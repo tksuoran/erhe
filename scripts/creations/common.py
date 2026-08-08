@@ -60,7 +60,6 @@ class Creation:
         self.client = McpClient(port)
         wait_for_server(self.client, wait_s)
         self.scene = None
-        self._material_pool = None
         # Accumulated per-scene setting overrides: set_scene_settings REPLACES
         # the whole Scene_settings object, so every send must carry the union
         # of everything set so far (ambience + wind + ...).
@@ -283,57 +282,33 @@ class Creation:
     def materials(self):
         return self.call("get_scene_materials", {"scene_name": self.scene}).get("materials", [])
 
-    MATERIAL_POOL_EXCLUDE = {"Rendertarget Node"}
-
     TEXTURE_SLOTS = ("base_color", "metallic_roughness", "normal", "occlusion", "emissive")
 
     def make_material(self, base_name=None, clear_textures=False, **edits):
-        """Claim an unused material from this scene's own stock library
-        (every new scene ships with the standard metals) and edit it in
-        place. Falls back to copying from another open scene when the pool
-        runs dry. Returns the material's name. clear_textures=True makes the
-        material plain: drops every texture assignment and resets the BxDF
-        to isotropic (stock metals default to circular-brushed anisotropic,
-        which draws an X/ring pattern per UV tile on faceted shapes)."""
-        if self._material_pool is None:
-            self._material_pool = [
-                m["name"] for m in self.materials()
-                if m["name"] not in self.MATERIAL_POOL_EXCLUDE]
-        name = None
-        if base_name is not None and base_name in self._material_pool:
-            self._material_pool.remove(base_name)
-            name = base_name
-        elif self._material_pool:
-            name = self._material_pool.pop(0)
-        if name is None:
-            # Pool exhausted: copy a material in from another open scene.
-            for scene in self.call("list_scenes")["scenes"]:
-                if scene["name"] == self.scene:
-                    continue
-                mats = self.call("get_scene_materials", {"scene_name": scene["name"]}).get("materials", [])
-                if not mats:
-                    continue
-                result = self.mutate("copy_library_item", {
-                    "item_name": mats[0]["name"], "item_type": "material",
-                    "source_scene": scene["name"], "target_scene": self.scene,
-                })
-                if isinstance(result, dict) and "name" in result:
-                    name = result["name"]
-                    break
-        if name is None:
-            raise RuntimeError(
-                "material pool exhausted and no other scene to copy from - "
-                "reuse materials (fewer make_material calls)")
-        if clear_textures:
-            edits["texture_samplers"] = {slot: {"texture": None} for slot in self.TEXTURE_SLOTS}
-            edits.setdefault("bxdf_model", "isotropic_brdf")
-            edits.setdefault("use_circular_brushed_metal", False)
-            edits.setdefault("use_aniso_control", False)
-        if edits:
-            args = {"scene_name": self.scene, "material_name": name}
+        """Create a fresh material in this scene's library with the given
+        fields, one create_material call (2026-08-08; replaces the old
+        stock-metal claim pool + copy_library_item fallback). Returns the
+        material's name. Fresh materials are already plain (no textures,
+        isotropic BRDF, non-metal white), so clear_textures is accepted for
+        backward compatibility but does nothing. Name collisions get a
+        ' N' suffix."""
+        del clear_textures  # fresh materials are already texture-free and isotropic
+        base = base_name or "Material"
+        name = base
+        for counter in range(2, 102):
+            args = {"scene_name": self.scene, "name": name}
             args.update(edits)
-            self.mutate("edit_material", args)
-        return name
+            try:
+                result = self.mutate("create_material", args)
+            except RuntimeError as error:
+                if "already exists" in str(error):
+                    name = f"{base} {counter}"
+                    continue
+                raise
+            if isinstance(result, dict) and "name" in result:
+                return result["name"]
+            return name  # server-busy path: mutate drained and returned None
+        raise RuntimeError(f"create_material: no free name found for '{base}'")
 
     # -------------------------------------------------------- texture graph
 

@@ -57,7 +57,7 @@ they carry the current idioms.
   `res/editor/scenes/creations/*.glb` (untracked; loadable with
   `load_scene`). Only the script is committed.
 - `scripts/creations/common.py` is the shared API: scene bootstrap,
-  look-at camera, material pool, graph builders, brushes, lights,
+  look-at camera, material creation, graph builders, brushes, lights,
   physics helpers, screenshots, `group()` - plus module-level vector
   math (`v_add`/`v_cross`/`v_rotate`/...), `align_y_quaternion`,
   `probe_tilt` / `probe_pose` / `rest_rotation` / `body_axis_elevation`,
@@ -147,12 +147,16 @@ following its construction logic:
 
 ## Materials & appearance
 
-- Each new scene ships 12 stock metals; `common.make_material` claims
-  and edits them in place - the pool is the hard budget (~12 materials
-  per scene). Always set `metallic` explicitly.
-- Stock metals default to circular-brushed anisotropic BRDF that draws
-  an X/ring pattern per UV tile; `make_material(clear_textures=True)`
-  resets textures + BRDF to plain isotropic. Use it for any flat color.
+- `common.make_material(name, **fields)` CREATES a fresh material via
+  the `create_material` MCP tool (2026-08-08) - no more 12-metal pool
+  budget or copy_library_item fallback; make as many as the scene
+  needs. Fresh materials are plain (no textures, isotropic BRDF,
+  non-metal white), so `clear_textures` is a no-op kept for old call
+  sites. Always set `metallic` and `base_color` explicitly - defaults
+  are white non-metal, NOT the old stock-metal look.
+- (Scene libraries still ship the 12 stock metals; they default to a
+  circular-brushed anisotropic BRDF that draws an X/ring pattern per
+  UV tile - avoid claiming them directly.)
 - Translucency: raster transparency is selected by
   `blending_mode="alpha_blend"` + `opacity` (opacity alone renders
   OPAQUE; `transmission` only affects the ray tracer). Glass ~0.16

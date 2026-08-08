@@ -469,6 +469,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "add_tags",                       &Mcp_server::action_add_tags                      },
             { "remove_tags",                    &Mcp_server::action_remove_tags                   },
             { "edit_material",                  &Mcp_server::action_edit_material                 },
+            { "create_material",                &Mcp_server::action_create_material               },
             { "copy_library_item",              &Mcp_server::action_copy_library_item             },
             { "set_scene_settings",             &Mcp_server::action_set_scene_settings            },
             { "save_scene",                     &Mcp_server::action_save_scene                    },

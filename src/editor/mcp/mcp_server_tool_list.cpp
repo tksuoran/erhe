@@ -330,41 +330,57 @@ void Mcp_server::refresh_tool_list()
             {"scale",     {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v]"}}}
         }}
     };
-    m_tool_infos.push_back({"edit_material",      "Edit material properties including texture assignments (undoable). Only fields supplied are changed.", {
-        {"type", "object"},
-        {"properties", {
-            {"scene_name",                 {{"type", "string"},  {"description", "Name of the scene (name path; not needed with material_id)"}}},
-            {"material_name",              {{"type", "string"},  {"description", "Name of the material to edit"}}},
-            {"material_id",                {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over the name path)"}}},
-            {"base_color",                 {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB base color [r, g, b]"}}},
-            {"opacity",                    {{"type", "number"},  {"description", "Opacity in [0, 1]"}}},
-            {"roughness",                  {{"description", "Roughness; either [x, y] for anisotropic or a single number applied to both."}}},
-            {"metallic",                   {{"type", "number"},  {"description", "Metallic factor in [0, 1]"}}},
-            {"reflectance",                {{"type", "number"},  {"description", "Dielectric reflectance in [0, 1]"}}},
-            {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
-            {"ior",                        {{"type", "number"},  {"description", "Index of refraction in [1, 3] (KHR_materials_ior; default 1.5)"}}},
-            {"transmission",               {{"type", "number"},  {"description", "Transmission factor in [0, 1] (KHR_materials_transmission); > 0 makes the GPU ray tracer refract through the surface"}}},
-            {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
-            {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
-            {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"})}, {"description", "Selects which BxDF the standard shader applies"}}},
-            {"blending_mode",              {{"type", "string"},  {"enum", json::array({"opaque", "alpha_blend", "multiply", "add", "subtract", "screen_door", "alpha_test"})}, {"description", "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass"}}},
-            {"alpha_cutoff",               {{"type", "number"},  {"description", "Alpha cutoff in [0, 1] for blending_mode alpha_test (default 0.5)"}}},
-            {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
-            {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
-            {"texture_samplers",           {
-                {"type", "object"},
-                {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list). Each slot holds a single texture reference, so assigning or clearing a texture also replaces/clears any Graph Texture binding on that slot."},
-                {"properties", {
-                    {"base_color",         texture_slot_schema},
-                    {"metallic_roughness", texture_slot_schema},
-                    {"normal",             texture_slot_schema},
-                    {"occlusion",          texture_slot_schema},
-                    {"emissive",           texture_slot_schema}
-                }}
+    // Material fields shared by edit_material and create_material (the
+    // handlers share apply_material_fields in mcp_server_material.cpp).
+    const json material_field_properties = {
+        {"base_color",                 {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB base color [r, g, b]"}}},
+        {"opacity",                    {{"type", "number"},  {"description", "Opacity in [0, 1]"}}},
+        {"roughness",                  {{"description", "Roughness; either [x, y] for anisotropic or a single number applied to both."}}},
+        {"metallic",                   {{"type", "number"},  {"description", "Metallic factor in [0, 1]"}}},
+        {"reflectance",                {{"type", "number"},  {"description", "Dielectric reflectance in [0, 1]"}}},
+        {"emissive",                   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Linear RGB emissive [r, g, b]"}}},
+        {"ior",                        {{"type", "number"},  {"description", "Index of refraction in [1, 3] (KHR_materials_ior; default 1.5)"}}},
+        {"transmission",               {{"type", "number"},  {"description", "Transmission factor in [0, 1] (KHR_materials_transmission); > 0 makes the GPU ray tracer refract through the surface"}}},
+        {"normal_texture_scale",       {{"type", "number"},  {"description", "Normal map scale"}}},
+        {"occlusion_texture_strength", {{"type", "number"},  {"description", "Occlusion map strength"}}},
+        {"bxdf_model",                 {{"type", "string"},  {"enum", json::array({"unlit", "isotropic_brdf", "anisotropic_brdf", "anisotropic_slope", "anisotropic_engine_ready"})}, {"description", "Selects which BxDF the standard shader applies"}}},
+        {"blending_mode",              {{"type", "string"},  {"enum", json::array({"opaque", "alpha_blend", "multiply", "add", "subtract", "screen_door", "alpha_test"})}, {"description", "Framebuffer blending: alpha_blend/multiply/add/subtract route through the translucent pass (raster translucency needs this - opacity alone renders opaque); screen_door/alpha_test discard in the opaque pass"}}},
+        {"alpha_cutoff",               {{"type", "number"},  {"description", "Alpha cutoff in [0, 1] for blending_mode alpha_test (default 0.5)"}}},
+        {"use_circular_brushed_metal", {{"type", "boolean"}, {"description", "Enable circular brushed metal shading variant"}}},
+        {"use_aniso_control",          {{"type", "boolean"}, {"description", "Enable anisotropic shading control"}}},
+        {"texture_samplers",           {
+            {"type", "object"},
+            {"description", "Per-slot texture assignments. Textures must come from the scene's content library (use get_scene_textures to list). Each slot holds a single texture reference, so assigning or clearing a texture also replaces/clears any Graph Texture binding on that slot."},
+            {"properties", {
+                {"base_color",         texture_slot_schema},
+                {"metallic_roughness", texture_slot_schema},
+                {"normal",             texture_slot_schema},
+                {"occlusion",          texture_slot_schema},
+                {"emissive",           texture_slot_schema}
             }}
-        }},
-        {"required", json::array({"scene_name", "material_name"})}
-    }});
+        }}
+    };
+    {
+        json properties = material_field_properties;
+        properties["scene_name"]    = {{"type", "string"},  {"description", "Name of the scene (name path; not needed with material_id)"}};
+        properties["material_name"] = {{"type", "string"},  {"description", "Name of the material to edit"}};
+        properties["material_id"]   = {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over the name path)"}};
+        m_tool_infos.push_back({"edit_material",      "Edit material properties including texture assignments (undoable). Only fields supplied are changed.", {
+            {"type", "object"},
+            {"properties", properties},
+            {"required", json::array({"scene_name", "material_name"})}
+        }});
+    }
+    {
+        json properties = material_field_properties;
+        properties["scene_name"] = {{"type", "string"}, {"description", "Scene whose content library receives the material"}};
+        properties["name"]       = {{"type", "string"}, {"description", "Name for the new material (must not already exist in the scene; the error returns existing_id when it does)"}};
+        m_tool_infos.push_back({"create_material", "Create a new material in a scene's content library and return its id. Accepts the same fields as edit_material; omitted fields keep the engine defaults (white, roughness 0.5, non-metal, opaque isotropic BRDF). Not undoable (like copy_library_item).", {
+            {"type", "object"},
+            {"properties", properties},
+            {"required", json::array({"scene_name", "name"})}
+        }});
+    }
 
     m_tool_infos.push_back({"copy_library_item", "Copy a content-library item from one scene's library to another's. Copies never alias: the copy is a fresh item owned by the target scene (brushes share their expensive payload by reference). Name collisions in the target get a ' (N)' suffix. Textures and graph assets cannot be copied; a copied material keeps its texture references into the source scene's textures (they render, but do not export with the target scene). Not undoable.", {
         {"type", "object"},

@@ -298,6 +298,7 @@ TEST_F(Mcp_test, tools_list_includes_material_and_texture_tools)
     EXPECT_TRUE(has("get_material_details"));
     EXPECT_TRUE(has("get_scene_textures"));
     EXPECT_TRUE(has("edit_material"));
+    EXPECT_TRUE(has("create_material"));
 }
 
 TEST_F(Mcp_test, list_scenes_returns_named_scenes)
@@ -698,6 +699,80 @@ TEST_F(Mcp_test, edit_material_invalid_texture_reference_type_returns_error)
         }}
     });
     EXPECT_TRUE(r.is_error);
+}
+
+// ---- create_material -------------------------------------------------------
+
+TEST_F(Mcp_test, create_material_roundtrip_and_duplicate_rejected)
+{
+    Mcp_env& env = Mcp_env::get();
+    // Unique per run: the created material stays in the live editor's
+    // library (creation is not undoable), so a fixed name would collide on
+    // the next run.
+    const std::string name =
+        "__mcp_test_mat_" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+
+    const json create_args{
+        {"scene_name", env.scene_name()},
+        {"name",       name},
+        {"base_color", json::array({0.1, 0.2, 0.3})},
+        {"metallic",   0.75},
+        {"roughness",  0.4}
+    };
+    Mcp_client::Tool_result created = env.client().call_tool("create_material", create_args);
+    ASSERT_FALSE(created.is_error) << "create_material errored: " << created.text;
+    ASSERT_TRUE(created.payload.contains("id"));
+    EXPECT_GT(created.payload["id"].get<std::size_t>(), 0u);
+
+    Mcp_client::Tool_result details = env.client().call_tool("get_material_details", json{
+        {"scene_name",    env.scene_name()},
+        {"material_name", name}
+    });
+    ASSERT_FALSE(details.is_error) << "get_material_details errored: " << details.text;
+    EXPECT_TRUE(approx_equal(details.payload["metallic"]  .get<double>(), 0.75));
+    EXPECT_TRUE(approx_equal(details.payload["base_color"][2].get<double>(), 0.3));
+
+    // Same name again: rejected, existing id reported.
+    Mcp_client::Tool_result dup = env.client().call_tool("create_material", create_args);
+    EXPECT_TRUE(dup.is_error);
+}
+
+TEST_F(Mcp_test, create_material_requires_name)
+{
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("create_material", json{
+        {"scene_name", Mcp_env::get().scene_name()}
+    });
+    EXPECT_TRUE(r.is_error);
+}
+
+TEST_F(Mcp_test, create_material_unknown_scene_returns_error)
+{
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("create_material", json{
+        {"scene_name", "__definitely_not_a_real_scene__"},
+        {"name",       "anything"}
+    });
+    EXPECT_TRUE(r.is_error);
+}
+
+TEST_F(Mcp_test, create_material_invalid_field_rejected_without_creating)
+{
+    Mcp_env& env = Mcp_env::get();
+    const std::string name =
+        "__mcp_test_mat_invalid_" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    Mcp_client::Tool_result r = env.client().call_tool("create_material", json{
+        {"scene_name", env.scene_name()},
+        {"name",       name},
+        {"base_color", "not an array"}
+    });
+    EXPECT_TRUE(r.is_error);
+
+    Mcp_client::Tool_result details = env.client().call_tool("get_material_details", json{
+        {"scene_name",    env.scene_name()},
+        {"material_name", name}
+    });
+    EXPECT_TRUE(details.is_error) << "Material should not exist after a rejected create";
 }
 
 // ---- edit_material: texture_samplers (transforms always testable) ---------

@@ -266,6 +266,212 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
     return entry;
 }
 
+// Optional material fields shared by edit_material and create_material.
+// Applies each present field of `args` to `after`, recording it in
+// `applied`; returns an error message on invalid input. `library` is only
+// needed for texture_samplers lookups.
+[[nodiscard]] auto apply_material_fields(
+    const json&                             args,
+    const std::shared_ptr<Content_library>& library,
+    erhe::primitive::Material_data&         after,
+    json&                                   applied
+) -> std::optional<std::string>
+{
+    glm::vec3   v3{};
+    glm::vec2   v2{};
+    float       f{};
+    bool        b{};
+    std::string field_err;
+
+    auto clamp01 = [](float v) { return std::clamp(v, 0.0f, 1.0f); };
+    auto clamp01_vec3 = [&](glm::vec3 v) { return glm::vec3{clamp01(v.x), clamp01(v.y), clamp01(v.z)}; };
+    auto clamp01_vec2 = [&](glm::vec2 v) { return glm::vec2{clamp01(v.x), clamp01(v.y)}; };
+
+    switch (try_read_vec3(args, "base_color", v3, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec3 clamped = clamp01_vec3(v3);
+            after.base_color = clamped;
+            applied["base_color"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "opacity", f, field_err)) {
+        case Field_status::Ok:         after.opacity = clamp01(f); applied["opacity"] = after.opacity; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec2(args, "roughness", v2, field_err)) {
+        case Field_status::Ok: {
+            const glm::vec2 clamped = clamp01_vec2(v2);
+            after.roughness = clamped;
+            applied["roughness"] = {clamped.x, clamped.y};
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "metallic", f, field_err)) {
+        case Field_status::Ok:         after.metallic = clamp01(f); applied["metallic"] = after.metallic; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "reflectance", f, field_err)) {
+        case Field_status::Ok:         after.reflectance = clamp01(f); applied["reflectance"] = after.reflectance; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_vec3(args, "emissive", v3, field_err)) {
+        case Field_status::Ok: {
+            // Emissive is HDR; floor at 0 but no upper clamp.
+            const glm::vec3 clamped{std::max(0.0f, v3.x), std::max(0.0f, v3.y), std::max(0.0f, v3.z)};
+            after.emissive = clamped;
+            applied["emissive"] = {clamped.x, clamped.y, clamped.z};
+            break;
+        }
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "ior", f, field_err)) {
+        // Physically meaningful IORs sit in [1, 3] (vacuum .. diamond-ish);
+        // clamp to that range, matching the Properties window slider.
+        case Field_status::Ok:         after.ior = std::clamp(f, 1.0f, 3.0f); applied["ior"] = after.ior; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "transmission", f, field_err)) {
+        case Field_status::Ok:         after.transmission = clamp01(f); applied["transmission"] = after.transmission; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "normal_texture_scale", f, field_err)) {
+        case Field_status::Ok:         after.normal_texture_scale = f; applied["normal_texture_scale"] = f; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    switch (try_read_float(args, "occlusion_texture_strength", f, field_err)) {
+        case Field_status::Ok:         after.occlusion_texture_strength = clamp01(f); applied["occlusion_texture_strength"] = after.occlusion_texture_strength; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    {
+        const auto bxdf_it = args.find("bxdf_model");
+        if (bxdf_it != args.end()) {
+            if (!bxdf_it->is_string()) {
+                return "bxdf_model must be a string";
+            }
+            const std::string s = bxdf_it->get<std::string>();
+            if (s == "unlit") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::unlit;
+            } else if (s == "isotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::isotropic_brdf;
+            } else if (s == "anisotropic_brdf") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_brdf;
+            } else if (s == "anisotropic_slope") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_slope;
+            } else if (s == "anisotropic_engine_ready") {
+                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_engine_ready;
+            } else {
+                return "bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf', 'anisotropic_slope', 'anisotropic_engine_ready'";
+            }
+            applied["bxdf_model"] = s;
+        }
+    }
+    {
+        const auto blending_it = args.find("blending_mode");
+        if (blending_it != args.end()) {
+            if (!blending_it->is_string()) {
+                return "blending_mode must be a string";
+            }
+            const std::string s = blending_it->get<std::string>();
+            if (s == "opaque") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::opaque;
+            } else if (s == "alpha_blend") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_blend;
+            } else if (s == "multiply") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::multiply;
+            } else if (s == "add") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::add;
+            } else if (s == "subtract") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::subtract;
+            } else if (s == "screen_door") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::screen_door;
+            } else if (s == "alpha_test") {
+                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_test;
+            } else {
+                return "blending_mode must be one of 'opaque', 'alpha_blend', 'multiply', 'add', 'subtract', 'screen_door', 'alpha_test'";
+            }
+            applied["blending_mode"] = s;
+        }
+    }
+    switch (try_read_float(args, "alpha_cutoff", f, field_err)) {
+        case Field_status::Ok:         after.alpha_cutoff = clamp01(f); applied["alpha_cutoff"] = after.alpha_cutoff; break;
+        case Field_status::Invalid:    return field_err;
+        case Field_status::NotPresent: break;
+    }
+    if (try_read_bool(args, "use_circular_brushed_metal", b)) {
+        after.use_circular_brushed_metal = b;
+        applied["use_circular_brushed_metal"] = b;
+    }
+    if (try_read_bool(args, "use_aniso_control", b)) {
+        after.use_aniso_control = b;
+        applied["use_aniso_control"] = b;
+    }
+
+    const auto ts_it = args.find("texture_samplers");
+    if (ts_it != args.end()) {
+        if (!ts_it->is_object()) {
+            return "texture_samplers must be an object";
+        }
+
+        if (!library || !library->textures) {
+            return "Content library has no textures node (texture-sampler edits need a scene-hosted material)";
+        }
+        const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+
+        struct Named_slot
+        {
+            const char*                                slot_name;
+            erhe::primitive::Material_texture_sampler* target;
+        };
+        const Named_slot slots[] = {
+            {"base_color",         &after.texture_samplers.base_color},
+            {"metallic_roughness", &after.texture_samplers.metallic_roughness},
+            {"normal",             &after.texture_samplers.normal},
+            {"occlusion",          &after.texture_samplers.occlusion},
+            {"emissive",           &after.texture_samplers.emissive}
+        };
+
+        std::vector<std::pair<const Named_slot*, Slot_edit>> parsed_edits;
+        parsed_edits.reserve(std::size(slots));
+
+        for (const Named_slot& slot : slots) {
+            const auto slot_it = ts_it->find(slot.slot_name);
+            if (slot_it == ts_it->end()) {
+                continue;
+            }
+            Slot_edit  edit{};
+            std::string slot_error{};
+            if (!parse_slot_edit(*slot_it, tex_list, edit, slot_error)) {
+                return std::string{slot.slot_name} + ": " + slot_error;
+            }
+            parsed_edits.emplace_back(&slot, std::move(edit));
+        }
+
+        json applied_textures = json::object();
+        for (auto& [slot, edit] : parsed_edits) {
+            apply_slot_edit(edit, *slot->target);
+            applied_textures[slot->slot_name] = slot_edit_summary(edit);
+        }
+        if (!applied_textures.empty()) {
+            applied["texture_samplers"] = applied_textures;
+        }
+    }
+
+    return std::nullopt;
+}
+
 } // anonymous namespace
 
 auto Mcp_server::find_material_by_id(const std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>
@@ -377,217 +583,11 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
     erhe::primitive::Material_data       after  = before;
 
     json applied = json::object();
-
-    glm::vec3   v3{};
-    glm::vec2   v2{};
-    float       f{};
-    bool        b{};
-    std::string field_err;
-
-    auto reject = [](const std::string& msg) -> std::string {
-        json r = make_text_content(msg);
+    const std::optional<std::string> field_error = apply_material_fields(args, library, after, applied);
+    if (field_error.has_value()) {
+        json r = make_text_content(field_error.value());
         r["isError"] = true;
         return r.dump();
-    };
-
-    auto clamp01 = [](float v) { return std::clamp(v, 0.0f, 1.0f); };
-    auto clamp01_vec3 = [&](glm::vec3 v) { return glm::vec3{clamp01(v.x), clamp01(v.y), clamp01(v.z)}; };
-    auto clamp01_vec2 = [&](glm::vec2 v) { return glm::vec2{clamp01(v.x), clamp01(v.y)}; };
-
-    switch (try_read_vec3(args, "base_color", v3, field_err)) {
-        case Field_status::Ok: {
-            const glm::vec3 clamped = clamp01_vec3(v3);
-            after.base_color = clamped;
-            applied["base_color"] = {clamped.x, clamped.y, clamped.z};
-            break;
-        }
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "opacity", f, field_err)) {
-        case Field_status::Ok:         after.opacity = clamp01(f); applied["opacity"] = after.opacity; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_vec2(args, "roughness", v2, field_err)) {
-        case Field_status::Ok: {
-            const glm::vec2 clamped = clamp01_vec2(v2);
-            after.roughness = clamped;
-            applied["roughness"] = {clamped.x, clamped.y};
-            break;
-        }
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "metallic", f, field_err)) {
-        case Field_status::Ok:         after.metallic = clamp01(f); applied["metallic"] = after.metallic; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "reflectance", f, field_err)) {
-        case Field_status::Ok:         after.reflectance = clamp01(f); applied["reflectance"] = after.reflectance; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_vec3(args, "emissive", v3, field_err)) {
-        case Field_status::Ok: {
-            // Emissive is HDR; floor at 0 but no upper clamp.
-            const glm::vec3 clamped{std::max(0.0f, v3.x), std::max(0.0f, v3.y), std::max(0.0f, v3.z)};
-            after.emissive = clamped;
-            applied["emissive"] = {clamped.x, clamped.y, clamped.z};
-            break;
-        }
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "ior", f, field_err)) {
-        // Physically meaningful IORs sit in [1, 3] (vacuum .. diamond-ish);
-        // clamp to that range, matching the Properties window slider.
-        case Field_status::Ok:         after.ior = std::clamp(f, 1.0f, 3.0f); applied["ior"] = after.ior; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "transmission", f, field_err)) {
-        case Field_status::Ok:         after.transmission = clamp01(f); applied["transmission"] = after.transmission; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "normal_texture_scale", f, field_err)) {
-        case Field_status::Ok:         after.normal_texture_scale = f; applied["normal_texture_scale"] = f; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    switch (try_read_float(args, "occlusion_texture_strength", f, field_err)) {
-        case Field_status::Ok:         after.occlusion_texture_strength = clamp01(f); applied["occlusion_texture_strength"] = after.occlusion_texture_strength; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    {
-        const auto bxdf_it = args.find("bxdf_model");
-        if (bxdf_it != args.end()) {
-            if (!bxdf_it->is_string()) {
-                json r = make_text_content("bxdf_model must be a string");
-                r["isError"] = true;
-                return r.dump();
-            }
-            const std::string s = bxdf_it->get<std::string>();
-            if (s == "unlit") {
-                after.bxdf_model = erhe::primitive::Bxdf_model::unlit;
-            } else if (s == "isotropic_brdf") {
-                after.bxdf_model = erhe::primitive::Bxdf_model::isotropic_brdf;
-            } else if (s == "anisotropic_brdf") {
-                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_brdf;
-            } else if (s == "anisotropic_slope") {
-                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_slope;
-            } else if (s == "anisotropic_engine_ready") {
-                after.bxdf_model = erhe::primitive::Bxdf_model::anisotropic_engine_ready;
-            } else {
-                json r = make_text_content("bxdf_model must be one of 'unlit', 'isotropic_brdf', 'anisotropic_brdf', 'anisotropic_slope', 'anisotropic_engine_ready'");
-                r["isError"] = true;
-                return r.dump();
-            }
-            applied["bxdf_model"] = s;
-        }
-    }
-    {
-        const auto blending_it = args.find("blending_mode");
-        if (blending_it != args.end()) {
-            if (!blending_it->is_string()) {
-                json r = make_text_content("blending_mode must be a string");
-                r["isError"] = true;
-                return r.dump();
-            }
-            const std::string s = blending_it->get<std::string>();
-            if (s == "opaque") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::opaque;
-            } else if (s == "alpha_blend") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_blend;
-            } else if (s == "multiply") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::multiply;
-            } else if (s == "add") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::add;
-            } else if (s == "subtract") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::subtract;
-            } else if (s == "screen_door") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::screen_door;
-            } else if (s == "alpha_test") {
-                after.blending_mode = erhe::primitive::Material_blending_mode::alpha_test;
-            } else {
-                json r = make_text_content("blending_mode must be one of 'opaque', 'alpha_blend', 'multiply', 'add', 'subtract', 'screen_door', 'alpha_test'");
-                r["isError"] = true;
-                return r.dump();
-            }
-            applied["blending_mode"] = s;
-        }
-    }
-    switch (try_read_float(args, "alpha_cutoff", f, field_err)) {
-        case Field_status::Ok:         after.alpha_cutoff = clamp01(f); applied["alpha_cutoff"] = after.alpha_cutoff; break;
-        case Field_status::Invalid:    return reject(field_err);
-        case Field_status::NotPresent: break;
-    }
-    if (try_read_bool(args, "use_circular_brushed_metal", b)) {
-        after.use_circular_brushed_metal = b;
-        applied["use_circular_brushed_metal"] = b;
-    }
-    if (try_read_bool(args, "use_aniso_control", b)) {
-        after.use_aniso_control = b;
-        applied["use_aniso_control"] = b;
-    }
-
-    const auto ts_it = args.find("texture_samplers");
-    if (ts_it != args.end()) {
-        if (!ts_it->is_object()) {
-            json r = make_text_content("texture_samplers must be an object");
-            r["isError"] = true;
-            return r.dump();
-        }
-
-        if (!library || !library->textures) {
-            json r = make_text_content("Content library has no textures node (texture-sampler edits need a scene-hosted material)");
-            r["isError"] = true;
-            return r.dump();
-        }
-        const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
-
-        struct Named_slot
-        {
-            const char*                                slot_name;
-            erhe::primitive::Material_texture_sampler* target;
-        };
-        const Named_slot slots[] = {
-            {"base_color",         &after.texture_samplers.base_color},
-            {"metallic_roughness", &after.texture_samplers.metallic_roughness},
-            {"normal",             &after.texture_samplers.normal},
-            {"occlusion",          &after.texture_samplers.occlusion},
-            {"emissive",           &after.texture_samplers.emissive}
-        };
-
-        std::vector<std::pair<const Named_slot*, Slot_edit>> parsed_edits;
-        parsed_edits.reserve(std::size(slots));
-
-        for (const Named_slot& slot : slots) {
-            const auto slot_it = ts_it->find(slot.slot_name);
-            if (slot_it == ts_it->end()) {
-                continue;
-            }
-            Slot_edit  edit{};
-            std::string slot_error{};
-            if (!parse_slot_edit(*slot_it, tex_list, edit, slot_error)) {
-                json r = make_text_content(std::string{slot.slot_name} + ": " + slot_error);
-                r["isError"] = true;
-                return r.dump();
-            }
-            parsed_edits.emplace_back(&slot, std::move(edit));
-        }
-
-        json applied_textures = json::object();
-        for (auto& [slot, edit] : parsed_edits) {
-            apply_slot_edit(edit, *slot->target);
-            applied_textures[slot->slot_name] = slot_edit_summary(edit);
-        }
-        if (!applied_textures.empty()) {
-            applied["texture_samplers"] = applied_textures;
-        }
     }
 
     if (applied.empty()) {
@@ -614,6 +614,76 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         {"id",      material->get_id()},
         {"applied", applied},
         {"changed", true}
+    }).dump();
+}
+
+auto Mcp_server::action_create_material(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string name       = args.value("name", "");
+
+    if (name.empty()) {
+        json r = make_text_content("name is required");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    Scene_root* const scene_root = find_scene(scene_name);
+    if (scene_root == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<Content_library> library = scene_root->get_content_library();
+    if (!library || !library->materials) {
+        json r = make_text_content("Scene has no material library: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Refuse duplicate names: edit_material addresses materials by name, so
+    // a second material with the same name would make both unaddressable.
+    // The existing id is returned so the caller can reuse or rename.
+    for (const auto& mat : library->materials->get_all<erhe::primitive::Material>()) {
+        if (mat->get_name() == name) {
+            json r = make_text_content("Material name already exists: " + name);
+            r["isError"]     = true;
+            r["existing_id"] = mat->get_id();
+            return r.dump();
+        }
+    }
+
+    erhe::primitive::Material_data data{};
+    json applied = json::object();
+    const std::optional<std::string> field_error = apply_material_fields(args, library, data, applied);
+    if (field_error.has_value()) {
+        json r = make_text_content(field_error.value());
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::primitive::Material> material;
+    {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
+        material = library->materials->make<erhe::primitive::Material>(
+            erhe::primitive::Material_create_info{
+                .name = name,
+                .data = data
+            }
+        );
+    }
+    if (!material) {
+        json r = make_text_content("Material creation failed");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Like copy_library_item, library-item creation is not undoable.
+    return make_json_content({
+        {"name",    material->get_name()},
+        {"id",      material->get_id()},
+        {"scene",   scene_root->get_name()},
+        {"applied", applied}
     }).dump();
 }
 
