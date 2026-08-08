@@ -464,6 +464,25 @@ class Creation:
         self.mutate("create_physics_joint_settings", args)
         return name
 
+    def group(self, name, position, parent_node_id=None):
+        """Empty node used as the root of one logical object (a plant, a
+        prop): children are created with parent_node_id=<returned id> and
+        world positions (create_shape/create_node treat position as world
+        and parent with world preservation). Returns the node id."""
+        args = {
+            "scene_name": self.scene, "name": name,
+            "position": [float(v) for v in position],
+        }
+        if parent_node_id is not None:
+            args["parent_node_id"] = int(parent_node_id)
+        result = self.mutate("create_node", args)
+        if isinstance(result, dict) and "node_id" in result:
+            return result["node_id"]
+        node = self.node_by_name(name)
+        if node is None:
+            raise RuntimeError(f"group '{name}' did not appear")
+        return node["id"]
+
     def anchor(self, name, parent_node_id, position):
         """Empty child node at a world position, used as a joint pivot."""
         result = self.mutate("create_node", {

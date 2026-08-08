@@ -12,6 +12,9 @@ clusters and a fallen mossy log with its stump.
 Showcases: parametric L-system vegetation at three scales (trees,
 ferns, flowers), non-uniform node scaling (rocks / moss / petals /
 pinnae), seeded scatter composition, morning-forest lighting.
+Every plant / boulder / prop is one subtree under its own group node
+(create_shape parent_node_id + world positions), so the scene hierarchy
+reads: Oak A, Bush 3, Fern 1, Fallen Tree (with its mushrooms nested).
 """
 
 import math
@@ -112,11 +115,13 @@ def expand_lsystem(rng, iterations, weights):
 
 def grow_tree(c, tag, base, species, bark, leaf_materials, rng):
     """Stochastic L-system tree: trunk cone, turtle-driven branch cones,
-    leaf tips greedily clustered into canopy spheres."""
+    leaf tips greedily clustered into canopy spheres. All parts are
+    children of one group node so the scene graph has one root per tree."""
     p = species
+    root = c.group(tag, base)
     c.shape("cone", f"{tag} Trunk", base, height=p["trunk_h"],
             bottom_radius=p["trunk_r"][0], top_radius=p["trunk_r"][1],
-            slice_count=14, material_name=bark)
+            slice_count=14, material_name=bark, parent_node_id=root)
 
     segments = []
     leaves = []
@@ -152,7 +157,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng):
     for i, (start, direction, length, radius) in enumerate(segments):
         result = c.shape("cone", f"{tag} Branch {i}", start, height=length,
                          bottom_radius=radius, top_radius=max(0.025, radius * 0.7),
-                         slice_count=8, material_name=bark)
+                         slice_count=8, material_name=bark, parent_node_id=root)
         rotation = align_y_quaternion(direction)
         if rotation is not None:
             node_id = result.get("node_id") if isinstance(result, dict) else None
@@ -177,16 +182,18 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng):
         jitter = [rng.uniform(-0.06, 0.06) for _ in range(3)]
         c.shape("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
                 radius=radius, slice_count=12, stack_count=9,
-                material_name=leaf_materials[i % len(leaf_materials)])
+                material_name=leaf_materials[i % len(leaf_materials)],
+                parent_node_id=root)
     print(f"{tag}: {len(segments)} segments, {len(clusters)} canopy clusters")
 
 
 # ------------------------------------------------------------- undergrowth
 
-def scaled_sphere(c, name, position, radius, scale, material, slices=14, stacks=10):
+def scaled_sphere(c, name, position, radius, scale, material, slices=14, stacks=10,
+                  parent=None):
     result = c.shape("uv_sphere", name, position, radius=radius,
                      slice_count=slices, stack_count=stacks,
-                     material_name=material)
+                     material_name=material, parent_node_id=parent)
     node_id = result.get("node_id") if isinstance(result, dict) else None
     if node_id is not None and scale != [1.0, 1.0, 1.0]:
         c.move_node_id(node_id, scale=scale)
@@ -194,7 +201,8 @@ def scaled_sphere(c, name, position, radius, scale, material, slices=14, stacks=
 
 
 def bush(c, tag, x, z, size, materials, rng):
-    """Dome bush: 3-4 overlapping squashed spheres."""
+    """Dome bush: 3-4 overlapping squashed spheres under one group node."""
+    root = c.group(tag, [x, 0.0, z])
     blobs = rng.randint(3, 4)
     for i in range(blobs):
         a = rng.uniform(0.0, 2.0 * math.pi)
@@ -202,42 +210,49 @@ def bush(c, tag, x, z, size, materials, rng):
         r = size * rng.uniform(0.55, 0.80)
         scaled_sphere(c, f"{tag} Blob {i}",
                       [x + d * math.cos(a), r * 0.55, z + d * math.sin(a)],
-                      r, [1.0, 0.72, 1.0], materials[i % len(materials)])
+                      r, [1.0, 0.72, 1.0], materials[i % len(materials)],
+                      parent=root)
 
 
 def mossy_rock(c, tag, x, z, size, yaw, m, rng):
-    """Boulder: squashed sphere sunk into the lawn + flattened moss cap."""
+    """Boulder: squashed sphere sunk into the lawn + flattened moss cap,
+    both under one group node."""
+    root = c.group(tag, [x, 0.0, z])
     node_id = scaled_sphere(c, f"{tag} Rock", [x, size * 0.26, z], size,
-                            [1.0 + rng.uniform(-0.15, 0.25), 0.50, 1.0], m["rock"])
+                            [1.0 + rng.uniform(-0.15, 0.25), 0.50, 1.0], m["rock"],
+                            parent=root)
     if node_id is not None:
         c.move_node_id(node_id, rotation_xyzw=[0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)])
     scaled_sphere(c, f"{tag} Moss", [x + size * 0.12, size * 0.42, z - size * 0.08],
-                  size * 0.82, [1.05, 0.32, 1.0], m["moss"])
+                  size * 0.82, [1.05, 0.32, 1.0], m["moss"], parent=root)
 
 
-def mushroom(c, tag, x, z, height, m, rng, y0=0.0):
-    """Fly agaric: cream stem, squashed red cap, white speckles."""
+def mushroom(c, tag, x, z, height, m, rng, y0=0.0, parent=None):
+    """Fly agaric: cream stem, squashed red cap, white speckles, grouped
+    under one node (which may itself be a child, e.g. of the fallen log)."""
+    root = c.group(tag, [x, y0, z], parent_node_id=parent)
     cap_r = height * 0.62
     c.shape("cone", f"{tag} Stem", [x, y0, z], height=height,
             bottom_radius=height * 0.30, top_radius=height * 0.20,
-            slice_count=10, material_name=m["cream"])
+            slice_count=10, material_name=m["cream"], parent_node_id=root)
     scaled_sphere(c, f"{tag} Cap", [x, y0 + height * 1.02, z], cap_r,
-                  [1.0, 0.60, 1.0], m["red"], slices=14, stacks=10)
+                  [1.0, 0.60, 1.0], m["red"], slices=14, stacks=10, parent=root)
     for i in range(3):
         a = rng.uniform(0.0, 2.0 * math.pi)
         d = cap_r * rng.uniform(0.35, 0.75)
         c.shape("uv_sphere", f"{tag} Dot {i}",
                 [x + d * math.cos(a), y0 + height * 1.02 + cap_r * 0.42, z + d * math.sin(a)],
                 radius=cap_r * 0.16, slice_count=8, stack_count=6,
-                material_name=m["cream"])
+                material_name=m["cream"], parent_node_id=root)
 
 
-def blade(c, name, position, radius, scale, direction, material):
+def blade(c, name, position, radius, scale, direction, material, parent=None):
     """Elongated squashed sphere aligned so its long (local Y) axis points
     along direction: leaf blades, petals, cut faces. Scale FIRST, then
     rotate (each transform_selection call is a separate edit)."""
     result = c.shape("uv_sphere", name, position, radius=radius,
-                     slice_count=10, stack_count=8, material_name=material)
+                     slice_count=10, stack_count=8, material_name=material,
+                     parent_node_id=parent)
     node_id = result.get("node_id") if isinstance(result, dict) else None
     if node_id is None:
         return
@@ -271,7 +286,8 @@ def expand_flower(rng, iterations=3):
 def flower(c, tag, x, z, color, m, rng):
     """L-system wildflower: turtle-drawn stem segments, leaf blades at
     the bracketed Ls, petal-ring blooms (center + 5 aligned petals) at
-    every K."""
+    every K. One group node per plant."""
+    root = c.group(tag, [x, 0.0, z])
     pos = [x, 0.0, z]
     heading = v_norm([rng.uniform(-0.12, 0.12), 1.0, rng.uniform(-0.12, 0.12)])
     left = v_norm(v_cross([0.0, 1.0, 0.0], heading)) if abs(heading[1]) < 0.999 else [1.0, 0.0, 0.0]
@@ -286,7 +302,7 @@ def flower(c, tag, x, z, color, m, rng):
             result = c.shape("cone", f"{tag} Stem {seg}", list(pos),
                              height=length, bottom_radius=0.013,
                              top_radius=0.010, slice_count=6,
-                             material_name=m["leaf2"])
+                             material_name=m["leaf2"], parent_node_id=root)
             rotation = align_y_quaternion(heading)
             if rotation is not None:
                 node_id = result.get("node_id") if isinstance(result, dict) else None
@@ -297,7 +313,7 @@ def flower(c, tag, x, z, color, m, rng):
         elif ch == "L":
             leaf_dir = v_norm(v_rotate(heading, left, math.radians(rng.uniform(55.0, 75.0))))
             blade(c, f"{tag} Leaf {seg}", v_add(pos, v_scale(leaf_dir, 0.05)),
-                  0.05, [0.50, 1.6, 0.22], leaf_dir, m["leaf2"])
+                  0.05, [0.50, 1.6, 0.22], leaf_dir, m["leaf2"], parent=root)
         elif ch == "&":
             heading = v_norm(v_rotate(heading, left, math.radians(rng.uniform(35.0, 55.0))))
         elif ch == "/":
@@ -309,13 +325,14 @@ def flower(c, tag, x, z, color, m, rng):
         elif ch == "K":
             c.shape("uv_sphere", f"{tag} Center {seg}",
                     v_add(pos, v_scale(heading, 0.02)), radius=0.032,
-                    slice_count=8, stack_count=6, material_name=m["yellow"])
+                    slice_count=8, stack_count=6, material_name=m["yellow"],
+                    parent_node_id=root)
             for i in range(5):
                 ring = v_rotate(left, heading, math.radians(i * 72.0 + rng.uniform(-8.0, 8.0)))
                 petal_dir = v_norm(v_add(ring, v_scale(heading, 0.45)))
                 blade(c, f"{tag} Petal {seg}.{i}",
                       v_add(pos, v_scale(petal_dir, 0.055)),
-                      0.045, [0.55, 1.35, 0.30], petal_dir, m[color])
+                      0.045, [0.55, 1.35, 0.30], petal_dir, m[color], parent=root)
             seg += 1
 
 
@@ -344,7 +361,9 @@ def expand_fern(rng, iterations=4):
 def fern(c, tag, x, z, size, m, rng):
     """L-system fern rosette: each frond is a turtle-drawn rachis of
     tapering cone segments that droops a little more with every step,
-    with paired pinna blades at the bracketed nodes and a tip leaflet."""
+    with paired pinna blades at the bracketed nodes and a tip leaflet.
+    One group node per fern."""
+    root = c.group(tag, [x, 0.0, z])
     fronds = 5
     base = [x, 0.04, z]
     for i in range(fronds):
@@ -362,7 +381,7 @@ def fern(c, tag, x, z, size, m, rng):
                 result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
                                  height=seg, bottom_radius=radius,
                                  top_radius=radius * 0.8, slice_count=6,
-                                 material_name=m["leaf2"])
+                                 material_name=m["leaf2"], parent_node_id=root)
                 rotation = align_y_quaternion(heading)
                 if rotation is not None:
                     node_id = result.get("node_id") if isinstance(result, dict) else None
@@ -386,38 +405,44 @@ def fern(c, tag, x, z, size, m, rng):
                 blade(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
                       v_add(pos, v_scale(pinna_dir, length * 0.9)),
                       length, [0.42, 1.55, 0.16], pinna_dir,
-                      m["leaf"] if (t + pending) % 2 else m["leaf2"])
+                      m["leaf"] if (t + pending) % 2 else m["leaf2"],
+                      parent=root)
                 pending = 0
 
 
 def fallen_log(c, m, rng):
     """Fallen mossy tree: horizontal tapered trunk, cut-face discs, its
-    stump, stub branches, moss patches and a pair of log-top mushrooms."""
+    stump, stub branches, moss patches and a pair of log-top mushrooms,
+    all under one 'Fallen Tree' group node."""
     start = [-2.7, 0.26, 3.0]
     d = v_norm([2.9, 0.02, 1.1])
     length = 3.1
+    root = c.group("Fallen Tree", [start[0], 0.0, start[2]])
     result = c.shape("cone", "Fallen Log", start, height=length,
                      bottom_radius=0.27, top_radius=0.19, slice_count=14,
-                     material_name=m["bark"])
+                     material_name=m["bark"], parent_node_id=root)
     node_id = result.get("node_id") if isinstance(result, dict) else None
     if node_id is not None:
         c.move_node_id(node_id, rotation_xyzw=align_y_quaternion(d))
     end = v_add(start, v_scale(d, length))
-    blade(c, "Log Cut Face", end, 0.19, [1.0, 0.16, 1.0], d, m["cream"])
+    blade(c, "Log Cut Face", end, 0.19, [1.0, 0.16, 1.0], d, m["cream"],
+          parent=root)
     # Stump the log broke off from, with a pale cut face.
     stump = v_add(start, v_scale(d, -0.8))
     c.shape("cone", "Log Stump", [stump[0], 0.0, stump[2]], height=0.5,
             bottom_radius=0.30, top_radius=0.27, slice_count=14,
-            material_name=m["bark"])
+            material_name=m["bark"], parent_node_id=root)
     scaled_sphere(c, "Stump Cut Face", [stump[0], 0.5, stump[2]], 0.26,
-                  [1.0, 0.14, 1.0], m["cream"], slices=12, stacks=8)
+                  [1.0, 0.14, 1.0], m["cream"], slices=12, stacks=8,
+                  parent=root)
     # Stub branches poking up from the log.
     for i, f in enumerate((0.9, 1.7, 2.4)):
         p = v_add(start, v_scale(d, f))
         stub_dir = v_norm([rng.uniform(-0.4, 0.4), 1.0, rng.uniform(-0.5, 0.1)])
         result = c.shape("cone", f"Log Stub {i}", [p[0], p[1] + 0.12, p[2]],
                          height=rng.uniform(0.30, 0.45), bottom_radius=0.06,
-                         top_radius=0.025, slice_count=8, material_name=m["bark"])
+                         top_radius=0.025, slice_count=8, material_name=m["bark"],
+                         parent_node_id=root)
         node_id = result.get("node_id") if isinstance(result, dict) else None
         if node_id is not None:
             c.move_node_id(node_id, rotation_xyzw=align_y_quaternion(stub_dir))
@@ -425,13 +450,14 @@ def fallen_log(c, m, rng):
     for i, f in enumerate((0.5, 1.4, 2.2)):
         p = v_add(start, v_scale(d, f))
         scaled_sphere(c, f"Log Moss {i}", [p[0], p[1] + 0.18, p[2]],
-                      0.22, [1.4, 0.30, 0.85], m["moss"], slices=10, stacks=8)
-    # Mushrooms colonizing the log.
+                      0.22, [1.4, 0.30, 0.85], m["moss"], slices=10, stacks=8,
+                      parent=root)
+    # Mushrooms colonizing the log (grouped under the fallen tree).
     log_top = start[1] + 0.20
     for i, f in enumerate((1.15, 1.95)):
         p = v_add(start, v_scale(d, f))
         mushroom(c, f"Log Mushroom {i}", p[0] + 0.06, p[2] - 0.06,
-                 rng.uniform(0.09, 0.13), m, rng, y0=log_top)
+                 rng.uniform(0.09, 0.13), m, rng, y0=log_top, parent=root)
 
 
 # --------------------------------------------------------------------- main
