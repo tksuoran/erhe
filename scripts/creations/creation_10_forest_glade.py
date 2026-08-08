@@ -357,10 +357,11 @@ def flower(c, tag, x, z, color, m, rng):
             seg += 1
 
 
-def expand_fern(rng, iterations=4):
-    """Frond L-system: the rachis apex grows a segment bearing a pinna
-    pair (usually), a single left or right pinna otherwise; the surviving
-    apex becomes the tip leaflet."""
+def expand_fern(rng, iterations=6):
+    """Frond L-system: the rachis apex grows a short segment bearing a
+    pinna pair at nearly every node (rarely a bare segment), so pinnae
+    pack densely along the rachis; the surviving apex becomes the tip
+    leaflet."""
     s = "A"
     for _ in range(iterations):
         out = []
@@ -369,12 +370,10 @@ def expand_fern(rng, iterations=4):
                 out.append(ch)
                 continue
             r = rng.random()
-            if r < 0.70:
+            if r < 0.88:
                 out.append("F[+L][-L]A")
-            elif r < 0.85:
-                out.append("F[+L]A")
             else:
-                out.append("F[-L]A")
+                out.append("FA")
         s = "".join(out)
     return s.replace("A", "L")
 
@@ -428,8 +427,8 @@ def fern(c, tag, x, z, size, m, rng):
         parent = root
         for ch in expand_fern(rng):
             if ch == "F":
-                seg = size * 0.30 * (0.88 ** t) * rng.uniform(0.9, 1.1)
-                radius = size * 0.020 * (1.0 - 0.10 * t)
+                seg = size * 0.20 * (0.92 ** t) * rng.uniform(0.9, 1.1)
+                radius = size * 0.018 * (1.0 - 0.07 * t)
                 result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
                                  height=seg, bottom_radius=radius,
                                  top_radius=radius * 0.8, slice_count=6,
@@ -442,7 +441,7 @@ def fern(c, tag, x, z, size, m, rng):
                     parent = node_id
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
-                heading = v_norm(v_add(heading, [out_dir[0] * 0.15, -0.18, out_dir[2] * 0.15]))
+                heading = v_norm(v_add(heading, [out_dir[0] * 0.10, -0.12, out_dir[2] * 0.10]))
                 t += 1
             elif ch == "+":
                 pending = 1
@@ -454,15 +453,15 @@ def fern(c, tag, x, z, size, m, rng):
                 else:
                     pinna_dir = v_norm(v_add(v_scale(side, float(pending)),
                                              v_scale(heading, 0.55)))
-                length = size * 0.15 * (1.0 - 0.11 * t) * rng.uniform(0.85, 1.15)
+                length = size * 0.16 * (1.0 - 0.075 * t) * rng.uniform(0.85, 1.15)
                 mats = (m["leaf"] if (t + pending) % 2 else m["leaf2"], m["leaf2"])
-                if t <= 2:
+                if t <= 1:
                     compound_pinna(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
                                    pos, pinna_dir, length, parent, mats, rng)
                 else:
                     blade(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
                           v_add(pos, v_scale(pinna_dir, length * 0.9)),
-                          length, [0.42, 1.55, 0.16], pinna_dir, mats[0],
+                          length, [0.32, 1.55, 0.13], pinna_dir, mats[0],
                           parent=parent)
                 pending = 0
 
