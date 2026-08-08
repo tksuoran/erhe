@@ -1184,8 +1184,14 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         }
 
         const double scale = args.value("scale", 1.0);
+        // "none" = pure visual instance: the Node_physics attachment the brush
+        // instancing creates is detached again before the node enters the
+        // scene. Saves one strip pass per part on physics-driven assemblies
+        // (e.g. swaying trees whose child parts must not collide).
+        const std::string motion_mode_text = args.value("motion_mode", "dynamic");
+        const bool skip_physics = (motion_mode_text == "none");
         const erhe::physics::Motion_mode motion_mode = parse_motion_mode(
-            args.value("motion_mode", "dynamic"),
+            skip_physics ? "static" : motion_mode_text,
             erhe::physics::Motion_mode::e_dynamic
         );
 
@@ -1196,11 +1202,17 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
+        if (skip_physics) {
+            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(instance_node.get());
+            if (node_physics) {
+                instance_node->detach(node_physics.get());
+            }
+        }
         result["node_name"]   = instance_node->get_name();
         result["node_id"]     = instance_node->get_id();
         result["material"]    = material->get_name();
         result["position"]    = {position.x, position.y, position.z};
-        result["motion_mode"] = motion_mode_to_string(motion_mode);
+        result["motion_mode"] = skip_physics ? "none" : motion_mode_to_string(motion_mode);
         result["parent"]      = parent ? parent->get_name() : "(scene root)";
     }
 

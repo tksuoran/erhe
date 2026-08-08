@@ -148,7 +148,7 @@ void Mcp_server::refresh_tool_list()
             {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
             {"material_id",    {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over material_name)"}}},
             {"scale",          {{"type", "number"},  {"description", "Uniform scale factor for the instance (default 1.0)"}}},
-            {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic)"}}},
+            {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic), or none = no rigid body at all (pure visual part, e.g. children of a physics-driven assembly)"}}},
             {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},
             {"steps",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "box: subdivision steps [x, y, z]"}}},
             {"power",          {{"type", "number"},  {"description", "box: power"}}},
