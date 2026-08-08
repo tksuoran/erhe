@@ -277,7 +277,19 @@ def rig_spider(c, spider):
 def main():
     args = standard_args("Spider Sentinel")
     c = Creation("Spider Sentinel", port=args.port, pause_s=args.pause,
-                 editor_exe=args.editor_exe, reuse=args.reuse)
+                 editor_exe=args.editor_exe, reuse=args.reuse,
+                 keep_scenes=args.keep_scenes)
+
+    if args.reframe:
+        # Reframe mode: no build - load the saved scene and redo only the
+        # framing/screenshot stage (composition iteration on a built scene).
+        scene = c.load(args.reframe)
+        print(f"reframe: loaded {args.reframe} as scene {scene}")
+        c.place_camera([2.9, 1.5, -3.3], [0.0, 0.5, 0.3])
+        c.screenshot("logs/creations/spider_sentinel_reframe.png")
+        print("Spider Sentinel reframe complete.")
+        return
+
     scene = c.new_scene()
     print(f"scene: {scene}")
 

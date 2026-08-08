@@ -53,13 +53,18 @@ class Creation:
     helpers used by every creation script."""
 
     def __init__(self, title, port=8080, wait_s=120.0, pause_s=10.0,
-                 editor_exe=None, reuse=False):
+                 editor_exe=None, reuse=False, keep_scenes=False):
         self.title = title
         if not reuse:
             launch_editor(editor_exe or DEFAULT_EDITOR_EXE)
         self.client = McpClient(port)
         wait_for_server(self.client, wait_s)
         self.scene = None
+        # Iteration hygiene: a reused (already-running) editor still holds
+        # the previous run's scenes; close them so iterations do not
+        # accumulate scenes/VRAM. keep_scenes opts out (--keep-scenes).
+        self.reuse = reuse
+        self._close_existing_scenes = reuse and not keep_scenes
         # One-time pause after the first visible mesh appears, so a screen
         # video recording can be started before the scene builds up.
         self.pause_s = pause_s
@@ -147,8 +152,44 @@ class Creation:
 
     # ---------------------------------------------------------------- scene
 
+    def close_all_scenes(self):
+        """Close every open scene (previous iterations of a reused editor)."""
+        for scene in self.call("list_scenes").get("scenes", []):
+            self.mutate("close_scene", {"scene_name": scene["name"]})
+        # close_scene is queued through the message bus; give the closes a
+        # few frames to land before the next create/load.
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            if not self.call("list_scenes").get("scenes", []):
+                return
+            time.sleep(0.2)
+
+    def load(self, glb_path):
+        """Reframe mode: load a previously saved scene .glb and activate it
+        (no build). Pair with --reframe in scripts: rebuild only the
+        camera / lights / screenshot stage against the loaded content."""
+        if self._close_existing_scenes:
+            self.close_all_scenes()
+            self._close_existing_scenes = False
+        before = {s["name"] for s in self.call("list_scenes")["scenes"]}
+        self.mutate("load_scene", {"path": str(glb_path)})
+        deadline = time.time() + 120.0
+        while time.time() < deadline:
+            names = [s["name"] for s in self.call("list_scenes")["scenes"]]
+            fresh = [n for n in names if n not in before]
+            if fresh:
+                self.scene = fresh[0]
+                self.mutate("set_active_scene", {"scene_name": self.scene})
+                self.settle()
+                return self.scene
+            time.sleep(0.2)
+        raise RuntimeError(f"load_scene did not surface a scene for {glb_path}")
+
     def new_scene(self):
         """Create a fresh scene (own camera/viewport/library) and activate it."""
+        if self._close_existing_scenes:
+            self.close_all_scenes()
+            self._close_existing_scenes = False
         before = {s["name"] for s in self.call("list_scenes")["scenes"]}
         self.mutate("create_scene")
         deadline = time.time() + 30.0
@@ -824,5 +865,14 @@ def standard_args(description):
                              "screenshot runs)")
     parser.add_argument("--reuse", action="store_true",
                         help="use the already-running editor instead of "
-                             "launching a fresh one without a default scene")
+                             "launching a fresh one without a default scene; "
+                             "closes the previous run's scenes first (see "
+                             "--keep-scenes)")
+    parser.add_argument("--keep-scenes", action="store_true",
+                        help="with --reuse: keep the editor's existing scenes "
+                             "instead of closing them before this run")
+    parser.add_argument("--reframe", metavar="GLB", default=None,
+                        help="skip the build: load_scene this saved .glb and "
+                             "run only the script's camera/lights/screenshot "
+                             "stage (scripts that support it)")
     return parser.parse_args()
