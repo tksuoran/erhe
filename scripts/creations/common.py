@@ -208,16 +208,8 @@ class Creation:
                     break
         if node is None:
             raise RuntimeError(f"camera node '{camera_name}' not found")
-        self.select(node["id"])
         rotation = look_at_quaternion(eye, target, up)
-        # transform_selection applies one component per call.
-        self.mutate("transform_selection", {
-            "space": "global", "translation": [float(v) for v in eye],
-        })
-        self.mutate("transform_selection", {
-            "space": "global", "rotation_xyzw": rotation,
-        })
-        self.clear_selection()
+        self.set_node_transform(node["id"], translation=eye, rotation_xyzw=rotation)
 
     CLUTTER_WINDOWS = [
         "Animation", "Asset Browser", "Clipboard", "Commands", "Composer",
@@ -376,43 +368,54 @@ class Creation:
         self._record_pause()
         return node_name
 
-    def move_node_id(self, node_id, translation=None, rotation_xyzw=None, scale=None):
-        self.select(node_id)
+    def set_node_transform(self, node, translation=None, rotation_xyzw=None,
+                           scale=None, space="world", deadline_s=5.0):
+        """Selection-free ABSOLUTE transform set: all provided components in
+        ONE call, by node id (int) or name (str). A node created in the same
+        editor frame attaches on the next frame, so 'Node not found' is
+        retried briefly."""
+        args = {"scene_name": self.scene, "space": space}
+        if isinstance(node, int):
+            args["node_id"] = node
+        else:
+            args["node_name"] = str(node)
         if translation is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "translation": [float(v) for v in translation]})
+            args["translation"] = [float(v) for v in translation]
         if rotation_xyzw is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "rotation_xyzw": [float(v) for v in rotation_xyzw]})
+            args["rotation_xyzw"] = [float(v) for v in rotation_xyzw]
         if scale is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "scale": [float(v) for v in scale]})
-        self.clear_selection()
+            args["scale"] = [float(v) for v in scale]
+        deadline = time.time() + deadline_s
+        while True:
+            try:
+                return self.mutate("set_node_transform", args)
+            except RuntimeError as error:
+                if ("Node not found" not in str(error)) or (time.time() > deadline):
+                    raise
+                time.sleep(0.05)
+
+    def move_node_id(self, node_id, translation=None, rotation_xyzw=None, scale=None):
+        self.set_node_transform(int(node_id), translation=translation,
+                                rotation_xyzw=rotation_xyzw, scale=scale)
 
     def move_node(self, node_name, translation=None, rotation_xyzw=None, scale=None):
-        node = self.node_by_name(node_name)
-        if node is None:
-            raise RuntimeError(f"node '{node_name}' not found")
-        self.select(node["id"])
-        # transform_selection applies one component per call.
-        if translation is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "translation": [float(v) for v in translation]})
-        if rotation_xyzw is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "rotation_xyzw": [float(v) for v in rotation_xyzw]})
-        if scale is not None:
-            self.mutate("transform_selection", {
-                "space": "global", "scale": [float(v) for v in scale]})
-        self.clear_selection()
+        self.set_node_transform(str(node_name), translation=translation,
+                                rotation_xyzw=rotation_xyzw, scale=scale)
 
     # ----------------------------------------------------------- primitives
 
     def shape(self, shape, name, position, **kwargs):
         """create_shape wrapper; returns the tool's result payload.
+        Pose in the SAME call: rotation_xyzw=[x,y,z,w] (world), scale=number
+        (uniform brush bake - collision follows) or scale=[x,y,z] (node TRS -
+        visual anisotropy, pair with motion_mode 'none'), mass=<kg> for
+        dynamic parts (inertia rescales to match). One call replaces the old
+        create + select + transform + deselect sequence.
         Box quirk: Create_box applies mat4_swap_xy to the generated geometry,
         so the effective world extents are (size[1], size[0], size[2]); swap
         here so callers can pass intuitive [x, y, z] extents."""
+        if kwargs.get("rotation_xyzw") is None:
+            kwargs.pop("rotation_xyzw", None)
         if shape == "box" and "size" in kwargs and kwargs["size"] is not None:
             sx, sy, sz = kwargs["size"]
             kwargs["size"] = [sy, sx, sz]

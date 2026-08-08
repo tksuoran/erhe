@@ -35,7 +35,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, align_y_quaternion, probe_tilt,
+    Creation, standard_args, align_y_quaternion, probe_tilt, quat_mul,
     v_add, v_scale, v_cross, v_norm, v_rotate,
 )
 
@@ -183,15 +183,13 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
             length = seg_len * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
             radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
             result = c.shape("cone", f"{tag} Branch {seg_count}", list(pos),
+                             rotation_xyzw=align_y_quaternion(heading),
                              height=length, bottom_radius=radius,
                              top_radius=max(0.025, radius * 0.7),
                              slice_count=8, material_name=bark,
                              parent_node_id=parent, motion_mode="none")
             node_id = result.get("node_id") if isinstance(result, dict) else None
-            rotation = align_y_quaternion(heading)
             if node_id is not None:
-                if rotation is not None:
-                    c.move_node_id(node_id, rotation_xyzw=rotation)
                 parent = node_id
             seg_count += 1
             pos = v_add(pos, v_scale(heading, length))
@@ -239,15 +237,14 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
 # ------------------------------------------------------------- undergrowth
 
 def scaled_sphere(c, name, position, radius, scale, material, slices=14, stacks=10,
-                  parent=None, motion_mode="static"):
+                  parent=None, motion_mode="static", rotation_xyzw=None):
     result = c.shape("uv_sphere", name, position, radius=radius,
+                     rotation_xyzw=rotation_xyzw,
+                     scale=scale if scale != [1.0, 1.0, 1.0] else None,
                      slice_count=slices, stack_count=stacks,
                      material_name=material, parent_node_id=parent,
                      motion_mode=motion_mode)
-    node_id = result.get("node_id") if isinstance(result, dict) else None
-    if node_id is not None and scale != [1.0, 1.0, 1.0]:
-        c.move_node_id(node_id, scale=scale)
-    return node_id
+    return result.get("node_id") if isinstance(result, dict) else None
 
 
 def bush(c, tag, x, z, size, materials, rng):
@@ -270,9 +267,8 @@ def mossy_rock(c, tag, x, z, size, yaw, m, rng):
     root = c.group(tag, [x, 0.0, z])
     node_id = scaled_sphere(c, f"{tag} Rock", [x, size * 0.26, z], size,
                             [1.0 + rng.uniform(-0.15, 0.25), 0.50, 1.0], m["rock"],
-                            parent=root)
-    if node_id is not None:
-        c.move_node_id(node_id, rotation_xyzw=[0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)])
+                            parent=root,
+                            rotation_xyzw=[0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)])
     scaled_sphere(c, f"{tag} Moss", [x + size * 0.12, size * 0.42, z - size * 0.08],
                   size * 0.82, [1.05, 0.32, 1.0], m["moss"],
                   parent=node_id if node_id is not None else root)
@@ -301,17 +297,12 @@ def mushroom(c, tag, x, z, height, m, rng, y0=0.0, parent=None):
 
 def blade(c, name, position, radius, scale, direction, material, parent=None):
     """Elongated squashed sphere aligned along direction (leaf blades,
-    petals, cut faces); scale FIRST, then rotate. Pure visual."""
-    result = c.shape("uv_sphere", name, position, radius=radius,
-                     slice_count=10, stack_count=8, material_name=material,
-                     parent_node_id=parent, motion_mode="none")
-    node_id = result.get("node_id") if isinstance(result, dict) else None
-    if node_id is None:
-        return
-    c.move_node_id(node_id, scale=scale)
-    rotation = align_y_quaternion(direction)
-    if rotation is not None:
-        c.move_node_id(node_id, rotation_xyzw=rotation)
+    petals, cut faces): one create call carries rotation + node scale
+    (composed as T*R*S, same as the old scale-then-rotate). Pure visual."""
+    c.shape("uv_sphere", name, position, radius=radius,
+            rotation_xyzw=align_y_quaternion(direction), scale=scale,
+            slice_count=10, stack_count=8, material_name=material,
+            parent_node_id=parent, motion_mode="none")
 
 
 def expand_flower(rng, iterations=3):
@@ -354,15 +345,13 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
             heading = v_norm(v_rotate(heading, left, wob))
             length = rng.uniform(0.09, 0.14)
             result = c.shape("cone", f"{tag} Stem {seg}", list(pos),
+                             rotation_xyzw=align_y_quaternion(heading),
                              height=length, bottom_radius=0.013,
                              top_radius=0.010, slice_count=6,
                              material_name=m["leaf2"], parent_node_id=parent,
                              motion_mode="none")
-            rotation = align_y_quaternion(heading)
             node_id = result.get("node_id") if isinstance(result, dict) else None
             if node_id is not None:
-                if rotation is not None:
-                    c.move_node_id(node_id, rotation_xyzw=rotation)
                 if seg == 0:
                     sway_jobs.append((tag, node_id, list(pos), "stem_sway", 0.03, 0.35, 0.10))
                 parent = node_id
@@ -421,13 +410,11 @@ def compound_pinna(c, name, pos, direction, length, parent, materials, rng):
     d = v_norm(direction)
     midrib_len = length * 2.1
     result = c.shape("cone", f"{name} Midrib", list(pos), height=midrib_len,
+                     rotation_xyzw=align_y_quaternion(d),
                      bottom_radius=length * 0.09, top_radius=length * 0.05,
                      slice_count=6, material_name=materials[1],
                      parent_node_id=parent, motion_mode="none")
     node_id = result.get("node_id") if isinstance(result, dict) else None
-    rotation = align_y_quaternion(d)
-    if node_id is not None and rotation is not None:
-        c.move_node_id(node_id, rotation_xyzw=rotation)
     mid_parent = node_id if node_id is not None else parent
     sperp = v_cross(d, [0.0, 1.0, 0.0])
     if abs(sperp[0]) + abs(sperp[1]) + abs(sperp[2]) < 1e-4:
@@ -463,15 +450,13 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                 seg = size * 0.20 * (0.92 ** t) * rng.uniform(0.9, 1.1)
                 radius = size * 0.018 * (1.0 - 0.07 * t)
                 result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
+                                 rotation_xyzw=align_y_quaternion(heading),
                                  height=seg, bottom_radius=radius,
                                  top_radius=radius * 0.8, slice_count=6,
                                  material_name=m["leaf2"], parent_node_id=parent,
                                  motion_mode="none")
-                rotation = align_y_quaternion(heading)
                 node_id = result.get("node_id") if isinstance(result, dict) else None
                 if node_id is not None:
-                    if rotation is not None:
-                        c.move_node_id(node_id, rotation_xyzw=rotation)
                     if t == 0:
                         sway_jobs.append((f"{tag} Frond {i}", node_id, list(pos),
                                           "frond_sway", 0.8, 0.22, 0.8))
@@ -521,15 +506,12 @@ def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
         a = rng.uniform(0.0, 2.0 * math.pi)
         tilt = math.radians(rng.uniform(14.0, 38.0))
         d = v_norm([math.sin(tilt) * math.cos(a), math.cos(tilt), math.sin(tilt) * math.sin(a)])
-        result = c.shape("cone", f"{tag} Blade {i}", base,
-                         height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
-                         top_radius=0.001, slice_count=3,
-                         material_name=m["leaf" if i % 2 else "leaf2"],
-                         parent_node_id=spine_id, motion_mode="none")
-        node_id = result.get("node_id") if isinstance(result, dict) else None
-        rotation = align_y_quaternion(d)
-        if node_id is not None and rotation is not None:
-            c.move_node_id(node_id, rotation_xyzw=rotation)
+        c.shape("cone", f"{tag} Blade {i}", base,
+                rotation_xyzw=align_y_quaternion(d),
+                height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
+                top_radius=0.001, slice_count=3,
+                material_name=m["leaf" if i % 2 else "leaf2"],
+                parent_node_id=spine_id, motion_mode="none")
 
 
 def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
@@ -579,14 +561,12 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
             branch_dir = v_norm([out_dir[0], ring_up, out_dir[2]])
             branch_len = rng.uniform(1.1, 1.5) * scale
             result = c.shape("cone", f"{tag} Branch {curtain_index}", ring_base,
+                             rotation_xyzw=align_y_quaternion(branch_dir),
                              height=branch_len, bottom_radius=0.09 * scale,
                              top_radius=0.05 * scale, slice_count=8,
                              material_name=m["bark"], parent_node_id=on_trunk,
                              motion_mode="none")
             branch_id = result.get("node_id") if isinstance(result, dict) else None
-            rotation = align_y_quaternion(branch_dir)
-            if branch_id is not None and rotation is not None:
-                c.move_node_id(branch_id, rotation_xyzw=rotation)
             carrier = branch_id if branch_id is not None else on_trunk
             tip = v_add(ring_base, v_scale(branch_dir, branch_len))
 
@@ -637,11 +617,10 @@ def fallen_log(c, m, rng):
     length = 3.1
     root = c.group("Fallen Tree", [start[0], 0.0, start[2]])
     result = c.shape("cone", "Fallen Log", start, height=length,
+                     rotation_xyzw=align_y_quaternion(d),
                      bottom_radius=0.27, top_radius=0.19, slice_count=14,
                      material_name=m["bark"], parent_node_id=root)
     log_id = result.get("node_id") if isinstance(result, dict) else None
-    if log_id is not None:
-        c.move_node_id(log_id, rotation_xyzw=align_y_quaternion(d))
     on_log = log_id if log_id is not None else root
     end = v_add(start, v_scale(d, length))
     blade(c, "Log Cut Face", end, 0.19, [1.0, 0.16, 1.0], d, m["cream"],
@@ -657,13 +636,11 @@ def fallen_log(c, m, rng):
     for i, f in enumerate((0.9, 1.7, 2.4)):
         p = v_add(start, v_scale(d, f))
         stub_dir = v_norm([rng.uniform(-0.4, 0.4), 1.0, rng.uniform(-0.5, 0.1)])
-        result = c.shape("cone", f"Log Stub {i}", [p[0], p[1] + 0.12, p[2]],
-                         height=rng.uniform(0.30, 0.45), bottom_radius=0.06,
-                         top_radius=0.025, slice_count=8, material_name=m["bark"],
-                         parent_node_id=on_log)
-        node_id = result.get("node_id") if isinstance(result, dict) else None
-        if node_id is not None:
-            c.move_node_id(node_id, rotation_xyzw=align_y_quaternion(stub_dir))
+        c.shape("cone", f"Log Stub {i}", [p[0], p[1] + 0.12, p[2]],
+                rotation_xyzw=align_y_quaternion(stub_dir),
+                height=rng.uniform(0.30, 0.45), bottom_radius=0.06,
+                top_radius=0.025, slice_count=8, material_name=m["bark"],
+                parent_node_id=on_log)
     for i, f in enumerate((0.5, 1.4, 2.2)):
         p = v_add(start, v_scale(d, f))
         scaled_sphere(c, f"Log Moss {i}", [p[0], p[1] + 0.18, p[2]],
@@ -718,22 +695,13 @@ def main():
     # watching a windowed build.
     c.light("directional", "Morning Sun", [0.0, 12.0, 0.0],
             [1.0, 0.92, 0.75], 2.6)
-    c.settle()  # light nodes insert on the next frame; lookup needs it live
-    sun = c.node_by_name("Morning Sun")
-    if sun is not None:
-        pitch = math.radians(-142.0)
-        yaw = math.radians(-55.0)
-        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
-        qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
-        q = [
-            qy[3] * qx[0] + qy[0] * qx[3] + qy[1] * qx[2] - qy[2] * qx[1],
-            qy[3] * qx[1] - qy[0] * qx[2] + qy[1] * qx[3] + qy[2] * qx[0],
-            qy[3] * qx[2] + qy[0] * qx[1] - qy[1] * qx[0] + qy[2] * qx[3],
-            qy[3] * qx[3] - qy[0] * qx[0] - qy[1] * qx[1] - qy[2] * qx[2],
-        ]
-        c.select(sun["id"])
-        c.mutate("transform_selection", {"space": "global", "rotation_xyzw": q})
-        c.clear_selection()
+    pitch = math.radians(-142.0)
+    yaw = math.radians(-55.0)
+    qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+    qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
+    # set_node_transform retries while the light's insert is pending: no
+    # settle + node_by_name dance, and the selection is never touched.
+    c.set_node_transform("Morning Sun", rotation_xyzw=quat_mul(qy, qx))
     c.light("point", "Green Bounce", [0.0, 3.5, 0.0], [0.55, 0.75, 0.45],
             45.0, range=20.0, cast_shadow=False)
     c.shadow_range(70.0)  # cover the whole tree ring + floor horizon

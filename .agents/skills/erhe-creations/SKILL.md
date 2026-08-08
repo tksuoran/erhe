@@ -104,9 +104,22 @@ following its construction logic:
 
 ## Transform gotchas (cost real debugging time - trust these)
 
-- `transform_selection` applies **ONE component per call** (translation
-  OR rotation OR scale); combined calls silently drop components.
-  `common.move_node_id` handles this.
+- **Pose at creation**: `create_shape` takes `rotation_xyzw`, `scale`
+  (number = uniform brush bake, collision follows; [x,y,z] array = node
+  TRS scale, visual only - pair with motion_mode "none") and `mass`
+  (dynamic parts; inertia rescales). One call replaces the old create +
+  select + rotate + deselect sequence, which was 69% of a big scene's
+  MCP time.
+- **`set_node_transform`** sets a node's transform by id/NAME with NO
+  selection: ABSOLUTE semantics, all provided components in one call,
+  undoable, rigid body teleported to the pose. It retries client-side
+  ('Node not found') while a same-frame insert is pending - rotating a
+  just-created light by name needs no settle() anymore. Prefer it over
+  select_items + transform_selection everywhere (selection has side
+  effects: gizmo rebind, selected dynamic bodies go kinematic).
+- `transform_selection` (when you do use it) applies **ONE component
+  per call** (translation OR rotation OR scale); combined calls
+  silently drop components.
 - Align-to-direction quaternion (chained cones, blades): axis MUST be
   `cross(+Y, dir) = (d.z, 0, -d.x)`. The mirrored sign renders every
   chained segment tilted opposite its chain step -> gapped "dashed"
@@ -165,8 +178,9 @@ following its construction logic:
 - **Set up lights + `shadow_range()` FIRST** (before any geometry) so a
   windowed viewing is lit and shadowed from the first shape onward.
   Light nodes insert on the NEXT frame (unlike create_node's synchronous
-  insert), so a node_by_name lookup right after `light()` (e.g. to
-  rotate the sun) needs a `settle()` in between.
+  insert); rotate the sun with `c.set_node_transform("<light name>",
+  rotation_xyzw=q)` - its not-found retry rides out the pending insert,
+  no settle() needed.
 - Tree age variety (creation 13): pass an age/scale parameter driving
   size (~ age^0.7-0.8), L-system depth (+1 iteration when age >= 1.3,
   -1 for saplings), branch density, gnarl and canopy clump size; sway

@@ -33,7 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
     Creation, standard_args, align_y_quaternion, body_axis_elevation,
-    hierarchy_report, probe_pose, rest_rotation,
+    hierarchy_report, probe_pose, quat_mul, rest_rotation,
     v_add, v_sub, v_scale, v_dot, v_distance, v_norm,
 )
 
@@ -157,15 +157,13 @@ class Spider:
         cap0   = v_add(p0, v_scale(direction, inset0))
         center = v_add(cap0, v_scale(direction, 0.5 * length))
         result = self.c.shape("capsule", name, center, motion_mode="none",
+                              rotation_xyzw=align_y_quaternion(direction),
                               length=length, bottom_radius=r0, top_radius=r1,
                               slice_count=16, stack_count=4,
                               material_name=material, parent_node_id=self.root)
         node_id = result.get("node_id") if isinstance(result, dict) else None
         if node_id is None:
             raise RuntimeError(f"create_shape '{name}' returned no node_id")
-        rotation = align_y_quaternion(direction)
-        if rotation is not None:
-            self.c.move_node_id(node_id, rotation_xyzw=rotation)
         self.parts[name] = node_id
         self.body_jobs.append((node_id, mass))
         self.capsules.append((name, cap0, v_add(cap0, v_scale(direction, length)), r0, r1))
@@ -221,15 +219,12 @@ class Spider:
                              slice_count=10, stack_count=8,
                              material_name=self.m["glow"],
                              parent_node_id=front_id, motion_mode="none")
-            result = self.c.shape("cone", f"Spider Fang {side:+.0f}",
-                                  self.local([side * 0.085, -0.115, -0.545]),
-                                  height=0.17, bottom_radius=0.038, top_radius=0.006,
-                                  slice_count=8, material_name=self.m["steel"],
-                                  parent_node_id=front_id, motion_mode="none")
-            node_id = result.get("node_id") if isinstance(result, dict) else None
-            rotation = align_y_quaternion([0.0, -0.75, -0.66])
-            if node_id is not None and rotation is not None:
-                self.c.move_node_id(node_id, rotation_xyzw=rotation)
+            self.c.shape("cone", f"Spider Fang {side:+.0f}",
+                         self.local([side * 0.085, -0.115, -0.545]),
+                         rotation_xyzw=align_y_quaternion([0.0, -0.75, -0.66]),
+                         height=0.17, bottom_radius=0.038, top_radius=0.006,
+                         slice_count=8, material_name=self.m["steel"],
+                         parent_node_id=front_id, motion_mode="none")
 
     def worst_clearance(self):
         worst_gap, worst_pair = math.inf, ""
@@ -308,21 +303,12 @@ def main():
 
     # Lights first, so a windowed viewing is lit from the first shape onward.
     c.light("directional", "Dusk Sun", [0.0, 10.0, 0.0], [1.0, 0.82, 0.60], 2.4)
-    c.settle()  # light nodes insert on the next frame; lookup needs it live
-    sun = c.node_by_name("Dusk Sun")
-    if sun is not None:
-        pitch, yaw = math.radians(-150.0), math.radians(40.0)
-        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
-        qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
-        q = [
-            qy[3] * qx[0] + qy[0] * qx[3] + qy[1] * qx[2] - qy[2] * qx[1],
-            qy[3] * qx[1] - qy[0] * qx[2] + qy[1] * qx[3] + qy[2] * qx[0],
-            qy[3] * qx[2] + qy[0] * qx[1] - qy[1] * qx[0] + qy[2] * qx[3],
-            qy[3] * qx[3] - qy[0] * qx[0] - qy[1] * qx[1] - qy[2] * qx[2],
-        ]
-        c.select(sun["id"])
-        c.mutate("transform_selection", {"space": "global", "rotation_xyzw": q})
-        c.clear_selection()
+    pitch, yaw = math.radians(-150.0), math.radians(40.0)
+    qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+    qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
+    # set_node_transform retries while the light's insert is pending, so no
+    # settle + node_by_name dance; by-name addressing, selection untouched.
+    c.set_node_transform("Dusk Sun", rotation_xyzw=quat_mul(qy, qx))
     c.light("point", "Cool Fill", [-4.5, 3.0, 3.5], [0.4, 0.5, 0.85], 130.0,
             range=16.0, cast_shadow=False)
     c.light("point", "Warm Rim", [3.0, 2.2, -4.5], [1.0, 0.6, 0.3], 110.0,
@@ -333,11 +319,9 @@ def main():
             material_name=m["floor"])
     for i, (x, z, r) in enumerate([(-4.8, -3.6, 0.55), (6.5, 5.0, 0.5),
                                    (-5.5, 6.5, 0.45)]):
-        result = c.shape("uv_sphere", f"Boulder {i}", [x, r * 0.35, z], radius=r,
-                         slice_count=14, stack_count=10, material_name=m["rock"])
-        node_id = result.get("node_id") if isinstance(result, dict) else None
-        if node_id is not None:
-            c.move_node_id(node_id, scale=[1.15, 0.55, 1.0])
+        c.shape("uv_sphere", f"Boulder {i}", [x, r * 0.35, z], radius=r,
+                scale=[1.15, 0.55, 1.0], slice_count=14, stack_count=10,
+                material_name=m["rock"])
 
     # ------------------------------------------------------------- spider
     center = [0.0, stand_height(), 0.0]

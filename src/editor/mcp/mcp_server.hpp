@@ -144,6 +144,7 @@ private:
     auto query_active_scene     (const nlohmann::json& args) -> std::string;
     auto action_set_active_scene(const nlohmann::json& args) -> std::string;
     auto action_transform_selection(const nlohmann::json& args) -> std::string;
+    auto action_set_node_transform(const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
     auto action_create_node     (const nlohmann::json& args) -> std::string;

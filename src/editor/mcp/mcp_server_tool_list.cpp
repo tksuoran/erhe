@@ -147,7 +147,9 @@ void Mcp_server::refresh_tool_list()
             {"parent_node_id", {{"type", "integer"}, {"description", "Parent node ID for the instance (default: scene root); the world position is preserved"}}},
             {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
             {"material_id",    {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over material_name)"}}},
-            {"scale",          {{"type", "number"},  {"description", "Uniform scale factor for the instance (default 1.0)"}}},
+            {"rotation_xyzw",  {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 4}, {"maxItems", 4}, {"description", "World rotation quaternion [x, y, z, w] for the instance - avoids the select + transform_selection round trips"}}},
+            {"scale",          {{"description", "Number = uniform brush bake scale (geometry, collision shape, volume and inertia all scale; use for physics parts; default 1.0). Array [x, y, z] = node-space TRS scale composed into the transform (visual anisotropy; collision shapes do NOT follow node scale - pair with motion_mode 'none')"}}},
+            {"mass",           {{"type", "number"},  {"description", "Rigid body mass override for the instance; local inertia is rescaled to match (default: brush density x volume). Only meaningful with a physics motion_mode"}}},
             {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic), or none = no rigid body at all (pure visual part, e.g. children of a physics-driven assembly)"}}},
             {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},
             {"steps",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "box: subdivision steps [x, y, z]"}}},
@@ -167,6 +169,19 @@ void Mcp_server::refresh_tool_list()
             {"minor_steps",    {{"type", "integer"}, {"description", "torus: minor steps"}}}
         }},
         {"required", json::array({"scene_name", "shape"})}
+    }});
+    m_tool_infos.push_back({"set_node_transform",  "Set a node's transform directly by node id/name - no selection involved (no gizmo rebind, no kinematic hold on selected dynamic bodies). ABSOLUTE set semantics: each provided component (translation / rotation_xyzw / scale) replaces that component of the node's current transform in the requested space; omitted components are preserved. All provided components apply in ONE call (unlike transform_selection's one-component-per-call drag emulation). Applied immediately and recorded as an undoable operation; the node's rigid body is snapped (teleported, no impulse) to the new pose. Note: a node created in the same frame attaches on the next frame and is not yet findable - retry on 'Node not found'.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",       {{"type", "integer"}, {"description", "Node ID (takes precedence over node_name)"}}},
+            {"node_name",     {{"type", "string"},  {"description", "Node name (alternative to node_id)"}}},
+            {"space",         {{"type", "string"},  {"description", "'world' (default; 'global' accepted as alias) or 'local' (parent space)"}}},
+            {"translation",   {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Translation [x, y, z]"}}},
+            {"rotation_xyzw", {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 4}, {"maxItems", 4}, {"description", "Rotation quaternion [x, y, z, w]"}}},
+            {"scale",         {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Scale [x, y, z]"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"create_node",         "Create an empty scene node (undoable), optionally parented and positioned. Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.", {
         {"type", "object"},

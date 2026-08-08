@@ -63,6 +63,7 @@ public:
     double                                     scale          {1.0f};
     bool                                       physics_enabled{true};
     erhe::physics::Motion_mode                 motion_mode    {erhe::physics::Motion_mode::e_dynamic};
+    std::optional<float>                       mass_override  {};   // rigid body mass; inertia is rescaled to match
 };
 
 class Brush : public erhe::Item<erhe::Item_base, erhe::Item_base, Brush, erhe::Item_kind::not_clonable>
@@ -136,7 +137,8 @@ auto place_brush_in_scene(
     double                                            scale           = 1.0,
     erhe::physics::Motion_mode                        motion_mode     = erhe::physics::Motion_mode::e_dynamic,
     std::shared_ptr<erhe::scene::Node>                parent          = {},
-    std::size_t                                       index_in_parent = 0
+    std::size_t                                       index_in_parent = 0,
+    std::optional<float>                              mass_override   = {}
 ) -> std::shared_ptr<erhe::scene::Node>;
 
 }

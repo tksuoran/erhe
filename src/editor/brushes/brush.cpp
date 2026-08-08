@@ -366,10 +366,20 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         if (m_data.collision_shape || m_data.collision_shape_generator) {
             ERHE_PROFILE_SCOPE("make brush node physics");
 
+            // Inertia scales linearly with mass for a fixed shape, so a mass
+            // override rescales the precomputed local inertia by the ratio.
+            const float default_mass = m_data.density * scaled.volume;
+            float     mass    = default_mass;
+            glm::mat4 inertia = scaled.local_inertia;
+            if (instance_create_info.mass_override.has_value() && (default_mass > 0.0f)) {
+                mass = instance_create_info.mass_override.value();
+                const float ratio = mass / default_mass;
+                inertia = glm::mat4{glm::mat3{scaled.local_inertia} * ratio};
+            }
             const erhe::physics::IRigid_body_create_info rigid_body_create_info{
                 .collision_shape  = scaled.collision_shape,
-                .mass             = m_data.density * scaled.volume,
-                .inertia_override = scaled.local_inertia,
+                .mass             = mass,
+                .inertia_override = inertia,
                 .debug_label      = std::string{name},
                 .motion_mode      = instance_create_info.motion_mode,
             };
@@ -402,7 +412,8 @@ auto place_brush_in_scene(
     double                                            scale,
     erhe::physics::Motion_mode                        motion_mode,
     std::shared_ptr<erhe::scene::Node>                parent,
-    std::size_t                                       index_in_parent
+    std::size_t                                       index_in_parent,
+    std::optional<float>                              mass_override
 ) -> std::shared_ptr<erhe::scene::Node>
 {
     constexpr uint64_t mesh_flags =
@@ -425,6 +436,7 @@ auto place_brush_in_scene(
         .material        = material,
         .scale           = scale,
         .motion_mode     = motion_mode,
+        .mass_override   = mass_override,
     };
 
     auto instance_node = brush.make_instance(create_info);

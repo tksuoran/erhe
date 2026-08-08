@@ -437,6 +437,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "get_active_scene",               &Mcp_server::query_active_scene                   },
             { "set_active_scene",               &Mcp_server::action_set_active_scene              },
             { "transform_selection",            &Mcp_server::action_transform_selection           },
+            { "set_node_transform",             &Mcp_server::action_set_node_transform            },
             { "place_brush",                    &Mcp_server::action_place_brush                   },
             { "create_shape",                   &Mcp_server::action_create_shape                  },
             { "create_node",                    &Mcp_server::action_create_node                   },

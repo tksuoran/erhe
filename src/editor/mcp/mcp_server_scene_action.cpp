@@ -6,6 +6,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_tile_io.hpp"
@@ -857,6 +858,116 @@ auto Mcp_server::action_transform_selection(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_set_node_transform(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        json r = make_text_content("Node not found (a node created this frame attaches on the next frame - retry)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string space = args.value("space", "world");
+    const bool world = (space == "world") || (space == "global");
+    if (!world && (space != "local")) {
+        json r = make_text_content("Invalid space '" + space + "' (expected 'world' or 'local')");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::string parse_error;
+    auto read_floats = [&args, &parse_error](const char* key, float* out_values, std::size_t count) -> bool {
+        if (!args.contains(key)) {
+            return false;
+        }
+        const json& value = args.at(key);
+        if (value.is_array() && (value.size() == count)) {
+            for (std::size_t i = 0; i < count; ++i) {
+                if (!value[i].is_number()) {
+                    parse_error = std::string{key} + " must be an array of " + std::to_string(count) + " numbers";
+                    return false;
+                }
+                out_values[i] = value[i].get<float>();
+            }
+            return true;
+        }
+        parse_error = std::string{key} + " must be an array of " + std::to_string(count) + " numbers";
+        return false;
+    };
+
+    std::optional<glm::vec3> translation;
+    std::optional<glm::quat> rotation;
+    std::optional<glm::vec3> scale;
+    float v[4];
+    if (read_floats("translation",   v, 3)) { translation = glm::vec3{v[0], v[1], v[2]};       }
+    if (read_floats("rotation_xyzw", v, 4)) { rotation    = glm::quat{v[3], v[0], v[1], v[2]}; }
+    if (read_floats("scale",         v, 3)) { scale       = glm::vec3{v[0], v[1], v[2]};       }
+    if (!parse_error.empty()) {
+        json r = make_text_content(parse_error);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (!translation.has_value() && !rotation.has_value() && !scale.has_value()) {
+        json r = make_text_content("Nothing to set - provide translation, rotation_xyzw and/or scale");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // ABSOLUTE set semantics (unlike transform_selection's drag-delta): the
+    // provided components replace those of the node's current transform in
+    // the requested space, in ONE call, without touching the selection (no
+    // gizmo rebind, no kinematic hold on selected dynamic bodies).
+    const erhe::scene::Trs_transform parent_from_node_before = node->parent_from_node_transform();
+    erhe::scene::Trs_transform trs = world ? node->world_from_node_transform() : parent_from_node_before;
+    if (translation.has_value()) { trs.set_translation(translation.value()); }
+    if (rotation.has_value())    { trs.set_rotation   (rotation.value());    }
+    if (scale.has_value())       { trs.set_scale      (scale.value());       }
+    if (world) {
+        node->set_world_from_node(trs);
+    } else {
+        node->set_parent_from_node(trs);
+    }
+
+    // Applied immediately (so chained set_node_transform calls compose), then
+    // recorded for undo: Node_transform_operation's execute is an idempotent
+    // absolute re-apply, so queueing it is the record. It also snaps the
+    // rigid body to the new pose (teleport, no impulse) on execute and undo.
+    m_context.operation_stack->queue(
+        std::make_shared<Node_transform_operation>(
+            Node_transform_operation::Parameters{
+                .node                    = node,
+                .parent_from_node_before = parent_from_node_before,
+                .parent_from_node_after  = node->parent_from_node_transform()
+            }
+        )
+    );
+
+    auto trs_to_json = [](const erhe::scene::Trs_transform& t) -> json {
+        const glm::vec3 translation_out = t.get_translation();
+        const glm::quat rotation_out    = t.get_rotation();
+        const glm::vec3 scale_out       = t.get_scale();
+        return json{
+            {"translation",   {translation_out.x, translation_out.y, translation_out.z}},
+            {"rotation_xyzw", {rotation_out.x, rotation_out.y, rotation_out.z, rotation_out.w}},
+            {"scale",         {scale_out.x, scale_out.y, scale_out.z}}
+        };
+    };
+    return make_json_content({
+        {"node_name",       node->get_name()},
+        {"node_id",         node->get_id()},
+        {"space",           world ? "world" : "local"},
+        {"local_transform", trs_to_json(node->parent_from_node_transform())},
+        {"world_transform", trs_to_json(node->world_from_node_transform())}
+    }).dump();
+}
+
 auto Mcp_server::action_place_brush(const json& args) -> std::string
 {
     const std::string scene_name    = args.value("scene_name", "");
@@ -1166,6 +1277,14 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         glm::vec3 position{0.0f};
         read_vec3("position", position);
 
+        std::optional<glm::quat> rotation;
+        {
+            const json value = args.value("rotation_xyzw", json());
+            if (value.is_array() && (value.size() == 4)) {
+                rotation = glm::quat{value[3].get<float>(), value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            }
+        }
+
         std::shared_ptr<erhe::scene::Node> parent;
         if (args.contains("parent_node_id")) {
             const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
@@ -1183,7 +1302,25 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             }
         }
 
-        const double scale = args.value("scale", 1.0);
+        // "scale" as a number is the brush bake scale (geometry, collision
+        // shape, volume and inertia all scale - the right choice for physics
+        // parts); as an array of 3 it becomes node-space TRS scale composed
+        // into the world transform (visual anisotropy - collision shapes do
+        // NOT follow node scale, so use it with motion_mode "none").
+        double scale = 1.0;
+        std::optional<glm::vec3> node_scale;
+        if (args.contains("scale")) {
+            const json& value = args.at("scale");
+            if (value.is_number()) {
+                scale = value.get<double>();
+            } else if (value.is_array() && (value.size() == 3)) {
+                node_scale = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            }
+        }
+        std::optional<float> mass_override;
+        if (args.contains("mass") && args.at("mass").is_number()) {
+            mass_override = args.at("mass").get<float>();
+        }
         // "none" = pure visual instance: the Node_physics attachment the brush
         // instancing creates is detached again before the node enters the
         // scene. Saves one strip pass per part on physics-driven assemblies
@@ -1195,8 +1332,14 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             erhe::physics::Motion_mode::e_dynamic
         );
 
-        const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
-        auto instance_node = place_brush_in_scene(m_context, *brush, *sr, world_from_node, material, scale, motion_mode, parent);
+        glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+        if (rotation.has_value()) {
+            world_from_node = world_from_node * glm::mat4_cast(rotation.value());
+        }
+        if (node_scale.has_value()) {
+            world_from_node = world_from_node * erhe::math::create_scale<float>(node_scale.value());
+        }
+        auto instance_node = place_brush_in_scene(m_context, *brush, *sr, world_from_node, material, scale, motion_mode, parent, 0, mass_override);
         if (!instance_node) {
             json r = make_text_content("Failed to create shape instance");
             r["isError"] = true;
@@ -1214,6 +1357,15 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         result["position"]    = {position.x, position.y, position.z};
         result["motion_mode"] = skip_physics ? "none" : motion_mode_to_string(motion_mode);
         result["parent"]      = parent ? parent->get_name() : "(scene root)";
+        if (rotation.has_value()) {
+            result["rotation_xyzw"] = {rotation->x, rotation->y, rotation->z, rotation->w};
+        }
+        if (node_scale.has_value()) {
+            result["node_scale"] = {node_scale->x, node_scale->y, node_scale->z};
+        }
+        if (mass_override.has_value()) {
+            result["mass"] = mass_override.value();
+        }
     }
 
     return make_json_content(result).dump();
