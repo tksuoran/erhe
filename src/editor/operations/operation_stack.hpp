@@ -87,6 +87,18 @@ public:
     void undo();
     void redo();
 
+    // Undo-group scope (MCP batch tool). While a group is open, operations
+    // handed to queue() / execute_now() outside of operation execution are
+    // executed immediately and collected instead of recorded; end_group()
+    // records the collected operations as ONE undo entry (a
+    // Compound_operation when there is more than one; Compound undo runs
+    // them in reverse). Operations queue()d while another operation is
+    // executing keep the normal deferred semantics and land OUTSIDE the
+    // group (they run in the next update() pass). Groups do not nest.
+    void begin_group();
+    // Returns the number of operations that were grouped.
+    auto end_group() -> std::size_t;
+
     // Not-yet-executed operations: the main-thread queue plus the cross-
     // thread inbox. Stale-data guards use this alongside the async-op
     // counters (App_context::pending/running_async_ops): an async worker
@@ -133,6 +145,10 @@ private:
     std::vector<std::shared_ptr<Operation>> m_executed;
     std::vector<std::shared_ptr<Operation>> m_undone;
     std::vector<std::shared_ptr<Operation>> m_queued;
+
+    // Undo-group scope state (begin_group / end_group).
+    bool                                    m_grouping{false};
+    std::vector<std::shared_ptr<Operation>> m_group_collected;
 
     // Cross-thread inbox for queue_from_thread(); drained by update().
     ERHE_PROFILE_MUTEX(std::mutex,          m_thread_queue_mutex);

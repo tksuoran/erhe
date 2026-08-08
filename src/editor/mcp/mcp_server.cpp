@@ -26,7 +26,7 @@ using namespace mcp_server_detail;
 namespace {
 
 // Name -> handler dispatch table type (the table itself lives inside
-// Mcp_server::process_queued_requests(), which has access to the private
+// Mcp_server::dispatch_tool_call(), which has access to the private
 // handler members). A table, not an if/else-if chain: MSVC counts each
 // else-if as a nested block and aborts with C1061 ("blocks nested too
 // deeply") once the tool count passes its limit (~120).
@@ -400,192 +400,7 @@ auto Mcp_server::process_queued_requests() -> int
         // logged loudly so the offending handler can still be tracked down.
         std::string result;
         try {
-
-        // Function-local: the handlers are private members, so their
-        // addresses can only be taken from inside the class.
-        static constexpr Tool_dispatch_entry c_tool_dispatch[] = {
-            { "list_scenes",                    &Mcp_server::query_list_scenes                    },
-            { "get_scene_nodes",                &Mcp_server::query_scene_nodes                    },
-            { "get_composition_passes",         &Mcp_server::query_composition_passes             },
-            { "get_node_details",               &Mcp_server::query_node_details                   },
-            { "get_scene_cameras",              &Mcp_server::query_scene_cameras                  },
-            { "get_scene_lights",               &Mcp_server::query_scene_lights                   },
-            { "get_scene_materials",            &Mcp_server::query_scene_materials                },
-            { "get_scene_textures",             &Mcp_server::query_scene_textures                 },
-            { "get_scene_brushes",              &Mcp_server::query_scene_brushes                  },
-            { "get_scene_settings",             &Mcp_server::query_scene_settings                 },
-            { "get_material_details",           &Mcp_server::query_material_details               },
-            { "get_viewports",                  &Mcp_server::query_viewports                      },
-            { "pick_at",                        &Mcp_server::query_pick_at                        },
-            { "get_server_info",                &Mcp_server::query_server_info                    },
-            { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
-            { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },
-            { "get_frame_pacing_frames",        &Mcp_server::query_frame_pacing_frames            },
-            { "set_frame_pacing_min_vsyncs",    &Mcp_server::action_set_frame_pacing_min_vsyncs   },
-            { "set_frame_pacing_workload",      &Mcp_server::action_set_frame_pacing_workload     },
-            { "set_frame_pacing_capture",       &Mcp_server::action_set_frame_pacing_capture      },
-            { "get_selection",                  &Mcp_server::query_selection                      },
-            { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
-            { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },
-            { "get_async_status",               &Mcp_server::query_async_status                   },
-            { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
-            { "raycast",                        &Mcp_server::query_raycast                        },
-            { "select_items",                   &Mcp_server::action_select_items                  },
-            { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
-            { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },
-            { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },
-            { "lightmap_set_baking",            &Mcp_server::action_lightmap_set_baking           },
-            { "lightmap_bake_to_disk",          &Mcp_server::action_lightmap_bake_to_disk         },
-            { "lightmap_save_all_tiles",        &Mcp_server::action_lightmap_save_all_tiles      },
-            { "lightmap_clear_tiles",           &Mcp_server::action_lightmap_clear_tiles         },
-            { "lightmap_prepare_tiles",         &Mcp_server::action_lightmap_prepare_tiles        },
-            { "lightmap_revert_tiles",          &Mcp_server::action_lightmap_revert_tiles         },
-            { "lightmap_prepare_cancel",        &Mcp_server::action_lightmap_prepare_cancel       },
-            { "lightmap_set_render",            &Mcp_server::action_lightmap_set_render           },
-            { "lightmap_frame_selection",       &Mcp_server::action_lightmap_frame_selection      },
-            { "lightmap_get_tiles",             &Mcp_server::query_lightmap_tiles                 },
-            { "lightmap_subdivide_tile",        &Mcp_server::action_lightmap_subdivide_tile       },
-            { "lightmap_merge_tile",            &Mcp_server::action_lightmap_merge_tile           },
-            { "lightmap_reorder_charts",        &Mcp_server::action_lightmap_reorder_charts       },
-            { "get_active_scene",               &Mcp_server::query_active_scene                   },
-            { "set_active_scene",               &Mcp_server::action_set_active_scene              },
-            { "transform_selection",            &Mcp_server::action_transform_selection           },
-            { "set_node_transform",             &Mcp_server::action_set_node_transform            },
-            { "place_brush",                    &Mcp_server::action_place_brush                   },
-            { "create_shape",                   &Mcp_server::action_create_shape                  },
-            { "create_node",                    &Mcp_server::action_create_node                   },
-            { "create_light",                   &Mcp_server::action_create_light                  },
-            { "edit_light",                     &Mcp_server::action_edit_light                    },
-            { "edit_camera",                    &Mcp_server::action_edit_camera                   },
-            { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
-            { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
-            { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
-            { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
-            { "reparent_node",                  &Mcp_server::action_reparent_node                 },
-            { "clipboard_copy_nodes",           &Mcp_server::action_clipboard_copy_nodes          },
-            { "clipboard_paste",                &Mcp_server::action_clipboard_paste               },
-            { "lock_items",                     &Mcp_server::action_lock_items                    },
-            { "unlock_items",                   &Mcp_server::action_unlock_items                  },
-            { "add_tags",                       &Mcp_server::action_add_tags                      },
-            { "remove_tags",                    &Mcp_server::action_remove_tags                   },
-            { "edit_material",                  &Mcp_server::action_edit_material                 },
-            { "create_material",                &Mcp_server::action_create_material               },
-            { "copy_library_item",              &Mcp_server::action_copy_library_item             },
-            { "set_scene_settings",             &Mcp_server::action_set_scene_settings            },
-            { "save_scene",                     &Mcp_server::action_save_scene                    },
-            { "load_scene",                     &Mcp_server::action_load_scene                    },
-            { "open_scene",                     &Mcp_server::action_open_scene                    },
-            { "close_scene",                    &Mcp_server::action_close_scene                   },
-            { "create_scene",                   &Mcp_server::action_create_scene                  },
-            { "export_gltf",                    &Mcp_server::action_export_gltf                   },
-            { "import_gltf",                    &Mcp_server::action_import_gltf                   },
-            { "scan_gltf",                      &Mcp_server::query_scan_gltf                      },
-            { "query_asset_manager",            &Mcp_server::query_asset_manager                  },
-            { "acquire_asset",                  &Mcp_server::action_acquire_asset                 },
-            { "release_asset",                  &Mcp_server::action_release_asset                 },
-            { "unload_asset",                   &Mcp_server::action_unload_asset                  },
-            { "set_tool_asset",                 &Mcp_server::action_set_tool_asset                },
-            { "set_inventory_slot",             &Mcp_server::action_set_inventory_slot            },
-            { "save_container",                 &Mcp_server::action_save_container                },
-            { "load_asset_file",                &Mcp_server::action_load_asset_file               },
-            { "reference_asset_into_scene",     &Mcp_server::action_reference_asset_into_scene    },
-            { "make_asset_external",            &Mcp_server::action_make_asset_external           },
-            { "make_asset_internal",            &Mcp_server::action_make_asset_internal           },
-            { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
-            { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
-            { "get_prefabs",                    &Mcp_server::query_prefabs                        },
-            { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
-            { "wake_physics_bodies",            &Mcp_server::action_wake_physics_bodies           },
-            { "get_physics_items",              &Mcp_server::query_physics_items                  },
-            { "get_physics_state",              &Mcp_server::query_get_physics_state              },
-            { "create_physics_body",            &Mcp_server::action_create_physics_body           },
-            { "edit_physics_body",              &Mcp_server::action_edit_physics_body             },
-            { "create_physics_joint",           &Mcp_server::action_create_physics_joint          },
-            { "edit_physics_joint",             &Mcp_server::action_edit_physics_joint            },
-            { "create_physics_material",        &Mcp_server::action_create_physics_material       },
-            { "edit_physics_material",          &Mcp_server::action_edit_physics_material         },
-            { "create_collision_filter",        &Mcp_server::action_create_collision_filter       },
-            { "edit_collision_filter",          &Mcp_server::action_edit_collision_filter         },
-            { "create_physics_joint_settings",  &Mcp_server::action_create_physics_joint_settings },
-            { "edit_physics_joint_settings",    &Mcp_server::action_edit_physics_joint_settings   },
-            { "set_mesh_component_mode",        &Mcp_server::action_set_mesh_component_mode       },
-            { "select_mesh_components",         &Mcp_server::action_select_mesh_components        },
-            { "grow_mesh_selection",            &Mcp_server::action_grow_mesh_selection           },
-            { "shrink_mesh_selection",          &Mcp_server::action_shrink_mesh_selection         },
-            { "get_mesh_component_selection",   &Mcp_server::query_mesh_component_selection       },
-            { "get_id_range_mapping",           &Mcp_server::query_id_range_mapping               },
-            { "debug_region_select",            &Mcp_server::action_debug_region_select           },
-            { "get_mesh_geometry_info",         &Mcp_server::query_mesh_geometry_info             },
-            { "get_mesh_attribute_values",      &Mcp_server::query_mesh_attribute_values          },
-            { "clear_mesh_component_selection", &Mcp_server::action_clear_mesh_component_selection},
-            { "set_edge_sharpness",             &Mcp_server::action_set_edge_sharpness            },
-            { "catmull_clark",                  &Mcp_server::action_catmull_clark                 },
-            { "align_components",               &Mcp_server::action_align_components              },
-            { "add_joint",                      &Mcp_server::action_add_joint                     },
-            { "flip_joint",                     &Mcp_server::action_flip_joint                    },
-            { "remesh",                         &Mcp_server::action_remesh                        },
-            { "decimate",                       &Mcp_server::action_decimate                      },
-            { "smooth",                         &Mcp_server::action_smooth                        },
-            { "chamfer",                        &Mcp_server::action_chamfer3                      },
-            { "merge_faces",                    &Mcp_server::action_merge_faces                   },
-            { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
-            { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },
-            { "set_transform_mode",             &Mcp_server::action_set_transform_mode            },
-            { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
-            { "get_transform_state",            &Mcp_server::query_transform_state                },
-            { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
-            { "set_geometry_graph_target",      &Mcp_server::action_set_geometry_graph_target     },
-            { "geometry_graph_add_node",        &Mcp_server::action_geometry_graph_add_node       },
-            { "geometry_graph_remove_node",     &Mcp_server::action_geometry_graph_remove_node    },
-            { "geometry_graph_set_parameter",   &Mcp_server::action_geometry_graph_set_parameter  },
-            { "geometry_graph_set_display_flags", &Mcp_server::action_geometry_graph_set_display_flags },
-            { "geometry_graph_set_node_previews", &Mcp_server::action_geometry_graph_set_node_previews },
-            { "geometry_graph_connect",         &Mcp_server::action_geometry_graph_connect        },
-            { "geometry_graph_disconnect",      &Mcp_server::action_geometry_graph_disconnect     },
-            { "geometry_graph_set_link_mid_points", &Mcp_server::action_geometry_graph_set_link_mid_points },
-            { "geometry_graph_set_link_curve",  &Mcp_server::action_geometry_graph_set_link_curve },
-            { "geometry_graph_set_view",        &Mcp_server::action_geometry_graph_set_view       },
-            { "texture_graph_set_view",         &Mcp_server::action_texture_graph_set_view        },
-            { "texture_graph_add_all",          &Mcp_server::action_texture_graph_add_all         },
-            { "geometry_graph_select_nodes",    &Mcp_server::action_geometry_graph_select_nodes   },
-            { "geometry_graph_set_node_layout", &Mcp_server::action_geometry_graph_set_node_layout},
-            { "create_graph_texture",           &Mcp_server::action_create_graph_texture          },
-            { "set_material_texture_source",    &Mcp_server::action_set_material_texture_source   },
-            { "get_graph_textures",             &Mcp_server::query_graph_textures                 },
-            { "create_graph_mesh",              &Mcp_server::action_create_graph_mesh             },
-            { "set_node_graph_mesh",            &Mcp_server::action_set_node_graph_mesh           },
-            { "get_graph_meshes",               &Mcp_server::query_graph_meshes                   },
-            { "get_texture_graph",              &Mcp_server::query_texture_graph                  },
-            { "set_texture_graph_target",       &Mcp_server::action_set_texture_graph_target      },
-            { "texture_graph_add_node",         &Mcp_server::action_texture_graph_add_node        },
-            { "texture_graph_remove_node",      &Mcp_server::action_texture_graph_remove_node     },
-            { "texture_graph_set_parameter",    &Mcp_server::action_texture_graph_set_parameter   },
-            { "texture_graph_connect",          &Mcp_server::action_texture_graph_connect         },
-            { "texture_graph_disconnect",       &Mcp_server::action_texture_graph_disconnect      },
-            { "texture_graph_export_png",       &Mcp_server::action_texture_graph_export_png      },
-            { "texture_graph_export_material",  &Mcp_server::action_texture_graph_export_material },
-            { "texture_graph_select_nodes",     &Mcp_server::action_texture_graph_select_nodes    },
-            { "texture_graph_set_node_layout",  &Mcp_server::action_texture_graph_set_node_layout },
-            { "open_geometry_graph_window",     &Mcp_server::action_open_geometry_graph_window    },
-            { "open_texture_graph_window",      &Mcp_server::action_open_texture_graph_window     },
-            { "open_properties_window",         &Mcp_server::action_open_properties_window        },
-            { "get_scene_animations",           &Mcp_server::query_scene_animations               },
-            { "set_animation_target",           &Mcp_server::action_set_animation_target          },
-            { "animation_playback",             &Mcp_server::action_animation_playback            },
-            { "animation_edit_keyframe",        &Mcp_server::action_animation_edit_keyframe       },
-            { "animation_create_key",           &Mcp_server::action_animation_create_key          },
-            { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
-            { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
-        };
-        Tool_handler handler = nullptr;
-        for (const Tool_dispatch_entry& entry : c_tool_dispatch) {
-            if (req->tool_name == entry.name) {
-                handler = entry.handler;
-                break;
-            }
-        }
-        result = (handler != nullptr) ? (this->*handler)(req->arguments) : execute_command(req->tool_name);
-
+            result = dispatch_tool_call(req->tool_name, req->arguments);
         } catch (const std::exception& e) {
             log_mcp->error("MCP server: handler for '{}' threw: {}", req->tool_name, e.what());
             result = make_error_content(std::string{"Handler '"} + req->tool_name + "' threw an exception: " + e.what());
@@ -609,6 +424,302 @@ auto Mcp_server::process_queued_requests() -> int
     }
 
     return count;
+}
+
+auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& arguments) -> std::string
+{
+    // Member-function-local: the handlers are private members, so their
+    // addresses can only be taken from inside the class. A table, not an
+    // if/else-if chain: MSVC counts each else-if as a nested block and
+    // aborts with C1061 once the tool count passes its limit (~120).
+    static constexpr Tool_dispatch_entry c_tool_dispatch[] = {
+        { "batch",                          &Mcp_server::action_batch                         },
+        { "list_scenes",                    &Mcp_server::query_list_scenes                    },
+        { "get_scene_nodes",                &Mcp_server::query_scene_nodes                    },
+        { "get_composition_passes",         &Mcp_server::query_composition_passes             },
+        { "get_node_details",               &Mcp_server::query_node_details                   },
+        { "get_scene_cameras",              &Mcp_server::query_scene_cameras                  },
+        { "get_scene_lights",               &Mcp_server::query_scene_lights                   },
+        { "get_scene_materials",            &Mcp_server::query_scene_materials                },
+        { "get_scene_textures",             &Mcp_server::query_scene_textures                 },
+        { "get_scene_brushes",              &Mcp_server::query_scene_brushes                  },
+        { "get_scene_settings",             &Mcp_server::query_scene_settings                 },
+        { "get_material_details",           &Mcp_server::query_material_details               },
+        { "get_viewports",                  &Mcp_server::query_viewports                      },
+        { "pick_at",                        &Mcp_server::query_pick_at                        },
+        { "get_server_info",                &Mcp_server::query_server_info                    },
+        { "set_window_visibility",          &Mcp_server::action_set_window_visibility         },
+        { "get_frame_pacing_status",        &Mcp_server::query_frame_pacing_status            },
+        { "get_frame_pacing_frames",        &Mcp_server::query_frame_pacing_frames            },
+        { "set_frame_pacing_min_vsyncs",    &Mcp_server::action_set_frame_pacing_min_vsyncs   },
+        { "set_frame_pacing_workload",      &Mcp_server::action_set_frame_pacing_workload     },
+        { "set_frame_pacing_capture",       &Mcp_server::action_set_frame_pacing_capture      },
+        { "get_selection",                  &Mcp_server::query_selection                      },
+        { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
+        { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },
+        { "get_async_status",               &Mcp_server::query_async_status                   },
+        { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
+        { "raycast",                        &Mcp_server::query_raycast                        },
+        { "select_items",                   &Mcp_server::action_select_items                  },
+        { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
+        { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },
+        { "lightmap_bake_direct",           &Mcp_server::action_lightmap_bake_direct          },
+        { "lightmap_set_baking",            &Mcp_server::action_lightmap_set_baking           },
+        { "lightmap_bake_to_disk",          &Mcp_server::action_lightmap_bake_to_disk         },
+        { "lightmap_save_all_tiles",        &Mcp_server::action_lightmap_save_all_tiles      },
+        { "lightmap_clear_tiles",           &Mcp_server::action_lightmap_clear_tiles         },
+        { "lightmap_prepare_tiles",         &Mcp_server::action_lightmap_prepare_tiles        },
+        { "lightmap_revert_tiles",          &Mcp_server::action_lightmap_revert_tiles         },
+        { "lightmap_prepare_cancel",        &Mcp_server::action_lightmap_prepare_cancel       },
+        { "lightmap_set_render",            &Mcp_server::action_lightmap_set_render           },
+        { "lightmap_frame_selection",       &Mcp_server::action_lightmap_frame_selection      },
+        { "lightmap_get_tiles",             &Mcp_server::query_lightmap_tiles                 },
+        { "lightmap_subdivide_tile",        &Mcp_server::action_lightmap_subdivide_tile       },
+        { "lightmap_merge_tile",            &Mcp_server::action_lightmap_merge_tile           },
+        { "lightmap_reorder_charts",        &Mcp_server::action_lightmap_reorder_charts       },
+        { "get_active_scene",               &Mcp_server::query_active_scene                   },
+        { "set_active_scene",               &Mcp_server::action_set_active_scene              },
+        { "transform_selection",            &Mcp_server::action_transform_selection           },
+        { "set_node_transform",             &Mcp_server::action_set_node_transform            },
+        { "place_brush",                    &Mcp_server::action_place_brush                   },
+        { "create_shape",                   &Mcp_server::action_create_shape                  },
+        { "create_node",                    &Mcp_server::action_create_node                   },
+        { "create_light",                   &Mcp_server::action_create_light                  },
+        { "edit_light",                     &Mcp_server::action_edit_light                    },
+        { "edit_camera",                    &Mcp_server::action_edit_camera                   },
+        { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
+        { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
+        { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
+        { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
+        { "reparent_node",                  &Mcp_server::action_reparent_node                 },
+        { "clipboard_copy_nodes",           &Mcp_server::action_clipboard_copy_nodes          },
+        { "clipboard_paste",                &Mcp_server::action_clipboard_paste               },
+        { "lock_items",                     &Mcp_server::action_lock_items                    },
+        { "unlock_items",                   &Mcp_server::action_unlock_items                  },
+        { "add_tags",                       &Mcp_server::action_add_tags                      },
+        { "remove_tags",                    &Mcp_server::action_remove_tags                   },
+        { "edit_material",                  &Mcp_server::action_edit_material                 },
+        { "create_material",                &Mcp_server::action_create_material               },
+        { "copy_library_item",              &Mcp_server::action_copy_library_item             },
+        { "set_scene_settings",             &Mcp_server::action_set_scene_settings            },
+        { "save_scene",                     &Mcp_server::action_save_scene                    },
+        { "load_scene",                     &Mcp_server::action_load_scene                    },
+        { "open_scene",                     &Mcp_server::action_open_scene                    },
+        { "close_scene",                    &Mcp_server::action_close_scene                   },
+        { "create_scene",                   &Mcp_server::action_create_scene                  },
+        { "export_gltf",                    &Mcp_server::action_export_gltf                   },
+        { "import_gltf",                    &Mcp_server::action_import_gltf                   },
+        { "scan_gltf",                      &Mcp_server::query_scan_gltf                      },
+        { "query_asset_manager",            &Mcp_server::query_asset_manager                  },
+        { "acquire_asset",                  &Mcp_server::action_acquire_asset                 },
+        { "release_asset",                  &Mcp_server::action_release_asset                 },
+        { "unload_asset",                   &Mcp_server::action_unload_asset                  },
+        { "set_tool_asset",                 &Mcp_server::action_set_tool_asset                },
+        { "set_inventory_slot",             &Mcp_server::action_set_inventory_slot            },
+        { "save_container",                 &Mcp_server::action_save_container                },
+        { "load_asset_file",                &Mcp_server::action_load_asset_file               },
+        { "reference_asset_into_scene",     &Mcp_server::action_reference_asset_into_scene    },
+        { "make_asset_external",            &Mcp_server::action_make_asset_external           },
+        { "make_asset_internal",            &Mcp_server::action_make_asset_internal           },
+        { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
+        { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
+        { "get_prefabs",                    &Mcp_server::query_prefabs                        },
+        { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
+        { "wake_physics_bodies",            &Mcp_server::action_wake_physics_bodies           },
+        { "get_physics_items",              &Mcp_server::query_physics_items                  },
+        { "get_physics_state",              &Mcp_server::query_get_physics_state              },
+        { "create_physics_body",            &Mcp_server::action_create_physics_body           },
+        { "edit_physics_body",              &Mcp_server::action_edit_physics_body             },
+        { "create_physics_joint",           &Mcp_server::action_create_physics_joint          },
+        { "edit_physics_joint",             &Mcp_server::action_edit_physics_joint            },
+        { "create_physics_material",        &Mcp_server::action_create_physics_material       },
+        { "edit_physics_material",          &Mcp_server::action_edit_physics_material         },
+        { "create_collision_filter",        &Mcp_server::action_create_collision_filter       },
+        { "edit_collision_filter",          &Mcp_server::action_edit_collision_filter         },
+        { "create_physics_joint_settings",  &Mcp_server::action_create_physics_joint_settings },
+        { "edit_physics_joint_settings",    &Mcp_server::action_edit_physics_joint_settings   },
+        { "set_mesh_component_mode",        &Mcp_server::action_set_mesh_component_mode       },
+        { "select_mesh_components",         &Mcp_server::action_select_mesh_components        },
+        { "grow_mesh_selection",            &Mcp_server::action_grow_mesh_selection           },
+        { "shrink_mesh_selection",          &Mcp_server::action_shrink_mesh_selection         },
+        { "get_mesh_component_selection",   &Mcp_server::query_mesh_component_selection       },
+        { "get_id_range_mapping",           &Mcp_server::query_id_range_mapping               },
+        { "debug_region_select",            &Mcp_server::action_debug_region_select           },
+        { "get_mesh_geometry_info",         &Mcp_server::query_mesh_geometry_info             },
+        { "get_mesh_attribute_values",      &Mcp_server::query_mesh_attribute_values          },
+        { "clear_mesh_component_selection", &Mcp_server::action_clear_mesh_component_selection},
+        { "set_edge_sharpness",             &Mcp_server::action_set_edge_sharpness            },
+        { "catmull_clark",                  &Mcp_server::action_catmull_clark                 },
+        { "align_components",               &Mcp_server::action_align_components              },
+        { "add_joint",                      &Mcp_server::action_add_joint                     },
+        { "flip_joint",                     &Mcp_server::action_flip_joint                    },
+        { "remesh",                         &Mcp_server::action_remesh                        },
+        { "decimate",                       &Mcp_server::action_decimate                      },
+        { "smooth",                         &Mcp_server::action_smooth                        },
+        { "chamfer",                        &Mcp_server::action_chamfer3                      },
+        { "merge_faces",                    &Mcp_server::action_merge_faces                   },
+        { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
+        { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },
+        { "set_transform_mode",             &Mcp_server::action_set_transform_mode            },
+        { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
+        { "get_transform_state",            &Mcp_server::query_transform_state                },
+        { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },
+        { "set_geometry_graph_target",      &Mcp_server::action_set_geometry_graph_target     },
+        { "geometry_graph_add_node",        &Mcp_server::action_geometry_graph_add_node       },
+        { "geometry_graph_remove_node",     &Mcp_server::action_geometry_graph_remove_node    },
+        { "geometry_graph_set_parameter",   &Mcp_server::action_geometry_graph_set_parameter  },
+        { "geometry_graph_set_display_flags", &Mcp_server::action_geometry_graph_set_display_flags },
+        { "geometry_graph_set_node_previews", &Mcp_server::action_geometry_graph_set_node_previews },
+        { "geometry_graph_connect",         &Mcp_server::action_geometry_graph_connect        },
+        { "geometry_graph_disconnect",      &Mcp_server::action_geometry_graph_disconnect     },
+        { "geometry_graph_set_link_mid_points", &Mcp_server::action_geometry_graph_set_link_mid_points },
+        { "geometry_graph_set_link_curve",  &Mcp_server::action_geometry_graph_set_link_curve },
+        { "geometry_graph_set_view",        &Mcp_server::action_geometry_graph_set_view       },
+        { "texture_graph_set_view",         &Mcp_server::action_texture_graph_set_view        },
+        { "texture_graph_add_all",          &Mcp_server::action_texture_graph_add_all         },
+        { "geometry_graph_select_nodes",    &Mcp_server::action_geometry_graph_select_nodes   },
+        { "geometry_graph_set_node_layout", &Mcp_server::action_geometry_graph_set_node_layout},
+        { "create_graph_texture",           &Mcp_server::action_create_graph_texture          },
+        { "set_material_texture_source",    &Mcp_server::action_set_material_texture_source   },
+        { "get_graph_textures",             &Mcp_server::query_graph_textures                 },
+        { "create_graph_mesh",              &Mcp_server::action_create_graph_mesh             },
+        { "set_node_graph_mesh",            &Mcp_server::action_set_node_graph_mesh           },
+        { "get_graph_meshes",               &Mcp_server::query_graph_meshes                   },
+        { "get_texture_graph",              &Mcp_server::query_texture_graph                  },
+        { "set_texture_graph_target",       &Mcp_server::action_set_texture_graph_target      },
+        { "texture_graph_add_node",         &Mcp_server::action_texture_graph_add_node        },
+        { "texture_graph_remove_node",      &Mcp_server::action_texture_graph_remove_node     },
+        { "texture_graph_set_parameter",    &Mcp_server::action_texture_graph_set_parameter   },
+        { "texture_graph_connect",          &Mcp_server::action_texture_graph_connect         },
+        { "texture_graph_disconnect",       &Mcp_server::action_texture_graph_disconnect      },
+        { "texture_graph_export_png",       &Mcp_server::action_texture_graph_export_png      },
+        { "texture_graph_export_material",  &Mcp_server::action_texture_graph_export_material },
+        { "texture_graph_select_nodes",     &Mcp_server::action_texture_graph_select_nodes    },
+        { "texture_graph_set_node_layout",  &Mcp_server::action_texture_graph_set_node_layout },
+        { "open_geometry_graph_window",     &Mcp_server::action_open_geometry_graph_window    },
+        { "open_texture_graph_window",      &Mcp_server::action_open_texture_graph_window     },
+        { "open_properties_window",         &Mcp_server::action_open_properties_window        },
+        { "get_scene_animations",           &Mcp_server::query_scene_animations               },
+        { "set_animation_target",           &Mcp_server::action_set_animation_target          },
+        { "animation_playback",             &Mcp_server::action_animation_playback            },
+        { "animation_edit_keyframe",        &Mcp_server::action_animation_edit_keyframe       },
+        { "animation_create_key",           &Mcp_server::action_animation_create_key          },
+        { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
+        { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
+    };
+    for (const Tool_dispatch_entry& entry : c_tool_dispatch) {
+        if (tool_name == entry.name) {
+            return (this->*entry.handler)(arguments);
+        }
+    }
+    return execute_command(tool_name);
+}
+
+auto Mcp_server::action_batch(const json& args) -> std::string
+{
+    const auto calls_it = args.find("calls");
+    if ((calls_it == args.end()) || !calls_it->is_array() || calls_it->empty()) {
+        json r = make_text_content("calls must be a non-empty array of {tool, arguments} objects");
+        r["isError"] = true;
+        return r.dump();
+    }
+    constexpr std::size_t k_max_batch_calls = 1024;
+    if (calls_it->size() > k_max_batch_calls) {
+        json r = make_text_content("Batch too large (max " + std::to_string(k_max_batch_calls) + " calls)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    // Validate every entry's shape up front so a malformed entry cannot
+    // leave half a batch applied.
+    for (const json& entry : *calls_it) {
+        if (!entry.is_object() || !entry.contains("tool") || !entry["tool"].is_string()) {
+            json r = make_text_content("Each batch entry must be an object with a string 'tool'");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const std::string tool = entry["tool"].get<std::string>();
+        if (tool == "batch") {
+            json r = make_text_content("batch cannot be nested");
+            r["isError"] = true;
+            return r.dump();
+        }
+        if (entry.contains("arguments") && !entry["arguments"].is_object()) {
+            json r = make_text_content("Batch entry 'arguments' must be an object when present");
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
+
+    // All sub-call operations become ONE undo entry. The group is closed
+    // before returning on every path; sub-call exceptions are caught below.
+    Operation_stack* const operation_stack = m_context.operation_stack;
+    if (operation_stack != nullptr) {
+        operation_stack->begin_group();
+    }
+
+    json        results     = json::array();
+    std::size_t error_count = 0;
+    for (const json& entry : *calls_it) {
+        const std::string tool      = entry["tool"].get<std::string>();
+        const json        arguments = entry.value("arguments", json::object());
+
+        std::string sub_result;
+        try {
+            sub_result = dispatch_tool_call(tool, arguments);
+        } catch (const std::exception& e) {
+            log_mcp->error("MCP server: batch handler for '{}' threw: {}", tool, e.what());
+            sub_result = make_error_content(std::string{"Handler '"} + tool + "' threw an exception: " + e.what());
+        } catch (...) {
+            log_mcp->error("MCP server: batch handler for '{}' threw a non-standard exception", tool);
+            sub_result = make_error_content(std::string{"Handler '"} + tool + "' threw a non-standard exception");
+        }
+        if (m_defer_current_request) {
+            // Deferral re-runs a whole queued request on the next frame;
+            // that cannot be honored for one call inside a batch.
+            m_defer_current_request = false;
+            sub_result = make_error_content("Tool '" + tool + "' needs a rendered frame and cannot run inside a batch; call it on its own");
+        }
+
+        // Sub-results are the handlers' MCP content envelopes; unwrap the
+        // text payload (JSON when the handler produced JSON) so the batch
+        // response nests cleanly.
+        json parsed  = json::parse(sub_result, nullptr, false);
+        bool is_error = true;
+        json payload  = sub_result;
+        if (parsed.is_object()) {
+            is_error = parsed.value("isError", false);
+            const auto content_it = parsed.find("content");
+            if ((content_it != parsed.end()) && content_it->is_array() && !content_it->empty() && content_it->front().contains("text")) {
+                const std::string text = content_it->front()["text"].get<std::string>();
+                json text_parsed = json::parse(text, nullptr, false);
+                payload = text_parsed.is_discarded() ? json(text) : text_parsed;
+            }
+        }
+        if (is_error) {
+            ++error_count;
+        }
+        results.push_back({
+            {"tool",   tool},
+            {"ok",     !is_error},
+            {"result", payload}
+        });
+    }
+
+    const std::size_t grouped = (operation_stack != nullptr) ? operation_stack->end_group() : 0;
+
+    json r = make_json_content({
+        {"count",              results.size()},
+        {"error_count",        error_count},
+        {"grouped_operations", grouped},
+        {"results",            results}
+    });
+    if (error_count > 0) {
+        // The successful sub-calls stay applied; the full per-call results
+        // are in the content text either way.
+        r["isError"] = true;
+    }
+    return r.dump();
 }
 
 auto Mcp_server::action_set_ray_trace(const json& args) -> std::string

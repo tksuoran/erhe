@@ -1,6 +1,7 @@
 #include "operations/operation_stack.hpp"
 
 #include "app_context.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
 
 #include "erhe_commands/commands.hpp"
@@ -85,6 +86,19 @@ void Operation_stack::queue(const std::shared_ptr<Operation>& operation)
 {
     verify_main_thread();
 
+    // Undo-group scope: execute immediately and collect, so the operation
+    // joins the group instead of running after end_group() in update().
+    // Not while an operation is executing - re-entrant execution is
+    // illegal, so a follow-up queued BY an executing operation keeps the
+    // deferred semantics (and lands outside the group).
+    if (m_grouping && !m_executing) {
+        m_executing = true;
+        operation->execute(m_context);
+        m_executing = false;
+        m_group_collected.push_back(operation);
+        return;
+    }
+
     // Legal also while an operation is executing (m_executing); the queued
     // operation runs later in the same update() pass.
     m_queued.push_back(operation);
@@ -111,8 +125,46 @@ void Operation_stack::execute_now(const std::shared_ptr<Operation>& operation)
     m_executing = true;
     operation->execute(m_context);
     m_executing = false;
+    if (m_grouping) {
+        m_group_collected.push_back(operation);
+        return;
+    }
     m_executed.push_back(operation);
     m_undone.clear();
+}
+
+void Operation_stack::begin_group()
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    ERHE_VERIFY(!m_grouping);
+    m_grouping = true;
+    m_group_collected.clear();
+}
+
+auto Operation_stack::end_group() -> std::size_t
+{
+    verify_main_thread();
+    ERHE_VERIFY(m_grouping);
+    m_grouping = false;
+
+    const std::size_t count = m_group_collected.size();
+    if (count == 1) {
+        // A single operation needs no wrapper.
+        m_executed.push_back(std::move(m_group_collected.front()));
+        m_undone.clear();
+    } else if (count > 1) {
+        // The collected operations have already executed; the compound's
+        // execute() only ever runs again on redo, like any recorded entry.
+        m_executed.push_back(
+            std::make_shared<Compound_operation>(
+                Compound_operation::Parameters{std::move(m_group_collected)}
+            )
+        );
+        m_undone.clear();
+    }
+    m_group_collected.clear();
+    return count;
 }
 
 void Operation_stack::update()

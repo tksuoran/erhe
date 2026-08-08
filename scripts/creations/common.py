@@ -136,6 +136,14 @@ class Creation:
                     time.sleep(pause)
                     pause = min(pause * 1.6, 2.0)
 
+    def batch(self, calls):
+        """Execute [{"tool": ..., "arguments": {...}}, ...] in one request,
+        one editor frame and ONE undo entry (batch MCP tool, 2026-08-08).
+        Returns the per-call result payloads; raises on any sub-call error
+        (successful earlier sub-calls stay applied)."""
+        result = self.mutate("batch", {"calls": calls})
+        return result.get("results", []) if isinstance(result, dict) else []
+
     @staticmethod
     def _busy(error):
         text = str(error)

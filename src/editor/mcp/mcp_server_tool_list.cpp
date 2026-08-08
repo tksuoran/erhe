@@ -12,6 +12,27 @@ void Mcp_server::refresh_tool_list()
     std::lock_guard<std::mutex> lock{m_tools_mutex};
     m_tool_infos.clear();
 
+    m_tool_infos.push_back({"batch", "Execute a list of tool calls in one request and one editor frame. Sub-calls run in order; each entry's result (unwrapped payload) and ok flag are reported in 'results'. Every operation the sub-calls record becomes ONE undo entry ('grouped_operations' reports how many were grouped). A failing sub-call does not stop the batch (error_count > 0 marks the whole response as an error, but earlier successes stay applied). batch cannot nest, and tools that need a rendered frame before answering (capture_screenshot in the windowed build) must be called on their own.", {
+        {"type", "object"},
+        {"properties", {
+            {"calls", {
+                {"type", "array"},
+                {"minItems", 1},
+                {"maxItems", 1024},
+                {"description", "Tool calls to execute in order"},
+                {"items", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"tool",      {{"type", "string"}, {"description", "Tool name (any tool except batch)"}}},
+                        {"arguments", {{"type", "object"}, {"description", "Arguments for the tool (default {})"}}}
+                    }},
+                    {"required", json::array({"tool"})}
+                }}
+            }}
+        }},
+        {"required", json::array({"calls"})}
+    }});
+
     // Query tools
     m_tool_infos.push_back({"list_scenes",         "List all scenes in the editor",                          schema_no_args()});
     m_tool_infos.push_back({"get_scene_nodes",     "List all nodes in a scene",                              schema_scene_name()});

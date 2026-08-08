@@ -76,6 +76,11 @@ public:
     // Called once per frame from the main thread.
     auto process_queued_requests() -> int;
 
+    // Name -> handler dispatch shared by process_queued_requests and
+    // action_batch; unknown names fall through to execute_command
+    // (registered editor commands are tools too).
+    auto dispatch_tool_call(const std::string& tool_name, const nlohmann::json& arguments) -> std::string;
+
     [[nodiscard]] auto is_running() const -> bool;
 
 private:
@@ -161,6 +166,7 @@ private:
     auto action_unlock_items    (const nlohmann::json& args) -> std::string;
     auto action_add_tags        (const nlohmann::json& args) -> std::string;
     auto action_remove_tags     (const nlohmann::json& args) -> std::string;
+    auto action_batch           (const nlohmann::json& args) -> std::string;
     auto action_edit_material   (const nlohmann::json& args) -> std::string;
     auto action_create_material (const nlohmann::json& args) -> std::string;
     auto action_copy_library_item(const nlohmann::json& args) -> std::string;

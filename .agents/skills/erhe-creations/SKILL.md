@@ -72,6 +72,13 @@ they carry the current idioms.
   MCP telemetry summary at exit (per-tool counts + seconds); read it
   before optimizing anything. Background command timeout is 10 min;
   scenes of ~2500 nodes build fine.
+- `c.batch([{"tool": ..., "arguments": {...}}, ...])` (batch MCP tool,
+  2026-08-08) runs N calls in one request, one editor frame and ONE
+  undo entry - use it for burst construction (many create_shape /
+  set_node_transform in a row) when telemetry shows call count
+  dominating. Sub-call results come back in order; any sub-call error
+  raises (earlier sub-calls stay applied). batch cannot nest and
+  capture_screenshot cannot be inside one.
 - Screenshot from 2-3 angles per iteration
   (`c.screenshot_views(base, [(suffix, eye, target), ...])`) -
   composition problems (occlusion, a buried face, a floating prop) then

@@ -299,6 +299,7 @@ TEST_F(Mcp_test, tools_list_includes_material_and_texture_tools)
     EXPECT_TRUE(has("get_scene_textures"));
     EXPECT_TRUE(has("edit_material"));
     EXPECT_TRUE(has("create_material"));
+    EXPECT_TRUE(has("batch"));
 }
 
 TEST_F(Mcp_test, list_scenes_returns_named_scenes)
@@ -699,6 +700,78 @@ TEST_F(Mcp_test, edit_material_invalid_texture_reference_type_returns_error)
         }}
     });
     EXPECT_TRUE(r.is_error);
+}
+
+// ---- batch -----------------------------------------------------------------
+
+TEST_F(Mcp_test, batch_groups_operations_into_one_undo_entry)
+{
+    Mcp_env& env = Mcp_env::get();
+    json before_details = material_details();
+    const double orig_metallic = before_details["metallic"].get<double>();
+
+    Mcp_client::Tool_result stack0 = env.client().call_tool("get_undo_redo_stack", json::object());
+    ASSERT_FALSE(stack0.is_error);
+    const std::size_t undo0 = stack0.payload["undo"].size();
+
+    const double target1 = (orig_metallic < 0.5) ? 0.61 : 0.11;
+    const double target2 = (orig_metallic < 0.5) ? 0.71 : 0.21;
+    Mcp_client::Tool_result batch = env.client().call_tool("batch", json{
+        {"calls", json::array({
+            json{{"tool", "edit_material"}, {"arguments", {
+                {"scene_name", env.scene_name()}, {"material_name", env.material_name()}, {"metallic", target1}}}},
+            json{{"tool", "edit_material"}, {"arguments", {
+                {"scene_name", env.scene_name()}, {"material_name", env.material_name()}, {"metallic", target2}}}}
+        })}
+    });
+    ASSERT_FALSE(batch.is_error) << batch.text;
+    EXPECT_EQ(batch.payload["count"].get<int>(), 2);
+    EXPECT_EQ(batch.payload["error_count"].get<int>(), 0);
+    EXPECT_EQ(batch.payload["grouped_operations"].get<int>(), 2);
+
+    // Grouped operations execute immediately (no update()-pass deferral),
+    // so the edit is visible without polling.
+    json details = material_details();
+    EXPECT_TRUE(approx_equal(details["metallic"].get<double>(), target2));
+
+    Mcp_client::Tool_result stack1 = env.client().call_tool("get_undo_redo_stack", json::object());
+    ASSERT_FALSE(stack1.is_error);
+    EXPECT_EQ(stack1.payload["undo"].size(), undo0 + 1);
+
+    // ONE undo steps back across both edits.
+    Mcp_client::Tool_result undo = env.client().call_tool("undo", json::object());
+    ASSERT_FALSE(undo.is_error) << undo.text;
+    json restored = material_details();
+    EXPECT_TRUE(approx_equal(restored["metallic"].get<double>(), orig_metallic))
+        << "metallic after one undo: " << restored["metallic"].get<double>()
+        << " expected " << orig_metallic;
+}
+
+TEST_F(Mcp_test, batch_rejects_nested_and_malformed)
+{
+    Mcp_client& client = Mcp_env::get().client();
+    EXPECT_TRUE(client.call_tool("batch", json{{"calls", json::array({json{{"tool", "batch"}}})}}).is_error);
+    EXPECT_TRUE(client.call_tool("batch", json{{"calls", json::array()}}).is_error);
+    EXPECT_TRUE(client.call_tool("batch", json::object()).is_error);
+    EXPECT_TRUE(client.call_tool("batch", json{{"calls", json::array({json{{"arguments", json::object()}}})}}).is_error);
+}
+
+TEST_F(Mcp_test, batch_partial_failure_reports_per_call_results)
+{
+    Mcp_client::Tool_result r = Mcp_env::get().client().call_tool("batch", json{
+        {"calls", json::array({
+            json{{"tool", "list_scenes"}},
+            json{{"tool", "__not_a_tool__"}}
+        })}
+    });
+    EXPECT_TRUE(r.is_error) << "error_count > 0 must mark the batch as an error";
+    ASSERT_TRUE(r.payload.contains("results")) << r.text;
+    const json& results = r.payload["results"];
+    ASSERT_EQ(results.size(), 2u);
+    EXPECT_TRUE (results[0]["ok"].get<bool>());
+    EXPECT_TRUE (results[0]["result"].contains("scenes"));
+    EXPECT_FALSE(results[1]["ok"].get<bool>());
+    EXPECT_EQ(r.payload["error_count"].get<int>(), 1);
 }
 
 // ---- create_material -------------------------------------------------------
