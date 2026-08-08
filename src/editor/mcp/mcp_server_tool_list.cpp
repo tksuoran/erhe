@@ -562,6 +562,19 @@ void Mcp_server::refresh_tool_list()
         }}
     }});
     m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
+    m_tool_infos.push_back({"apply_physics_force", "Apply an external force / torque / impulse to a dynamic rigid body (world space, activates the body). Forces and torques accumulate for the next fixed step only (re-apply for a sustained push); impulses change velocity immediately. 'point' (world position) makes force / impulse act at that point instead of the center of mass.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Node ID (preferred over node_name when both given)"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Node name (used when node_id is absent)"}}},
+            {"force",      {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Force [x, y, z] in newtons"}}},
+            {"torque",     {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Torque [x, y, z] in newton meters"}}},
+            {"impulse",    {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Impulse [x, y, z] in newton seconds"}}},
+            {"point",      {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "World position where force / impulse is applied (default: center of mass)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
 
     m_tool_infos.push_back({"get_physics_items", "List the shared physics content-library items (physics materials, collision filters, joint settings) with full properties", schema_scene_name()});
 

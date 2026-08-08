@@ -41,6 +41,11 @@ public:
 
     void begin_move                  ()                                             override; // Disables deactivation
     void end_move                    ()                                             override; // Sets active, clears disable deactivation
+    void apply_force                 (const glm::vec3&)                   override {}
+    void apply_force_at              (const glm::vec3&, const glm::vec3&) override {}
+    void apply_torque                (const glm::vec3&)                   override {}
+    void apply_impulse               (const glm::vec3&)                   override {}
+    void apply_impulse_at            (const glm::vec3&, const glm::vec3&) override {}
     void set_angular_velocity        (const glm::vec3& velocity)                    override;
     void set_damping                 (float linear_damping, float angular_damping)  override;
     void set_friction                (float friction)                               override;

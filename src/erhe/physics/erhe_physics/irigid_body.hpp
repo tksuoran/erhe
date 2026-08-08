@@ -91,6 +91,17 @@ public:
     [[nodiscard]] virtual auto get_collision_filter        () const -> std::shared_ptr<Collision_filter> = 0;
     virtual void begin_move          ()                                             = 0;
     virtual void end_move            ()                                             = 0;
+    // External force application, world space. Forces and torques accumulate
+    // for the next simulation step and are cleared after it (call every fixed
+    // step for a sustained push, e.g. wind); impulses change velocity
+    // immediately. Overloads without a point act at the center of mass.
+    // The body is activated (woken) so the input takes effect; applying to a
+    // non-dynamic body is a no-op.
+    virtual void apply_force         (const glm::vec3& force)                            = 0;
+    virtual void apply_force_at      (const glm::vec3& force, const glm::vec3& point)    = 0;
+    virtual void apply_torque        (const glm::vec3& torque)                           = 0;
+    virtual void apply_impulse       (const glm::vec3& impulse)                          = 0;
+    virtual void apply_impulse_at    (const glm::vec3& impulse, const glm::vec3& point)  = 0;
     virtual void set_angular_velocity(const glm::vec3& velocity)                    = 0;
     virtual void set_damping         (float linear_damping, float angular_damping)  = 0;
     virtual void set_friction        (float friction)                               = 0;

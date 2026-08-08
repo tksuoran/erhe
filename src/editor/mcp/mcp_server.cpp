@@ -444,6 +444,7 @@ auto Mcp_server::process_queued_requests() -> int
             { "edit_light",                     &Mcp_server::action_edit_light                    },
             { "edit_camera",                    &Mcp_server::action_edit_camera                   },
             { "toggle_physics",                 &Mcp_server::action_toggle_physics                },
+            { "apply_physics_force",            &Mcp_server::action_apply_physics_force           },
             { "add_node_attachment",            &Mcp_server::action_add_node_attachment           },
             { "remove_node_attachment",         &Mcp_server::action_remove_node_attachment        },
             { "reparent_node",                  &Mcp_server::action_reparent_node                 },

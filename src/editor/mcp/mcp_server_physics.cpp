@@ -42,6 +42,63 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_apply_physics_force(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+    if (!node_physics) {
+        return make_error_content("Node has no rigid body: " + node->get_name());
+    }
+    erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+    if (rigid_body == nullptr) {
+        return make_error_content("Rigid body is not registered: " + node->get_name());
+    }
+    if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+        return make_error_content("Rigid body is not dynamic: " + node->get_name());
+    }
+
+    json applied = json::array();
+    const bool has_point = args.contains("point");
+    const glm::vec3 point = get_vec3(args, "point", glm::vec3{0.0f});
+    if (args.contains("force")) {
+        const glm::vec3 force = get_vec3(args, "force", glm::vec3{0.0f});
+        if (has_point) {
+            rigid_body->apply_force_at(force, point);
+        } else {
+            rigid_body->apply_force(force);
+        }
+        applied.push_back("force");
+    }
+    if (args.contains("torque")) {
+        rigid_body->apply_torque(get_vec3(args, "torque", glm::vec3{0.0f}));
+        applied.push_back("torque");
+    }
+    if (args.contains("impulse")) {
+        const glm::vec3 impulse = get_vec3(args, "impulse", glm::vec3{0.0f});
+        if (has_point) {
+            rigid_body->apply_impulse_at(impulse, point);
+        } else {
+            rigid_body->apply_impulse(impulse);
+        }
+        applied.push_back("impulse");
+    }
+    if (applied.empty()) {
+        return make_error_content("Nothing to apply: give force, torque and/or impulse");
+    }
+    return make_json_content({
+        {"node_id", node->get_id()},
+        {"applied", applied}
+    }).dump();
+}
+
 auto Mcp_server::query_physics_items(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");

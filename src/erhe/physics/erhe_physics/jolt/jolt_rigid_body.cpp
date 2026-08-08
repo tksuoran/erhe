@@ -256,6 +256,46 @@ void Jolt_rigid_body::end_move()
     //m_body_interface.ActivateBody(m_body->GetID());
 }
 
+void Jolt_rigid_body::apply_force(const glm::vec3& force)
+{
+    if ((m_body == nullptr) || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    get_body_interface().AddForce(m_body->GetID(), to_jolt(force));
+}
+
+void Jolt_rigid_body::apply_force_at(const glm::vec3& force, const glm::vec3& point)
+{
+    if ((m_body == nullptr) || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    get_body_interface().AddForce(m_body->GetID(), to_jolt(force), to_jolt(point));
+}
+
+void Jolt_rigid_body::apply_torque(const glm::vec3& torque)
+{
+    if ((m_body == nullptr) || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    get_body_interface().AddTorque(m_body->GetID(), to_jolt(torque));
+}
+
+void Jolt_rigid_body::apply_impulse(const glm::vec3& impulse)
+{
+    if ((m_body == nullptr) || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    get_body_interface().AddImpulse(m_body->GetID(), to_jolt(impulse));
+}
+
+void Jolt_rigid_body::apply_impulse_at(const glm::vec3& impulse, const glm::vec3& point)
+{
+    if ((m_body == nullptr) || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    get_body_interface().AddImpulse(m_body->GetID(), to_jolt(impulse), to_jolt(point));
+}
+
 void Jolt_rigid_body::set_motion_mode(const Motion_mode motion_mode)
 {
     if (m_body == nullptr) {

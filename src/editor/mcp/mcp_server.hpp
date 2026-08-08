@@ -187,6 +187,7 @@ private:
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
+    auto action_apply_physics_force(const nlohmann::json& args) -> std::string;
     auto query_physics_items    (const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
