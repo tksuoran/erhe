@@ -110,7 +110,11 @@ BIRCH = {
 # flower stems looser still.
 SWAY_SETTINGS = {
     "tree_sway":  {"range": 0.12, "stiffness": 300.0, "damping": 30.0, "max_force": 600.0},
-    "frond_sway": {"range": 0.35, "stiffness": 6.0,   "damping": 0.50, "max_force": 8.0},
+    # Frond dynamics: only the spine hull carries mass, so a light spine +
+    # stiff spring rings at several Hz (jittery). A heavier spine and softer
+    # spring put the natural frequency ~1.5 Hz; body angular damping kills
+    # the residual ring.
+    "frond_sway": {"range": 0.35, "stiffness": 1.5,   "damping": 0.25, "max_force": 8.0},
     "stem_sway":  {"range": 0.50, "stiffness": 0.8,   "damping": 0.08, "max_force": 3.0},
 }
 
@@ -479,7 +483,7 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                         c.move_node_id(node_id, rotation_xyzw=rotation)
                     if t == 0:
                         sway_jobs.append((f"{tag} Frond {i}", node_id, list(pos),
-                                          "frond_sway", 0.08, 0.3, 0.4))
+                                          "frond_sway", 0.8, 0.3, 0.8))
                     parent = node_id
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
@@ -556,9 +560,11 @@ def fallen_log(c, m, rng):
 
 # ---------------------------------------------------------------- sway probe
 
-def probe_sway(c, node_names, seconds=6.0, interval=0.5):
+def probe_sway(c, node_names, seconds=6.0, interval=0.25):
     """Sample world tilt (deg from upright) of the named nodes and print a
-    small table - numeric proof the wind is moving the plants."""
+    small table - numeric proof the wind is moving the plants. Roughness
+    (mean |second difference|) exposes high-frequency ringing that the
+    range alone hides: smooth sway ~ a fraction of a degree, jitter >> 1."""
     steps = max(1, int(seconds / interval))
     series = {name: [] for name in node_names}
     for _ in range(steps):
@@ -570,7 +576,12 @@ def probe_sway(c, node_names, seconds=6.0, interval=0.5):
             series[name].append(math.degrees(math.acos(max(-1.0, min(1.0, y_up)))))
     for name, tilts in series.items():
         lo, hi = min(tilts), max(tilts)
-        print(f"sway {name}: {' '.join(f'{t:5.1f}' for t in tilts)}  (range {hi - lo:.1f} deg)")
+        roughness = 0.0
+        if len(tilts) > 2:
+            roughness = sum(abs(tilts[i + 1] - 2.0 * tilts[i] + tilts[i - 1])
+                            for i in range(1, len(tilts) - 1)) / (len(tilts) - 2)
+        print(f"sway {name}: {' '.join(f'{t:5.1f}' for t in tilts)}  "
+              f"(range {hi - lo:.1f} deg, roughness {roughness:.2f})")
     return series
 
 
@@ -615,14 +626,25 @@ def main():
     c.shape("box", "Forest Floor", [0.0, -0.25, 0.0], size=[60.0, 0.5, 60.0],
             material_name=m["grass"])
 
-    # Ring of trees around the clearing (bases lifted 0.05 so the trunk
-    # hulls clear the floor instead of grinding on it).
+    # Two rings of trees around the clearing (bases lifted 0.05 so the
+    # trunk hulls clear the floor instead of grinding on it). The outer
+    # ring keeps the +X/+Z camera approach clear (eye [6.8, 3.2, 7.6]).
     trees = [
         ("Oak A",   OAK,   [-3.6, 0.05, -3.4]),
         ("Oak B",   OAK,   [4.2, 0.05, -3.8]),
         ("Oak C",   OAK,   [-4.6, 0.05, 2.6]),
         ("Birch A", BIRCH, [1.2, 0.05, -5.2]),
         ("Birch B", BIRCH, [5.6, 0.05, -1.6]),
+        ("Oak D",   OAK,   [-7.6, 0.05, -6.8]),
+        ("Oak E",   OAK,   [8.6, 0.05, -5.8]),
+        ("Oak F",   OAK,   [-8.8, 0.05, 3.6]),
+        ("Oak G",   OAK,   [0.2, 0.05, -9.2]),
+        ("Oak H",   OAK,   [-3.4, 0.05, 6.8]),
+        ("Birch C", BIRCH, [2.6, 0.05, -8.6]),
+        ("Birch D", BIRCH, [9.2, 0.05, -1.2]),
+        ("Birch E", BIRCH, [-9.0, 0.05, -1.8]),
+        ("Birch F", BIRCH, [6.4, 0.05, -7.8]),
+        ("Birch G", BIRCH, [-6.0, 0.05, 6.6]),
     ]
     for tag, species, base in trees:
         bark = m["birch"] if species is BIRCH else m["bark"]
@@ -644,9 +666,17 @@ def main():
 
     fallen_log(c, m, rng)
 
-    for i, (x, z, size) in enumerate([(-2.6, -1.8, 1.15), (3.3, -2.4, 1.0),
-                                      (0.9, 2.6, 0.9)]):
-        fern(c, f"Fern {i}", x, z, size, m, rng, sway_jobs)
+    # Fern colonies: three clusters of three rosettes each, varied sizes.
+    fern_clusters = [
+        [(-2.6, -1.8, 1.15), (-3.3, -1.2, 0.85), (-1.9, -2.5, 0.95)],
+        [(3.3, -2.4, 1.0),   (4.0, -1.9, 0.8),   (2.7, -3.1, 0.9)],
+        [(0.9, 2.6, 0.9),    (1.7, 3.1, 0.75),   (0.2, 3.3, 0.8)],
+    ]
+    fern_index = 0
+    for cluster in fern_clusters:
+        for x, z, size in cluster:
+            fern(c, f"Fern {fern_index}", x, z, size, m, rng, sway_jobs)
+            fern_index += 1
 
     colors = ["pink", "yellow", "cream", "sky_blue"]
     for i in range(8):
