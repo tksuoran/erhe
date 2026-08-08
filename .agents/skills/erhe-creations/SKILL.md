@@ -149,6 +149,15 @@ following its construction logic:
 - Camera: `place_camera(eye, target)`; `exposure()` if needed. Check
   every screenshot for objects occluding the camera ray and for the
   floor's horizon edge (floor boxes want ~60 m for eye-level cameras).
+- **Set up lights + `shadow_range()` FIRST** (before any geometry) so a
+  windowed viewing is lit and shadowed from the first shape onward.
+  Light nodes insert on the NEXT frame (unlike create_node's synchronous
+  insert), so a node_by_name lookup right after `light()` (e.g. to
+  rotate the sun) needs a `settle()` in between.
+- Tree age variety (creation 13): pass an age/scale parameter driving
+  size (~ age^0.7-0.8), L-system depth (+1 iteration when age >= 1.3,
+  -1 for saplings), branch density, gnarl and canopy clump size; sway
+  mass ~ age^2, receptivity ~ age (old trees lumber, saplings whip).
 
 ## L-system vegetation (creations 9-10 carry reference code)
 
