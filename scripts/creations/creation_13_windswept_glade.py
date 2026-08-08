@@ -761,6 +761,7 @@ def main():
         c.clear_selection()
     c.light("point", "Green Bounce", [0.0, 3.5, 0.0], [0.55, 0.75, 0.45],
             45.0, range=20.0, cast_shadow=False)
+    c.shadow_range(70.0)  # cover the whole tree ring + floor horizon
 
     c.shape("box", "Forest Floor", [0.0, -0.25, 0.0], size=[60.0, 0.5, 60.0],
             material_name=m["grass"])

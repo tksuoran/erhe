@@ -450,6 +450,16 @@ class Creation:
                 "scene_name": self.scene, "camera_id": cameras[0]["id"],
                 "exposure": float(value)})
 
+    def shadow_range(self, value):
+        """Camera shadow range / far distance: raise it early when a scene
+        is larger than the default range, so distant objects are shadowed
+        (and stay shadowed while a windowed build is being watched)."""
+        cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
+        if cameras:
+            self.mutate("edit_camera", {
+                "scene_name": self.scene, "camera_id": cameras[0]["id"],
+                "shadow_range": float(value)})
+
     # -------------------------------------------------------------- physics
 
     def set_physics(self, enabled):
