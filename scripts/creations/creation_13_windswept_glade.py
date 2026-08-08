@@ -171,36 +171,57 @@ def expand_lsystem(rng, iterations, weights):
     return s.replace("A", "L")
 
 
-def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs):
+def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1.0):
     """Stochastic L-system tree, graph mirroring the bracket structure.
     Every part is motion_mode="none"; the trunk is the sway spine (the
-    whole branch/canopy subtree rides its node), collected in sway_jobs."""
+    whole branch/canopy subtree rides its node), collected in sway_jobs.
+
+    age scales the whole tree: an old tree (age > ~1.3) is taller and
+    thicker, branches one L-system iteration DEEPER, branches more
+    densely, is more gnarled (wider wobble) and carries larger canopy
+    clumps; a sapling (age < ~0.7) is the reverse. The sway body's mass
+    grows with age^2 and its wind receptivity with age, so old trees
+    lumber and saplings whip."""
     p = species
+    iterations = p["iterations"]
+    if age >= 1.3:
+        iterations += 1
+    elif age <= 0.7:
+        iterations -= 1
+    weights = (min(0.95, p["weights"][0] * min(age, 1.15)), p["weights"][1])
+    trunk_h = p["trunk_h"] * age
+    trunk_r = (p["trunk_r"][0] * (age ** 0.8), p["trunk_r"][1] * (age ** 0.8))
+    seg_len = p["seg_len"] * (age ** 0.7)
+    wobble = p["wobble"] * (1.0 + 0.6 * max(0.0, age - 1.0))
+    pitch_lo, pitch_hi = p["pitch"]
+    pitch = (pitch_lo, pitch_hi + 8.0 * max(0.0, age - 1.0))
+
     root = c.group(tag, base)
-    result = c.shape("cone", f"{tag} Trunk", base, height=p["trunk_h"],
-                     bottom_radius=p["trunk_r"][0], top_radius=p["trunk_r"][1],
+    result = c.shape("cone", f"{tag} Trunk", base, height=trunk_h,
+                     bottom_radius=trunk_r[0], top_radius=trunk_r[1],
                      slice_count=14, material_name=bark, parent_node_id=root,
                      motion_mode="none")
     trunk_id = result.get("node_id") if isinstance(result, dict) else None
     parent = trunk_id if trunk_id is not None else root
     if trunk_id is not None:
-        sway_jobs.append((tag, trunk_id, list(base), "tree_sway", 25.0, 6.0, 0.8))
+        sway_jobs.append((tag, trunk_id, list(base), "tree_sway",
+                          25.0 * age * age, 6.0 * age, 0.8))
 
     leaves = []                         # (tip position, carrying branch id)
     seg_count = 0
-    pos = v_add(base, [0.0, p["trunk_h"], 0.0])
+    pos = v_add(base, [0.0, trunk_h, 0.0])
     heading = v_norm(p["tilt"])
     left = v_norm(v_cross([0.0, 1.0, 0.0], heading)) if abs(heading[1]) < 0.999 else [1.0, 0.0, 0.0]
     left = v_norm(v_cross(heading, v_cross(left, heading)))
     depth = 0
     stack = []
 
-    for ch in expand_lsystem(rng, p["iterations"], p["weights"]):
+    for ch in expand_lsystem(rng, iterations, weights):
         if ch == "F":
-            wob = math.radians(rng.uniform(-p["wobble"], p["wobble"]))
+            wob = math.radians(rng.uniform(-wobble, wobble))
             heading = v_norm(v_rotate(heading, left, wob))
-            length = p["seg_len"] * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
-            radius = max(0.03, p["seg_r"] * (p["r_falloff"] ** depth))
+            length = seg_len * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
+            radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
             result = c.shape("cone", f"{tag} Branch {seg_count}", list(pos),
                              height=length, bottom_radius=radius,
                              top_radius=max(0.025, radius * 0.7),
@@ -215,7 +236,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs):
             seg_count += 1
             pos = v_add(pos, v_scale(heading, length))
         elif ch == "&":
-            angle = math.radians(rng.uniform(*p["pitch"]))
+            angle = math.radians(rng.uniform(*pitch))
             heading = v_norm(v_rotate(heading, left, angle))
         elif ch == "/":
             angle = math.radians(rng.uniform(95.0, 145.0))
@@ -229,7 +250,8 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs):
             leaves.append((v_add(pos, v_scale(heading, 0.12)), parent))
 
     clusters = []                       # [centroid, count, contributor counts]
-    merge_sq = p["cluster_r"] * p["cluster_r"]
+    cluster_r = p["cluster_r"] * (age ** 0.5)
+    merge_sq = cluster_r * cluster_r
     for point, carrier in leaves:
         for cluster in clusters:
             center, count, carriers = cluster
@@ -242,8 +264,9 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs):
         else:
             clusters.append([list(point), 1, {carrier: 1}])
     base_r, per, cap = p["leaf_r"]
+    age_leaf = age ** 0.6
     for i, (center, count, carriers) in enumerate(clusters):
-        radius = min(base_r + per * math.sqrt(count), cap)
+        radius = min(base_r + per * math.sqrt(count), cap) * age_leaf
         jitter = [rng.uniform(-0.06, 0.06) for _ in range(3)]
         carrier = max(carriers.items(), key=lambda kv: kv[1])[0]
         c.shape("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
@@ -549,20 +572,26 @@ def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
             c.move_node_id(node_id, rotation_xyzw=rotation)
 
 
-def willow(c, tag, base, m, rng, sway_jobs):
+def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
     """Weeping willow: static-looking trunk + arching branches (all
     motion_mode="none"), with a swinging leaf CURTAIN at each branch tip.
     Each curtain root is a small dynamic body jointed to a coincident
     anchor on its branch - NOT to the world - so the curtains swing in
     the wind while staying attached to the tree. The long hanging
-    strands are elongated blade spheres riding the curtain root."""
+    strands are elongated blade spheres riding the curtain root.
+
+    scale is the tree's age: an ancient willow (scale >= 1.5) is
+    proportionally bigger, droops its branches lower, and grows a second
+    lower ring of branch curtains; curtain body mass scales with scale^2
+    and receptivity with scale, so the big tree's curtains swing slower."""
     x, y, z = base
+    ancient = scale >= 1.5
     root = c.group(tag, base)
-    trunk_h = 2.3
+    trunk_h = 2.3 * scale
     result = c.shape("cone", f"{tag} Trunk", base, height=trunk_h,
-                     bottom_radius=0.30, top_radius=0.20, slice_count=12,
-                     material_name=m["bark"], parent_node_id=root,
-                     motion_mode="none")
+                     bottom_radius=0.30 * scale, top_radius=0.20 * scale,
+                     slice_count=12, material_name=m["bark"],
+                     parent_node_id=root, motion_mode="none")
     trunk_id = result.get("node_id") if isinstance(result, dict) else None
     on_trunk = trunk_id if trunk_id is not None else root
     top = [x, y + trunk_h, z]
@@ -570,62 +599,75 @@ def willow(c, tag, base, m, rng, sway_jobs):
     for i in range(3):
         ca = 2.0 * math.pi * i / 3.0 + rng.uniform(-0.4, 0.4)
         c.shape("uv_sphere", f"{tag} Crown {i}",
-                [x + 0.45 * math.cos(ca), y + trunk_h + 0.35, z + 0.45 * math.sin(ca)],
-                radius=rng.uniform(0.5, 0.65), slice_count=12, stack_count=9,
+                [x + 0.45 * scale * math.cos(ca), y + trunk_h + 0.35 * scale,
+                 z + 0.45 * scale * math.sin(ca)],
+                radius=rng.uniform(0.5, 0.65) * scale, slice_count=12, stack_count=9,
                 material_name=m["leaf" if i % 2 else "leaf2"],
                 parent_node_id=on_trunk, motion_mode="none")
-    curtain_count = 6
-    for i in range(curtain_count):
-        a = 2.0 * math.pi * i / curtain_count + rng.uniform(-0.25, 0.25)
-        out_dir = [math.cos(a), 0.0, math.sin(a)]
-        branch_dir = v_norm([out_dir[0], 0.55, out_dir[2]])
-        branch_len = rng.uniform(1.1, 1.5)
-        result = c.shape("cone", f"{tag} Branch {i}", top, height=branch_len,
-                         bottom_radius=0.09, top_radius=0.05, slice_count=8,
-                         material_name=m["bark"], parent_node_id=on_trunk,
-                         motion_mode="none")
-        branch_id = result.get("node_id") if isinstance(result, dict) else None
-        rotation = align_y_quaternion(branch_dir)
-        if branch_id is not None and rotation is not None:
-            c.move_node_id(branch_id, rotation_xyzw=rotation)
-        carrier = branch_id if branch_id is not None else on_trunk
-        tip = v_add(top, v_scale(branch_dir, branch_len))
 
-        # Curtain root: small stub at the branch tip; its hull is the
-        # dynamic body all strands of this curtain ride.
-        result = c.shape("cone", f"{tag} Curtain {i}", tip, height=0.18,
-                         bottom_radius=0.05, top_radius=0.03, slice_count=6,
-                         material_name=m["bark"], parent_node_id=carrier,
-                         motion_mode="none")
-        curtain_id = result.get("node_id") if isinstance(result, dict) else None
-        if curtain_id is None:
-            continue
-        # Static inner strands along the branch (inner foliage barely
-        # moves), then the swinging tip curtain.
-        for s in range(3):
-            frac = 0.35 + 0.2 * s
-            sp = v_add(top, v_scale(branch_dir, branch_len * frac))
-            sa = a + rng.uniform(-0.8, 0.8)
-            sd = v_norm([math.cos(sa) * 0.22, -1.0, math.sin(sa) * 0.22])
-            length = rng.uniform(0.7, 1.0)
-            blade(c, f"{tag} Inner {i}.{s}",
-                  v_add(sp, v_scale(sd, length * 0.5)),
-                  0.22, [0.18, length * 2.3, 0.12], sd,
-                  m["leaf" if s % 2 else "leaf2"], parent=carrier)
-        strands = rng.randint(8, 10)
-        for s in range(strands):
-            sa = a + rng.uniform(-0.9, 0.9)
-            sd = v_norm([math.cos(sa) * 0.30, -1.0, math.sin(sa) * 0.30])
-            length = rng.uniform(0.9, 1.4)
-            blade(c, f"{tag} Strand {i}.{s}",
-                  v_add(tip, v_scale(sd, length * 0.5)),
-                  0.22, [0.18, length * 2.3, 0.12], sd,
-                  m["leaf" if s % 2 else "leaf2"], parent=curtain_id)
-        # World-anchored at the branch tip: the willow's own parts are all
-        # motion_mode="none" (the tree never moves), so a world anchor at
-        # the tip is exactly a branch anchor, with fewer calls.
-        sway_jobs.append((f"{tag} Curtain {i}", curtain_id, list(tip),
-                          "curtain_sway", 0.6, 0.35, 0.5))
+    # Branch rings: (attach height fraction, branch count, upward pitch).
+    # The ancient tree hangs a second, droopier ring below the crown.
+    rings = [(1.0, 6, 0.55 if not ancient else 0.40)]
+    if ancient:
+        rings.append((0.68, 4, 0.25))
+    curtain_index = 0
+    for ring_frac, ring_branches, ring_up in rings:
+        ring_base = [x, y + trunk_h * ring_frac, z]
+        for i in range(ring_branches):
+            a = 2.0 * math.pi * i / ring_branches + rng.uniform(-0.25, 0.25)
+            out_dir = [math.cos(a), 0.0, math.sin(a)]
+            branch_dir = v_norm([out_dir[0], ring_up, out_dir[2]])
+            branch_len = rng.uniform(1.1, 1.5) * scale
+            result = c.shape("cone", f"{tag} Branch {curtain_index}", ring_base,
+                             height=branch_len, bottom_radius=0.09 * scale,
+                             top_radius=0.05 * scale, slice_count=8,
+                             material_name=m["bark"], parent_node_id=on_trunk,
+                             motion_mode="none")
+            branch_id = result.get("node_id") if isinstance(result, dict) else None
+            rotation = align_y_quaternion(branch_dir)
+            if branch_id is not None and rotation is not None:
+                c.move_node_id(branch_id, rotation_xyzw=rotation)
+            carrier = branch_id if branch_id is not None else on_trunk
+            tip = v_add(ring_base, v_scale(branch_dir, branch_len))
+
+            # Curtain root: small stub at the branch tip; its hull is the
+            # dynamic body all strands of this curtain ride.
+            result = c.shape("cone", f"{tag} Curtain {curtain_index}", tip,
+                             height=0.18 * scale, bottom_radius=0.05 * scale,
+                             top_radius=0.03 * scale, slice_count=6,
+                             material_name=m["bark"], parent_node_id=carrier,
+                             motion_mode="none")
+            curtain_id = result.get("node_id") if isinstance(result, dict) else None
+            if curtain_id is None:
+                curtain_index += 1
+                continue
+            # Static inner strands along the branch (inner foliage barely
+            # moves), then the swinging tip curtain.
+            for s in range(3):
+                frac = 0.35 + 0.2 * s
+                sp = v_add(ring_base, v_scale(branch_dir, branch_len * frac))
+                sa = a + rng.uniform(-0.8, 0.8)
+                sd = v_norm([math.cos(sa) * 0.22, -1.0, math.sin(sa) * 0.22])
+                length = rng.uniform(0.7, 1.0) * scale
+                blade(c, f"{tag} Inner {curtain_index}.{s}",
+                      v_add(sp, v_scale(sd, length * 0.5)),
+                      0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
+                      m["leaf" if s % 2 else "leaf2"], parent=carrier)
+            strands = rng.randint(8, 10)
+            for s in range(strands):
+                sa = a + rng.uniform(-0.9, 0.9)
+                sd = v_norm([math.cos(sa) * 0.30, -1.0, math.sin(sa) * 0.30])
+                length = rng.uniform(0.9, 1.4) * scale
+                blade(c, f"{tag} Strand {curtain_index}.{s}",
+                      v_add(tip, v_scale(sd, length * 0.5)),
+                      0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
+                      m["leaf" if s % 2 else "leaf2"], parent=curtain_id)
+            # World-anchored at the branch tip: the willow's own parts are
+            # all motion_mode="none" (the tree never moves), so a world
+            # anchor at the tip is exactly a branch anchor, fewer calls.
+            sway_jobs.append((f"{tag} Curtain {curtain_index}", curtain_id, list(tip),
+                              "curtain_sway", 0.6 * scale * scale, 0.35 * scale, 0.5))
+            curtain_index += 1
 
 
 def fallen_log(c, m, rng):
@@ -769,26 +811,29 @@ def main():
     # Two rings of trees around the clearing (bases lifted 0.05 so the
     # trunk hulls clear the floor instead of grinding on it). The outer
     # ring keeps the +X/+Z camera approach clear (eye [6.8, 3.2, 7.6]).
+    # Ages span sapling (0.6) to ancient (1.5): each affects size,
+    # branching depth/density, gnarl and canopy - no two trees alike.
     trees = [
-        ("Oak A",   OAK,   [-3.6, 0.05, -3.4]),
-        ("Oak B",   OAK,   [4.2, 0.05, -3.8]),
-        ("Oak C",   OAK,   [-4.6, 0.05, 2.6]),
-        ("Birch A", BIRCH, [1.2, 0.05, -5.2]),
-        ("Birch B", BIRCH, [5.6, 0.05, -1.6]),
-        ("Oak D",   OAK,   [-7.6, 0.05, -6.8]),
-        ("Oak E",   OAK,   [8.6, 0.05, -5.8]),
-        ("Oak F",   OAK,   [-8.8, 0.05, 3.6]),
-        ("Oak G",   OAK,   [0.2, 0.05, -9.2]),
-        ("Oak H",   OAK,   [-3.4, 0.05, 6.8]),
-        ("Birch C", BIRCH, [2.6, 0.05, -8.6]),
-        ("Birch D", BIRCH, [9.2, 0.05, -1.2]),
-        ("Birch E", BIRCH, [-9.0, 0.05, -1.8]),
-        ("Birch F", BIRCH, [6.4, 0.05, -7.8]),
-        ("Birch G", BIRCH, [-6.0, 0.05, 6.6]),
+        ("Oak A",   OAK,   [-3.6, 0.05, -3.4], 1.0),
+        ("Oak B",   OAK,   [4.2, 0.05, -3.8],  1.45),
+        ("Oak C",   OAK,   [-4.6, 0.05, 2.6],  0.85),
+        ("Birch A", BIRCH, [1.2, 0.05, -5.2],  1.0),
+        ("Birch B", BIRCH, [5.6, 0.05, -1.6],  0.65),
+        ("Oak D",   OAK,   [-7.6, 0.05, -6.8], 1.35),
+        ("Oak E",   OAK,   [8.6, 0.05, -5.8],  1.0),
+        ("Oak F",   OAK,   [-8.8, 0.05, 3.6],  0.7),
+        ("Oak G",   OAK,   [0.2, 0.05, -9.2],  1.15),
+        ("Oak H",   OAK,   [-3.4, 0.05, 6.8],  0.9),
+        ("Birch C", BIRCH, [2.6, 0.05, -8.6],  1.3),
+        ("Birch D", BIRCH, [9.2, 0.05, -1.2],  0.95),
+        ("Birch E", BIRCH, [-9.0, 0.05, -1.8], 0.6),
+        ("Birch F", BIRCH, [6.4, 0.05, -7.8],  1.1),
+        ("Birch G", BIRCH, [-6.0, 0.05, 6.6],  0.8),
     ]
-    for tag, species, base in trees:
+    for tag, species, base, age in trees:
         bark = m["birch"] if species is BIRCH else m["bark"]
-        grow_tree(c, tag, base, species, bark, [m["leaf"], m["leaf2"]], rng, sway_jobs)
+        grow_tree(c, tag, base, species, bark, [m["leaf"], m["leaf2"]], rng,
+                  sway_jobs, age=age)
 
     for i, (x, z, size) in enumerate([(-2.2, -4.6, 0.8), (2.6, -5.0, 0.7),
                                       (-5.2, 0.2, 0.9), (5.4, -0.6, 0.8),
@@ -847,9 +892,10 @@ def main():
     # Two weeping willows: A at the clearing's left edge, curtains
     # overhanging the meadow (prominent but ~12 m from the camera eye
     # [6.8, 3.2, 7.6] - close-up strands read as screen-filling slabs);
-    # B in the back ring as a depth element.
+    # B an ANCIENT giant at twice the size, towering over the back ring
+    # with a second, lower ring of branch curtains.
     willow(c, "Willow A", [-3.2, 0.05, 1.4], m, rng, sway_jobs)
-    willow(c, "Willow B", [4.6, 0.05, -6.2], m, rng, sway_jobs)
+    willow(c, "Willow B", [4.6, 0.05, -6.2], m, rng, sway_jobs, scale=2.0)
 
     # ------------------------------------------------------- physics + wind
     c.settle()
