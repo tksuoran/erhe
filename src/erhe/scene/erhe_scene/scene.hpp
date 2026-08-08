@@ -97,6 +97,31 @@ public:
     // as all other hosted-item mutation.
     void mark_node_transform_dirty(const Node& node);
 
+    // RAII bracket for transform writes made by the OWNER of
+    // no_transform_update nodes' transforms (the editor's physics writeback).
+    // Dirt recorded while a scope is alive keeps the propagation skip over
+    // no_transform_update children; dirt from any other writer (tools, MCP,
+    // undo, animation) carries them, so editing an ancestor moves its
+    // body-driven subtree along. Scopes do not nest.
+    class Transform_owner_writes_scope final
+    {
+    public:
+        explicit Transform_owner_writes_scope(Scene& scene)
+            : m_scene{scene}
+        {
+            m_scene.m_transform_owner_writes = true;
+        }
+        ~Transform_owner_writes_scope() noexcept
+        {
+            m_scene.m_transform_owner_writes = false;
+        }
+        Transform_owner_writes_scope(const Transform_owner_writes_scope&)            = delete;
+        Transform_owner_writes_scope& operator=(const Transform_owner_writes_scope&) = delete;
+
+    private:
+        Scene& m_scene;
+    };
+
     [[nodiscard]] auto get_mesh_by_id       (erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Mesh>;
     [[nodiscard]] auto get_light_by_id      (erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Light>;
     [[nodiscard]] auto get_camera_by_id     (erhe::Unique_id<Node>::id_type id) const -> std::shared_ptr<Camera>;
@@ -160,7 +185,7 @@ public:
     glm::vec4 ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
 
 private:
-    void update_subtree_transforms(Node& node);
+    void update_subtree_transforms(Node& node, bool carry_body_driven);
 
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;
@@ -181,6 +206,8 @@ private:
     std::vector<Node*>                        m_transform_dirty_processing;
     std::unordered_set<const Node*>           m_transform_update_visited;
     bool                                      m_updating_node_transforms{false};
+    // See set_transform_owner_writes().
+    bool                                      m_transform_owner_writes{false};
 };
 
 } // namespace erhe::scene

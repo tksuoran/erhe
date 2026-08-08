@@ -1476,6 +1476,12 @@ void Scene_root::after_physics_simulation_steps()
         m_node_physics_sorted = true;
     }
 
+    // Owner-write bracket: dirt recorded by these body -> node writes keeps
+    // the propagation skip over no_transform_update children (the writeback
+    // covers every body-driven node itself); dirt from any other writer
+    // carries body-driven subtrees with their edited ancestor instead (see
+    // Scene::Transform_owner_writes_scope).
+    const erhe::scene::Scene::Transform_owner_writes_scope owner_writes_scope{*m_scene};
     for (const auto& node_physics : m_node_physics) {
         auto* rigid_body = node_physics->get_rigid_body();
         if (rigid_body) {

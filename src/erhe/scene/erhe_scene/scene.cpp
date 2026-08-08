@@ -264,9 +264,15 @@ void Scene::mark_node_transform_dirty(const Node& node)
         return;
     }
     if (node.node_data.transforms.scene_transform_dirty) {
+        // A non-owner write upgrades an owner-dirty node: carry semantics win
+        // (see scene_transform_dirty_by_owner).
+        if (!m_transform_owner_writes) {
+            node.node_data.transforms.scene_transform_dirty_by_owner = false;
+        }
         return;
     }
-    node.node_data.transforms.scene_transform_dirty = true;
+    node.node_data.transforms.scene_transform_dirty          = true;
+    node.node_data.transforms.scene_transform_dirty_by_owner = m_transform_owner_writes;
     m_transform_dirty_nodes.push_back(const_cast<Node*>(&node));
 }
 
@@ -305,37 +311,50 @@ void Scene::update_node_transforms()
     m_transform_update_visited.clear();
     for (Node* node : m_transform_dirty_processing) {
         node->node_data.transforms.scene_transform_dirty = false;
+        const bool carry_body_driven = !node->node_data.transforms.scene_transform_dirty_by_owner;
+        node->node_data.transforms.scene_transform_dirty_by_owner = false;
         if (!m_transform_update_visited.insert(node).second) {
             continue;
         }
-        update_subtree_transforms(*node);
+        update_subtree_transforms(*node, carry_body_driven);
     }
     m_transform_dirty_processing.clear();
     m_updating_node_transforms = false;
 }
 
-void Scene::update_subtree_transforms(Node& node)
+void Scene::update_subtree_transforms(Node& node, const bool carry_body_driven)
 {
     // The dirty node itself is already up to date: every write path updates
     // the node's own world transform and notifies its attachments eagerly
     // (transform setters, Node::handle_parent_update). Only descendants need
-    // recomputation. no_transform_update children own their world transform
-    // (physics-driven); their cached world did not change with the parent, so
-    // their branches need no visit either - when such a node IS written, its
-    // setter dirties it and propagation resumes from there.
+    // recomputation.
+    //
+    // no_transform_update children own their world transform (physics-
+    // driven). When the dirt came from the transform owner itself (the
+    // physics writeback; scene_transform_dirty_by_owner), their cached world
+    // did not change with the parent, so their branches are skipped - the
+    // owner writes every body-driven node itself, in ITS order, and a
+    // recompute here could stomp a sibling-order-dependent fresh pose in a
+    // chain of body-driven nodes. Any OTHER writer's dirt (tools, MCP, undo,
+    // animation) CARRIES them: their parent_from_node is kept current by
+    // set_world_from_node, so the recompute moves the body-driven subtree
+    // with its edited ancestor; the physics writeback then teleports the
+    // rigid bodies to the carried node poses (Node_physics::
+    // before_physics_simulation runs node -> body for every body each frame
+    // while the simulation runs, and on resume when it is paused).
     for (const auto& child : node.get_children()) {
         const auto child_node = std::dynamic_pointer_cast<Node>(child);
         if (!child_node) {
             continue;
         }
-        if (child_node->is_no_transform_update()) {
+        if (!carry_body_driven && child_node->is_no_transform_update()) {
             continue;
         }
         if (!m_transform_update_visited.insert(child_node.get()).second) {
             continue;
         }
         child_node->update_transform(0);
-        update_subtree_transforms(*child_node);
+        update_subtree_transforms(*child_node, carry_body_driven);
     }
 }
 

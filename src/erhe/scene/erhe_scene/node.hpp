@@ -28,6 +28,13 @@ public:
     // frame enqueue the node only once.
     mutable bool          scene_transform_dirty  {false};
 
+    // True while scene_transform_dirty is set IF every write that dirtied the
+    // node came from the owner of no_transform_update nodes' transforms (the
+    // physics writeback; see Scene::set_transform_owner_writes). Propagation
+    // from such a node keeps skipping no_transform_update children; any other
+    // writer's dirt CARRIES them (ancestor edits move body-driven subtrees).
+    mutable bool          scene_transform_dirty_by_owner{false};
+
     // One of these is normative, and the other is calculated by update_transform()
     Trs_transform         parent_from_node;
     mutable Trs_transform world_from_node;  
