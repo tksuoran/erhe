@@ -113,9 +113,12 @@ SWAY_SETTINGS = {
     # Frond dynamics: only the spine hull carries mass, so a light spine +
     # stiff spring rings at several Hz (jittery). A heavier spine and softer
     # spring put the natural frequency ~1.5 Hz; body angular damping kills
-    # the residual ring.
-    "frond_sway": {"range": 0.35, "stiffness": 1.5,   "damping": 0.25, "max_force": 8.0},
-    "stem_sway":  {"range": 0.50, "stiffness": 0.8,   "damping": 0.08, "max_force": 3.0},
+    # the residual ring. The same sizing rule (aim omega = sqrt(k / I) at
+    # 1-2 Hz via explicit mass) applies to every plant scale below.
+    "frond_sway":   {"range": 0.35, "stiffness": 1.5,   "damping": 0.25, "max_force": 8.0},
+    "stem_sway":    {"range": 0.50, "stiffness": 0.8,   "damping": 0.08, "max_force": 3.0},
+    "grass_sway":   {"range": 0.60, "stiffness": 0.3,   "damping": 0.03, "max_force": 2.0},
+    "curtain_sway": {"range": 0.60, "stiffness": 0.5,   "damping": 0.06, "max_force": 5.0},
 }
 
 
@@ -347,9 +350,12 @@ def expand_flower(rng, iterations=3):
     return s.replace("A", "K")
 
 
-def flower(c, tag, x, z, color, m, rng, sway_jobs):
+def flower(c, tag, x, z, color, m, rng, sway_jobs,
+           petal_count=5, petal_len=1.35, bloom_r=0.032, iterations=3):
     """L-system wildflower; stem segment 0 is the sway spine (the whole
-    plant above it is motion_mode="none" and rides its node)."""
+    plant above it is motion_mode="none" and rides its node). Variety
+    comes from geometry - petal count / length, bloom size, stem
+    iterations - since the 12-material pool is already fully claimed."""
     base = [x, 0.03, z]
     root = c.group(tag, [x, 0.0, z])
     parent = root
@@ -359,7 +365,7 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs):
     stack = []
     seg = 0
 
-    for ch in expand_flower(rng):
+    for ch in expand_flower(rng, iterations):
         if ch == "F":
             wob = math.radians(rng.uniform(-7.0, 7.0))
             heading = v_norm(v_rotate(heading, left, wob))
@@ -392,18 +398,20 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs):
         elif ch == "]":
             pos, heading, left, parent = stack.pop()
         elif ch == "K":
+            center_color = m["cream"] if color == "yellow" else m["yellow"]
             result = c.shape("uv_sphere", f"{tag} Center {seg}",
-                             v_add(pos, v_scale(heading, 0.02)), radius=0.032,
-                             slice_count=8, stack_count=6, material_name=m["yellow"],
+                             v_add(pos, v_scale(heading, 0.02)), radius=bloom_r,
+                             slice_count=8, stack_count=6, material_name=center_color,
                              parent_node_id=parent, motion_mode="none")
             center_id = result.get("node_id") if isinstance(result, dict) else None
             petal_parent = center_id if center_id is not None else parent
-            for i in range(5):
-                ring = v_rotate(left, heading, math.radians(i * 72.0 + rng.uniform(-8.0, 8.0)))
+            step = 360.0 / petal_count
+            for i in range(petal_count):
+                ring = v_rotate(left, heading, math.radians(i * step + rng.uniform(-8.0, 8.0)))
                 petal_dir = v_norm(v_add(ring, v_scale(heading, 0.45)))
                 blade(c, f"{tag} Petal {seg}.{i}",
                       v_add(pos, v_scale(petal_dir, 0.055)),
-                      0.045, [0.55, 1.35, 0.30], petal_dir, m[color],
+                      0.045, [0.55, petal_len, 0.30], petal_dir, m[color],
                       parent=petal_parent)
             seg += 1
 
@@ -483,7 +491,7 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                         c.move_node_id(node_id, rotation_xyzw=rotation)
                     if t == 0:
                         sway_jobs.append((f"{tag} Frond {i}", node_id, list(pos),
-                                          "frond_sway", 0.8, 0.3, 0.8))
+                                          "frond_sway", 0.8, 0.22, 0.8))
                     parent = node_id
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
@@ -510,6 +518,114 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                           length, [0.32, 1.55, 0.13], pinna_dir, mats[0],
                           parent=parent)
                 pending = 0
+
+
+def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
+    """Grass tuft: a central spine blade (the sway body) with 3-5 fanned
+    blade cones riding it as visual children. Whole tuft bends together."""
+    root = c.group(tag, [x, 0.0, z])
+    base = [x, 0.02, z]
+    h = size * rng.uniform(0.9, 1.2)
+    result = c.shape("cone", f"{tag} Spine", base, height=h,
+                     bottom_radius=0.012, top_radius=0.001, slice_count=3,
+                     material_name=m["leaf2"], parent_node_id=root,
+                     motion_mode="none")
+    spine_id = result.get("node_id") if isinstance(result, dict) else None
+    if spine_id is None:
+        return
+    sway_jobs.append((tag, spine_id, base, "grass_sway", 0.10, 0.12, 0.4))
+    for i in range(rng.randint(3, 5)):
+        a = rng.uniform(0.0, 2.0 * math.pi)
+        tilt = math.radians(rng.uniform(14.0, 38.0))
+        d = v_norm([math.sin(tilt) * math.cos(a), math.cos(tilt), math.sin(tilt) * math.sin(a)])
+        result = c.shape("cone", f"{tag} Blade {i}", base,
+                         height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
+                         top_radius=0.001, slice_count=3,
+                         material_name=m["leaf" if i % 2 else "leaf2"],
+                         parent_node_id=spine_id, motion_mode="none")
+        node_id = result.get("node_id") if isinstance(result, dict) else None
+        rotation = align_y_quaternion(d)
+        if node_id is not None and rotation is not None:
+            c.move_node_id(node_id, rotation_xyzw=rotation)
+
+
+def willow(c, tag, base, m, rng, sway_jobs):
+    """Weeping willow: static-looking trunk + arching branches (all
+    motion_mode="none"), with a swinging leaf CURTAIN at each branch tip.
+    Each curtain root is a small dynamic body jointed to a coincident
+    anchor on its branch - NOT to the world - so the curtains swing in
+    the wind while staying attached to the tree. The long hanging
+    strands are elongated blade spheres riding the curtain root."""
+    x, y, z = base
+    root = c.group(tag, base)
+    trunk_h = 2.3
+    result = c.shape("cone", f"{tag} Trunk", base, height=trunk_h,
+                     bottom_radius=0.30, top_radius=0.20, slice_count=12,
+                     material_name=m["bark"], parent_node_id=root,
+                     motion_mode="none")
+    trunk_id = result.get("node_id") if isinstance(result, dict) else None
+    on_trunk = trunk_id if trunk_id is not None else root
+    top = [x, y + trunk_h, z]
+    # Leafy crown mass so the tree does not read as bare branches.
+    for i in range(3):
+        ca = 2.0 * math.pi * i / 3.0 + rng.uniform(-0.4, 0.4)
+        c.shape("uv_sphere", f"{tag} Crown {i}",
+                [x + 0.45 * math.cos(ca), y + trunk_h + 0.35, z + 0.45 * math.sin(ca)],
+                radius=rng.uniform(0.5, 0.65), slice_count=12, stack_count=9,
+                material_name=m["leaf" if i % 2 else "leaf2"],
+                parent_node_id=on_trunk, motion_mode="none")
+    curtain_count = 6
+    for i in range(curtain_count):
+        a = 2.0 * math.pi * i / curtain_count + rng.uniform(-0.25, 0.25)
+        out_dir = [math.cos(a), 0.0, math.sin(a)]
+        branch_dir = v_norm([out_dir[0], 0.55, out_dir[2]])
+        branch_len = rng.uniform(1.1, 1.5)
+        result = c.shape("cone", f"{tag} Branch {i}", top, height=branch_len,
+                         bottom_radius=0.09, top_radius=0.05, slice_count=8,
+                         material_name=m["bark"], parent_node_id=on_trunk,
+                         motion_mode="none")
+        branch_id = result.get("node_id") if isinstance(result, dict) else None
+        rotation = align_y_quaternion(branch_dir)
+        if branch_id is not None and rotation is not None:
+            c.move_node_id(branch_id, rotation_xyzw=rotation)
+        carrier = branch_id if branch_id is not None else on_trunk
+        tip = v_add(top, v_scale(branch_dir, branch_len))
+
+        # Curtain root: small stub at the branch tip; its hull is the
+        # dynamic body all strands of this curtain ride.
+        result = c.shape("cone", f"{tag} Curtain {i}", tip, height=0.18,
+                         bottom_radius=0.05, top_radius=0.03, slice_count=6,
+                         material_name=m["bark"], parent_node_id=carrier,
+                         motion_mode="none")
+        curtain_id = result.get("node_id") if isinstance(result, dict) else None
+        if curtain_id is None:
+            continue
+        # Static inner strands along the branch (inner foliage barely
+        # moves), then the swinging tip curtain.
+        for s in range(3):
+            frac = 0.35 + 0.2 * s
+            sp = v_add(top, v_scale(branch_dir, branch_len * frac))
+            sa = a + rng.uniform(-0.8, 0.8)
+            sd = v_norm([math.cos(sa) * 0.22, -1.0, math.sin(sa) * 0.22])
+            length = rng.uniform(0.7, 1.0)
+            blade(c, f"{tag} Inner {i}.{s}",
+                  v_add(sp, v_scale(sd, length * 0.5)),
+                  0.22, [0.18, length * 2.3, 0.12], sd,
+                  m["leaf" if s % 2 else "leaf2"], parent=carrier)
+        strands = rng.randint(8, 10)
+        for s in range(strands):
+            sa = a + rng.uniform(-0.9, 0.9)
+            sd = v_norm([math.cos(sa) * 0.30, -1.0, math.sin(sa) * 0.30])
+            length = rng.uniform(0.9, 1.4)
+            blade(c, f"{tag} Strand {i}.{s}",
+                  v_add(tip, v_scale(sd, length * 0.5)),
+                  0.22, [0.18, length * 2.3, 0.12], sd,
+                  m["leaf" if s % 2 else "leaf2"], parent=curtain_id)
+        # World-anchored at the branch tip: the willow's own parts are all
+        # motion_mode="none" (the tree never moves), so a world anchor at
+        # the tip is exactly a branch anchor, with fewer calls.
+        sway_jobs.append((f"{tag} Curtain {i}", curtain_id, list(tip),
+                          "curtain_sway", 0.6, 0.35, 0.5))
 
 
 def fallen_log(c, m, rng):
@@ -678,12 +794,38 @@ def main():
             fern(c, f"Fern {fern_index}", x, z, size, m, rng, sway_jobs)
             fern_index += 1
 
-    colors = ["pink", "yellow", "cream", "sky_blue"]
-    for i in range(8):
+    # Wildflower meadow: 20 flowers in 5 colors; variety from geometry
+    # (petal count / length, bloom size, stem height) - the material pool
+    # is fully claimed, so no new colors.
+    colors = ["pink", "yellow", "cream", "sky_blue", "red"]
+    for i in range(20):
         a = rng.uniform(0.0, 2.0 * math.pi)
-        d = rng.uniform(0.5, 2.8)
+        d = rng.uniform(0.5, 3.2)
         flower(c, f"Flower {i}", d * math.cos(a), d * math.sin(a),
-               colors[i % len(colors)], m, rng, sway_jobs)
+               colors[i % len(colors)], m, rng, sway_jobs,
+               petal_count=rng.randint(4, 7),
+               petal_len=rng.uniform(1.1, 1.7),
+               bloom_r=rng.uniform(0.024, 0.042),
+               iterations=rng.randint(2, 4))
+
+    # Grass colonies: clusters of physics tufts across the clearing.
+    grass_clusters = [(1.5, 1.5), (-1.0, 0.6), (-0.4, -1.4),
+                      (2.4, -0.8), (0.3, 3.6), (-2.8, 2.2)]
+    tuft_index = 0
+    for cx, cz in grass_clusters:
+        for _ in range(3):
+            gx = cx + rng.uniform(-0.45, 0.45)
+            gz = cz + rng.uniform(-0.45, 0.45)
+            grass_tuft(c, f"Grass {tuft_index}", gx, gz,
+                       rng.uniform(0.24, 0.36), m, rng, sway_jobs)
+            tuft_index += 1
+
+    # Two weeping willows: A at the clearing's left edge, curtains
+    # overhanging the meadow (prominent but ~12 m from the camera eye
+    # [6.8, 3.2, 7.6] - close-up strands read as screen-filling slabs);
+    # B in the back ring as a depth element.
+    willow(c, "Willow A", [-3.2, 0.05, 1.4], m, rng, sway_jobs)
+    willow(c, "Willow B", [4.6, 0.05, -6.2], m, rng, sway_jobs)
 
     c.light("directional", "Morning Sun", [0.0, 12.0, 0.0],
             [1.0, 0.92, 0.75], 2.6)
@@ -717,7 +859,8 @@ def main():
     c.set_physics(True)
     c.wake_physics()
 
-    probe_sway(c, ["Oak A Trunk", "Fern 0 Rachis 0.0", "Flower 0 Stem 0"])
+    probe_sway(c, ["Oak A Trunk", "Fern 0 Rachis 0.0", "Flower 0 Stem 0",
+                   "Grass 0 Spine", "Willow A Curtain 0"])
 
     c.place_camera([6.8, 3.2, 7.6], [0.0, 1.3, -0.8])
     c.screenshot("logs/creations/windswept_glade.png")
