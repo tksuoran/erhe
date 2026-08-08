@@ -298,10 +298,14 @@ ride it:
   `common.body(node_id, shape="auto", motion_mode="dynamic",
   mass=<explicit>, gravity_factor=0, wind_receptivity=...)` - "auto"
   hulls the node's own mesh, so the collision follows the visual.
-- Coincident anchor child at the spine base + world joint with shared
-  rest-pose motor settings. Collect (node, base, settings, mass,
-  receptivity) jobs during the build and rig them AFTER settle() with
-  the simulation still disabled.
+- Coincident anchor child at the spine base, jointed to a CARRIER on
+  the same plant (root group / trunk / branch, given a tiny static
+  sensor body: shape="sphere" radius=0.05 is_trigger=true) - NEVER to
+  the world (2026-08-08: world anchors pin foliage in world space, so
+  moving the plant leaves it floating behind; carrier joints are
+  body-relative and the whole plant moves as one object). Collect
+  (node, base, settings, mass, receptivity, carrier) jobs during the
+  build and rig them AFTER settle() with the simulation still disabled.
 - Lift plant bases a few cm (trees 0.05) so spine hulls clear the
   floor instead of grinding on it.
 - `common.wind(...)` enables the scene wind (it carries the required
@@ -328,7 +332,9 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 
 - **Rig**: chain of Y-axis capsules (`create_shape capsule` is
   center-origin), coincident anchor child pairs at each pivot as above;
-  root anchor joints to the world (no connected node). Joint settings:
+  the root anchor joints to a sensor-body carrier on the plant root
+  (world joints pin the plant in place - see the sway bullet above).
+  Joint settings:
   lock linear XYZ (0..0) + angular Y (0..0), limit angular X/Z (about
   +/-0.9 rad), and add angular drives on axes 0 and 2 with
   `position_target 0`, `stiffness ~30`, `damping ~2`, finite
