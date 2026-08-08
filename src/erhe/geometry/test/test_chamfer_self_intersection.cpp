@@ -3,6 +3,7 @@
 #include "erhe_geometry/operation/conway/chamfer_old.hpp"
 #include "erhe_geometry/operation/conway/chamfer3.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
+#include "erhe_geometry/shapes/sphere.hpp"
 
 #include <geogram/basic/geometry.h>
 
@@ -125,6 +126,23 @@ auto apply_chamfer3(const erhe::geometry::Geometry& source)
 }
 
 } // anonymous namespace
+
+//
+// === UV sphere (pole triangle fans) ===
+//
+// The editor's create_shape uv_sphere (8x8 default) crashed chamfer3 100%
+// (queue task: chamfer-on-uv_sphere). Reproduces the mixed quad + pole
+// triangle topology.
+//
+
+TEST(Chamfer3, UvSphere_Chamfers)
+{
+    std::unique_ptr<erhe::geometry::Geometry> sphere = std::make_unique<erhe::geometry::Geometry>("uv_sphere");
+    erhe::geometry::shapes::make_sphere(sphere->get_mesh(), 1.0f, 8, 8);
+    sphere->process({.flags = process_flags});
+    std::unique_ptr<erhe::geometry::Geometry> chamfered = apply_chamfer3(*sphere);
+    EXPECT_GT(chamfered->get_mesh().facets.nb(), sphere->get_mesh().facets.nb());
+}
 
 //
 // === Known-good reference test ===

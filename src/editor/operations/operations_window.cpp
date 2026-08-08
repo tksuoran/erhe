@@ -2034,7 +2034,7 @@ void Operations::generate_frame_field_tangents(const float sharp_angle_deg)
 {
     async_for_selected_nodes_with_mesh(
         [this, sharp_angle_deg](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Generate_frame_field_tangents_operation>(std::move(params), sharp_angle_deg)
             );
         }
@@ -2084,7 +2084,7 @@ void Operations::make_geometry()
             }
 
             if (!compound_parameters.operations.empty()) {
-                m_context.operation_stack->queue(
+                m_context.operation_stack->queue_from_thread(
                     std::make_shared<Compound_operation>(std::move(compound_parameters))
                 );
             }
@@ -2171,7 +2171,7 @@ void Operations::kis(const float height)
     // selected facets are raised (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, height](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Kis_operation>(std::move(params), height)
             );
         },
@@ -2209,7 +2209,7 @@ void Operations::truncate(const float ratio)
     // selected facets are truncated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, ratio](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Truncate_operation>(std::move(params), ratio)
             );
         },
@@ -2228,7 +2228,7 @@ void Operations::gyro(const float ratio)
     // selected facets are gyrated (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, ratio](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Gyro_operation>(std::move(params), ratio)
             );
         },
@@ -2247,7 +2247,7 @@ void Operations::chamfer3(const float bevel_ratio)
     // selected facets are chamfered (the rest of the mesh stays connected).
     async_for_selected_nodes_with_mesh(
         [this, bevel_ratio](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Chamfer3_operation>(std::move(params), bevel_ratio)
             );
         },
@@ -2261,7 +2261,7 @@ void Operations::merge_faces()
     // single polygon. Requires a face-mode mesh-component selection (gated in the UI).
     async_for_selected_nodes_with_mesh(
         [this](Mesh_operation_parameters&& params) {
-            m_context.operation_stack->queue(
+            m_context.operation_stack->queue_from_thread(
                 std::make_shared<Merge_faces_operation>(std::move(params))
             );
         },
