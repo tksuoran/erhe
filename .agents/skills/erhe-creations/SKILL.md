@@ -17,10 +17,11 @@ agent memory and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_12_uap_hangar` (henge, reef,
-robots, ragdoll, glass audience, sandbox + L-system oak, forest glade,
-monster portal island, UAP hangar). Look at the two or three most recent
-scripts before writing a new one - they carry the current idioms.
+`creation_1_conway_cathedral` … `creation_13_windswept_glade` (henge,
+reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
+glade, monster portal island, UAP hangar, windswept glade = glade +
+physics foliage + wind). Look at the two or three most recent scripts
+before writing a new one - they carry the current idioms.
 
 ## Workflow
 
@@ -186,6 +187,41 @@ following its construction logic:
   recreates the body BEFORE it lands. Two calls: first
   `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
   recreation that applies it.
+
+## Physics LOD for whole plants (creation 13 carries reference code)
+
+For a scene full of swaying vegetation, do NOT chain bodies per
+segment - give each plant ONE spine body and let the visual subtree
+ride it:
+
+- Visual parts (branches, canopies, pinnae, petals) are created with
+  `motion_mode="none"` - NO rigid body at all. A static child body
+  would grind against the dynamic spine and block the sway; "none"
+  costs nothing and needs no strip pass.
+- The spine node (tree trunk / frond rachis 0 / stem segment 0) gets
+  `common.body(node_id, shape="auto", motion_mode="dynamic",
+  mass=<explicit>, gravity_factor=0, wind_receptivity=...)` - "auto"
+  hulls the node's own mesh, so the collision follows the visual.
+- Coincident anchor child at the spine base + world joint with shared
+  rest-pose motor settings. Collect (node, base, settings, mass,
+  receptivity) jobs during the build and rig them AFTER settle() with
+  the simulation still disabled.
+- Lift plant bases a few cm (trees 0.05) so spine hulls clear the
+  floor instead of grinding on it.
+- `common.wind(...)` enables the scene wind (it carries the required
+  `"_version": 2`); Creation accumulates scene settings, so wind and
+  ambience no longer clobber each other - but call ambience/wind only
+  through common, never raw set_scene_settings (it REPLACES the whole
+  object).
+- Verified per-scale tuning (mass / stiffness / damping / max_force /
+  range / receptivity): tree 25 / 300 / 30 / 600 / 0.12 / 6.0,
+  fern frond 0.08 / 6 / 0.5 / 8 / 0.35 / 0.3,
+  flower stem 0.03 / 0.8 / 0.08 / 3 / 0.50 / 0.35, with wind speed 3,
+  gusts 2.2 @ 0.4 Hz, turbulence 0.45, wavelength 9.
+- Print a sway probe (sample tip tilt every 0.5 s): healthy plants
+  OSCILLATE and recover; a monotonic tilt ramp that parks at the
+  angular limit means receptivity is too high for the drive stiffness
+  (iteration-1 ferns blew flat exactly this way).
 
 ## Bendy plants & wind (rest-pose motor joints; verified 2026-08-08)
 
