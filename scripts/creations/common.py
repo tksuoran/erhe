@@ -60,6 +60,10 @@ class Creation:
         wait_for_server(self.client, wait_s)
         self.scene = None
         self._material_pool = None
+        # Accumulated per-scene setting overrides: set_scene_settings REPLACES
+        # the whole Scene_settings object, so every send must carry the union
+        # of everything set so far (ambience + wind + ...).
+        self._scene_settings = {}
         # One-time pause after the first visible mesh appears, so a screen
         # video recording can be started before the scene builds up.
         self.pause_s = pause_s
@@ -414,12 +418,20 @@ class Creation:
         self._record_pause()
         return result
 
-    def ambience(self, ambient=None, clear_color=None, grid=None, sky=None):
-        """Scene mood knobs. grid / sky accept a bool (visibility / enable)
-        or a full Grid_config / Sky_config dict override."""
+    def _send_scene_settings(self, new_entries, ambient=None):
+        """Merge new_entries into the accumulated per-scene settings and send
+        the union (set_scene_settings replaces the whole object)."""
+        self._scene_settings.update(new_entries)
         args = {"scene_name": self.scene}
         if ambient is not None:
             args["ambient_light"] = [float(v) for v in ambient]
+        if self._scene_settings:
+            args["settings"] = self._scene_settings
+        self.mutate("set_scene_settings", args)
+
+    def ambience(self, ambient=None, clear_color=None, grid=None, sky=None):
+        """Scene mood knobs. grid / sky accept a bool (visibility / enable)
+        or a full Grid_config / Sky_config dict override."""
         settings = {}
         if clear_color is not None:
             settings["clear_color"] = [float(v) for v in clear_color]
@@ -429,9 +441,7 @@ class Creation:
             # "_version" matters: sky "enabled" is an added_in=2 field, and a
             # versionless JSON object parses as version 1 (the field is dropped).
             settings["sky"] = sky if isinstance(sky, dict) else {"_version": 3, "enabled": bool(sky)}
-        if settings:
-            args["settings"] = settings
-        self.mutate("set_scene_settings", args)
+        self._send_scene_settings(settings, ambient=ambient)
 
     def exposure(self, value):
         cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
@@ -455,6 +465,36 @@ class Creation:
     def wake_physics(self):
         """Wake all dynamic bodies (they enter the world deactivated)."""
         self.mutate("wake_physics_bodies", {"scene_name": self.scene})
+
+    def wind(self, enabled=True, direction=(1.0, 0.0, 0.3), speed=3.5,
+             gust_amplitude=2.5, gust_frequency=0.35, turbulence=0.4,
+             wavelength=10.0):
+        """Per-scene wind (Physics_config v2 override). Wind applies
+        force = wind_receptivity * (wind_velocity - body_velocity) to every
+        dynamic body with wind_receptivity > 0, each fixed step. The
+        "_version": 2 is REQUIRED - a versionless physics object parses as
+        v1 and the wind fields are silently dropped."""
+        self._send_scene_settings({"physics": {
+            "_version": 2,
+            "static_enable": True,
+            "dynamic_enable": True,
+            "debug_draw": False,
+            "wind_enable": bool(enabled),
+            "wind_direction": [float(v) for v in direction],
+            "wind_speed": float(speed),
+            "wind_gust_amplitude": float(gust_amplitude),
+            "wind_gust_frequency": float(gust_frequency),
+            "wind_turbulence": float(turbulence),
+            "wind_wavelength": float(wavelength),
+        }})
+
+    def body(self, node_id, **kwargs):
+        """create_physics_body on a node (typically one created with
+        motion_mode="none"): shape="auto" hulls the node's own mesh. Pass
+        wind_receptivity / gravity_factor / mass / damping etc. through."""
+        args = {"scene_name": self.scene, "node_id": int(node_id)}
+        args.update(kwargs)
+        return self.mutate("create_physics_body", args)
 
     def joint_settings(self, name, limits, drives=None):
         """Create shared Physics_joint_settings in this scene's library."""
