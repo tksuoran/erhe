@@ -5,12 +5,13 @@ A small sunlit forest clearing: a ring of L-system trees in two species
 (gnarled oaks and slim pale birches, same stochastic string-rewriting +
 3D-turtle interpreter with per-species parameters), L-system wildflowers
 (segmented stems, bracketed leaves, side-bloom stalks, petal-ring
-blooms), fern rosettes with arched beaded fronds, dome bushes, mossy
-boulders, fly-agaric mushroom clusters and a fallen mossy log with its
-stump.
-Showcases: parametric L-system vegetation at two scales (trees and
-flowers), non-uniform node scaling (rocks / moss / petals / fern
-leaflets), seeded scatter composition, morning-forest lighting.
+blooms), L-system ferns (each frond a turtle-drawn rachis of tapering
+segments drooping under gravity, with paired pinna blades at every node
+and a tip leaflet), dome bushes, mossy boulders, fly-agaric mushroom
+clusters and a fallen mossy log with its stump.
+Showcases: parametric L-system vegetation at three scales (trees,
+ferns, flowers), non-uniform node scaling (rocks / moss / petals /
+pinnae), seeded scatter composition, morning-forest lighting.
 """
 
 import math
@@ -318,27 +319,75 @@ def flower(c, tag, x, z, color, m, rng):
             seg += 1
 
 
+def expand_fern(rng, iterations=4):
+    """Frond L-system: the rachis apex grows a segment bearing a pinna
+    pair (usually), a single left or right pinna otherwise; the surviving
+    apex becomes the tip leaflet."""
+    s = "A"
+    for _ in range(iterations):
+        out = []
+        for ch in s:
+            if ch != "A":
+                out.append(ch)
+                continue
+            r = rng.random()
+            if r < 0.70:
+                out.append("F[+L][-L]A")
+            elif r < 0.85:
+                out.append("F[+L]A")
+            else:
+                out.append("F[-L]A")
+        s = "".join(out)
+    return s.replace("A", "L")
+
+
 def fern(c, tag, x, z, size, m, rng):
-    """Fern rosette: 5-6 fronds, each an outward arc of three flattened,
-    shrinking leaflet spheres (rises then droops)."""
-    fronds = rng.randint(5, 6)
+    """L-system fern rosette: each frond is a turtle-drawn rachis of
+    tapering cone segments that droops a little more with every step,
+    with paired pinna blades at the bracketed nodes and a tip leaflet."""
+    fronds = 5
+    base = [x, 0.04, z]
     for i in range(fronds):
-        a = 2.0 * math.pi * i / fronds + rng.uniform(-0.25, 0.25)
-        dx, dz = math.cos(a), math.sin(a)
-        # Yaw the leaflet's long (local X) axis onto the frond direction.
-        yaw = [0.0, math.sin(-a / 2.0), 0.0, math.cos(a / 2.0)]
-        reach = size * rng.uniform(0.85, 1.1)
-        for t in range(3):
-            tt = (t + 1) / 3.0
-            py = max(0.05, size * (0.22 + 1.05 * tt * (1.0 - tt)))
-            radius = size * 0.17 * (1.15 - 0.28 * t)
-            node_id = scaled_sphere(c, f"{tag} Frond {i}.{t}",
-                                    [x + dx * reach * tt, py, z + dz * reach * tt],
-                                    radius, [1.6, 0.30, 0.45],
-                                    m["leaf"] if i % 2 else m["leaf2"],
-                                    slices=10, stacks=8)
-            if node_id is not None:
-                c.move_node_id(node_id, rotation_xyzw=yaw)
+        a = 2.0 * math.pi * i / fronds + rng.uniform(-0.3, 0.3)
+        out_dir = [math.cos(a), 0.0, math.sin(a)]
+        side = [-out_dir[2], 0.0, out_dir[0]]
+        heading = v_norm([out_dir[0] * 0.65, 1.0, out_dir[2] * 0.65])
+        pos = list(base)
+        t = 0
+        pending = 0
+        for ch in expand_fern(rng):
+            if ch == "F":
+                seg = size * 0.30 * (0.88 ** t) * rng.uniform(0.9, 1.1)
+                radius = size * 0.020 * (1.0 - 0.10 * t)
+                result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
+                                 height=seg, bottom_radius=radius,
+                                 top_radius=radius * 0.8, slice_count=6,
+                                 material_name=m["leaf2"])
+                rotation = align_y_quaternion(heading)
+                if rotation is not None:
+                    node_id = result.get("node_id") if isinstance(result, dict) else None
+                    if node_id is not None:
+                        c.move_node_id(node_id, rotation_xyzw=rotation)
+                pos = v_add(pos, v_scale(heading, seg * 0.95))
+                # gravity droop: pitch outward-down a little more each step
+                heading = v_norm(v_add(heading, [out_dir[0] * 0.15, -0.18, out_dir[2] * 0.15]))
+                t += 1
+            elif ch == "+":
+                pending = 1
+            elif ch == "-":
+                pending = -1
+            elif ch == "L":
+                if pending == 0:
+                    pinna_dir = heading
+                else:
+                    pinna_dir = v_norm(v_add(v_scale(side, float(pending)),
+                                             v_scale(heading, 0.55)))
+                length = size * 0.15 * (1.0 - 0.11 * t) * rng.uniform(0.85, 1.15)
+                blade(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
+                      v_add(pos, v_scale(pinna_dir, length * 0.9)),
+                      length, [0.42, 1.55, 0.16], pinna_dir,
+                      m["leaf"] if (t + pending) % 2 else m["leaf2"])
+                pending = 0
 
 
 def fallen_log(c, m, rng):
@@ -453,9 +502,9 @@ def main():
     # Fallen mossy tree along the front edge of the clearing.
     fallen_log(c, m, rng)
 
-    # Fern rosettes in the tree shade.
-    for i, (x, z, size) in enumerate([(-2.5, -1.7, 0.55), (3.3, -2.3, 0.5),
-                                      (-4.0, 4.1, 0.6), (0.9, 2.5, 0.45)]):
+    # L-system fern rosettes in the tree shade.
+    for i, (x, z, size) in enumerate([(-2.6, -1.8, 1.15), (3.3, -2.4, 1.0),
+                                      (0.9, 2.6, 0.9)]):
         fern(c, f"Fern {i}", x, z, size, m, rng)
 
     # L-system wildflowers across the open glade.
