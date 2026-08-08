@@ -52,6 +52,16 @@ void Physics_window::imgui()
     bool changed = false;
     changed |= ImGui::Checkbox("Physics enabled", &m_context.editor_settings->physics.dynamic_enable);
     changed |= ImGui::Checkbox("Debug draw", &m_context.editor_settings->physics.debug_draw);
+    if (ImGui::CollapsingHeader("Wind")) {
+        Physics_config& physics = m_context.editor_settings->physics;
+        changed |= ImGui::Checkbox   ("Enable##wind", &physics.wind_enable);
+        changed |= ImGui::InputFloat3("Direction",    &physics.wind_direction.x);
+        changed |= ImGui::SliderFloat("Speed",           &physics.wind_speed,           0.0f, 30.0f, "%.1f m/s");
+        changed |= ImGui::SliderFloat("Gust Amplitude",  &physics.wind_gust_amplitude,  0.0f, 15.0f, "%.1f m/s");
+        changed |= ImGui::SliderFloat("Gust Frequency",  &physics.wind_gust_frequency,  0.0f,  3.0f, "%.2f Hz");
+        changed |= ImGui::SliderFloat("Turbulence",      &physics.wind_turbulence,      0.0f,  1.0f, "%.2f");
+        changed |= ImGui::SliderFloat("Gust Wavelength", &physics.wind_wavelength,      0.1f, 50.0f, "%.1f m");
+    }
     if (changed) {
         m_context.app_settings->settings_store().touch();
     }

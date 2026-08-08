@@ -295,9 +295,10 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
 
         auto node_physics = std::dynamic_pointer_cast<Node_physics>(att);
         if (node_physics) {
-            att_json["motion_mode"]    = motion_mode_to_string(node_physics->get_motion_mode());
-            att_json["is_trigger"]     = node_physics->is_trigger();
-            att_json["gravity_factor"] = node_physics->get_gravity_factor();
+            att_json["motion_mode"]      = motion_mode_to_string(node_physics->get_motion_mode());
+            att_json["is_trigger"]       = node_physics->is_trigger();
+            att_json["gravity_factor"]   = node_physics->get_gravity_factor();
+            att_json["wind_receptivity"] = node_physics->get_wind_receptivity();
             const std::shared_ptr<erhe::physics::ICollision_shape>& shape = node_physics->get_collision_shape();
             att_json["collision_shape"] = shape ? shape->describe() : "";
             const std::shared_ptr<erhe::physics::Physics_material>& physics_material = node_physics->get_physics_material();

@@ -122,7 +122,7 @@ void App_scenes::update_physics_simulation_fixed_step(const Time_context& time_c
         if (!physics.static_enable || !physics.dynamic_enable) {
             continue;
         }
-        scene_root->update_physics_simulation_fixed_step(time_context.simulation_dt_s);
+        scene_root->update_physics_simulation_fixed_step(time_context.simulation_dt_s, physics);
     }
 }
 

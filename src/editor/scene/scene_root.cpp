@@ -1,5 +1,6 @@
 #include "scene/scene_root.hpp"
 
+#include "config/generated/physics_config.hpp"
 #include "editor_log.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
@@ -49,7 +50,10 @@
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
 
+#include <glm/gtc/constants.hpp>
+
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <ctime>
 #include <functional>
@@ -1389,10 +1393,63 @@ void Scene_root::before_physics_simulation_steps()
     }
 }
 
-void Scene_root::update_physics_simulation_fixed_step(const double dt)
+void Scene_root::update_physics_simulation_fixed_step(const double dt, const Physics_config& physics)
 {
-    if (m_physics_world) {
-        m_physics_world->update_fixed_step(dt);
+    if (!m_physics_world) {
+        return;
+    }
+    apply_wind_forces(static_cast<float>(dt), physics);
+    m_physics_world->update_fixed_step(dt);
+}
+
+void Scene_root::apply_wind_forces(const float dt, const Physics_config& physics)
+{
+    if (!physics.wind_enable) {
+        return;
+    }
+    const float direction_length = glm::length(physics.wind_direction);
+    if (direction_length < 1e-6f) {
+        return;
+    }
+    m_wind_time += static_cast<double>(dt);
+
+    const glm::vec3 direction = physics.wind_direction / direction_length;
+    // Lateral axis for the turbulence component; when the wind blows straight
+    // up or down any horizontal axis serves.
+    glm::vec3 lateral = glm::cross(direction, glm::vec3{0.0f, 1.0f, 0.0f});
+    const float lateral_length = glm::length(lateral);
+    lateral = (lateral_length > 1e-6f) ? (lateral / lateral_length) : glm::vec3{1.0f, 0.0f, 0.0f};
+
+    const float two_pi     = glm::two_pi<float>();
+    const float t          = static_cast<float>(m_wind_time);
+    const float wavelength = std::max(physics.wind_wavelength, 0.01f);
+
+    for (const std::shared_ptr<Node_physics>& node_physics : m_node_physics) {
+        const float receptivity = node_physics->get_wind_receptivity();
+        if (receptivity <= 0.0f) {
+            continue;
+        }
+        erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
+        if ((rigid_body == nullptr) || (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic)) {
+            continue;
+        }
+        const glm::vec3 position = rigid_body->get_center_of_mass();
+        // Traveling gust wave: phase advances along the wind direction, so
+        // plants a wavelength apart move a full cycle out of phase.
+        const float phase  = two_pi * (glm::dot(position, direction) / wavelength);
+        const float gust   = physics.wind_gust_amplitude * std::sin((two_pi * physics.wind_gust_frequency * t) - phase);
+        // Off-frequency secondary wave drives the lateral turbulence so the
+        // motion does not read as a single mechanical oscillation.
+        const float wobble = std::sin((two_pi * 0.37f * physics.wind_gust_frequency * t) + (2.0f * phase));
+        const float speed  = std::max(physics.wind_speed + gust, 0.0f);
+        const glm::vec3 wind_velocity = (direction * speed) + (lateral * (physics.wind_turbulence * speed * wobble));
+        // Relative-velocity drag: bodies already moving with the wind feel no
+        // force, which both damps the response and lets gusts hand energy back.
+        const glm::vec3 force = receptivity * (wind_velocity - rigid_body->get_linear_velocity());
+        if (glm::dot(force, force) < 1e-8f) {
+            continue; // do not wake a sleeping body for a negligible force
+        }
+        rigid_body->apply_force(force);
     }
 }
 

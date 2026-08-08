@@ -118,6 +118,7 @@ auto parse_gltf_physics_overrides(const erhe::gltf::Gltf_data& gltf_data)
         if (payload.contains("restitution")     && payload["restitution"].is_number())     { entry.restitution     = payload["restitution"].get<float>(); }
         if (payload.contains("linear_damping")  && payload["linear_damping"].is_number())  { entry.linear_damping  = payload["linear_damping"].get<float>(); }
         if (payload.contains("angular_damping") && payload["angular_damping"].is_number()) { entry.angular_damping = payload["angular_damping"].get<float>(); }
+        if (payload.contains("wind_receptivity") && payload["wind_receptivity"].is_number()) { entry.wind_receptivity = payload["wind_receptivity"].get<float>(); }
         overrides.emplace(gltf_data.nodes[i].get(), entry);
     }
     return overrides;

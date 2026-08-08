@@ -946,6 +946,13 @@ void Properties::node_physics_properties(Node_physics& node_physics)
         }
     });
 
+    add_entry("Wind Receptivity", [&node_physics](){
+        float wind_receptivity = node_physics.get_wind_receptivity();
+        if (ImGui::SliderFloat("##", &wind_receptivity, 0.0f, 10.0f, "%.2f kg/s")) {
+            node_physics.set_wind_receptivity(wind_receptivity);
+        }
+    });
+
     add_entry(
         "Initial Linear Velocity",
         [&node_physics](){

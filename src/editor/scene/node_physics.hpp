@@ -94,6 +94,13 @@ public:
     [[nodiscard]] auto get_gravity_factor() const -> float;
     void               set_gravity_factor(float gravity_factor);
 
+    // Wind receptivity in kg/s: the scene wind system applies
+    // force = wind_receptivity * (wind_velocity - body_velocity) at the body
+    // center of mass each fixed step. 0 (default) = unaffected by wind (the
+    // body is never touched, so it can sleep normally).
+    [[nodiscard]] auto get_wind_receptivity() const -> float;
+    void               set_wind_receptivity(float wind_receptivity);
+
     // Initial velocities apply when the rigid body is (re)created - at scene
     // attach or after set_trigger() / set_center_of_mass_offset(); they do
     // not change a live body (use the rigid body API for that).
@@ -129,6 +136,7 @@ private:
     erhe::physics::IRigid_body_create_info      m_create_info;
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_dynamic};
+    float                                       m_wind_receptivity{0.0f};
 };
 
 }

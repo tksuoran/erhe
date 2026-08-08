@@ -289,6 +289,9 @@ void add_gltf_editor_state(
                 {"linear_damping",  json_float(rigid_body ? rigid_body->get_linear_damping()  : 0.05f)},
                 {"angular_damping", json_float(rigid_body ? rigid_body->get_angular_damping() : 0.05f)},
             };
+            if (node_physics->get_wind_receptivity() != 0.0f) {
+                physics_json["wind_receptivity"] = json_float(node_physics->get_wind_receptivity());
+            }
             append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_physics\":{}", physics_json.dump()));
             used_physics = true;
         }

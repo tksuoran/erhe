@@ -27,6 +27,7 @@ Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
     , m_create_info {src.m_create_info}
     , m_rigid_body  {}        // clone rigid body is not initially created
     , m_motion_mode {src.m_motion_mode}
+    , m_wind_receptivity{src.m_wind_receptivity}
 {
 }
 
@@ -246,6 +247,16 @@ void Node_physics::set_gravity_factor(const float gravity_factor)
     if (m_rigid_body && (m_rigid_body->get_motion_mode() != Motion_mode::e_static)) {
         m_rigid_body->set_gravity_factor(gravity_factor);
     }
+}
+
+auto Node_physics::get_wind_receptivity() const -> float
+{
+    return m_wind_receptivity;
+}
+
+void Node_physics::set_wind_receptivity(const float wind_receptivity)
+{
+    m_wind_receptivity = wind_receptivity;
 }
 
 auto Node_physics::get_initial_linear_velocity() const -> glm::vec3

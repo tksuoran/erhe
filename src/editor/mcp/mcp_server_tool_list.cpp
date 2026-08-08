@@ -599,6 +599,7 @@ void Mcp_server::refresh_tool_list()
         {"linear_damping",   {{"type", "number"}, {"description", "Linear damping"}}},
         {"angular_damping",  {{"type", "number"}, {"description", "Angular damping"}}},
         {"gravity_factor",   {{"type", "number"}, {"description", "Gravity factor (default 1.0)"}}},
+        {"wind_receptivity", {{"type", "number"}, {"description", "Wind drag coefficient in kg/s: the scene wind applies force = wind_receptivity * (wind_velocity - body_velocity) each fixed step; 0 (default) = unaffected"}}},
         {"is_trigger",       {{"type", "boolean"}, {"description", "Create as a sensor / trigger volume"}}},
         {"linear_velocity",  {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Initial linear velocity [x, y, z] (world space, applied at body creation)"}}},
         {"angular_velocity", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Initial angular velocity [x, y, z] (world space, applied at body creation)"}}},

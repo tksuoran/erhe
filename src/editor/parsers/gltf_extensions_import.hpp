@@ -37,6 +37,7 @@ public:
     std::optional<float>                      restitution;
     std::optional<float>                      linear_damping;
     std::optional<float>                      angular_damping;
+    std::optional<float>                      wind_receptivity; // Node_physics attribute, applied after construction
 };
 
 [[nodiscard]] auto parse_gltf_physics_overrides(const erhe::gltf::Gltf_data& gltf_data)

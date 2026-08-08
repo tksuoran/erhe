@@ -322,6 +322,18 @@ void import_gltf_physics(
         if (overrides.linear_damping.has_value())  { create_info.linear_damping  = overrides.linear_damping.value(); }
         if (overrides.angular_damping.has_value()) { create_info.angular_damping = overrides.angular_damping.value(); }
     };
+    // Node_physics attributes that live outside the create info, applied
+    // after construction.
+    const auto apply_node_physics_overrides = [&physics_overrides](Node_physics& node_physics, const erhe::scene::Node* node) {
+        const auto it = physics_overrides.find(node);
+        if (it == physics_overrides.end()) {
+            return;
+        }
+        const Gltf_physics_overrides& overrides = it->second;
+        if (overrides.wind_receptivity.has_value()) {
+            node_physics.set_wind_receptivity(overrides.wind_receptivity.value());
+        }
+    };
 
     // 1. Shared content-library items (1:1 with the glTF top-level arrays),
     //    attached through undoable operations like materials / textures.
@@ -597,6 +609,7 @@ void import_gltf_physics(
         // bodies are created when the insert operation gives the nodes a
         // scene host.
         auto node_physics = std::make_shared<Node_physics>(create_info);
+        apply_node_physics_overrides(*node_physics, root);
         root->attach(node_physics);
         nodes_with_body.insert(root);
         ++body_count;
@@ -678,6 +691,7 @@ void import_gltf_physics(
             importer.make_body_create_info(*node, description.motion, trigger_shape, {}, trigger_filter, true);
         apply_physics_overrides(create_info, node);
         auto node_physics = std::make_shared<Node_physics>(create_info);
+        apply_node_physics_overrides(*node_physics, node);
         node->attach(node_physics);
         nodes_with_body.insert(node);
         ++trigger_count;
@@ -703,6 +717,7 @@ void import_gltf_physics(
         );
         apply_physics_overrides(create_info, node);
         auto node_physics = std::make_shared<Node_physics>(create_info);
+        apply_node_physics_overrides(*node_physics, node);
         node->attach(node_physics);
         nodes_with_body.insert(node);
         ++body_count;

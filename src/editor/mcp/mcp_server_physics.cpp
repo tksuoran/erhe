@@ -212,6 +212,9 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
     create_info.debug_label = node->get_name();
 
     const std::shared_ptr<Node_physics> node_physics = m_context.scene_commands->create_new_rigid_body(node.get(), create_info);
+    if (node_physics && args.contains("wind_receptivity")) {
+        node_physics->set_wind_receptivity(args["wind_receptivity"].get<float>());
+    }
     if (!node_physics) {
         return make_error_content("Failed to create rigid body on node: " + node->get_name());
     }
@@ -304,6 +307,10 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     if (args.contains("gravity_factor")) {
         node_physics->set_gravity_factor(args["gravity_factor"].get<float>());
         applied.push_back("gravity_factor");
+    }
+    if (args.contains("wind_receptivity")) {
+        node_physics->set_wind_receptivity(args["wind_receptivity"].get<float>());
+        applied.push_back("wind_receptivity");
     }
     if (args.contains("linear_velocity")) {
         node_physics->set_initial_linear_velocity(get_vec3(args, "linear_velocity", glm::vec3{0.0f}));

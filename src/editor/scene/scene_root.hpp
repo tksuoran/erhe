@@ -16,6 +16,7 @@
 #include <vector>
 
 class btCollisionShape;
+struct Physics_config; // erhe_codegen generated, global namespace
 
 namespace erhe {
     class Item_base;
@@ -174,7 +175,7 @@ public:
     void unregister_node_joint  (const std::shared_ptr<Node_joint>& node_joint);
 
     void before_physics_simulation_steps     ();
-    void update_physics_simulation_fixed_step(double dt);
+    void update_physics_simulation_fixed_step(double dt, const Physics_config& physics);
     void after_physics_simulation_steps      ();
 
     // Item_flags::no_transform_update means "the physics simulation currently
@@ -276,9 +277,15 @@ private:
     std::filesystem::path                           m_source_path;
     bool                                            m_is_registered{false};
 
+    // Applies wind forces to wind-receptive dynamic bodies; called once per
+    // fixed step from update_physics_simulation_fixed_step() before the world
+    // steps (Jolt clears accumulated forces after every step).
+    void apply_wind_forces(float dt, const Physics_config& physics);
+
     // Must live longer than m_scene for example
     bool                                            m_node_physics_sorted{false};
     bool                                            m_physics_simulation_running{true};
+    double                                          m_wind_time{0.0};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
