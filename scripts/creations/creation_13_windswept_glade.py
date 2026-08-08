@@ -19,9 +19,11 @@ Physics rig pattern (per swaying element):
 - the spine node (trunk / frond rachis segment 0 / stem segment 0)
   gets create_physics_body shape="auto" (hull of its own mesh),
   gravity_factor 0, explicit mass, wind_receptivity,
-- a coincident anchor child at the spine base joints it to the WORLD
-  with shared rest-pose motor settings (linear + angular-Y locked,
-  angular X/Z limited, position-target-0 drives),
+- a coincident anchor child at the spine base joints it to its CARRIER
+  (the plant's root group / trunk / branch, which gets a tiny static
+  sensor body) with shared rest-pose motor settings (linear + angular-Y
+  locked, angular X/Z limited, position-target-0 drives) - never to the
+  world, so a plant can be moved as one object,
 - everything is built with the simulation DISABLED so the joints
   capture the authored pose as the rest pose, then physics + wind are
   enabled and the bodies woken.
@@ -101,15 +103,26 @@ def make_sway_settings(c):
 
 def rig_sway(c, sway_jobs):
     """Turn each collected spine node into a wind-receptive dynamic body
-    jointed to the world at its base. Run AFTER settle() with the
-    simulation disabled, so the joints capture the authored rest pose."""
-    for tag, node_id, base_pos, settings, mass, receptivity, ang_damp in sway_jobs:
+    jointed to its CARRIER (the plant part it hangs off: the plant's root
+    group, a trunk or a branch) - never to the world. World anchors pinned
+    sway parts in world space, so moving a plant left its foliage floating
+    behind (2026-08-08); with carrier joints the constraint frames are
+    body-relative and the whole plant moves as one object. The carrier gets
+    a tiny static sensor body (constraint target only - sensors collide
+    with nothing). Run AFTER settle() with the simulation disabled, so the
+    joints capture the authored rest pose."""
+    carriers_with_body = set()
+    for tag, node_id, base_pos, settings, mass, receptivity, ang_damp, carrier_id in sway_jobs:
+        if carrier_id not in carriers_with_body:
+            c.body(carrier_id, shape="sphere", radius=0.05,
+                   motion_mode="static", is_trigger=True)
+            carriers_with_body.add(carrier_id)
         c.body(node_id, shape="auto", motion_mode="dynamic", mass=mass,
                gravity_factor=0.0, angular_damping=ang_damp,
                linear_damping=0.05, wind_receptivity=receptivity)
         anchor_id = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
-        c.joint(anchor_id, settings_name=settings)
-    print(f"rigged {len(sway_jobs)} sway spines")
+        c.joint(anchor_id, connected_node_id=carrier_id, settings_name=settings)
+    print(f"rigged {len(sway_jobs)} sway spines on {len(carriers_with_body)} carriers")
 
 
 def expand_lsystem(rng, iterations, weights):
@@ -165,7 +178,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
     parent = trunk_id if trunk_id is not None else root
     if trunk_id is not None:
         sway_jobs.append((tag, trunk_id, list(base), "tree_sway",
-                          25.0 * age * age, 6.0 * age, 0.8))
+                          25.0 * age * age, 6.0 * age, 0.8, root))
 
     leaves = []                         # (tip position, carrying branch id)
     seg_count = 0
@@ -353,7 +366,7 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
             node_id = result.get("node_id") if isinstance(result, dict) else None
             if node_id is not None:
                 if seg == 0:
-                    sway_jobs.append((tag, node_id, list(pos), "stem_sway", 0.03, 0.35, 0.10))
+                    sway_jobs.append((tag, node_id, list(pos), "stem_sway", 0.03, 0.35, 0.10, root))
                 parent = node_id
             pos = v_add(pos, v_scale(heading, length))
             seg += 1
@@ -422,11 +435,16 @@ def compound_pinna(c, name, pos, direction, length, parent, materials, rng):
     sperp = v_norm(sperp)
     mid_point = v_add(pos, v_scale(d, midrib_len * 0.5))
     plen = length * 0.62
+    # A blade's half-extent along its direction is radius * scale_y; center
+    # each pinnule one half-extent (minus a hair of embed) from its
+    # attachment point so it barely touches instead of poking through.
+    side_half = plen * 1.5
     for s in (-1.0, 1.0):
         pdir = v_norm(v_add(v_scale(sperp, s), v_scale(d, 0.5)))
-        blade(c, f"{name} Pinnule {s:+.0f}", v_add(mid_point, v_scale(pdir, plen * 0.8)),
+        blade(c, f"{name} Pinnule {s:+.0f}", v_add(mid_point, v_scale(pdir, side_half * 0.92)),
               plen, [0.45, 1.5, 0.18], pdir, materials[0], parent=mid_parent)
-    blade(c, f"{name} Pinnule Tip", v_add(pos, v_scale(d, midrib_len * 0.95)),
+    tip_half = plen * 0.9 * 1.5
+    blade(c, f"{name} Pinnule Tip", v_add(pos, v_scale(d, midrib_len * 0.98 + tip_half * 0.9)),
           plen * 0.9, [0.45, 1.5, 0.18], d, materials[0], parent=mid_parent)
 
 
@@ -459,7 +477,7 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                 if node_id is not None:
                     if t == 0:
                         sway_jobs.append((f"{tag} Frond {i}", node_id, list(pos),
-                                          "frond_sway", 0.8, 0.22, 0.8))
+                                          "frond_sway", 0.8, 0.22, 0.8, root))
                     parent = node_id
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
@@ -481,8 +499,11 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                     compound_pinna(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
                                    pos, pinna_dir, length, parent, mats, rng)
                 else:
+                    # Center one half-extent (radius * scale_y, minus a hair
+                    # of embed) out along the pinna direction: the blade
+                    # barely touches the rachis instead of poking through it.
                     blade(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
-                          v_add(pos, v_scale(pinna_dir, length * 0.9)),
+                          v_add(pos, v_scale(pinna_dir, length * 1.55 * 0.92)),
                           length, [0.32, 1.55, 0.13], pinna_dir, mats[0],
                           parent=parent)
                 pending = 0
@@ -501,7 +522,7 @@ def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
     spine_id = result.get("node_id") if isinstance(result, dict) else None
     if spine_id is None:
         return
-    sway_jobs.append((tag, spine_id, base, "grass_sway", 0.10, 0.12, 0.4))
+    sway_jobs.append((tag, spine_id, base, "grass_sway", 0.10, 0.12, 0.4, root))
     for i in range(rng.randint(3, 5)):
         a = rng.uniform(0.0, 2.0 * math.pi)
         tilt = math.radians(rng.uniform(14.0, 38.0))
@@ -602,11 +623,13 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
                       v_add(tip, v_scale(sd, length * 0.5)),
                       0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
                       m["leaf" if s % 2 else "leaf2"], parent=curtain_id)
-            # World-anchored at the branch tip: the willow's own parts are
-            # all motion_mode="none" (the tree never moves), so a world
-            # anchor at the tip is exactly a branch anchor, fewer calls.
+            # Anchored to the BRANCH (rig_sway gives it a sensor carrier
+            # body), matching the docstring: the curtain stays attached when
+            # the tree is moved. (A world anchor here once left curtains
+            # floating behind a moved willow.)
             sway_jobs.append((f"{tag} Curtain {curtain_index}", curtain_id, list(tip),
-                              "curtain_sway", 0.6 * scale * scale, 0.35 * scale, 0.5))
+                              "curtain_sway", 0.6 * scale * scale, 0.35 * scale, 0.5,
+                              carrier))
             curtain_index += 1
 
 
@@ -741,9 +764,20 @@ def main():
                                       (-3.0, 3.8, 0.7), (2.0, 4.6, 0.9)]):
         bush(c, f"Bush {i}", x, z, size, [m["leaf"], m["leaf2"]], rng)
 
-    for i, (x, z, size) in enumerate([(-1.6, 1.8, 0.55), (1.9, 0.7, 0.75),
-                                      (0.4, -2.6, 0.45), (3.2, 3.6, 0.5)]):
+    boulders = [(-1.6, 1.8, 0.55), (1.9, 0.7, 0.75),
+                (0.4, -2.6, 0.45), (3.2, 3.6, 0.5)]
+    for i, (x, z, size) in enumerate(boulders):
         mossy_rock(c, f"Boulder {i}", x, z, size, rng.uniform(0.0, math.pi), m, rng)
+
+    # Boulder keep-out: the rocks are static colliders, so a flower or grass
+    # tuft spawned inside one locks its sway hull in permanent contact
+    # (constant wild impulses). Margin covers the rock's horizontal stretch
+    # (up to 1.25x size) plus a sway hull's reach.
+    def clear_of_boulders(px, pz, margin=0.45):
+        return all(
+            (px - bx) ** 2 + (pz - bz) ** 2 > (bs * 1.25 + margin) ** 2
+            for bx, bz, bs in boulders
+        )
 
     for i, (x, z) in enumerate([(2.45, 1.25), (2.7, 0.9), (2.2, 0.55),
                                 (-3.1, -2.9), (-3.5, -2.5),
@@ -769,9 +803,13 @@ def main():
     # is fully claimed, so no new colors.
     colors = ["pink", "yellow", "cream", "sky_blue", "red"]
     for i in range(20):
-        a = rng.uniform(0.0, 2.0 * math.pi)
-        d = rng.uniform(0.5, 3.2)
-        flower(c, f"Flower {i}", d * math.cos(a), d * math.sin(a),
+        for _ in range(40):  # resample until clear of the boulders
+            a = rng.uniform(0.0, 2.0 * math.pi)
+            d = rng.uniform(0.5, 3.2)
+            fx, fz = d * math.cos(a), d * math.sin(a)
+            if clear_of_boulders(fx, fz):
+                break
+        flower(c, f"Flower {i}", fx, fz,
                colors[i % len(colors)], m, rng, sway_jobs,
                petal_count=rng.randint(4, 7),
                petal_len=rng.uniform(1.1, 1.7),
@@ -784,8 +822,11 @@ def main():
     tuft_index = 0
     for cx, cz in grass_clusters:
         for _ in range(3):
-            gx = cx + rng.uniform(-0.45, 0.45)
-            gz = cz + rng.uniform(-0.45, 0.45)
+            for _ in range(40):  # resample until clear of the boulders
+                gx = cx + rng.uniform(-0.45, 0.45)
+                gz = cz + rng.uniform(-0.45, 0.45)
+                if clear_of_boulders(gx, gz, margin=0.25):
+                    break
             grass_tuft(c, f"Grass {tuft_index}", gx, gz,
                        rng.uniform(0.24, 0.36), m, rng, sway_jobs)
             tuft_index += 1
