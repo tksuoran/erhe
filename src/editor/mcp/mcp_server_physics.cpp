@@ -212,11 +212,14 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
     create_info.debug_label = node->get_name();
 
     const std::shared_ptr<Node_physics> node_physics = m_context.scene_commands->create_new_rigid_body(node.get(), create_info);
-    if (node_physics && args.contains("wind_receptivity")) {
-        node_physics->set_wind_receptivity(args["wind_receptivity"].get<float>());
-    }
     if (!node_physics) {
         return make_error_content("Failed to create rigid body on node: " + node->get_name());
+    }
+    if (args.contains("wind_receptivity")) {
+        node_physics->set_wind_receptivity(args["wind_receptivity"].get<float>());
+    }
+    if (args.value("wake", false)) {
+        node_physics->set_wake_on_attach(true);
     }
     return make_json_content({
         {"created",     true},
@@ -338,7 +341,17 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     }
     if (rigid_body != nullptr) {
         if (args.contains("mass")) {
-            rigid_body->set_mass_properties(args["mass"].get<float>(), rigid_body->get_local_inertia());
+            // Inertia scales linearly with mass for a fixed shape (same
+            // ratio math as the create-path mass override in brush.cpp);
+            // keeping the old inertia would leave the body tumbling as if
+            // it still had the old mass.
+            const float new_mass = args["mass"].get<float>();
+            const float old_mass = rigid_body->get_mass();
+            glm::mat4 inertia = rigid_body->get_local_inertia();
+            if (old_mass > 0.0f) {
+                inertia = glm::mat4{glm::mat3{inertia} * (new_mass / old_mass)};
+            }
+            rigid_body->set_mass_properties(new_mass, inertia);
             applied.push_back("mass");
         }
         if (args.contains("friction")) {

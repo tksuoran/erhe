@@ -74,6 +74,10 @@ void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host,
         log_physics->trace("making rigid body for {}", get_node()->get_name());
         create_rigid_body(physics_world);
         new_scene_root->register_node_physics(shared_this);
+        if (m_wake_on_attach && m_rigid_body && (m_rigid_body->get_motion_mode() == Motion_mode::e_dynamic)) {
+            m_rigid_body->begin_move();
+            m_rigid_body->end_move();
+        }
     }
 }
 
@@ -257,6 +261,11 @@ auto Node_physics::get_wind_receptivity() const -> float
 void Node_physics::set_wind_receptivity(const float wind_receptivity)
 {
     m_wind_receptivity = wind_receptivity;
+}
+
+void Node_physics::set_wake_on_attach(const bool wake_on_attach)
+{
+    m_wake_on_attach = wake_on_attach;
 }
 
 auto Node_physics::get_initial_linear_velocity() const -> glm::vec3

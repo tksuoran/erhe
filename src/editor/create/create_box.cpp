@@ -59,7 +59,13 @@ auto Create_box::create(Brush_data& brush_create_info) const -> std::shared_ptr<
 auto Create_box::create_brush(Brush_data& brush_create_info, const Box_parameters& parameters) -> std::shared_ptr<Brush>
 {
     auto geometry = std::make_shared<erhe::geometry::Geometry>("box");
-    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(parameters.size), to_geo_vec3i(parameters.steps), parameters.power);
+    // The mat4_swap_xy below reorients the generated topology; it also swaps
+    // the world X/Y extents, so feed make_box pre-swapped size/steps to keep
+    // the FINAL world extents equal to parameters.size as given (callers -
+    // the Create tool UI and MCP create_shape - think in world axes).
+    const glm::vec3  swapped_size {parameters.size.y,  parameters.size.x,  parameters.size.z};
+    const glm::ivec3 swapped_steps{parameters.steps.y, parameters.steps.x, parameters.steps.z};
+    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(swapped_size), to_geo_vec3i(swapped_steps), parameters.power);
     brush_create_info.geometry = geometry;
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
     geometry->process(

@@ -260,7 +260,12 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name"})}
     }});
-    m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation on/off",              schema_no_args()});
+    m_tool_infos.push_back({"toggle_physics",     "Toggle dynamic physics simulation, or set it explicitly with 'enabled'", {
+        {"type", "object"},
+        {"properties", {
+            {"enabled", {{"type", "boolean"}, {"description", "Explicit state; omit to toggle"}}}
+        }}
+    }});
     m_tool_infos.push_back({"add_node_attachment", "Add a new attachment to a scene node (undoable, executes on the next frame). 'type' is a catalog key: camera, light, mesh, rigid_body, joint, layout, layout_item, grid, frame_controller. All kinds except joint are single-instance (refused if the node already has one). layout_item requires the node's parent to have a layout. Verify with get_node_details.", {
         {"type", "object"},
         {"properties", {
@@ -421,12 +426,13 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name"})}
     }});
-    m_tool_infos.push_back({"set_scene_settings", "Set a scene's per-scene state: ambient light color and/or the per-scene setting overrides (#239). 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override). These persist in the ERHE_scene extension when the scene is saved.", {
+    m_tool_infos.push_back({"set_scene_settings", "Set a scene's per-scene state: ambient light color and/or the per-scene setting overrides (#239). By default 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override); with merge: true the given fields deep-merge (RFC 7386) over the current settings instead - omitted fields keep their values, null deletes an override. These persist in the ERHE_scene extension when the scene is saved.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",    {{"type", "string"}, {"description", "Name of the scene"}}},
             {"ambient_light", {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 4}, {"description", "Ambient light color [r, g, b] or [r, g, b, a]"}}},
-            {"settings",      {{"type", "object"}, {"description", "Scene_settings object (same shape get_scene_settings returns): optional sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color ([r,g,b,a]), post_processing (bool)"}}}
+            {"settings",      {{"type", "object"}, {"description", "Scene_settings object (same shape get_scene_settings returns): optional sky, grid, physics, shadow_frustum_fit, camera_controls, clear_color ([r,g,b,a]), post_processing (bool)"}}},
+            {"merge",         {{"type", "boolean"}, {"description", "Deep-merge 'settings' over the current settings instead of replacing them (default false)"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});
@@ -663,6 +669,7 @@ void Mcp_server::refresh_tool_list()
     create_body_properties.update(node_ref_properties);
     create_body_properties.update(shape_properties);
     create_body_properties.update(body_properties);
+    create_body_properties["wake"] = {{"type", "boolean"}, {"description", "Wake the (dynamic) body as soon as it enters the world instead of starting asleep; replaces a follow-up wake_physics_bodies pass"}};
     m_tool_infos.push_back({"create_physics_body", "Attach a new rigid body (Node_physics) to a scene node (undoable). One rigid body per node.", {
         {"type", "object"},
         {"properties", create_body_properties},

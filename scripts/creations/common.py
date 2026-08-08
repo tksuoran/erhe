@@ -60,10 +60,6 @@ class Creation:
         self.client = McpClient(port)
         wait_for_server(self.client, wait_s)
         self.scene = None
-        # Accumulated per-scene setting overrides: set_scene_settings REPLACES
-        # the whole Scene_settings object, so every send must carry the union
-        # of everything set so far (ambience + wind + ...).
-        self._scene_settings = {}
         # One-time pause after the first visible mesh appears, so a screen
         # video recording can be started before the scene builds up.
         self.pause_s = pause_s
@@ -393,15 +389,11 @@ class Creation:
         (uniform brush bake - collision follows) or scale=[x,y,z] (node TRS -
         visual anisotropy, pair with motion_mode 'none'), mass=<kg> for
         dynamic parts (inertia rescales to match). One call replaces the old
-        create + select + transform + deselect sequence.
-        Box quirk: Create_box applies mat4_swap_xy to the generated geometry,
-        so the effective world extents are (size[1], size[0], size[2]); swap
-        here so callers can pass intuitive [x, y, z] extents."""
+        create + select + transform + deselect sequence. Box size is world
+        [x, y, z] extents (the old Create_box swap quirk was fixed
+        2026-08-08 - do NOT re-add a swap here)."""
         if kwargs.get("rotation_xyzw") is None:
             kwargs.pop("rotation_xyzw", None)
-        if shape == "box" and "size" in kwargs and kwargs["size"] is not None:
-            sx, sy, sz = kwargs["size"]
-            kwargs["size"] = [sy, sx, sz]
         args = {
             "scene_name": self.scene, "shape": shape, "name": name,
             "position": [float(v) for v in position],
@@ -444,14 +436,14 @@ class Creation:
         return result
 
     def _send_scene_settings(self, new_entries, ambient=None):
-        """Merge new_entries into the accumulated per-scene settings and send
-        the union (set_scene_settings replaces the whole object)."""
-        self._scene_settings.update(new_entries)
+        """Send per-scene setting overrides. merge=True (server-side deep
+        merge, 2026-08-08) keeps earlier overrides - no client accumulator."""
         args = {"scene_name": self.scene}
         if ambient is not None:
             args["ambient_light"] = [float(v) for v in ambient]
-        if self._scene_settings:
-            args["settings"] = self._scene_settings
+        if new_entries:
+            args["settings"] = new_entries
+            args["merge"] = True
         self.mutate("set_scene_settings", args)
 
     def ambience(self, ambient=None, clear_color=None, grid=None, sky=None):
@@ -488,14 +480,9 @@ class Creation:
     # -------------------------------------------------------------- physics
 
     def set_physics(self, enabled):
-        """Set the dynamic physics simulation on/off deterministically.
-        toggle_physics only flips, so toggle once and flip back if the
-        reported state is not the wanted one."""
-        result = self.mutate("toggle_physics")
-        state = result.get("dynamic_physics_enabled") if isinstance(result, dict) else None
-        if state == bool(enabled):
-            return
-        self.mutate("toggle_physics")
+        """Set the dynamic physics simulation on/off (toggle_physics takes
+        an explicit 'enabled' since 2026-08-08)."""
+        self.mutate("toggle_physics", {"enabled": bool(enabled)})
 
     def wake_physics(self):
         """Wake all dynamic bodies (they enter the world deactivated)."""

@@ -62,11 +62,36 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        // Replace semantics: the whole Scene_settings is rebuilt from the
-        // given object, so omitted fields return to "use the editor-global
-        // default" ({} clears every override).
+        // Loud reject of unversioned sub-configs: the codegen deserializer
+        // treats a missing _version as version 1 and SILENTLY drops every
+        // added_in > 1 field (e.g. a versionless sky object loses
+        // "enabled"). Hand-written MCP input must say which version it is.
+        for (const auto& [key, sub] : value.items()) {
+            if (sub.is_object() && !sub.empty() && !sub.contains("_version")) {
+                json r = make_text_content(
+                    "settings." + key + " has no _version; a versionless object deserializes as "
+                    "version 1 and silently drops newer fields - add the config's current _version"
+                );
+                r["isError"] = true;
+                return r.dump();
+            }
+        }
+        // Default: replace semantics - the whole Scene_settings is rebuilt
+        // from the given object, so omitted fields return to "use the
+        // editor-global default" ({} clears every override). With
+        // merge: true the given fields are deep-merged (RFC 7386) over the
+        // CURRENT settings instead: omitted fields keep their values and a
+        // null deletes an override - no client-side accumulator needed.
+        json settings_value = value;
+        if (args.value("merge", false)) {
+            json current = json::parse(serialize(sr->get_scene_settings(), 0), nullptr, false);
+            if (current.is_object()) {
+                current.merge_patch(value);
+                settings_value = std::move(current);
+            }
+        }
         Scene_settings new_settings{};
-        const std::string            settings_text = value.dump();
+        const std::string            settings_text = settings_value.dump();
         simdjson::ondemand::parser   settings_parser;
         simdjson::padded_string      settings_padded{settings_text};
         simdjson::ondemand::document settings_document;
@@ -1481,10 +1506,12 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
         node->set_world_from_node(erhe::math::create_translation<float>(position));
     }
 
-    // Insert the light node into the scene root via an undoable operation that
-    // runs on the next editor frame (mirrors Scene_builder::add_lights).
+    // Insert the light node into the scene root via an undoable operation,
+    // executed NOW rather than queued: the returned node_id is attached and
+    // addressable by the caller's next tool call (a queued insert left the
+    // node invisible to find_node_in_scene until the next frame).
     const std::shared_ptr<erhe::scene::Node>& root_node = sr->get_scene().get_root_node();
-    m_context.operation_stack->queue(
+    m_context.operation_stack->execute_now(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
@@ -1506,7 +1533,7 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
         {"range",       range},
         {"cast_shadow", cast_shadow},
         {"position",    {position.x, position.y, position.z}},
-        {"queued",      true} // the insert operation executes on the next editor frame
+        {"queued",      false} // inserted synchronously; immediately addressable
     }).dump();
 }
 
@@ -1748,17 +1775,28 @@ auto Mcp_server::action_edit_camera(const json& args) -> std::string
 
 auto Mcp_server::action_toggle_physics(const json& args) -> std::string
 {
-    static_cast<void>(args);
-
     if (!m_context.app_settings) {
         json r = make_text_content("Settings not available");
         r["isError"] = true;
         return r.dump();
     }
 
-    m_context.editor_settings->physics.dynamic_enable = !m_context.editor_settings->physics.dynamic_enable;
+    // Optional explicit state; omitted = toggle. Scripts that need a known
+    // state (settle-then-freeze loops) pass enabled instead of reading the
+    // state first and toggling conditionally.
+    bool enabled = !m_context.editor_settings->physics.dynamic_enable;
+    const auto enabled_it = args.find("enabled");
+    if (enabled_it != args.end()) {
+        if (!enabled_it->is_boolean()) {
+            json r = make_text_content("enabled must be a boolean");
+            r["isError"] = true;
+            return r.dump();
+        }
+        enabled = enabled_it->get<bool>();
+    }
+
+    m_context.editor_settings->physics.dynamic_enable = enabled;
     m_context.app_settings->settings_store().touch();
-    const bool enabled = m_context.editor_settings->physics.dynamic_enable;
 
     return make_json_content({
         {"dynamic_physics_enabled", enabled}

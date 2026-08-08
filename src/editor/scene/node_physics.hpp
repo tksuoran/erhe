@@ -101,6 +101,12 @@ public:
     [[nodiscard]] auto get_wind_receptivity() const -> float;
     void               set_wind_receptivity(float wind_receptivity);
 
+    // Bodies enter the world deactivated (quiet scene loading). With
+    // wake_on_attach set, a dynamic body is woken right after it is added
+    // to the world, so a freshly created body starts simulating without a
+    // separate wake_physics_bodies pass.
+    void set_wake_on_attach(bool wake_on_attach);
+
     // Initial velocities apply when the rigid body is (re)created - at scene
     // attach or after set_trigger() / set_center_of_mass_offset(); they do
     // not change a live body (use the rigid body API for that).
@@ -137,6 +143,7 @@ private:
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_dynamic};
     float                                       m_wind_receptivity{0.0f};
+    bool                                        m_wake_on_attach{false};
 };
 
 }

@@ -143,9 +143,9 @@ following its construction logic:
   local TRS: elongated-Y sphere + align rotation = a blade pointing any
   direction (petals, pinnae, cut-face discs). UNROTATED anisotropic
   scale stays world-axis - orient every elongated part explicitly.
-- `create_box` applies `mat4_swap_xy`: world extents are
-  `(size[1], size[0], size[2])`. `common.shape()` compensates - always
-  go through it.
+- Box `size` is plain world [x, y, z] extents (the old Create_box
+  swap_xy quirk was fixed in the editor 2026-08-08; common.shape() no
+  longer compensates - do not swap anywhere).
 - Cone base sits at the node origin, +Y up, `height` upward; box and
   sphere are center-origin. Capsule is center-origin, length along Y.
 - Debug recipe for placement bugs: build an ISOLATED minimal repro in
@@ -227,9 +227,12 @@ following its construction logic:
   settings_name=<library settings>`. Limits: lock linear = all axes
   0..0; hinge = lock 2 angular + range on one; ball = range on all 3;
   weld = everything locked; pendulum-to-world = no connected node.
-- `set_physics(enabled)` via toggle + verify (toggle only flips);
-  bodies spawn DEACTIVATED - `wake_physics()` after enabling. Freeze an
-  aftermath pose by toggling physics off before save.
+- `toggle_physics` takes an explicit `enabled` bool since 2026-08-08
+  (omit = old toggle behavior) - no toggle-and-verify dance. Bodies
+  still spawn DEACTIVATED unless created with `wake: true` on
+  `create_physics_body`; `wake_physics()` remains for waking a whole
+  scene after enabling. Freeze an aftermath pose by
+  `toggle_physics enabled=false` before save.
 - Pure-visual child parts: `strip_physics(node_id)`.
 - `apply_physics_force` pokes a dynamic body (force / torque / impulse +
   optional world `point`). Impulses act immediately; forces last one
@@ -247,11 +250,12 @@ sway springs: creation 14's 50-part ragdoll spider STANDS under full
 gravity on motorized leg joints (and staggers + recovers from an
 apply_physics_force shove).
 
-- Explicit masses are essential for motor sizing, and `create_shape`
-  cannot set mass while `edit_physics_body`'s mass edit does NOT rescale
-  inertia. Create every part `motion_mode="none"`, pose it, then attach
-  the body with `create_physics_body shape="auto" mass=<explicit>`
-  (gravity_factor stays 1 - the point is to carry the weight).
+- Explicit masses are essential for motor sizing. Create every part
+  `motion_mode="none"`, pose it, then attach the body with
+  `create_physics_body shape="auto" mass=<explicit>` (gravity_factor
+  stays 1 - the point is to carry the weight). (`edit_physics_body`
+  mass edits DO rescale inertia since 2026-08-08, so post-hoc mass
+  tuning is safe too.)
 - Size stiffness per joint from its static hold torque = (weight share
   at the contact point) x (horizontal lever from joint to contact), for
   ~0.02 rad of sag; graduate along the limb (spider hip 2400 -> toe 100
@@ -290,10 +294,12 @@ ride it:
 - Lift plant bases a few cm (trees 0.05) so spine hulls clear the
   floor instead of grinding on it.
 - `common.wind(...)` enables the scene wind (it carries the required
-  `"_version": 2`); Creation accumulates scene settings, so wind and
-  ambience no longer clobber each other - but call ambience/wind only
-  through common, never raw set_scene_settings (it REPLACES the whole
-  object).
+  `"_version": 2`). set_scene_settings supports `merge: true`
+  (server-side deep merge, 2026-08-08) - common uses it, so wind and
+  ambience never clobber each other and no client accumulator exists.
+  Raw set_scene_settings WITHOUT merge still REPLACES the whole object,
+  and versionless sub-objects are now rejected loudly instead of
+  silently dropping newer fields.
 - Verified per-scale tuning (mass / stiffness / damping / max_force /
   range / receptivity): tree 25 / 300 / 30 / 600 / 0.12 / 6.0,
   fern frond 0.08 / 6 / 0.5 / 8 / 0.35 / 0.3,
