@@ -5027,6 +5027,16 @@ private:
                 // rebuilt by their owner - never part of the file content.
                 continue;
             }
+            if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::content) == 0) {
+                // Item_flags::content marks scene content; everything else
+                // living under the root is transient editor furniture -
+                // rendertarget UI quads (hotbar / hud), tool visuals,
+                // controllers - recreated by its owner every session. A
+                // rendertarget mesh in particular must never reach the
+                // exporter: its texture is GPU-rendered every frame with no
+                // retained source image bytes to serialize.
+                continue;
+            }
             out_node_indices.push_back(process_node(*erhe_child_node, pre_transform));
         }
     }
@@ -5057,6 +5067,12 @@ private:
         // mesh_flags, no skin).
         std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
         if (erhe_mesh && m_arguments.excluded_meshes.contains(erhe_mesh.get())) {
+            erhe_mesh.reset();
+        }
+        if (erhe_mesh && ((erhe_mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0)) {
+            // Belt and braces for the child-node content filter above: a
+            // rendertarget mesh (UI quad rendered into every frame) has no
+            // serializable texture source; the node exports without it.
             erhe_mesh.reset();
         }
         if (erhe_mesh) {

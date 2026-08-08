@@ -98,7 +98,11 @@ Quad_view::Quad_view(
 
         m_rendertarget_node = std::make_shared<erhe::scene::Node>(std::string{debug_label} + " RT node");
         m_rendertarget_node->attach(m_rendertarget_mesh);
-        m_rendertarget_node->enable_flag_bits(erhe::Item_flags::show_in_developer_ui);
+        // rendertarget (and no content): transient editor furniture, matching
+        // the standalone scene rendertarget node - the glTF exporter saves
+        // only content-flagged children, so the hotbar / hud quad never leaks
+        // into a saved scene (its texture has no serializable image source).
+        m_rendertarget_node->enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::show_in_developer_ui);
     }
 
     m_imgui_host = std::make_shared<Rendertarget_imgui_host>(

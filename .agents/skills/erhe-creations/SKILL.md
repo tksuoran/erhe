@@ -31,8 +31,8 @@ they carry the current idioms.
   creation scene is the ONLY scene). Flags from `common.standard_args`:
   `--reuse` (attach to running editor), `--editor-exe` (pick a build),
   `--pause N` (recording pause after first visible mesh, default 10 s),
-  `--no-save` (REQUIRED for windowed runs - windowed `save_scene`
-  crashes in glTF export; headless saves work).
+  `--no-save` (optional: skip `save_scene`; windowed saves work since
+  the exporter's content-flag filter, 2026-08-08).
 - **Iterate with headless screenshots**:
   `py -3 scripts/creations/<script>.py --pause 0 --editor-exe
   build_vs2026_vulkan_headless/src/editor/Release/editor.exe`
@@ -341,11 +341,10 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 
 - `chamfer` op on a uv_sphere selection crashes the editor (use
   `remesh`).
-- WINDOWED `save_scene` crashes during glTF export ("Rendertarget_mesh
-  ... no retained source image bytes") - headless saves work; use
-  `--no-save` windowed.
 - `capture_screenshot` is headless-only (queue ITEM 4 tracks the
-  windowed implementation).
+  windowed implementation). (The windowed `save_scene` crash is FIXED
+  2026-08-08: the glTF exporter saves only `Item_flags::content`
+  children, so the hotbar rendertarget quad no longer reaches export.)
 - Graphics preset High once shipped `shadow_light_count 32` (~2.1 GiB
   VRAM per view -> OOM with two scenes); trimmed to 8 locally in
   `config/editor/graphics_presets.json` - coordinate before reverting.
