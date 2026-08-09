@@ -35,8 +35,8 @@ from common import (  # noqa: E402
 
 SHOTS = [
     ("",       [34.0, 8.5, 40.0], [-10.0, 5.0, -14.0]),
-    ("_bow",   [-22.0, 3.5, 30.0], [2.0, 5.5, -2.0]),
-    ("_stern", [10.0, 9.0, -40.0], [-4.0, 4.5, 4.0]),
+    ("_bow",   [-16.0, 3.5, -36.0], [4.0, 4.5, 6.0]),
+    ("_stern", [26.0, 6.5, 22.0], [-6.0, 3.5, -6.0]),
 ]
 
 
@@ -524,22 +524,25 @@ def main():
             motion_mode="none", material_name=m["sea"])
 
     # ------------------------------------------------------------- the fleet
+    # Headings face the evening sun: the sun light travels toward
+    # (+0.71, -0.50, +0.50), so the sun sits toward (-0.71, -0.50) on the
+    # horizon = heading ~ -125 deg; ships keep a few degrees of spread.
     flagship = ShipYard(
-        c, m, "Galleon Aurora", [0.0, 0.0, 0.0], heading_deg=18.0,
+        c, m, "Galleon Aurora", [0.0, 0.0, 0.0], heading_deg=-122.0,
         length=30.0, beam=7.6, depth=2.6, freeboard=2.6,
         masts=[(0.28, 13.0, 4.0), (-0.02, 16.0, 6.0), (-0.30, 11.0, 8.0)],
         gunports=5, flagship=True, heel_deg=3.0)
     flagship.build()
 
     brig = ShipYard(
-        c, m, "Brig Meri", [-30.0, 0.0, -2.0], heading_deg=24.0,
+        c, m, "Brig Meri", [-30.0, 0.0, -2.0], heading_deg=-116.0,
         length=18.0, beam=5.0, depth=1.8, freeboard=1.9,
         masts=[(0.20, 10.0, 4.0), (-0.22, 11.5, 6.0)],
         gunports=3, heel_deg=4.0)
     brig.build()
 
     sloop = ShipYard(
-        c, m, "Sloop Tuuli", [15.0, 0.0, -17.0], heading_deg=10.0,
+        c, m, "Sloop Tuuli", [15.0, 0.0, -17.0], heading_deg=-130.0,
         length=12.0, beam=3.4, depth=1.3, freeboard=1.3,
         masts=[(-0.05, 9.0, 5.0)],
         gunports=0, heel_deg=5.0)
