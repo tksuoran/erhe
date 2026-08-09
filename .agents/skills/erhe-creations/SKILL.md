@@ -129,6 +129,22 @@ following its construction logic:
   (dynamic parts; inertia rescales). One call replaces the old create +
   select + rotate + deselect sequence, which was 69% of a big scene's
   MCP time.
+- **Geometry reuse (2026-08-09)**: `common.shape()` pools by shape type
+  + geometry parameters - repeated calls place instances of ONE
+  content-library brush (`create_shape add_brush` once, `place_brush`
+  after), so N same-shaped parts cost one geometry + GPU allocation and
+  save/load as one glTF mesh with N node references. Free win: keep
+  geometry parameters identical across repeated parts (quantize instead
+  of jittering slice counts / radii); vary look per instance with
+  material, node scale ([x,y,z]) and pose, which stay per-instance. A
+  NUMBER bake scale builds one primitive per distinct value (memoized) -
+  fine for a few sizes, wasteful for per-part random scales. Pass
+  `reuse=False` if a placed instance must not register a library brush
+  at all; geometry ops are safe on shared instances - they REPLACE the
+  mesh's primitives, so the edited instance silently goes private while
+  the others keep sharing. Brushes appear in the scene's Content
+  Library (Brushes folder) and persist in the saved .glb via
+  ERHE_brushes.
 - **`set_node_transform`** sets a node's transform by id/NAME with NO
   selection: ABSOLUTE semantics, all provided components in one call,
   undoable, rigid body teleported to the pose. It retries client-side
@@ -373,8 +389,10 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 - Update `prompt_queue.txt` ITEM -1's commit list and the
   `mcp-creation-scripts-*` agent memory pointer after each creation.
 - MCP node/material ids are per-session - never hardcode them.
-- `select_items` requires `scene_name`; `place_brush` has no rotation
-  arg (rotate by returned `node_id`; names collide).
+- `select_items` requires `scene_name`. `place_brush` takes the full
+  placement set since 2026-08-09 (rotation_xyzw, parent_node_id, name,
+  scale number-or-array, mass, motion_mode incl. "none", brush_name) -
+  identical to create_shape's instance parameters.
 
 ## Open bugs (workarounds in place; fix only if asked)
 

@@ -73,6 +73,11 @@ class Creation:
         # printed at exit so the skill's runtime-budget numbers stay measured
         # instead of folklore.
         self._call_stats = {}
+        # Geometry reuse pool: (shape, geometry-params repr) -> brush id.
+        # shape() places instances of one library brush per unique geometry
+        # instead of creating a new mesh per call. Per scene - cleared on
+        # new_scene()/load().
+        self._shape_pool = {}
         atexit.register(self._print_call_stats)
 
     def _record_pause(self):
@@ -171,6 +176,7 @@ class Creation:
         if self._close_existing_scenes:
             self.close_all_scenes()
             self._close_existing_scenes = False
+        self._shape_pool = {}
         before = {s["name"] for s in self.call("list_scenes")["scenes"]}
         self.mutate("load_scene", {"path": str(glb_path)})
         deadline = time.time() + 120.0
@@ -190,6 +196,7 @@ class Creation:
         if self._close_existing_scenes:
             self.close_all_scenes()
             self._close_existing_scenes = False
+        self._shape_pool = {}
         before = {s["name"] for s in self.call("list_scenes")["scenes"]}
         self.mutate("create_scene")
         deadline = time.time() + 30.0
@@ -424,24 +431,65 @@ class Creation:
 
     # ----------------------------------------------------------- primitives
 
-    def shape(self, shape, name, position, **kwargs):
-        """create_shape wrapper; returns the tool's result payload.
+    # create_shape parameters that define the GEOMETRY (everything else on a
+    # shape() call is per-instance placement). Same-key calls share a brush.
+    SHAPE_GEOMETRY_KEYS = frozenset((
+        "size", "steps", "power",
+        "radius", "slice_count", "stack_count",
+        "height", "length", "bottom_radius", "top_radius", "use_top", "use_bottom",
+        "major_radius", "minor_radius", "major_steps", "minor_steps",
+    ))
+
+    def shape(self, shape, name, position, reuse=True, **kwargs):
+        """create_shape/place_brush wrapper; returns the tool's result payload.
         Pose in the SAME call: rotation_xyzw=[x,y,z,w] (world), scale=number
         (uniform brush bake - collision follows) or scale=[x,y,z] (node TRS -
         visual anisotropy, pair with motion_mode 'none'), mass=<kg> for
         dynamic parts (inertia rescales to match). One call replaces the old
         create + select + transform + deselect sequence. Box size is world
         [x, y, z] extents (the old Create_box swap quirk was fixed
-        2026-08-08 - do NOT re-add a swap here)."""
+        2026-08-08 - do NOT re-add a swap here).
+
+        Geometry REUSE (2026-08-09): calls with the same shape type and
+        geometry parameters share ONE content-library brush - the first call
+        creates it (create_shape add_brush) and later ones place instances
+        (place_brush), so N same-shaped parts cost one geometry + GPU
+        allocation instead of N, and export as one glTF mesh referenced by N
+        nodes. Name, material, pose, node scale and physics stay
+        per-instance; a NUMBER bake scale builds one extra primitive per
+        distinct value (memoized on the brush), so prefer scale=[x,y,z] or
+        few distinct bake scales. reuse=False restores a private per-call
+        mesh - only needed when a geometry op will later edit this one
+        instance in place."""
         if kwargs.get("rotation_xyzw") is None:
             kwargs.pop("rotation_xyzw", None)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        motion_mode = kwargs.pop("motion_mode", "static")
+        pool_key = None
+        if reuse and kwargs.get("instance", True) is not False:
+            geometry_params = {k: kwargs[k] for k in kwargs if k in self.SHAPE_GEOMETRY_KEYS}
+            pool_key = (shape, repr(sorted(geometry_params.items())))
+            brush_id = self._shape_pool.get(pool_key)
+            if brush_id is not None:
+                args = {
+                    "scene_name": self.scene, "brush_id": brush_id, "name": name,
+                    "position": [float(v) for v in position],
+                    "motion_mode": motion_mode,
+                }
+                args.update({k: v for k, v in kwargs.items() if k not in self.SHAPE_GEOMETRY_KEYS})
+                result = self.mutate("place_brush", args)
+                self._record_pause()
+                return result
+            kwargs["add_brush"] = True
         args = {
             "scene_name": self.scene, "shape": shape, "name": name,
             "position": [float(v) for v in position],
-            "motion_mode": kwargs.pop("motion_mode", "static"),
+            "motion_mode": motion_mode,
         }
-        args.update({k: v for k, v in kwargs.items() if v is not None})
+        args.update(kwargs)
         result = self.mutate("create_shape", args)
+        if pool_key is not None and isinstance(result, dict) and result.get("brush_id"):
+            self._shape_pool[pool_key] = result["brush_id"]
         if kwargs.get("instance", True) is not False:
             self._record_pause()
         return result
@@ -464,14 +512,22 @@ class Creation:
                 return brush["id"]
         return None
 
-    def place(self, brush_id, position, material_name=None, scale=1.0, motion_mode="static"):
+    def place(self, brush_id, position, material_name=None, scale=1.0,
+              motion_mode="static", name=None, **kwargs):
+        """place_brush wrapper: instance a content-library brush (shared
+        geometry + GPU buffers). Placement kwargs match shape():
+        rotation_xyzw, parent_node_id, mass, material_id; scale is a number
+        (brush bake scale) or [x, y, z] (node TRS scale, visuals only)."""
         args = {
             "scene_name": self.scene, "brush_id": brush_id,
             "position": [float(v) for v in position],
-            "scale": float(scale), "motion_mode": motion_mode,
+            "scale": scale, "motion_mode": motion_mode,
         }
         if material_name:
             args["material_name"] = material_name
+        if name:
+            args["name"] = name
+        args.update({k: v for k, v in kwargs.items() if v is not None})
         result = self.mutate("place_brush", args)
         self._record_pause()
         return result
