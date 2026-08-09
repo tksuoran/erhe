@@ -437,15 +437,19 @@ class ShipYard:
 
         # Figurehead: gilded standing figure leaning out over the stem -
         # robe cone, torso cone, head sphere, two swept-back arm blades.
-        # The hull surface bulges past the authored stem head, so the base
-        # sits at the stem head z and leans well forward or the whole
-        # figure ends up buried in the prow. Sized MONUMENTAL (the real
-        # figure is ~4 m gilded bronze): iteration 2's human-proportioned
-        # one read as a flagpole knob at fleet distance.
+        # Sized MONUMENTAL (the real figure is ~4 m gilded bronze): a
+        # human-proportioned one read as a flagpole knob at fleet
+        # distance. The robe base is computed ON the scoop-circle stem
+        # surface (plus a small forward offset) so the figure grows out
+        # of the stem instead of floating ahead of it - a hardcoded z
+        # left a visible gap once the lean increased.
         lean = 38.0
         lr = math.radians(lean)
         up = [0.0, math.cos(lr), math.sin(lr)]
-        base = [0.0, fb * 1.00, L * 0.560]
+        base_y = fb * 1.02
+        base_z = cz - math.sqrt(max(0.0, radius * radius
+                                    - (base_y - cy) ** 2)) + 0.08 * s
+        base = [0.0, base_y, base_z]
         robe_h = 1.00 * s
         torso_h = 0.52 * s
         c.shape("cone", self.n("Figurehead Robe"), self.to_world(base),
@@ -619,7 +623,7 @@ class ShipYard:
                 # (iteration 2: the lower strip stood off the bow like a
                 # fin). The bow strip ends just AFT of the stem edge
                 # instead of wrapping past it.
-                hug = 0.98 if band == 0 else 1.01
+                hug = 1.01 if band == 0 else 1.03
                 y_end = stripe_y + fb * 0.14
                 z_end = cz - math.sqrt(max(0.0, radius * radius
                                            - (y_end - cy) ** 2)) - 0.06 * s
@@ -639,7 +643,7 @@ class ShipYard:
                     }
                     for run, pts in runs.items():
                         self.bent_strip(f"Stripe {band} {run} {side}",
-                                        polyline_curve(pts), 0.07 * s,
+                                        polyline_curve(pts), 0.11 * s,
                                         0.16 * s, m["white"])
                 # Dark ports: thin boxes spanning the beam, poking through
                 # the stripe on both sides; two extra chase the bow taper.
@@ -734,9 +738,16 @@ class ShipYard:
             y = deck_y + height * h_frac
             span = yard_span * w_frac
             sail_h = height * sh_frac
+            yard_y = y + sail_h * 0.52
+            if s == 0:
+                # Course foot raised half way up (yard stays): the
+                # full-depth course hung down into the bulwarks and
+                # deckhouses.
+                y += sail_h * 0.25
+                sail_h *= 0.5
             # Yard (horizontal spar)
             c.shape("capsule", self.n(f"Yard {index}.{s}"),
-                    self.to_world([0.0, y + sail_h * 0.52, base_z]),
+                    self.to_world([0.0, yard_y, base_z]),
                     length=span, bottom_radius=0.06 * self.s,
                     top_radius=0.06 * self.s,
                     rotation_xyzw=roll_quat(90.0), motion_mode="none",

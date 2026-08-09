@@ -278,7 +278,9 @@ following its construction logic:
   need ONE cross-section the whole way (a box/strip mix reads as steps
   at every joint), and hull-hugging bands need a per-height hug factor
   (the hull FLARES - at a low stripe's height the surface sits inside
-  the rail half-beam; 0.98 low / 1.01 near rail worked). Small fittings
+  the rail half-beam; 1.01 low / 1.03 near rail + a 0.11*s-thick strip
+  keeps the band proud everywhere - 0.98/1.01 with a thin strip sank
+  into the bulged surface in places). Small fittings
   poking through a curved band (gunport dots) are per-side plates just
   proud of the band FACE - beam-spanning boxes poke out of the taper as
   tabs.
