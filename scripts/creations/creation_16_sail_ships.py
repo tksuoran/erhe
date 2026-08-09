@@ -34,9 +34,10 @@ from common import (  # noqa: E402
 )
 
 SHOTS = [
-    ("",       [34.0, 8.5, 40.0], [-10.0, 5.0, -14.0]),
-    ("_bow",   [-16.0, 3.5, -36.0], [4.0, 4.5, 6.0]),
-    ("_stern", [26.0, 6.5, 22.0], [-6.0, 3.5, -6.0]),
+    ("",         [34.0, 8.5, 40.0], [-10.0, 5.0, -14.0]),
+    ("_bow",     [-16.0, 3.5, -36.0], [4.0, 4.5, 6.0]),
+    ("_stern",   [26.0, 6.5, 22.0], [-6.0, 3.5, -6.0]),
+    ("_vespucci", [-88.0, 14.0, -18.0], [-14.0, 8.0, -62.0]),
 ]
 
 
@@ -126,7 +127,8 @@ class ShipYard:
 
     def __init__(self, c, m, name, position, heading_deg, length, beam,
                  depth, freeboard, masts, gunports=0, flagship=False,
-                 heel_deg=0.0):
+                 heel_deg=0.0, hull_material=None, stripes=False,
+                 deckhouses=False, sails_per_mast=2):
         self.c = c
         self.m = m
         self.name = name
@@ -140,6 +142,13 @@ class ShipYard:
         self.gunports = gunports
         self.flagship = flagship
         self.heel = heel_deg
+        # Style knobs (the Amerigo Vespucci look): hull material override,
+        # white gun-deck stripes with dark ports instead of wales, white
+        # deckhouses, three-sail stacks per mast.
+        self.hull_material = hull_material
+        self.stripes = stripes
+        self.deckhouses = deckhouses
+        self.sails_per_mast = sails_per_mast
         self.root = None
         # Sails/pennants collect here; their shadows on the water render as
         # harsh aliased spikes, so shadow_cast is disabled on them after the
@@ -174,9 +183,10 @@ class ShipYard:
         self.root = c.group(self.name, self.position)
         points = hull_station_points(self.length, self.beam, self.depth,
                                      self.freeboard)
+        hull_mat = self.hull_material or m["hull"]
         c.shape("convex_hull", self.n("Hull"), self.to_world([0, 0, 0]),
                 points=points, motion_mode="none", reuse=False,
-                material_name=m["hull"], parent_node_id=self.root)
+                material_name=hull_mat, parent_node_id=self.root)
 
         # All hull carves in ONE multi-tool difference: each CSG pass
         # re-triangulates the whole hull, so stacking a pass per pocket
@@ -243,22 +253,171 @@ class ShipYard:
                 size=[0.12, self.depth * 0.9, 0.8], motion_mode="none",
                 material_name=m["hull_dark"], parent_node_id=self.root)
         # Wales only span the parallel midbody - straight boxes poke out of
-        # the tapering ends otherwise (iteration 1 finding).
-        for wale_y in (0.12, self.freeboard * 0.62):
-            c.shape("box", self.n(f"Wale {wale_y:.2f}"),
-                    self.to_world([0.0, wale_y, -self.length * 0.02]),
-                    size=[self.beam * 1.01, 0.12, self.length * 0.48],
-                    motion_mode="none", material_name=m["trim"],
-                    parent_node_id=self.root)
+        # the tapering ends otherwise (iteration 1 finding). Striped hulls
+        # (Vespucci) get white gun-deck bands instead - see build_style().
+        if not self.stripes:
+            for wale_y in (0.12, self.freeboard * 0.62):
+                c.shape("box", self.n(f"Wale {wale_y:.2f}"),
+                        self.to_world([0.0, wale_y, -self.length * 0.02]),
+                        size=[self.beam * 1.01, 0.12, self.length * 0.48],
+                        motion_mode="none", material_name=m["trim"],
+                        parent_node_id=self.root)
 
-        # Bowsprit - rooted inside the forecastle block so it reads attached
+        # Bowsprit - rooted inside the forecastle block so it reads attached.
+        # self.s scales fixed-size details with the ship (the sloop is 0.6,
+        # the Vespucci ~1.9 - unscaled 0.14 m spars vanish on a 58 m hull).
+        self.s = max(0.6, self.length / 30.0)
         L = self.length
         sprit_len = L * 0.30
         c.shape("cone", self.n("Bowsprit"),
                 self.to_world([0.0, self.freeboard * 0.80, L * 0.38]),
-                height=sprit_len, bottom_radius=0.14, top_radius=0.05,
+                height=sprit_len, bottom_radius=0.14 * self.s,
+                top_radius=0.05 * self.s,
                 rotation_xyzw=pitch_quat(62.0), motion_mode="none",
                 material_name=m["mast"], parent_node_id=self.root)
+
+    def build_bow_detail(self):
+        """Bow furniture, scaled by self.s: cutwater blade along the stem,
+        gilded figurehead under the bowsprit, beakhead rails from the
+        forecastle to the stem head, hawse discs, and a bobstay rope from
+        the cutwater to the bowsprit tip."""
+        c, m, s = self.c, self.m, self.s
+        L, fb, dep = self.length, self.freeboard, self.depth
+
+        # Cutwater: thin blade proud of the stem, leaning with the stem
+        # line (forefoot -> stem head).
+        # The hull surface bulges past the authored stem points, so all bow
+        # furniture sits FORWARD of the stem line or it ends up buried
+        # inside the prow block (iteration finding).
+        stem_head = [0.0, fb * 1.45, L * 0.52]
+        forefoot = [0.0, -dep * 0.45, L * 0.46]
+        dy = stem_head[1] - forefoot[1]
+        dz = stem_head[2] - forefoot[2]
+        stem_pitch = math.degrees(math.atan2(dz, dy))
+        mid = [0.0, (stem_head[1] + forefoot[1]) * 0.5,
+               (stem_head[2] + forefoot[2]) * 0.5 + 0.55 * s]
+        c.shape("box", self.n("Cutwater"), self.to_world(mid),
+                size=[0.12 * s, dy * 1.02, 0.7 * s],
+                rotation_xyzw=pitch_quat(stem_pitch), motion_mode="none",
+                material_name=m["trim"], parent_node_id=self.root)
+
+        # Figurehead: gilded bust on the stem head - sphere head over a
+        # forward-leaning cone torso.
+        c.shape("cone", self.n("Figurehead Torso"),
+                self.to_world([0.0, fb * 1.05, L * 0.535]),
+                height=0.62 * s, bottom_radius=0.11 * s,
+                top_radius=0.05 * s, rotation_xyzw=pitch_quat(35.0),
+                motion_mode="none", material_name=m["gold"],
+                parent_node_id=self.root)
+        c.shape("uv_sphere", self.n("Figurehead"),
+                self.to_world([0.0, fb * 1.05 + 0.52 * s, L * 0.535 + 0.40 * s]),
+                radius=0.13 * s, slice_count=10, stack_count=8,
+                motion_mode="none", material_name=m["gold"],
+                parent_node_id=self.root)
+
+        # Beakhead rails: two rods per side from the forecastle rail to the
+        # stem head (base-origin cones - base AT the start point).
+        for side in (+1, -1):
+            for k, (y0, y1) in enumerate(((fb * 1.02, fb * 1.38),
+                                          (fb * 0.78, fb * 1.20))):
+                start = [side * self.half_beam_at(0.38) * 0.85, y0, L * 0.38]
+                end = [side * 0.04 * s, y1, L * 0.535]
+                d = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
+                length = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
+                q = align_y_quaternion([v / length for v in d])
+                c.shape("cone", self.n(f"Beak Rail {side}.{k}"),
+                        self.to_world(start), rotation_xyzw=q,
+                        height=length, bottom_radius=0.035 * s,
+                        top_radius=0.035 * s, motion_mode="none",
+                        material_name=m["trim"], parent_node_id=self.root)
+
+        # Hawse holes: dark discs on the bow flare (disc faces +/-Z; yaw
+        # +/-100 deg turns it outward with a touch of flare).
+        for side in (+1, -1):
+            c.shape("disc", self.n(f"Hawse {side}"),
+                    self.to_world([side * self.half_beam_at(0.40) * 0.90,
+                                   fb * 0.52, L * 0.40]),
+                    outer_radius=0.10 * s, slice_count=12,
+                    rotation_xyzw=yaw_quat(side * 100.0), motion_mode="none",
+                    material_name=m["hull_dark"], parent_node_id=self.root)
+
+        # Bobstay: rope from the cutwater waterline to the bowsprit tip.
+        sprit_base = [0.0, fb * 0.80, L * 0.38]
+        sprit_dir = [0.0, math.cos(math.radians(62.0)), math.sin(math.radians(62.0))]
+        sprit_len = L * 0.30
+        tip = [sprit_base[0] + sprit_dir[0] * sprit_len,
+               sprit_base[1] + sprit_dir[1] * sprit_len,
+               sprit_base[2] + sprit_dir[2] * sprit_len]
+        start = [0.0, 0.15, L * 0.53]
+        d = [tip[0] - start[0], tip[1] - start[1], tip[2] - start[2]]
+        length = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
+        q = align_y_quaternion([v / length for v in d])
+        c.shape("cone", self.n("Bobstay"), self.to_world(start),
+                rotation_xyzw=q, height=length, bottom_radius=0.025 * s,
+                top_radius=0.025 * s, motion_mode="none",
+                material_name=m["rope"], parent_node_id=self.root)
+
+    def build_style(self):
+        """Hull livery beyond the default wales: the Amerigo Vespucci look -
+        two white gun-deck stripes with a row of dark ports, white
+        deckhouses on the main deck, and a gilded bow scroll."""
+        c, m, s = self.c, self.m, self.s
+        L, fb = self.length, self.freeboard
+        deck_y = fb * 0.45
+
+        if self.stripes:
+            for band, stripe_y in enumerate((fb * 0.28, fb * 0.68)):
+                c.shape("box", self.n(f"Stripe {band}"),
+                        self.to_world([0.0, stripe_y, -L * 0.02]),
+                        size=[self.beam * 1.015, 0.16 * s, L * 0.58],
+                        motion_mode="none", material_name=m["white"],
+                        parent_node_id=self.root)
+                # Dark ports: thin boxes spanning the beam, poking through
+                # the stripe on both sides.
+                batch = c.part_batch()
+                count = 9
+                for i in range(count):
+                    z = -L * 0.02 + (i - (count - 1) * 0.5) * (L * 0.52 / count)
+                    batch.part("box", self.n(f"Port {band}.{i}"),
+                               self.to_world([0.0, stripe_y, z]),
+                               parent_node_id=self.root,
+                               material_name=m["hull_dark"],
+                               size=[self.beam * 1.03, 0.09 * s, 0.30 * s])
+                batch.flush()
+            # Gilded bow scroll: gold band sweeping up the sheer toward the
+            # stem head, one per side.
+            for side in (+1, -1):
+                start = [side * self.half_beam_at(0.30) * 0.98, fb * 0.80, L * 0.30]
+                end = [side * 0.06 * s, fb * 1.30, L * 0.505]
+                d = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
+                length = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
+                q = align_y_quaternion([v / length for v in d])
+                c.shape("cone", self.n(f"Bow Scroll {side}"),
+                        self.to_world(start), rotation_xyzw=q,
+                        height=length, bottom_radius=0.07 * s,
+                        top_radius=0.04 * s, motion_mode="none",
+                        material_name=m["gold"], parent_node_id=self.root)
+
+        if self.deckhouses:
+            # Tall enough to peek over the bulwark (deck sits at fb*0.45,
+            # the rail at fb - a house shorter than ~0.55*fb/s vanishes).
+            houses = [
+                (0.20, 0.42, 1.30, 0.13),   # (z_frac, width frac, height, length frac)
+                (-0.06, 0.50, 1.60, 0.17),
+                (-0.34, 0.40, 1.20, 0.11),
+            ]
+            for k, (z_frac, w_frac, h, l_frac) in enumerate(houses):
+                c.shape("box", self.n(f"Deckhouse {k}"),
+                        self.to_world([0.0, deck_y + h * 0.5 * s, z_frac * L]),
+                        size=[self.beam * w_frac, h * s, L * l_frac],
+                        motion_mode="none", material_name=m["white"],
+                        parent_node_id=self.root)
+            # Gold name band across the transom.
+            c.shape("box", self.n("Stern Band"),
+                    self.to_world([0.0, fb * 1.05, -L * 0.508]),
+                    size=[self.beam * 0.55, 0.14 * s, 0.10],
+                    motion_mode="none", material_name=m["gold"],
+                    parent_node_id=self.root)
 
     def build_mast(self, index, z_frac, height, rake_deg):
         """Mast + yards + square sails + pennant. Returns nothing; children
@@ -269,18 +428,22 @@ class ShipYard:
         rake = pitch_quat(-rake_deg)  # lean aft slightly
         mast = c.shape("cone", self.n(f"Mast {index}"),
                        self.to_world([0.0, deck_y, base_z]),
-                       height=height, bottom_radius=0.16, top_radius=0.07,
+                       height=height, bottom_radius=0.16 * self.s,
+                       top_radius=0.07 * self.s,
                        slice_count=10, rotation_xyzw=rake,
                        motion_mode="none", material_name=m["mast"],
                        parent_node_id=self.root)
         mast_id = mast.get("node_id")
 
-        # Square sails: course (big, low) + topsail (smaller, high).
-        sails = [
-            (0.32, 0.95, 0.42),   # (center height frac, width frac of yard span, sail height frac)
-            (0.68, 0.62, 0.26),
-        ]
-        yard_span = height * 0.62
+        # Square sail stacks: course (big, low) upward to smaller sails.
+        sail_stacks = {
+            2: [(0.32, 0.95, 0.42), (0.68, 0.62, 0.26)],
+            3: [(0.26, 0.95, 0.34), (0.55, 0.76, 0.25), (0.79, 0.56, 0.17)],
+        }
+        sails = sail_stacks[self.sails_per_mast]
+        # Full-rigged stacks carry proportionally wider yards, or the tall
+        # masts read as ribbons against a long hull.
+        yard_span = height * (0.72 if self.sails_per_mast >= 3 else 0.62)
         for s, (h_frac, w_frac, sh_frac) in enumerate(sails):
             y = deck_y + height * h_frac
             span = yard_span * w_frac
@@ -288,7 +451,8 @@ class ShipYard:
             # Yard (horizontal spar)
             c.shape("capsule", self.n(f"Yard {index}.{s}"),
                     self.to_world([0.0, y + sail_h * 0.52, base_z]),
-                    length=span, bottom_radius=0.06, top_radius=0.06,
+                    length=span, bottom_radius=0.06 * self.s,
+                    top_radius=0.06 * self.s,
                     rotation_xyzw=roll_quat(90.0), motion_mode="none",
                     material_name=m["mast"], parent_node_id=mast_id)
             # Sail: subdivided thin box, belly billowed forward with FFD.
@@ -302,15 +466,18 @@ class ShipYard:
 
         # Crow's nest on the tallest mast: cone minus inner cone = open cup.
         if index == self.tallest_mast_index():
+            ns = self.s
             nest_y = deck_y + height * 0.80
             c.shape("cone", self.n("Crows Nest"),
                     self.to_world([0.0, nest_y, base_z]),
-                    height=0.55, bottom_radius=0.34, top_radius=0.46,
+                    height=0.55 * ns, bottom_radius=0.34 * ns,
+                    top_radius=0.46 * ns,
                     slice_count=14, motion_mode="none", reuse=False,
                     material_name=m["trim"], parent_node_id=mast_id)
             c.shape("cone", self.n("nest carve"),
-                    self.to_world([0.0, nest_y + 0.12, base_z]),
-                    height=0.6, bottom_radius=0.26, top_radius=0.40,
+                    self.to_world([0.0, nest_y + 0.12 * ns, base_z]),
+                    height=0.6 * ns, bottom_radius=0.26 * ns,
+                    top_radius=0.40 * ns,
                     slice_count=14, motion_mode="none", reuse=False,
                     material_name=m["trim"])
             c.csg(self.n("Crows Nest"), self.n("nest carve"), "difference",
@@ -318,11 +485,11 @@ class ShipYard:
 
         # Masthead pennant: thin box rippled with an S-curve FFD.
         pen = c.shape("box", self.n(f"Pennant {index}"),
-                      self.to_world([1.1, deck_y + height + 0.25, base_z]),
-                      size=[2.2, 0.28, 0.02], steps=[9, 2, 1],
+                      self.to_world([1.1 * self.s, deck_y + height + 0.25, base_z]),
+                      size=[2.2 * self.s, 0.28 * self.s, 0.02], steps=[9, 2, 1],
                       motion_mode="none", reuse=False,
                       material_name=m["flag"], parent_node_id=mast_id)
-        ripple_pennant(c, pen.get("node_id"), amp=0.16)
+        ripple_pennant(c, pen.get("node_id"), amp=0.16 * self.s)
         self.no_shadow_ids.append(pen.get("node_id"))
 
         # Shrouds: stays from masthead to the rails (thin capsules).
@@ -343,7 +510,8 @@ class ShipYard:
                            self.to_world(top), rotation_xyzw=q,
                            parent_node_id=mast_id,
                            material_name=m["rope"],
-                           height=length, bottom_radius=0.02, top_radius=0.02)
+                           height=length, bottom_radius=0.02 * self.s,
+                           top_radius=0.02 * self.s)
         batch.flush()
 
     def tallest_mast_index(self):
@@ -424,36 +592,39 @@ class ShipYard:
                     material_name=m["gold"], parent_node_id=self.root)
 
         # Anchor at the bow (all ships): torus ring + shank capsule union.
+        s = self.s
         anchor_pos = [self.beam * 0.52, self.freeboard * 0.55, L * 0.34]
         c.shape("torus", self.n("Anchor"), self.to_world(anchor_pos),
-                major_radius=0.16, minor_radius=0.035, major_steps=14,
+                major_radius=0.16 * s, minor_radius=0.035 * s, major_steps=14,
                 minor_steps=8, motion_mode="none", reuse=False,
                 material_name=m["iron"], parent_node_id=self.root)
         c.shape("capsule", self.n("anchor shank"),
-                self.to_world([anchor_pos[0], anchor_pos[1] - 0.42, anchor_pos[2]]),
-                length=0.7, bottom_radius=0.035, top_radius=0.035,
+                self.to_world([anchor_pos[0], anchor_pos[1] - 0.42 * s, anchor_pos[2]]),
+                length=0.7 * s, bottom_radius=0.035 * s, top_radius=0.035 * s,
                 motion_mode="none", reuse=False, material_name=m["iron"])
         c.csg(self.n("Anchor"), self.n("anchor shank"), "union", wait=False)
         c.shape("capsule", self.n("Anchor Stock"),
-                self.to_world([anchor_pos[0], anchor_pos[1] - 0.68, anchor_pos[2]]),
-                length=0.55, bottom_radius=0.03, top_radius=0.03,
+                self.to_world([anchor_pos[0], anchor_pos[1] - 0.68 * s, anchor_pos[2]]),
+                length=0.55 * s, bottom_radius=0.03 * s, top_radius=0.03 * s,
                 rotation_xyzw=pitch_quat(90.0), motion_mode="none",
                 material_name=m["mast"], parent_node_id=self.root)
 
         # Stern lantern on a short post at the taffrail (all ships)
         c.shape("capsule", self.n("Lantern Post"),
                 self.to_world([0.0, self.freeboard * 1.28, -L * 0.495]),
-                length=0.5, bottom_radius=0.03, top_radius=0.03,
+                length=0.5 * s, bottom_radius=0.03 * s, top_radius=0.03 * s,
                 motion_mode="none", material_name=m["mast"],
                 parent_node_id=self.root)
         c.shape("uv_sphere", self.n("Stern Lantern"),
-                self.to_world([0.0, self.freeboard * 1.28 + 0.36, -L * 0.495]),
-                radius=0.14, slice_count=10, stack_count=8,
+                self.to_world([0.0, self.freeboard * 1.28 + 0.36 * s, -L * 0.495]),
+                radius=0.14 * s, slice_count=10, stack_count=8,
                 motion_mode="none", material_name=m["lantern"],
                 parent_node_id=self.root)
 
     def build(self):
         self.build_hull()
+        self.build_bow_detail()
+        self.build_style()
         for i, (z_frac, height, rake) in enumerate(self.mast_fracs):
             self.build_mast(i, z_frac, height, rake)
         self.build_fittings()
@@ -497,6 +668,8 @@ def main():
         "flag":      c.make_material("pennant red",  base_color=[0.70, 0.08, 0.06], roughness=0.8,  metallic=0.0),
         "lantern":   c.make_material("lantern glow", base_color=[1.0, 0.75, 0.35],  roughness=0.6,  metallic=0.0,
                                      emissive=[2.6, 1.7, 0.7]),
+        "hull_black": c.make_material("black steel", base_color=[0.035, 0.035, 0.045], roughness=0.5, metallic=0.2),
+        "white":     c.make_material("ship white",   base_color=[0.90, 0.90, 0.87],  roughness=0.6,  metallic=0.0),
         "sea":       c.make_material("sea water",    base_color=[0.02, 0.15, 0.28], roughness=0.10, metallic=0.0,
                                      blending_mode="alpha_blend", opacity=0.25),
         "seabed":    c.make_material("seabed",       base_color=[0.10, 0.17, 0.20], roughness=1.0,  metallic=0.0),
@@ -547,6 +720,18 @@ def main():
         masts=[(-0.05, 9.0, 5.0)],
         gunports=0, heel_deg=5.0)
     sloop.build()
+
+    # The nave scuola herself: black steel hull, two white gun-deck
+    # stripes with a row of dark ports, white deckhouses, gilded bow
+    # scroll and figurehead, full-rigged three-sail stacks. Placed astern
+    # of the squadron so her size reads against the galleon.
+    vespucci = ShipYard(
+        c, m, "Amerigo Vespucci", [-20.0, 0.0, -60.0], heading_deg=-118.0,
+        length=58.0, beam=10.0, depth=3.4, freeboard=4.4,
+        masts=[(0.30, 28.0, 2.0), (0.0, 30.0, 3.0), (-0.30, 24.0, 4.0)],
+        gunports=0, heel_deg=2.0, hull_material=m["hull_black"],
+        stripes=True, deckhouses=True, sails_per_mast=3)
+    vespucci.build()
 
     # ------------------------------------------------------------- verify
     print(f"nodes: {len(c.nodes())}")
