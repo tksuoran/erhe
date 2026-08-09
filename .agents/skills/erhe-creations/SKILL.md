@@ -17,12 +17,13 @@ agent memory and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_16_sail_ships` (henge,
+`creation_1_conway_cathedral` … `creation_17_rock_piles` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
 tree garden = 28 Finnish species via lsystem_trees.py, sail ships =
-CSG-carved convex-hull hulls + FFD-billowed sails).
+CSG-carved convex-hull hulls + FFD-billowed sails, rockfall =
+physics-settled rock piles + staged cairn under the manual clock).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -375,6 +376,17 @@ following its construction logic:
 - Camera: `place_camera(eye, target)`; `exposure()` if needed. Check
   every screenshot for objects occluding the camera ray and for the
   floor's horizon edge (floor boxes want ~60 m for eye-level cameras).
+- **Ground beyond the shadow fit renders as a hard dark band** (creation
+  17): keep the WHOLE ground box - including its diagonal corners -
+  inside `shadow_range` (500 m ground + 40 m range drew a giant dark
+  trapezoid; a 160 m ground left a corner wedge past its 90 m range).
+  Make the ground a THIN slab (0.08 m) so its unlit side face at the far
+  edge reads as a hairline instead of a dark bar.
+- Ground textures: a box face has ONE UV tile, so noise scales must be
+  huge (fbm scale ~90 on a 110 m plane) or the pattern stretches to
+  featureless flatness; and watch value-noise cell size - `noise` size 9
+  = 12 m cells that read as a regular checker from a raised camera
+  (size 48 keeps grain ~2 m).
 - **Set up lights + `shadow_range()` FIRST** (before any geometry) so a
   windowed viewing is lit and shadowed from the first shape onward.
   `shadow_range(value)` also sets the camera far clip to `value` - for
@@ -430,6 +442,44 @@ following its construction logic:
   recreates the body BEFORE it lands. Two calls: first
   `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
   recreation that applies it.
+
+## Deterministic settling & staged construction (creation 17 carries reference code)
+
+The `advance_time` MCP tool (2026-08-09) is a manual simulation clock:
+`{seconds}` queues exactly that much SIMULATION time (drained at
+`max_step_ms`, default 250, per rendered frame - bypasses the 25 ms
+wall-clock dilation cap and the hidden-window pause), `{mode}` switches
+wall_clock | paused | manual (paused/manual freeze the sim except queued
+advances). Wrappers: `c.advance_time(...)`, `c.run_simulation(seconds)`
+(queue + poll + restore wall_clock).
+
+- **Settle recipe**: build everything with physics DISABLED, then
+  `advance_time mode=manual` -> `set_physics(True)` -> `wake_physics()`
+  -> advance N seconds -> `set_physics(False)` -> `mode=wall_clock`.
+  Identical result windowed or headless, any frame rate; ~10 simulated
+  seconds settle in under a second of wall time.
+- **Staged construction**: with the sim frozen between explicit ticks,
+  you can PLACE BODIES MID-SETTLE: creation 17's cairn lays one flat
+  slab per course, ticks 1.2 s, reads the stone's landed pose
+  (node_world_pose) and lays the next course on the MEASURED top,
+  following the stack as it drifts. Wake_physics after each placement
+  (bodies spawn asleep). Dropping a whole pre-stacked tower at once
+  collapses - twice confirmed.
+- The sim is deterministic in TIME but not bit-identical across runs
+  (Jolt threading): a staged course can still slide off on an unlucky
+  run - VERIFY each stage (landed y vs expected) and retry, delete +
+  re-place, like a person would.
+- Physics ROCK PILES: rock = convex hull of a jittered fibonacci-sphere
+  point cloud (9-14 points angular, 22-24 worn; round the coords so the
+  shape pool key is stable); a few archetypes as pooled brushes,
+  instanced with QUANTIZED number bake scales (collision follows; a
+  multiplicative scale ladder caps per-brush primitive count) +
+  power-law sizes; pre-heap with sphere-drop packing (largest first,
+  each rested on the heap) so the settle compacts instead of exploding;
+  batch `edit_physics_body` friction 0.9 / restitution 0.02 /
+  angular_damping 0.35 so rocks pile instead of scattering. Boulders
+  > 1 m want the ANGULAR archetypes (an evenly-jittered 30-point hull
+  reads as a geodesic ball at boulder scale).
 
 ## Load-bearing motor rigs (creation 14 carries reference code)
 
