@@ -30,8 +30,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, reframe, align_y_quaternion, quat_mul,
-    quat_rotate, v_add,
+    Creation, standard_args, reframe, align_y_quaternion,
+    axis_angle_quaternion, quat_mul, quat_rotate, v_add, v_cross, v_dot,
 )
 
 SHOTS = [
@@ -356,21 +356,98 @@ class ShipYard:
                 rotation_xyzw=pitch_quat(self.sprit_pitch), motion_mode="none",
                 material_name=m["mast"], parent_node_id=self.root)
 
+    def hull_surface(self, local_points, max_distance=8.0):
+        """ACTUAL hull side-surface point + outward unit normal at each
+        ship-local sample, in ONE batched geometry_query: a raycast from
+        outside the beam straight toward the centerline, so the hit stays
+        AT the sample's station and height. (closest_point probes drifted
+        AFT toward the wider hull near the curved bow - the nearest
+        surface point is not the surface at that station.) Returns (point,
+        normal) pairs in ship-local space (build-time only: the root is
+        not yet heading-rotated, so world = position + local); falls back
+        to the sample itself when the ray misses."""
+        queries = []
+        for p in local_points:
+            queries.append({
+                "type": "raycast",
+                "origin": self.to_world(p),
+                "direction": [-1.0 if p[0] >= 0.0 else 1.0, 0.0, 0.0],
+                "max_distance": max_distance,
+            })
+        hits = self.c.geometry_query(queries)
+        out = []
+        for sample, hit in zip(local_points, hits):
+            if hit.get("hit"):
+                position = [hit["position"][k] - self.position[k]
+                            for k in range(3)]
+                out.append((position, list(hit["normal"])))
+            else:
+                out.append((list(sample),
+                            [1.0 if sample[0] >= 0.0 else -1.0, 0.0, 0.0]))
+        return out
+
     def bent_strip(self, label, curve_fn, size_x, size_z, material,
-                   steps=12):
+                   steps=12, face_normal=None):
         """One lattice-bent box strip whose centerline follows curve_fn(t),
         t in [0,1], ship-local points. The box is created straight between
         curve_fn(0) and curve_fn(1) (local +Y along the chord), then a
         [1,3,1] bezier FFD moves the two interior control planes so the
         strip passes through the curve at t=1/3 and 2/3 (cubic bezier fit;
         the ends stay pinned). Smooth curved trim from ONE node - no
-        faceted cone chains."""
+        faceted cone chains.
+
+        face_normal rolls the strip about its chord so local +X (the
+        size_x thickness axis) faces that direction - lay hull-hugging
+        bands FLAT on the probed surface. Without it the cross-section
+        keeps align_y_quaternion's arbitrary roll (vertical-ish), and on
+        a flared hull the band reads as a horizontal LEDGE from above.
+        Pass a LIST of four normals (at t = 0, 1/3, 2/3, 1) and the strip
+        also TWISTS along its length - each FFD control plane's corners
+        get tangential offsets rotating the cross-section, fit through
+        the same cubic so the face tracks a normal that turns along the
+        run (the bow taper turns ~20 deg; one constant roll buried the
+        far end of the band there)."""
         c = self.c
         p0 = curve_fn(0.0)
         p3 = curve_fn(1.0)
         d = [p3[k] - p0[k] for k in range(3)]
         ln = math.sqrt(sum(v * v for v in d))
-        q = align_y_quaternion([v / ln for v in d])
+        dirn = [v / ln for v in d]
+        q = align_y_quaternion(dirn)
+        normals = None
+        if face_normal is not None:
+            normals = (list(face_normal) if isinstance(face_normal[0], (list, tuple))
+                       else [face_normal])
+
+        def perp_angle(normal, reference_x):
+            # Signed angle around the chord from reference_x to the
+            # chord-perpendicular projection of normal (None if parallel).
+            along = v_dot(normal, dirn)
+            n_perp = [normal[k] - along * dirn[k] for k in range(3)]
+            n_len = math.sqrt(sum(v * v for v in n_perp))
+            if n_len <= 1e-6:
+                return None
+            n_perp = [v / n_len for v in n_perp]
+            return math.atan2(v_dot(v_cross(reference_x, n_perp), dirn),
+                              v_dot(reference_x, n_perp))
+
+        twist = [0.0, 0.0, 0.0, 0.0]  # roll per FFD control plane
+        if normals:
+            x_cur = quat_rotate(q, [1.0, 0.0, 0.0])
+            base = perp_angle(normals[0], x_cur)
+            if base is not None:
+                q = quat_mul(axis_angle_quaternion(dirn, base), q)
+            if len(normals) == 4:
+                x_rolled = quat_rotate(q, [1.0, 0.0, 0.0])
+                t13 = perp_angle(normals[1], x_rolled) or 0.0
+                t23 = perp_angle(normals[2], x_rolled) or 0.0
+                t_end = perp_angle(normals[3], x_rolled) or 0.0
+                # Cubic fit through the twist samples (ends pinned at
+                # 0 and t_end), same construction as the bend below.
+                twist = [0.0,
+                         3.0 * t13 - 1.5 * t23 + t_end / 3.0,
+                         3.0 * t23 - 1.5 * t13 - t_end * 5.0 / 6.0,
+                         t_end]
         mid = [(p0[k] + p3[k]) * 0.5 for k in range(3)]
         r = c.shape("box", self.n(label), self.to_world(mid),
                     size=[size_x, ln * 1.01, size_z], steps=[2, steps, 2],
@@ -383,15 +460,34 @@ class ShipYard:
             return [b[k] - (p0[k] + d[k] * t) for k in range(3)]
 
         d13, d23 = chord_dev(1.0 / 3.0), chord_dev(2.0 / 3.0)
+        if os.environ.get("STRIP_DEBUG"):
+            print(f"strip {label}: len={ln:.2f} d13={[round(v,3) for v in d13]} "
+                  f"d23={[round(v,3) for v in d23]} "
+                  f"twist_deg={[round(math.degrees(a),1) for a in twist]}")
         # Cubic bezier through the chord deviations: B(1/3) and B(2/3) with
         # pinned ends give the control-plane offsets C1, C2.
         c1 = [3.0 * d13[k] - 1.5 * d23[k] for k in range(3)]
         c2 = [3.0 * d23[k] - 1.5 * d13[k] for k in range(3)]
         qc = [-q[0], -q[1], -q[2], q[3]]     # world -> node local
-        c1l, c2l = quat_rotate(qc, c1), quat_rotate(qc, c2)
-        offsets = [[i, j, k] + list(cl)
-                   for j, cl in ((1, c1l), (2, c2l))
-                   for i in (0, 1) for k in (0, 1)]
+        plane_move = {1: quat_rotate(qc, c1), 2: quat_rotate(qc, c2)}
+        offsets = []
+        for j in range(4):
+            move = plane_move.get(j, [0.0, 0.0, 0.0])
+            angle = twist[j]
+            if (j not in plane_move) and (abs(angle) <= 1e-6):
+                continue  # untouched (pinned) control plane
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            for i in (0, 1):
+                for k in (0, 1):
+                    # Twist = rotate this plane's cage corners around the
+                    # strip axis; the bezier interpolates the roll along
+                    # the length.
+                    xc = (i - 0.5) * size_x
+                    zc = (k - 0.5) * size_z
+                    dx = xc * (cos_a - 1.0) - zc * sin_a
+                    dz = xc * sin_a + zc * (cos_a - 1.0)
+                    offsets.append([i, j, k,
+                                    move[0] + dx, move[1], move[2] + dz])
         c.lattice_deform(node, divisions=[1, 3, 1], offsets=offsets,
                          wait=False)
         return node
@@ -605,66 +701,127 @@ class ShipYard:
                     return 0.06 * (zf - 0.30) / 0.10
                 return 0.06 + 0.08 * min(1.0, (zf - 0.40) / 0.06)
 
-            def polyline_curve(pts):
-                def fn(t, pts=pts):
-                    seg = t * (len(pts) - 1)
-                    i = min(int(seg), len(pts) - 2)
-                    f = seg - i
-                    return [pts[i][k] + (pts[i + 1][k] - pts[i][k]) * f
+            def arc_interp(pts, values=None):
+                """ARC-LENGTH-parameterized interpolator over a polyline
+                (values defaults to the points; pass a parallel list to
+                interpolate normals along the same stations). Index-based
+                parameterization broke on unevenly spaced stations: the
+                cubic fit forced its 1/3-length point onto a vertex only
+                22% along the chord and the strip snaked meters into the
+                hull."""
+                vals = values if values is not None else pts
+                cum = [0.0]
+                for a, b in zip(pts, pts[1:]):
+                    cum.append(cum[-1] + math.sqrt(
+                        sum((b[k] - a[k]) ** 2 for k in range(3))))
+                total = cum[-1] or 1.0
+
+                def fn(t):
+                    d = min(max(t, 0.0), 1.0) * total
+                    i = 1
+                    while (i < len(cum) - 1) and (cum[i] < d):
+                        i += 1
+                    f = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) or 1.0)
+                    return [vals[i - 1][k] + (vals[i][k] - vals[i - 1][k]) * f
                             for k in range(3)]
                 return fn
 
+            # Whole stripe = three lattice-bent strips per side (aft taper,
+            # midbody, bow run) with ONE cross-section - a box/strip mix
+            # showed as steps at every joint. Every stripe station and port
+            # is placed from the PROBED hull surface (hull_surface /
+            # geometry_query, 2026-08-09): the convex hull bulges
+            # unpredictably past the authored stations, and the previous
+            # screenshot-tuned per-band hug factors either sank or shelved
+            # somewhere along the run. The 4-station runs put their probes
+            # exactly on the bezier fit stations (t = 0, 1/3, 2/3, 1), so
+            # the strips touch the true surface there. The hull carves are
+            # still in flight (wait=False) - settle so probes see the
+            # final surface.
+            c.settle()
             cy, cz, radius, _, _ = self.scoop
+            # Two 4-station runs cover the bow so every polyline vertex IS
+            # a bezier fit station (one 6-point run deviated inward
+            # mid-segment and the band sank into the hull forward of
+            # ~0.32 L); bow2 gets the analytic stem-edge end point.
+            run_bias = {"aft": 0.03, "mid": 0.03, "bow1": 0.04,
+                        "bow2": 0.055, "bow3": 0.055}
+            port_zfs = ([-0.02 + (i - 4) * (0.52 / 9) for i in range(9)]
+                        + [0.31, 0.40])
             for band, stripe_y in enumerate((fb * 0.28, fb * 0.68)):
-                # Whole stripe = three lattice-bent strips per side (aft
-                # taper, midbody, bow run) with ONE cross-section - a
-                # box/strip mix showed as steps at every joint. Hug factor
-                # per band: the hull FLARES, so at the lower stripe's
-                # height the surface sits inside the rail half-beam
-                # (iteration 2: the lower strip stood off the bow like a
-                # fin). The bow strip ends just AFT of the stem edge
-                # instead of wrapping past it.
-                hug = 1.04 if band == 0 else 1.05
+                # The stripe ends ON the hull at the concave stem cut, at
+                # full width - the gold stem trim terminates it like the
+                # real bow (converging the band to the centerline dived
+                # inside the hull wedge and the last meters vanished). The
+                # side plating reaches z_stem(y) from the scoop circle;
+                # denser bow2 stations because the fit stations sit
+                # between probes on chords that cut inside the curvature.
                 y_end = stripe_y + fb * 0.14
-                z_end = cz - math.sqrt(max(0.0, radius * radius
-                                           - (y_end - cy) ** 2)) - 0.06 * s
+                z_edge = (cz - math.sqrt(max(0.0, radius * radius
+                                             - (y_end - cy) ** 2))) / L - 0.004
+                runs_zf = {
+                    "aft": (-0.475, -0.357, -0.238, -0.12),
+                    "mid": (-0.12, -0.002, 0.117, 0.235),
+                    "bow1": (0.235, 0.28, 0.325, 0.37),
+                    "bow2": (0.37, 0.40, 0.43, 0.46),
+                    # Short final run to the stem cut on its own: the
+                    # surface yaws hard over the last meters and one run's
+                    # single roll+twist could not follow it.
+                    "bow3": (0.46, (0.46 + z_edge) * 0.5, z_edge),
+                }
+                strip_zfs = [zf for zfs in runs_zf.values() for zf in zfs]
+                port_batch = c.part_batch()
                 for side in (+1, -1):
-                    def hull_pt(zf):
-                        return [side * self.half_beam_at(zf) * hug,
+                    def guess(zf):
+                        # Probe from just outside the expected surface so
+                        # the nearest triangle is the hull SIDE, not deck.
+                        return [side * (self.half_beam_at(zf) + 1.5),
                                 stripe_y + fb * sheer_rise(zf), zf * L]
 
-                    runs = {
-                        "aft": [hull_pt(zf) for zf in
-                                (-0.475, -0.38, -0.27, -0.12)],
-                        "mid": [hull_pt(zf) for zf in
-                                (-0.12, 0.0, 0.12, 0.235)],
-                        "bow": [hull_pt(zf) for zf in
-                                (0.235, 0.30, 0.36, 0.41, 0.45)]
-                               + [[side * 0.05 * s, y_end, z_end]],
-                    }
-                    for run, pts in runs.items():
+                    surface = self.hull_surface(
+                        [guess(zf) for zf in strip_zfs + port_zfs])
+                    strip_hits = surface[:len(strip_zfs)]
+                    port_hits = surface[len(strip_zfs):]
+
+                    def unit(v):
+                        v_len = math.sqrt(sum(x * x for x in v)) or 1.0
+                        return [x / v_len for x in v]
+
+                    index = 0
+                    for run, zfs in runs_zf.items():
+                        hits = strip_hits[index:index + len(zfs)]
+                        index += len(zfs)
+                        # Centerline biased slightly outward along each
+                        # probe normal: the cubic touches the true surface
+                        # only at its fit stations, and between them the
+                        # hull bulges OUTWARD - without the bias the band
+                        # sinks mid-segment. The face rides the surface via
+                        # per-station normals (roll + twist in bent_strip).
+                        pts = [[p[k] + n[k] * run_bias[run] * s
+                                for k in range(3)]
+                               for p, n in hits]
+                        nlist = [list(n) for _, n in hits]
+                        normal_fn = arc_interp(pts, nlist)
+                        ns4 = [unit(normal_fn(t))
+                               for t in (0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0)]
                         self.bent_strip(f"Stripe {band} {run} {side}",
-                                        polyline_curve(pts), 0.12 * s,
-                                        0.16 * s, m["white"])
-                # Dark ports: thin boxes spanning the beam, poking through
-                # the stripe on both sides; two extra chase the bow taper.
-                # Dark ports: thin plates just proud of each strip FACE.
-                # Beam-spanning boxes poked out of the tapering hull as
-                # brown tabs riding on the stripes (iteration 5).
-                batch = c.part_batch()
-                port_zfs = ([-0.02 + (i - 4) * (0.52 / 9) for i in range(9)]
-                            + [0.31, 0.40])
-                for side in (+1, -1):
-                    for k, zf in enumerate(port_zfs):
-                        x = self.half_beam_at(zf) * hug + 0.065 * s
-                        batch.part("box", self.n(f"Port {band}.{side}.{k}"),
-                                   self.to_world([side * x,
-                                                  stripe_y + fb * sheer_rise(zf),
-                                                  zf * L]),
-                                   parent_node_id=self.root,
-                                   material_name=m["hull_dark"],
-                                   size=[0.08 * s, 0.09 * s, 0.30 * s])
-                batch.flush()
+                                        arc_interp(pts), 0.10 * s,
+                                        0.16 * s, m["white"],
+                                        face_normal=ns4)
+                    # Dark ports: thin plates rolled onto the surface
+                    # normal, just proud of the strip face (strip face
+                    # 0.05s out; plates span 0.02s..0.10s).
+                    for k, (p, n) in enumerate(port_hits):
+                        port_batch.part(
+                            "box", self.n(f"Port {band}.{side}.{k}"),
+                            self.to_world([p[j] + n[j] * 0.06 * s
+                                           for j in range(3)]),
+                            rotation_xyzw=quat_mul(align_y_quaternion(n),
+                                                   roll_quat(90.0)),
+                            parent_node_id=self.root,
+                            material_name=m["hull_dark"],
+                            size=[0.08 * s, 0.09 * s, 0.30 * s])
+                port_batch.flush()
             # Gold sheer line: the references run a continuous gilded band
             # at rail level the FULL hull length; the bow scroll below
             # continues it forward, so the boxes stop where the scroll
