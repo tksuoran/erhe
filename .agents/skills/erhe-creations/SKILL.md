@@ -513,6 +513,18 @@ advances). Wrappers: `c.advance_time(...)`, `c.run_simulation(seconds)`
   physics-shape schema) and requires length > |bottom - top|. Saguaro
   ribs rejected: hulls cannot go concave, per-rib CSG costs a boolean
   pass each; matte green material reads right at scene scale.
+- **Blades / leaves = `create_shape sweep`** (2026-08-09; creation 17
+  agaves are reference): a closed CCW cross-section polyline (`profile`,
+  sharp corners stay sharp - author smooth arcs as dense points) swept
+  along a bezier `spine` with parallel-transported frames; `taper`
+  (t, scale) keys with a final ~0 collapse the tip into the terminal
+  spine point; `twist_deg`, optional `profile_end` morph. Agave leaf:
+  channeled crescent profile (upper face dips, convex belly, margin
+  corners), 4-point outward-curving spine, taper [[0,.85],[.25,1],
+  [.7,.6],[1,0]]. A rosette shares ONE pooled blade brush - pitch, yaw
+  and bake scale are per-instance (leaf local +X is the curve
+  direction; yaw about Y maps +X to (cos,0,-sin), so leaf yaw = ring
+  angle - 90 deg). All sweep params are in SHAPE_GEOMETRY_KEYS.
 
 ## Load-bearing motor rigs (creation 14 carries reference code)
 
