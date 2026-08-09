@@ -484,7 +484,7 @@ def main():
         "lantern":   c.make_material("lantern glow", base_color=[1.0, 0.75, 0.35],  roughness=0.6,  metallic=0.0,
                                      emissive=[2.6, 1.7, 0.7]),
         "sea":       c.make_material("sea water",    base_color=[0.02, 0.15, 0.28], roughness=0.10, metallic=0.0,
-                                     blending_mode="alpha_blend", opacity=0.85),
+                                     blending_mode="alpha_blend", opacity=0.25),
         "seabed":    c.make_material("seabed",       base_color=[0.10, 0.17, 0.20], roughness=1.0,  metallic=0.0),
     }
 
