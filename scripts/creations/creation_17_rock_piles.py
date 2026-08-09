@@ -37,6 +37,7 @@ SHOTS = [
     ("_cairn",  [9.4, 1.6, -0.6],   [6.5, 1.1, -3.4]),
     ("_low",    [-6.5, 0.9, 8.5],   [-2.0, 1.2, -4.0]),
     ("_cactus", [-3.0, 2.8, 6.5],   [-10.0, 2.8, -1.0]),
+    ("_agave",  [-6.2, 1.5, 5.8],   [-8.5, 0.7, 3.0]),
 ]
 
 ROCK_DENSITY = 2600.0  # kg/m3, granite-ish
@@ -456,6 +457,71 @@ def build_cacti(c, yard, rng):
     prickly_pear("Prickly pear N", 0.5, -6.0, 0.9, 5, greens[1])
 
 
+def build_agaves(c, yard, rng):
+    """Agave tequilana rosettes from the sweep shape (2026-08-09): each
+    leaf is ONE swept blade - a closed CCW crescent profile (channeled
+    upper face, convex belly, sharp margins) swept along a 4-point bezier
+    spine curving outward, tapered [[0, 0.85], [0.25, 1], [0.7, 0.6],
+    [1, 0]] so the tip collapses into the terminal spine point. All
+    leaves of a plant share ONE pooled blade brush (identical profile /
+    spine / taper; pitch, yaw and bake scale are per-instance), so a
+    26-leaf rosette costs one geometry."""
+    agave_green = c.ensure_material(
+        "agave blue", base_color=[0.35, 0.46, 0.44], roughness=0.7, metallic=0.0)
+    agave_pale = c.ensure_material(
+        "agave pale", base_color=[0.44, 0.54, 0.50], roughness=0.7, metallic=0.0)
+    root = c.group("Agaves", [0.0, 0.0, 0.0])
+
+    # Unit leaf, +Y up, curving outward along +X; length ~1.
+    blade_profile = [
+        [0.080, 0.0], [0.040, -0.008], [0.0, -0.012], [-0.040, -0.008],
+        [-0.080, 0.0], [-0.050, -0.032], [0.0, -0.045], [0.050, -0.032],
+    ]
+    blade_spine = [[0.0, 0.0, 0.0], [0.02, 0.35, 0.0], [0.10, 0.68, 0.0], [0.30, 0.95, 0.0]]
+    blade_taper = [[0.0, 0.85], [0.25, 1.0], [0.7, 0.6], [1.0, 0.0]]
+
+    def leaf(name, position, yaw, pitch, scale, material, parent):
+        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+        qz = [0.0, 0.0, math.sin(-pitch / 2), math.cos(-pitch / 2)]
+        c.shape("sweep", name, position,
+                profile=blade_profile, spine=blade_spine, taper=blade_taper,
+                spine_steps=10, scale=scale,
+                rotation_xyzw=quat_mul(qy, qz), motion_mode="none",
+                material_name=material, parent_node_id=parent)
+
+    def agave(name, x, z, s, material):
+        plant = c.group(name, [x, 0.0, z], parent_node_id=root)
+        c.shape("uv_sphere", f"{name} core", [x, 0.10 * s, z], radius=1.0,
+                slice_count=16, stack_count=8, scale=[0.18 * s, 0.14 * s, 0.18 * s],
+                motion_mode="none", material_name=material, parent_node_id=plant)
+        # Rosette rings: outer leaves long and near-horizontal, inner
+        # short and steep; per-ring yaw offset staggers the spiral.
+        rings = [
+            (9, math.radians(68.0), 1.00),
+            (7, math.radians(50.0), 0.90),
+            (5, math.radians(32.0), 0.75),
+            (3, math.radians(14.0), 0.60),
+        ]
+        index = 0
+        for ring_index, (count, pitch, length) in enumerate(rings):
+            yaw0 = rng.uniform(0.0, 2.0 * math.pi)
+            for k in range(count):
+                yaw = yaw0 + (k + 0.5 * ring_index) * 2.0 * math.pi / count
+                index += 1
+                out = [math.sin(yaw), 0.0, math.cos(yaw)]
+                base = [x + out[0] * 0.06 * s, 0.05 * s, z + out[2] * 0.06 * s]
+                jitter = rng.uniform(-0.06, 0.06)
+                # Leaf local +X (curve direction) lands on `out`: a yaw
+                # rotation about Y maps +X to (cos, 0, -sin), so the leaf
+                # yaw is the ring angle minus 90 degrees.
+                leaf(f"{name} leaf {index}", base, yaw - math.pi / 2.0,
+                     pitch + jitter, round(s * length, 2), material, plant)
+
+    agave("Agave grande", -8.5, 3.0, 1.3, agave_green)
+    agave("Agave mediana", 3.2, -8.8, 1.0, agave_pale)
+    agave("Agave joven", 7.5, 6.2, 0.7, agave_green)
+
+
 def build_pebbles(c, yard, rng):
     """Static pebble drifts around the pile skirts: analytic placement
     (partially sunk, random pose), motion_mode none - no body cost."""
@@ -634,6 +700,7 @@ def main():
         "Pebbles": lambda: build_pebbles(c, yard, rng),
         "Dunes":   lambda: build_dunes(c, yard, rng),
         "Cacti":   lambda: build_cacti(c, yard, rng),
+        "Agaves":  lambda: build_agaves(c, yard, rng),
     }
 
     if only:
@@ -646,7 +713,7 @@ def main():
         else:
             piles[only]()
             yard.apply_rock_friction()
-            if only not in ("Pebbles", "Dunes", "Cacti"):
+            if only not in ("Pebbles", "Dunes", "Cacti", "Agaves"):
                 settle_rocks(c, pre_s=7.0, post_s=1.0)
         yard.apply_chamfer()
         eye, target = c.shot_relative(only, [5.0, 2.6, 5.5], [0.0, 0.8, 0.0])

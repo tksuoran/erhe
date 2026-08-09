@@ -557,6 +557,9 @@ class Creation:
         # disc / triangle / quad / rectangle / regular_polyhedron / convex_hull
         "outer_radius", "inner_radius", "edge", "width",
         "front_face", "back_face", "kind", "points",
+        # sweep (closed profile swept along a bezier spine, 2026-08-09)
+        "profile", "profile_end", "spine", "spine_steps", "taper",
+        "twist_deg", "start_cap", "end_cap",
     ))
 
     def shape(self, shape, name, position, reuse=True, **kwargs):
