@@ -273,7 +273,9 @@ void Mcp_server::refresh_tool_list()
             {"camera_name",  {{"type", "string"},  {"description", "Name of the camera to edit (alternative to camera_id)"}}},
             {"exposure",     {{"type", "number"},  {"description", "New exposure value (1.0 = neutral)"}}},
             {"shadow_range", {{"type", "number"},  {"description", "New shadow range / far distance"}}},
-            {"fov_y",        {{"type", "number"},  {"description", "New vertical field of view in radians (perspective_vertical cameras)"}}}
+            {"fov_y",        {{"type", "number"},  {"description", "New vertical field of view in radians (perspective_vertical cameras)"}}},
+            {"z_near",       {{"type", "number"},  {"description", "New near clip plane distance"}}},
+            {"z_far",        {{"type", "number"},  {"description", "New far clip plane distance (default projection is 64 m - big scenes clip without raising this)"}}}
         }},
         {"required", json::array({"scene_name"})}
     }});

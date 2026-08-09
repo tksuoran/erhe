@@ -646,15 +646,20 @@ class Creation:
                 "scene_name": self.scene, "camera_id": cameras[0]["id"],
                 "exposure": float(value)})
 
-    def shadow_range(self, value):
+    def shadow_range(self, value, z_far=None):
         """Camera shadow range / far distance: raise it early when a scene
         is larger than the default range, so distant objects are shadowed
-        (and stay shadowed while a windowed build is being watched)."""
+        (and stay shadowed while a windowed build is being watched).
+        ALSO raises the camera far clip plane to match (z_far defaults to
+        the same value): the projection default is only 64 m, so big
+        scenes - e.g. the tree garden's back row - silently far-plane
+        clip otherwise. Pass z_far explicitly to decouple them."""
         cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
         if cameras:
             self.mutate("edit_camera", {
                 "scene_name": self.scene, "camera_id": cameras[0]["id"],
-                "shadow_range": float(value)})
+                "shadow_range": float(value),
+                "z_far": float(z_far if z_far is not None else value)})
 
     # -------------------------------------------------------------- physics
 

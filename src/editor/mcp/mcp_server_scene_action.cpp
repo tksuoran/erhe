@@ -1889,6 +1889,20 @@ auto Mcp_server::action_edit_camera(const json& args) -> std::string
                 changed["fov_y"] = projection->fov_y;
             }
         }
+        if (args.contains("z_near")) {
+            erhe::scene::Projection* projection = camera->projection();
+            if (projection != nullptr) {
+                projection->z_near = args.value("z_near", projection->z_near);
+                changed["z_near"] = projection->z_near;
+            }
+        }
+        if (args.contains("z_far")) {
+            erhe::scene::Projection* projection = camera->projection();
+            if (projection != nullptr) {
+                projection->z_far = args.value("z_far", projection->z_far);
+                changed["z_far"] = projection->z_far;
+            }
+        }
     }
 
     return make_json_content({

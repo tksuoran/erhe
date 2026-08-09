@@ -254,16 +254,18 @@ def main():
     c.wake_physics()
     probe_tilt(c, ["Metsäkuusi Trunk", "Rauduskoivu Trunk", "Metsätammi Trunk"])
 
-    # Wide lens + close eye: the far row must stay inside the ~80 m draw
-    # distance (the first framing at 100 m lost the back row entirely).
+    # shadow_range(160) above also raised the camera far plane to 160 m
+    # (the projection default is 64 m - the first framing of this garden
+    # far-plane clipped its back row), so the overview can sit at a
+    # comfortable distance with a moderate lens.
     cameras = c.call("get_scene_cameras", {"scene_name": c.scene}).get("cameras", [])
     if cameras:
         c.mutate("edit_camera", {
             "scene_name": c.scene,
             "camera_name": cameras[0].get("name") or cameras[0].get("node"),
-            "fov_y": 1.15,
+            "fov_y": 0.9,
         })
-    c.place_camera([0.0, 20.0, 36.0], [0.0, 13.0, -10.0])
+    c.place_camera([0.0, 24.0, 58.0], [0.0, 14.0, -12.0])
     c.screenshot("logs/creations/tree_garden.png")
     c.place_camera([-34.0, 8.0, 26.0], [8.0, 12.0, -18.0])
     c.screenshot("logs/creations/tree_garden_low.png")
