@@ -260,6 +260,14 @@ following its construction logic:
   midbody (~0.5 L) or they poke out of the tapering hull; rigging rods
   are base-origin cones - place the base AT the start point (masthead),
   never at the segment midpoint.
+- The convex hull SURFACE bulges past the authored station points, so
+  bow furniture (cutwater, figurehead, beak rails) must sit clearly
+  FORWARD of the stem line or it ends up buried inside the prow block.
+  Scale fixed-size fittings by ship size (s = length / reference) - an
+  unscaled 0.14 m spar vanishes on a 58 m hull.
+- Square sails are edge-on RIBBONS from abeam - a broadside camera on a
+  square-rigger shows masts and paper edges; shoot from a bow or stern
+  quarter (creation 16's Vespucci shot: port bow, ~1.5 ship lengths).
 
 ## Materials & appearance
 
