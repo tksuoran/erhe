@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Creation 13: Windswept Glade.
 
 The Forest Glade (creation 10) rebuilt with live physics in the
@@ -40,6 +40,7 @@ from common import (  # noqa: E402
     Creation, standard_args, align_y_quaternion, probe_tilt, quat_mul,
     v_add, v_scale, v_cross, v_norm, v_rotate,
 )
+from lsystem_trees import grow_tree  # noqa: E402  (moved to the shared module)
 
 
 # ----------------------------------------------------------------- L-system
@@ -124,130 +125,6 @@ def rig_sway(c, sway_jobs):
         c.joint(anchor_id, connected_node_id=carrier_id, settings_name=settings)
     print(f"rigged {len(sway_jobs)} sway spines on {len(carriers_with_body)} carriers")
 
-
-def expand_lsystem(rng, iterations, weights):
-    s = "A"
-    for _ in range(iterations):
-        out = []
-        for ch in s:
-            if ch != "A":
-                out.append(ch)
-                continue
-            r = rng.random()
-            if r < weights[0]:
-                out.append("F[&A]/[&A]/[&A]")
-            elif r < weights[1]:
-                out.append("F[&A]/[&A]")
-            else:
-                out.append("F/[&A]")
-        s = "".join(out)
-    return s.replace("A", "L")
-
-
-def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1.0):
-    """Stochastic L-system tree, graph mirroring the bracket structure.
-    Every part is motion_mode="none"; the trunk is the sway spine (the
-    whole branch/canopy subtree rides its node), collected in sway_jobs.
-
-    age scales the whole tree: an old tree (age > ~1.3) is taller and
-    thicker, branches one L-system iteration DEEPER, branches more
-    densely, is more gnarled (wider wobble) and carries larger canopy
-    clumps; a sapling (age < ~0.7) is the reverse. The sway body's mass
-    grows with age^2 and its wind receptivity with age, so old trees
-    lumber and saplings whip."""
-    p = species
-    iterations = p["iterations"]
-    if age >= 1.3:
-        iterations += 1
-    elif age <= 0.7:
-        iterations -= 1
-    weights = (min(0.95, p["weights"][0] * min(age, 1.15)), p["weights"][1])
-    trunk_h = p["trunk_h"] * age
-    trunk_r = (p["trunk_r"][0] * (age ** 0.8), p["trunk_r"][1] * (age ** 0.8))
-    seg_len = p["seg_len"] * (age ** 0.7)
-    wobble = p["wobble"] * (1.0 + 0.6 * max(0.0, age - 1.0))
-    pitch_lo, pitch_hi = p["pitch"]
-    pitch = (pitch_lo, pitch_hi + 8.0 * max(0.0, age - 1.0))
-
-    root = c.group(tag, base)
-    result = c.shape("cone", f"{tag} Trunk", base, height=trunk_h,
-                     bottom_radius=trunk_r[0], top_radius=trunk_r[1],
-                     slice_count=14, material_name=bark, parent_node_id=root,
-                     motion_mode="none")
-    trunk_id = result.get("node_id") if isinstance(result, dict) else None
-    parent = trunk_id if trunk_id is not None else root
-    if trunk_id is not None:
-        sway_jobs.append((tag, trunk_id, list(base), "tree_sway",
-                          25.0 * age * age, 6.0 * age, 0.8, root))
-    # Whole branch + canopy structure goes out as ONE place_brush_instances
-    # call: chained segments parent via in-batch handles.
-    batch = c.part_batch()
-
-    leaves = []                         # (tip position, carrying branch id)
-    seg_count = 0
-    pos = v_add(base, [0.0, trunk_h, 0.0])
-    heading = v_norm(p["tilt"])
-    left = v_norm(v_cross([0.0, 1.0, 0.0], heading)) if abs(heading[1]) < 0.999 else [1.0, 0.0, 0.0]
-    left = v_norm(v_cross(heading, v_cross(left, heading)))
-    depth = 0
-    stack = []
-
-    for ch in expand_lsystem(rng, iterations, weights):
-        if ch == "F":
-            wob = math.radians(rng.uniform(-wobble, wobble))
-            heading = v_norm(v_rotate(heading, left, wob))
-            length = seg_len * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
-            radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
-            # Unit-cone instance; as_parent adds a rigid pose node so the
-            # child branches/canopies do not inherit this segment's scale.
-            parent = batch.part("cone", f"{tag} Branch {seg_count}", list(pos),
-                                rotation_xyzw=align_y_quaternion(heading),
-                                height=length, bottom_radius=radius,
-                                top_radius=max(0.025, radius * 0.7),
-                                slice_count=8, material_name=bark,
-                                parent_node_id=parent, as_parent=True)
-            seg_count += 1
-            pos = v_add(pos, v_scale(heading, length))
-        elif ch == "&":
-            angle = math.radians(rng.uniform(*pitch))
-            heading = v_norm(v_rotate(heading, left, angle))
-        elif ch == "/":
-            angle = math.radians(rng.uniform(95.0, 145.0))
-            left = v_norm(v_rotate(left, heading, angle))
-        elif ch == "[":
-            stack.append((list(pos), list(heading), list(left), depth, parent))
-            depth += 1
-        elif ch == "]":
-            pos, heading, left, depth, parent = stack.pop()
-        elif ch == "L":
-            leaves.append((v_add(pos, v_scale(heading, 0.12)), parent))
-
-    clusters = []                       # [centroid, count, contributor counts]
-    cluster_r = p["cluster_r"] * (age ** 0.5)
-    merge_sq = cluster_r * cluster_r
-    for point, carrier in leaves:
-        for cluster in clusters:
-            center, count, carriers = cluster
-            d = [point[j] - center[j] for j in range(3)]
-            if d[0] * d[0] + d[1] * d[1] + d[2] * d[2] < merge_sq:
-                cluster[1] = count + 1
-                cluster[0] = [center[j] + d[j] / cluster[1] for j in range(3)]
-                carriers[carrier] = carriers.get(carrier, 0) + 1
-                break
-        else:
-            clusters.append([list(point), 1, {carrier: 1}])
-    base_r, per, cap = p["leaf_r"]
-    age_leaf = age ** 0.6
-    for i, (center, count, carriers) in enumerate(clusters):
-        radius = min(base_r + per * math.sqrt(count), cap) * age_leaf
-        jitter = [rng.uniform(-0.06, 0.06) for _ in range(3)]
-        carrier = max(carriers.items(), key=lambda kv: kv[1])[0]
-        batch.part("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
-                   radius=radius, slice_count=12, stack_count=9,
-                   material_name=leaf_materials[i % len(leaf_materials)],
-                   parent_node_id=carrier)
-    batch.flush()
-    print(f"{tag}: {seg_count} segments, {len(clusters)} canopy clusters")
 
 
 # ------------------------------------------------------------- undergrowth

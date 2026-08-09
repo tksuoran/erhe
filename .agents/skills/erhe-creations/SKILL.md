@@ -369,6 +369,16 @@ ride it:
 Foliage that bends under impact / wind and springs back to its authored
 pose needs no new machinery - six-dof drives ARE the rest-pose motor:
 
+- **L-system trees are a shared module**: `scripts/creations/`
+  `lsystem_trees.py` - expand_lsystem + grow_tree (moved from the glade,
+  rng-identical) plus species-level generators (grow_conifer whorls with
+  tip_rise, grow_columnar, grow_shrub, broadleaf_species_params from a
+  REAL height in meters). Realism knobs (2026-08-09 research: ABOP
+  tropism, Weber-Penn curve/crown shape, pipe-model radii, golden-angle
+  phyllotaxis) are opt-in species keys: tropism / tip_tropism /
+  phyllotaxis / pipe_exponent / curve_res. Reference use: creation 15
+  tree garden (28 Finnish species, one PartBatch flush per tree, 281
+  MCP calls total).
 - **Rig**: chain of Y-axis capsules (`create_shape capsule` is
   center-origin), coincident anchor child pairs at each pivot as above;
   the root anchor joints to a sensor-body carrier on the plant root
