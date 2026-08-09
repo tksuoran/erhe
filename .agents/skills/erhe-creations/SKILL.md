@@ -260,11 +260,37 @@ following its construction logic:
   midbody (~0.5 L) or they poke out of the tapering hull; rigging rods
   are base-origin cones - place the base AT the start point (masthead),
   never at the segment midpoint.
+- **Concave profiles on a convex hull come from the carve list** (the
+  Vespucci clipper stem, 2026-08-09): a convex hull cannot hollow
+  itself, so difference a beam-spanning cylinder (equal-radius capped
+  cone laid along X via roll 90) whose surface passes through the two
+  profile chord endpoints with the wanted sagitta
+  (R = c^2/(8*sag) + sag/2, center at chord mid + normal*(R - sag)) -
+  the cut face IS the curved profile. Keep the circle parameters so
+  trim can trace the cut exactly.
+- **Curved trim = lattice-bent strips, not chained cones** (creation 16
+  bow): one thin box (steps ~[2,12,2] along its length) rotated chord-
+  aligned, then a [1,3,1] bezier FFD; solve the two interior control
+  planes from curve samples at t=1/3, 2/3 (C1 = 3*d13 - 1.5*d23,
+  C2 = 3*d23 - 1.5*d13 on the chord deviations, rotated world->local
+  with common.quat_rotate + conjugate). One node per band, smooth
+  silhouette; see ShipYard.bent_strip. Bands that continue each other
+  need ONE cross-section the whole way (a box/strip mix reads as steps
+  at every joint), and hull-hugging bands need a per-height hug factor
+  (the hull FLARES - at a low stripe's height the surface sits inside
+  the rail half-beam; 0.98 low / 1.01 near rail worked). Small fittings
+  poking through a curved band (gunport dots) are per-side plates just
+  proud of the band FACE - beam-spanning boxes poke out of the taper as
+  tabs.
 - The convex hull SURFACE bulges past the authored station points, so
   bow furniture (cutwater, figurehead, beak rails) must sit clearly
   FORWARD of the stem line or it ends up buried inside the prow block.
   Scale fixed-size fittings by ship size (s = length / reference) - an
-  unscaled 0.14 m spar vanishes on a 58 m hull.
+  unscaled 0.14 m spar vanishes on a 58 m hull. Figureheads and similar
+  hero fittings want MONUMENTAL scale (the real Vespucci figure is
+  ~4 m): a human-proportioned one reads as a flagpole knob from fleet
+  distance, and it must lean well forward off the stem head or the
+  bulge swallows it.
 - Square sails are edge-on RIBBONS from abeam - a broadside camera on a
   square-rigger shows masts and paper edges; shoot from a bow or stern
   quarter (creation 16's Vespucci shot: port bow, ~1.5 ship lengths).
