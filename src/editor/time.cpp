@@ -6,6 +6,8 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace editor {
 
 auto Time::get_frame_time_average_ms() const -> float
@@ -57,6 +59,21 @@ void Time::prepare_update(bool advance_simulation, int64_t simulation_advance_ns
         simulation_frame_duration_ns = 0;
     }
 
+    // Manual time control (MCP advance_time): a pending manual advance
+    // replaces this frame's simulation delta outright - the wall-clock /
+    // display delta, the 25 ms dilation cap and the hidden-window pause
+    // above all yield to it (an explicit request must run even when the
+    // window is hidden, and exceeding the cap is the point of batch
+    // settling). With nothing pending, paused and manual modes freeze
+    // simulation time the same way the hidden pause does.
+    if (m_pending_manual_advance_ns > 0) {
+        const int64_t step = std::min(m_pending_manual_advance_ns, m_manual_max_step_per_frame_ns);
+        simulation_frame_duration_ns = step;
+        m_pending_manual_advance_ns -= step;
+    } else if (m_time_mode != Time_mode::wall_clock) {
+        simulation_frame_duration_ns = 0;
+    }
+
     //m_current_time = new_time;
     m_simulation_time_accumulator += simulation_frame_duration_ns;
     m_simulation_dt_ns = 1'000'000'000 / 240;
@@ -98,6 +115,33 @@ void Time::for_each_fixed_step(std::function<void(const Time_context&)> callback
     for (const Time_context& time_context : m_this_frame_fixed_steps) {
         callback(time_context);
     }
+}
+
+void Time::set_time_mode(Time_mode mode)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    m_time_mode = mode;
+}
+
+auto Time::get_time_mode() const -> Time_mode
+{
+    return m_time_mode;
+}
+
+void Time::request_simulation_advance(int64_t advance_ns, int64_t max_step_per_frame_ns)
+{
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+    if (advance_ns > 0) {
+        m_pending_manual_advance_ns += advance_ns;
+    }
+    if (max_step_per_frame_ns > 0) {
+        m_manual_max_step_per_frame_ns = max_step_per_frame_ns;
+    }
+}
+
+auto Time::get_pending_simulation_advance_ns() const -> int64_t
+{
+    return m_pending_manual_advance_ns;
 }
 
 auto Time::get_frame_number() const -> uint64_t

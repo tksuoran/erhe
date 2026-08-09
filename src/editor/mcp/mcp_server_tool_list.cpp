@@ -326,6 +326,14 @@ void Mcp_server::refresh_tool_list()
             {"enabled", {{"type", "boolean"}, {"description", "Explicit state; omit to toggle"}}}
         }}
     }});
+    m_tool_infos.push_back({"advance_time", "Control the editor simulation clock. 'seconds' queues that much simulation time to run deterministically at 'max_step_ms' (default 250) of simulation per rendered frame, bypassing the 25 ms wall-clock dilation cap and the hidden-window pause - the call returns immediately, poll with an empty call until pending_seconds is 0. 'mode' switches the clock source: wall_clock (normal), paused / manual (simulation frozen except queued advances). Physics settling recipe: build with physics disabled, toggle_physics enabled + wake, mode=manual, advance_time seconds=N, poll, then freeze.", {
+        {"type", "object"},
+        {"properties", {
+            {"seconds",     {{"type", "number"}, {"description", "Simulation time to advance, in seconds (queued; >= 0)"}}},
+            {"max_step_ms", {{"type", "number"}, {"description", "Max simulation milliseconds consumed per rendered frame while draining the queue (default 250, sticky)"}}},
+            {"mode",        {{"type", "string"}, {"enum", json::array({"wall_clock", "paused", "manual"})}, {"description", "Simulation clock source; omit to leave unchanged"}}}
+        }}
+    }});
     m_tool_infos.push_back({"add_node_attachment", "Add a new attachment to a scene node (undoable, executes on the next frame). 'type' is a catalog key: camera, light, mesh, rigid_body, joint, layout, layout_item, grid, frame_controller. All kinds except joint are single-instance (refused if the node already has one). layout_item requires the node's parent to have a layout. Verify with get_node_details.", {
         {"type", "object"},
         {"properties", {

@@ -8,6 +8,7 @@
 #include "operations/geometry_operations.hpp"
 #include "operations/merge_static_subtree_operation.hpp"
 #include "operations/node_transform_operation.hpp"
+#include "time.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_tile_io.hpp"
@@ -31,6 +32,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 
 namespace editor {
@@ -2139,6 +2141,63 @@ auto Mcp_server::action_toggle_physics(const json& args) -> std::string
 
     return make_json_content({
         {"dynamic_physics_enabled", enabled}
+    }).dump();
+}
+
+auto Mcp_server::action_advance_time(const json& args) -> std::string
+{
+    Time* time = m_context.time;
+    if (time == nullptr) {
+        json r = make_text_content("Time not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const auto mode_it = args.find("mode");
+    if (mode_it != args.end()) {
+        if (!mode_it->is_string()) {
+            json r = make_text_content("mode must be a string: wall_clock, paused or manual");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const std::string mode_name = mode_it->get<std::string>();
+        if (mode_name == "wall_clock") {
+            time->set_time_mode(Time_mode::wall_clock);
+        } else if (mode_name == "paused") {
+            time->set_time_mode(Time_mode::paused);
+        } else if (mode_name == "manual") {
+            time->set_time_mode(Time_mode::manual);
+        } else {
+            json r = make_text_content("Unknown mode: " + mode_name + " (wall_clock, paused or manual)");
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
+
+    const double seconds     = args.value("seconds", 0.0);
+    const double max_step_ms = args.value("max_step_ms", 0.0);
+    if ((seconds < 0.0) || (max_step_ms < 0.0)) {
+        json r = make_text_content("seconds and max_step_ms must be >= 0");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const int64_t advance_ns  = static_cast<int64_t>(std::llround(seconds * 1e9));
+    const int64_t max_step_ns = static_cast<int64_t>(std::llround(max_step_ms * 1e6));
+    if ((advance_ns > 0) || (max_step_ns > 0)) {
+        time->request_simulation_advance(advance_ns, max_step_ns);
+    }
+
+    const char* mode_name = "wall_clock";
+    switch (time->get_time_mode()) {
+        case Time_mode::paused: mode_name = "paused"; break;
+        case Time_mode::manual: mode_name = "manual"; break;
+        default: break;
+    }
+    return make_json_content({
+        {"mode",              mode_name},
+        {"pending_seconds",   static_cast<double>(time->get_pending_simulation_advance_ns()) * 1e-9},
+        {"simulation_time_s", static_cast<double>(time->get_simulation_time_ns()) * 1e-9},
+        {"frame_number",      time->get_frame_number()}
     }).dump();
 }
 

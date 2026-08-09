@@ -17,6 +17,15 @@ namespace editor {
 class Time;
 class App_message_bus;
 
+// Simulation clock source (MCP advance_time). wall_clock is the normal
+// editor behavior; paused and manual freeze simulation time except for
+// explicitly requested manual advances (request_simulation_advance).
+enum class Time_mode : int {
+    wall_clock = 0,
+    paused     = 1,
+    manual     = 2
+};
+
 class Time_context
 {
 public:
@@ -63,6 +72,18 @@ public:
     void prepare_update     (bool advance_simulation = true, int64_t simulation_advance_ns = -1);
     void for_each_fixed_step(std::function<void(const Time_context&)> callback);
 
+    // Manual simulation-time control (MCP advance_time): a queued manual
+    // advance replaces the frame's simulation delta - wall clock / predicted
+    // display delta, the 25 ms dilation cap and the hidden-window pause all
+    // yield to it, so batch settling runs deterministically at
+    // max_step_per_frame_ns of simulation time per rendered frame until the
+    // queue drains. With no pending advance, paused and manual modes produce
+    // zero fixed steps per frame.
+    void set_time_mode(Time_mode mode);
+    [[nodiscard]] auto get_time_mode() const -> Time_mode;
+    void request_simulation_advance(int64_t advance_ns, int64_t max_step_per_frame_ns = 0);
+    [[nodiscard]] auto get_pending_simulation_advance_ns() const -> int64_t;
+
     void update_transform_animations(App_message_bus& app_message_bus);
     void finish_all_transform_animations(App_message_bus& app_message_bus);
     void begin_transform_animation(
@@ -80,6 +101,9 @@ private:
     int64_t  m_simulation_dt_ns                  {0};
     int64_t  m_simulation_time_ns                {0};
     uint64_t m_frame_number                      {0};
+    Time_mode m_time_mode                        {Time_mode::wall_clock};
+    int64_t  m_pending_manual_advance_ns         {0};
+    int64_t  m_manual_max_step_per_frame_ns      {250'000'000};
 
     ERHE_PROFILE_MUTEX(std::mutex,         m_mutex);
     std::vector<Time_context>              m_this_frame_fixed_steps;
