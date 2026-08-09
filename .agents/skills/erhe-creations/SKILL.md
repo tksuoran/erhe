@@ -338,6 +338,10 @@ following its construction logic:
   floor's horizon edge (floor boxes want ~60 m for eye-level cameras).
 - **Set up lights + `shadow_range()` FIRST** (before any geometry) so a
   windowed viewing is lit and shadowed from the first shape onward.
+  `shadow_range(value)` also sets the camera far clip to `value` - for
+  big open scenes pass `z_far` explicitly (e.g.
+  `shadow_range(160, z_far=900)`) or the ground/sea plane far-clips
+  into a hard horizon band.
   Light nodes insert on the NEXT frame (unlike create_node's synchronous
   insert); rotate the sun with `c.set_node_transform("<light name>",
   rotation_xyzw=q)` - its not-found retry rides out the pending insert,

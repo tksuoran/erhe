@@ -439,17 +439,18 @@ class ShipYard:
         # robe cone, torso cone, head sphere, two swept-back arm blades.
         # Sized MONUMENTAL (the real figure is ~4 m gilded bronze): a
         # human-proportioned one read as a flagpole knob at fleet
-        # distance. The robe base is computed ON the scoop-circle stem
-        # surface (plus a small forward offset) so the figure grows out
-        # of the stem instead of floating ahead of it - a hardcoded z
-        # left a visible gap once the lean increased.
-        lean = 38.0
+        # distance. The robe base sits ON the scoop-circle stem surface
+        # and its lean FOLLOWS the stem tangent there (minus a few
+        # degrees upright) so the figure flows out of the raked stem -
+        # both a hardcoded z and a fixed lean read detached.
+        base_y = fb * 1.02
+        z_surf = cz - math.sqrt(max(0.0, radius * radius
+                                    - (base_y - cy) ** 2))
+        base = [0.0, base_y, z_surf + 0.02 * s]
+        dy, dz = base_y - cy, z_surf - cz
+        lean = math.degrees(math.atan2(dy, -dz)) - 8.0
         lr = math.radians(lean)
         up = [0.0, math.cos(lr), math.sin(lr)]
-        base_y = fb * 1.02
-        base_z = cz - math.sqrt(max(0.0, radius * radius
-                                    - (base_y - cy) ** 2)) + 0.08 * s
-        base = [0.0, base_y, base_z]
         robe_h = 1.00 * s
         torso_h = 0.52 * s
         c.shape("cone", self.n("Figurehead Robe"), self.to_world(base),
@@ -623,7 +624,7 @@ class ShipYard:
                 # (iteration 2: the lower strip stood off the bow like a
                 # fin). The bow strip ends just AFT of the stem edge
                 # instead of wrapping past it.
-                hug = 1.01 if band == 0 else 1.03
+                hug = 1.04 if band == 0 else 1.05
                 y_end = stripe_y + fb * 0.14
                 z_end = cz - math.sqrt(max(0.0, radius * radius
                                            - (y_end - cy) ** 2)) - 0.06 * s
@@ -643,7 +644,7 @@ class ShipYard:
                     }
                     for run, pts in runs.items():
                         self.bent_strip(f"Stripe {band} {run} {side}",
-                                        polyline_curve(pts), 0.11 * s,
+                                        polyline_curve(pts), 0.12 * s,
                                         0.16 * s, m["white"])
                 # Dark ports: thin boxes spanning the beam, poking through
                 # the stripe on both sides; two extra chase the bow taper.
@@ -655,7 +656,7 @@ class ShipYard:
                             + [0.31, 0.40])
                 for side in (+1, -1):
                     for k, zf in enumerate(port_zfs):
-                        x = self.half_beam_at(zf) * hug + 0.035 * s
+                        x = self.half_beam_at(zf) * hug + 0.065 * s
                         batch.part("box", self.n(f"Port {band}.{side}.{k}"),
                                    self.to_world([side * x,
                                                   stripe_y + fb * sheer_rise(zf),
@@ -758,7 +759,7 @@ class ShipYard:
                            size=[span * 0.96, sail_h, 0.05],
                            steps=[8, 8, 1], motion_mode="none", reuse=False,
                            material_name=m["canvas"], parent_node_id=mast_id)
-            billow_sail(c, sail.get("node_id"), belly=sail_h * 0.38)
+            billow_sail(c, sail.get("node_id"), belly=sail_h * 0.62)
             self.no_shadow_ids.append(sail.get("node_id"))
 
         # Crow's nest on the tallest mast: cone minus inner cone = open cup.
@@ -991,7 +992,9 @@ def main():
     c.set_node_transform("Evening Sun", rotation_xyzw=quat_mul(qy, qx))
     c.light("point", "Sky Fill", [-20.0, 30.0, 30.0], [0.55, 0.62, 0.80],
             260.0, range=140.0, cast_shadow=False)
-    c.shadow_range(140.0)
+    # z_far decoupled: the 600 m sea plane far-clips at the default
+    # shadow-coupled 140/160 m and the horizon shows as a hard band.
+    c.shadow_range(140.0, z_far=900.0)
 
     # Sea: OPEN-OCEAN recipe - deep dark bottom under near-opaque water, so
     # the surface reads blue everywhere instead of showing seabed shadows
@@ -1043,7 +1046,7 @@ def main():
     print(f"nodes: {len(c.nodes())}")
 
     # ------------------------------------------------------------- cameras
-    c.shadow_range(160.0)
+    c.shadow_range(160.0, z_far=900.0)
     c.screenshot_views("logs/creations/sail_ships", SHOTS)
 
     if not args.no_save:
