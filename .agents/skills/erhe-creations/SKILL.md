@@ -17,10 +17,12 @@ agent memory and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_14_spider_sentinel` (henge,
+`creation_1_conway_cathedral` … `creation_16_sail_ships` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
-physics foliage + wind, spider sentinel = motor-held STANDING ragdoll).
+physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
+tree garden = 28 Finnish species via lsystem_trees.py, sail ships =
+CSG-carved convex-hull hulls + FFD-billowed sails).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -201,6 +203,53 @@ following its construction logic:
 - Debug recipe for placement bugs: build an ISOLATED minimal repro in
   the running editor (e.g. a 3-cone chain at 45 deg), then compare
   `get_scene_nodes` TRS against expectations, then screenshot.
+
+## CSG, authored hulls & FFD (new tools 2026-08-09; creation 16 is reference)
+
+- **`c.csg(target, tools, operation)`** (union / intersection /
+  difference, WORLD-space composed): the result REPLACES the target
+  mesh's primitives in place (node id, name, transform, children,
+  material, physics attachment all survive; collision rebuilt as a
+  convex hull of the result) and the TOOL NODES ARE REMOVED (children
+  reparent up - use leaf mesh nodes as tools). One undoable operation;
+  queued async, the wrapper settles by default.
+- **Batch the carves**: pass a LIST of tool node ids - all tools merge
+  into one solid and apply in a single boolean pass. Sequential calls
+  re-triangulate the whole target once per call and the stacked passes
+  show as sliver-triangle shading zigzags on large near-planar facets.
+  Creation 16 carves deck well + 10 gunports + 3 transom windows in ONE
+  difference.
+- Inputs must be closed watertight manifolds (capped cones, boxes,
+  spheres, convex hulls, regular polyhedra - NOT open discs/rectangles
+  or use_bottom=false cones). CSG on a pooled instance silently goes
+  private; create hero targets with reuse=False.
+- **`create_shape convex_hull`** (points=[[x,y,z],...] node-local, >=4
+  non-coplanar) is the way to get authored silhouettes - ship hulls
+  from station points (rail pair + bilge pair + keel per station, stem/
+  transom extremes). Convexity is fine for a beamy hull: carve the deck
+  well back in with CSG and real bulwarks remain. Hull brushes build
+  with SMOOTH normals (fair surface; also hides CSG triangulation).
+  Also new: disc (annulus with inner_radius), triangle, quad, rectangle
+  (flat XY, thin-box collision - use motion_mode none), and
+  regular_polyhedron (tetra/cube/octa/dodeca/icosa/cuboctahedron).
+- **`c.lattice_deform(node, offsets, divisions=[2,2,2], ...)`** = FFD:
+  cage auto-fits the mesh's local bounds; offsets are sparse
+  [i,j,k,dx,dy,dz] control point displacements; bezier default pins
+  whatever you leave at rest. Billowed sails: box size [w,h,0.05] steps
+  [8,8,1], push the i=1 column's dz (all j/k rows, mid > foot > head) -
+  corners stay pinned and the smooth-normal recompute reads as canvas
+  creases for free. Pennant ripple: divisions [3,1,1], +amp at i=1,
+  -amp at i=2. The source needs interior vertices (a 4-vertex quad
+  cannot bend) - use box steps.
+- Open-ocean water (vs the shallow-lagoon recipe below): near-opaque
+  alpha_blend (opacity ~0.85) dark blue [0.02,0.15,0.28] over a DEEP
+  dark seabed - a bright shallow seabed reads olive at fleet scale.
+  Disable shadow_cast (set_item_flags) on sails/flags: their water
+  shadows alias into harsh spikes; keep hull + mast shadows.
+- Straight trim boxes (wales/strakes) must stay within the parallel
+  midbody (~0.5 L) or they poke out of the tapering hull; rigging rods
+  are base-origin cones - place the base AT the start point (masthead),
+  never at the segment midpoint.
 
 ## Materials & appearance
 
