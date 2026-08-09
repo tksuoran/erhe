@@ -32,6 +32,7 @@ namespace erhe::primitive {
 namespace editor {
 
 class App_context;
+class Brush;
 class Scene_root;
 
 // Represents a single MCP tool descriptor
@@ -111,6 +112,12 @@ private:
     // containers - the id path lets tools address container materials,
     // which live in no scene library (R5.4 verification surface).
     auto find_material_by_id    (std::size_t material_id) -> std::shared_ptr<erhe::primitive::Material>;
+
+    // Shared instance-placement path for place_brush and create_shape: resolves
+    // material / position / rotation / parent / scale / mass / motion_mode from
+    // args, places the brush instance and fills result. Returns an empty string
+    // on success, or a complete error response to return to the client.
+    auto place_brush_instance   (const nlohmann::json& args, Scene_root& scene_root, Brush& brush, nlohmann::json& result) -> std::string;
     auto query_list_scenes      (const nlohmann::json& args) -> std::string;
     auto query_scene_nodes      (const nlohmann::json& args) -> std::string;
     auto query_composition_passes(const nlohmann::json& args) -> std::string;

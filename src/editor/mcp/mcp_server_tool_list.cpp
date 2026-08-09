@@ -143,17 +143,23 @@ void Mcp_server::refresh_tool_list()
             {"end_edit",      {{"type", "boolean"}, {"description", "Record an undo operation and refresh edit baselines (default true)"}}}
         }}
     }});
-    m_tool_infos.push_back({"place_brush",         "Place a brush instance in a scene at a given position", {
+    m_tool_infos.push_back({"place_brush",         "Place an instance of a content-library brush in a scene. THE shape-reuse path: every placement of one brush shares its geometry and GPU buffers, so create a shape once (create_shape with add_brush) and place it N times instead of calling create_shape N times. Placement parameters are identical to create_shape's instance parameters.", {
         {"type", "object"},
         {"properties", {
-            {"scene_name",    {{"type", "string"},  {"description", "Name of the scene"}}},
-            {"brush_id",      {{"type", "integer"}, {"description", "Brush ID (from get_scene_brushes)"}}},
-            {"position",      {{"type", "array"},   {"items", {{"type", "number"}}}, {"description", "World position [x, y, z]"}}},
-            {"material_name", {{"type", "string"},  {"description", "Material name (optional, uses first available if omitted)"}}},
-            {"scale",         {{"type", "number"},  {"description", "Scale factor (optional, default 1.0)"}}},
-            {"motion_mode",   {{"type", "string"},  {"description", "Physics mode: static, dynamic (optional, default dynamic)"}}}
+            {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"brush_id",       {{"type", "integer"}, {"description", "Brush ID (from get_scene_brushes or create_shape add_brush; takes precedence over brush_name)"}}},
+            {"brush_name",     {{"type", "string"},  {"description", "Brush name (alternative to brush_id)"}}},
+            {"name",           {{"type", "string"},  {"description", "Instance node name (default: brush name). Renames only the node; the mesh keeps the brush name so instances stay export-deduplicable"}}},
+            {"position",       {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "World position [x, y, z] (default [0, 0, 0])"}}},
+            {"rotation_xyzw",  {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 4}, {"maxItems", 4}, {"description", "World rotation quaternion [x, y, z, w] - avoids the select + transform_selection round trips"}}},
+            {"parent_node_id", {{"type", "integer"}, {"description", "Parent node ID for the instance (default: scene root); the world position is preserved"}}},
+            {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
+            {"material_id",    {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over material_name)"}}},
+            {"scale",          {{"description", "Number = uniform brush bake scale (geometry, collision shape, volume and inertia all scale; use for physics parts; default 1.0). NOTE each distinct bake scale builds its own GPU primitive (shared by placements at that scale) - prefer few distinct scales, or the array form. Array [x, y, z] = node-space TRS scale composed into the transform (visual anisotropy, no new primitive; collision shapes do NOT follow node scale - pair with motion_mode 'none')"}}},
+            {"mass",           {{"type", "number"},  {"description", "Rigid body mass override for the instance; local inertia is rescaled to match (default: brush density x volume). Only meaningful with a physics motion_mode"}}},
+            {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode: static, kinematic, dynamic (default dynamic), or none = no rigid body at all (pure visual part, e.g. children of a physics-driven assembly)"}}}
         }},
-        {"required", json::array({"scene_name", "brush_id", "position"})}
+        {"required", json::array({"scene_name"})}
     }});
 
     m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the same generators as the Create window, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps).", {
@@ -169,7 +175,7 @@ void Mcp_server::refresh_tool_list()
             {"material_name",  {{"type", "string"},  {"description", "Material name (default: first available)"}}},
             {"material_id",    {{"type", "integer"}, {"description", "Material by unique item id; reaches any scene's materials and the asset manager's loaded container materials (takes precedence over material_name)"}}},
             {"rotation_xyzw",  {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 4}, {"maxItems", 4}, {"description", "World rotation quaternion [x, y, z, w] for the instance - avoids the select + transform_selection round trips"}}},
-            {"scale",          {{"description", "Number = uniform brush bake scale (geometry, collision shape, volume and inertia all scale; use for physics parts; default 1.0). Array [x, y, z] = node-space TRS scale composed into the transform (visual anisotropy; collision shapes do NOT follow node scale - pair with motion_mode 'none')"}}},
+            {"scale",          {{"description", "Number = uniform brush bake scale (geometry, collision shape, volume and inertia all scale; use for physics parts; default 1.0). Array [x, y, z] = node-space TRS scale composed into the transform (visual anisotropy; collision shapes do NOT follow node scale - pair with motion_mode 'none'). For shape reuse prefer add_brush once + place_brush N times over N create_shape calls"}}},
             {"mass",           {{"type", "number"},  {"description", "Rigid body mass override for the instance; local inertia is rescaled to match (default: brush density x volume). Only meaningful with a physics motion_mode"}}},
             {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic), or none = no rigid body at all (pure visual part, e.g. children of a physics-driven assembly)"}}},
             {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},

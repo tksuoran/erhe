@@ -993,55 +993,36 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::action_place_brush(const json& args) -> std::string
+// Instance placement shared by place_brush and create_shape. Every placement
+// of one brush shares its Primitive (and thus GPU buffers / raytrace shape) -
+// this is THE reuse path: create a shape once, place it N times.
+auto Mcp_server::place_brush_instance(const json& args, Scene_root& sr, Brush& brush, json& result) -> std::string
 {
-    const std::string scene_name    = args.value("scene_name", "");
-    const std::size_t brush_id      = args.value("brush_id", std::size_t{0});
-    const json        pos_json      = args.value("position", json::array());
+    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        }
+    };
+
+    auto library = sr.get_content_library();
+
+    std::shared_ptr<erhe::primitive::Material> material;
     const std::string material_name = args.value("material_name", "");
-    const double      scale         = args.value("scale", 1.0);
-    const std::string motion_str    = args.value("motion_mode", "dynamic");
-
-    auto* sr = find_scene(scene_name);
-    if (!sr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    // Find brush by ID
-    auto library = sr->get_content_library();
-    if (!library || !library->brushes) {
-        json r = make_text_content("No brushes in scene");
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    std::shared_ptr<Brush> brush;
-    const auto& brush_list = library->brushes->get_all<Brush>();
-    for (const auto& b : brush_list) {
-        if (b->get_id() == brush_id) {
-            brush = b;
-            break;
+    const std::size_t material_id   = args.value("material_id", std::size_t{0});
+    if (material_id != 0) {
+        // The id path reaches materials in any scene's library AND the
+        // asset manager's loaded containers (which live in no scene) -
+        // the R5.4 verification surface for meshes using container
+        // materials.
+        material = find_material_by_id(material_id);
+        if (!material) {
+            json r = make_text_content("Material not found with id: " + std::to_string(material_id));
+            r["isError"] = true;
+            return r.dump();
         }
     }
-    if (!brush) {
-        json r = make_text_content("Brush not found with id: " + std::to_string(brush_id));
-        r["isError"] = true;
-        return r.dump();
-    }
-
-    // Parse position
-    glm::vec3 position{0.0f};
-    if (pos_json.is_array() && pos_json.size() >= 3) {
-        position.x = pos_json[0].get<float>();
-        position.y = pos_json[1].get<float>();
-        position.z = pos_json[2].get<float>();
-    }
-
-    // Find material
-    std::shared_ptr<erhe::primitive::Material> material;
-    if (!material_name.empty() && library->materials) {
+    if (!material && !material_name.empty() && library && library->materials) {
         const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
         for (const auto& mat : mat_list) {
             if (mat->get_name() == material_name) {
@@ -1050,7 +1031,7 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
             }
         }
     }
-    if (!material && library->materials) {
+    if (!material && library && library->materials) {
         const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
         if (!mat_list.empty()) {
             material = mat_list.front();
@@ -1062,38 +1043,156 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
         return r.dump();
     }
 
-    // Motion mode
-    erhe::physics::Motion_mode motion_mode = erhe::physics::Motion_mode::e_dynamic;
-    if (motion_str == "static") {
-        motion_mode = erhe::physics::Motion_mode::e_static;
+    glm::vec3 position{0.0f};
+    read_vec3("position", position);
+
+    std::optional<glm::quat> rotation;
+    {
+        const json value = args.value("rotation_xyzw", json());
+        if (value.is_array() && (value.size() == 4)) {
+            rotation = glm::quat{value[3].get<float>(), value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        }
     }
 
-    const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+    std::shared_ptr<erhe::scene::Node> parent;
+    if (args.contains("parent_node_id")) {
+        const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
+        sr.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            if (node->get_id() == parent_node_id) {
+                parent = node;
+                return false;
+            }
+            return true;
+        });
+        if (!parent) {
+            json r = make_text_content("Parent node not found with id: " + std::to_string(parent_node_id));
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
 
-    auto node = place_brush_in_scene(
-        m_context,
-        *brush,
-        *sr,
-        world_from_node,
-        material,
-        scale,
-        motion_mode
+    // "scale" as a number is the brush bake scale (geometry, collision
+    // shape, volume and inertia all scale - the right choice for physics
+    // parts); as an array of 3 it becomes node-space TRS scale composed
+    // into the world transform (visual anisotropy - collision shapes do
+    // NOT follow node scale, so use it with motion_mode "none").
+    double scale = 1.0;
+    std::optional<glm::vec3> node_scale;
+    if (args.contains("scale")) {
+        const json& value = args.at("scale");
+        if (value.is_number()) {
+            scale = value.get<double>();
+        } else if (value.is_array() && (value.size() == 3)) {
+            node_scale = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+        }
+    }
+    std::optional<float> mass_override;
+    if (args.contains("mass") && args.at("mass").is_number()) {
+        mass_override = args.at("mass").get<float>();
+    }
+    // "none" = pure visual instance: the Node_physics attachment the brush
+    // instancing creates is detached again before the node enters the
+    // scene. Saves one strip pass per part on physics-driven assemblies
+    // (e.g. swaying trees whose child parts must not collide).
+    const std::string motion_mode_text = args.value("motion_mode", "dynamic");
+    const bool skip_physics = (motion_mode_text == "none");
+    const erhe::physics::Motion_mode motion_mode = parse_motion_mode(
+        skip_physics ? "static" : motion_mode_text,
+        erhe::physics::Motion_mode::e_dynamic
     );
 
-    if (!node) {
-        json r = make_text_content("Failed to place brush");
+    glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
+    if (rotation.has_value()) {
+        world_from_node = world_from_node * glm::mat4_cast(rotation.value());
+    }
+    if (node_scale.has_value()) {
+        world_from_node = world_from_node * erhe::math::create_scale<float>(node_scale.value());
+    }
+    auto instance_node = place_brush_in_scene(m_context, brush, sr, world_from_node, material, scale, motion_mode, parent, 0, mass_override);
+    if (!instance_node) {
+        json r = make_text_content("Failed to create shape instance");
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (skip_physics) {
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(instance_node.get());
+        if (node_physics) {
+            instance_node->detach(node_physics.get());
+        }
+    }
+    // Per-instance name renames the NODE only: the mesh keeps the brush name,
+    // so instances of one brush stay content-identical for glTF export dedup.
+    const std::string instance_name = args.value("name", "");
+    if (!instance_name.empty()) {
+        instance_node->set_name(instance_name);
+    }
+    result["node_name"]   = instance_node->get_name();
+    result["node_id"]     = instance_node->get_id();
+    result["material"]    = material->get_name();
+    result["position"]    = {position.x, position.y, position.z};
+    result["motion_mode"] = skip_physics ? "none" : motion_mode_to_string(motion_mode);
+    result["parent"]      = parent ? parent->get_name() : "(scene root)";
+    if (rotation.has_value()) {
+        result["rotation_xyzw"] = {rotation->x, rotation->y, rotation->z, rotation->w};
+    }
+    if (node_scale.has_value()) {
+        result["node_scale"] = {node_scale->x, node_scale->y, node_scale->z};
+    } else {
+        result["scale"] = scale;
+    }
+    if (mass_override.has_value()) {
+        result["mass"] = mass_override.value();
+    }
+    return {};
+}
+
+auto Mcp_server::action_place_brush(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    auto library = sr->get_content_library();
+    if (!library || !library->brushes) {
+        json r = make_text_content("No brushes in scene");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::size_t brush_id   = args.value("brush_id", std::size_t{0});
+    const std::string brush_name = args.value("brush_name", "");
+    std::shared_ptr<Brush> brush;
+    const auto& brush_list = library->brushes->get_all<Brush>();
+    for (const auto& b : brush_list) {
+        if ((brush_id != 0) ? (b->get_id() == brush_id) : (b->get_name() == brush_name)) {
+            brush = b;
+            break;
+        }
+    }
+    if (!brush) {
+        json r = make_text_content(
+            (brush_id != 0)
+                ? "Brush not found with id: " + std::to_string(brush_id)
+                : brush_name.empty()
+                    ? std::string{"Provide brush_id or brush_name"}
+                    : "Brush not found with name: " + brush_name
+        );
         r["isError"] = true;
         return r.dump();
     }
 
     json result = {
-        {"node_name", node->get_name()},
-        {"node_id",   node->get_id()},
-        {"brush",     brush->get_name()},
-        {"material",  material->get_name()},
-        {"position",  {position.x, position.y, position.z}},
-        {"scale",     scale}
+        {"brush",    brush->get_name()},
+        {"brush_id", brush->get_id()}
     };
+    const std::string error = place_brush_instance(args, *sr, *brush, result);
+    if (!error.empty()) {
+        return error;
+    }
     return make_json_content(result).dump();
 }
 
@@ -1263,133 +1362,9 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     }
 
     if (make_instance) {
-        std::shared_ptr<erhe::primitive::Material> material;
-        const std::string material_name = args.value("material_name", "");
-        const std::size_t material_id   = args.value("material_id", std::size_t{0});
-        if (material_id != 0) {
-            // The id path reaches materials in any scene's library AND the
-            // asset manager's loaded containers (which live in no scene) -
-            // the R5.4 verification surface for meshes using container
-            // materials.
-            material = find_material_by_id(material_id);
-            if (!material) {
-                json r = make_text_content("Material not found with id: " + std::to_string(material_id));
-                r["isError"] = true;
-                return r.dump();
-            }
-        }
-        if (!material && !material_name.empty() && library && library->materials) {
-            const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
-            for (const auto& mat : mat_list) {
-                if (mat->get_name() == material_name) {
-                    material = mat;
-                    break;
-                }
-            }
-        }
-        if (!material && library && library->materials) {
-            const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
-            if (!mat_list.empty()) {
-                material = mat_list.front();
-            }
-        }
-        if (!material) {
-            json r = make_text_content("No materials available");
-            r["isError"] = true;
-            return r.dump();
-        }
-
-        glm::vec3 position{0.0f};
-        read_vec3("position", position);
-
-        std::optional<glm::quat> rotation;
-        {
-            const json value = args.value("rotation_xyzw", json());
-            if (value.is_array() && (value.size() == 4)) {
-                rotation = glm::quat{value[3].get<float>(), value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
-            }
-        }
-
-        std::shared_ptr<erhe::scene::Node> parent;
-        if (args.contains("parent_node_id")) {
-            const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
-            sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-                if (node->get_id() == parent_node_id) {
-                    parent = node;
-                    return false;
-                }
-                return true;
-            });
-            if (!parent) {
-                json r = make_text_content("Parent node not found with id: " + std::to_string(parent_node_id));
-                r["isError"] = true;
-                return r.dump();
-            }
-        }
-
-        // "scale" as a number is the brush bake scale (geometry, collision
-        // shape, volume and inertia all scale - the right choice for physics
-        // parts); as an array of 3 it becomes node-space TRS scale composed
-        // into the world transform (visual anisotropy - collision shapes do
-        // NOT follow node scale, so use it with motion_mode "none").
-        double scale = 1.0;
-        std::optional<glm::vec3> node_scale;
-        if (args.contains("scale")) {
-            const json& value = args.at("scale");
-            if (value.is_number()) {
-                scale = value.get<double>();
-            } else if (value.is_array() && (value.size() == 3)) {
-                node_scale = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
-            }
-        }
-        std::optional<float> mass_override;
-        if (args.contains("mass") && args.at("mass").is_number()) {
-            mass_override = args.at("mass").get<float>();
-        }
-        // "none" = pure visual instance: the Node_physics attachment the brush
-        // instancing creates is detached again before the node enters the
-        // scene. Saves one strip pass per part on physics-driven assemblies
-        // (e.g. swaying trees whose child parts must not collide).
-        const std::string motion_mode_text = args.value("motion_mode", "dynamic");
-        const bool skip_physics = (motion_mode_text == "none");
-        const erhe::physics::Motion_mode motion_mode = parse_motion_mode(
-            skip_physics ? "static" : motion_mode_text,
-            erhe::physics::Motion_mode::e_dynamic
-        );
-
-        glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
-        if (rotation.has_value()) {
-            world_from_node = world_from_node * glm::mat4_cast(rotation.value());
-        }
-        if (node_scale.has_value()) {
-            world_from_node = world_from_node * erhe::math::create_scale<float>(node_scale.value());
-        }
-        auto instance_node = place_brush_in_scene(m_context, *brush, *sr, world_from_node, material, scale, motion_mode, parent, 0, mass_override);
-        if (!instance_node) {
-            json r = make_text_content("Failed to create shape instance");
-            r["isError"] = true;
-            return r.dump();
-        }
-        if (skip_physics) {
-            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(instance_node.get());
-            if (node_physics) {
-                instance_node->detach(node_physics.get());
-            }
-        }
-        result["node_name"]   = instance_node->get_name();
-        result["node_id"]     = instance_node->get_id();
-        result["material"]    = material->get_name();
-        result["position"]    = {position.x, position.y, position.z};
-        result["motion_mode"] = skip_physics ? "none" : motion_mode_to_string(motion_mode);
-        result["parent"]      = parent ? parent->get_name() : "(scene root)";
-        if (rotation.has_value()) {
-            result["rotation_xyzw"] = {rotation->x, rotation->y, rotation->z, rotation->w};
-        }
-        if (node_scale.has_value()) {
-            result["node_scale"] = {node_scale->x, node_scale->y, node_scale->z};
-        }
-        if (mass_override.has_value()) {
-            result["mass"] = mass_override.value();
+        const std::string error = place_brush_instance(args, *sr, *brush, result);
+        if (!error.empty()) {
+            return error;
         }
     }
 
