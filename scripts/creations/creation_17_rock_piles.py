@@ -155,6 +155,7 @@ class RockYard:
         self.materials = materials
         self.archetypes = make_archetypes(rng)
         self.body_ids = []
+        self.chamfer_ids = []
         self.counter = 0
 
     LARGE_ARCHETYPES = ("shard", "angular", "block", "chunky")
@@ -180,6 +181,8 @@ class RockYard:
         node_id = result.get("node_id") if isinstance(result, dict) else None
         if dynamic and node_id:
             self.body_ids.append((node_id, friction))
+        if node_id and scale >= 0.45:
+            self.chamfer_ids.append(node_id)
         return node_id
 
     def apply_rock_friction(self):
@@ -193,6 +196,22 @@ class RockYard:
         for i in range(0, len(calls), 40):
             self.c.batch(calls[i:i + 40])
         self.body_ids = []
+
+    def apply_chamfer(self, bevel_ratio=0.22):
+        """Beveled facet rims on every rock big enough to show them
+        (>= 0.45 m). Runs AFTER the settle: the chamfer op replaces the
+        instance's mesh primitives (the instance silently goes private -
+        deliberate; small rocks and pebbles keep sharing brushes), the
+        physics attachment and pose survive, and the frozen bodies keep
+        their slightly-proud original collision hulls (invisible). One
+        node_ids batch per 50 rocks, one settle at the end."""
+        ids = self.chamfer_ids
+        self.chamfer_ids = []
+        for i in range(0, len(ids), 50):
+            self.c.mutate("chamfer", {
+                "scene_name": self.c.scene, "node_ids": ids[i:i + 50],
+                "bevel_ratio": bevel_ratio})
+        self.c.settle()
 
 
 # --------------------------------------------------------------- the objects
@@ -228,8 +247,9 @@ def stack_cairn(c, yard, rng):
         for attempt in range(3):
             pos = [top_x + rng.uniform(-0.03, 0.03), top_y + half + 0.01,
                    top_z + rng.uniform(-0.03, 0.03)]
-            yard.rock(f"Cairn c{i}", pos, s, root, archetype="cairn_flat",
-                      rotation=tilt_yaw_quat(rng, 2.0), friction=1.5)
+            node_id = yard.rock(f"Cairn c{i}", pos, s, root,
+                                archetype="cairn_flat",
+                                rotation=tilt_yaw_quat(rng, 2.0), friction=1.5)
             yard.apply_rock_friction()
             name = f"Cairn c{i} rock {yard.counter}"
             c.wake_physics()
@@ -237,7 +257,10 @@ def stack_cairn(c, yard, rng):
             position, _rotation = c.node_world_pose(name)
             if position[1] > top_y - half:
                 break
+            # The discarded stone's id must leave the chamfer list too or
+            # the post-settle chamfer batch fails on a missing node.
             c.delete_nodes(names=[name])
+            yard.chamfer_ids = [i_ for i_ in yard.chamfer_ids if i_ != node_id]
         top_x, top_y, top_z = position[0], position[1] + half, position[2]
 
 
@@ -268,6 +291,43 @@ def build_outcrop(c, yard, rng):
     sizes = [power_law_size(rng, 0.2, 0.8) for _ in range(26)]
     for s, pos in heap_positions(rng, sizes, [center[0], 0.0, center[2] + 1.6], 2.2):
         yard.rock("Outcrop", pos, s, root)
+
+
+def build_dunes(c, yard, rng):
+    """Smooth sand mounds. Presentation research (2026-08-09): a
+    high-tessellation uv_sphere (slice 48 / stack 24, smooth vertex
+    normals) instanced with node TRS scale [rx, h, rz], yawed and sunk
+    ~35% below grade gives a perfectly smooth mound whose skirt melts
+    into the ground - and every mound shares ONE pooled brush. The
+    alternatives all show facets or creases at silhouette scale:
+    lattice-deformed stepped boxes crease on the coarse control grid,
+    catmull_clark / smooth on hulls stays polygonal at the rim.
+    motion_mode none (no collision): the rocks settle on the flat
+    ground and the drifts lap AGAINST the pile skirts, reading as sand
+    accumulated around the stones."""
+    root = c.group("Dunes", [0.0, 0.0, 0.0])
+
+    def mound(name, x, z, rx, h, rz, yaw_deg, sink=0.42):
+        yaw = math.radians(yaw_deg)
+        c.shape("uv_sphere", name, [x, -sink * h, z],
+                radius=1.0, slice_count=48, stack_count=24,
+                motion_mode="none", scale=[rx, h, rz],
+                rotation_xyzw=[0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)],
+                material_name="dune sand", parent_node_id=root)
+
+    # Big wind-aligned dunes in the middle distance (long axes share a
+    # NW-SE heading so the field reads as one wind regime). Less sunk
+    # than the drifts so they keep a real crest height.
+    mound("Dune west",      -17.0,   3.0, 10.0, 2.2, 4.8, -24.0, sink=0.30)
+    mound("Dune north",       7.0, -19.0, 13.0, 2.6, 5.8, -32.0, sink=0.30)
+    mound("Dune far east",   24.0,  -6.0,  8.0, 1.8, 4.0, -18.0, sink=0.30)
+    mound("Dune south",      -4.0,  16.0,  9.0, 1.9, 4.2, -28.0, sink=0.30)
+    # Low drifts lapping the pile skirts.
+    mound("Talus drift E",    4.6,   2.6,  2.6, 0.34, 1.6, -30.0)
+    mound("Talus drift W",   -3.6,  -1.2,  2.6, 0.30, 1.5, -22.0)
+    mound("Cairn drift",      7.8,  -2.2,  2.2, 0.26, 1.3, -30.0)
+    mound("Outcrop drift",   -6.6,  -3.2,  2.8, 0.34, 1.6, -26.0)
+    mound("Field drift",      1.0,  -8.5,  3.4, 0.34, 1.9, -30.0)
 
 
 def build_pebbles(c, yard, rng):
@@ -324,6 +384,27 @@ def grad(stops, interpolation=1):
             "stops": [{"pos": p, "color": list(c)} for p, c in stops]}
 
 
+SAND_GRADIENT = [
+    (0.00, [0.34, 0.27, 0.19, 1.0]),
+    (0.40, [0.52, 0.43, 0.30, 1.0]),
+    (0.72, [0.64, 0.55, 0.41, 1.0]),
+    (1.00, [0.74, 0.67, 0.53, 1.0])]
+
+
+def make_dune_texture(c):
+    """Same gradient as the ground so dune and ground tones match, but a
+    LOW fbm scale: a mound's uv_sphere UV spans the whole sphere, so the
+    ground texture's scale-90 fbm renders as microscopic bright grain
+    that visually detaches the mound from the ground (iteration 6)."""
+    g = c.texture_graph("Dune Sand")
+    base = g.add("fbm", {"noise": 1, "scale_x": 5.0, "scale_y": 3.0, "iterations": 5.0})
+    color = g.add("colorize", {"gradient": grad(SAND_GRADIENT)})
+    out = g.add("output", {"name": "Dune Sand", "size": 512})
+    g.link(base, color)
+    g.link(color, out, dst_slot=2)
+    return "Dune Sand"
+
+
 def make_ground_texture(c):
     # The box face UV spans the WHOLE ground plane - noise scale must be
     # high or the pattern stretches to featureless tan (iteration 1).
@@ -333,11 +414,7 @@ def make_ground_texture(c):
     # checker from the overview camera. Keep the speck grain under ~2.5 m.
     speck = g.add("noise", {"size": 48, "density": 0.4})
     mix = g.add("math", {"op": 0, "clamp": True})
-    color = g.add("colorize", {"gradient": grad([
-        (0.00, [0.34, 0.27, 0.19, 1.0]),
-        (0.40, [0.52, 0.43, 0.30, 1.0]),
-        (0.72, [0.64, 0.55, 0.41, 1.0]),
-        (1.00, [0.74, 0.67, 0.53, 1.0])])})
+    color = g.add("colorize", {"gradient": grad(SAND_GRADIENT)})
     out = g.add("output", {"name": "Dry Earth", "size": 1024})
     g.link(base, mix)
     g.link(speck, mix, dst_slot=1)
@@ -403,9 +480,13 @@ def main():
         c.shadow_range(110.0, z_far=600.0)
 
         make_ground_texture(c)
+        make_dune_texture(c)
         c.shape("box", "Ground", [0.0, -0.04, 0.0], size=[110.0, 0.08, 110.0],
                 material_name=ground_material)
         c.bind_material_texture("dry earth", "Dry Earth")
+        c.ensure_material("dune sand", base_color=[0.60, 0.52, 0.40],
+                          roughness=1.0, metallic=0.0)
+        c.bind_material_texture("dune sand", "Dune Sand")
         details = c.call("get_material_details", {
             "scene_name": c.scene, "material_name": "dry earth"})
         print(f"dry earth material: {details}")
@@ -425,6 +506,7 @@ def main():
         "Cairn":   None,
         "Outcrop": lambda: build_outcrop(c, yard, rng),
         "Pebbles": lambda: build_pebbles(c, yard, rng),
+        "Dunes":   lambda: build_dunes(c, yard, rng),
     }
 
     if only:
@@ -437,8 +519,9 @@ def main():
         else:
             piles[only]()
             yard.apply_rock_friction()
-            if only != "Pebbles":
+            if only not in ("Pebbles", "Dunes"):
                 settle_rocks(c, pre_s=7.0, post_s=1.0)
+        yard.apply_chamfer()
         eye, target = c.shot_relative(only, [5.0, 2.6, 5.5], [0.0, 0.8, 0.0])
         c.screenshot_views("logs/creations/rockfall", [("only", eye, target)])
     else:
@@ -448,6 +531,7 @@ def main():
         yard.apply_rock_friction()
         print(f"nodes before settle: {len(c.nodes())}")
         settle_rocks(c, cairn_stage=lambda: stack_cairn(c, yard, rng))
+        yard.apply_chamfer()
         c.screenshot_views("logs/creations/rockfall", SHOTS)
 
     if not args.no_save:
