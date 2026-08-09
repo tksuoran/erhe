@@ -117,6 +117,7 @@ class Thumbnails;
 class Time;
 class Tools;
 class Transform_tool;
+class Transform_update_stats_tracker;
 class Scene_views;
 
 class App_context
@@ -174,6 +175,9 @@ public:
     // editor lifetime once set.
     Frame_pacing_window*                    frame_pacing_window   {nullptr};
     erhe::frame_pacing::Frame_pacing_observer* frame_pacing_observer{nullptr};
+    // Per-frame Scene::update_node_transforms() cost aggregation; feeds the
+    // Performance window plots and MCP get_transform_update_stats.
+    Transform_update_stats_tracker*         transform_update_stats_tracker{nullptr};
 #if defined(ERHE_PHYSICS_LIBRARY_JOLT)
     erhe::renderer::Jolt_debug_renderer*    jolt_debug_renderer   {nullptr};
 #endif

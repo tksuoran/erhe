@@ -458,6 +458,7 @@ auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& ar
         { "get_undo_redo_stack",            &Mcp_server::query_undo_redo_stack                },
         { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },
         { "get_async_status",               &Mcp_server::query_async_status                   },
+        { "get_transform_update_stats",     &Mcp_server::query_transform_update_stats         },
         { "get_shadow_fit_debug",           &Mcp_server::query_shadow_fit_debug               },
         { "raycast",                        &Mcp_server::query_raycast                        },
         { "select_items",                   &Mcp_server::action_select_items                  },

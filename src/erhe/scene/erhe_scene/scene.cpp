@@ -280,6 +280,8 @@ void Scene::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();
 
+    const std::chrono::steady_clock::time_point time_before_lock = std::chrono::steady_clock::now();
+
     // Worker threads (the editor's async raytrace kickoff and geometry
     // operations) mutate hosted item state under the Item_host mutex, and
     // the transform-update attachment callbacks read that state (e.g.
@@ -293,6 +295,8 @@ void Scene::update_node_transforms()
     if (m_transform_dirty_nodes.empty()) {
         return; // nothing moved since the last pass
     }
+
+    const std::chrono::steady_clock::time_point time_after_lock = std::chrono::steady_clock::now();
 
     m_updating_node_transforms = true;
     std::swap(m_transform_dirty_nodes, m_transform_dirty_processing);
@@ -308,6 +312,8 @@ void Scene::update_node_transforms()
         }
     );
 
+    const std::chrono::steady_clock::time_point time_after_sort = std::chrono::steady_clock::now();
+
     m_transform_update_visited.clear();
     for (Node* node : m_transform_dirty_processing) {
         node->node_data.transforms.scene_transform_dirty = false;
@@ -318,6 +324,18 @@ void Scene::update_node_transforms()
         }
         update_subtree_transforms(*node, carry_body_driven);
     }
+
+    const std::chrono::steady_clock::time_point time_after_propagate = std::chrono::steady_clock::now();
+    const auto to_ms = [](const std::chrono::steady_clock::duration duration) -> double {
+        return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count()) * 1.0e-6;
+    };
+    m_transform_update_stats.pass_count    += 1;
+    m_transform_update_stats.dirty_count   += m_transform_dirty_processing.size();
+    m_transform_update_stats.visited_count += m_transform_update_visited.size();
+    m_transform_update_stats.lock_wait_ms  += to_ms(time_after_lock      - time_before_lock);
+    m_transform_update_stats.sort_ms       += to_ms(time_after_sort      - time_after_lock);
+    m_transform_update_stats.propagate_ms  += to_ms(time_after_propagate - time_after_sort);
+
     m_transform_dirty_processing.clear();
     m_updating_node_transforms = false;
 }

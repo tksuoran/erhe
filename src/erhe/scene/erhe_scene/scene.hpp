@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -86,6 +87,47 @@ public:
     // world (see node_sanity_check, Mesh::detach_rt_from_scene).
     void sever_host            ();
     void update_node_transforms();
+
+    // Per-pass cost of update_node_transforms(), accumulated across passes
+    // until sampled. Passes with an empty dirty list record nothing, so the
+    // steady-state overhead is a single clock read per pass.
+    class Transform_update_stats
+    {
+    public:
+        void reset()
+        {
+            *this = Transform_update_stats{};
+        }
+        void add(const Transform_update_stats& other)
+        {
+            pass_count    += other.pass_count;
+            dirty_count   += other.dirty_count;
+            visited_count += other.visited_count;
+            lock_wait_ms  += other.lock_wait_ms;
+            sort_ms       += other.sort_ms;
+            propagate_ms  += other.propagate_ms;
+        }
+        [[nodiscard]] auto total_ms() const -> double
+        {
+            return lock_wait_ms + sort_ms + propagate_ms;
+        }
+
+        std::size_t pass_count   {0}; // update_node_transforms() passes that had work
+        std::size_t dirty_count  {0}; // dirty-list entries swapped in and sorted
+        std::size_t visited_count{0}; // unique nodes recorded in the visited set (dirty roots + subtree descendants updated)
+        double      lock_wait_ms {0.0};
+        double      sort_ms     {0.0};
+        double      propagate_ms{0.0};
+    };
+
+    // Returns the stats accumulated since the previous sample and resets the
+    // accumulator. Main thread only (the same thread that runs the passes).
+    [[nodiscard]] auto sample_transform_update_stats() -> Transform_update_stats
+    {
+        const Transform_update_stats result = m_transform_update_stats;
+        m_transform_update_stats.reset();
+        return result;
+    }
 
     // Queues the node's subtree for world-transform propagation in the next
     // update_node_transforms() pass. Called by Node::handle_transform_update()
@@ -205,6 +247,7 @@ private:
     std::vector<Node*>                        m_transform_dirty_nodes;
     std::vector<Node*>                        m_transform_dirty_processing;
     std::unordered_set<const Node*>           m_transform_update_visited;
+    Transform_update_stats                    m_transform_update_stats;
     bool                                      m_updating_node_transforms{false};
     // See set_transform_owner_writes().
     bool                                      m_transform_owner_writes{false};

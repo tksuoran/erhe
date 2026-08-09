@@ -120,6 +120,7 @@
 #include "windows/inventory_window.hpp"
 #include "windows/properties.hpp"
 #include "windows/settings_window.hpp"
+#include "windows/transform_update_stats.hpp"
 #include "windows/viewport_config_window.hpp"
 #include "windows/scene_view_config_window.hpp"
 
@@ -769,6 +770,9 @@ public:
         m_viewport_scene_views->update_transforms();
         if (m_app_context.OpenXR) {
             m_headset_view->update_transforms();
+        }
+        if (m_transform_update_stats_tracker) {
+            m_transform_update_stats_tracker->sample_frame(*m_app_scenes.get(), *m_tools.get());
         }
 
         // Interactive lightmap bake (doc/lightmap_baking_plan.md section
@@ -2061,6 +2065,8 @@ public:
                 m_frame_log_window       = std::make_unique<erhe::imgui::Frame_log_window   >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  *m_logs.get());
                 m_performance_window     = std::make_unique<erhe::imgui::Performance_window >(*m_imgui_renderer.get(), *m_imgui_windows.get());
                 m_app_context.performance_window = m_performance_window.get();
+                m_transform_update_stats_tracker = std::make_unique<Transform_update_stats_tracker>(*m_performance_window.get());
+                m_app_context.transform_update_stats_tracker = m_transform_update_stats_tracker.get();
                 m_pipelines              = std::make_unique<erhe::imgui::Pipelines          >(*m_imgui_renderer.get(), *m_imgui_windows.get());
             }
             ERHE_TASK_FOOTER(
@@ -3971,6 +3977,9 @@ public:
     std::unique_ptr<erhe::imgui::Tail_log_window    >        m_tail_log_window;
     std::unique_ptr<erhe::imgui::Frame_log_window   >        m_frame_log_window;
     std::unique_ptr<erhe::imgui::Performance_window >        m_performance_window;
+    // Declared after m_performance_window: destroyed first, so the tracker's
+    // plots unregister while the window is still alive.
+    std::unique_ptr<Transform_update_stats_tracker  >        m_transform_update_stats_tracker;
     std::unique_ptr<erhe::imgui::Pipelines          >        m_pipelines;
 
     std::unique_ptr<Tools            >                       m_tools;

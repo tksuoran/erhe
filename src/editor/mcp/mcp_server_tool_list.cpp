@@ -104,6 +104,12 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"get_undo_redo_stack", "Get undo/redo operation stacks",                       schema_no_args()});
     m_tool_infos.push_back({"clear_undo_history",  "Drop the undo and redo histories (queued operations are kept). Recorded operations are declared users / indirect pins of the assets they retain, so container unload can refuse until the history is cleared (R5.4).", schema_no_args()});
     m_tool_infos.push_back({"get_async_status",   "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread). The scene is settled only when all three are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.", schema_no_args()});
+    m_tool_infos.push_back({"get_transform_update_stats", "Per-frame cost of Scene::update_node_transforms() summed over all scenes (plus the tool scene): last frame's pass/dirty/visited counts and lock/sort/propagate CPU milliseconds, a running per-frame average since launch or the last reset (frames, avg_*, peak_total_ms), and per-scene registered node bucket sizes (transform_update_nodes / no_transform_update_nodes). Pass reset=true to zero the running aggregate AFTER reading (the response still reports the pre-reset aggregate) - use it to bracket a measurement window.", {
+        {"type", "object"},
+        {"properties", {
+            {"reset", {{"type", "boolean"}, {"description", "Zero the running aggregate after reading (default false)"}}}
+        }}
+    }});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
         {"type", "object"},

@@ -4,7 +4,9 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_rendering.hpp"
+#include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
 #include "windows/frame_pacing_window.hpp"
@@ -1113,6 +1115,64 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
             }}
         };
     }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::query_transform_update_stats(const json& args) -> std::string
+{
+    Transform_update_stats_tracker* const tracker = m_context.transform_update_stats_tracker;
+    if (tracker == nullptr) {
+        json r = make_text_content("Transform update stats tracker not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const erhe::scene::Scene::Transform_update_stats& frame     = tracker->get_frame_stats();
+    const erhe::scene::Scene::Transform_update_stats& aggregate = tracker->get_aggregate_stats();
+    const std::size_t frames = tracker->get_aggregate_frame_count();
+    const double per_frame = (frames > 0) ? (1.0 / static_cast<double>(frames)) : 0.0;
+
+    json result = {
+        {"last_frame", {
+            {"pass_count",    frame.pass_count},
+            {"dirty_count",   frame.dirty_count},
+            {"visited_count", frame.visited_count},
+            {"lock_wait_ms",  frame.lock_wait_ms},
+            {"sort_ms",       frame.sort_ms},
+            {"propagate_ms",  frame.propagate_ms},
+            {"total_ms",      frame.total_ms()}
+        }},
+        {"aggregate", {
+            {"frames",             frames},
+            {"avg_pass_count",     static_cast<double>(aggregate.pass_count)    * per_frame},
+            {"avg_dirty_count",    static_cast<double>(aggregate.dirty_count)   * per_frame},
+            {"avg_visited_count",  static_cast<double>(aggregate.visited_count) * per_frame},
+            {"avg_lock_wait_ms",   aggregate.lock_wait_ms * per_frame},
+            {"avg_sort_ms",        aggregate.sort_ms      * per_frame},
+            {"avg_propagate_ms",   aggregate.propagate_ms * per_frame},
+            {"avg_total_ms",       aggregate.total_ms()   * per_frame},
+            {"peak_total_ms",      tracker->get_peak_total_ms()}
+        }}
+    };
+
+    if (m_context.app_scenes != nullptr) {
+        json scenes = json::array();
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            const erhe::scene::Scene& scene = scene_root->get_scene();
+            scenes.push_back({
+                {"name",                      scene_root->get_name()},
+                {"transform_update_nodes",    scene.get_transform_update_nodes().size()},
+                {"no_transform_update_nodes", scene.get_no_transform_update_nodes().size()}
+            });
+        }
+        result["scenes"] = std::move(scenes);
+    }
+
+    if (args.value("reset", false)) {
+        tracker->reset_aggregate();
+        result["aggregate_reset"] = true;
+    }
+
     return make_json_content(result).dump();
 }
 

@@ -303,8 +303,12 @@ void Plot::imgui()
         }
 
 
-        auto max_text = fmt::format("Max: {:.3f} ms", displayed_max);
-        auto now_text = fmt::format("Now: {:.3f} ms", v0);
+        auto max_text = m_integer_values
+            ? fmt::format("Max: {:.0f} {}", displayed_max, m_unit)
+            : fmt::format("Max: {:.3f} {}", displayed_max, m_unit);
+        auto now_text = m_integer_values
+            ? fmt::format("Now: {:.0f} {}", v0, m_unit)
+            : fmt::format("Now: {:.3f} {}", v0, m_unit);
         ImGui::RenderTextClipped(
             ImVec2{frame_bb.Min.x, frame_bb.Min.y + style.FramePadding.y},
             frame_bb.Max,

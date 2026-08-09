@@ -34,6 +34,10 @@ public:
 protected:
     std::size_t        m_offset         {0};
     std::size_t        m_value_count    {0};
+    // Unit suffix for the Max/Now readout; integer_values switches the
+    // readout to whole numbers (counts instead of durations).
+    const char*        m_unit           {"ms"};
+    bool               m_integer_values {false};
     float              m_max_great      {2.5f};
     float              m_max_ok         {5.0f};
     float              m_scale_min      {0.0f};
