@@ -10,6 +10,7 @@
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_workflow.hpp"
+#include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
@@ -825,6 +826,38 @@ auto Scene_root::make_browser_window(
                             close = true;
                         }
                     }
+                }
+            }
+            // "Place in Scene": instance a brush leaf at the world origin
+            // with the library's first material. The placement shares the
+            // brush's primitive (one GPU allocation for every instance of
+            // the brush) and inserts undoably.
+            {
+                const std::shared_ptr<Brush> leaf_brush = std::dynamic_pointer_cast<Brush>(content_node->item);
+                if (leaf_brush && ImGui::MenuItem("Place in Scene")) {
+                    App_context* context_ptr = &context;
+                    deferred_operations.push_back(
+                        [this, context_ptr, leaf_brush]() {
+                            std::shared_ptr<erhe::primitive::Material> material;
+                            const std::shared_ptr<Content_library>& library = get_content_library();
+                            if (library && library->materials) {
+                                const auto& materials = library->materials->get_all<erhe::primitive::Material>();
+                                if (!materials.empty()) {
+                                    material = materials.front();
+                                }
+                            }
+                            if (!material) {
+                                log_scene->warn("Place in Scene: scene has no material");
+                                return;
+                            }
+                            place_brush_in_scene(
+                                *context_ptr, *leaf_brush, *this,
+                                glm::mat4{1.0f}, material, 1.0,
+                                erhe::physics::Motion_mode::e_static
+                            );
+                        }
+                    );
+                    close = true;
                 }
             }
             // "Copy to Scene": copy a library item into another open scene's
