@@ -37,7 +37,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"list_scenes",         "List all scenes in the editor",                          schema_no_args()});
     m_tool_infos.push_back({"get_scene_nodes",     "List all nodes in a scene",                              schema_scene_name()});
     m_tool_infos.push_back({"get_composition_passes", "Inspect the Composer's composition passes and why each one drew or did not draw on its last render: name, enabled flag, whether it has a render-time is_enabled predicate, mesh layer ids, item filter bits, and last_result - one of never_rendered / disabled / is_enabled_false / no_scene_root / primitive_mode_disabled / no_mesh_layers / submitted, plus the scene view it last ran for and how many meshes its layers held. Use this when geometry is missing and a GPU frame capture shows NO draw calls and NO debug marker for the pass: a pass that returns early emits no marker at all, so the capture cannot tell a mis-gated pass from missing geometry. Note that 'submitted' only means the pass reached draw submission; its meshes may still have been rejected by the item filter.", schema_no_args()});
-    m_tool_infos.push_back({"get_node_details",    "Get detailed info for a node (transform, attachments). A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it).",  schema_scene_and_item("node_name", "Name of the node")});
+    m_tool_infos.push_back({"get_node_details",    "Get detailed info for a node (transform, attachments). A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",  schema_scene_and_item("node_name", "Name of the node")});
     m_tool_infos.push_back({"get_scene_cameras",   "List all cameras in a scene",                            schema_scene_name()});
     m_tool_infos.push_back({"get_scene_lights",    "List all lights in a scene",                             schema_scene_name()});
     m_tool_infos.push_back({"get_scene_materials", "List all materials in a scene's content library",        schema_scene_name()});
@@ -176,7 +176,7 @@ void Mcp_server::refresh_tool_list()
             {"end_edit",      {{"type", "boolean"}, {"description", "Record an undo operation and refresh edit baselines (default true)"}}}
         }}
     }});
-    m_tool_infos.push_back({"place_brush",         "Place an instance of a content-library brush in a scene. THE shape-reuse path: every placement of one brush shares its geometry and GPU buffers, so create a shape once (create_shape with add_brush) and place it N times instead of calling create_shape N times. Placement parameters are identical to create_shape's instance parameters.", {
+    m_tool_infos.push_back({"place_brush",         "Place an instance of a content-library brush in a scene. THE shape-reuse path: every placement of one brush shares its geometry and GPU buffers, so create a shape once (create_shape with add_brush) and place it N times instead of calling create_shape N times. Placement parameters are identical to create_shape's instance parameters. STRICT arguments: unrecognized keys are rejected, never silently ignored.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
@@ -196,7 +196,7 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name"})}
     }});
 
-    m_tool_infos.push_back({"place_brush_instances", "Place MANY brush instances in one call (one request, one editor frame). Each placement takes the same parameters as place_brush (brush_id/brush_name, name, position, rotation_xyzw, scale, material_name/material_id, mass, motion_mode, pose_node), plus parent_index = index of an EARLIER placement in this same call to parent under it (its pose node when it used pose_node) - this is how chained structures (branch segments, nested parts) batch, since same-frame nodes are not findable by id. 'defaults' merges under every placement. On a mid-batch error the earlier placements stay applied and the error reports the failing index. Returns per-placement node ids in order.", {
+    m_tool_infos.push_back({"place_brush_instances", "Place MANY brush instances in one call (one request, one editor frame). Each placement takes the same parameters as place_brush (brush_id/brush_name, name, position, rotation_xyzw, scale, material_name/material_id, mass, motion_mode, pose_node), plus parent_index = index of an EARLIER placement in this same call to parent under it (its pose node when it used pose_node) - this is how chained structures (branch segments, nested parts) batch, since same-frame nodes are not findable by id. 'defaults' merges under every placement. On a mid-batch error the earlier placements stay applied and the error reports the failing index. STRICT arguments: every placement's keys are validated BEFORE any placement applies; unrecognized keys reject the whole call. Returns per-placement node ids in order.", {
         {"type", "object"},
         {"properties", {
             {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
@@ -206,7 +206,7 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "placements"})}
     }});
 
-    m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the erhe geometry generators, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps), disc (outer_radius, inner_radius, slice_count, stack_count; annulus when inner_radius > 0; flat in the XY plane facing +/-Z), triangle (radius; flat XY), quad (edge; flat XY, double sided), rectangle (width, height, front_face, back_face; flat XY), regular_polyhedron (kind = tetrahedron / cube / octahedron / dodecahedron / icosahedron / cuboctahedron, radius; watertight - good CSG inputs), convex_hull (points = [[x,y,z], ...] in node-local space, >= 4 non-coplanar; watertight hull - THE way to get authored silhouettes like ship hulls; good CSG input). Flat shapes get a thin box collision shape - prefer motion_mode none for them.", {
+    m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the erhe geometry generators, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps), disc (outer_radius, inner_radius, slice_count, stack_count; annulus when inner_radius > 0; flat in the XY plane facing +/-Z), triangle (radius; flat XY), quad (edge; flat XY, double sided), rectangle (width, height, front_face, back_face; flat XY), regular_polyhedron (kind = tetrahedron / cube / octahedron / dodecahedron / icosahedron / cuboctahedron, radius; watertight - good CSG inputs), convex_hull (points = [[x,y,z], ...] in node-local space, >= 4 non-coplanar; watertight hull - THE way to get authored silhouettes like ship hulls; good CSG input). Flat shapes get a thin box collision shape - prefer motion_mode none for them. STRICT arguments: keys not in the placement set or the chosen shape's parameter set are REJECTED (e.g. 'radius' on a capsule - capsules take bottom_radius/top_radius), never silently ignored.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
@@ -695,7 +695,16 @@ void Mcp_server::refresh_tool_list()
             {"max_bounces",      {{"type", "integer"}, {"description", "Max transmissive interactions along one branch, [0, 12]; omit to leave unchanged"}}}
         }}
     }});
-    m_tool_infos.push_back({"wake_physics_bodies", "Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated)", schema_scene_name()});
+    m_tool_infos.push_back({"wake_physics_bodies", "Activate dynamic rigid bodies (bodies enter the world deactivated). Scoped since 2026-08-09: node_ids wakes exactly those nodes' bodies, node_id/node_name wakes the SUBTREE under that node (union when combined); no filter wakes the whole scene. Scope iterative re-settles (--only rebuilds) so already-settled structures elsewhere stay asleep.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_ids",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Wake exactly these nodes' bodies"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Wake every dynamic body in this node's subtree (takes precedence over node_name)"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Subtree filter by node name (alternative to node_id)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"apply_physics_force", "Apply an external force / torque / impulse to a dynamic rigid body (world space, activates the body). Forces and torques accumulate for the next fixed step only (re-apply for a sustained push); impulses change velocity immediately. 'point' (world position) makes force / impulse act at that point instead of the center of mass.", {
         {"type", "object"},
         {"properties", {

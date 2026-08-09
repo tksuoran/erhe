@@ -28,6 +28,7 @@
 #include <geogram/mesh/mesh.h>
 
 #include <cmath>
+#include <functional>
 #include <limits>
 
 #include "scene/generated/scene_settings_serialization.hpp"
@@ -340,6 +341,32 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         children.push_back(child->get_name());
     }
 
+    // Merged world AABB of every mesh in this node's SUBTREE (this node
+    // included): one call gives camera auto-fit the whole object's bounds
+    // instead of a per-mesh-node get_node_details walk.
+    erhe::math::Aabb subtree_aabb{};
+    {
+        std::function<void(const std::shared_ptr<erhe::scene::Node>&)> merge_subtree =
+            [&](const std::shared_ptr<erhe::scene::Node>& node) {
+                for (const auto& att : node->get_attachments()) {
+                    const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(att);
+                    if (mesh) {
+                        const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
+                        if (aabb_world.is_valid()) {
+                            subtree_aabb.include(aabb_world);
+                        }
+                    }
+                }
+                for (const auto& child : node->get_children()) {
+                    const auto child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+                    if (child_node) {
+                        merge_subtree(child_node);
+                    }
+                }
+            };
+        merge_subtree(found_node);
+    }
+
     auto parent_node = found_node->get_parent_node();
 
     json result = {
@@ -361,6 +388,12 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         }},
         {"attachments",    attachments},
         {"children",       children},
+        {"subtree_world_aabb", subtree_aabb.is_valid()
+            ? json{
+                {"min", json::array({subtree_aabb.min.x, subtree_aabb.min.y, subtree_aabb.min.z})},
+                {"max", json::array({subtree_aabb.max.x, subtree_aabb.max.y, subtree_aabb.max.z})}
+            }
+            : json(nullptr)},
         {"visible",        found_node->is_visible()},
         {"selected",       found_node->is_selected()},
         {"locked",         found_node->is_lock_edit()},

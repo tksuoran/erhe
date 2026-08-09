@@ -3,6 +3,8 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include <unordered_set>
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -17,10 +19,57 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
         return r.dump();
     }
 
+    // Scoped wake (2026-08-09): node_ids wakes exactly those nodes' bodies,
+    // node_id / node_name wakes the whole SUBTREE under that node, and the
+    // two combine as a union; no filter wakes the whole scene. Iterating one
+    // object (--only rebuilds) must not wake every settled body elsewhere -
+    // an unscoped wake could topple an already-built structure.
+    std::unordered_set<std::size_t> id_filter;
+    if (args.contains("node_ids")) {
+        const json& ids = args.at("node_ids");
+        if (!ids.is_array()) {
+            json r = make_text_content("node_ids must be an array of node ids");
+            r["isError"] = true;
+            return r.dump();
+        }
+        for (const auto& id : ids) {
+            id_filter.insert(id.get<std::size_t>());
+        }
+    }
+    std::shared_ptr<erhe::scene::Node> subtree_root{};
+    if (args.contains("node_id") || args.contains("node_name")) {
+        subtree_root = find_node_in_scene(*sr, args, "node_id", "node_name");
+        if (!subtree_root) {
+            json r = make_text_content("Node not found (node_id / node_name subtree filter)");
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
+    const bool scoped = !id_filter.empty() || static_cast<bool>(subtree_root);
+    auto in_scope = [&](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+        if (!scoped) {
+            return true;
+        }
+        if (id_filter.contains(node->get_id())) {
+            return true;
+        }
+        if (subtree_root) {
+            for (const erhe::scene::Node* ancestor = node.get(); ancestor != nullptr; ancestor = ancestor->get_parent_node().get()) {
+                if (ancestor == subtree_root.get()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
     // Bodies enter the world deactivated (quiet scene loading); wake the
     // dynamic ones the same way Node_joint does after constraint creation.
     std::size_t woken = 0;
     sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+        if (!in_scope(node)) {
+            return true;
+        }
         const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
         if (!node_physics) {
             return true;
@@ -38,7 +87,8 @@ auto Mcp_server::action_wake_physics_bodies(const json& args) -> std::string
         return true;
     });
     return make_json_content({
-        {"woken", woken}
+        {"woken", woken},
+        {"scoped", scoped}
     }).dump();
 }
 

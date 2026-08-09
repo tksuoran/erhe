@@ -1069,6 +1069,70 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     }).dump();
 }
 
+// Strict argument checking for the shape/placement tools: an unrecognized
+// key silently falling back to defaults is a whole CLASS of trap (capsule
+// 'radius' ignored -> default radii tripped the tapered-capsule length check
+// mid-build; the old box swap_xy quirk; _version field drops), so these
+// tools REJECT keys their schema does not know instead of ignoring them.
+namespace {
+
+using Key_list = std::vector<const char*>;
+
+// Placement keys accepted by place_brush_instance (shared by create_shape,
+// place_brush and place_brush_instances).
+const Key_list placement_keys{
+    "scene_name", "name", "position", "rotation_xyzw", "parent_node_id",
+    "material_name", "material_id", "scale", "mass", "motion_mode", "pose_node"
+};
+
+auto collect_unrecognized_keys(const json& args, const std::vector<Key_list>& allowed_lists) -> std::string
+{
+    std::string unrecognized;
+    for (const auto& [key, value] : args.items()) {
+        static_cast<void>(value);
+        bool known = false;
+        for (const auto& allowed : allowed_lists) {
+            for (const char* allowed_key : allowed) {
+                if (key == allowed_key) {
+                    known = true;
+                    break;
+                }
+            }
+            if (known) {
+                break;
+            }
+        }
+        if (!known) {
+            if (!unrecognized.empty()) {
+                unrecognized += ", ";
+            }
+            unrecognized += key;
+        }
+    }
+    return unrecognized;
+}
+
+auto make_unrecognized_keys_error(const std::string& tool_and_context, const std::string& unrecognized, const std::vector<Key_list>& allowed_lists) -> std::string
+{
+    std::string accepted;
+    for (const auto& allowed : allowed_lists) {
+        for (const char* key : allowed) {
+            if (!accepted.empty()) {
+                accepted += ", ";
+            }
+            accepted += key;
+        }
+    }
+    json r = mcp_server_detail::make_text_content(
+        tool_and_context + ": unrecognized argument(s): " + unrecognized +
+        " (accepted: " + accepted + ")"
+    );
+    r["isError"] = true;
+    return r.dump();
+}
+
+} // anonymous namespace
+
 // Instance placement shared by place_brush, place_brush_instances and
 // create_shape. Every placement of one brush shares its Primitive (and thus
 // GPU buffers / raytrace shape) - this is THE reuse path: create a shape
@@ -1281,6 +1345,12 @@ auto Mcp_server::place_brush_instance(
 
 auto Mcp_server::action_place_brush(const json& args) -> std::string
 {
+    const Key_list brush_keys{"brush_id", "brush_name"};
+    const std::string unrecognized = collect_unrecognized_keys(args, {placement_keys, brush_keys});
+    if (!unrecognized.empty()) {
+        return make_unrecognized_keys_error("place_brush", unrecognized, {placement_keys, brush_keys});
+    }
+
     const std::string scene_name = args.value("scene_name", "");
     auto* sr = find_scene(scene_name);
     if (!sr) {
@@ -1351,6 +1421,29 @@ auto Mcp_server::action_place_brush_instances(const json& args) -> std::string
         return r.dump();
     }
     const json defaults = args.value("defaults", json::object());
+
+    // Validate EVERY placement's keys before applying any, so a typo'd key
+    // never leaves a half-applied batch behind.
+    const Key_list batch_placement_keys{"brush_id", "brush_name", "parent_index"};
+    {
+        const Key_list top_level_keys{"scene_name", "defaults", "placements"};
+        const std::string top_unrecognized = collect_unrecognized_keys(args, {top_level_keys});
+        if (!top_unrecognized.empty()) {
+            return make_unrecognized_keys_error("place_brush_instances", top_unrecognized, {top_level_keys});
+        }
+        for (std::size_t i = 0; i < placements.size(); ++i) {
+            json p = defaults;
+            p.update(placements[i]);
+            const std::string unrecognized = collect_unrecognized_keys(p, {placement_keys, batch_placement_keys});
+            if (!unrecognized.empty()) {
+                return make_unrecognized_keys_error(
+                    "place_brush_instances placements[" + std::to_string(i) + "]",
+                    unrecognized,
+                    {placement_keys, batch_placement_keys}
+                );
+            }
+        }
+    }
 
     const auto& brush_list = library->brushes->get_all<Brush>();
     auto find_brush = [&brush_list](const json& p) -> std::shared_ptr<Brush> {
@@ -1441,6 +1534,32 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
         json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, convex_hull, regular_polyhedron or sweep)");
         r["isError"] = true;
         return r.dump();
+    }
+
+    // Per-shape geometry-key allowlists: 'radius' is valid on a uv_sphere but
+    // NOT on a capsule (which takes bottom_radius / top_radius), so a global
+    // allowlist would not catch the cross-shape traps this check exists for.
+    // Keep in sync with the parsing below and the create_shape tool schema
+    // (mcp_server_tool_list.cpp).
+    {
+        const Key_list creation_keys{"shape", "instance", "add_brush"};
+        Key_list geometry_keys{};
+        if      (shape == "box")                { geometry_keys = {"size", "steps", "power"}; }
+        else if (shape == "uv_sphere")          { geometry_keys = {"radius", "slice_count", "stack_count"}; }
+        else if (shape == "cone")               { geometry_keys = {"height", "bottom_radius", "top_radius", "use_top", "use_bottom", "slice_count", "stack_count"}; }
+        else if (shape == "capsule")            { geometry_keys = {"length", "bottom_radius", "top_radius", "slice_count", "stack_count"}; }
+        else if (shape == "torus")              { geometry_keys = {"major_radius", "minor_radius", "major_steps", "minor_steps"}; }
+        else if (shape == "disc")               { geometry_keys = {"outer_radius", "inner_radius", "slice_count", "stack_count"}; }
+        else if (shape == "triangle")           { geometry_keys = {"radius"}; }
+        else if (shape == "quad")               { geometry_keys = {"edge"}; }
+        else if (shape == "rectangle")          { geometry_keys = {"width", "height", "front_face", "back_face"}; }
+        else if (shape == "regular_polyhedron") { geometry_keys = {"kind", "radius"}; }
+        else if (shape == "convex_hull")        { geometry_keys = {"points"}; }
+        else if (shape == "sweep")              { geometry_keys = {"profile", "profile_end", "spine", "spine_steps", "taper", "twist_deg", "start_cap", "end_cap"}; }
+        const std::string unrecognized = collect_unrecognized_keys(args, {placement_keys, creation_keys, geometry_keys});
+        if (!unrecognized.empty()) {
+            return make_unrecognized_keys_error("create_shape (" + shape + ")", unrecognized, {geometry_keys, placement_keys, creation_keys});
+        }
     }
 
     const bool make_instance = args.value("instance", true);
