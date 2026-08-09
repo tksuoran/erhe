@@ -25,7 +25,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, reframe,
+    Creation, standard_args, reframe, align_y_quaternion, quat_mul,
+    v_add, v_norm, v_scale,
 )
 
 import random  # noqa: E402
@@ -35,6 +36,7 @@ SHOTS = [
     ("_talus",  [5.8, 2.4, 6.8],    [0.0, 1.0, 0.0]),
     ("_cairn",  [9.4, 1.6, -0.6],   [6.5, 1.1, -3.4]),
     ("_low",    [-6.5, 0.9, 8.5],   [-2.0, 1.2, -4.0]),
+    ("_cactus", [-3.0, 2.8, 6.5],   [-10.0, 2.8, -1.0]),
 ]
 
 ROCK_DENSITY = 2600.0  # kg/m3, granite-ish
@@ -330,6 +332,130 @@ def build_dunes(c, yard, rng):
     mound("Field drift",      1.0,  -8.5,  3.4, 0.34, 1.9, -30.0)
 
 
+def build_cacti(c, yard, rng):
+    """Desert cacti. Shape research (2026-08-09): saguaro trunk and arms
+    are smooth CAPSULES - the arm's elbow-then-up curve is a 3-segment
+    chain (out-and-up, steeper, vertical) with align_y_quaternion, radii
+    matched so the smooth caps read as one limb; barrel cacti and
+    prickly-pear pads are squashed uv_spheres (pads [rx, ry, 0.09-thin]).
+    Real saguaro RIBS were considered and rejected: convex hulls cannot
+    go concave, per-rib CSG grooves cost a boolean pass per rib, and at
+    scene scale a matte green material reads right without them.
+    Capsule/sphere parameters are QUANTIZED so the shape pool shares
+    brushes across cacti. All parts motion_mode none (no bodies - the
+    piles' settle never touches them)."""
+    greens = [
+        c.ensure_material("cactus green", base_color=[0.24, 0.38, 0.18],
+                          roughness=0.85, metallic=0.0),
+        c.ensure_material("cactus sage",  base_color=[0.30, 0.43, 0.26],
+                          roughness=0.85, metallic=0.0),
+    ]
+    bloom = c.ensure_material("cactus bloom", base_color=[0.95, 0.90, 0.75],
+                              roughness=0.7, metallic=0.0)
+    fruit = c.ensure_material("cactus fruit", base_color=[0.72, 0.12, 0.30],
+                              roughness=0.7, metallic=0.0)
+    root = c.group("Cacti", [0.0, 0.0, 0.0])
+
+    def q2(v, step):  # quantize a geometry parameter for brush pooling
+        return max(step, round(v / step) * step)
+
+    def limb(name, base, direction, length, radius, material):
+        # create_shape capsule takes bottom_radius / top_radius (a plain
+        # 'radius' argument is silently ignored - geometry capsules are
+        # tapered-capable, unlike the physics-shape schema).
+        direction = v_norm(direction)
+        length = q2(length, 0.1)
+        r = q2(radius, 0.02)
+        center = v_add(base, v_scale(direction, 0.5 * length))
+        c.shape("capsule", name, center, bottom_radius=r, top_radius=r,
+                length=length, rotation_xyzw=align_y_quaternion(direction),
+                motion_mode="none", material_name=material,
+                parent_node_id=root)
+        return v_add(base, v_scale(direction, length))
+
+    def saguaro(name, x, z, s, arm_specs, material):
+        trunk_len = q2(2.6 * s, 0.1)
+        trunk_r = q2(0.26 * s, 0.02)
+        c.shape("capsule", f"{name} trunk", [x, 0.5 * trunk_len, z],
+                bottom_radius=trunk_r, top_radius=trunk_r, length=trunk_len,
+                motion_mode="none", material_name=material,
+                parent_node_id=root)
+        c.shape("uv_sphere", f"{name} crown", [x, trunk_len + 0.1 * s, z],
+                radius=0.06, scale=s, motion_mode="none",
+                material_name=bloom, parent_node_id=root)
+        for index, (height_frac, azimuth_deg) in enumerate(arm_specs):
+            az = math.radians(azimuth_deg)
+            out = [math.cos(az), 0.0, math.sin(az)]
+            base = [x + out[0] * 0.22 * s, trunk_len * height_frac,
+                    z + out[2] * 0.22 * s]
+            r = 0.16 * s
+            arm = f"{name} arm {index + 1}"
+            tip = limb(f"{arm} a", base, [out[0], 0.55, out[2]], 0.55 * s, r, material)
+            tip = limb(f"{arm} b", tip, [out[0] * 0.45, 1.0, out[2] * 0.45], 0.45 * s, r, material)
+            tip = limb(f"{arm} c", tip, [0.0, 1.0, 0.0], 0.65 * s, r, material)
+            c.shape("uv_sphere", f"{arm} bloom", tip, radius=0.05,
+                    scale=s, motion_mode="none", material_name=bloom,
+                    parent_node_id=root)
+
+    def barrel(name, x, z, s, material):
+        # Squat and slightly sunk or it reads as a green ball.
+        c.shape("uv_sphere", name, [x, 0.28 * s, z], radius=1.0,
+                slice_count=32, stack_count=16, scale=[0.44 * s, 0.34 * s, 0.44 * s],
+                motion_mode="none", material_name=material, parent_node_id=root)
+        c.shape("uv_sphere", f"{name} bloom", [x, 0.60 * s, z], radius=0.06,
+                scale=s, motion_mode="none", material_name=bloom,
+                parent_node_id=root)
+
+    def prickly_pear(name, x, z, s, pad_count, material):
+        """Pad FAN, not a totem: pads must spread sideways with real
+        outward LEAN (tilt of the pad plane) or the stacked thin spheres
+        read as a ball column (first iteration). Each pad leans further
+        out along its own yaw; fruits dot some pad top edges."""
+        def pad_quat(yaw, tilt):
+            qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+            qx = [math.sin(tilt / 2), 0.0, 0.0, math.cos(tilt / 2)]
+            return quat_mul(qy, qx)
+
+        pads = [([x, 0.30 * s, z], rng.uniform(0.0, math.pi), 0.0)]
+        c.shape("uv_sphere", f"{name} pad 1", pads[0][0], radius=1.0,
+                slice_count=24, stack_count=12,
+                scale=[0.38 * s, 0.44 * s, 0.07 * s],
+                rotation_xyzw=pad_quat(pads[0][1], 0.0),
+                motion_mode="none", material_name=material, parent_node_id=root)
+        for i in range(1, pad_count):
+            parent_pos, parent_yaw, parent_tilt = pads[rng.randrange(len(pads))]
+            yaw = parent_yaw + rng.uniform(-1.1, 1.1)
+            lean = rng.uniform(0.35, 0.65)
+            tilt = min(parent_tilt + rng.uniform(0.12, 0.35), 0.75)
+            out = v_norm([math.sin(yaw) * lean, 1.0 - 0.4 * lean, math.cos(yaw) * lean])
+            pos = v_add(parent_pos, v_scale(out, 0.56 * s))
+            # Pad plane leans outward with the growth direction (tilt
+            # about the pad's local X after its yaw).
+            c.shape("uv_sphere", f"{name} pad {i + 1}", pos, radius=1.0,
+                    slice_count=24, stack_count=12,
+                    scale=[0.34 * s, 0.40 * s, 0.065 * s],
+                    rotation_xyzw=pad_quat(yaw, math.copysign(tilt, math.sin(yaw - parent_yaw) or 1.0)),
+                    motion_mode="none", material_name=material, parent_node_id=root)
+            pads.append((pos, yaw, tilt))
+            if rng.random() < 0.4:
+                c.shape("uv_sphere", f"{name} fruit {i}",
+                        v_add(pos, [math.sin(yaw) * 0.1 * s, 0.42 * s, math.cos(yaw) * 0.1 * s]),
+                        radius=0.045, scale=s, motion_mode="none",
+                        material_name=fruit, parent_node_id=root)
+
+    saguaro("Saguaro grande", -10.0, -1.0, 1.7,
+            [(0.42, 20.0), (0.55, 150.0), (0.62, 265.0)], greens[0])
+    saguaro("Saguaro vieja", 12.0, -8.0, 1.4,
+            [(0.48, 70.0), (0.58, 220.0)], greens[1])
+    saguaro("Saguaro joven", 5.5, 8.0, 0.9, [(0.55, 300.0)], greens[0])
+    barrel("Barrel cactus A", 2.2, 4.6, 1.0, greens[0])
+    barrel("Barrel cactus B", 8.8, -1.4, 0.8, greens[1])
+    barrel("Barrel cactus C", -9.8, -8.6, 1.2, greens[0])
+    prickly_pear("Prickly pear W", -5.2, 1.8, 1.0, 6, greens[1])
+    prickly_pear("Prickly pear E", 10.5, 3.5, 1.1, 7, greens[0])
+    prickly_pear("Prickly pear N", 0.5, -6.0, 0.9, 5, greens[1])
+
+
 def build_pebbles(c, yard, rng):
     """Static pebble drifts around the pile skirts: analytic placement
     (partially sunk, random pose), motion_mode none - no body cost."""
@@ -507,6 +633,7 @@ def main():
         "Outcrop": lambda: build_outcrop(c, yard, rng),
         "Pebbles": lambda: build_pebbles(c, yard, rng),
         "Dunes":   lambda: build_dunes(c, yard, rng),
+        "Cacti":   lambda: build_cacti(c, yard, rng),
     }
 
     if only:
@@ -519,7 +646,7 @@ def main():
         else:
             piles[only]()
             yard.apply_rock_friction()
-            if only not in ("Pebbles", "Dunes"):
+            if only not in ("Pebbles", "Dunes", "Cacti"):
                 settle_rocks(c, pre_s=7.0, post_s=1.0)
         yard.apply_chamfer()
         eye, target = c.shot_relative(only, [5.0, 2.6, 5.5], [0.0, 0.8, 0.0])
