@@ -378,11 +378,31 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   phyllotaxis) are opt-in species keys: tropism / tip_tropism /
   phyllotaxis / pipe_exponent / curve_res. Reference use: creation 15
   tree garden (28 Finnish species, one PartBatch flush per tree, 281
-  MCP calls total).
+  MCP calls total). Branches want SUBDIVISION or they read as straight
+  sticks (2026-08-09): broadleaf curve_res default is 3, lower trunk
+  branches arch as sub-cone chains (per-sub downward blend + lateral
+  jitter), conifer boughs are curved 2-segment chains, shrub stems
+  carry a 2-cone outward-arching continuation above the single spine
+  hull. `sway_setting_for_height(c, h, stiffness_scale, range_scale)`
+  tunes habits off the tapered-beam rule: columnar juniper x4
+  stiffness / half range (its sway body is only the short inner trunk,
+  so joint angle is amplified over the full visual column), shrub
+  stems x3 / 0.6 + receptivity trimmed.
 - **Rig**: chain of Y-axis capsules (`create_shape capsule` is
   center-origin), coincident anchor child pairs at each pivot as above;
   the root anchor joints to a sensor-body carrier on the plant root
   (world joints pin the plant in place - see the sway bullet above).
+- **Sibling spines need a collision filter** (2026-08-09): a joint
+  disables collision only for ITS pair, so spines jointed to the same
+  carrier still collide with each other - shrub stems fanning out of one
+  base point (and limbs crowding a crown) sit permanently
+  interpenetrated and the solver push-out reads as wobble/jitter. Fix:
+  one `create_collision_filter` whose `collision_systems` and
+  `not_collide_with_systems` are both `["sway_spines"]` (self-denylist),
+  passed as `filter_name` on every spine body -
+  `lsystem_trees.rig_tree_sway` does this. The filter insert is queued;
+  settle() before the first body references it. Unfiltered bodies
+  (lawn, props) still collide with spines.
   Joint settings:
   lock linear XYZ (0..0) + angular Y (0..0), limit angular X/Z (about
   +/-0.9 rad), and add angular drives on axes 0 and 2 with

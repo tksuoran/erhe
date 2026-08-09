@@ -80,7 +80,7 @@ def grow_roots(batch, tag, base, trunk_r, bark, rng, root_count=5,
                    material_name=bark, parent_node_id=parent)
 
 
-def rig_tree_sway(c, sway_jobs):
+def rig_tree_sway(c, sway_jobs, collision_filter="sway_spines"):
     """Glade-pattern rest-pose motor rig with HIERARCHY support: each spine
     node becomes a wind-receptive dynamic body (shape="auto" hull of its
     own mesh - spines must be REAL geometry, not unit-part instances)
@@ -97,7 +97,22 @@ def rig_tree_sway(c, sway_jobs):
     constraint frame at the carrier body's origin - for a limb jointed to
     a trunk that is the trunk BASE, meters from the pivot, and the motors
     drove the limb around the wrong point (crowns slumped to half
-    height)."""
+    height).
+
+    Spine bodies share one collision filter that denylists ITSELF: joints
+    only disable collision for their own pair, so sibling spines jointed
+    to the same carrier still collided - shrub stems fanning out of one
+    base point and limbs crowding a trunk crown sat permanently
+    interpenetrated and the solver's push-out made them jitter/wobble.
+    Spines keep colliding with everything unfiltered (lawn, props)."""
+    if collision_filter and collision_filter not in _collision_filter_cache:
+        c.mutate("create_collision_filter", {
+            "scene_name": c.scene, "name": collision_filter,
+            "collision_systems": [collision_filter],
+            "not_collide_with_systems": [collision_filter],
+        })
+        c.settle()  # the library insert executes on the next editor frame
+        _collision_filter_cache.add(collision_filter)
     spine_ids = {job[1] for job in sway_jobs}
     carriers_with_body = set()
     for tag, node_id, base_pos, settings, mass, receptivity, ang_damp, carrier_id in sway_jobs:
@@ -105,9 +120,12 @@ def rig_tree_sway(c, sway_jobs):
             c.body(carrier_id, shape="sphere", radius=0.05,
                    motion_mode="static", is_trigger=True)
             carriers_with_body.add(carrier_id)
-        c.body(node_id, shape="auto", motion_mode="dynamic", mass=mass,
-               gravity_factor=0.0, angular_damping=ang_damp,
-               linear_damping=0.05, wind_receptivity=receptivity)
+        body_args = dict(shape="auto", motion_mode="dynamic", mass=mass,
+                         gravity_factor=0.0, angular_damping=ang_damp,
+                         linear_damping=0.05, wind_receptivity=receptivity)
+        if collision_filter:
+            body_args["filter_name"] = collision_filter
+        c.body(node_id, **body_args)
         anchor_spine = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
         anchor_carrier = c.anchor(f"{tag} Sway Pivot", carrier_id, base_pos)
         c.joint(anchor_spine, connected_node_id=anchor_carrier, settings_name=settings)
@@ -133,25 +151,34 @@ def make_rest_pose_settings(c, name, range_rad, stiffness, damping, max_force):
 
 
 _sway_setting_cache = set()
+_collision_filter_cache = set()
 
 
-def sway_setting_for_height(c, height):
+def sway_setting_for_height(c, height, stiffness_scale=1.0, range_scale=1.0):
     """BEAM-SCALED joint settings, one per 4 m height bucket (joint settings
     are shared library items, so they quantize). Bending stiffness of a
     tapered beam goes ~ r^4 / L and trunk radius grows with height, so
-    stiffness ~ h^2 while rotational inertia grows ~ h^3: tall thick trunks
-    get SMALL, LOW-FREQUENCY sway (omega ~ 1/sqrt(h)) and thin trunks sway
-    MORE and faster. The angular range widens for thin members the same
-    way. Limbs reuse this rule via their EQUIVALENT height (radius / 0.014,
-    the trunk radius-per-height factor), so stiffness keeps falling
-    steeply toward thinner and thinner branches."""
+    stiffness ~ h^2 while rotational inertia grows ~ h^3: tall thick
+    trunks get SMALL, LOW-FREQUENCY sway (omega ~ 1/sqrt(h)) and thin
+    trunks sway MORE and faster. The angular range widens for thin members
+    the same way. Limbs reuse this rule via their EQUIVALENT height
+    (radius / 0.014, the trunk radius-per-height factor), so stiffness
+    keeps falling steeply toward thinner and thinner branches.
+
+    stiffness_scale / range_scale tune species whose habit departs from
+    the plain tapered-beam rule: a columnar juniper is a stiff bundled
+    column (scale stiffness UP, range DOWN) and shrub stems read calmer
+    with the same treatment. Damping rides stiffness (x0.10), so scaled
+    settings also damp proportionally harder."""
     bucket = max(4, int(round(height / 4.0)) * 4)
     name = f"tree_sway_h{bucket}"
+    if stiffness_scale != 1.0 or range_scale != 1.0:
+        name += f"_s{stiffness_scale:g}_r{range_scale:g}"
     if name not in _sway_setting_cache:
-        stiffness = 2.2 * bucket * bucket
+        stiffness = 2.2 * bucket * bucket * stiffness_scale
         make_rest_pose_settings(
             c, name,
-            range_rad=0.06 + 1.6 / bucket,
+            range_rad=(0.06 + 1.6 / bucket) * range_scale,
             stiffness=stiffness,
             damping=stiffness * 0.10,
             max_force=stiffness * 2.2,
@@ -297,13 +324,30 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
             continue
         d = v_norm([math.cos(a), rng.uniform(0.20, 0.45), math.sin(a)])
         blen = seg_len * (0.55 + 0.6 * min(1.05, frac)) * rng.uniform(0.85, 1.1)
-        handle = batch.part("cone", f"{tag} Low Branch {i}", bpos,
-                            rotation_xyzw=align_y_quaternion(d),
-                            height=blen, bottom_radius=branch_r,
-                            top_radius=max(0.025, branch_r * 0.45),
-                            slice_count=6, material_name=bark,
-                            parent_node_id=parent, as_parent=True)
-        tip = v_add(bpos, v_scale(d, blen))
+        # Arching low branch: a chain of sub-cones instead of one straight
+        # stick - each sub-segment blends a downward pull plus lateral
+        # jitter into the heading, so the branch rises from the trunk and
+        # curves toward horizontal at the tip (real low boughs arch under
+        # their own weight).
+        sub_n = max(2, curve_res)
+        sub_len = blen / sub_n
+        r_tip = max(0.025, branch_r * 0.45)
+        droop = rng.uniform(0.10, 0.22)
+        handle = parent
+        tip = bpos
+        for si in range(sub_n):
+            if si > 0:
+                d = v_norm(v_add(v_add(d, [0.0, -droop, 0.0]),
+                                 [rng.uniform(-0.10, 0.10), 0.0, rng.uniform(-0.10, 0.10)]))
+            r_lo = branch_r + (r_tip - branch_r) * (si / sub_n)
+            r_hi = branch_r + (r_tip - branch_r) * ((si + 1) / sub_n)
+            handle = batch.part("cone", f"{tag} Low Branch {i}.{si}", tip,
+                                rotation_xyzw=align_y_quaternion(d),
+                                height=sub_len, bottom_radius=r_lo,
+                                top_radius=max(0.02, r_hi),
+                                slice_count=6, material_name=bark,
+                                parent_node_id=handle, as_parent=True)
+            tip = v_add(tip, v_scale(d, sub_len))
         batch.part("uv_sphere", f"{tag} Low Canopy {i}", tip,
                    radius=p["leaf_r"][0] * (0.55 + 0.5 * min(1.05, frac)) * rng.uniform(0.85, 1.1),
                    slice_count=10, stack_count=8,
@@ -458,7 +502,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
 
 def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
                              trunk_frac=0.22, tropism=None, tip_tropism=None,
-                             phyllotaxis=True, curve_res=2, root_count=5,
+                             phyllotaxis=True, curve_res=3, root_count=5,
                              trunk_branches=None, trunk_collider=False, tilt=None,
                              stubs=0.12, sway=None):
     """Derive a grow_tree species dict from a REAL target height (m).
@@ -507,13 +551,17 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                  whorl_step_frac=0.05, branch_len_frac=0.16, shape=1.0,
                  trunk_r_frac=0.013, tip_rise=0.0, root_count=0,
                  sparse_lower=0, trunk_collider=False, sway_jobs=None,
-                 sway_settings="tree_sway", sway_mass=25.0, sway_receptivity=6.0):
+                 sway_settings="tree_sway", sway_mass=25.0, sway_receptivity=6.0,
+                 curve_res=2):
     """Excurrent (single-leader) conifer: straight trunk cone + whorls of
     branches whose length follows the Weber-Penn crown shape
-    (1 - t)^shape from crown base (t=0) to tip (t=1). Each branch is one
-    cone with one elongated foliage sphere along it; the leader gets a
-    foliage spike. droop < 0 sweeps branches down (spruce), > 0 up
-    (young pine tops). Everything batches into one call."""
+    (1 - t)^shape from crown base (t=0) to tip (t=1). Each branch is a
+    chain of curve_res sub-cones with a gentle per-branch vertical
+    curvature (tip_rise > 0 replaces that with the explicit two-segment
+    down-then-up spruce sweep) and one elongated foliage sphere along it;
+    the leader gets a foliage spike. droop < 0 sweeps branches down
+    (spruce), > 0 up (young pine tops). Everything batches into one
+    call."""
     x, y, z = base
     root = c.group(tag, base)
     batch = c.part_batch()
@@ -597,18 +645,44 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                            slice_count=8, stack_count=6, material_name=leaf,
                            parent_node_id=outer)
             else:
-                handle = batch.part("cone", f"{tag} W{whorl}.{i}", bpos,
-                                    rotation_xyzw=align_y_quaternion(d),
-                                    height=blen, bottom_radius=branch_r,
-                                    top_radius=max(0.01, branch_r * 0.4),
-                                    slice_count=5, material_name=bark,
-                                    parent_node_id=trunk, as_parent=True)
-                fol_center = v_add(bpos, v_scale(d, blen * 0.62))
+                # Curved bough: curve_res sub-cones with a per-branch
+                # vertical curvature blended in each sub-segment (sag-
+                # biased, occasionally rising); the foliage rides the
+                # segment containing the 62% point, aligned to its heading.
+                sub_n = max(1, curve_res)
+                sub_len = blen / sub_n
+                r_tip = max(0.01, branch_r * 0.4)
+                curve = rng.uniform(-0.16, 0.06)
+                handle = trunk
+                seg_pos = bpos
+                fol_center = None
+                fol_dir = d
+                fol_handle = None
+                for si in range(sub_n):
+                    if si > 0:
+                        d = v_norm(v_add(d, [0.0, curve, 0.0]))
+                    r_lo = branch_r + (r_tip - branch_r) * (si / sub_n)
+                    r_hi = branch_r + (r_tip - branch_r) * ((si + 1) / sub_n)
+                    handle = batch.part("cone", f"{tag} W{whorl}.{i}.{si}", seg_pos,
+                                        rotation_xyzw=align_y_quaternion(d),
+                                        height=sub_len, bottom_radius=r_lo,
+                                        top_radius=max(0.008, r_hi),
+                                        slice_count=5, material_name=bark,
+                                        parent_node_id=handle, as_parent=True)
+                    lo = si * sub_len
+                    if lo <= blen * 0.62 < lo + sub_len:
+                        fol_center = v_add(seg_pos, v_scale(d, blen * 0.62 - lo))
+                        fol_dir = d
+                        fol_handle = handle
+                    seg_pos = v_add(seg_pos, v_scale(d, sub_len))
+                if fol_center is None:
+                    fol_center = seg_pos
+                    fol_handle = handle
                 batch.part("uv_sphere", f"{tag} W{whorl}.{i} Foliage", fol_center,
-                           rotation_xyzw=align_y_quaternion(d),
+                           rotation_xyzw=align_y_quaternion(fol_dir),
                            radii=[blen * 0.24, blen * 0.52, blen * 0.24],
                            slice_count=8, stack_count=6, material_name=leaf,
-                           parent_node_id=handle)
+                           parent_node_id=fol_handle)
         hgt += step
         whorl += 1
     # Leader spike: narrow foliage cone capping the tip.
@@ -683,25 +757,45 @@ def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35,
         lean = spread * rng.uniform(0.6, 1.3)
         d = v_norm([math.cos(a) * lean, 1.0, math.sin(a) * lean])
         stem_h = height * rng.uniform(0.55, 0.75)
+        # Curved stem: the lower 55% is the sway spine (one body, one
+        # hull), then two sub-cones arch further outward and slightly
+        # down - the crown rides the last one, so the whole curve sways
+        # as one piece around the spine joint.
+        spine_h = stem_h * 0.55
+        r_base = height * 0.018
+        r_mid = height * 0.012
         if sway_jobs is not None:
             # Each stem is a light sway spine jointed to the shrub root.
             result = c.shape("cone", f"{tag} Stem {i}", base,
                              rotation_xyzw=align_y_quaternion(d),
-                             height=stem_h, bottom_radius=height * 0.018,
-                             top_radius=height * 0.008, slice_count=6,
+                             height=spine_h, bottom_radius=r_base,
+                             top_radius=r_mid, slice_count=6,
                              material_name=bark, parent_node_id=root,
                              motion_mode="none")
             handle = result.get("node_id") if isinstance(result, dict) else root
             sway_jobs.append((f"{tag} Stem {i}", handle, list(base), sway_settings,
-                              sway_mass, sway_receptivity, 0.6, root))
+                              sway_mass, sway_receptivity, 1.2, root))
         else:
             handle = batch.part("cone", f"{tag} Stem {i}", base,
                                 rotation_xyzw=align_y_quaternion(d),
-                                height=stem_h, bottom_radius=height * 0.018,
-                                top_radius=height * 0.008, slice_count=6,
+                                height=spine_h, bottom_radius=r_base,
+                                top_radius=r_mid, slice_count=6,
                                 material_name=bark, parent_node_id=root,
                                 as_parent=True)
-        tip = v_add(base, v_scale(d, stem_h))
+        tip = v_add(base, v_scale(d, spine_h))
+        sub_len = (stem_h - spine_h) / 2.0
+        radii = [r_mid, height * 0.009, height * 0.006]
+        for si in range(2):
+            d = v_norm(v_add(d, [math.cos(a) * 0.20 + rng.uniform(-0.06, 0.06),
+                                 -0.06,
+                                 math.sin(a) * 0.20 + rng.uniform(-0.06, 0.06)]))
+            handle = batch.part("cone", f"{tag} Stem {i}.{si}", tip,
+                                rotation_xyzw=align_y_quaternion(d),
+                                height=sub_len, bottom_radius=radii[si],
+                                top_radius=radii[si + 1], slice_count=6,
+                                material_name=bark, parent_node_id=handle,
+                                as_parent=True)
+            tip = v_add(tip, v_scale(d, sub_len))
         r = height * rng.uniform(0.20, 0.28)
         batch.part("uv_sphere", f"{tag} Crown {i}",
                    [tip[0], tip[1] + r * 0.4, tip[2]],

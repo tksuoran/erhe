@@ -16,12 +16,19 @@ is a REAL-geometry sway spine (dynamic body, gravity 0, wind-receptive,
 rest-pose motor joint to the tree's root group) and every MAJOR limb
 (pipe-model share >= 12% of the tree) is a second-level spine jointed to
 the trunk. Masses and receptivity scale with real height, so the 45 m
-spruce lumbers while the shrub stems whip. Built with the simulation
-OFF so the joints capture the authored pose; then wind + physics on.
+spruce lumbers while the shrub stems whip. All spine bodies share one
+self-denylisting collision filter (rig_tree_sway) - sibling stems/limbs
+no longer jitter from permanently interpenetrating hulls - and the
+columnar juniper + shrubs get stiffness-scaled joint settings so they
+stir instead of wobbling. Built with the simulation OFF so the joints
+capture the authored pose; then wind + physics on.
 Each trunk rises from a root flare with surface roots; lower branches
-ladder evenly from mid-trunk to the crown (some as broken stubs on the
-old oak/apple/elm); the cluster species (Hieskoivu, Harmaaleppä, Raita,
-Lehtotuomi) grow 2-3 staggered trunks from a shared root mound.
+ladder evenly from mid-trunk to the crown as ARCHING sub-cone chains
+(some as broken stubs on the old oak/apple/elm); broadleaf crown
+segments draw at curve_res 3 and conifer boughs as curved 2-segment
+chains, so branches bend instead of reading as straight sticks; the
+cluster species (Hieskoivu, Harmaaleppä, Raita, Lehtotuomi) grow 2-3
+staggered trunks from a shared root mound.
 """
 
 import math
@@ -199,21 +206,35 @@ def main():
                          sway_receptivity=0.9 * height,
                          sway_settings=sway_setting_for_height(c, height), **kwargs)
         elif habit == "columnar":
+            # A juniper column is a tight bundle of near-vertical stems, far
+            # stiffer than a tapered trunk of the same height - and its sway
+            # body is only the short inner trunk, so any joint angle is
+            # amplified over the full visual column. Stiffness up 4x, range
+            # halved, receptivity halved (was: full beam rule + 0.6*h, which
+            # parked the trunk at the angular limit and wobbled there).
             kwargs.setdefault("root_count", 3)
             grow_columnar(c, tag, base, height, m[bark], m[leaf], rng,
                           sway_jobs=sway_jobs, sway_mass=2.0 * height,
-                          sway_receptivity=0.6 * height,
-                          sway_settings=sway_setting_for_height(c, height), **kwargs)
+                          sway_receptivity=0.3 * height,
+                          sway_settings=sway_setting_for_height(
+                              c, height, stiffness_scale=4.0, range_scale=0.5),
+                          **kwargs)
         elif habit == "shrub":
             # Shared root mound: the stems already spread from one point, so
             # with roots underneath the branching reads as starting below
-            # ground. Stems are thin: beam scaling by stem height (~60% of
-            # the shrub) makes them the softest, liveliest spines.
+            # ground. Stems are thin - beam scaling by stem height keeps
+            # them the softest spines - but the raw bucket-4 setting plus
+            # base-overlapping stem hulls made the willows/buckthorns
+            # WOBBLE: rig_tree_sway's shared collision filter stops the
+            # stem-vs-stem penetration fights, and stiffness x3 with a
+            # narrower range calms the spring itself.
             kwargs.setdefault("root_count", 4)
             grow_shrub(c, tag, base, height, m[bark], m[leaf], rng,
                        sway_jobs=sway_jobs, sway_mass=0.15 * height,
-                       sway_receptivity=0.35 * height,
-                       sway_settings=sway_setting_for_height(c, height * 0.6), **kwargs)
+                       sway_receptivity=0.25 * height,
+                       sway_settings=sway_setting_for_height(
+                           c, height * 0.6, stiffness_scale=3.0, range_scale=0.6),
+                       **kwargs)
         elif cluster:
             # Multi-stem cluster: a shared root mound and 2-3 full trunks
             # leaning outward from almost the same point, heights staggered -
@@ -252,7 +273,9 @@ def main():
            wavelength=14.0)
     c.set_physics(True)
     c.wake_physics()
-    probe_tilt(c, ["Metsäkuusi Trunk", "Rauduskoivu Trunk", "Metsätammi Trunk"])
+    probe_tilt(c, ["Metsäkuusi Trunk", "Rauduskoivu Trunk", "Metsätammi Trunk",
+                   "Kotikataja Trunk", "Jokipaju Stem 0", "Orapaatsama Stem 0",
+                   "Suippuorapihlaja Stem 0"])
 
     # shadow_range(160) above also raised the camera far plane to 160 m
     # (the projection default is 64 m - the first framing of this garden
