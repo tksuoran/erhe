@@ -1,6 +1,6 @@
 ---
 name: erhe-creations
-description: Build an MCP-driven showcase scene ("creation") in the erhe editor. Read BEFORE starting, revising, or debugging any creation in scripts/creations/ - covers the workflow (self-launching scripts, screenshot iteration in either build, windowed showing), the mandatory scene-graph hierarchy rules, and every hard-won MCP editor gotcha (transforms, materials, L-systems, physics, lighting). Revise this document at the end of each creation session with new learnings.
+description: Build an MCP-driven showcase scene ("creation") in the erhe editor. Read BEFORE starting, revising, or debugging any creation in scripts/creations/ - covers the workflow (self-launching scripts, screenshot iteration in either build, windowed showing), the mandatory scene-graph hierarchy rules, and the MCP editor gotchas (transforms, materials, lighting); domain recipes (vegetation, physics rigs, CSG/hulls, settling, sweep blades) live in references/*.md indexed inside. Revise this document (and the matching reference file) at the end of each creation session with new learnings.
 ---
 
 # Editor AI Creations
@@ -11,9 +11,13 @@ reproducible: it launches the editor, builds one scene, frames the
 camera, screenshots and saves the scene.
 
 **Maintenance contract:** read this document before any creation work;
-at the end of a session, fold new facts into it (and prune anything it
-made obsolete). This file is the canonical home for creation knowledge -
-agent memory and prompt_queue.txt only point here.
+at the end of a session, fold new facts in (and prune anything they
+made obsolete). This file is the workflow contract + gotcha index;
+stable domain recipes live in `references/*.md` (see "Domain recipes"
+below) - fold workflow/tooling facts HERE and domain facts into the
+matching reference file (new domain = new file + one index line here).
+This skill is the canonical home for creation knowledge - agent memory
+and prompt_queue.txt only point here.
 
 ## Existing creations
 
@@ -73,6 +77,18 @@ they carry the current idioms.
   material by name instead of stacking suffixed duplicates). Measured
   on creation 16: 182 vs 419 MCP calls for a one-ship change. EVERY
   new creation should wire this too.
+- **FIRST use of a new MCP tool / shape / parameter goes into a
+  30-second scratch-scene probe** (fresh scene, one shape, one
+  screenshot) before wiring it into a full creation run. Two full
+  rockfall runs died on exactly this (capsule `radius=`,
+  chamfer-on-deleted-ids); the probe costs ~5% of a run.
+- **Wrap the build in `common.fail_soft`** (2026-08-09; creation 17 is
+  the pattern): `with common.fail_soft(c, base_path, failed_glb=None):`
+  around everything after the Creation is constructed - a crashed build
+  still screenshots the aftermath (`<base>_failed.png`, optionally saves
+  a `*_failed.glb`) before the process exits, instead of losing the
+  whole run's evidence. It also restores the wall clock if the crash
+  happened mid-manual-settle. EVERY new creation wires this.
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
@@ -84,7 +100,10 @@ they carry the current idioms.
   physics helpers, screenshots, `group()` - plus module-level vector
   math (`v_add`/`v_cross`/`v_rotate`/...), `align_y_quaternion`,
   `probe_tilt` / `probe_pose` / `rest_rotation` / `body_axis_elevation`,
-  and `hierarchy_report`. IMPORT these, never re-derive them locally.
+  `hierarchy_report`, and the randomized-placement kit promoted from
+  creation 17 (`rand_quat` Shoemake, `tilt_yaw_quat`, `power_law_size`,
+  `quantize_scale`, `sim(c, seconds)` manual-clock tick, `fail_soft`).
+  IMPORT these, never re-derive them locally.
   Extend common.py rather than duplicating helpers - but keep
   per-creation code (L-system rules, critters) in the creation script.
 - Runtime budget (measured 2026-08-08 against a live Release editor):
@@ -116,6 +135,14 @@ they carry the current idioms.
   cameras: `eye, target = c.shot_relative(node_name, local_eye,
   local_target)` converts OBJECT-LOCAL offsets through the node's live
   world transform - no hand heading trigonometry for close-ups.
+- **Never GUESS a framing distance - fit it**: `eye, target =
+  c.frame(node_name, azimuth, elevation, margin=1.3)` (2026-08-09)
+  reads the subtree's merged world AABB (`get_node_details
+  subtree_world_aabb`, one call) and places the camera where the
+  bounding sphere fills the view from the given direction, returning
+  the pair for screenshot_views. A guessed eye can land INSIDE the
+  object (the rockfall `_cactus` shot did, twice); a fitted one cannot.
+  `shot_relative` stays for authored close-ups.
 - **Probe the ACTUAL surface instead of guessing offsets**
   (`geometry_query` MCP tool, 2026-08-09): `c.closest_points(points,
   node_name="Hull")` returns closest surface point + unit normal +
@@ -129,19 +156,8 @@ they carry the current idioms.
   DRIFTS toward the bulkier body near curved ends - for "surface AT
   this station" cast a RAY from outside toward the centerline
   (creation 16 hull_surface()).
-- **Hull-hugging bands** (creation 16 stripes are the reference
-  implementation): probe stations with rays; ARC-LENGTH parameterize
-  the polyline (index parameterization on uneven stations bent the
-  cubic meters off course); split long runs so probes land on the
-  cubic fit stations (t = 0, 1/3, 2/3, 1) and give hard-turning ends
-  their own short run; roll the strip's face onto the surface normal
-  and TWIST via per-control-plane corner rotations when the normal
-  turns along the run (vertical cross-sections read as ledges on a
-  flared hull); add a small outward bias (0.03-0.06 x s) because
-  between fit stations the cubic cuts inside an outward-bulging
-  surface. STRIP_DEBUG=1 prints fit deviations + twist per strip -
-  a deviation of meters means broken parameterization, centimeters is
-  healthy hull curvature.
+  (creation 16 hull_surface()). The full hull-hugging band recipe is in
+  `references/csg_hulls.md`.
 
 ## Scene-graph hierarchy (MANDATORY for all creations)
 
@@ -254,89 +270,6 @@ following its construction logic:
   the running editor (e.g. a 3-cone chain at 45 deg), then compare
   `get_scene_nodes` TRS against expectations, then screenshot.
 
-## CSG, authored hulls & FFD (new tools 2026-08-09; creation 16 is reference)
-
-- **`c.csg(target, tools, operation)`** (union / intersection /
-  difference, WORLD-space composed): the result REPLACES the target
-  mesh's primitives in place (node id, name, transform, children,
-  material, physics attachment all survive; collision rebuilt as a
-  convex hull of the result) and the TOOL NODES ARE REMOVED (children
-  reparent up - use leaf mesh nodes as tools). One undoable operation;
-  queued async, the wrapper settles by default.
-- **Batch the carves**: pass a LIST of tool node ids - all tools merge
-  into one solid and apply in a single boolean pass. Sequential calls
-  re-triangulate the whole target once per call and the stacked passes
-  show as sliver-triangle shading zigzags on large near-planar facets.
-  Creation 16 carves deck well + 10 gunports + 3 transom windows in ONE
-  difference.
-- Inputs must be closed watertight manifolds (capped cones, boxes,
-  spheres, convex hulls, regular polyhedra - NOT open discs/rectangles
-  or use_bottom=false cones). CSG on a pooled instance silently goes
-  private; create hero targets with reuse=False.
-- **`create_shape convex_hull`** (points=[[x,y,z],...] node-local, >=4
-  non-coplanar) is the way to get authored silhouettes - ship hulls
-  from station points (rail pair + bilge pair + keel per station, stem/
-  transom extremes). Convexity is fine for a beamy hull: carve the deck
-  well back in with CSG and real bulwarks remain. Hull brushes build
-  with SMOOTH normals (fair surface; also hides CSG triangulation).
-  Also new: disc (annulus with inner_radius), triangle, quad, rectangle
-  (flat XY, thin-box collision - use motion_mode none), and
-  regular_polyhedron (tetra/cube/octa/dodeca/icosa/cuboctahedron).
-- **`c.lattice_deform(node, offsets, divisions=[2,2,2], ...)`** = FFD:
-  cage auto-fits the mesh's local bounds; offsets are sparse
-  [i,j,k,dx,dy,dz] control point displacements; bezier default pins
-  whatever you leave at rest. Billowed sails: box size [w,h,0.05] steps
-  [8,8,1], push the i=1 column's dz (all j/k rows, mid > foot > head) -
-  corners stay pinned and the smooth-normal recompute reads as canvas
-  creases for free. Pennant ripple: divisions [3,1,1], +amp at i=1,
-  -amp at i=2. The source needs interior vertices (a 4-vertex quad
-  cannot bend) - use box steps.
-- Open-ocean water (vs the shallow-lagoon recipe below): near-opaque
-  alpha_blend (opacity ~0.85) dark blue [0.02,0.15,0.28] over a DEEP
-  dark seabed - a bright shallow seabed reads olive at fleet scale.
-  Disable shadow_cast (set_item_flags) on sails/flags: their water
-  shadows alias into harsh spikes; keep hull + mast shadows.
-- Straight trim boxes (wales/strakes) must stay within the parallel
-  midbody (~0.5 L) or they poke out of the tapering hull; rigging rods
-  are base-origin cones - place the base AT the start point (masthead),
-  never at the segment midpoint.
-- **Concave profiles on a convex hull come from the carve list** (the
-  Vespucci clipper stem, 2026-08-09): a convex hull cannot hollow
-  itself, so difference a beam-spanning cylinder (equal-radius capped
-  cone laid along X via roll 90) whose surface passes through the two
-  profile chord endpoints with the wanted sagitta
-  (R = c^2/(8*sag) + sag/2, center at chord mid + normal*(R - sag)) -
-  the cut face IS the curved profile. Keep the circle parameters so
-  trim can trace the cut exactly.
-- **Curved trim = lattice-bent strips, not chained cones** (creation 16
-  bow): one thin box (steps ~[2,12,2] along its length) rotated chord-
-  aligned, then a [1,3,1] bezier FFD; solve the two interior control
-  planes from curve samples at t=1/3, 2/3 (C1 = 3*d13 - 1.5*d23,
-  C2 = 3*d23 - 1.5*d13 on the chord deviations, rotated world->local
-  with common.quat_rotate + conjugate). One node per band, smooth
-  silhouette; see ShipYard.bent_strip. Bands that continue each other
-  need ONE cross-section the whole way (a box/strip mix reads as steps
-  at every joint), and hull-hugging bands need a per-height hug factor
-  (the hull FLARES - at a low stripe's height the surface sits inside
-  the rail half-beam; 1.01 low / 1.03 near rail + a 0.11*s-thick strip
-  keeps the band proud everywhere - 0.98/1.01 with a thin strip sank
-  into the bulged surface in places). Small fittings
-  poking through a curved band (gunport dots) are per-side plates just
-  proud of the band FACE - beam-spanning boxes poke out of the taper as
-  tabs.
-- The convex hull SURFACE bulges past the authored station points, so
-  bow furniture (cutwater, figurehead, beak rails) must sit clearly
-  FORWARD of the stem line or it ends up buried inside the prow block.
-  Scale fixed-size fittings by ship size (s = length / reference) - an
-  unscaled 0.14 m spar vanishes on a 58 m hull. Figureheads and similar
-  hero fittings want MONUMENTAL scale (the real Vespucci figure is
-  ~4 m): a human-proportioned one reads as a flagpole knob from fleet
-  distance, and it must lean well forward off the stem head or the
-  bulge swallows it.
-- Square sails are edge-on RIBBONS from abeam - a broadside camera on a
-  square-rigger shows masts and paper edges; shoot from a bow or stern
-  quarter (creation 16's Vespucci shot: port bow, ~1.5 ship lengths).
-
 ## Materials & appearance
 
 - `common.make_material(name, **fields)` CREATES a fresh material via
@@ -397,283 +330,28 @@ following its construction logic:
   insert); rotate the sun with `c.set_node_transform("<light name>",
   rotation_xyzw=q)` - its not-found retry rides out the pending insert,
   no settle() needed.
-- Tree age variety (creation 13): pass an age/scale parameter driving
-  size (~ age^0.7-0.8), L-system depth (+1 iteration when age >= 1.3,
-  -1 for saplings), branch density, gnarl and canopy clump size; sway
-  mass ~ age^2, receptivity ~ age (old trees lumber, saplings whip).
+## Domain recipes (references/)
 
-## L-system vegetation (creations 9-10 carry reference code)
+Stable domain knowledge lives in `references/` next to this file - read
+the relevant file(s) BEFORE building in that domain, the same way this
+file is read before any creation work:
 
-- String rewrite with stochastic rules; interpret with a 3D turtle
-  (heading/left vectors + Rodrigues rotation). Symbols: `F` segment,
-  `[`/`]` push/pop, `&`/`^` pitch, `+`/`-` yaw or pinna side, `/` roll,
-  terminal `A -> L`/`K` leaf/bloom.
-- Trees: per-species parameter dicts (trunk, seg falloffs, pitch range,
-  branch-count weights); leaf tips greedily clustered into canopy
-  spheres (radius ~ sqrt(count)); one wobble pitch per `F` for gnarl.
-- Ferns: rachis of ~6 short segments with progressive gravity droop and
-  a pinna pair at nearly every node (~12 pinnae/frond reads realistic);
-  basal pinnae expand a second L-system level (midrib + pinnule pair +
-  tip). Flowers: stem segments + bracketed leaf blades + side-bloom
-  stalks; blooms = center sphere + 5 aligned petal blades.
-- 3-slice cones make triangles/prisms (TR-3B slab, portal ring); stand
-  upright with `qx(90)`, then roll `qz(180)` for vertex-up.
-
-## Physics (creations 7-8 carry reference code)
-
-- Shapes with `motion_mode="dynamic"`; per joint create TWO coincident
-  anchor child nodes (`common.anchor`, world positions), `settle()`,
-  then `create_physics_joint node=anchorA connected=anchorB
-  settings_name=<library settings>`. Limits: lock linear = all axes
-  0..0; hinge = lock 2 angular + range on one; ball = range on all 3;
-  weld = everything locked; pendulum-to-world = no connected node.
-- `toggle_physics` takes an explicit `enabled` bool since 2026-08-08
-  (omit = old toggle behavior) - no toggle-and-verify dance. Bodies
-  still spawn DEACTIVATED unless created with `wake: true` on
-  `create_physics_body`; `wake_physics()` remains for waking a whole
-  scene after enabling. Freeze an aftermath pose by
-  `toggle_physics enabled=false` before save.
-- Pure-visual child parts: `strip_physics(node_id)`.
-- `apply_physics_force` pokes a dynamic body (force / torque / impulse +
-  optional world `point`). Impulses act immediately; forces last one
-  fixed step (re-apply for a sustained push).
-- `edit_physics_body` initial-velocity gotcha: `linear_velocity` only
-  stores into the create info, and a shape edit in the SAME call
-  recreates the body BEFORE it lands. Two calls: first
-  `{linear_velocity, mass, ...}`, then `{shape, ...}` to trigger the
-  recreation that applies it.
-
-## Deterministic settling & staged construction (creation 17 carries reference code)
-
-The `advance_time` MCP tool (2026-08-09) is a manual simulation clock:
-`{seconds}` queues exactly that much SIMULATION time (drained at
-`max_step_ms`, default 250, per rendered frame - bypasses the 25 ms
-wall-clock dilation cap and the hidden-window pause), `{mode}` switches
-wall_clock | paused | manual (paused/manual freeze the sim except queued
-advances). Wrappers: `c.advance_time(...)`, `c.run_simulation(seconds)`
-(queue + poll + restore wall_clock).
-
-- **Settle recipe**: build everything with physics DISABLED, then
-  `advance_time mode=manual` -> `set_physics(True)` -> `wake_physics()`
-  -> advance N seconds -> `set_physics(False)` -> `mode=wall_clock`.
-  Identical result windowed or headless, any frame rate; ~10 simulated
-  seconds settle in under a second of wall time.
-- **Staged construction**: with the sim frozen between explicit ticks,
-  you can PLACE BODIES MID-SETTLE: creation 17's cairn lays one flat
-  slab per course, ticks 1.2 s, reads the stone's landed pose
-  (node_world_pose) and lays the next course on the MEASURED top,
-  following the stack as it drifts. Wake_physics after each placement
-  (bodies spawn asleep). Dropping a whole pre-stacked tower at once
-  collapses - twice confirmed.
-- The sim is deterministic in TIME but not bit-identical across runs
-  (Jolt threading): a staged course can still slide off on an unlucky
-  run - VERIFY each stage (landed y vs expected) and retry, delete +
-  re-place, like a person would.
-- Physics ROCK PILES: rock = convex hull of a jittered fibonacci-sphere
-  point cloud (9-14 points angular, 22-24 worn; round the coords so the
-  shape pool key is stable); a few archetypes as pooled brushes,
-  instanced with QUANTIZED number bake scales (collision follows; a
-  multiplicative scale ladder caps per-brush primitive count) +
-  power-law sizes; pre-heap with sphere-drop packing (largest first,
-  each rested on the heap) so the settle compacts instead of exploding;
-  batch `edit_physics_body` friction 0.9 / restitution 0.02 /
-  angular_damping 0.35 so rocks pile instead of scattering. Boulders
-  > 1 m want the ANGULAR archetypes (an evenly-jittered 30-point hull
-  reads as a geodesic ball at boulder scale).
-- Chamfer the visible rocks AFTER the settle: one `chamfer` call with a
-  `node_ids` batch (~50/call, bevel_ratio ~0.22) on every rock >= 0.45 m
-  - each instance silently goes private (deliberate; pebbles keep
-  sharing), pose + physics attachment survive, frozen bodies keep the
-  slightly-proud original hulls (invisible). If a staged builder DELETES
-  a body (cairn retry), prune its id from the chamfer list or the batch
-  fails on the missing node.
-- **Smooth sand mounds / dunes** (creation 17): ONE pooled
-  high-tessellation `uv_sphere` brush (slice 48 / stack 24, smooth
-  normals), instanced per mound with node TRS scale [rx, h, rz]
-  (motion_mode none), yawed to a shared wind heading and SUNK below
-  grade (drifts 0.42*h, real-crest dunes 0.30*h) so the skirt melts into
-  the ground. Do NOT reuse the ground texture on them: a mound's sphere
-  UV spans the whole sphere, so the ground's scale-90 fbm renders as
-  microscopic bright grain that detaches the mound (bread-loaf look) -
-  make a second graph with the SAME gradient at fbm scale ~5x3 and bind
-  it to a dedicated dune material with the ground's base_color.
-  Rejected smooth-mound alternatives: lattice-deformed stepped boxes
-  crease on the control grid, catmull_clark / smooth on hulls stays
-  polygonal at the silhouette.
-- **Cacti** (creation 17): saguaro = smooth capsule trunk + arms as
-  3-capsule chains (out-and-up, steeper, vertical - align_y_quaternion,
-  equal radii so the hemisphere caps read as one limb); barrel = squat
-  SUNK uv_sphere ([0.44, 0.34, 0.44]*s at y 0.28*s - taller reads as a
-  green ball); prickly pear = thin uv_sphere pads ([0.38, 0.44, 0.07]*s)
-  that FAN with real outward lean (0.35-0.65) AND pad-plane tilt
-  (quat_mul(yaw, tilt)) - small-lean untilted pads stack into a ball
-  totem. Quantize capsule/sphere parameters for brush pooling; all parts
-  motion_mode none. GOTCHA: create_shape capsule takes bottom_radius /
-  top_radius (a 'radius' argument is silently IGNORED - that's the
-  physics-shape schema) and requires length > |bottom - top|. Saguaro
-  ribs rejected: hulls cannot go concave, per-rib CSG costs a boolean
-  pass each; matte green material reads right at scene scale.
-- **Blades / leaves = `create_shape sweep`** (2026-08-09; creation 17
-  agaves are reference): a closed CCW cross-section polyline (`profile`,
-  sharp corners stay sharp - author smooth arcs as dense points) swept
-  along a bezier `spine` with parallel-transported frames; `taper`
-  (t, scale) keys with a final ~0 collapse the tip into the terminal
-  spine point; `twist_deg`, optional `profile_end` morph. Agave leaf:
-  channeled crescent profile (upper face dips, convex belly, margin
-  corners), 4-point outward-curving spine, taper [[0,.85],[.25,1],
-  [.7,.6],[1,0]]. A rosette shares ONE pooled blade brush - pitch, yaw
-  and bake scale are per-instance (leaf local +X is the curve
-  direction; yaw about Y maps +X to (cos,0,-sin), so leaf yaw = ring
-  angle - 90 deg). All sweep params are in SHAPE_GEOMETRY_KEYS.
-
-## Load-bearing motor rigs (creation 14 carries reference code)
-
-Rest-pose motor drives are strong enough to act as MUSCLES, not just
-sway springs: creation 14's 50-part ragdoll spider STANDS under full
-gravity on motorized leg joints (and staggers + recovers from an
-apply_physics_force shove).
-
-- Explicit masses are essential for motor sizing. Create every part
-  `motion_mode="none"`, pose it, then attach the body with
-  `create_physics_body shape="auto" mass=<explicit>` (gravity_factor
-  stays 1 - the point is to carry the weight). (`edit_physics_body`
-  mass edits DO rescale inertia since 2026-08-08, so post-hoc mass
-  tuning is safe too.)
-- Size stiffness per joint from its static hold torque = (weight share
-  at the contact point) x (horizontal lever from joint to contact), for
-  ~0.02 rad of sag; graduate along the limb (spider hip 2400 -> toe 100
-  Nm/rad). `max_force` ~5x hold torque makes a real shove yield the
-  motors visibly before recovery. Drives on all 3 angular axes,
-  position_target 0, limits ~+/-0.45 rad, linear locked.
-- Feet/contact ends: place the authored pose so free-end tips just touch
-  the floor (compute the drop analytically from the limb tables); the
-  closed contact chain makes the stance much stiffer than open-chain
-  spring sag suggests (measured: 24 mm sag on a 0.46 m stance).
-- Pose probes: "tilt from world up" is useless for capsules rotated off
-  +Y (reads 90 deg forever). Gate standing on height + drift from the
-  REST rotation, and gate recovery on the body axis ELEVATION only
-  (yaw-insensitive) - a shoved creature legitimately re-plants facing a
-  new heading. A shove also slides it 1-2 m: re-frame the aftermath
-  camera on the body's actual position, not the build position.
-
-## Physics LOD for whole plants (creation 13 carries reference code)
-
-For a scene full of swaying vegetation, do NOT chain bodies per
-segment - give each plant ONE spine body and let the visual subtree
-ride it:
-
-- Visual parts (branches, canopies, pinnae, petals) are created with
-  `motion_mode="none"` - NO rigid body at all. A static child body
-  would grind against the dynamic spine and block the sway; "none"
-  costs nothing and needs no strip pass.
-- The spine node (tree trunk / frond rachis 0 / stem segment 0) gets
-  `common.body(node_id, shape="auto", motion_mode="dynamic",
-  mass=<explicit>, gravity_factor=0, wind_receptivity=...)` - "auto"
-  hulls the node's own mesh, so the collision follows the visual.
-- Coincident anchor child at the spine base, jointed to a CARRIER on
-  the same plant (root group / trunk / branch, given a tiny static
-  sensor body: shape="sphere" radius=0.05 is_trigger=true) - NEVER to
-  the world (2026-08-08: world anchors pin foliage in world space, so
-  moving the plant leaves it floating behind; carrier joints are
-  body-relative and the whole plant moves as one object). Collect
-  (node, base, settings, mass, receptivity, carrier) jobs during the
-  build and rig them AFTER settle() with the simulation still disabled.
-- Lift plant bases a few cm (trees 0.05) so spine hulls clear the
-  floor instead of grinding on it.
-- `common.wind(...)` enables the scene wind (it carries the required
-  `"_version": 2`). set_scene_settings supports `merge: true`
-  (server-side deep merge, 2026-08-08) - common uses it, so wind and
-  ambience never clobber each other and no client accumulator exists.
-  Raw set_scene_settings WITHOUT merge still REPLACES the whole object,
-  and versionless sub-objects are now rejected loudly instead of
-  silently dropping newer fields.
-- Verified per-scale tuning (mass / stiffness / damping / max_force /
-  range / receptivity): tree 25 / 300 / 30 / 600 / 0.12 / 6.0,
-  fern frond 0.08 / 6 / 0.5 / 8 / 0.35 / 0.3,
-  flower stem 0.03 / 0.8 / 0.08 / 3 / 0.50 / 0.35, with wind speed 3,
-  gusts 2.2 @ 0.4 Hz, turbulence 0.45, wavelength 9.
-- Print a sway probe (sample tip tilt every 0.5 s): healthy plants
-  OSCILLATE and recover; a monotonic tilt ramp that parks at the
-  angular limit means receptivity is too high for the drive stiffness
-  (iteration-1 ferns blew flat exactly this way).
-
-## Bendy plants & wind (rest-pose motor joints; verified 2026-08-08)
-
-Foliage that bends under impact / wind and springs back to its authored
-pose needs no new machinery - six-dof drives ARE the rest-pose motor:
-
-- **L-system trees are a shared module**: `scripts/creations/`
-  `lsystem_trees.py` - expand_lsystem + grow_tree (moved from the glade,
-  rng-identical) plus species-level generators (grow_conifer whorls with
-  tip_rise, grow_columnar, grow_shrub, broadleaf_species_params from a
-  REAL height in meters). Realism knobs (2026-08-09 research: ABOP
-  tropism, Weber-Penn curve/crown shape, pipe-model radii, golden-angle
-  phyllotaxis) are opt-in species keys: tropism / tip_tropism /
-  phyllotaxis / pipe_exponent / curve_res. Reference use: creation 15
-  tree garden (28 Finnish species, one PartBatch flush per tree, 281
-  MCP calls total). Branches want SUBDIVISION + SUBTREES or they read
-  as lollipop sticks (2026-08-09): broadleaf curve_res default is 4,
-  lower trunk branches arch as sub-cone chains (per-sub downward blend
-  + lateral jitter) carrying none / a few 2-cone FORKS with their own
-  smaller canopies, conifer boughs are curved 3-segment chains with
-  0-2 side twigs + foliage tufts (twig pitch inherits species droop -
-  spruce hangs its branchlets), shrub stems carry a 3-cone
-  outward-arching continuation above the single spine hull with side
-  shoots + small crown tufts. Extra parts cost frame time (~19 ->
-  ~27 ms on the 28-tree garden) - keep fork/twig counts in the 0-3
-  range. `sway_setting_for_height(c, h, stiffness_scale, range_scale)`
-  tunes habits off the tapered-beam rule: columnar juniper x4
-  stiffness / half range (its sway body is only the short inner trunk,
-  so joint angle is amplified over the full visual column), shrub
-  stems x3 / 0.6 + receptivity trimmed. Small DENSE evergreens hit the
-  same trap through the plain conifer path (the 8.4 m yew parked at
-  its angular limit like the juniper): creation 15 exposes
-  sway_stiffness_scale / sway_range_scale / sway_receptivity_frac as
-  species keys for that.
-- **Rig**: chain of Y-axis capsules (`create_shape capsule` is
-  center-origin), coincident anchor child pairs at each pivot as above;
-  the root anchor joints to a sensor-body carrier on the plant root
-  (world joints pin the plant in place - see the sway bullet above).
-- **Sibling spines need a collision filter** (2026-08-09): a joint
-  disables collision only for ITS pair, so spines jointed to the same
-  carrier still collide with each other - shrub stems fanning out of one
-  base point (and limbs crowding a crown) sit permanently
-  interpenetrated and the solver push-out reads as wobble/jitter. Fix:
-  one `create_collision_filter` whose `collision_systems` and
-  `not_collide_with_systems` are both `["sway_spines"]` (self-denylist),
-  passed as `filter_name` on every spine body -
-  `lsystem_trees.rig_tree_sway` does this. The filter insert is queued;
-  settle() before the first body references it. Unfiltered bodies
-  (lawn, props) still collide with spines.
-  Joint settings:
-  lock linear XYZ (0..0) + angular Y (0..0), limit angular X/Z (about
-  +/-0.9 rad), and add angular drives on axes 0 and 2 with
-  `position_target 0`, `stiffness ~30`, `damping ~2`, finite
-  `max_force ~60`. Target 0 = the pose at joint creation; the motor
-  springs back to it, `max_force` is the yield threshold, the limits cap
-  the bend.
-- **Build with physics DISABLED, enable after the joints exist.**
-  Segments free-fall for the frames between create_shape and the
-  gravity_factor edit, and joints capture that fallen pose as the rest
-  pose (a few degrees of permanent lean). Verified: disabled-build gives
-  rest tilt exactly 0.
-- `gravity_factor 0` on segments so the motor spring does not fight
-  gravity (no droop below the authored pose); modest
-  `angular_damping ~0.1`.
-- Stiffness/max_force scale with segment thickness: stiff base, floppy
-  tip reads plant-like.
-- **Wind**: set `wind_receptivity` (kg/s) on segment bodies via
-  create/edit_physics_body - increasing toward the tip (e.g. 0.7 base ->
-  1.5 tip). Enable scene wind through `set_scene_settings` physics
-  override; the object MUST carry `"_version": 2` or the wind fields are
-  silently dropped by version migration (same trap as sky `_version`).
-  Verified values: `wind_speed 6, wind_gust_amplitude 4,
-  wind_gust_frequency 0.5, wind_turbulence 0.4, wind_wavelength 8` =
-  dramatic 7-78 deg sway; quarter those receptivities for subtle
-  ambient foliage. Wind force is
-  `receptivity * (wind_velocity - body_velocity)` at the COM each fixed
-  step; zero receptivity bodies are never touched (they sleep).
-  `wind_receptivity` persists in the ERHE_physics extension on save.
+- `references/vegetation.md` - L-system plants and trees
+  (lsystem_trees.py species system), the one-spine physics LOD, sway
+  motor rigs, sibling-spine collision filters, scene wind + tuning
+  tables. Creations 9-10, 13, 15.
+- `references/physics_rigs.md` - joint plumbing (anchors, limits,
+  drives), toggle/wake semantics, ragdolls, load-bearing motor rigs
+  (the standing spider) and pose probes. Creations 7-8, 14.
+- `references/csg_hulls.md` - CSG carving (batched tools), authored
+  convex-hull silhouettes, lattice/FFD deformation, bent-strip trim,
+  probed hull-hugging bands, ship-scale composition. Creation 16.
+- `references/settling_rock_piles.md` - the manual simulation clock
+  (advance_time), deterministic settles, SCOPED wakes, staged
+  construction (the cairn), rock piles, chamfer batches, dunes and
+  cacti. Creation 17.
+- `references/blades_sweep.md` - the sweep shape for blades / leaves
+  (agave rosettes). Creation 17.
 
 ## Conventions
 
@@ -681,8 +359,9 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   records WHY and any debugging lesson; end with the Claude co-author
   line. Only the script (and common.py changes) are committed; the user
   pushes.
-- Update `prompt_queue.txt` ITEM -1's commit list and the
-  `mcp-creation-scripts-*` agent memory pointer after each creation.
+- prompt_queue.txt ITEM -1 and the `mcp-creation-scripts-*` agent
+  memory only POINT at git log and this skill - do not grow commit
+  ledgers in them; git log is the history.
 - MCP node/material ids are per-session - never hardcode them.
 - `select_items` requires `scene_name`. `place_brush` takes the full
   placement set since 2026-08-09 (rotation_xyzw, parent_node_id, name,
