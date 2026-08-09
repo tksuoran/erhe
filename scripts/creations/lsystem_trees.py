@@ -54,6 +54,45 @@ def distal_f_counts(s):
     return counts
 
 
+def grow_roots(batch, tag, base, trunk_r, bark, rng, root_count=5,
+               flare=1.6, reach=3.6, parent=None):
+    """Root system at a trunk base: a flare cone widening into the ground
+    plus root_count surface roots radiating outward - thin cones that start
+    just above grade and sink gently below it, so they read as roots
+    running partly on the surface."""
+    x, y, z = base
+    flare_h = max(0.3, trunk_r * 1.3)
+    batch.part("cone", f"{tag} Root Flare", [x, y - flare_h * 0.35, z],
+               height=flare_h, bottom_radius=trunk_r * flare,
+               top_radius=trunk_r * 1.05, slice_count=10,
+               material_name=bark, parent_node_id=parent)
+    for i in range(root_count):
+        a = 2.0 * math.pi * i / root_count + rng.uniform(-0.4, 0.4)
+        d = v_norm([math.cos(a), rng.uniform(-0.22, -0.10), math.sin(a)])
+        length = trunk_r * flare * rng.uniform(1.6, 2.6) + trunk_r * reach * rng.uniform(0.6, 1.0)
+        start = [x + math.cos(a) * trunk_r * 0.7,
+                 y + trunk_r * rng.uniform(0.25, 0.45),
+                 z + math.sin(a) * trunk_r * 0.7]
+        batch.part("cone", f"{tag} Root {i}", start,
+                   rotation_xyzw=align_y_quaternion(d),
+                   height=length, bottom_radius=trunk_r * rng.uniform(0.38, 0.52),
+                   top_radius=trunk_r * 0.08, slice_count=6,
+                   material_name=bark, parent_node_id=parent)
+
+
+def add_trunk_collider(c, tag, parent_node_id, base, height, bottom_radius, top_radius):
+    """Static tapered-cylinder rigid body along the trunk axis. Collision
+    shapes have no offset and unit-part trunks cannot use shape=\"auto\"
+    (hulls ignore node scale), so an anchor child at mid-height carries an
+    explicitly sized shape instead."""
+    anchor_id = c.anchor(f"{tag} Trunk Collider", parent_node_id,
+                         [base[0], base[1] + height * 0.5, base[2]])
+    c.body(anchor_id, shape="tapered_cylinder", bottom_radius=float(bottom_radius),
+           top_radius=float(top_radius), length=float(height),
+           motion_mode="static")
+    return anchor_id
+
+
 # ----------------------------------------------------- glade L-system (moved)
 
 def expand_lsystem(rng, iterations, weights):
@@ -133,6 +172,35 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
     # Whole branch + canopy structure goes out as ONE place_brush_instances
     # call: chained segments parent via in-batch handles.
     batch = c.part_batch()
+
+    # Optional root system (opt-in "root_count"): flare + surface roots at
+    # the trunk base, parented to the tree root group.
+    if p.get("root_count"):
+        grow_roots(batch, tag, base, trunk_r[0], bark, rng,
+                   root_count=p["root_count"], parent=root)
+    # Optional lower trunk branches (opt-in "trunk_branches"): real trees
+    # carry branches down the trunk, not just the crown - lower ones grow
+    # LONGER (more light history), each tipped with a small foliage clump.
+    for i in range(p.get("trunk_branches", 0)):
+        frac = rng.uniform(0.35, 0.9)
+        a = rng.uniform(0.0, 2.0 * math.pi)
+        elev = rng.uniform(0.25, 0.55)
+        d = v_norm([math.cos(a), elev, math.sin(a)])
+        blen = seg_len * (1.15 - 0.55 * frac) * rng.uniform(0.8, 1.1)
+        bpos = v_add(base, [0.0, trunk_h * frac, 0.0])
+        branch_r = max(0.03, trunk_r[1] * (0.5 - 0.25 * frac))
+        handle = batch.part("cone", f"{tag} Low Branch {i}", bpos,
+                            rotation_xyzw=align_y_quaternion(d),
+                            height=blen, bottom_radius=branch_r,
+                            top_radius=max(0.02, branch_r * 0.5),
+                            slice_count=6, material_name=bark,
+                            parent_node_id=parent, as_parent=True)
+        tip = v_add(bpos, v_scale(d, blen))
+        batch.part("uv_sphere", f"{tag} Low Canopy {i}", tip,
+                   radius=p["leaf_r"][0] * rng.uniform(0.6, 0.85),
+                   slice_count=10, stack_count=8,
+                   material_name=leaf_materials[i % len(leaf_materials)],
+                   parent_node_id=handle)
 
     leaves = []                         # (tip position, carrying branch id)
     seg_count = 0
@@ -227,6 +295,10 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                    material_name=leaf_materials[i % len(leaf_materials)],
                    parent_node_id=carrier)
     batch.flush()
+    # Opt-in static trunk collider (physics presence without a sway rig).
+    if p.get("trunk_collider"):
+        add_trunk_collider(c, tag, root, base, trunk_h + seg_len,
+                           trunk_r[0], trunk_r[1])
     print(f"{tag}: {seg_count} segments, {len(clusters)} canopy clusters")
     return root
 
@@ -235,7 +307,8 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
 
 def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
                              trunk_frac=0.22, tropism=None, tip_tropism=None,
-                             phyllotaxis=True, curve_res=2):
+                             phyllotaxis=True, curve_res=2, root_count=5,
+                             trunk_branches=3, trunk_collider=True, tilt=None):
     """Derive a grow_tree species dict from a REAL target height (m).
     spread widens branching (weights + pitch), gnarl adds wobble, canopy
     scales foliage clump size, tip_tropism droops the fine outer growth
@@ -258,7 +331,7 @@ def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
         "seg_len": seg_len, "len_falloff": falloff,
         "seg_r": height * 0.011, "r_falloff": 0.62,
         "pitch": (18.0 * spread, 36.0 * spread), "wobble": 7.0 * gnarl,
-        "tilt": [0.04, 0.995, 0.02],
+        "tilt": tilt if tilt is not None else [0.04, 0.995, 0.02],
         "cluster_r": height * 0.045 * canopy,
         "leaf_r": (height * 0.042 * canopy, height * 0.012 * canopy, height * 0.11 * canopy),
         "tropism": tropism if tropism is not None else [0.0, 0.05, 0.0],
@@ -266,13 +339,17 @@ def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
         "phyllotaxis": phyllotaxis,
         "pipe_exponent": 2.49,
         "curve_res": curve_res,
+        "root_count": root_count,
+        "trunk_branches": trunk_branches,
+        "trunk_collider": trunk_collider,
     }
 
 
 def grow_conifer(c, tag, base, height, bark, leaf, rng,
                  crown_frac=0.85, droop=-0.25, whorl_branches=5,
                  whorl_step_frac=0.05, branch_len_frac=0.16, shape=1.0,
-                 trunk_r_frac=0.013, tip_rise=0.0):
+                 trunk_r_frac=0.013, tip_rise=0.0, root_count=0,
+                 sparse_lower=0, trunk_collider=False):
     """Excurrent (single-leader) conifer: straight trunk cone + whorls of
     branches whose length follows the Weber-Penn crown shape
     (1 - t)^shape from crown base (t=0) to tip (t=1). Each branch is one
@@ -287,7 +364,29 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                        bottom_radius=trunk_r, top_radius=max(0.02, trunk_r * 0.08),
                        slice_count=10, material_name=bark,
                        parent_node_id=root, as_parent=True)
+    if root_count:
+        grow_roots(batch, tag, base, trunk_r, bark, rng,
+                   root_count=root_count, parent=root)
     crown_base = height * (1.0 - crown_frac)
+    # Sparse lower boughs below the crown (old pines keep a few).
+    for i in range(sparse_lower):
+        hfrac = rng.uniform(0.22, max(0.30, (crown_base / height) * 0.95))
+        a = rng.uniform(0.0, 2.0 * math.pi)
+        d = v_norm([math.cos(a), rng.uniform(-0.15, 0.10), math.sin(a)])
+        blen = height * branch_len_frac * rng.uniform(0.45, 0.75)
+        bpos = [x, y + height * hfrac, z]
+        handle = batch.part("cone", f"{tag} Low {i}", bpos,
+                            rotation_xyzw=align_y_quaternion(d),
+                            height=blen, bottom_radius=trunk_r * 0.22,
+                            top_radius=trunk_r * 0.08, slice_count=5,
+                            material_name=bark, parent_node_id=trunk,
+                            as_parent=True)
+        fol_center = v_add(bpos, v_scale(d, blen * 0.7))
+        batch.part("uv_sphere", f"{tag} Low {i} Foliage", fol_center,
+                   rotation_xyzw=align_y_quaternion(d),
+                   radii=[blen * 0.24, blen * 0.45, blen * 0.24],
+                   slice_count=8, stack_count=6, material_name=leaf,
+                   parent_node_id=handle)
     step = max(0.8, height * whorl_step_frac)
     hgt = crown_base
     whorl = 0
@@ -349,12 +448,15 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                height=spike_h, bottom_radius=spike_h * 0.28, top_radius=0.02,
                slice_count=8, material_name=leaf, parent_node_id=trunk)
     batch.flush()
+    if trunk_collider:
+        add_trunk_collider(c, tag, root, base, height * 0.97,
+                           trunk_r, max(0.02, trunk_r * 0.08))
     print(f"{tag}: {whorl} whorls")
     return root
 
 
 def grow_columnar(c, tag, base, height, bark, leaf, rng, width_frac=0.16,
-                  lobes=5):
+                  lobes=5, root_count=0, trunk_collider=False):
     """Columnar evergreen (juniper): short trunk + a stack of squashed
     foliage spheres narrowing toward the tip."""
     x, y, z = base
@@ -364,6 +466,9 @@ def grow_columnar(c, tag, base, height, bark, leaf, rng, width_frac=0.16,
                        bottom_radius=height * 0.02, top_radius=height * 0.012,
                        slice_count=8, material_name=bark,
                        parent_node_id=root, as_parent=True)
+    if root_count:
+        grow_roots(batch, tag, base, height * 0.02, bark, rng,
+                   root_count=root_count, parent=root)
     for i in range(lobes):
         t = i / max(1, lobes - 1)
         cy = height * (0.14 + 0.80 * t)
@@ -375,15 +480,24 @@ def grow_columnar(c, tag, base, height, bark, leaf, rng, width_frac=0.16,
                    slice_count=10, stack_count=8, material_name=leaf,
                    parent_node_id=trunk)
     batch.flush()
+    if trunk_collider:
+        add_trunk_collider(c, tag, root, base, height * 0.9,
+                           height * 0.05, height * 0.02)
     return root
 
 
-def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35):
+def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35,
+               root_count=0, trunk_collider=False):
     """Multi-stem shrub / small bushy tree: stems lean outward from the
-    base, each carrying an elongated canopy blob at its tip."""
+    base, each carrying an elongated canopy blob at its tip. With
+    root_count the stems rise from a shared root mound - branching that
+    reads as starting below ground."""
     x, y, z = base
     root = c.group(tag, base)
     batch = c.part_batch()
+    if root_count:
+        grow_roots(batch, tag, base, height * 0.03, bark, rng,
+                   root_count=root_count, flare=2.4, parent=root)
     for i in range(stems):
         a = 2.0 * math.pi * i / stems + rng.uniform(-0.5, 0.5)
         lean = spread * rng.uniform(0.6, 1.3)
@@ -403,4 +517,7 @@ def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35):
                    slice_count=10, stack_count=8, material_name=leaf,
                    parent_node_id=handle)
     batch.flush()
+    if trunk_collider:
+        add_trunk_collider(c, tag, root, base, height * 0.55,
+                           height * 0.05, height * 0.03)
     return root
