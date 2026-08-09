@@ -145,6 +145,21 @@ following its construction logic:
   the others keep sharing. Brushes appear in the scene's Content
   Library (Brushes folder) and persist in the saved .glb via
   ERHE_brushes.
+- **Unit-geometry parts**: for procedurally SIZED visual parts (jittered
+  lengths/radii would defeat the pool), use `common.part()` - a unit
+  box/sphere/cone brush shared per proportion key, sized per instance
+  with node TRS scale (cone taper quantizes to 0.1 steps; it is baked
+  geometry). Node scale scales the whole subtree, so `part()` keeps the
+  scaled mesh a LEAF: pass `as_parent=True` when the part will carry
+  children and it inserts an unscaled pose node as the attach point.
+  NOT for physics parts - collision shapes and body shape="auto" hulls
+  ignore node scale, so sway spines and static colliders keep `shape()`.
+  Also mind that an as_parent pose node is UNROTATED: a rest-pose sway
+  joint whose carrier is a pose node captures different constraint-frame
+  axes than a rotated mesh carrier (glade willow curtains settled at a
+  different angle after the retrofit - visually fine, but check probes).
+  Pilot numbers (windswept glade, 2026-08-09): create_shape 2231 -> 170
+  calls, wall 37.6 -> 33.0 s, viewport frame ~9.6 -> ~8.6 ms.
 - **`set_node_transform`** sets a node's transform by id/NAME with NO
   selection: ABSOLUTE semantics, all provided components in one call,
   undoable, rigid body teleported to the pose. It retries client-side

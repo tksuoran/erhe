@@ -195,13 +195,15 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
             heading = v_norm(v_rotate(heading, left, wob))
             length = seg_len * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
             radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
-            result = c.shape("cone", f"{tag} Branch {seg_count}", list(pos),
-                             rotation_xyzw=align_y_quaternion(heading),
-                             height=length, bottom_radius=radius,
-                             top_radius=max(0.025, radius * 0.7),
-                             slice_count=8, material_name=bark,
-                             parent_node_id=parent, motion_mode="none")
-            node_id = result.get("node_id") if isinstance(result, dict) else None
+            # Unit-cone instance; as_parent adds an unscaled pose node so the
+            # child branches/canopies do not inherit this segment's scale.
+            result = c.part("cone", f"{tag} Branch {seg_count}", list(pos),
+                            rotation_xyzw=align_y_quaternion(heading),
+                            height=length, bottom_radius=radius,
+                            top_radius=max(0.025, radius * 0.7),
+                            slice_count=8, material_name=bark,
+                            parent_node_id=parent, as_parent=True)
+            node_id = result.get("node_id")
             if node_id is not None:
                 parent = node_id
             seg_count += 1
@@ -240,10 +242,10 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
         radius = min(base_r + per * math.sqrt(count), cap) * age_leaf
         jitter = [rng.uniform(-0.06, 0.06) for _ in range(3)]
         carrier = max(carriers.items(), key=lambda kv: kv[1])[0]
-        c.shape("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
-                radius=radius, slice_count=12, stack_count=9,
-                material_name=leaf_materials[i % len(leaf_materials)],
-                parent_node_id=carrier, motion_mode="none")
+        c.part("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
+               radius=radius, slice_count=12, stack_count=9,
+               material_name=leaf_materials[i % len(leaf_materials)],
+               parent_node_id=carrier)
     print(f"{tag}: {seg_count} segments, {len(clusters)} canopy clusters")
 
 
@@ -310,12 +312,15 @@ def mushroom(c, tag, x, z, height, m, rng, y0=0.0, parent=None):
 
 def blade(c, name, position, radius, scale, direction, material, parent=None):
     """Elongated squashed sphere aligned along direction (leaf blades,
-    petals, cut faces): one create call carries rotation + node scale
-    (composed as T*R*S, same as the old scale-then-rotate). Pure visual."""
-    c.shape("uv_sphere", name, position, radius=radius,
-            rotation_xyzw=align_y_quaternion(direction), scale=scale,
-            slice_count=10, stack_count=8, material_name=material,
-            parent_node_id=parent, motion_mode="none")
+    petals, cut faces). Unit-sphere instance: EVERY blade in the scene
+    shares one brush; radius and the anisotropic stretch fold into the
+    node scale (T*R*S, same result as the old radius + scale). Blades are
+    always leaves, so no pose node is needed. Pure visual."""
+    c.part("uv_sphere", name, position,
+           rotation_xyzw=align_y_quaternion(direction),
+           radii=[radius * scale[0], radius * scale[1], radius * scale[2]],
+           slice_count=10, stack_count=8, material_name=material,
+           parent_node_id=parent)
 
 
 def expand_flower(rng, iterations=3):
@@ -357,17 +362,30 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
             wob = math.radians(rng.uniform(-7.0, 7.0))
             heading = v_norm(v_rotate(heading, left, wob))
             length = rng.uniform(0.09, 0.14)
-            result = c.shape("cone", f"{tag} Stem {seg}", list(pos),
-                             rotation_xyzw=align_y_quaternion(heading),
-                             height=length, bottom_radius=0.013,
-                             top_radius=0.010, slice_count=6,
-                             material_name=m["leaf2"], parent_node_id=parent,
-                             motion_mode="none")
-            node_id = result.get("node_id") if isinstance(result, dict) else None
-            if node_id is not None:
-                if seg == 0:
+            if seg == 0:
+                # Sway spine: keeps REAL geometry (create_physics_body
+                # shape="auto" hulls the node's own mesh; a unit-scaled
+                # instance would hull at unit size).
+                result = c.shape("cone", f"{tag} Stem {seg}", list(pos),
+                                 rotation_xyzw=align_y_quaternion(heading),
+                                 height=length, bottom_radius=0.013,
+                                 top_radius=0.010, slice_count=6,
+                                 material_name=m["leaf2"], parent_node_id=parent,
+                                 motion_mode="none")
+                node_id = result.get("node_id") if isinstance(result, dict) else None
+                if node_id is not None:
                     sway_jobs.append((tag, node_id, list(pos), "stem_sway", 0.03, 0.35, 0.10, root))
-                parent = node_id
+                    parent = node_id
+            else:
+                result = c.part("cone", f"{tag} Stem {seg}", list(pos),
+                                rotation_xyzw=align_y_quaternion(heading),
+                                height=length, bottom_radius=0.013,
+                                top_radius=0.010, slice_count=6,
+                                material_name=m["leaf2"], parent_node_id=parent,
+                                as_parent=True)
+                node_id = result.get("node_id")
+                if node_id is not None:
+                    parent = node_id
             pos = v_add(pos, v_scale(heading, length))
             seg += 1
         elif ch == "L":
@@ -384,11 +402,11 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
             pos, heading, left, parent = stack.pop()
         elif ch == "K":
             center_color = m["cream"] if color == "yellow" else m["yellow"]
-            result = c.shape("uv_sphere", f"{tag} Center {seg}",
-                             v_add(pos, v_scale(heading, 0.02)), radius=bloom_r,
-                             slice_count=8, stack_count=6, material_name=center_color,
-                             parent_node_id=parent, motion_mode="none")
-            center_id = result.get("node_id") if isinstance(result, dict) else None
+            result = c.part("uv_sphere", f"{tag} Center {seg}",
+                            v_add(pos, v_scale(heading, 0.02)), radius=bloom_r,
+                            slice_count=8, stack_count=6, material_name=center_color,
+                            parent_node_id=parent, as_parent=True)
+            center_id = result.get("node_id")
             petal_parent = center_id if center_id is not None else parent
             step = 360.0 / petal_count
             for i in range(petal_count):
@@ -422,12 +440,12 @@ def compound_pinna(c, name, pos, direction, length, parent, materials, rng):
     """Second L-system level: midrib + pinnule pair + tip pinnule."""
     d = v_norm(direction)
     midrib_len = length * 2.1
-    result = c.shape("cone", f"{name} Midrib", list(pos), height=midrib_len,
-                     rotation_xyzw=align_y_quaternion(d),
-                     bottom_radius=length * 0.09, top_radius=length * 0.05,
-                     slice_count=6, material_name=materials[1],
-                     parent_node_id=parent, motion_mode="none")
-    node_id = result.get("node_id") if isinstance(result, dict) else None
+    result = c.part("cone", f"{name} Midrib", list(pos), height=midrib_len,
+                    rotation_xyzw=align_y_quaternion(d),
+                    bottom_radius=length * 0.09, top_radius=length * 0.05,
+                    slice_count=6, material_name=materials[1],
+                    parent_node_id=parent, as_parent=True)
+    node_id = result.get("node_id")
     mid_parent = node_id if node_id is not None else parent
     sperp = v_cross(d, [0.0, 1.0, 0.0])
     if abs(sperp[0]) + abs(sperp[1]) + abs(sperp[2]) < 1e-4:
@@ -467,18 +485,29 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
             if ch == "F":
                 seg = size * 0.20 * (0.92 ** t) * rng.uniform(0.9, 1.1)
                 radius = size * 0.018 * (1.0 - 0.07 * t)
-                result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
-                                 rotation_xyzw=align_y_quaternion(heading),
-                                 height=seg, bottom_radius=radius,
-                                 top_radius=radius * 0.8, slice_count=6,
-                                 material_name=m["leaf2"], parent_node_id=parent,
-                                 motion_mode="none")
-                node_id = result.get("node_id") if isinstance(result, dict) else None
-                if node_id is not None:
-                    if t == 0:
+                if t == 0:
+                    # Sway spine: real geometry (shape="auto" body hull).
+                    result = c.shape("cone", f"{tag} Rachis {i}.{t}", list(pos),
+                                     rotation_xyzw=align_y_quaternion(heading),
+                                     height=seg, bottom_radius=radius,
+                                     top_radius=radius * 0.8, slice_count=6,
+                                     material_name=m["leaf2"], parent_node_id=parent,
+                                     motion_mode="none")
+                    node_id = result.get("node_id") if isinstance(result, dict) else None
+                    if node_id is not None:
                         sway_jobs.append((f"{tag} Frond {i}", node_id, list(pos),
                                           "frond_sway", 0.8, 0.22, 0.8, root))
-                    parent = node_id
+                        parent = node_id
+                else:
+                    result = c.part("cone", f"{tag} Rachis {i}.{t}", list(pos),
+                                    rotation_xyzw=align_y_quaternion(heading),
+                                    height=seg, bottom_radius=radius,
+                                    top_radius=radius * 0.8, slice_count=6,
+                                    material_name=m["leaf2"], parent_node_id=parent,
+                                    as_parent=True)
+                    node_id = result.get("node_id")
+                    if node_id is not None:
+                        parent = node_id
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
                 heading = v_norm(v_add(heading, [out_dir[0] * 0.10, -0.12, out_dir[2] * 0.10]))
@@ -527,12 +556,12 @@ def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
         a = rng.uniform(0.0, 2.0 * math.pi)
         tilt = math.radians(rng.uniform(14.0, 38.0))
         d = v_norm([math.sin(tilt) * math.cos(a), math.cos(tilt), math.sin(tilt) * math.sin(a)])
-        c.shape("cone", f"{tag} Blade {i}", base,
-                rotation_xyzw=align_y_quaternion(d),
-                height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
-                top_radius=0.001, slice_count=3,
-                material_name=m["leaf" if i % 2 else "leaf2"],
-                parent_node_id=spine_id, motion_mode="none")
+        c.part("cone", f"{tag} Blade {i}", base,
+               rotation_xyzw=align_y_quaternion(d),
+               height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
+               top_radius=0.001, slice_count=3,
+               material_name=m["leaf" if i % 2 else "leaf2"],
+               parent_node_id=spine_id)
 
 
 def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
@@ -551,22 +580,22 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
     ancient = scale >= 1.5
     root = c.group(tag, base)
     trunk_h = 2.3 * scale
-    result = c.shape("cone", f"{tag} Trunk", base, height=trunk_h,
-                     bottom_radius=0.30 * scale, top_radius=0.20 * scale,
-                     slice_count=12, material_name=m["bark"],
-                     parent_node_id=root, motion_mode="none")
-    trunk_id = result.get("node_id") if isinstance(result, dict) else None
+    result = c.part("cone", f"{tag} Trunk", base, height=trunk_h,
+                    bottom_radius=0.30 * scale, top_radius=0.20 * scale,
+                    slice_count=12, material_name=m["bark"],
+                    parent_node_id=root, as_parent=True)
+    trunk_id = result.get("node_id")
     on_trunk = trunk_id if trunk_id is not None else root
     top = [x, y + trunk_h, z]
     # Leafy crown mass so the tree does not read as bare branches.
     for i in range(3):
         ca = 2.0 * math.pi * i / 3.0 + rng.uniform(-0.4, 0.4)
-        c.shape("uv_sphere", f"{tag} Crown {i}",
-                [x + 0.45 * scale * math.cos(ca), y + trunk_h + 0.35 * scale,
-                 z + 0.45 * scale * math.sin(ca)],
-                radius=rng.uniform(0.5, 0.65) * scale, slice_count=12, stack_count=9,
-                material_name=m["leaf" if i % 2 else "leaf2"],
-                parent_node_id=on_trunk, motion_mode="none")
+        c.part("uv_sphere", f"{tag} Crown {i}",
+               [x + 0.45 * scale * math.cos(ca), y + trunk_h + 0.35 * scale,
+                z + 0.45 * scale * math.sin(ca)],
+               radius=rng.uniform(0.5, 0.65) * scale, slice_count=12, stack_count=9,
+               material_name=m["leaf" if i % 2 else "leaf2"],
+               parent_node_id=on_trunk)
 
     # Branch rings: (attach height fraction, branch count, upward pitch).
     # The ancient tree hangs a second, droopier ring below the crown.
@@ -581,13 +610,15 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
             out_dir = [math.cos(a), 0.0, math.sin(a)]
             branch_dir = v_norm([out_dir[0], ring_up, out_dir[2]])
             branch_len = rng.uniform(1.1, 1.5) * scale
-            result = c.shape("cone", f"{tag} Branch {curtain_index}", ring_base,
-                             rotation_xyzw=align_y_quaternion(branch_dir),
-                             height=branch_len, bottom_radius=0.09 * scale,
-                             top_radius=0.05 * scale, slice_count=8,
-                             material_name=m["bark"], parent_node_id=on_trunk,
-                             motion_mode="none")
-            branch_id = result.get("node_id") if isinstance(result, dict) else None
+            # Pose-node part: the carrier id rig_sway gets is the UNSCALED
+            # pose node (it grows a sensor body + curtain children).
+            result = c.part("cone", f"{tag} Branch {curtain_index}", ring_base,
+                            rotation_xyzw=align_y_quaternion(branch_dir),
+                            height=branch_len, bottom_radius=0.09 * scale,
+                            top_radius=0.05 * scale, slice_count=8,
+                            material_name=m["bark"], parent_node_id=on_trunk,
+                            as_parent=True)
+            branch_id = result.get("node_id")
             carrier = branch_id if branch_id is not None else on_trunk
             tip = v_add(ring_base, v_scale(branch_dir, branch_len))
 

@@ -532,6 +532,84 @@ class Creation:
         self._record_pause()
         return result
 
+    # ------------------------------------------------------ unit-shape parts
+
+    def unit_brush(self, shape, **geometry):
+        """Get-or-create a content-library brush for a geometry key: one
+        create_shape (instance=False, add_brush=True) per unique key, then
+        cache the brush id in the pool."""
+        key = (shape, repr(sorted(geometry.items())))
+        brush_id = self._shape_pool.get(key)
+        if brush_id is None:
+            label = " ".join(f"{k}={v}" for k, v in sorted(geometry.items()))
+            result = self.mutate("create_shape", {
+                "scene_name": self.scene, "shape": shape,
+                "name": f"unit {shape} {label}",
+                "instance": False, "add_brush": True, **geometry,
+            })
+            brush_id = result.get("brush_id") if isinstance(result, dict) else None
+            if brush_id is None:
+                raise RuntimeError(f"unit brush creation failed: {shape} {geometry}")
+            self._shape_pool[key] = brush_id
+        return brush_id
+
+    def part(self, shape, name, position, rotation_xyzw=None, parent_node_id=None,
+             material_name=None, as_parent=False, **dims):
+        """Unit-geometry INSTANCED visual part (always motion_mode "none"):
+        every part with the same proportions shares one library brush, and
+        the instance is sized with node TRS scale - one geometry + GPU
+        allocation for N parts. Node scale scales the whole subtree, so the
+        scaled mesh must stay a LEAF: a part that will carry children
+        (as_parent=True) gets an extra unscaled pose node at position and
+        the scaled mesh hangs under it; children then attach to the pose
+        node with world positions as usual. Returns {"node_id": attach
+        point} (the pose node when as_parent).
+
+        dims per shape: box size=[x,y,z]; uv_sphere radius=r or
+        radii=[x,y,z] (+ slice_count/stack_count); cone height,
+        bottom_radius, top_radius (+ slice_count, use_top/use_bottom) - the
+        taper ratio is baked geometry and quantizes to 0.1 steps, radii and
+        height come from node scale.
+
+        NOT for physics parts: brush collision shapes and body shape="auto"
+        hulls ignore node scale - keep shape() for sway spines and static
+        colliders."""
+        if shape == "box":
+            size = dims.pop("size")
+            geometry = {"size": [1.0, 1.0, 1.0], **dims}
+            scale3 = [float(v) for v in size]
+        elif shape == "uv_sphere":
+            radii = dims.pop("radii", None)
+            if radii is None:
+                radius = float(dims.pop("radius"))
+                radii = [radius, radius, radius]
+            geometry = {"radius": 1.0, **dims}
+            scale3 = [float(v) for v in radii]
+        elif shape == "cone":
+            height = float(dims.pop("height"))
+            bottom = float(dims.pop("bottom_radius"))
+            top = float(dims.pop("top_radius", 0.0))
+            taper = round(max(0.0, min(1.0, (top / bottom) if bottom > 0.0 else 0.0)) * 10.0) / 10.0
+            geometry = {"height": 1.0, "bottom_radius": 1.0, "top_radius": taper, **dims}
+            scale3 = [bottom, height, bottom]
+        else:
+            raise ValueError(f"part(): unsupported shape '{shape}'")
+        brush_id = self.unit_brush(shape, **geometry)
+        attach_id = None
+        mesh_parent = parent_node_id
+        mesh_name = name
+        if as_parent:
+            attach_id = self.group(name, position, parent_node_id=parent_node_id)
+            mesh_parent = attach_id
+            mesh_name = f"{name} Mesh"
+        result = self.place(brush_id, position, material_name=material_name,
+                            scale=scale3, motion_mode="none", name=mesh_name,
+                            rotation_xyzw=rotation_xyzw,
+                            parent_node_id=mesh_parent)
+        if attach_id is None:
+            attach_id = result.get("node_id") if isinstance(result, dict) else None
+        return {"node_id": attach_id}
+
     def _send_scene_settings(self, new_entries, ambient=None):
         """Send per-scene setting overrides. merge=True (server-side deep
         merge, 2026-08-08) keeps earlier overrides - no client accumulator."""
