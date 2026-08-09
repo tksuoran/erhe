@@ -4225,6 +4225,18 @@ private:
     // the primitive was skipped); used to place per-primitive extension
     // payloads.
     std::unordered_map<const erhe::scene::Mesh*, std::vector<std::optional<std::size_t>>> m_erhe_mesh_primitive_index_map;
+    // Content identity of an exported mesh: name + per-primitive (source,
+    // material) pointer pairs, where source is the triangle soup or geometry
+    // the primitive exports from. erhe meshes cloned from one template (brush
+    // instances, glTF import clones) share these pointers, so their nodes
+    // collapse to ONE glTF mesh and primitive sharing survives the round trip
+    // (the importer clones the template mesh per referencing node, sharing
+    // the Primitive shared_ptrs).
+    using Mesh_content_key = std::pair<std::string, std::vector<std::pair<const void*, const void*>>>;
+    std::map<Mesh_content_key, std::size_t> m_mesh_content_to_gltf_mesh_index;
+    // First exporter of each glTF mesh index; only this mesh stamps the glTF
+    // mesh's uid/name identity.
+    std::unordered_map<const erhe::scene::Mesh*, std::size_t> m_erhe_canonical_mesh_to_gltf_mesh_index;
     [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::size_t
     {
         ERHE_VERIFY(erhe_mesh != nullptr);
@@ -4235,9 +4247,60 @@ private:
             return fi->second;
         }
 
+        // Resolves what a Mesh_primitive would export from: the triangle soup
+        // when present (source of truth for imported primitives), else the
+        // geometry; nullptr = the primitive is skipped. Must match the
+        // emission loop below.
+        const auto primitive_export_source = [](const erhe::scene::Mesh_primitive& erhe_mesh_primitive) -> const void* {
+            const erhe::primitive::Primitive_render_shape* render_shape = erhe_mesh_primitive.primitive ? erhe_mesh_primitive.primitive->render_shape.get() : nullptr;
+            if (render_shape == nullptr) {
+                return nullptr;
+            }
+            const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape->get_triangle_soup();
+            if (soup) {
+                return soup.get();
+            }
+            return render_shape->get_geometry_const().get();
+        };
+
+        const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
+
+        // Meshes carrying caller extension payloads keep a private glTF mesh:
+        // collapsing them could merge distinct payloads onto one object.
+        const bool has_extension_payloads =
+            m_arguments.extension_payloads.meshes.contains(erhe_mesh) ||
+            [&]() {
+                const auto it = m_arguments.extension_payloads.mesh_primitives.lower_bound({erhe_mesh, 0});
+                return (it != m_arguments.extension_payloads.mesh_primitives.end()) && (it->first.first == erhe_mesh);
+            }();
+
+        Mesh_content_key content_key{std::string{erhe_mesh->get_name()}, {}};
+        if (!has_extension_payloads) {
+            for (const erhe::scene::Mesh_primitive& erhe_mesh_primitive : erhe_primitives) {
+                const void* source = primitive_export_source(erhe_mesh_primitive);
+                if (source == nullptr) {
+                    continue;
+                }
+                content_key.second.emplace_back(source, static_cast<const void*>(erhe_mesh_primitive.material.get()));
+            }
+            const auto content_fi = m_mesh_content_to_gltf_mesh_index.find(content_key);
+            if (content_fi != m_mesh_content_to_gltf_mesh_index.end()) {
+                const std::size_t shared_gltf_mesh_index = content_fi->second;
+                std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
+                primitive_index_map.resize(erhe_primitives.size());
+                std::size_t gltf_primitive_index = 0;
+                for (std::size_t primitive_index = 0; primitive_index < erhe_primitives.size(); ++primitive_index) {
+                    if (primitive_export_source(erhe_primitives[primitive_index]) != nullptr) {
+                        primitive_index_map[primitive_index] = gltf_primitive_index++;
+                    }
+                }
+                m_erhe_mesh_to_gltf_mesh_index.insert({erhe_mesh, shared_gltf_mesh_index});
+                return shared_gltf_mesh_index;
+            }
+        }
+
         fastgltf::Mesh gltf_mesh{};
         gltf_mesh.name = FASTGLTF_STD_PMR_NS::string{erhe_mesh->get_name()};
-        const std::vector<erhe::scene::Mesh_primitive>& erhe_primitives = erhe_mesh->get_primitives();
         std::vector<std::optional<std::size_t>>& primitive_index_map = m_erhe_mesh_primitive_index_map[erhe_mesh];
         primitive_index_map.resize(erhe_primitives.size());
         std::vector<std::pair<std::size_t, std::string>> pending_geometry_extensions; // (gltf primitive index, extension members)
@@ -4283,6 +4346,10 @@ private:
         std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
         m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
         m_erhe_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
+        m_erhe_canonical_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
+        if (!has_extension_payloads) {
+            m_mesh_content_to_gltf_mesh_index.emplace(std::move(content_key), gltf_mesh_index);
+        }
         for (auto& [gltf_primitive_index, extension_members] : pending_geometry_extensions) {
             m_geometry_primitive_extensions[{gltf_mesh_index, gltf_primitive_index}] = std::move(extension_members);
         }
@@ -5542,7 +5609,9 @@ private:
             targets.insert(targets.end(), category_targets.begin(), category_targets.end());
         };
         add_targets(m_gltf_asset.nodes,      m_erhe_node_to_gltf_node_index);
-        add_targets(m_gltf_asset.meshes,     m_erhe_mesh_to_gltf_mesh_index);
+        // Canonical meshes only: content-deduped meshes share a glTF mesh,
+        // which must be uid-stamped exactly once (by its first exporter).
+        add_targets(m_gltf_asset.meshes,     m_erhe_canonical_mesh_to_gltf_mesh_index);
         add_targets(m_gltf_asset.cameras,    m_erhe_camera_to_gltf_camera_index);
         // ERHE_asset_reference proxies are excluded: a proxy's identity
         // lives in its defining container, and stamping would write a
