@@ -500,6 +500,19 @@ advances). Wrappers: `c.advance_time(...)`, `c.run_simulation(seconds)`
   Rejected smooth-mound alternatives: lattice-deformed stepped boxes
   crease on the control grid, catmull_clark / smooth on hulls stays
   polygonal at the silhouette.
+- **Cacti** (creation 17): saguaro = smooth capsule trunk + arms as
+  3-capsule chains (out-and-up, steeper, vertical - align_y_quaternion,
+  equal radii so the hemisphere caps read as one limb); barrel = squat
+  SUNK uv_sphere ([0.44, 0.34, 0.44]*s at y 0.28*s - taller reads as a
+  green ball); prickly pear = thin uv_sphere pads ([0.38, 0.44, 0.07]*s)
+  that FAN with real outward lean (0.35-0.65) AND pad-plane tilt
+  (quat_mul(yaw, tilt)) - small-lean untilted pads stack into a ball
+  totem. Quantize capsule/sphere parameters for brush pooling; all parts
+  motion_mode none. GOTCHA: create_shape capsule takes bottom_radius /
+  top_radius (a 'radius' argument is silently IGNORED - that's the
+  physics-shape schema) and requires length > |bottom - top|. Saguaro
+  ribs rejected: hulls cannot go concave, per-rib CSG costs a boolean
+  pass each; matte green material reads right at scene scale.
 
 ## Load-bearing motor rigs (creation 14 carries reference code)
 
