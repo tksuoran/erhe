@@ -158,6 +158,7 @@ private:
     auto action_clear_undo_history(const nlohmann::json& args) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_transform_update_stats(const nlohmann::json& args) -> std::string;
+    auto action_merge_static_subtree(const nlohmann::json& args) -> std::string;
     auto query_shadow_fit_debug (const nlohmann::json& args) -> std::string;
     auto query_raycast          (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;

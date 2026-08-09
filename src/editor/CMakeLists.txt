@@ -342,6 +342,8 @@ erhe_target_sources_grouped(
     operations/scene_builder_viewport_resources_operation.hpp
     operations/merge_operation.cpp
     operations/merge_operation.hpp
+    operations/merge_static_subtree_operation.cpp
+    operations/merge_static_subtree_operation.hpp
     operations/mesh_operation.cpp
     operations/mesh_operation.hpp
     operations/move_mesh_vertices_operation.cpp

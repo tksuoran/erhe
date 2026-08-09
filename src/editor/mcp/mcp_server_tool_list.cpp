@@ -110,6 +110,16 @@ void Mcp_server::refresh_tool_list()
             {"reset", {{"type", "boolean"}, {"description", "Zero the running aggregate after reading (default false)"}}}
         }}
     }});
+    m_tool_infos.push_back({"merge_static_subtree", "Bake the static geometry under a node into that node's own mesh, one combined primitive per material, and REMOVE the merged nodes - the runtime fix for deep visual-only part hierarchies riding on physics bodies (each node under a moving body costs per-frame transform propagation + a draw). Merges only nodes whose sole attachment is a Mesh; nodes with rigid bodies or no_transform_update (nested sway spines, sensor carriers) are boundaries - kept, and with recurse=true (default) each becomes its own merge segment, so one call on a tree root flattens the whole rig segment by segment. Attachment-less chain/pose nodes whose whole subtree merged are pruned too (attachment-less LEAF nodes such as joint pivot anchors always survive). Kept nodes whose parent was removed are reparented to the segment root world-preserving. Undoable. Setup cost is significant (geometry merge + GPU mesh build per material per segment); merged parts lose individual pickability.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"},  {"description", "Name of the scene"}}},
+            {"node_id",    {{"type", "integer"}, {"description", "Root node id (takes precedence over node_name)"}}},
+            {"node_name",  {{"type", "string"},  {"description", "Root node name (alternative to node_id)"}}},
+            {"recurse",    {{"type", "boolean"}, {"description", "Also merge each discovered boundary segment (nested spines) as its own target (default true)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
+    }});
     m_tool_infos.push_back({"get_shadow_fit_debug","Dump directional shadow frustum fit debug geometry per shadow node: F_shadow planes, their bounded face quads (the truncated view-frustum faces caster AABBs are tested against), and receiver frustum corners. Needs the Shadow Fit 'Collect Debug' setting enabled.", schema_no_args()});
     m_tool_infos.push_back({"raycast",             "Shoot a ray through a scene's raytrace world and report the closest hit (mesh, node, primitive index, distance, position, normal). Uses the same mask defaults as the interactive viewport hover ray, so it verifies hover / ray picking behavior headlessly.", {
         {"type", "object"},

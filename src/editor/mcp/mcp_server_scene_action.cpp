@@ -6,6 +6,7 @@
 #include "config/generated/editor_settings_config.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
+#include "operations/merge_static_subtree_operation.hpp"
 #include "operations/node_transform_operation.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -2196,5 +2197,52 @@ auto Mcp_server::action_remove_tags(const json& args) -> std::string
     return make_json_content({{"untagged_count", static_cast<int>(items.size())}}).dump();
 }
 
+auto Mcp_server::action_merge_static_subtree(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!node) {
+        return make_error_content("Node not found (give node_id or node_name)");
+    }
+    const bool recurse = args.value("recurse", true);
+
+    // The geometry bake happens in the constructor (main thread, MCP
+    // dispatch); the structural swap executes on the operation stack.
+    const std::shared_ptr<Merge_static_subtree_operation> op = std::make_shared<Merge_static_subtree_operation>(
+        Merge_static_subtree_operation::Parameters{
+            .context    = m_context,
+            .build_info = erhe::primitive::Build_info{
+                .primitive_types = {
+                    .fill_triangles          = true,
+                    .fill_triangles_expanded = true,
+                    .edge_lines              = true,
+                    .corner_points           = true,
+                    .centroid_points         = true
+                },
+                .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+            },
+            .root       = node,
+            .recurse    = recurse
+        }
+    );
+    const std::size_t segments = op->get_target_count();
+    const std::size_t merged   = op->get_merged_count();
+    if (merged == 0) {
+        return make_error_content(fmt::format("Nothing to merge under '{}' (no mesh-only static descendants)", node->get_name()));
+    }
+    m_context.operation_stack->queue(op);
+    return make_json_content({
+        {"node_id",      node->get_id()},
+        {"node_name",    node->get_name()},
+        {"segments",     segments},
+        {"merged_nodes", merged},
+        {"queued",       true},
+        {"message",      "executes on the operation stack - poll get_async_status until queued_operations == 0"}
+    }).dump();
+}
 
 } // namespace editor
