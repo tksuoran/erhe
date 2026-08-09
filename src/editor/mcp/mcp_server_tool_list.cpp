@@ -1005,15 +1005,16 @@ void Mcp_server::refresh_tool_list()
             {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
     }});
-    m_tool_infos.push_back({"csg", "CSG boolean between two mesh nodes (queued, undoable as ONE operation): target <operation> tool, composed in WORLD space. The result geometry REPLACES the target node's mesh primitives in place - the target keeps its node id, name, transform, children, material and physics attachment (collision shape is rebuilt as a convex hull of the result). The tool node is then REMOVED from the scene (its children, if any, reparent to the tool's parent - pass a leaf mesh node as the tool). Inputs should be closed watertight manifolds (capped cones etc.); an empty result leaves the scene unchanged and logs a message. Note: on a pooled brush instance the edited target silently goes private (same rule as the other geometry ops). Executes on the target's scene; poll get_async_status before reading the result.", {
+    m_tool_infos.push_back({"csg", "CSG boolean between mesh nodes (queued, undoable as ONE operation): target <operation> tool(s), composed in WORLD space. The result geometry REPLACES the target node's mesh primitives in place - the target keeps its node id, name, transform, children, material and physics attachment (collision shape is rebuilt as a convex hull of the result). The tool nodes are then REMOVED from the scene (their children, if any, reparent to the tool's parent - pass leaf mesh nodes as tools). Multiple tools (tool_node_ids) merge into ONE tool solid and apply in a single pass - STRONGLY preferred over sequential calls (each pass re-triangulates the whole target, and stacked passes leave sliver-triangle shading artifacts). Inputs should be closed watertight manifolds (capped cones etc.); an empty result leaves the scene unchanged and logs a message. Note: on a pooled brush instance the edited target silently goes private (same rule as the other geometry ops). Executes on the target's scene; poll get_async_status before reading the result.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",     {{"type", "string"},  {"description", "Name of the scene (required)"}}},
-            {"operation",      {{"type", "string"},  {"description", "Boolean operation: union, intersection or difference (target minus tool)"}}},
+            {"operation",      {{"type", "string"},  {"description", "Boolean operation: union, intersection or difference (target minus tools)"}}},
             {"node_id",        {{"type", "integer"}, {"description", "Target (A) node id (takes precedence over node_name)"}}},
             {"node_name",      {{"type", "string"},  {"description", "Target (A) node name"}}},
             {"tool_node_id",   {{"type", "integer"}, {"description", "Tool (B) node id (takes precedence over tool_node_name)"}}},
-            {"tool_node_name", {{"type", "string"},  {"description", "Tool (B) node name"}}}
+            {"tool_node_name", {{"type", "string"},  {"description", "Tool (B) node name"}}},
+            {"tool_node_ids",  {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Multiple tool node ids - merged into one tool solid, applied in one pass (preferred for e.g. a row of carve boxes)"}}}
         }},
         {"required", json::array({"scene_name", "operation"})}
     }});

@@ -1613,7 +1613,10 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
                 r["isError"] = true;
                 return r.dump();
             }
-            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            // Smooth normals: authored hulls (ship hulls etc.) read as a
+            // fair surface, and the near-coplanar triangle fans CSG carving
+            // produces later do not show up as flat-shaded zigzag facets.
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::point_normals);
             parameters_echo = {{"point_count", points.size()}};
         }
     }

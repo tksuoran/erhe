@@ -764,12 +764,34 @@ auto Mcp_server::action_csg(const json& args) -> std::string
     if (!target_node) {
         return make_error_content("Target node not found (give node_id or node_name)");
     }
-    const std::shared_ptr<erhe::scene::Node> tool_node = find_node_in_scene(*sr, args, "tool_node_id", "tool_node_name");
-    if (!tool_node) {
-        return make_error_content("Tool node not found (give tool_node_id or tool_node_name)");
+    std::vector<std::shared_ptr<erhe::scene::Node>> tool_nodes;
+    if (args.contains("tool_node_ids")) {
+        const json& ids = args["tool_node_ids"];
+        if (!ids.is_array() || ids.empty()) {
+            return make_error_content("tool_node_ids must be a non-empty array of node ids");
+        }
+        for (const auto& id_value : ids) {
+            if (!id_value.is_number_unsigned() && !id_value.is_number_integer()) {
+                return make_error_content("tool_node_ids entries must be integers");
+            }
+            json lookup = {{"tool_node_id", id_value.get<std::size_t>()}};
+            const std::shared_ptr<erhe::scene::Node> tool_node = find_node_in_scene(*sr, lookup, "tool_node_id", "tool_node_name");
+            if (!tool_node) {
+                return make_error_content("Tool node not found: " + id_value.dump());
+            }
+            tool_nodes.push_back(tool_node);
+        }
+    } else {
+        const std::shared_ptr<erhe::scene::Node> tool_node = find_node_in_scene(*sr, args, "tool_node_id", "tool_node_name");
+        if (!tool_node) {
+            return make_error_content("Tool node not found (give tool_node_id / tool_node_name / tool_node_ids)");
+        }
+        tool_nodes.push_back(tool_node);
     }
-    if (target_node == tool_node) {
-        return make_error_content("Target and tool must be different nodes");
+    for (const std::shared_ptr<erhe::scene::Node>& tool_node : tool_nodes) {
+        if (target_node == tool_node) {
+            return make_error_content("Target and tool must be different nodes");
+        }
     }
 
     // Snapshot - retarget - run - restore, like run_geometry_op_with_target,
@@ -781,8 +803,11 @@ auto Mcp_server::action_csg(const json& args) -> std::string
     const std::vector<std::shared_ptr<erhe::Item_base>> saved = m_context.selection->get_selected_items();
     m_context.selection->set_active_scene_root(sr->shared_from_this());
     {
+        std::vector<std::shared_ptr<erhe::Item_base>> selection;
+        selection.push_back(target_node);
+        selection.insert(selection.end(), tool_nodes.begin(), tool_nodes.end());
         Scoped_selection_change change{*m_context.selection};
-        m_context.selection->set_selection({target_node, tool_node});
+        m_context.selection->set_selection(selection);
     }
     if      (operation == "union")        { m_context.operations->union_();       }
     else if (operation == "intersection") { m_context.operations->intersection(); }
@@ -791,11 +816,15 @@ auto Mcp_server::action_csg(const json& args) -> std::string
         Scoped_selection_change change{*m_context.selection};
         m_context.selection->set_selection(saved);
     }
+    json tools = json::array();
+    for (const std::shared_ptr<erhe::scene::Node>& tool_node : tool_nodes) {
+        tools.push_back({{"id", tool_node->get_id()}, {"name", tool_node->get_name()}});
+    }
     return make_json_content({
         {"queued",    true},
         {"operation", operation},
         {"target",    {{"id", target_node->get_id()}, {"name", target_node->get_name()}}},
-        {"tool",      {{"id", tool_node->get_id()},   {"name", tool_node->get_name()}}}
+        {"tools",     tools}
     }).dump();
 }
 

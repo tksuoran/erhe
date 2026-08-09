@@ -498,11 +498,15 @@ class Creation:
         return result
 
     def csg(self, target, tool, operation="difference", wait=True):
-        """CSG boolean: target <operation> tool, composed in WORLD space.
-        target/tool are node ids (int) or names (str). The result REPLACES
-        the target's mesh primitives in place (node id, name, transform,
-        children, material survive); the TOOL NODE IS REMOVED (children
-        reparent up - pass a leaf mesh node). One undoable operation.
+        """CSG boolean: target <operation> tool(s), composed in WORLD space.
+        target is a node id (int) or name (str); tool is one id/name or a
+        LIST of node ids - a list merges into one tool solid applied in a
+        single pass, which is strongly preferred over sequential calls
+        (each pass re-triangulates the whole target and stacked passes
+        leave sliver-triangle shading artifacts). The result REPLACES the
+        target's mesh primitives in place (node id, name, transform,
+        children, material survive); the TOOL NODES ARE REMOVED (children
+        reparent up - pass leaf mesh nodes). One undoable operation.
         Inputs must be closed watertight manifolds (capped cones, boxes,
         spheres, convex hulls, regular polyhedra); a CSG-edited pooled
         instance silently goes private (create with reuse=False when a
@@ -513,7 +517,9 @@ class Creation:
             args["node_id"] = target
         else:
             args["node_name"] = str(target)
-        if isinstance(tool, int):
+        if isinstance(tool, (list, tuple)):
+            args["tool_node_ids"] = [int(t) for t in tool]
+        elif isinstance(tool, int):
             args["tool_node_id"] = tool
         else:
             args["tool_node_name"] = str(tool)
