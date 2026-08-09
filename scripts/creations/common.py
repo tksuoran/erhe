@@ -855,6 +855,38 @@ class Creation:
         """Wake all dynamic bodies (they enter the world deactivated)."""
         self.mutate("wake_physics_bodies", {"scene_name": self.scene})
 
+    def advance_time(self, seconds=None, max_step_ms=None, mode=None):
+        """Editor simulation clock control (advance_time MCP tool,
+        2026-08-09). seconds queues that much SIMULATION time, drained at
+        max_step_ms (default 250, sticky) of simulation per rendered frame -
+        deterministic, bypasses the 25 ms wall-clock dilation cap and the
+        hidden-window pause. mode: wall_clock | paused | manual (paused /
+        manual freeze the simulation except queued advances). Call with no
+        arguments to poll: returns {mode, pending_seconds,
+        simulation_time_s, frame_number}."""
+        args = {}
+        if seconds is not None:
+            args["seconds"] = float(seconds)
+        if max_step_ms is not None:
+            args["max_step_ms"] = float(max_step_ms)
+        if mode is not None:
+            args["mode"] = mode
+        return self.mutate("advance_time", args)
+
+    def run_simulation(self, seconds, max_step_ms=None, deadline_s=600.0):
+        """Advance the simulation by exactly `seconds` under manual time and
+        block until the queue drains (physics settling: enable + wake first,
+        freeze with set_physics(False) after). Restores wall_clock mode."""
+        self.advance_time(seconds=seconds, max_step_ms=max_step_ms, mode="manual")
+        deadline = time.time() + deadline_s
+        while time.time() < deadline:
+            status = self.advance_time()
+            if status.get("pending_seconds", 0.0) <= 0.0:
+                self.advance_time(mode="wall_clock")
+                return status
+            time.sleep(0.1)
+        raise RuntimeError("run_simulation: manual advance did not drain in time")
+
     def wind(self, enabled=True, direction=(1.0, 0.0, 0.3), speed=3.5,
              gust_amplitude=2.5, gust_frequency=0.35, turbulence=0.4,
              wavelength=10.0):
