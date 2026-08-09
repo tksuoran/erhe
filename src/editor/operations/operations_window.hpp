@@ -13,6 +13,7 @@
 #include <vector>
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
+#include "erhe_geometry/operation/lattice_deform.hpp"
 #include "windows/property_editor.hpp"
 
 #include <imgui/imgui.h>
@@ -148,6 +149,9 @@ public:
     void difference();
     void intersection();
     void union_();
+
+    // Free-form deformation (no UI button; driven via MCP lattice_deform)
+    void lattice_deform(erhe::geometry::operation::Lattice_deform_parameters&& parameters, bool auto_fit_cage);
 
     // Subdivision
     void catmull_clark();

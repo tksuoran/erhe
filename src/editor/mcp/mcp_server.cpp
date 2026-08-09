@@ -560,6 +560,8 @@ auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& ar
         { "decimate",                       &Mcp_server::action_decimate                      },
         { "smooth",                         &Mcp_server::action_smooth                        },
         { "chamfer",                        &Mcp_server::action_chamfer3                      },
+        { "csg",                            &Mcp_server::action_csg                           },
+        { "lattice_deform",                 &Mcp_server::action_lattice_deform                },
         { "merge_faces",                    &Mcp_server::action_merge_faces                   },
         { "generate_texture_coordinates",   &Mcp_server::action_generate_texture_coordinates  },
         { "set_transform_reference_mode",   &Mcp_server::action_set_transform_reference_mode  },

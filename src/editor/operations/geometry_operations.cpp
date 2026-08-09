@@ -2,8 +2,10 @@
 #include "operations/item_insert_remove_operation.hpp"
 
 #include "app_context.hpp"
+#include "app_settings.hpp"
 #include "renderers/lightmap_report.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -31,13 +33,16 @@
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/operation/subdivision/sqrt3_subdivision.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
+#include "erhe_physics/icollision_shape.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_utility/bit_helpers.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
 #include <cmath>
+#include <limits>
 
 using erhe::geometry::to_geo_mat4f;
 
@@ -462,16 +467,60 @@ Make_atlas_operation::Make_atlas_operation(
 
 ///
 
+Lattice_deform_operation::Lattice_deform_operation(
+    Mesh_operation_parameters&&                            context,
+    erhe::geometry::operation::Lattice_deform_parameters&& lattice_parameters,
+    const bool                                             auto_fit_cage
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Lattice_deform");
+    make_entries(
+        [parameters = std::move(lattice_parameters), auto_fit_cage](
+            const erhe::geometry::Geometry& before_geometry,
+            erhe::geometry::Geometry&       after_geometry
+        ) mutable -> void {
+            if (auto_fit_cage) {
+                // Fit the cage to the source geometry's local bounds; pad
+                // degenerate axes so the lattice basis stays well defined
+                // (same policy as the geometry-graph Lattice node).
+                const GEO::MeshVertices& vertices = before_geometry.get_mesh().vertices;
+                glm::vec3 cage_min{ std::numeric_limits<float>::max()};
+                glm::vec3 cage_max{-std::numeric_limits<float>::max()};
+                for (GEO::index_t vertex = 0; vertex < vertices.nb(); ++vertex) {
+                    const GEO::vec3f p = erhe::geometry::get_pointf(vertices, vertex);
+                    cage_min = glm::min(cage_min, glm::vec3{p.x, p.y, p.z});
+                    cage_max = glm::max(cage_max, glm::vec3{p.x, p.y, p.z});
+                }
+                if (vertices.nb() > 0) {
+                    for (int axis = 0; axis < 3; ++axis) {
+                        if ((cage_max[axis] - cage_min[axis]) < 1e-4f) {
+                            cage_min[axis] -= 0.05f;
+                            cage_max[axis] += 0.05f;
+                        }
+                    }
+                    parameters.cage_min = cage_min;
+                    parameters.cage_max = cage_max;
+                }
+            }
+            erhe::geometry::operation::lattice_deform(before_geometry, after_geometry, parameters);
+        }
+    );
+    set_description(fmt::format("Lattice_deform {}", describe_entries()));
+}
+
+///
+
 Intersection_operation::Intersection_operation(Mesh_operation_parameters&& parameters)
-    : Binary_mesh_operation{std::move(parameters), erhe::geometry::operation::intersection}
+    : Binary_mesh_operation{std::move(parameters), "intersection", erhe::geometry::operation::intersection}
 {
 }
 Difference_operation::Difference_operation(Mesh_operation_parameters&& parameters)
-    : Binary_mesh_operation{std::move(parameters), erhe::geometry::operation::difference}
+    : Binary_mesh_operation{std::move(parameters), "difference", erhe::geometry::operation::difference}
 {
 }
 Union_operation::Union_operation(Mesh_operation_parameters&& parameters)
-    : Binary_mesh_operation{std::move(parameters), erhe::geometry::operation::union_}
+    : Binary_mesh_operation{std::move(parameters), "union", erhe::geometry::operation::union_}
 {
 }
 
@@ -479,18 +528,20 @@ Union_operation::Union_operation(Mesh_operation_parameters&& parameters)
 
 Binary_mesh_operation::Binary_mesh_operation(
     Mesh_operation_parameters&& parameters,
+    const char*                 operation_name,
     std::function<void(
         const erhe::geometry::Geometry& lhs,
         const erhe::geometry::Geometry& rhs,
         erhe::geometry::Geometry&       result
     )> operation
 )
-    : Compound_operation{make_operations(std::move(parameters), operation)}
+    : Compound_operation{make_operations(std::move(parameters), operation_name, operation)}
 {
 }
 
 auto Binary_mesh_operation::make_operations(
     Mesh_operation_parameters&& parameters,
+    const char*                 operation_name,
     std::function<void(
         const erhe::geometry::Geometry& lhs,
         const erhe::geometry::Geometry& rhs,
@@ -498,7 +549,10 @@ auto Binary_mesh_operation::make_operations(
     )> operation
 ) -> Compound_operation::Parameters
 {
-    // Collect input from selection
+    // Inputs come from parameters.items in order (snapshotted synchronously
+    // on the main thread by Operations::resolve_operation_items, so the MCP
+    // retarget-selection-and-restore pattern is race-free): the first
+    // mesh-carrying content node is the target, the rest are tools.
     struct Entry
     {
         std::shared_ptr<erhe::geometry::Geometry> geometry;
@@ -506,25 +560,18 @@ auto Binary_mesh_operation::make_operations(
     };
     std::vector<Entry> lhs_entries;
     std::vector<Entry> rhs_entries;
-    std::shared_ptr<erhe::primitive::Material> material{};
+    std::shared_ptr<erhe::scene::Node>              target_node{};
+    std::shared_ptr<erhe::scene::Mesh>              target_mesh{};
+    std::vector<std::shared_ptr<erhe::scene::Node>> tool_nodes;
+    std::shared_ptr<erhe::primitive::Material>      material{};
     erhe::primitive::Normal_style normal_style = erhe::primitive::Normal_style::none;
-
-    // Booleans act on the ACTIVE scene's selection only: one host, so the
-    // single item_host_mutex lock below is correct, and world transforms are
-    // composed within one world space. Selection in other scenes persists but
-    // never participates.
-    const std::shared_ptr<Scene_root> active_scene_root = parameters.context.selection->get_active_scene_root();
-    if (!active_scene_root) {
-        return {};
-    }
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items =
-        parameters.context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
     glm::mat4 target_node_from_world = glm::mat4{1};
-    glm::mat4 target_world_from_node = glm::mat4{1};
-
-    bool first_mesh = true;
     erhe::Item_host* item_host = nullptr;
-    for (const auto& item : selected_items) {
+
+    for (const auto& item : parameters.items) {
+        if (!erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::content)) {
+            continue;
+        }
         std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
         if (!node) {
             continue;
@@ -535,17 +582,23 @@ auto Binary_mesh_operation::make_operations(
             continue;
         }
 
+        // All participating nodes share one host (async_for_nodes_with_mesh
+        // verified this), so world transforms compose within one world space
+        // and the single item_host_mutex lock below is correct.
         glm::mat4 target_from_entry_node;
-        if (first_mesh) {
+        const bool is_target = !target_node;
+        if (is_target) {
             target_from_entry_node = glm::mat4{1};
             target_node_from_world = raw_node->node_from_world();
-            target_world_from_node = raw_node->world_from_node();
-            first_mesh = false;
+            target_node            = node;
+            target_mesh            = mesh;
+            item_host              = raw_node->get_item_host();
         } else {
             target_from_entry_node = target_node_from_world * raw_node->world_from_node();
+            tool_nodes.push_back(node);
         }
 
-        std::vector<Entry>& entries = lhs_entries.empty() ? lhs_entries : rhs_entries;
+        std::vector<Entry>& entries = is_target ? lhs_entries : rhs_entries;
         for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
             const erhe::primitive::Primitive&                               primitive = *mesh_primitive.primitive.get();
             const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape     = primitive.render_shape;
@@ -563,9 +616,6 @@ auto Binary_mesh_operation::make_operations(
             if (!material) {
                 material = mesh_primitive.material;
             }
-            if (item_host == nullptr) {
-                item_host = raw_node->get_item_host();
-            }
         }
     }
 
@@ -573,37 +623,37 @@ auto Binary_mesh_operation::make_operations(
         return {};
     }
     if (lhs_entries.empty() || rhs_entries.empty()) {
+        log_operations->info("CSG {}: need a target mesh node plus at least one tool mesh node", operation_name);
         return {};
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
-    Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-    erhe::scene::Scene* scene = scene_root->get_hosted_scene();
-    const auto scene_root_node = scene->get_root_node();
 
-    // Merge lhs and rhs inputs
-    erhe::geometry::Geometry transformed_lhs{};
-    erhe::geometry::Geometry transformed_rhs{};
-    for (const Entry& entry : lhs_entries) {
-        transformed_lhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
+    // Merge inputs into the target's local space and run the boolean. The CSG
+    // implementations (and merge) reach Geogram, which must not run
+    // concurrently with other Geogram invocations - see geogram_lock().
+    std::shared_ptr<erhe::geometry::Geometry> out_geometry = std::make_shared<erhe::geometry::Geometry>(operation_name);
+    {
+        const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+        erhe::geometry::Geometry transformed_lhs{};
+        erhe::geometry::Geometry transformed_rhs{};
+        for (const Entry& entry : lhs_entries) {
+            transformed_lhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
+        }
+        for (const Entry& entry : rhs_entries) {
+            transformed_rhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
+        }
+
+        transformed_lhs.get_mesh().vertices.set_double_precision();
+        transformed_rhs.get_mesh().vertices.set_double_precision();
+        out_geometry->get_mesh().vertices.set_double_precision();
+        operation(
+            transformed_lhs,
+            transformed_rhs,
+            *out_geometry.get()
+        );
+
+        out_geometry->get_mesh().vertices.set_single_precision();
     }
-    for (const Entry& entry : rhs_entries) {
-        transformed_rhs.merge_with_transform(*entry.geometry.get(), to_geo_mat4f(entry.target_from_entry_node));
-    }
-
-    // Perform operation
-    std::shared_ptr<erhe::geometry::Geometry> out_geometry = std::make_shared<erhe::geometry::Geometry>();
-    transformed_lhs.get_mesh().vertices.set_double_precision();
-    transformed_rhs.get_mesh().vertices.set_double_precision();
-    out_geometry->get_mesh().vertices.set_double_precision();
-    operation(
-        transformed_lhs,
-        transformed_rhs,
-        *out_geometry.get()
-    );
-
-    out_geometry->get_mesh().vertices.set_single_precision();
-
-    //transform_mesh(out_geometry->get_mesh(), to_geo_mat4f(target_node_from_world));
 
     const uint64_t flags =
         erhe::geometry::Geometry::process_flag_connect |
@@ -620,49 +670,76 @@ auto Binary_mesh_operation::make_operations(
         return Compound_operation::Parameters{};
     }
 
-    // Create new Primitive
-    constexpr uint64_t mesh_flags =
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::content     |
-        erhe::Item_flags::shadow_cast |
-        erhe::Item_flags::id          |
-        erhe::Item_flags::show_in_ui;
-    constexpr uint64_t node_flags =
-        erhe::Item_flags::visible     |
-        erhe::Item_flags::content     |
-        erhe::Item_flags::show_in_ui;
-
     std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(out_geometry);
     const bool renderable_ok = primitive->make_renderable_mesh(parameters.build_info, normal_style);
     const bool raytrace_ok   = primitive->make_raytrace();
     ERHE_VERIFY(renderable_ok && raytrace_ok);
 
-    // Create new Node
-    std::string name{"TODO"};
-    std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Node>(name);
-    std::shared_ptr<erhe::scene::Mesh> mesh = std::make_shared<erhe::scene::Mesh>(name);
-    mesh->add_primitive(primitive, material);
-    mesh->layer_id = scene_root->layers().content()->id;
-    mesh->enable_flag_bits   (mesh_flags);
-    node->set_world_from_node(target_world_from_node);
-    node->attach             (mesh);
-    node->enable_flag_bits   (node_flags);
+    // The result replaces the target mesh's primitives in place; the target
+    // keeps its material unless it had none (then the first tool material).
+    const std::shared_ptr<Node_physics> before_node_physics = erhe::scene::get_attachment<Node_physics>(target_node.get());
+    Mesh_operation::Entry entry{
+        .scene_mesh = target_mesh,
+        .before = {
+            .node_physics = before_node_physics,
+            .primitives   = target_mesh->get_primitives()
+        },
+        .after = {
+            .node_physics = before_node_physics,
+            .primitives   = { erhe::scene::Mesh_primitive{primitive, material} }
+        }
+    };
+
+    // Rebuild the collision shape from the result (same policy as
+    // Mesh_operation::make_entries: convex hull of the new geometry).
+    if (before_node_physics && parameters.context.editor_settings->physics.static_enable) {
+        GEO::Mesh convex_hull{};
+        const bool convex_hull_ok = erhe::geometry::make_convex_hull(out_geometry->get_mesh(), convex_hull);
+        if (convex_hull_ok) {
+            std::vector<float> coordinates;
+            coordinates.resize(convex_hull.vertices.nb() * 3);
+            for (GEO::index_t vertex : convex_hull.vertices) {
+                const GEO::vec3f p = erhe::geometry::get_pointf(convex_hull.vertices, vertex);
+                coordinates[3 * vertex + 0] = p.x;
+                coordinates[3 * vertex + 1] = p.y;
+                coordinates[3 * vertex + 2] = p.z;
+            }
+            auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                coordinates.data(),
+                static_cast<int>(convex_hull.vertices.nb()),
+                static_cast<int>(3 * sizeof(float))
+            );
+            const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                .collision_shape = collision_shape,
+                .debug_label     = out_geometry->get_name(),
+                .motion_mode     = before_node_physics->get_motion_mode()
+            };
+            entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+        }
+    }
+
+    Mesh_operation_parameters entry_parameters{
+        .context    = parameters.context,
+        .build_info = parameters.build_info
+    };
+    entry_parameters.items.push_back(target_node);
+    std::shared_ptr<Mesh_operation> mesh_operation = std::make_shared<Mesh_operation>(std::move(entry_parameters));
+    mesh_operation->add_entry(std::move(entry));
 
     Compound_operation::Parameters compound_operation_parameters;
-    compound_operation_parameters.operations.push_back(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = parameters.context,
-                .item    = node,
-                .parent  = scene_root_node,
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
-    );
-
-    //if (parameters.make_operations_result_callback) {
-    //    parameters.make_operations_result_callback(node, compound_operation_parameters);
-    //}
+    compound_operation_parameters.operations.push_back(std::move(mesh_operation));
+    for (const std::shared_ptr<erhe::scene::Node>& tool_node : tool_nodes) {
+        compound_operation_parameters.operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = parameters.context,
+                    .item    = tool_node,
+                    .parent  = tool_node->get_parent().lock(),
+                    .mode    = Item_insert_remove_operation::Mode::remove
+                }
+            )
+        );
+    }
 
     return compound_operation_parameters;
 }

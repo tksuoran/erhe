@@ -3,6 +3,8 @@
 
 #include "mcp/mcp_server_shared.hpp"
 
+#include <fmt/format.h>
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -739,6 +741,158 @@ auto Mcp_server::action_chamfer3(const json& args) -> std::string
         return make_error_content(target_error);
     }
     return make_json_content({{"queued", true}, {"bevel_ratio", bevel_ratio}}).dump();
+}
+
+auto Mcp_server::action_csg(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    if (m_context.selection == nullptr) {
+        return make_error_content("Selection system not available");
+    }
+    const std::string operation = args.value("operation", "");
+    if ((operation != "union") && (operation != "intersection") && (operation != "difference")) {
+        return make_error_content("Invalid operation: '" + operation + "' (union, intersection, difference)");
+    }
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    const std::shared_ptr<erhe::scene::Node> target_node = find_node_in_scene(*sr, args, "node_id", "node_name");
+    if (!target_node) {
+        return make_error_content("Target node not found (give node_id or node_name)");
+    }
+    const std::shared_ptr<erhe::scene::Node> tool_node = find_node_in_scene(*sr, args, "tool_node_id", "tool_node_name");
+    if (!tool_node) {
+        return make_error_content("Tool node not found (give tool_node_id or tool_node_name)");
+    }
+    if (target_node == tool_node) {
+        return make_error_content("Target and tool must be different nodes");
+    }
+
+    // Snapshot - retarget - run - restore, like run_geometry_op_with_target,
+    // but with explicit ordering: the boolean takes the FIRST item as the
+    // target and the rest as tools. Binary_mesh_operation snapshots the items
+    // synchronously (Operations::resolve_operation_items), so restoring the
+    // selection here does not race the async operation. The boolean acts on
+    // the active scene's selection bucket, so activate the target scene too.
+    const std::vector<std::shared_ptr<erhe::Item_base>> saved = m_context.selection->get_selected_items();
+    m_context.selection->set_active_scene_root(sr->shared_from_this());
+    {
+        Scoped_selection_change change{*m_context.selection};
+        m_context.selection->set_selection({target_node, tool_node});
+    }
+    if      (operation == "union")        { m_context.operations->union_();       }
+    else if (operation == "intersection") { m_context.operations->intersection(); }
+    else                                  { m_context.operations->difference();   }
+    {
+        Scoped_selection_change change{*m_context.selection};
+        m_context.selection->set_selection(saved);
+    }
+    return make_json_content({
+        {"queued",    true},
+        {"operation", operation},
+        {"target",    {{"id", target_node->get_id()}, {"name", target_node->get_name()}}},
+        {"tool",      {{"id", tool_node->get_id()},   {"name", tool_node->get_name()}}}
+    }).dump();
+}
+
+auto Mcp_server::action_lattice_deform(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Lattice_deform_parameters parameters;
+    bool auto_fit_cage = true;
+
+    auto read_vec3 = [&args](const char* key, glm::vec3& out_value) -> bool {
+        const json value = args.value(key, json());
+        if (value.is_array() && (value.size() == 3)) {
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            return true;
+        }
+        return false;
+    };
+    glm::vec3 cage_min{};
+    glm::vec3 cage_max{};
+    const bool has_min = read_vec3("cage_min", cage_min);
+    const bool has_max = read_vec3("cage_max", cage_max);
+    if (has_min != has_max) {
+        return make_error_content("Give both cage_min and cage_max, or neither (auto fit)");
+    }
+    if (has_min) {
+        parameters.cage_min = cage_min;
+        parameters.cage_max = cage_max;
+        auto_fit_cage = false;
+    }
+
+    const json divisions_json = args.value("divisions", json());
+    if (divisions_json.is_array() && (divisions_json.size() == 3)) {
+        parameters.divisions = glm::ivec3{
+            std::max(1, divisions_json[0].get<int>()),
+            std::max(1, divisions_json[1].get<int>()),
+            std::max(1, divisions_json[2].get<int>())
+        };
+    }
+
+    const std::string interpolation = args.value("interpolation", "bezier");
+    if (interpolation == "trilinear") {
+        parameters.interpolation = erhe::geometry::operation::Lattice_interpolation::trilinear;
+    } else if (interpolation == "bezier") {
+        parameters.interpolation = erhe::geometry::operation::Lattice_interpolation::bezier;
+    } else {
+        return make_error_content("Invalid interpolation: " + interpolation + " (trilinear, bezier)");
+    }
+    parameters.regenerate_attributes = args.value("regenerate_attributes", true);
+
+    parameters.control_point_offsets.assign(
+        erhe::geometry::operation::lattice_control_point_count(parameters.divisions),
+        glm::vec3{0.0f}
+    );
+    const json offsets_json = args.value("offsets", json::array());
+    if (!offsets_json.is_array() || offsets_json.empty()) {
+        return make_error_content("offsets is required: [[i, j, k, dx, dy, dz], ...] control point displacements");
+    }
+    for (const auto& entry : offsets_json) {
+        if (!entry.is_array() || (entry.size() != 6)) {
+            return make_error_content("offsets entries must be [i, j, k, dx, dy, dz]");
+        }
+        const int i = entry[0].get<int>();
+        const int j = entry[1].get<int>();
+        const int k = entry[2].get<int>();
+        if (
+            (i < 0) || (i > parameters.divisions.x) ||
+            (j < 0) || (j > parameters.divisions.y) ||
+            (k < 0) || (k > parameters.divisions.z)
+        ) {
+            return make_error_content(
+                fmt::format(
+                    "offset index ({}, {}, {}) out of range - lattice has {}x{}x{} control points",
+                    i, j, k,
+                    parameters.divisions.x + 1, parameters.divisions.y + 1, parameters.divisions.z + 1
+                )
+            );
+        }
+        const std::size_t index = erhe::geometry::operation::lattice_offset_index(parameters.divisions, i, j, k);
+        parameters.control_point_offsets[index] = glm::vec3{entry[3].get<float>(), entry[4].get<float>(), entry[5].get<float>()};
+    }
+
+    const glm::ivec3  divisions_echo = parameters.divisions;
+    const std::string target_error   = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->lattice_deform(std::move(parameters), auto_fit_cage);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    return make_json_content({
+        {"queued",        true},
+        {"divisions",     {divisions_echo.x, divisions_echo.y, divisions_echo.z}},
+        {"interpolation", interpolation},
+        {"auto_fit_cage", auto_fit_cage},
+        {"offset_count",  offsets_json.size()}
+    }).dump();
 }
 
 auto Mcp_server::action_merge_faces(const json& args) -> std::string

@@ -438,6 +438,9 @@ class Creation:
         "radius", "slice_count", "stack_count",
         "height", "length", "bottom_radius", "top_radius", "use_top", "use_bottom",
         "major_radius", "minor_radius", "major_steps", "minor_steps",
+        # disc / triangle / quad / rectangle / regular_polyhedron / convex_hull
+        "outer_radius", "inner_radius", "edge", "width",
+        "front_face", "back_face", "kind", "points",
     ))
 
     def shape(self, shape, name, position, reuse=True, **kwargs):
@@ -492,6 +495,59 @@ class Creation:
             self._shape_pool[pool_key] = result["brush_id"]
         if kwargs.get("instance", True) is not False:
             self._record_pause()
+        return result
+
+    def csg(self, target, tool, operation="difference", wait=True):
+        """CSG boolean: target <operation> tool, composed in WORLD space.
+        target/tool are node ids (int) or names (str). The result REPLACES
+        the target's mesh primitives in place (node id, name, transform,
+        children, material survive); the TOOL NODE IS REMOVED (children
+        reparent up - pass a leaf mesh node). One undoable operation.
+        Inputs must be closed watertight manifolds (capped cones, boxes,
+        spheres, convex hulls, regular polyhedra); a CSG-edited pooled
+        instance silently goes private (create with reuse=False when a
+        shared brush must stay untouched). Queued async; wait=True settles
+        before returning so the result is immediately usable."""
+        args = {"scene_name": self.scene, "operation": operation}
+        if isinstance(target, int):
+            args["node_id"] = target
+        else:
+            args["node_name"] = str(target)
+        if isinstance(tool, int):
+            args["tool_node_id"] = tool
+        else:
+            args["tool_node_name"] = str(tool)
+        result = self.mutate("csg", args)
+        if wait:
+            self.settle()
+        return result
+
+    def lattice_deform(self, node, offsets, divisions=None, cage_min=None,
+                       cage_max=None, interpolation="bezier", wait=True):
+        """Free-form deformation of one mesh node through a control point
+        lattice. offsets = [[i, j, k, dx, dy, dz], ...] displacements in the
+        mesh's LOCAL space; divisions [x,y,z] cells (default [2,2,2] = 3^3
+        control points, indices 0..divisions per axis). The cage auto-fits
+        the geometry's local bounds unless cage_min+cage_max are given.
+        Needs interior vertices to bend - billow sails from a box with
+        steps (e.g. size [w, h, 0.02], steps [8, 8, 1]), not a 4-vertex
+        quad. Queued async; wait=True settles before returning."""
+        args = {"scene_name": self.scene,
+                "offsets": [[float(v) if index >= 3 else int(v)
+                             for index, v in enumerate(entry)] for entry in offsets],
+                "interpolation": interpolation}
+        if isinstance(node, int):
+            args["node_id"] = node
+        else:
+            args["node_name"] = str(node)
+        if divisions is not None:
+            args["divisions"] = [int(v) for v in divisions]
+        if cage_min is not None and cage_max is not None:
+            args["cage_min"] = [float(v) for v in cage_min]
+            args["cage_max"] = [float(v) for v in cage_max]
+        result = self.mutate("lattice_deform", args)
+        if wait:
+            self.settle()
         return result
 
     def light(self, light_type, name, position, color, intensity, **kwargs):

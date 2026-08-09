@@ -17,7 +17,13 @@
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "tools/clipboard.hpp"
 
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/shapes/convex_hull.hpp"
+#include "erhe_geometry/shapes/disc.hpp"
+#include "erhe_geometry/shapes/regular_polygon.hpp"
+#include "erhe_geometry/shapes/regular_polyhedron.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "erhe_physics/icollision_shape.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <simdjson.h>
@@ -1358,8 +1364,12 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     }
 
     const std::string shape = args.value("shape", "");
-    if ((shape != "box") && (shape != "uv_sphere") && (shape != "cone") && (shape != "capsule") && (shape != "torus")) {
-        json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule or torus)");
+    if (
+        (shape != "box")       && (shape != "uv_sphere") && (shape != "cone")               && (shape != "capsule")     &&
+        (shape != "torus")     && (shape != "disc")      && (shape != "triangle")           && (shape != "quad")        &&
+        (shape != "rectangle") && (shape != "convex_hull") && (shape != "regular_polyhedron")
+    ) {
+        json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, convex_hull or regular_polyhedron)");
         r["isError"] = true;
         return r.dump();
     }
@@ -1473,7 +1483,7 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             {"stack_count",   parameters.hemisphere_stack_count},
             {"tapered",       parameters.bottom_radius != parameters.top_radius}
         };
-    } else { // torus
+    } else if (shape == "torus") {
         Torus_parameters parameters;
         parameters.major_radius = args.value("major_radius", parameters.major_radius);
         parameters.minor_radius = args.value("minor_radius", parameters.minor_radius);
@@ -1486,6 +1496,126 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             {"major_steps",  parameters.major_steps},
             {"minor_steps",  parameters.minor_steps}
         };
+    } else {
+        // Shapes generated straight from erhe_geometry (no Create-window
+        // class): build geometry, process, wrap into a Brush. Flat shapes
+        // (disc / triangle / quad / rectangle) get an explicit thin-box
+        // collision shape - Brush's automatic convex hull needs volume.
+        auto finish_brush = [&brush_create_info](
+            const std::shared_ptr<erhe::geometry::Geometry>& geometry,
+            const erhe::primitive::Normal_style              normal_style
+        ) -> std::shared_ptr<Brush> {
+            geometry->process(
+                {
+                    .flags =
+                        erhe::geometry::Geometry::process_flag_connect |
+                        erhe::geometry::Geometry::process_flag_build_edges |
+                        erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+                }
+            );
+            brush_create_info.geometry     = geometry;
+            brush_create_info.normal_style = normal_style;
+            return std::make_shared<Brush>(brush_create_info);
+        };
+        if (shape == "disc") {
+            const float outer_radius = args.value("outer_radius", 1.0f);
+            const float inner_radius = args.value("inner_radius", 0.0f);
+            const int   slice_count  = std::max(3, args.value("slice_count", 32));
+            const int   stack_count  = std::max(1, args.value("stack_count", 2));
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("disc");
+            erhe::geometry::shapes::make_disc(geometry->get_mesh(), outer_radius, inner_radius, slice_count, stack_count);
+            brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                glm::vec3{outer_radius, outer_radius, 0.01f}
+            );
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {
+                {"outer_radius", outer_radius},
+                {"inner_radius", inner_radius},
+                {"slice_count",  slice_count},
+                {"stack_count",  stack_count}
+            };
+        } else if (shape == "triangle") {
+            const float radius = args.value("radius", 1.0f);
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("triangle");
+            erhe::geometry::shapes::make_triangle(geometry->get_mesh(), radius);
+            brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                glm::vec3{radius, radius, 0.01f}
+            );
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {{"radius", radius}};
+        } else if (shape == "quad") {
+            const float edge = args.value("edge", 1.0f);
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("quad");
+            erhe::geometry::shapes::make_quad(geometry->get_mesh(), edge);
+            brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                glm::vec3{0.5f * edge, 0.5f * edge, 0.01f}
+            );
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {{"edge", edge}};
+        } else if (shape == "rectangle") {
+            const float width      = args.value("width",      1.0f);
+            const float height     = args.value("height",     1.0f);
+            const bool  front_face = args.value("front_face", true);
+            const bool  back_face  = args.value("back_face",  true);
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("rectangle");
+            erhe::geometry::shapes::make_rectangle(geometry->get_mesh(), width, height, front_face, back_face);
+            brush_create_info.collision_shape = erhe::physics::ICollision_shape::create_box_shape_shared(
+                glm::vec3{0.5f * width, 0.5f * height, 0.01f}
+            );
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {
+                {"width",      width},
+                {"height",     height},
+                {"front_face", front_face},
+                {"back_face",  back_face}
+            };
+        } else if (shape == "regular_polyhedron") {
+            const std::string kind   = args.value("kind", "icosahedron");
+            const float       radius = args.value("radius", 1.0f);
+            auto geometry = std::make_shared<erhe::geometry::Geometry>(kind);
+            if      (kind == "tetrahedron")   { erhe::geometry::shapes::make_tetrahedron  (geometry->get_mesh(), radius); }
+            else if (kind == "cube")          { erhe::geometry::shapes::make_cube         (geometry->get_mesh(), radius); }
+            else if (kind == "octahedron")    { erhe::geometry::shapes::make_octahedron   (geometry->get_mesh(), radius); }
+            else if (kind == "dodecahedron")  { erhe::geometry::shapes::make_dodecahedron (geometry->get_mesh(), radius); }
+            else if (kind == "icosahedron")   { erhe::geometry::shapes::make_icosahedron  (geometry->get_mesh(), radius); }
+            else if (kind == "cuboctahedron") { erhe::geometry::shapes::make_cuboctahedron(geometry->get_mesh(), radius); }
+            else {
+                json r = make_text_content("Invalid kind '" + kind + "' (tetrahedron, cube, octahedron, dodecahedron, icosahedron, cuboctahedron)");
+                r["isError"] = true;
+                return r.dump();
+            }
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {{"kind", kind}, {"radius", radius}};
+        } else { // convex_hull
+            const json points_json = args.value("points", json::array());
+            std::vector<glm::vec3> points;
+            for (const auto& point : points_json) {
+                if (!point.is_array() || (point.size() != 3)) {
+                    json r = make_text_content("points entries must be [x, y, z] arrays");
+                    r["isError"] = true;
+                    return r.dump();
+                }
+                points.emplace_back(point[0].get<float>(), point[1].get<float>(), point[2].get<float>());
+            }
+            if (points.size() < 4) {
+                json r = make_text_content("convex_hull needs at least 4 non-coplanar points");
+                r["isError"] = true;
+                return r.dump();
+            }
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("convex_hull");
+            {
+                // make_convex_hull reaches Geogram (Delaunay)
+                const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
+                erhe::geometry::shapes::make_convex_hull(geometry->get_mesh(), points);
+            }
+            if (geometry->get_mesh().facets.nb() == 0) {
+                json r = make_text_content("convex_hull produced no facets - are the points coplanar?");
+                r["isError"] = true;
+                return r.dump();
+            }
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
+            parameters_echo = {{"point_count", points.size()}};
+        }
     }
 
     if (!brush) {

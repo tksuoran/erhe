@@ -2134,6 +2134,17 @@ void Operations::union_()
     async_mesh_operation<Union_operation>();
 }
 
+void Operations::lattice_deform(erhe::geometry::operation::Lattice_deform_parameters&& parameters, const bool auto_fit_cage)
+{
+    async_for_selected_nodes_with_mesh(
+        [this, parameters = std::move(parameters), auto_fit_cage](Mesh_operation_parameters&& params) mutable {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Lattice_deform_operation>(std::move(params), std::move(parameters), auto_fit_cage)
+            );
+        }
+    );
+}
+
 void Operations::catmull_clark()
 {
     // Selection-aware: when a face-mode mesh-component selection is active, only the

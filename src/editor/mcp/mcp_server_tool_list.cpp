@@ -189,11 +189,11 @@ void Mcp_server::refresh_tool_list()
         {"required", json::array({"scene_name", "placements"})}
     }});
 
-    m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the same generators as the Create window, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps).", {
+    m_tool_infos.push_back({"create_shape",        "Create a parametric shape using the erhe geometry generators, then place an instance in the scene and/or add the brush to the content library. Shape parameters: box (size [x,y,z], steps [x,y,z], power), uv_sphere (radius, slice_count, stack_count), cone (height, bottom_radius, top_radius, use_top, use_bottom, slice_count, stack_count), capsule (length, bottom_radius, top_radius, slice_count, stack_count; tapered when the radii differ, which requires length > |bottom_radius - top_radius|), torus (major_radius, minor_radius, major_steps, minor_steps), disc (outer_radius, inner_radius, slice_count, stack_count; annulus when inner_radius > 0; flat in the XY plane facing +/-Z), triangle (radius; flat XY), quad (edge; flat XY, double sided), rectangle (width, height, front_face, back_face; flat XY), regular_polyhedron (kind = tetrahedron / cube / octahedron / dodecahedron / icosahedron / cuboctahedron, radius; watertight - good CSG inputs), convex_hull (points = [[x,y,z], ...] in node-local space, >= 4 non-coplanar; watertight hull - THE way to get authored silhouettes like ship hulls; good CSG input). Flat shapes get a thin box collision shape - prefer motion_mode none for them.", {
         {"type", "object"},
         {"properties", {
             {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
-            {"shape",          {{"type", "string"},  {"description", "Shape type: box, uv_sphere, cone, capsule or torus"}}},
+            {"shape",          {{"type", "string"},  {"description", "Shape type: box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, regular_polyhedron or convex_hull"}}},
             {"name",           {{"type", "string"},  {"description", "Brush / instance name (default: shape type)"}}},
             {"instance",       {{"type", "boolean"}, {"description", "Place an instance node in the scene (default true)"}}},
             {"add_brush",      {{"type", "boolean"}, {"description", "Add the brush to the content library for later place_brush use (default false)"}}},
@@ -220,7 +220,15 @@ void Mcp_server::refresh_tool_list()
             {"major_radius",   {{"type", "number"},  {"description", "torus: major radius"}}},
             {"minor_radius",   {{"type", "number"},  {"description", "torus: minor radius"}}},
             {"major_steps",    {{"type", "integer"}, {"description", "torus: major steps"}}},
-            {"minor_steps",    {{"type", "integer"}, {"description", "torus: minor steps"}}}
+            {"minor_steps",    {{"type", "integer"}, {"description", "torus: minor steps"}}},
+            {"outer_radius",   {{"type", "number"},  {"description", "disc: outer radius (default 1)"}}},
+            {"inner_radius",   {{"type", "number"},  {"description", "disc: inner radius; > 0 makes an annulus/ring (default 0)"}}},
+            {"edge",           {{"type", "number"},  {"description", "quad: edge length (default 1)"}}},
+            {"width",          {{"type", "number"},  {"description", "rectangle: width (default 1)"}}},
+            {"front_face",     {{"type", "boolean"}, {"description", "rectangle: generate the +Z-facing face (default true)"}}},
+            {"back_face",      {{"type", "boolean"}, {"description", "rectangle: generate the -Z-facing face (default true)"}}},
+            {"kind",           {{"type", "string"},  {"description", "regular_polyhedron: tetrahedron, cube, octahedron, dodecahedron, icosahedron or cuboctahedron (default icosahedron)"}}},
+            {"points",         {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}}, {"description", "convex_hull: node-local points [[x,y,z], ...], at least 4 non-coplanar"}}}
         }},
         {"required", json::array({"scene_name", "shape"})}
     }});
@@ -996,6 +1004,34 @@ void Mcp_server::refresh_tool_list()
             {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}},
             {"bevel_ratio", {{"type", "number"}, {"description", "How much each face shrinks toward its centroid, [0,1] (default 0.25)"}}}
         }}
+    }});
+    m_tool_infos.push_back({"csg", "CSG boolean between two mesh nodes (queued, undoable as ONE operation): target <operation> tool, composed in WORLD space. The result geometry REPLACES the target node's mesh primitives in place - the target keeps its node id, name, transform, children, material and physics attachment (collision shape is rebuilt as a convex hull of the result). The tool node is then REMOVED from the scene (its children, if any, reparent to the tool's parent - pass a leaf mesh node as the tool). Inputs should be closed watertight manifolds (capped cones etc.); an empty result leaves the scene unchanged and logs a message. Note: on a pooled brush instance the edited target silently goes private (same rule as the other geometry ops). Executes on the target's scene; poll get_async_status before reading the result.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",     {{"type", "string"},  {"description", "Name of the scene (required)"}}},
+            {"operation",      {{"type", "string"},  {"description", "Boolean operation: union, intersection or difference (target minus tool)"}}},
+            {"node_id",        {{"type", "integer"}, {"description", "Target (A) node id (takes precedence over node_name)"}}},
+            {"node_name",      {{"type", "string"},  {"description", "Target (A) node name"}}},
+            {"tool_node_id",   {{"type", "integer"}, {"description", "Tool (B) node id (takes precedence over tool_node_name)"}}},
+            {"tool_node_name", {{"type", "string"},  {"description", "Tool (B) node name"}}}
+        }},
+        {"required", json::array({"scene_name", "operation"})}
+    }});
+    m_tool_infos.push_back({"lattice_deform", "Free-form deformation (FFD) of mesh node(s) through a control point lattice (queued, undoable). The cage is an axis-aligned box in the mesh's LOCAL space, auto-fitted to the geometry's bounds unless cage_min/cage_max are given. offsets lists control point displacements [i, j, k, dx, dy, dz]; unlisted points stay at rest. divisions [x,y,z] cells means (x+1)*(y+1)*(z+1) control points, index 0..divisions per axis. bezier interpolation (default) gives smooth global FFD - THE tool for billowing sails, bent planks, tapered curves; trilinear is local per-cell. The source mesh needs interior vertices to bend (a 4-vertex quad cannot billow - use a box with steps, e.g. size [w,h,0.02] steps [8,8,1]). Topology is unchanged. Acts on the current object selection, or on explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored).", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name",  {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},
+            {"node_ids",    {{"type", "array"},   {"items", {{"type", "integer"}}}, {"description", "Explicit target node ids; the previous selection is restored after the call"}}},
+            {"node_id",     {{"type", "integer"}, {"description", "Single explicit target node id"}}},
+            {"node_name",   {{"type", "string"},  {"description", "Single explicit target node name"}}},
+            {"divisions",   {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Lattice cell count per axis (default [2,2,2] = 27 control points)"}}},
+            {"offsets",     {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 6}, {"maxItems", 6}}}, {"description", "Control point displacements [i, j, k, dx, dy, dz] in cage (local) space; required"}}},
+            {"cage_min",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Cage box min corner in mesh-local space (give with cage_max; omit both for auto fit)"}}},
+            {"cage_max",    {{"type", "array"},   {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "Cage box max corner in mesh-local space"}}},
+            {"interpolation", {{"type", "string"}, {"description", "bezier (default; smooth global FFD) or trilinear (local per-cell)"}}},
+            {"regenerate_attributes", {{"type", "boolean"}, {"description", "Recompute smooth normals from the deformed positions (default true)"}}}
+        }},
+        {"required", json::array({"offsets"})}
     }});
     json geometry_target_properties = {
         {"scene_name", {{"type", "string"},  {"description", "Scene for node targets (required with node_ids / node_id / node_name)"}}},

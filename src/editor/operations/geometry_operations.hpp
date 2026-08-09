@@ -3,6 +3,7 @@
 #include "operations/mesh_operation.hpp"
 #include "operations/compound_operation.hpp"
 
+#include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
 
 #include <unordered_map>
@@ -163,6 +164,22 @@ public:
     Smooth_operation(Mesh_operation_parameters&& context, unsigned int iterations, float strength, bool regenerate_attributes);
 };
 
+// Free-form deformation through a control point lattice (see
+// erhe_geometry lattice_deform.hpp). With auto_fit_cage the cage box is
+// fitted per mesh to the source geometry's local bounds (degenerate axes
+// padded), so control point offsets deform relative to the mesh's own
+// extent - the natural mode for one-shot script use (billowed sails,
+// bent planks).
+class Lattice_deform_operation : public Mesh_operation
+{
+public:
+    Lattice_deform_operation(
+        Mesh_operation_parameters&&                            context,
+        erhe::geometry::operation::Lattice_deform_parameters&& lattice_parameters,
+        bool                                                   auto_fit_cage
+    );
+};
+
 class Make_atlas_operation : public Mesh_operation
 {
 public:
@@ -186,11 +203,18 @@ public:
         std::unordered_map<const erhe::geometry::Geometry*, std::vector<float>> per_facet_chart_order = {});
 };
 
+// CSG boolean over parameters.items in order: the FIRST mesh-carrying content
+// node is the target (lhs), every following one is a tool (rhs). The result
+// geometry - composed in the target node's local space - REPLACES the target
+// mesh's primitives (node id, name, transform, children and physics attachment
+// all survive), and the tool nodes are removed (their children reparent up,
+// like delete). Everything is one undoable compound operation.
 class Binary_mesh_operation : public Compound_operation
 {
 public:
     Binary_mesh_operation(
         Mesh_operation_parameters&& parameters,
+        const char*                 operation_name,
         std::function<void(
             const erhe::geometry::Geometry& lhs,
             const erhe::geometry::Geometry& rhs,
@@ -201,6 +225,7 @@ public:
 protected:
     auto make_operations(
         Mesh_operation_parameters&& parameters,
+        const char*                 operation_name,
         std::function<void(
             const erhe::geometry::Geometry& lhs,
             const erhe::geometry::Geometry& rhs,
