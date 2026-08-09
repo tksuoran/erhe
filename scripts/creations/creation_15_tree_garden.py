@@ -34,70 +34,25 @@ sys.path.insert(0, os.path.dirname(__file__))
 from common import Creation, standard_args, quat_mul, probe_tilt  # noqa: E402
 from lsystem_trees import (  # noqa: E402
     broadleaf_species_params, grow_columnar, grow_conifer, grow_roots,
-    grow_shrub, grow_tree, rig_tree_sway,
+    grow_shrub, grow_tree, rig_tree_sway, sway_setting_for_height,
 )
-
-def make_rest_pose_settings(c, name, range_rad, stiffness, damping, max_force):
-    """Rest-pose motor joint settings (glade recipe): linear XYZ + angular Y
-    locked, angular X/Z limited, drives spring back to the authored pose."""
-    c.joint_settings(
-        name,
-        limits=[
-            {"linear_axes": [True, True, True], "angular_axes": [False, False, False], "min": 0.0, "max": 0.0},
-            {"linear_axes": [False, False, False], "angular_axes": [False, True, False], "min": 0.0, "max": 0.0},
-            {"linear_axes": [False, False, False], "angular_axes": [True, False, False], "min": -range_rad, "max": range_rad},
-            {"linear_axes": [False, False, False], "angular_axes": [False, False, True], "min": -range_rad, "max": range_rad},
-        ],
-        drives=[
-            {"type": "angular", "axis": 0, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
-            {"type": "angular", "axis": 2, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
-        ],
-    )
-
-
-_sway_setting_cache = set()
-
-
-def sway_setting_for_height(c, height):
-    """BEAM-SCALED joint settings, one per 4 m height bucket (joint settings
-    are shared library items, so they quantize). Bending stiffness of a
-    tapered beam goes ~ r^4 / L and trunk radius grows with height, so
-    stiffness ~ h^2 while rotational inertia grows ~ h^3: tall thick trunks
-    get SMALL, LOW-FREQUENCY sway (omega ~ 1/sqrt(h)) and thin trunks sway
-    MORE and faster. The angular range widens for thin trees the same way
-    (~5 deg for the 45 m spruce, ~15 deg for a hawthorn)."""
-    bucket = max(4, int(round(height / 4.0)) * 4)
-    name = f"tree_sway_h{bucket}"
-    if name not in _sway_setting_cache:
-        stiffness = 2.2 * bucket * bucket
-        make_rest_pose_settings(
-            c, name,
-            range_rad=0.06 + 1.6 / bucket,
-            stiffness=stiffness,
-            damping=stiffness * 0.10,
-            max_force=stiffness * 2.2,
-        )
-        _sway_setting_cache.add(name)
-    return name
-
 
 def tree_sway_config(c, height):
     """Height-scaled trunk-level rig (glade recipe): trunk mass and
     receptivity grow with the tree, so the 45 m spruce lumbers while the
-    17 m apple stirs. branch_sway (second-level limb spines jointed to the
-    trunk) is implemented in lsystem_trees but DISABLED here: with limbs
-    rigged, crowns slump to half height - the limb joints do not hold
-    their rest pose against a dynamic trunk carrier (tried both limb
-    scene-parents: under the trunk = double-driven transforms, under the
-    root group = same slump). Needs a dedicated debugging session.
-    trunk_settings comes from sway_setting_for_height, so joint stiffness
-    follows beam scaling per tree size (thick = stiff and slow, thin =
-    soft and lively)."""
+    17 m apple stirs. branch_sway makes major limbs (pipe share >= 12%)
+    second-level spines jointed to the trunk with the ragdoll two-anchor
+    pivot (the single-anchor joint put the trunk-side constraint frame at
+    the trunk BASE and crowns slumped); their stiffness comes from the
+    beam rule keyed by limb radius, so stiffness keeps dropping steeply
+    toward thinner branches. trunk_settings comes from
+    sway_setting_for_height (thick = stiff and slow, thin = soft and
+    lively)."""
     return {
         "trunk_settings": sway_setting_for_height(c, height),
         "trunk_mass": 3.0 * height,
         "trunk_receptivity": 0.9 * height,
-        "branch_sway": False,
+        "branch_sway": True,
     }
 
 # (finnish, scientific, height_m, habit, bark, leaf, kwargs)

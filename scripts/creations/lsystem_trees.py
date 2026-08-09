@@ -89,7 +89,15 @@ def rig_tree_sway(c, sway_jobs):
     non-spine carriers get the tiny static sensor body. Jobs must list a
     tree's trunk before its limbs so the trunk body exists when the limb
     joints look it up. Run AFTER settle() with the simulation DISABLED so
-    the joints capture the authored rest pose."""
+    the joints capture the authored rest pose.
+
+    Joints use the ragdoll pattern (creations 7/14): TWO coincident anchor
+    children at the pivot, one on each body, jointed together. Connecting
+    the spine anchor straight to the carrier NODE put the carrier-side
+    constraint frame at the carrier body's origin - for a limb jointed to
+    a trunk that is the trunk BASE, meters from the pivot, and the motors
+    drove the limb around the wrong point (crowns slumped to half
+    height)."""
     spine_ids = {job[1] for job in sway_jobs}
     carriers_with_body = set()
     for tag, node_id, base_pos, settings, mass, receptivity, ang_damp, carrier_id in sway_jobs:
@@ -100,9 +108,56 @@ def rig_tree_sway(c, sway_jobs):
         c.body(node_id, shape="auto", motion_mode="dynamic", mass=mass,
                gravity_factor=0.0, angular_damping=ang_damp,
                linear_damping=0.05, wind_receptivity=receptivity)
-        anchor_id = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
-        c.joint(anchor_id, connected_node_id=carrier_id, settings_name=settings)
+        anchor_spine = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
+        anchor_carrier = c.anchor(f"{tag} Sway Pivot", carrier_id, base_pos)
+        c.joint(anchor_spine, connected_node_id=anchor_carrier, settings_name=settings)
     print(f"rigged {len(sway_jobs)} sway spines")
+
+
+def make_rest_pose_settings(c, name, range_rad, stiffness, damping, max_force):
+    """Rest-pose motor joint settings (glade recipe): linear XYZ + angular Y
+    locked, angular X/Z limited, drives spring back to the authored pose."""
+    c.joint_settings(
+        name,
+        limits=[
+            {"linear_axes": [True, True, True], "angular_axes": [False, False, False], "min": 0.0, "max": 0.0},
+            {"linear_axes": [False, False, False], "angular_axes": [False, True, False], "min": 0.0, "max": 0.0},
+            {"linear_axes": [False, False, False], "angular_axes": [True, False, False], "min": -range_rad, "max": range_rad},
+            {"linear_axes": [False, False, False], "angular_axes": [False, False, True], "min": -range_rad, "max": range_rad},
+        ],
+        drives=[
+            {"type": "angular", "axis": 0, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
+            {"type": "angular", "axis": 2, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
+        ],
+    )
+
+
+_sway_setting_cache = set()
+
+
+def sway_setting_for_height(c, height):
+    """BEAM-SCALED joint settings, one per 4 m height bucket (joint settings
+    are shared library items, so they quantize). Bending stiffness of a
+    tapered beam goes ~ r^4 / L and trunk radius grows with height, so
+    stiffness ~ h^2 while rotational inertia grows ~ h^3: tall thick trunks
+    get SMALL, LOW-FREQUENCY sway (omega ~ 1/sqrt(h)) and thin trunks sway
+    MORE and faster. The angular range widens for thin members the same
+    way. Limbs reuse this rule via their EQUIVALENT height (radius / 0.014,
+    the trunk radius-per-height factor), so stiffness keeps falling
+    steeply toward thinner and thinner branches."""
+    bucket = max(4, int(round(height / 4.0)) * 4)
+    name = f"tree_sway_h{bucket}"
+    if name not in _sway_setting_cache:
+        stiffness = 2.2 * bucket * bucket
+        make_rest_pose_settings(
+            c, name,
+            range_rad=0.06 + 1.6 / bucket,
+            stiffness=stiffness,
+            damping=stiffness * 0.10,
+            max_force=stiffness * 2.2,
+        )
+        _sway_setting_cache.add(name)
+    return name
 
 
 def add_trunk_collider(c, tag, parent_node_id, base, height, bottom_radius, top_radius):
@@ -212,18 +267,24 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
         grow_roots(batch, tag, base, trunk_r[0], bark, rng,
                    root_count=p["root_count"], parent=root)
     # Optional lower trunk branches (opt-in "trunk_branches"): an EVEN
-    # golden-angle ladder from mid-trunk to the crown base, so there is no
-    # bare gap below the crown. Length and foliage grow toward the crown to
-    # meet the crown branches; thickness comes from the trunk they leave.
-    # "branch_stub_chance" turns some into short blunt stubs - broken
-    # branches on an old tree.
+    # golden-angle ladder from mid-trunk THROUGH the first crown spine
+    # segments (the L-system only brackets at segment tops, so the zone
+    # covered by Branch 0-1 - a full seg_len above the trunk - was bare;
+    # the ladder now spans one continuous branch distribution up to the
+    # first bracket region, Weber-Penn style). Length and foliage grow
+    # toward the crown to meet the crown branches; thickness comes from
+    # the trunk they leave. "branch_stub_chance" turns some into short
+    # blunt stubs - broken branches on an old tree.
     n_lower = p.get("trunk_branches", 0)
     stub_chance = p.get("branch_stub_chance", 0.0)
+    ladder_top = trunk_h + seg_len * 1.15
     for i in range(n_lower):
-        frac = min(0.98, 0.45 + 0.53 * (i + rng.uniform(0.2, 0.8)) / n_lower)
+        u = min(1.0, (i + rng.uniform(0.2, 0.8)) / n_lower)
+        band_y = trunk_h * 0.45 + (ladder_top - trunk_h * 0.45) * u
+        frac = band_y / trunk_h  # may exceed 1.0: rungs along Branch 0-1
         a = i * GOLDEN_ANGLE + rng.uniform(-0.5, 0.5)
-        bpos = v_add(base, [0.0, trunk_h * frac, 0.0])
-        branch_r = max(0.04, trunk_r[1] * (0.62 - 0.22 * frac))
+        bpos = v_add(base, [0.0, band_y, 0.0])
+        branch_r = max(0.04, trunk_r[1] * max(0.25, 0.62 - 0.22 * frac))
         if rng.random() < stub_chance:
             # Broken stub: short, blunt, near-horizontal, no foliage.
             d = v_norm([math.cos(a), rng.uniform(-0.10, 0.15), math.sin(a)])
@@ -235,7 +296,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                        material_name=bark, parent_node_id=parent)
             continue
         d = v_norm([math.cos(a), rng.uniform(0.20, 0.45), math.sin(a)])
-        blen = seg_len * (0.55 + 0.6 * frac) * rng.uniform(0.85, 1.1)
+        blen = seg_len * (0.55 + 0.6 * min(1.05, frac)) * rng.uniform(0.85, 1.1)
         handle = batch.part("cone", f"{tag} Low Branch {i}", bpos,
                             rotation_xyzw=align_y_quaternion(d),
                             height=blen, bottom_radius=branch_r,
@@ -244,7 +305,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                             parent_node_id=parent, as_parent=True)
         tip = v_add(bpos, v_scale(d, blen))
         batch.part("uv_sphere", f"{tag} Low Canopy {i}", tip,
-                   radius=p["leaf_r"][0] * (0.55 + 0.5 * frac) * rng.uniform(0.85, 1.1),
+                   radius=p["leaf_r"][0] * (0.55 + 0.5 * min(1.05, frac)) * rng.uniform(0.85, 1.1),
                    slice_count=10, stack_count=8,
                    material_name=leaf_materials[i % len(leaf_materials)],
                    parent_node_id=handle)
@@ -304,8 +365,15 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                                  parent_node_id=root, motion_mode="none")
                 limb_id = result.get("node_id") if isinstance(result, dict) else None
                 if limb_id is not None:
+                    # Beam-scaled limb stiffness: reuse the height-bucket rule
+                    # via the limb's EQUIVALENT height (radius / trunk
+                    # radius-per-height) - much softer than the trunk, and
+                    # softer still the thinner the limb.
+                    settings_name = sway.get("branch_settings")
+                    if settings_name is None:
+                        settings_name = sway_setting_for_height(c, radius / 0.014)
                     sway_jobs.append((f"{tag} Limb {seg_count}", limb_id, list(pos),
-                                      sway.get("branch_settings", "branch_sway"),
+                                      settings_name,
                                       sway.get("branch_mass", max(0.4, radius * length * 30.0)),
                                       sway.get("branch_receptivity", 2.0),
                                       0.8, trunk_id if trunk_id is not None else root))
