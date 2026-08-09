@@ -482,6 +482,7 @@ auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& ar
         { "transform_selection",            &Mcp_server::action_transform_selection           },
         { "set_node_transform",             &Mcp_server::action_set_node_transform            },
         { "place_brush",                    &Mcp_server::action_place_brush                   },
+        { "place_brush_instances",          &Mcp_server::action_place_brush_instances         },
         { "create_shape",                   &Mcp_server::action_create_shape                  },
         { "create_node",                    &Mcp_server::action_create_node                   },
         { "create_light",                   &Mcp_server::action_create_light                  },

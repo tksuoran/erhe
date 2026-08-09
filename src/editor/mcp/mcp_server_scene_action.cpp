@@ -993,10 +993,18 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     }).dump();
 }
 
-// Instance placement shared by place_brush and create_shape. Every placement
-// of one brush shares its Primitive (and thus GPU buffers / raytrace shape) -
-// this is THE reuse path: create a shape once, place it N times.
-auto Mcp_server::place_brush_instance(const json& args, Scene_root& sr, Brush& brush, json& result) -> std::string
+// Instance placement shared by place_brush, place_brush_instances and
+// create_shape. Every placement of one brush shares its Primitive (and thus
+// GPU buffers / raytrace shape) - this is THE reuse path: create a shape
+// once, place it N times.
+auto Mcp_server::place_brush_instance(
+    const json&                               args,
+    Scene_root&                               sr,
+    Brush&                                    brush,
+    json&                                     result,
+    const std::shared_ptr<erhe::scene::Node>& parent_override,
+    std::shared_ptr<erhe::scene::Node>*       out_attach_node
+) -> std::string
 {
     auto read_vec3 = [&args](const char* key, glm::vec3& out_value) {
         const json value = args.value(key, json());
@@ -1054,8 +1062,8 @@ auto Mcp_server::place_brush_instance(const json& args, Scene_root& sr, Brush& b
         }
     }
 
-    std::shared_ptr<erhe::scene::Node> parent;
-    if (args.contains("parent_node_id")) {
+    std::shared_ptr<erhe::scene::Node> parent = parent_override;
+    if (!parent && args.contains("parent_node_id")) {
         const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
         sr.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
             if (node->get_id() == parent_node_id) {
@@ -1101,6 +1109,45 @@ auto Mcp_server::place_brush_instance(const json& args, Scene_root& sr, Brush& b
         erhe::physics::Motion_mode::e_dynamic
     );
 
+    const std::string instance_name = args.value("name", "");
+
+    // pose_node: insert an extra rigid (position + rotation, NO scale) node
+    // and hang the scaled instance under it as a leaf. Node scale scales the
+    // whole subtree, so children of a scaled instance would inherit it; the
+    // pose node is the safe attach point for children (and for constraint
+    // carriers - it keeps the rotated frame the instance mesh would have had).
+    const bool pose_node = args.value("pose_node", false);
+    std::shared_ptr<erhe::scene::Node> attach_node{};
+    if (pose_node) {
+        // Built directly (not via Scene_commands::create_new_empty_node): the
+        // requested parent may be a same-batch pose node whose insert is still
+        // queued - it has no item host yet, which create_new_empty_node's
+        // scene-root resolution requires. Ops execute in queue order, so the
+        // chain attaches parent-first.
+        attach_node = std::make_shared<erhe::scene::Node>(instance_name.empty() ? std::string{brush.get_name()} : instance_name);
+        // visible: inert while the node is empty, but attachments added later
+        // sync their visibility from the node.
+        attach_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::visible | erhe::Item_flags::show_in_ui);
+        glm::mat4 pose_world = erhe::math::create_translation<float>(position);
+        if (rotation.has_value()) {
+            pose_world = pose_world * glm::mat4_cast(rotation.value());
+        }
+        // Not yet attached (the insert executes on the next editor frame);
+        // the world transform set now is preserved by Node::set_parent.
+        attach_node->set_world_from_node(pose_world);
+        m_context.operation_stack->queue(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = attach_node,
+                    .parent  = parent ? parent : sr.get_scene().get_root_node(),
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+        parent = attach_node;
+    }
+
     glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
     if (rotation.has_value()) {
         world_from_node = world_from_node * glm::mat4_cast(rotation.value());
@@ -1122,12 +1169,22 @@ auto Mcp_server::place_brush_instance(const json& args, Scene_root& sr, Brush& b
     }
     // Per-instance name renames the NODE only: the mesh keeps the brush name,
     // so instances of one brush stay content-identical for glTF export dedup.
-    const std::string instance_name = args.value("name", "");
-    if (!instance_name.empty()) {
+    if (pose_node) {
+        instance_node->set_name((instance_name.empty() ? std::string{brush.get_name()} : instance_name) + " Mesh");
+    } else if (!instance_name.empty()) {
         instance_node->set_name(instance_name);
     }
-    result["node_name"]   = instance_node->get_name();
-    result["node_id"]     = instance_node->get_id();
+    if (!attach_node) {
+        attach_node = instance_node;
+    }
+    if (out_attach_node != nullptr) {
+        *out_attach_node = attach_node;
+    }
+    result["node_name"]   = attach_node->get_name();
+    result["node_id"]     = attach_node->get_id();
+    if (pose_node) {
+        result["mesh_node_id"] = instance_node->get_id();
+    }
     result["material"]    = material->get_name();
     result["position"]    = {position.x, position.y, position.z};
     result["motion_mode"] = skip_physics ? "none" : motion_mode_to_string(motion_mode);
@@ -1194,6 +1251,99 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
         return error;
     }
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_place_brush_instances(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    auto library = sr->get_content_library();
+    if (!library || !library->brushes) {
+        json r = make_text_content("No brushes in scene");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json placements = args.value("placements", json::array());
+    if (!placements.is_array() || placements.empty()) {
+        json r = make_text_content("placements must be a non-empty array");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json defaults = args.value("defaults", json::object());
+
+    const auto& brush_list = library->brushes->get_all<Brush>();
+    auto find_brush = [&brush_list](const json& p) -> std::shared_ptr<Brush> {
+        const std::size_t brush_id   = p.value("brush_id", std::size_t{0});
+        const std::string brush_name = p.value("brush_name", "");
+        for (const auto& b : brush_list) {
+            if ((brush_id != 0) ? (b->get_id() == brush_id) : (!brush_name.empty() && (b->get_name() == brush_name))) {
+                return b;
+            }
+        }
+        return {};
+    };
+
+    // Attach nodes of the placements so far: parent_index lets a placement
+    // parent under an EARLIER placement in this same call (same-frame nodes
+    // are not findable by id, so chains - branch segments, nested parts -
+    // could not be batched otherwise).
+    std::vector<std::shared_ptr<erhe::scene::Node>> attach_nodes;
+    attach_nodes.reserve(placements.size());
+    json results = json::array();
+    for (std::size_t i = 0; i < placements.size(); ++i) {
+        json p = defaults;
+        p.update(placements[i]);
+        const std::shared_ptr<Brush> brush = find_brush(p);
+        if (!brush) {
+            json r = make_text_content(
+                "placements[" + std::to_string(i) + "]: brush not found (give brush_id or brush_name); " +
+                std::to_string(i) + " earlier placement(s) were applied"
+            );
+            r["isError"] = true;
+            return r.dump();
+        }
+        std::shared_ptr<erhe::scene::Node> parent_override{};
+        if (p.contains("parent_index")) {
+            const std::size_t parent_index = p.value("parent_index", std::size_t{0});
+            if ((parent_index >= i) || !attach_nodes[parent_index]) {
+                json r = make_text_content(
+                    "placements[" + std::to_string(i) + "]: parent_index " + std::to_string(parent_index) +
+                    " must reference an earlier placement in this call; " +
+                    std::to_string(i) + " earlier placement(s) were applied"
+                );
+                r["isError"] = true;
+                return r.dump();
+            }
+            parent_override = attach_nodes[parent_index];
+        }
+        json result = {
+            {"brush",    brush->get_name()},
+            {"brush_id", brush->get_id()}
+        };
+        std::shared_ptr<erhe::scene::Node> attach_node{};
+        const std::string error = place_brush_instance(p, *sr, *brush, result, parent_override, &attach_node);
+        if (!error.empty()) {
+            // The per-placement error response already carries isError; note
+            // how far the batch got (earlier placements stay applied).
+            json r = make_text_content(
+                "placements[" + std::to_string(i) + "] failed; " +
+                std::to_string(i) + " earlier placement(s) were applied. Inner error follows: " + error
+            );
+            r["isError"] = true;
+            return r.dump();
+        }
+        attach_nodes.push_back(attach_node);
+        results.push_back(std::move(result));
+    }
+    return make_json_content({
+        {"count",      results.size()},
+        {"placements", std::move(results)}
+    }).dump();
 }
 
 auto Mcp_server::action_create_shape(const json& args) -> std::string
