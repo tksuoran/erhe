@@ -19,10 +19,16 @@
 #include "tools/bone_visualization.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
+
+#include <geogram/mesh/mesh.h>
+
+#include <cmath>
+#include <limits>
 
 #include "scene/generated/scene_settings_serialization.hpp"
 
@@ -679,6 +685,223 @@ auto Mcp_server::query_raycast(const json& args) -> std::string
         {"position",        {position.x, position.y, position.z}},
         {"normal",          {hit.normal.x, hit.normal.y, hit.normal.z}}
     }).dump();
+}
+
+namespace {
+
+// Closest point on triangle abc to p (Ericson, Real-Time Collision Detection 5.1.5).
+auto closest_point_on_triangle(const glm::vec3 p, const glm::vec3 a, const glm::vec3 b, const glm::vec3 c) -> glm::vec3
+{
+    const glm::vec3 ab = b - a;
+    const glm::vec3 ac = c - a;
+    const glm::vec3 ap = p - a;
+    const float d1 = glm::dot(ab, ap);
+    const float d2 = glm::dot(ac, ap);
+    if ((d1 <= 0.0f) && (d2 <= 0.0f)) {
+        return a;
+    }
+    const glm::vec3 bp = p - b;
+    const float d3 = glm::dot(ab, bp);
+    const float d4 = glm::dot(ac, bp);
+    if ((d3 >= 0.0f) && (d4 <= d3)) {
+        return b;
+    }
+    const float vc = d1 * d4 - d3 * d2;
+    if ((vc <= 0.0f) && (d1 >= 0.0f) && (d3 <= 0.0f)) {
+        return a + (d1 / (d1 - d3)) * ab;
+    }
+    const glm::vec3 cp = p - c;
+    const float d5 = glm::dot(ab, cp);
+    const float d6 = glm::dot(ac, cp);
+    if ((d6 >= 0.0f) && (d5 <= d6)) {
+        return c;
+    }
+    const float vb = d5 * d2 - d1 * d6;
+    if ((vb <= 0.0f) && (d2 >= 0.0f) && (d6 <= 0.0f)) {
+        return a + (d2 / (d2 - d6)) * ac;
+    }
+    const float va = d3 * d6 - d5 * d4;
+    if ((va <= 0.0f) && ((d4 - d3) >= 0.0f) && ((d5 - d6) >= 0.0f)) {
+        return b + ((d4 - d3) / ((d4 - d3) + (d5 - d6))) * (c - b);
+    }
+    const float denom = 1.0f / (va + vb + vc);
+    return a + ab * (vb * denom) + ac * (vc * denom);
+}
+
+} // anonymous namespace
+
+// Batched geometry queries: placement scripts need MANY surface probes per
+// object (a stripe run samples the hull every meter), so the API takes an
+// array of queries and answers them in one request instead of one call each.
+auto Mcp_server::query_geometry_batch(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    const json queries = args.value("queries", json::array());
+    if (!queries.is_array() || queries.empty()) {
+        json r = make_text_content("geometry_query needs a non-empty queries array");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    erhe::raytrace::IScene& rt_scene = sr->get_raytrace_scene();
+    bool rt_committed = false;  // committed once, lazily, for the whole batch
+    const auto& scene = sr->get_scene();
+
+    json results = json::array();
+    for (const json& q : queries) {
+        const std::string type = q.value("type", "");
+        if (type == "raycast") {
+            const json origin_json    = q.value("origin",    json::array());
+            const json direction_json = q.value("direction", json::array());
+            if ((origin_json.size() != 3) || (direction_json.size() != 3)) {
+                results.push_back({{"error", "raycast needs origin [x, y, z] and direction [x, y, z]"}});
+                continue;
+            }
+            const glm::vec3 ray_origin{origin_json.at(0).get<float>(), origin_json.at(1).get<float>(), origin_json.at(2).get<float>()};
+            glm::vec3 ray_direction{direction_json.at(0).get<float>(), direction_json.at(1).get<float>(), direction_json.at(2).get<float>()};
+            if (glm::length(ray_direction) == 0.0f) {
+                results.push_back({{"error", "raycast direction must be non-zero"}});
+                continue;
+            }
+            ray_direction = glm::normalize(ray_direction);
+            if (!rt_committed) {
+                rt_scene.commit();
+                rt_committed = true;
+            }
+            erhe::raytrace::Ray ray{
+                .origin    = ray_origin,
+                .t_near    = 0.0f,
+                .direction = ray_direction,
+                .time      = 0.0f,
+                .t_far     = q.value("max_distance", 9999.0f),
+                .mask      = q.value("mask", Raytrace_node_mask::pickable_static),
+                .id        = 0,
+                .flags     = 0
+            };
+            erhe::raytrace::Hit hit;
+            rt_scene.intersect(ray, hit);
+            if (hit.instance == nullptr) {
+                results.push_back({{"hit", false}});
+                continue;
+            }
+            auto* raytrace_primitive = static_cast<erhe::scene::Raytrace_primitive*>(hit.instance->get_user_data());
+            if ((raytrace_primitive == nullptr) || (raytrace_primitive->mesh == nullptr)) {
+                results.push_back({{"error", "raycast hit an instance without Raytrace_primitive user data"}});
+                continue;
+            }
+            erhe::scene::Mesh* mesh = raytrace_primitive->mesh;
+            erhe::scene::Node* node = mesh->get_node();
+            const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
+            // The raytracer's hit normal is the unnormalized geometric
+            // normal (triangle-area scaled); a placement API wants a unit
+            // vector like the closest_point branch returns.
+            glm::vec3 hit_normal = hit.normal;
+            const float hit_normal_len = glm::length(hit_normal);
+            if (hit_normal_len > 0.0f) {
+                hit_normal /= hit_normal_len;
+            }
+            results.push_back({
+                {"hit",       true},
+                {"node_name", node ? node->get_name() : ""},
+                {"node_id",   node ? node->get_id() : 0},
+                {"mesh_name", mesh->get_name()},
+                {"distance",  ray.t_far},
+                {"position",  {position.x, position.y, position.z}},
+                {"normal",    {hit_normal.x, hit_normal.y, hit_normal.z}}
+            });
+        } else if (type == "closest_point") {
+            const json point_json = q.value("point", json::array());
+            if (point_json.size() != 3) {
+                results.push_back({{"error", "closest_point needs point [x, y, z]"}});
+                continue;
+            }
+            const glm::vec3 p{point_json.at(0).get<float>(), point_json.at(1).get<float>(), point_json.at(2).get<float>()};
+            const uint64_t    want_id   = q.value("node_id", static_cast<uint64_t>(0));
+            const std::string want_name = q.value("node_name", "");
+
+            float            best_d2 = std::numeric_limits<float>::max();
+            glm::vec3        best_position{0.0f};
+            glm::vec3        best_normal{0.0f};
+            const erhe::scene::Node* best_node = nullptr;
+            bool             mesh_seen = false;
+            scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+                if ((want_id != 0) && (node->get_id() != want_id)) {
+                    return true;
+                }
+                if (!want_name.empty() && (node->get_name() != want_name)) {
+                    return true;
+                }
+                const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                if (!mesh) {
+                    return true;
+                }
+                mesh_seen = true;
+                const glm::mat4 world_from_node = node->world_from_node();
+                for (const erhe::scene::Mesh_primitive& prim : mesh->get_primitives()) {
+                    if (!prim.primitive || !prim.primitive->render_shape) {
+                        continue;
+                    }
+                    const std::shared_ptr<erhe::geometry::Geometry> geometry = prim.primitive->render_shape->get_geometry();
+                    if (!geometry) {
+                        continue;
+                    }
+                    const GEO::Mesh& geo_mesh = geometry->get_mesh();
+                    for (GEO::index_t facet : geo_mesh.facets) {
+                        const GEO::index_t corner_count = geo_mesh.facets.nb_corners(facet);
+                        if (corner_count < 3) {
+                            continue;
+                        }
+                        const GEO::vec3f p0 = erhe::geometry::get_pointf(geo_mesh.vertices, geo_mesh.facets.vertex(facet, 0));
+                        const glm::vec3 a = glm::vec3{world_from_node * glm::vec4{p0.x, p0.y, p0.z, 1.0f}};
+                        for (GEO::index_t i = 1; (i + 1) < corner_count; ++i) {
+                            const GEO::vec3f p1 = erhe::geometry::get_pointf(geo_mesh.vertices, geo_mesh.facets.vertex(facet, i));
+                            const GEO::vec3f p2 = erhe::geometry::get_pointf(geo_mesh.vertices, geo_mesh.facets.vertex(facet, i + 1));
+                            const glm::vec3 b = glm::vec3{world_from_node * glm::vec4{p1.x, p1.y, p1.z, 1.0f}};
+                            const glm::vec3 c = glm::vec3{world_from_node * glm::vec4{p2.x, p2.y, p2.z, 1.0f}};
+                            const glm::vec3 candidate = closest_point_on_triangle(p, a, b, c);
+                            const glm::vec3 offset = candidate - p;
+                            const float d2 = glm::dot(offset, offset);
+                            if (d2 < best_d2) {
+                                best_d2       = d2;
+                                best_position = candidate;
+                                best_normal   = glm::cross(b - a, c - a);
+                                best_node     = node.get();
+                            }
+                        }
+                    }
+                }
+                return true;
+            });
+            if (best_node == nullptr) {
+                results.push_back({
+                    {"found", false},
+                    {"error", mesh_seen ? "matched mesh has no triangles" : "no matching mesh node"}
+                });
+                continue;
+            }
+            const float normal_len = glm::length(best_normal);
+            if (normal_len > 0.0f) {
+                best_normal /= normal_len;
+            }
+            results.push_back({
+                {"found",     true},
+                {"node_name", best_node->get_name()},
+                {"node_id",   best_node->get_id()},
+                {"position",  {best_position.x, best_position.y, best_position.z}},
+                {"normal",    {best_normal.x, best_normal.y, best_normal.z}},
+                {"distance",  std::sqrt(best_d2)}
+            });
+        } else {
+            results.push_back({{"error", "unknown query type: '" + type + "' (raycast | closest_point)"}});
+        }
+    }
+    return make_json_content({{"results", results}}).dump();
 }
 
 auto Mcp_server::query_shadow_fit_debug(const json& args) -> std::string

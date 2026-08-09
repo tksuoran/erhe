@@ -182,6 +182,72 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
     }).dump();
 }
 
+// Delete nodes (whole subtrees) by id and/or name - the MCP counterpart of
+// Edit > Delete, undoable through the same Selection::delete_items path, but
+// WITHOUT touching the user's selection. Built for partial-rebuild iteration:
+// a creation script deletes one object's root group and rebuilds only that
+// object instead of the whole scene.
+auto Mcp_server::action_delete_nodes(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    std::set<std::size_t> target_ids;
+    for (const auto& id_val : args.value("ids", json::array())) {
+        if (id_val.is_number_unsigned() || id_val.is_number_integer()) {
+            target_ids.insert(id_val.get<std::size_t>());
+        }
+    }
+    std::set<std::string> target_names;
+    for (const auto& name_val : args.value("names", json::array())) {
+        if (name_val.is_string()) {
+            target_names.insert(name_val.get<std::string>());
+        }
+    }
+    if (target_ids.empty() && target_names.empty()) {
+        json r = make_text_content("delete_nodes needs ids and/or names");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::vector<std::shared_ptr<erhe::Item_base>> items = find_items_by_ids(*sr, target_ids);
+    if (!target_names.empty()) {
+        std::set<std::size_t> have_ids;
+        for (const auto& item : items) {
+            have_ids.insert(item->get_id());
+        }
+        sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            if ((target_names.count(node->get_name()) > 0) && (have_ids.count(node->get_id()) == 0)) {
+                items.push_back(node);
+                have_ids.insert(node->get_id());
+            }
+            return true;
+        });
+    }
+    if (items.empty()) {
+        json r = make_text_content("delete_nodes: no matching nodes");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    json deleted = json::array();
+    for (const auto& item : items) {
+        deleted.push_back({
+            {"id",   item->get_id()},
+            {"name", item->get_name()}
+        });
+    }
+    const bool queued = m_context.selection->delete_items(items);
+    return make_json_content({
+        {"queued",  queued},
+        {"deleted", deleted}
+    }).dump();
+}
+
 auto Mcp_server::action_set_item_flags(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");

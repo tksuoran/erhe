@@ -132,6 +132,14 @@ void Mcp_server::refresh_tool_list()
         }},
         {"required", json::array({"scene_name", "origin", "direction"})}
     }});
+    m_tool_infos.push_back({"geometry_query",      "Run a BATCH of geometry queries in one call; per-query results come back in order (a query error fills that entry's 'error' without failing the batch). Types: 'raycast' {origin, direction, max_distance?, mask?} = closest raytrace-world hit exactly like the raycast tool; 'closest_point' {point, node_id? / node_name?} = closest point on render-mesh SURFACE triangles in world space (distance, position, triangle normal, owning node; searched over the named node's mesh, or EVERY mesh in the scene when no node is given - name a node for big scenes). Built for placement scripts: probe the ACTUAL surface (e.g. a convex hull bulges past its authored points) instead of guessing offsets, many probes per request.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"queries",    {{"type", "array"},  {"description", "Query objects: {type:'raycast', origin:[x,y,z], direction:[x,y,z], max_distance?, mask?} or {type:'closest_point', point:[x,y,z], node_id?, node_name?}"}, {"items", {{"type", "object"}}}}}
+        }},
+        {"required", json::array({"scene_name", "queries"})}
+    }});
     m_tool_infos.push_back({"select_items",        "Select items by ID (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] clears the target scene only) and makes the target scene the active scene.",   {
         {"type", "object"},
         {"properties", {
@@ -139,6 +147,15 @@ void Mcp_server::refresh_tool_list()
             {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Array of item IDs to select"}}}
         }},
         {"required", json::array({"scene_name", "ids"})}
+    }});
+    m_tool_infos.push_back({"delete_nodes",        "Delete nodes (whole SUBTREES) by id and/or name - the MCP counterpart of Edit > Delete, undoable through the same recursive-delete path, without touching the user's selection. lock_edit items and their subtrees survive (prefab instances always delete whole). Queued; settle before rebuilding into the freed names. Built for partial-rebuild iteration: delete one object's root group and rebuild only that object.", {
+        {"type", "object"},
+        {"properties", {
+            {"scene_name", {{"type", "string"}, {"description", "Name of the scene"}}},
+            {"ids",        {{"type", "array"}, {"items", {{"type", "integer"}}}, {"description", "Node ids to delete (subtrees)"}}},
+            {"names",      {{"type", "array"}, {"items", {{"type", "string"}}},  {"description", "Node names to delete (subtrees; exact match, all matches)"}}}
+        }},
+        {"required", json::array({"scene_name"})}
     }});
     m_tool_infos.push_back({"get_active_scene",    "Get the active scene: the scene that commands targeting scene-hosted items act on (the transform gizmo, mesh operations, delete/cut/duplicate). Follows selection changes and window focus; null when no scene is active.", schema_no_args()});
     m_tool_infos.push_back({"set_active_scene",    "Make a scene the active scene, through the same activation path as focusing that scene's window in the UI (the gizmo rebinds to its selection, the window highlight moves, commands target it).", {
