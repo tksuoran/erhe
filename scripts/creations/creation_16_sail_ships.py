@@ -30,7 +30,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, reframe, align_y_quaternion, quat_mul, v_add,
+    Creation, standard_args, reframe, align_y_quaternion, quat_mul,
+    quat_rotate, v_add,
 )
 
 SHOTS = [
@@ -38,7 +39,16 @@ SHOTS = [
     ("_bow",     [-16.0, 3.5, -36.0], [4.0, 4.5, 6.0]),
     ("_stern",   [26.0, 6.5, 22.0], [-6.0, 3.5, -6.0]),
     ("_vespucci", [-88.0, 14.0, -18.0], [-14.0, 8.0, -62.0]),
+    # Vespucci clipper-bow close-up (bow ~ [-44.7, 3.5, -73.1])
+    ("_vespucci_bow", [-68.5, 6.0, -71.0], [-43.0, 4.5, -73.5]),
 ]
+
+
+def bezier2(p0, p1, p2, t):
+    """Quadratic bezier point (p1 is the control point)."""
+    u = 1.0 - t
+    return [u * u * p0[k] + 2.0 * u * t * p1[k] + t * t * p2[k]
+            for k in range(3)]
 
 
 def yaw_quat(degrees):
@@ -58,37 +68,62 @@ def roll_quat(degrees):
 
 # --------------------------------------------------------------------- hull
 
-def hull_station_points(length, beam, depth, freeboard):
+def hull_station_points(length, beam, depth, freeboard, clipper=False):
     """Authored station points for a convex ship hull, local space: +Z bow,
     +Y up, waterline at y=0. Keel at -depth, rail at +freeboard. Convexity
     is fine for a beamy age-of-sail hull: the faceted envelope reads as
-    planking, and the deck well is carved back in with CSG."""
+    planking, and the deck well is carved back in with CSG.
+
+    clipper=True (the Amerigo Vespucci) swaps the blunt raised prow for a
+    clipper bow: denser fore stations with rising sheer and narrowing beam
+    round the entry, and the stem overhangs the waterline by ~6.5% of the
+    length (waterline entry at 0.50 L, stem head at 0.565 L). The straight
+    hull edge between those two is scooped concave with a CSG cylinder in
+    build_hull - a convex hull cannot hollow itself."""
     half = length * 0.5
     b = beam * 0.5
     points = []
-    # (z_frac, rail_half_beam_frac, keel_y_frac): station spine
-    stations = [
-        (-0.50, 0.62, -0.30),   # transom
-        (-0.34, 0.88, -0.80),
-        (-0.12, 1.00, -1.00),   # midship, deepest keel
-        ( 0.12, 0.97, -1.00),
-        ( 0.32, 0.80, -0.72),
-        ( 0.46, 0.52, -0.35),   # fore shoulder
-    ]
-    for z_frac, beam_frac, keel_frac in stations:
+    # (z_frac, rail_half_beam_frac, keel_y_frac, sheer_frac): station spine
+    if clipper:
+        stations = [
+            (-0.50, 0.62, -0.30, 1.00),   # transom
+            (-0.34, 0.88, -0.80, 1.00),
+            (-0.12, 1.00, -1.00, 1.00),   # midship, deepest keel
+            ( 0.12, 0.97, -1.00, 1.00),
+            ( 0.30, 0.82, -0.78, 1.00),
+            ( 0.40, 0.60, -0.52, 1.06),   # sheer starts rising
+            ( 0.46, 0.36, -0.24, 1.14),   # fine entry
+        ]
+    else:
+        stations = [
+            (-0.50, 0.62, -0.30, 1.00),   # transom
+            (-0.34, 0.88, -0.80, 1.00),
+            (-0.12, 1.00, -1.00, 1.00),   # midship, deepest keel
+            ( 0.12, 0.97, -1.00, 1.00),
+            ( 0.32, 0.80, -0.72, 1.00),
+            ( 0.46, 0.52, -0.35, 1.00),   # fore shoulder
+        ]
+    for z_frac, beam_frac, keel_frac, sheer_frac in stations:
         z = z_frac * length
         bw = b * beam_frac
         keel_y = depth * keel_frac
-        rail_y = freeboard
+        rail_y = freeboard * sheer_frac
         points.append([+bw, rail_y, z])
         points.append([-bw, rail_y, z])
         points.append([+bw * 0.92, 0.4 * freeboard - 0.35 * depth, z])  # bilge turn
         points.append([-bw * 0.92, 0.4 * freeboard - 0.35 * depth, z])
         points.append([0.0, keel_y, z])
-    # Bow: raised stem + forefoot
-    points.append([0.0, freeboard * 1.45, half * 1.04])   # stem head (raised prow)
-    points.append([0.0, freeboard * 0.3,  half * 1.10])   # cutwater
-    points.append([0.0, -depth * 0.45,    half * 0.92])   # forefoot
+    if clipper:
+        # Clipper stem: waterline entry + overhanging stem head; the
+        # concave hollow between them is carved in build_hull.
+        points.append([0.0, freeboard * 1.30, half * 1.13])  # stem head
+        points.append([0.0, 0.0,              half * 1.00])  # waterline entry
+        points.append([0.0, -depth * 0.10,    half * 0.955])  # forefoot round
+    else:
+        # Bow: raised stem + forefoot
+        points.append([0.0, freeboard * 1.45, half * 1.04])   # stem head (raised prow)
+        points.append([0.0, freeboard * 0.3,  half * 1.10])   # cutwater
+        points.append([0.0, -depth * 0.45,    half * 0.92])   # forefoot
     # Stern: raised transom corners (poop sheer)
     points.append([+b * 0.55, freeboard * 1.30, -half * 1.02])
     points.append([-b * 0.55, freeboard * 1.30, -half * 1.02])
@@ -128,7 +163,7 @@ class ShipYard:
     def __init__(self, c, m, name, position, heading_deg, length, beam,
                  depth, freeboard, masts, gunports=0, flagship=False,
                  heel_deg=0.0, hull_material=None, stripes=False,
-                 deckhouses=False, sails_per_mast=2):
+                 deckhouses=False, sails_per_mast=2, clipper=False):
         self.c = c
         self.m = m
         self.name = name
@@ -149,6 +184,11 @@ class ShipYard:
         self.stripes = stripes
         self.deckhouses = deckhouses
         self.sails_per_mast = sails_per_mast
+        self.clipper = clipper
+        if clipper:
+            self.BEAM_PROFILE = [(-0.50, 0.62), (-0.34, 0.88), (-0.12, 1.00),
+                                 (0.12, 0.97), (0.30, 0.82), (0.40, 0.60),
+                                 (0.46, 0.36)]
         self.root = None
         # Sails/pennants collect here; their shadows on the water render as
         # harsh aliased spikes, so shadow_cast is disabled on them after the
@@ -182,7 +222,7 @@ class ShipYard:
         c, m = self.c, self.m
         self.root = c.group(self.name, self.position)
         points = hull_station_points(self.length, self.beam, self.depth,
-                                     self.freeboard)
+                                     self.freeboard, clipper=self.clipper)
         hull_mat = self.hull_material or m["hull"]
         c.shape("convex_hull", self.n("Hull"), self.to_world([0, 0, 0]),
                 points=points, motion_mode="none", reuse=False,
@@ -219,6 +259,36 @@ class ShipYard:
                                 motion_mode="none", reuse=False,
                                 material_name=m["hull"])
                     carves.append(r.get("node_id"))
+
+        # Clipper bow: the hull edge from waterline entry to stem head is a
+        # straight convex-hull chord - scoop it concave with a beam-spanning
+        # cylinder (capped equal-radius cone laid along X) whose surface
+        # passes through both chord endpoints with the wanted sagitta. The
+        # cut face IS the clipper stem profile; the circle parameters are
+        # kept for the gold stem trim to trace (build_clipper_bow).
+        if self.clipper:
+            L, fb = self.length, self.freeboard
+            E = [0.0, 0.0, L * 0.500]          # waterline entry
+            H = [0.0, fb * 1.30, L * 0.565]    # stem head
+            t0, t1 = 0.10, 0.90                # hollow spans this stem range
+            P0 = [E[k] + (H[k] - E[k]) * t0 for k in range(3)]
+            P1 = [E[k] + (H[k] - E[k]) * t1 for k in range(3)]
+            dy, dz = P1[1] - P0[1], P1[2] - P0[2]
+            c_len = math.hypot(dy, dz)
+            ny, nz = -dz / c_len, dy / c_len   # forward-down chord normal
+            sag = fb * 0.18
+            radius = c_len * c_len / (8.0 * sag) + 0.5 * sag
+            cy = (P0[1] + P1[1]) * 0.5 + ny * (radius - sag)
+            cz = (P0[2] + P1[2]) * 0.5 + nz * (radius - sag)
+            self.scoop = (cy, cz, radius, P0, P1)
+            span = self.beam * 1.6
+            r = c.shape("cone", self.n("bow scoop carve"),
+                        self.to_world([span * 0.5, cy, cz]),
+                        height=span, bottom_radius=radius, top_radius=radius,
+                        slice_count=28, rotation_xyzw=roll_quat(90.0),
+                        motion_mode="none", reuse=False,
+                        material_name=m["hull"])
+            carves.append(r.get("node_id"))
 
         # Flagship: three windows carved into the transom.
         if self.flagship:
@@ -266,21 +336,185 @@ class ShipYard:
         # Bowsprit - rooted inside the forecastle block so it reads attached.
         # self.s scales fixed-size details with the ship (the sloop is 0.6,
         # the Vespucci ~1.9 - unscaled 0.14 m spars vanish on a 58 m hull).
+        # Clipper bow (references: the real Vespucci): the bowsprit is much
+        # SHALLOWER (~19 deg above horizontal, continuing the sheer line)
+        # and roots in the raised forecastle just aft of the stem head.
         self.s = max(0.6, self.length / 30.0)
         L = self.length
-        sprit_len = L * 0.30
+        if self.clipper:
+            self.sprit_base = [0.0, self.freeboard * 1.06, L * 0.42]
+            self.sprit_pitch = 71.0
+            self.sprit_len = L * 0.29
+        else:
+            self.sprit_base = [0.0, self.freeboard * 0.80, L * 0.38]
+            self.sprit_pitch = 62.0
+            self.sprit_len = L * 0.30
         c.shape("cone", self.n("Bowsprit"),
-                self.to_world([0.0, self.freeboard * 0.80, L * 0.38]),
-                height=sprit_len, bottom_radius=0.14 * self.s,
+                self.to_world(self.sprit_base),
+                height=self.sprit_len, bottom_radius=0.14 * self.s,
                 top_radius=0.05 * self.s,
-                rotation_xyzw=pitch_quat(62.0), motion_mode="none",
+                rotation_xyzw=pitch_quat(self.sprit_pitch), motion_mode="none",
                 material_name=m["mast"], parent_node_id=self.root)
+
+    def bent_strip(self, label, curve_fn, size_x, size_z, material,
+                   steps=12):
+        """One lattice-bent box strip whose centerline follows curve_fn(t),
+        t in [0,1], ship-local points. The box is created straight between
+        curve_fn(0) and curve_fn(1) (local +Y along the chord), then a
+        [1,3,1] bezier FFD moves the two interior control planes so the
+        strip passes through the curve at t=1/3 and 2/3 (cubic bezier fit;
+        the ends stay pinned). Smooth curved trim from ONE node - no
+        faceted cone chains."""
+        c = self.c
+        p0 = curve_fn(0.0)
+        p3 = curve_fn(1.0)
+        d = [p3[k] - p0[k] for k in range(3)]
+        ln = math.sqrt(sum(v * v for v in d))
+        q = align_y_quaternion([v / ln for v in d])
+        mid = [(p0[k] + p3[k]) * 0.5 for k in range(3)]
+        r = c.shape("box", self.n(label), self.to_world(mid),
+                    size=[size_x, ln * 1.01, size_z], steps=[2, steps, 2],
+                    rotation_xyzw=q, motion_mode="none", reuse=False,
+                    material_name=material, parent_node_id=self.root)
+        node = r.get("node_id")
+
+        def chord_dev(t):
+            b = curve_fn(t)
+            return [b[k] - (p0[k] + d[k] * t) for k in range(3)]
+
+        d13, d23 = chord_dev(1.0 / 3.0), chord_dev(2.0 / 3.0)
+        # Cubic bezier through the chord deviations: B(1/3) and B(2/3) with
+        # pinned ends give the control-plane offsets C1, C2.
+        c1 = [3.0 * d13[k] - 1.5 * d23[k] for k in range(3)]
+        c2 = [3.0 * d23[k] - 1.5 * d13[k] for k in range(3)]
+        qc = [-q[0], -q[1], -q[2], q[3]]     # world -> node local
+        c1l, c2l = quat_rotate(qc, c1), quat_rotate(qc, c2)
+        offsets = [[i, j, k] + list(cl)
+                   for j, cl in ((1, c1l), (2, c2l))
+                   for i in (0, 1) for k in (0, 1)]
+        c.lattice_deform(node, divisions=[1, 3, 1], offsets=offsets,
+                         wait=False)
+        return node
+
+    def bobstay(self, start):
+        """Rope from a stem point to the bowsprit tip."""
+        c, m = self.c, self.m
+        pr = math.radians(self.sprit_pitch)
+        sprit_dir = [0.0, math.cos(pr), math.sin(pr)]
+        tip = [self.sprit_base[k] + sprit_dir[k] * self.sprit_len
+               for k in range(3)]
+        d = [tip[k] - start[k] for k in range(3)]
+        length = math.sqrt(sum(v * v for v in d))
+        q = align_y_quaternion([v / length for v in d])
+        c.shape("cone", self.n("Bobstay"), self.to_world(start),
+                rotation_xyzw=q, height=length, bottom_radius=0.025 * self.s,
+                top_radius=0.025 * self.s, motion_mode="none",
+                material_name=m["rope"], parent_node_id=self.root)
+
+    def build_clipper_bow(self):
+        """The Amerigo Vespucci bow (references: blueprint + side profiles):
+        gold trim chained along the CONCAVE stem cut, a gilded statue
+        figurehead standing on the stem head under the shallow bowsprit,
+        hawse discs low on the flare, and a bobstay to the bowsprit tip.
+        No beakhead rails - her bow is solid flared plating; the sheer
+        scrollwork arc lives in build_style with the livery."""
+        c, m, s = self.c, self.m, self.s
+        L, fb = self.length, self.freeboard
+
+        # Stem trim: a gold blade lattice-bent along the scoop circle so it
+        # lies ON the concave cut face, standing slightly proud of it.
+        cy, cz, radius, P0, P1 = self.scoop
+        a0 = math.atan2(P0[1] - cy, P0[2] - cz)
+        a1 = math.atan2(P1[1] - cy, P1[2] - cz)
+        rr = radius - 0.03 * s
+
+        def stem_curve(t):
+            a = a0 + (a1 - a0) * t
+            return [0.0, cy + rr * math.sin(a), cz + rr * math.cos(a)]
+
+        self.bent_strip("Stem Trim", stem_curve, 0.09 * s, 0.18 * s,
+                        m["gold"])
+
+        # Figurehead: gilded standing figure leaning out over the stem -
+        # robe cone, torso cone, head sphere, two swept-back arm blades.
+        # The hull surface bulges past the authored stem head, so the base
+        # sits at the stem head z and leans well forward or the whole
+        # figure ends up buried in the prow. Sized MONUMENTAL (the real
+        # figure is ~4 m gilded bronze): iteration 2's human-proportioned
+        # one read as a flagpole knob at fleet distance.
+        lean = 38.0
+        lr = math.radians(lean)
+        up = [0.0, math.cos(lr), math.sin(lr)]
+        base = [0.0, fb * 1.00, L * 0.560]
+        robe_h = 1.00 * s
+        torso_h = 0.52 * s
+        c.shape("cone", self.n("Figurehead Robe"), self.to_world(base),
+                height=robe_h, bottom_radius=0.16 * s, top_radius=0.09 * s,
+                rotation_xyzw=pitch_quat(lean), motion_mode="none",
+                material_name=m["gold"], parent_node_id=self.root)
+        shoulder = [base[k] + up[k] * robe_h for k in range(3)]
+        c.shape("cone", self.n("Figurehead Torso"), self.to_world(shoulder),
+                height=torso_h, bottom_radius=0.10 * s, top_radius=0.055 * s,
+                rotation_xyzw=pitch_quat(lean), motion_mode="none",
+                material_name=m["gold"], parent_node_id=self.root)
+        head = [shoulder[k] + up[k] * (torso_h + 0.08 * s) for k in range(3)]
+        c.shape("uv_sphere", self.n("Figurehead Head"), self.to_world(head),
+                radius=0.10 * s, slice_count=10, stack_count=8,
+                motion_mode="none", material_name=m["gold"],
+                parent_node_id=self.root)
+        # Arm blades sweep back-down along the sheer (elongated spheres).
+        for side in (+1, -1):
+            arm_dir = [side * 0.35, -0.45, -0.82]
+            ln = math.sqrt(sum(v * v for v in arm_dir))
+            q = align_y_quaternion([v / ln for v in arm_dir])
+            c.shape("uv_sphere", self.n(f"Figurehead Arm {side}"),
+                    self.to_world([shoulder[0] + side * 0.08 * s,
+                                   shoulder[1], shoulder[2]]),
+                    radius=1.0, scale=[0.045 * s, 0.22 * s, 0.045 * s],
+                    slice_count=8, stack_count=6, rotation_xyzw=q,
+                    motion_mode="none", material_name=m["gold"],
+                    parent_node_id=self.root)
+
+        # Hawse discs on the bow flare (proud of the bulged surface), with
+        # an anchor nested below and a chain rod between them - the
+        # generic midship anchor floats beside the narrowed clipper bow.
+        for side in (+1, -1):
+            hawse = [side * self.half_beam_at(0.43) * 1.00, fb * 0.45, L * 0.43]
+            c.shape("disc", self.n(f"Hawse {side}"),
+                    self.to_world(hawse),
+                    outer_radius=0.10 * s, slice_count=12,
+                    rotation_xyzw=yaw_quat(side * 104.0), motion_mode="none",
+                    material_name=m["hull_dark"], parent_node_id=self.root)
+        anchor = [self.half_beam_at(0.415) * 1.02, fb * 0.38, L * 0.415]
+        c.shape("torus", self.n("Bow Anchor"), self.to_world(anchor),
+                major_radius=0.16 * s, minor_radius=0.035 * s, major_steps=14,
+                minor_steps=8, motion_mode="none", reuse=False,
+                material_name=m["iron"], parent_node_id=self.root)
+        c.shape("capsule", self.n("bow anchor shank"),
+                self.to_world([anchor[0], anchor[1] - 0.30 * s, anchor[2]]),
+                length=0.45 * s, bottom_radius=0.035 * s, top_radius=0.035 * s,
+                motion_mode="none", reuse=False, material_name=m["iron"])
+        c.csg(self.n("Bow Anchor"), self.n("bow anchor shank"), "union",
+              wait=False)
+        hawse_r = [self.half_beam_at(0.43) * 1.00, fb * 0.45, L * 0.43]
+        d = [anchor[k] - hawse_r[k] for k in range(3)]
+        ln = math.sqrt(sum(v * v for v in d))
+        c.shape("cone", self.n("Anchor Chain"), self.to_world(hawse_r),
+                rotation_xyzw=align_y_quaternion([v / ln for v in d]),
+                height=ln, bottom_radius=0.03 * s, top_radius=0.03 * s,
+                motion_mode="none", material_name=m["iron"],
+                parent_node_id=self.root)
+
+        self.bobstay([0.0, 0.25, L * 0.492])
 
     def build_bow_detail(self):
         """Bow furniture, scaled by self.s: cutwater blade along the stem,
         gilded figurehead under the bowsprit, beakhead rails from the
         forecastle to the stem head, hawse discs, and a bobstay rope from
         the cutwater to the bowsprit tip."""
+        if self.clipper:
+            self.build_clipper_bow()
+            return
         c, m, s = self.c, self.m, self.s
         L, fb, dep = self.length, self.freeboard, self.depth
 
@@ -342,20 +576,7 @@ class ShipYard:
                     material_name=m["hull_dark"], parent_node_id=self.root)
 
         # Bobstay: rope from the cutwater waterline to the bowsprit tip.
-        sprit_base = [0.0, fb * 0.80, L * 0.38]
-        sprit_dir = [0.0, math.cos(math.radians(62.0)), math.sin(math.radians(62.0))]
-        sprit_len = L * 0.30
-        tip = [sprit_base[0] + sprit_dir[0] * sprit_len,
-               sprit_base[1] + sprit_dir[1] * sprit_len,
-               sprit_base[2] + sprit_dir[2] * sprit_len]
-        start = [0.0, 0.15, L * 0.53]
-        d = [tip[0] - start[0], tip[1] - start[1], tip[2] - start[2]]
-        length = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
-        q = align_y_quaternion([v / length for v in d])
-        c.shape("cone", self.n("Bobstay"), self.to_world(start),
-                rotation_xyzw=q, height=length, bottom_radius=0.025 * s,
-                top_radius=0.025 * s, motion_mode="none",
-                material_name=m["rope"], parent_node_id=self.root)
+        self.bobstay([0.0, 0.15, L * 0.53])
 
     def build_style(self):
         """Hull livery beyond the default wales: the Amerigo Vespucci look -
@@ -366,37 +587,102 @@ class ShipYard:
         deck_y = fb * 0.45
 
         if self.stripes:
+            # The white stripes run the FULL hull into the stem on the real
+            # ship. Boxes only work on the parallel midbody; in the bow
+            # taper a rectangular box either shelves out or buries, so the
+            # fore run is a chained TUBE per side that follows the beam
+            # profile, rises with the sheer, and converges onto the concave
+            # stem cut (its end point is computed from the scoop circle).
+            def sheer_rise(zf):
+                if zf <= 0.30:
+                    return 0.0
+                if zf <= 0.40:
+                    return 0.06 * (zf - 0.30) / 0.10
+                return 0.06 + 0.08 * min(1.0, (zf - 0.40) / 0.06)
+
+            def polyline_curve(pts):
+                def fn(t, pts=pts):
+                    seg = t * (len(pts) - 1)
+                    i = min(int(seg), len(pts) - 2)
+                    f = seg - i
+                    return [pts[i][k] + (pts[i + 1][k] - pts[i][k]) * f
+                            for k in range(3)]
+                return fn
+
+            cy, cz, radius, _, _ = self.scoop
             for band, stripe_y in enumerate((fb * 0.28, fb * 0.68)):
-                c.shape("box", self.n(f"Stripe {band}"),
-                        self.to_world([0.0, stripe_y, -L * 0.02]),
-                        size=[self.beam * 1.015, 0.16 * s, L * 0.58],
-                        motion_mode="none", material_name=m["white"],
-                        parent_node_id=self.root)
+                # Whole stripe = three lattice-bent strips per side (aft
+                # taper, midbody, bow run) with ONE cross-section - a
+                # box/strip mix showed as steps at every joint. Hug factor
+                # per band: the hull FLARES, so at the lower stripe's
+                # height the surface sits inside the rail half-beam
+                # (iteration 2: the lower strip stood off the bow like a
+                # fin). The bow strip ends just AFT of the stem edge
+                # instead of wrapping past it.
+                hug = 0.98 if band == 0 else 1.01
+                y_end = stripe_y + fb * 0.14
+                z_end = cz - math.sqrt(max(0.0, radius * radius
+                                           - (y_end - cy) ** 2)) - 0.06 * s
+                for side in (+1, -1):
+                    def hull_pt(zf):
+                        return [side * self.half_beam_at(zf) * hug,
+                                stripe_y + fb * sheer_rise(zf), zf * L]
+
+                    runs = {
+                        "aft": [hull_pt(zf) for zf in
+                                (-0.475, -0.38, -0.27, -0.12)],
+                        "mid": [hull_pt(zf) for zf in
+                                (-0.12, 0.0, 0.12, 0.235)],
+                        "bow": [hull_pt(zf) for zf in
+                                (0.235, 0.30, 0.36, 0.41, 0.45)]
+                               + [[side * 0.05 * s, y_end, z_end]],
+                    }
+                    for run, pts in runs.items():
+                        self.bent_strip(f"Stripe {band} {run} {side}",
+                                        polyline_curve(pts), 0.07 * s,
+                                        0.16 * s, m["white"])
                 # Dark ports: thin boxes spanning the beam, poking through
-                # the stripe on both sides.
+                # the stripe on both sides; two extra chase the bow taper.
+                # Dark ports: thin plates just proud of each strip FACE.
+                # Beam-spanning boxes poked out of the tapering hull as
+                # brown tabs riding on the stripes (iteration 5).
                 batch = c.part_batch()
-                count = 9
-                for i in range(count):
-                    z = -L * 0.02 + (i - (count - 1) * 0.5) * (L * 0.52 / count)
-                    batch.part("box", self.n(f"Port {band}.{i}"),
-                               self.to_world([0.0, stripe_y, z]),
-                               parent_node_id=self.root,
-                               material_name=m["hull_dark"],
-                               size=[self.beam * 1.03, 0.09 * s, 0.30 * s])
+                port_zfs = ([-0.02 + (i - 4) * (0.52 / 9) for i in range(9)]
+                            + [0.31, 0.40])
+                for side in (+1, -1):
+                    for k, zf in enumerate(port_zfs):
+                        x = self.half_beam_at(zf) * hug + 0.035 * s
+                        batch.part("box", self.n(f"Port {band}.{side}.{k}"),
+                                   self.to_world([side * x,
+                                                  stripe_y + fb * sheer_rise(zf),
+                                                  zf * L]),
+                                   parent_node_id=self.root,
+                                   material_name=m["hull_dark"],
+                                   size=[0.08 * s, 0.09 * s, 0.30 * s])
                 batch.flush()
-            # Gilded bow scroll: gold band sweeping up the sheer toward the
-            # stem head, one per side.
+            # Gold sheer line: the references run a continuous gilded band
+            # at rail level the FULL hull length; the bow scroll below
+            # continues it forward, so the boxes stop where the scroll
+            # starts.
+            for zc, zl in ((-0.3775, 0.195), (-0.03, 0.50)):
+                c.shape("box", self.n(f"Sheer Line @{zc}"),
+                        self.to_world([0.0, fb * 0.98, zc * L]),
+                        size=[2.0 * self.half_beam_at(zc) * 1.05,
+                              0.10 * s, zl * L],
+                        motion_mode="none", material_name=m["gold"],
+                        parent_node_id=self.root)
+            # Gilded bow scroll: a gold ARC sweeping from the sheer up and
+            # forward into the figurehead (references show a curved band,
+            # not a straight one) - quadratic bezier, one lattice-bent
+            # strip per side.
             for side in (+1, -1):
-                start = [side * self.half_beam_at(0.30) * 0.98, fb * 0.80, L * 0.30]
-                end = [side * 0.06 * s, fb * 1.30, L * 0.505]
-                d = [end[0] - start[0], end[1] - start[1], end[2] - start[2]]
-                length = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
-                q = align_y_quaternion([v / length for v in d])
-                c.shape("cone", self.n(f"Bow Scroll {side}"),
-                        self.to_world(start), rotation_xyzw=q,
-                        height=length, bottom_radius=0.07 * s,
-                        top_radius=0.04 * s, motion_mode="none",
-                        material_name=m["gold"], parent_node_id=self.root)
+                p0 = [side * self.half_beam_at(0.26) * 1.00, fb * 0.98, L * 0.26]
+                p1 = [side * self.half_beam_at(0.40) * 1.06, fb * 1.20, L * 0.42]
+                p2 = [side * 0.06 * s, fb * 1.26, L * 0.55]
+                self.bent_strip(
+                    f"Bow Scroll {side}",
+                    lambda t, p0=p0, p1=p1, p2=p2: bezier2(p0, p1, p2, t),
+                    0.08 * s, 0.11 * s, m["gold"])
 
         if self.deckhouses:
             # Tall enough to peek over the bulwark (deck sits at fb*0.45,
@@ -591,8 +877,13 @@ class ShipYard:
                     kind="icosahedron", radius=0.16, motion_mode="none",
                     material_name=m["gold"], parent_node_id=self.root)
 
-        # Anchor at the bow (all ships): torus ring + shank capsule union.
+        # Anchor at the bow (non-clipper ships - the clipper bow carries
+        # its own hawse-nested anchor in build_clipper_bow; the generic one
+        # floats beside the narrowed clipper entry).
         s = self.s
+        if self.clipper:
+            self.build_stern_lantern()
+            return
         anchor_pos = [self.beam * 0.52, self.freeboard * 0.55, L * 0.34]
         c.shape("torus", self.n("Anchor"), self.to_world(anchor_pos),
                 major_radius=0.16 * s, minor_radius=0.035 * s, major_steps=14,
@@ -609,7 +900,11 @@ class ShipYard:
                 rotation_xyzw=pitch_quat(90.0), motion_mode="none",
                 material_name=m["mast"], parent_node_id=self.root)
 
+        self.build_stern_lantern()
+
+    def build_stern_lantern(self):
         # Stern lantern on a short post at the taffrail (all ships)
+        c, m, s, L = self.c, self.m, self.s, self.length
         c.shape("capsule", self.n("Lantern Post"),
                 self.to_world([0.0, self.freeboard * 1.28, -L * 0.495]),
                 length=0.5 * s, bottom_radius=0.03 * s, top_radius=0.03 * s,
@@ -730,7 +1025,7 @@ def main():
         length=58.0, beam=10.0, depth=3.4, freeboard=4.4,
         masts=[(0.30, 28.0, 2.0), (0.0, 30.0, 3.0), (-0.30, 24.0, 4.0)],
         gunports=0, heel_deg=2.0, hull_material=m["hull_black"],
-        stripes=True, deckhouses=True, sails_per_mast=3)
+        stripes=True, deckhouses=True, sails_per_mast=3, clipper=True)
     vespucci.build()
 
     # ------------------------------------------------------------- verify

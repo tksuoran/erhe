@@ -1136,6 +1136,15 @@ def quat_mul(a, b):
     ]
 
 
+def quat_rotate(q, v):
+    """Rotate vector v by quaternion q ([x,y,z,w]). Pass the conjugate
+    ([-x,-y,-z,w]) to go world -> node-local (e.g. for lattice_deform
+    offsets, which are node-local)."""
+    qv = [q[0], q[1], q[2]]
+    t = v_scale(v_cross(qv, v), 2.0)
+    return v_add(v_add(v, v_scale(t, q[3])), v_cross(qv, t))
+
+
 def hsv_to_rgb(h, s, v):
     """h in [0,1). Returns linear-ish RGB triple."""
     i = int(h * 6.0) % 6
