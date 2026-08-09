@@ -216,6 +216,36 @@ class Creation:
             time.sleep(0.1)
         raise RuntimeError("create_scene did not surface a new scene")
 
+    def attach_scene(self, scene_name=None):
+        """Adopt an already-open scene without creating or closing anything
+        (partial-rebuild / live-angle mode; pair with --only). Sets
+        self.scene and makes it the active scene."""
+        scenes = [s["name"] for s in self.call("list_scenes").get("scenes", [])]
+        if not scenes:
+            raise RuntimeError("attach_scene: no open scenes")
+        name = scene_name or scenes[0]
+        if name not in scenes:
+            raise RuntimeError(f"attach_scene: '{name}' not open (open: {scenes})")
+        self._close_existing_scenes = False
+        self._shape_pool = {}
+        self._presented_scene = None
+        self.scene = name
+        self.mutate("set_active_scene", {"scene_name": name})
+        return name
+
+    def delete_nodes(self, names=None, ids=None):
+        """Delete node subtrees by exact name and/or id (undoable, queued
+        through the editor's recursive-delete path; settles before
+        returning so rebuilding into the freed names is safe)."""
+        args = {"scene_name": self.scene}
+        if names:
+            args["names"] = names if isinstance(names, list) else [names]
+        if ids:
+            args["ids"] = ids if isinstance(ids, list) else [ids]
+        result = self.mutate("delete_nodes", args)
+        self.settle()
+        return result
+
     def settle(self, deadline_s=600.0, extra_sleep=0.0):
         """Wait until pending + running + queued_operations == 0. Polls at
         0.1 s - typical geometry ops finish inside one or two cycles, and
@@ -247,6 +277,37 @@ class Creation:
             "ids": ids if isinstance(ids, list) else [ids],
         })
 
+    # ------------------------------------------------------- geometry queries
+
+    def geometry_query(self, queries):
+        """Run a BATCH of geometry queries in one MCP call (2026-08-09).
+        queries: list of
+          {"type": "raycast", "origin": [x,y,z], "direction": [x,y,z],
+           "max_distance"?: f, "mask"?: i}
+          {"type": "closest_point", "point": [x,y,z],
+           "node_id"?: i, "node_name"?: s}   # omit node = whole scene
+        Returns the per-query result list IN ORDER; a bad query fills its
+        entry's "error" without failing the batch. Use it to probe the
+        ACTUAL surface (a convex hull bulges past its authored points)
+        instead of guessing offsets."""
+        result = self.call("geometry_query",
+                           {"scene_name": self.scene, "queries": queries})
+        return result.get("results", [])
+
+    def closest_points(self, points, node_name=None, node_id=None):
+        """Closest point on a mesh SURFACE for each input point, one batched
+        call. Results carry position / normal / distance / node. Name the
+        node (e.g. the hull) - a whole-scene search visits every mesh."""
+        queries = []
+        for p in points:
+            q = {"type": "closest_point", "point": [float(v) for v in p]}
+            if node_id is not None:
+                q["node_id"] = node_id
+            elif node_name is not None:
+                q["node_name"] = node_name
+            queries.append(q)
+        return self.geometry_query(queries)
+
     def clear_selection(self):
         self.select([])
 
@@ -269,6 +330,32 @@ class Creation:
             raise RuntimeError(f"camera node '{camera_name}' not found")
         rotation = look_at_quaternion(eye, target, up)
         self.set_node_transform(node["id"], translation=eye, rotation_xyzw=rotation)
+
+    def node_world_pose(self, node_name):
+        """(position, rotation_xyzw) of a node in WORLD space, from the
+        editor's live transform (get_node_details)."""
+        details = self.call("get_node_details",
+                            {"scene_name": self.scene, "node_name": node_name})
+        world = details.get("world_transform", {})
+        position = world.get("translation") or details.get("world_position")
+        rotation = world.get("rotation_xyzw", [0.0, 0.0, 0.0, 1.0])
+        if position is None:
+            raise RuntimeError(f"node_world_pose: no transform for '{node_name}'")
+        return list(position), list(rotation)
+
+    def shot_relative(self, node_name, local_eye, local_target):
+        """(eye, target) in world space from OBJECT-LOCAL offsets on a live
+        node - one-liner object-relative cameras (a ship's bow close-up at
+        any heading) instead of hand-rotating offsets:
+
+            eye, target = c.shot_relative("Amerigo Vespucci",
+                                          [13, 6, 48], [-1, 4.5, 27])
+            c.screenshot_views(base, [("_bow", eye, target)])
+        """
+        position, rotation = self.node_world_pose(node_name)
+        eye = v_add(position, quat_rotate(rotation, [float(v) for v in local_eye]))
+        target = v_add(position, quat_rotate(rotation, [float(v) for v in local_target]))
+        return eye, target
 
     CLUTTER_WINDOWS = [
         "Animation", "Asset Browser", "Clipboard", "Commands", "Composer",
@@ -379,6 +466,17 @@ class Creation:
                 return result["name"]
             return name  # server-busy path: mutate drained and returned None
         raise RuntimeError(f"create_material: no free name found for '{base}'")
+
+    def ensure_material(self, name, **edits):
+        """make_material, unless a material with this exact name already
+        exists in the scene's library - then just return the name. Partial
+        rebuilds (--only) re-enter the script's material setup against a
+        populated library; without this every run would add ' N'-suffixed
+        duplicates."""
+        for material in self.materials():
+            if material.get("name") == name:
+                return name
+        return self.make_material(name, **edits)
 
     # -------------------------------------------------------- texture graph
 
@@ -1199,4 +1297,9 @@ def standard_args(description):
                         help="skip the build: load_scene this saved .glb and "
                              "run only the script's camera/lights/screenshot "
                              "stage (scripts that support it)")
+    parser.add_argument("--only", metavar="OBJECT", default=None,
+                        help="partial rebuild: attach to the running editor's "
+                             "scene (implies --reuse --keep-scenes), delete "
+                             "the named root group and rebuild ONLY that "
+                             "object (scripts that support it)")
     return parser.parse_args()

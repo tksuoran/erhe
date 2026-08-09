@@ -954,100 +954,121 @@ def main():
     args = standard_args("Sail Ships")
     if reframe(args, "Sail Ships", "logs/creations/sail_ships", SHOTS):
         return
+    only = args.only
     c = Creation("Sail Ships", port=args.port, pause_s=args.pause,
-                 editor_exe=args.editor_exe, reuse=args.reuse)
-    scene = c.new_scene()
-    print(f"scene: {scene}")
+                 editor_exe=args.editor_exe,
+                 reuse=args.reuse or bool(only), keep_scenes=bool(only))
+    if only:
+        # Partial rebuild: adopt the open scene, delete the named ship's
+        # root group, rebuild only that ship (~4x faster iteration on a
+        # one-ship change; needs a running editor with the scene open).
+        scene = c.attach_scene()
+        print(f"attached scene: {scene} (rebuilding only '{only}')")
+    else:
+        scene = c.new_scene()
+        print(f"scene: {scene}")
 
-    c.ambience(ambient=[0.16, 0.17, 0.20],
-               clear_color=[0.72, 0.60, 0.48, 1.0], grid=False,
-               sky={"_version": 3, "enabled": True, "mode": 1})
+    if not only:
+        c.ambience(ambient=[0.16, 0.17, 0.20],
+                   clear_color=[0.72, 0.60, 0.48, 1.0], grid=False,
+                   sky={"_version": 3, "enabled": True, "mode": 1})
 
+    # ensure_material: --only re-enters this against a populated library.
     m = {
-        "hull":      c.make_material("oak planking", base_color=[0.30, 0.19, 0.10], roughness=0.85, metallic=0.0),
-        "hull_dark": c.make_material("tarred oak",   base_color=[0.13, 0.09, 0.06], roughness=0.9,  metallic=0.0),
-        "trim":      c.make_material("teak trim",    base_color=[0.45, 0.29, 0.14], roughness=0.7,  metallic=0.0),
-        "mast":      c.make_material("pine spar",    base_color=[0.52, 0.40, 0.24], roughness=0.8,  metallic=0.0),
-        "canvas":    c.make_material("sailcloth",    base_color=[0.87, 0.82, 0.70], roughness=0.95, metallic=0.0),
-        "rope":      c.make_material("hemp rope",    base_color=[0.42, 0.35, 0.22], roughness=1.0,  metallic=0.0),
-        "iron":      c.make_material("cast iron",    base_color=[0.10, 0.10, 0.11], roughness=0.45, metallic=0.9),
-        "gold":      c.make_material("brass",        base_color=[0.85, 0.65, 0.25], roughness=0.35, metallic=1.0),
-        "flag":      c.make_material("pennant red",  base_color=[0.70, 0.08, 0.06], roughness=0.8,  metallic=0.0),
-        "lantern":   c.make_material("lantern glow", base_color=[1.0, 0.75, 0.35],  roughness=0.6,  metallic=0.0,
-                                     emissive=[2.6, 1.7, 0.7]),
-        "hull_black": c.make_material("black steel", base_color=[0.035, 0.035, 0.045], roughness=0.5, metallic=0.2),
-        "white":     c.make_material("ship white",   base_color=[0.90, 0.90, 0.87],  roughness=0.6,  metallic=0.0),
-        "sea":       c.make_material("sea water",    base_color=[0.02, 0.15, 0.28], roughness=0.10, metallic=0.0,
-                                     blending_mode="alpha_blend", opacity=0.25),
-        "seabed":    c.make_material("seabed",       base_color=[0.10, 0.17, 0.20], roughness=1.0,  metallic=0.0),
+        "hull":      c.ensure_material("oak planking", base_color=[0.30, 0.19, 0.10], roughness=0.85, metallic=0.0),
+        "hull_dark": c.ensure_material("tarred oak",   base_color=[0.13, 0.09, 0.06], roughness=0.9,  metallic=0.0),
+        "trim":      c.ensure_material("teak trim",    base_color=[0.45, 0.29, 0.14], roughness=0.7,  metallic=0.0),
+        "mast":      c.ensure_material("pine spar",    base_color=[0.52, 0.40, 0.24], roughness=0.8,  metallic=0.0),
+        "canvas":    c.ensure_material("sailcloth",    base_color=[0.87, 0.82, 0.70], roughness=0.95, metallic=0.0),
+        "rope":      c.ensure_material("hemp rope",    base_color=[0.42, 0.35, 0.22], roughness=1.0,  metallic=0.0),
+        "iron":      c.ensure_material("cast iron",    base_color=[0.10, 0.10, 0.11], roughness=0.45, metallic=0.9),
+        "gold":      c.ensure_material("brass",        base_color=[0.85, 0.65, 0.25], roughness=0.35, metallic=1.0),
+        "flag":      c.ensure_material("pennant red",  base_color=[0.70, 0.08, 0.06], roughness=0.8,  metallic=0.0),
+        "lantern":   c.ensure_material("lantern glow", base_color=[1.0, 0.75, 0.35],  roughness=0.6,  metallic=0.0,
+                                       emissive=[2.6, 1.7, 0.7]),
+        "hull_black": c.ensure_material("black steel", base_color=[0.035, 0.035, 0.045], roughness=0.5, metallic=0.2),
+        "white":     c.ensure_material("ship white",   base_color=[0.90, 0.90, 0.87],  roughness=0.6,  metallic=0.0),
+        "sea":       c.ensure_material("sea water",    base_color=[0.02, 0.15, 0.28], roughness=0.10, metallic=0.0,
+                                       blending_mode="alpha_blend", opacity=0.25),
+        "seabed":    c.ensure_material("seabed",       base_color=[0.10, 0.17, 0.20], roughness=1.0,  metallic=0.0),
     }
 
-    # Lights first (SKILL rule): golden-hour sun low off the port bows.
-    c.light("directional", "Evening Sun", [0.0, 40.0, 0.0],
-            [1.0, 0.78, 0.52], 2.6)
-    pitch = math.radians(-150.0)
-    yaw = math.radians(55.0)
-    qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
-    qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
-    c.set_node_transform("Evening Sun", rotation_xyzw=quat_mul(qy, qx))
-    c.light("point", "Sky Fill", [-20.0, 30.0, 30.0], [0.55, 0.62, 0.80],
-            260.0, range=140.0, cast_shadow=False)
-    # z_far decoupled: the 600 m sea plane far-clips at the default
-    # shadow-coupled 140/160 m and the horizon shows as a hard band.
-    c.shadow_range(140.0, z_far=900.0)
+    if not only:
+        # Lights first (SKILL rule): golden-hour sun low off the port bows.
+        c.light("directional", "Evening Sun", [0.0, 40.0, 0.0],
+                [1.0, 0.78, 0.52], 2.6)
+        pitch = math.radians(-150.0)
+        yaw = math.radians(55.0)
+        qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+        qx = [math.sin(pitch / 2), 0.0, 0.0, math.cos(pitch / 2)]
+        c.set_node_transform("Evening Sun", rotation_xyzw=quat_mul(qy, qx))
+        c.light("point", "Sky Fill", [-20.0, 30.0, 30.0], [0.55, 0.62, 0.80],
+                260.0, range=140.0, cast_shadow=False)
+        # z_far decoupled: the 600 m sea plane far-clips at the default
+        # shadow-coupled 140/160 m and the horizon shows as a hard band.
+        c.shadow_range(140.0, z_far=900.0)
 
-    # Sea: OPEN-OCEAN recipe - deep dark bottom under near-opaque water, so
-    # the surface reads blue everywhere instead of showing seabed shadows
-    # (the SKILL's bright-seabed recipe is for shallow lagoons); 600 m
-    # across so the box edge stays past the horizon line.
-    c.shape("box", "Seabed", [0.0, -6.0, 0.0], size=[600.0, 1.0, 600.0],
-            material_name=m["seabed"])
-    c.shape("box", "Sea", [0.0, -2.75, 0.0], size=[600.0, 5.5, 600.0],
-            motion_mode="none", material_name=m["sea"])
+        # Sea: OPEN-OCEAN recipe - deep dark bottom under near-opaque water,
+        # so the surface reads blue everywhere instead of showing seabed
+        # shadows (the SKILL's bright-seabed recipe is for shallow lagoons);
+        # 600 m across so the box edge stays past the horizon line.
+        c.shape("box", "Seabed", [0.0, -6.0, 0.0], size=[600.0, 1.0, 600.0],
+                material_name=m["seabed"])
+        c.shape("box", "Sea", [0.0, -2.75, 0.0], size=[600.0, 5.5, 600.0],
+                motion_mode="none", material_name=m["sea"])
 
     # ------------------------------------------------------------- the fleet
     # Headings face the evening sun: the sun light travels toward
     # (+0.71, -0.50, +0.50), so the sun sits toward (-0.71, -0.50) on the
     # horizon = heading ~ -125 deg; ships keep a few degrees of spread.
-    flagship = ShipYard(
-        c, m, "Galleon Aurora", [0.0, 0.0, 0.0], heading_deg=-122.0,
-        length=30.0, beam=7.6, depth=2.6, freeboard=2.6,
-        masts=[(0.28, 13.0, 4.0), (-0.02, 16.0, 6.0), (-0.30, 11.0, 8.0)],
-        gunports=5, flagship=True, heel_deg=3.0)
-    flagship.build()
+    fleet = {
+        "Galleon Aurora": lambda: ShipYard(
+            c, m, "Galleon Aurora", [0.0, 0.0, 0.0], heading_deg=-122.0,
+            length=30.0, beam=7.6, depth=2.6, freeboard=2.6,
+            masts=[(0.28, 13.0, 4.0), (-0.02, 16.0, 6.0), (-0.30, 11.0, 8.0)],
+            gunports=5, flagship=True, heel_deg=3.0),
+        "Brig Meri": lambda: ShipYard(
+            c, m, "Brig Meri", [-30.0, 0.0, -2.0], heading_deg=-116.0,
+            length=18.0, beam=5.0, depth=1.8, freeboard=1.9,
+            masts=[(0.20, 10.0, 4.0), (-0.22, 11.5, 6.0)],
+            gunports=3, heel_deg=4.0),
+        "Sloop Tuuli": lambda: ShipYard(
+            c, m, "Sloop Tuuli", [15.0, 0.0, -17.0], heading_deg=-130.0,
+            length=12.0, beam=3.4, depth=1.3, freeboard=1.3,
+            masts=[(-0.05, 9.0, 5.0)],
+            gunports=0, heel_deg=5.0),
+        # The nave scuola herself: black steel clipper bow, two white
+        # port-dotted stripes, white deckhouses, gilded scroll and
+        # figurehead, full-rigged three-sail stacks. Placed astern of the
+        # squadron so her size reads against the galleon.
+        "Amerigo Vespucci": lambda: ShipYard(
+            c, m, "Amerigo Vespucci", [-20.0, 0.0, -60.0], heading_deg=-118.0,
+            length=58.0, beam=10.0, depth=3.4, freeboard=4.4,
+            masts=[(0.30, 28.0, 2.0), (0.0, 30.0, 3.0), (-0.30, 24.0, 4.0)],
+            gunports=0, heel_deg=2.0, hull_material=m["hull_black"],
+            stripes=True, deckhouses=True, sails_per_mast=3, clipper=True),
+    }
 
-    brig = ShipYard(
-        c, m, "Brig Meri", [-30.0, 0.0, -2.0], heading_deg=-116.0,
-        length=18.0, beam=5.0, depth=1.8, freeboard=1.9,
-        masts=[(0.20, 10.0, 4.0), (-0.22, 11.5, 6.0)],
-        gunports=3, heel_deg=4.0)
-    brig.build()
-
-    sloop = ShipYard(
-        c, m, "Sloop Tuuli", [15.0, 0.0, -17.0], heading_deg=-130.0,
-        length=12.0, beam=3.4, depth=1.3, freeboard=1.3,
-        masts=[(-0.05, 9.0, 5.0)],
-        gunports=0, heel_deg=5.0)
-    sloop.build()
-
-    # The nave scuola herself: black steel hull, two white gun-deck
-    # stripes with a row of dark ports, white deckhouses, gilded bow
-    # scroll and figurehead, full-rigged three-sail stacks. Placed astern
-    # of the squadron so her size reads against the galleon.
-    vespucci = ShipYard(
-        c, m, "Amerigo Vespucci", [-20.0, 0.0, -60.0], heading_deg=-118.0,
-        length=58.0, beam=10.0, depth=3.4, freeboard=4.4,
-        masts=[(0.30, 28.0, 2.0), (0.0, 30.0, 3.0), (-0.30, 24.0, 4.0)],
-        gunports=0, heel_deg=2.0, hull_material=m["hull_black"],
-        stripes=True, deckhouses=True, sails_per_mast=3, clipper=True)
-    vespucci.build()
-
-    # ------------------------------------------------------------- verify
-    print(f"nodes: {len(c.nodes())}")
-
-    # ------------------------------------------------------------- cameras
-    c.shadow_range(160.0, z_far=900.0)
-    c.screenshot_views("logs/creations/sail_ships", SHOTS)
+    if only:
+        if only not in fleet:
+            raise SystemExit(f"--only '{only}' unknown; ships: {list(fleet)}")
+        c.delete_nodes(names=[only])
+        yard = fleet[only]()
+        yard.build()
+        print(f"nodes: {len(c.nodes())}")
+        # Object-relative close-up of just the rebuilt ship (bow quarter),
+        # via the live node transform - no hand heading trigonometry.
+        L = yard.length
+        eye, target = c.shot_relative(only, [0.45 * L, 0.11 * L, 0.85 * L],
+                                      [0.0, 0.08 * L, 0.45 * L])
+        c.screenshot_views("logs/creations/sail_ships", [("only", eye, target)])
+    else:
+        for make in fleet.values():
+            make().build()
+        print(f"nodes: {len(c.nodes())}")
+        # --------------------------------------------------------- cameras
+        c.shadow_range(160.0, z_far=900.0)
+        c.screenshot_views("logs/creations/sail_ships", SHOTS)
 
     if not args.no_save:
         c.save("res/editor/scenes/creations/sail_ships.glb")
