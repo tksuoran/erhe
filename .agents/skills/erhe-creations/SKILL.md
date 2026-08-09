@@ -57,8 +57,11 @@ they carry the current idioms.
   opts out) - iterate without relaunching or leaking scenes.
   `--reframe <glb>` skips the build: it load_scenes the saved .glb and
   runs only the script's camera/screenshot stage - composition
-  iteration in seconds instead of a full rebuild (scripts opt in;
-  creation_14 is the pattern).
+  iteration in seconds instead of a full rebuild. Generic since
+  2026-08-09: hoist the shot list to a module SHOTS constant and put
+  `if common.reframe(args, title, base_path, SHOTS): return` at the
+  top of main() (creation_16 is the pattern; creation_14 has the older
+  hand-rolled version). EVERY new creation should wire this.
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
@@ -81,6 +84,13 @@ they carry the current idioms.
   MCP telemetry summary at exit (per-tool counts + seconds); read it
   before optimizing anything. Background command timeout is 10 min;
   scenes of ~2500 nodes build fine.
+- SETTLE SLEEPS dominate wall time, not MCP latency (2026-08-09,
+  measured on creation 16: 411 -> 255 calls, get_async_status 60 -> 6).
+  csg()/lattice_deform() ops on INDEPENDENT targets go out with
+  wait=False + ONE settle() at the end of the builder; screenshot()'s
+  settle is the backstop. presentation()'s hide pass runs once per
+  scene automatically (was 147 set_window_visibility calls/run when it
+  repeated per screenshot).
 - `c.batch([{"tool": ..., "arguments": {...}}, ...])` (batch MCP tool,
   2026-08-08) runs N calls in one request, one editor frame and ONE
   undo entry - use it for burst construction (many create_shape /

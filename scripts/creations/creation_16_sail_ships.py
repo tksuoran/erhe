@@ -30,8 +30,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, align_y_quaternion, quat_mul, v_add,
+    Creation, standard_args, reframe, align_y_quaternion, quat_mul, v_add,
 )
+
+SHOTS = [
+    ("",       [34.0, 8.5, 40.0], [-10.0, 5.0, -14.0]),
+    ("_bow",   [-22.0, 3.5, 30.0], [2.0, 5.5, -2.0]),
+    ("_stern", [10.0, 9.0, -40.0], [-4.0, 4.5, 4.0]),
+]
 
 
 def yaw_quat(degrees):
@@ -94,7 +100,7 @@ def billow_sail(c, node, belly, direction=1.0):
     stay pinned (only interior control points move), the middle bulges
     toward the bow, the foot bulges slightly less than the center."""
     dz = belly * direction
-    c.lattice_deform(node, offsets=[
+    c.lattice_deform(node, wait=False, offsets=[
         [1, 0, 0, 0.0, 0.0, 0.70 * dz], [1, 0, 1, 0.0, 0.0, 0.70 * dz], [1, 0, 2, 0.0, 0.0, 0.70 * dz],
         [1, 1, 0, 0.0, 0.0, 1.00 * dz], [1, 1, 1, 0.0, 0.0, 1.00 * dz], [1, 1, 2, 0.0, 0.0, 1.00 * dz],
         [1, 2, 0, 0.0, 0.0, 0.55 * dz], [1, 2, 1, 0.0, 0.0, 0.55 * dz], [1, 2, 2, 0.0, 0.0, 0.55 * dz],
@@ -104,7 +110,7 @@ def billow_sail(c, node, belly, direction=1.0):
 def ripple_pennant(c, node, amp):
     """S-curve ripple along a pennant's length (local X): divisions [3,1,1],
     alternating lateral offsets."""
-    c.lattice_deform(node, divisions=[3, 1, 1], offsets=[
+    c.lattice_deform(node, wait=False, divisions=[3, 1, 1], offsets=[
         [1, 0, 0, 0.0, 0.0, +amp], [1, 1, 0, 0.0, 0.0, +amp],
         [1, 0, 1, 0.0, 0.0, +amp], [1, 1, 1, 0.0, 0.0, +amp],
         [2, 0, 0, 0.0, 0.0, -amp], [2, 1, 0, 0.0, 0.0, -amp],
@@ -214,7 +220,10 @@ class ShipYard:
                             reuse=False, material_name=m["hull"])
                 carves.append(r.get("node_id"))
 
-        c.csg(self.n("Hull"), carves, "difference")
+        # All csg/lattice ops in this builder target INDEPENDENT meshes, so
+        # they go out with wait=False and build() settles ONCE at the end
+        # (each wrapper settle sleeps at least a poll cycle).
+        c.csg(self.n("Hull"), carves, "difference", wait=False)
 
         if self.flagship:
             # Warm cabin glow just behind the window openings
@@ -304,7 +313,8 @@ class ShipYard:
                     height=0.6, bottom_radius=0.26, top_radius=0.40,
                     slice_count=14, motion_mode="none", reuse=False,
                     material_name=m["trim"])
-            c.csg(self.n("Crows Nest"), self.n("nest carve"), "difference")
+            c.csg(self.n("Crows Nest"), self.n("nest carve"), "difference",
+                  wait=False)
 
         # Masthead pennant: thin box rippled with an S-curve FFD.
         pen = c.shape("box", self.n(f"Pennant {index}"),
@@ -362,7 +372,7 @@ class ShipYard:
                             rotation_xyzw=roll_quat(ang), motion_mode="none",
                             reuse=False, material_name=m["trim"])
                 spokes.append(r.get("node_id"))
-            c.csg(self.n("Wheel"), spokes, "union")
+            c.csg(self.n("Wheel"), spokes, "union", wait=False)
             c.shape("capsule", self.n("Wheel Post"),
                     self.to_world([0.0, deck_y + 0.5, wheel_z - 0.15]),
                     length=0.9, bottom_radius=0.07, top_radius=0.07,
@@ -386,7 +396,7 @@ class ShipYard:
                         motion_mode="none", reuse=False,
                         material_name=m["iron"])
                 c.csg(self.n(f"Cannon {side}"), self.n(f"bore {side}"),
-                      "difference")
+                      "difference", wait=False)
                 c.shape("box", self.n(f"Carriage {side}"),
                         self.to_world([gun_pos[0], deck_y + 0.14, gz - 0.25]),
                         size=[0.4, 0.28, 0.8], motion_mode="none",
@@ -423,7 +433,7 @@ class ShipYard:
                 self.to_world([anchor_pos[0], anchor_pos[1] - 0.42, anchor_pos[2]]),
                 length=0.7, bottom_radius=0.035, top_radius=0.035,
                 motion_mode="none", reuse=False, material_name=m["iron"])
-        c.csg(self.n("Anchor"), self.n("anchor shank"), "union")
+        c.csg(self.n("Anchor"), self.n("anchor shank"), "union", wait=False)
         c.shape("capsule", self.n("Anchor Stock"),
                 self.to_world([anchor_pos[0], anchor_pos[1] - 0.68, anchor_pos[2]]),
                 length=0.55, bottom_radius=0.03, top_radius=0.03,
@@ -456,12 +466,16 @@ class ShipYard:
             "ids": [i for i in self.no_shadow_ids if i],
             "flags": ["shadow_cast"], "enabled": False,
         })
+        # One settle for every wait=False csg/lattice op issued above.
+        self.c.settle()
 
 
 # --------------------------------------------------------------------- main
 
 def main():
     args = standard_args("Sail Ships")
+    if reframe(args, "Sail Ships", "logs/creations/sail_ships", SHOTS):
+        return
     c = Creation("Sail Ships", port=args.port, pause_s=args.pause,
                  editor_exe=args.editor_exe, reuse=args.reuse)
     scene = c.new_scene()
@@ -536,11 +550,7 @@ def main():
 
     # ------------------------------------------------------------- cameras
     c.shadow_range(160.0)
-    c.screenshot_views("logs/creations/sail_ships", [
-        ("",        [34.0, 8.5, 40.0], [-10.0, 5.0, -14.0]),
-        ("_bow",    [-22.0, 3.5, 30.0], [2.0, 5.5, -2.0]),
-        ("_stern",  [10.0, 9.0, -40.0], [-4.0, 4.5, 4.0]),
-    ])
+    c.screenshot_views("logs/creations/sail_ships", SHOTS)
 
     if not args.no_save:
         c.save("res/editor/scenes/creations/sail_ships.glb")

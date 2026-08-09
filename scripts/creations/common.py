@@ -78,6 +78,10 @@ class Creation:
         # instead of creating a new mesh per call. Per scene - cleared on
         # new_scene()/load().
         self._shape_pool = {}
+        # presentation() hide-pass memo (per scene): once done, screenshots
+        # only re-focus the creation's viewport.
+        self._presented_scene = None
+        self._my_viewport = None
         atexit.register(self._print_call_stats)
 
     def _record_pause(self):
@@ -177,6 +181,7 @@ class Creation:
             self.close_all_scenes()
             self._close_existing_scenes = False
         self._shape_pool = {}
+        self._presented_scene = None
         before = {s["name"] for s in self.call("list_scenes")["scenes"]}
         self.mutate("load_scene", {"path": str(glb_path)})
         deadline = time.time() + 120.0
@@ -197,6 +202,7 @@ class Creation:
             self.close_all_scenes()
             self._close_existing_scenes = False
         self._shape_pool = {}
+        self._presented_scene = None
         before = {s["name"] for s in self.call("list_scenes")["scenes"]}
         self.mutate("create_scene")
         deadline = time.time() + 30.0
@@ -211,7 +217,9 @@ class Creation:
         raise RuntimeError("create_scene did not surface a new scene")
 
     def settle(self, deadline_s=600.0, extra_sleep=0.0):
-        """Wait until pending + running + queued_operations == 0."""
+        """Wait until pending + running + queued_operations == 0. Polls at
+        0.1 s - typical geometry ops finish inside one or two cycles, and
+        settle sleeps (not MCP latency) dominate a build's wall time."""
         deadline = time.time() + deadline_s
         while time.time() < deadline:
             status = self.call("get_async_status")
@@ -221,7 +229,7 @@ class Creation:
                 if extra_sleep > 0.0:
                     time.sleep(extra_sleep)
                 return
-            time.sleep(0.2)
+            time.sleep(0.1)
         raise RuntimeError("scene did not settle in time")
 
     def nodes(self):
@@ -285,7 +293,15 @@ class Creation:
 
     def presentation(self):
         """Hide every non-viewport window and other scenes' viewports, then
-        focus this creation's viewport so the capture shows only it."""
+        focus this creation's viewport so the capture shows only it. The
+        hide pass runs ONCE per scene (repeated per screenshot it was 147
+        calls / 0.8 s a run - 36% of all MCP calls, pure cosmetics); later
+        calls only re-focus the viewport."""
+        if self._presented_scene == self.scene:
+            if self._my_viewport:
+                self.mutate("set_window_visibility",
+                            {"title": self._my_viewport, "visible": True, "focus": True})
+            return
         mine = None
         for viewport in self.call("get_viewports").get("viewports", []):
             if viewport.get("scene") == self.scene:
@@ -296,12 +312,14 @@ class Creation:
             self._hide_window(title)
         if mine:
             self.mutate("set_window_visibility", {"title": mine, "visible": True, "focus": True})
+        self._presented_scene = self.scene
+        self._my_viewport = mine
 
     def screenshot(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self.settle()
         self.presentation()
-        time.sleep(1.0)  # let a few frames render with final state
+        time.sleep(0.4)  # let a few frames render with final state
         try:
             result = self.call("capture_screenshot", {"path": path})
         except RuntimeError as error:
@@ -511,7 +529,10 @@ class Creation:
         spheres, convex hulls, regular polyhedra); a CSG-edited pooled
         instance silently goes private (create with reuse=False when a
         shared brush must stay untouched). Queued async; wait=True settles
-        before returning so the result is immediately usable."""
+        before returning so the result is immediately usable. BULK PATTERN:
+        ops on INDEPENDENT targets can all go out with wait=False + ONE
+        settle() at the end - each settle sleeps at least a poll cycle, and
+        those sleeps (not MCP latency) dominate a build's wall time."""
         args = {"scene_name": self.scene, "operation": operation}
         if isinstance(target, int):
             args["node_id"] = target
@@ -537,7 +558,9 @@ class Creation:
         the geometry's local bounds unless cage_min+cage_max are given.
         Needs interior vertices to bend - billow sails from a box with
         steps (e.g. size [w, h, 0.02], steps [8, 8, 1]), not a 4-vertex
-        quad. Queued async; wait=True settles before returning."""
+        quad. Queued async; wait=True settles before returning - deforms of
+        many independent meshes (a ship's sails) want wait=False + one
+        settle() at the end (see csg's bulk pattern note)."""
         args = {"scene_name": self.scene,
                 "offsets": [[float(v) if index >= 3 else int(v)
                              for index, v in enumerate(entry)] for entry in offsets],
@@ -1121,6 +1144,27 @@ def hsv_to_rgb(h, s, v):
     q = v * (1.0 - f * s)
     t = v * (1.0 - (1.0 - f) * s)
     return [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][i]
+
+
+def reframe(args, title, base_path, views):
+    """Generic --reframe stage: when --reframe <glb> was given, load the
+    saved scene and run ONLY the camera/screenshot stage (views as for
+    screenshot_views), then return True - the script should return without
+    building. Composition iteration in seconds instead of a full rebuild.
+    Call at the top of main():
+
+        if common.reframe(args, "My Scene", "logs/creations/my_scene", SHOTS):
+            return
+    """
+    if not getattr(args, "reframe", None):
+        return False
+    c = Creation(title, port=args.port, pause_s=0,
+                 editor_exe=args.editor_exe, reuse=args.reuse)
+    scene = c.load(args.reframe)
+    print(f"reframe: loaded {args.reframe} as scene {scene}")
+    c.screenshot_views(base_path, views)
+    print(f"{title} reframe complete.")
+    return True
 
 
 def standard_args(description):
