@@ -37,38 +37,51 @@ from lsystem_trees import (  # noqa: E402
     grow_shrub, grow_tree, rig_tree_sway,
 )
 
-# Rest-pose motor joint settings (glade recipe): linear XYZ + angular Y
-# locked, angular X/Z limited, drives spring back to the authored pose.
-# tree_sway carries whole 100+ kg trunks; branch_sway carries limbs and
-# shrub stems.
-SWAY_SETTINGS = {
-    "tree_sway":   {"range": 0.08, "stiffness": 1500.0, "damping": 150.0, "max_force": 3000.0},
-    # Limbs carry tens of kg and everything distal rides them: with soft
-    # motors (12/60) every limb sagged to its +-0.3 rad limit and the crowns
-    # slumped to half height. Stiff, tightly limited motors keep the crown
-    # shape and leave a visible few degrees of limb sway.
-    "branch_sway": {"range": 0.14, "stiffness": 220.0,  "damping": 22.0,  "max_force": 900.0},
-}
+def make_rest_pose_settings(c, name, range_rad, stiffness, damping, max_force):
+    """Rest-pose motor joint settings (glade recipe): linear XYZ + angular Y
+    locked, angular X/Z limited, drives spring back to the authored pose."""
+    c.joint_settings(
+        name,
+        limits=[
+            {"linear_axes": [True, True, True], "angular_axes": [False, False, False], "min": 0.0, "max": 0.0},
+            {"linear_axes": [False, False, False], "angular_axes": [False, True, False], "min": 0.0, "max": 0.0},
+            {"linear_axes": [False, False, False], "angular_axes": [True, False, False], "min": -range_rad, "max": range_rad},
+            {"linear_axes": [False, False, False], "angular_axes": [False, False, True], "min": -range_rad, "max": range_rad},
+        ],
+        drives=[
+            {"type": "angular", "axis": 0, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
+            {"type": "angular", "axis": 2, "stiffness": stiffness, "damping": damping, "max_force": max_force, "position_target": 0.0},
+        ],
+    )
 
 
-def make_sway_settings(c):
-    for name, p in SWAY_SETTINGS.items():
-        c.joint_settings(
-            name,
-            limits=[
-                {"linear_axes": [True, True, True], "angular_axes": [False, False, False], "min": 0.0, "max": 0.0},
-                {"linear_axes": [False, False, False], "angular_axes": [False, True, False], "min": 0.0, "max": 0.0},
-                {"linear_axes": [False, False, False], "angular_axes": [True, False, False], "min": -p["range"], "max": p["range"]},
-                {"linear_axes": [False, False, False], "angular_axes": [False, False, True], "min": -p["range"], "max": p["range"]},
-            ],
-            drives=[
-                {"type": "angular", "axis": 0, "stiffness": p["stiffness"], "damping": p["damping"], "max_force": p["max_force"], "position_target": 0.0},
-                {"type": "angular", "axis": 2, "stiffness": p["stiffness"], "damping": p["damping"], "max_force": p["max_force"], "position_target": 0.0},
-            ],
+_sway_setting_cache = set()
+
+
+def sway_setting_for_height(c, height):
+    """BEAM-SCALED joint settings, one per 4 m height bucket (joint settings
+    are shared library items, so they quantize). Bending stiffness of a
+    tapered beam goes ~ r^4 / L and trunk radius grows with height, so
+    stiffness ~ h^2 while rotational inertia grows ~ h^3: tall thick trunks
+    get SMALL, LOW-FREQUENCY sway (omega ~ 1/sqrt(h)) and thin trunks sway
+    MORE and faster. The angular range widens for thin trees the same way
+    (~5 deg for the 45 m spruce, ~15 deg for a hawthorn)."""
+    bucket = max(4, int(round(height / 4.0)) * 4)
+    name = f"tree_sway_h{bucket}"
+    if name not in _sway_setting_cache:
+        stiffness = 2.2 * bucket * bucket
+        make_rest_pose_settings(
+            c, name,
+            range_rad=0.06 + 1.6 / bucket,
+            stiffness=stiffness,
+            damping=stiffness * 0.10,
+            max_force=stiffness * 2.2,
         )
+        _sway_setting_cache.add(name)
+    return name
 
 
-def tree_sway_config(height):
+def tree_sway_config(c, height):
     """Height-scaled trunk-level rig (glade recipe): trunk mass and
     receptivity grow with the tree, so the 45 m spruce lumbers while the
     17 m apple stirs. branch_sway (second-level limb spines jointed to the
@@ -76,8 +89,12 @@ def tree_sway_config(height):
     rigged, crowns slump to half height - the limb joints do not hold
     their rest pose against a dynamic trunk carrier (tried both limb
     scene-parents: under the trunk = double-driven transforms, under the
-    root group = same slump). Needs a dedicated debugging session."""
+    root group = same slump). Needs a dedicated debugging session.
+    trunk_settings comes from sway_setting_for_height, so joint stiffness
+    follows beam scaling per tree size (thick = stiff and slow, thin =
+    soft and lively)."""
     return {
+        "trunk_settings": sway_setting_for_height(c, height),
         "trunk_mass": 3.0 * height,
         "trunk_receptivity": 0.9 * height,
         "branch_sway": False,
@@ -224,20 +241,24 @@ def main():
             kwargs.setdefault("root_count", 5)
             grow_conifer(c, tag, base, height, m[bark], m[leaf], rng,
                          sway_jobs=sway_jobs, sway_mass=3.0 * height,
-                         sway_receptivity=0.9 * height, **kwargs)
+                         sway_receptivity=0.9 * height,
+                         sway_settings=sway_setting_for_height(c, height), **kwargs)
         elif habit == "columnar":
             kwargs.setdefault("root_count", 3)
             grow_columnar(c, tag, base, height, m[bark], m[leaf], rng,
                           sway_jobs=sway_jobs, sway_mass=2.0 * height,
-                          sway_receptivity=0.6 * height, **kwargs)
+                          sway_receptivity=0.6 * height,
+                          sway_settings=sway_setting_for_height(c, height), **kwargs)
         elif habit == "shrub":
             # Shared root mound: the stems already spread from one point, so
             # with roots underneath the branching reads as starting below
-            # ground.
+            # ground. Stems are thin: beam scaling by stem height (~60% of
+            # the shrub) makes them the softest, liveliest spines.
             kwargs.setdefault("root_count", 4)
             grow_shrub(c, tag, base, height, m[bark], m[leaf], rng,
                        sway_jobs=sway_jobs, sway_mass=0.15 * height,
-                       sway_receptivity=0.35 * height, **kwargs)
+                       sway_receptivity=0.35 * height,
+                       sway_settings=sway_setting_for_height(c, height * 0.6), **kwargs)
         elif cluster:
             # Multi-stem cluster: a shared root mound and 2-3 full trunks
             # leaning outward from almost the same point, heights staggered -
@@ -256,19 +277,19 @@ def main():
                 species = broadleaf_species_params(
                     stem_height, root_count=0,
                     tilt=[lean * math.cos(a), 1.0, lean * math.sin(a)],
-                    sway=tree_sway_config(stem_height),
+                    sway=tree_sway_config(c, stem_height),
                     **kwargs)
                 grow_tree(c, f"{tag} {s + 1}", stem_base, species, m[bark],
                           leaf_pair, rng, sway_jobs=sway_jobs)
         else:
-            species = broadleaf_species_params(height, sway=tree_sway_config(height),
+            species = broadleaf_species_params(height, sway=tree_sway_config(c, height),
                                                **kwargs)
             grow_tree(c, tag, base, species, m[bark], leaf_pair,
                       rng, sway_jobs=sway_jobs)
 
     # ------------------------------------------------------ physics + wind
+    # (Joint settings were created lazily per height bucket during the build.)
     c.settle()
-    make_sway_settings(c)
     rig_tree_sway(c, sway_jobs)
     c.settle()
     c.wind(enabled=True, direction=[1.0, 0.0, 0.35], speed=3.0,
