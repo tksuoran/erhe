@@ -179,6 +179,9 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
     if trunk_id is not None:
         sway_jobs.append((tag, trunk_id, list(base), "tree_sway",
                           25.0 * age * age, 6.0 * age, 0.8, root))
+    # Whole branch + canopy structure goes out as ONE place_brush_instances
+    # call: chained segments parent via in-batch handles.
+    batch = c.part_batch()
 
     leaves = []                         # (tip position, carrying branch id)
     seg_count = 0
@@ -195,17 +198,14 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
             heading = v_norm(v_rotate(heading, left, wob))
             length = seg_len * (p["len_falloff"] ** depth) * rng.uniform(0.85, 1.15)
             radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
-            # Unit-cone instance; as_parent adds an unscaled pose node so the
+            # Unit-cone instance; as_parent adds a rigid pose node so the
             # child branches/canopies do not inherit this segment's scale.
-            result = c.part("cone", f"{tag} Branch {seg_count}", list(pos),
-                            rotation_xyzw=align_y_quaternion(heading),
-                            height=length, bottom_radius=radius,
-                            top_radius=max(0.025, radius * 0.7),
-                            slice_count=8, material_name=bark,
-                            parent_node_id=parent, as_parent=True)
-            node_id = result.get("node_id")
-            if node_id is not None:
-                parent = node_id
+            parent = batch.part("cone", f"{tag} Branch {seg_count}", list(pos),
+                                rotation_xyzw=align_y_quaternion(heading),
+                                height=length, bottom_radius=radius,
+                                top_radius=max(0.025, radius * 0.7),
+                                slice_count=8, material_name=bark,
+                                parent_node_id=parent, as_parent=True)
             seg_count += 1
             pos = v_add(pos, v_scale(heading, length))
         elif ch == "&":
@@ -242,10 +242,11 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
         radius = min(base_r + per * math.sqrt(count), cap) * age_leaf
         jitter = [rng.uniform(-0.06, 0.06) for _ in range(3)]
         carrier = max(carriers.items(), key=lambda kv: kv[1])[0]
-        c.part("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
-               radius=radius, slice_count=12, stack_count=9,
-               material_name=leaf_materials[i % len(leaf_materials)],
-               parent_node_id=carrier)
+        batch.part("uv_sphere", f"{tag} Canopy {i}", v_add(center, jitter),
+                   radius=radius, slice_count=12, stack_count=9,
+                   material_name=leaf_materials[i % len(leaf_materials)],
+                   parent_node_id=carrier)
+    batch.flush()
     print(f"{tag}: {seg_count} segments, {len(clusters)} canopy clusters")
 
 
@@ -310,17 +311,20 @@ def mushroom(c, tag, x, z, height, m, rng, y0=0.0, parent=None):
                 material_name=m["cream"], parent_node_id=dot_parent)
 
 
-def blade(c, name, position, radius, scale, direction, material, parent=None):
+def blade(c, name, position, radius, scale, direction, material, parent=None,
+          batch=None):
     """Elongated squashed sphere aligned along direction (leaf blades,
     petals, cut faces). Unit-sphere instance: EVERY blade in the scene
     shares one brush; radius and the anisotropic stretch fold into the
     node scale (T*R*S, same result as the old radius + scale). Blades are
-    always leaves, so no pose node is needed. Pure visual."""
-    c.part("uv_sphere", name, position,
-           rotation_xyzw=align_y_quaternion(direction),
-           radii=[radius * scale[0], radius * scale[1], radius * scale[2]],
-           slice_count=10, stack_count=8, material_name=material,
-           parent_node_id=parent)
+    always leaves, so no pose node is needed. Pure visual. Pass batch to
+    collect into a PartBatch instead of placing immediately."""
+    (batch if batch is not None else c).part(
+        "uv_sphere", name, position,
+        rotation_xyzw=align_y_quaternion(direction),
+        radii=[radius * scale[0], radius * scale[1], radius * scale[2]],
+        slice_count=10, stack_count=8, material_name=material,
+        parent_node_id=parent)
 
 
 def expand_flower(rng, iterations=3):
@@ -351,6 +355,7 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
     base = [x, 0.03, z]
     root = c.group(tag, [x, 0.0, z])
     parent = root
+    batch = c.part_batch()  # everything except stem segment 0 (the spine)
     pos = list(base)
     heading = v_norm([rng.uniform(-0.12, 0.12), 1.0, rng.uniform(-0.12, 0.12)])
     left = v_norm(v_cross([0.0, 1.0, 0.0], heading)) if abs(heading[1]) < 0.999 else [1.0, 0.0, 0.0]
@@ -377,21 +382,19 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
                     sway_jobs.append((tag, node_id, list(pos), "stem_sway", 0.03, 0.35, 0.10, root))
                     parent = node_id
             else:
-                result = c.part("cone", f"{tag} Stem {seg}", list(pos),
-                                rotation_xyzw=align_y_quaternion(heading),
-                                height=length, bottom_radius=0.013,
-                                top_radius=0.010, slice_count=6,
-                                material_name=m["leaf2"], parent_node_id=parent,
-                                as_parent=True)
-                node_id = result.get("node_id")
-                if node_id is not None:
-                    parent = node_id
+                parent = batch.part("cone", f"{tag} Stem {seg}", list(pos),
+                                    rotation_xyzw=align_y_quaternion(heading),
+                                    height=length, bottom_radius=0.013,
+                                    top_radius=0.010, slice_count=6,
+                                    material_name=m["leaf2"], parent_node_id=parent,
+                                    as_parent=True)
             pos = v_add(pos, v_scale(heading, length))
             seg += 1
         elif ch == "L":
             leaf_dir = v_norm(v_rotate(heading, left, math.radians(rng.uniform(55.0, 75.0))))
             blade(c, f"{tag} Leaf {seg}", v_add(pos, v_scale(leaf_dir, 0.05)),
-                  0.05, [0.50, 1.6, 0.22], leaf_dir, m["leaf2"], parent=parent)
+                  0.05, [0.50, 1.6, 0.22], leaf_dir, m["leaf2"], parent=parent,
+                  batch=batch)
         elif ch == "&":
             heading = v_norm(v_rotate(heading, left, math.radians(rng.uniform(35.0, 55.0))))
         elif ch == "/":
@@ -402,12 +405,10 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
             pos, heading, left, parent = stack.pop()
         elif ch == "K":
             center_color = m["cream"] if color == "yellow" else m["yellow"]
-            result = c.part("uv_sphere", f"{tag} Center {seg}",
-                            v_add(pos, v_scale(heading, 0.02)), radius=bloom_r,
-                            slice_count=8, stack_count=6, material_name=center_color,
-                            parent_node_id=parent, as_parent=True)
-            center_id = result.get("node_id")
-            petal_parent = center_id if center_id is not None else parent
+            petal_parent = batch.part("uv_sphere", f"{tag} Center {seg}",
+                                      v_add(pos, v_scale(heading, 0.02)), radius=bloom_r,
+                                      slice_count=8, stack_count=6, material_name=center_color,
+                                      parent_node_id=parent, as_parent=True)
             step = 360.0 / petal_count
             for i in range(petal_count):
                 ring = v_rotate(left, heading, math.radians(i * step + rng.uniform(-8.0, 8.0)))
@@ -415,8 +416,9 @@ def flower(c, tag, x, z, color, m, rng, sway_jobs,
                 blade(c, f"{tag} Petal {seg}.{i}",
                       v_add(pos, v_scale(petal_dir, 0.055)),
                       0.045, [0.55, petal_len, 0.30], petal_dir, m[color],
-                      parent=petal_parent)
+                      parent=petal_parent, batch=batch)
             seg += 1
+    batch.flush()
 
 
 def expand_fern(rng, iterations=6):
@@ -436,17 +438,25 @@ def expand_fern(rng, iterations=6):
     return s.replace("A", "L")
 
 
-def compound_pinna(c, name, pos, direction, length, parent, materials, rng):
+def compound_pinna(c, name, pos, direction, length, parent, materials, rng,
+                   batch=None):
     """Second L-system level: midrib + pinnule pair + tip pinnule."""
     d = v_norm(direction)
     midrib_len = length * 2.1
-    result = c.part("cone", f"{name} Midrib", list(pos), height=midrib_len,
-                    rotation_xyzw=align_y_quaternion(d),
-                    bottom_radius=length * 0.09, top_radius=length * 0.05,
-                    slice_count=6, material_name=materials[1],
-                    parent_node_id=parent, as_parent=True)
-    node_id = result.get("node_id")
-    mid_parent = node_id if node_id is not None else parent
+    if batch is not None:
+        mid_parent = batch.part("cone", f"{name} Midrib", list(pos), height=midrib_len,
+                                rotation_xyzw=align_y_quaternion(d),
+                                bottom_radius=length * 0.09, top_radius=length * 0.05,
+                                slice_count=6, material_name=materials[1],
+                                parent_node_id=parent, as_parent=True)
+    else:
+        result = c.part("cone", f"{name} Midrib", list(pos), height=midrib_len,
+                        rotation_xyzw=align_y_quaternion(d),
+                        bottom_radius=length * 0.09, top_radius=length * 0.05,
+                        slice_count=6, material_name=materials[1],
+                        parent_node_id=parent, as_parent=True)
+        node_id = result.get("node_id")
+        mid_parent = node_id if node_id is not None else parent
     sperp = v_cross(d, [0.0, 1.0, 0.0])
     if abs(sperp[0]) + abs(sperp[1]) + abs(sperp[2]) < 1e-4:
         sperp = [1.0, 0.0, 0.0]
@@ -460,10 +470,12 @@ def compound_pinna(c, name, pos, direction, length, parent, materials, rng):
     for s in (-1.0, 1.0):
         pdir = v_norm(v_add(v_scale(sperp, s), v_scale(d, 0.5)))
         blade(c, f"{name} Pinnule {s:+.0f}", v_add(mid_point, v_scale(pdir, side_half * 0.92)),
-              plen, [0.45, 1.5, 0.18], pdir, materials[0], parent=mid_parent)
+              plen, [0.45, 1.5, 0.18], pdir, materials[0], parent=mid_parent,
+              batch=batch)
     tip_half = plen * 0.9 * 1.5
     blade(c, f"{name} Pinnule Tip", v_add(pos, v_scale(d, midrib_len * 0.98 + tip_half * 0.9)),
-          plen * 0.9, [0.45, 1.5, 0.18], d, materials[0], parent=mid_parent)
+          plen * 0.9, [0.45, 1.5, 0.18], d, materials[0], parent=mid_parent,
+          batch=batch)
 
 
 def fern(c, tag, x, z, size, m, rng, sway_jobs):
@@ -472,6 +484,7 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
     root = c.group(tag, [x, 0.0, z])
     fronds = 5
     base = [x, 0.04, z]
+    batch = c.part_batch()  # everything except the 5 spine segments
     for i in range(fronds):
         a = 2.0 * math.pi * i / fronds + rng.uniform(-0.3, 0.3)
         out_dir = [math.cos(a), 0.0, math.sin(a)]
@@ -499,15 +512,12 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                                           "frond_sway", 0.8, 0.22, 0.8, root))
                         parent = node_id
                 else:
-                    result = c.part("cone", f"{tag} Rachis {i}.{t}", list(pos),
-                                    rotation_xyzw=align_y_quaternion(heading),
-                                    height=seg, bottom_radius=radius,
-                                    top_radius=radius * 0.8, slice_count=6,
-                                    material_name=m["leaf2"], parent_node_id=parent,
-                                    as_parent=True)
-                    node_id = result.get("node_id")
-                    if node_id is not None:
-                        parent = node_id
+                    parent = batch.part("cone", f"{tag} Rachis {i}.{t}", list(pos),
+                                        rotation_xyzw=align_y_quaternion(heading),
+                                        height=seg, bottom_radius=radius,
+                                        top_radius=radius * 0.8, slice_count=6,
+                                        material_name=m["leaf2"], parent_node_id=parent,
+                                        as_parent=True)
                 pos = v_add(pos, v_scale(heading, seg * 0.95))
                 # gravity droop: pitch outward-down a little more each step
                 heading = v_norm(v_add(heading, [out_dir[0] * 0.10, -0.12, out_dir[2] * 0.10]))
@@ -526,7 +536,8 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                 mats = (m["leaf"] if (t + pending) % 2 else m["leaf2"], m["leaf2"])
                 if t <= 1:
                     compound_pinna(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
-                                   pos, pinna_dir, length, parent, mats, rng)
+                                   pos, pinna_dir, length, parent, mats, rng,
+                                   batch=batch)
                 else:
                     # Center one half-extent (radius * scale_y, minus a hair
                     # of embed) out along the pinna direction: the blade
@@ -534,8 +545,9 @@ def fern(c, tag, x, z, size, m, rng, sway_jobs):
                     blade(c, f"{tag} Pinna {i}.{t}.{pending:+d}",
                           v_add(pos, v_scale(pinna_dir, length * 1.55 * 0.92)),
                           length, [0.32, 1.55, 0.13], pinna_dir, mats[0],
-                          parent=parent)
+                          parent=parent, batch=batch)
                 pending = 0
+    batch.flush()
 
 
 def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
@@ -552,16 +564,18 @@ def grass_tuft(c, tag, x, z, size, m, rng, sway_jobs):
     if spine_id is None:
         return
     sway_jobs.append((tag, spine_id, base, "grass_sway", 0.10, 0.12, 0.4, root))
+    batch = c.part_batch()
     for i in range(rng.randint(3, 5)):
         a = rng.uniform(0.0, 2.0 * math.pi)
         tilt = math.radians(rng.uniform(14.0, 38.0))
         d = v_norm([math.sin(tilt) * math.cos(a), math.cos(tilt), math.sin(tilt) * math.sin(a)])
-        c.part("cone", f"{tag} Blade {i}", base,
-               rotation_xyzw=align_y_quaternion(d),
-               height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
-               top_radius=0.001, slice_count=3,
-               material_name=m["leaf" if i % 2 else "leaf2"],
-               parent_node_id=spine_id)
+        batch.part("cone", f"{tag} Blade {i}", base,
+                   rotation_xyzw=align_y_quaternion(d),
+                   height=h * rng.uniform(0.65, 1.0), bottom_radius=0.010,
+                   top_radius=0.001, slice_count=3,
+                   material_name=m["leaf" if i % 2 else "leaf2"],
+                   parent_node_id=spine_id)
+    batch.flush()
 
 
 def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
@@ -580,29 +594,30 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
     ancient = scale >= 1.5
     root = c.group(tag, base)
     trunk_h = 2.3 * scale
-    result = c.part("cone", f"{tag} Trunk", base, height=trunk_h,
-                    bottom_radius=0.30 * scale, top_radius=0.20 * scale,
-                    slice_count=12, material_name=m["bark"],
-                    parent_node_id=root, as_parent=True)
-    trunk_id = result.get("node_id")
-    on_trunk = trunk_id if trunk_id is not None else root
-    top = [x, y + trunk_h, z]
+    # Batch 1: trunk + crowns + branches. Curtain roots are sway spines
+    # (real geometry, and their strands need the real branch ids), so they
+    # come after the flush; their foliage is batch 2.
+    batch = c.part_batch()
+    trunk_handle = batch.part("cone", f"{tag} Trunk", base, height=trunk_h,
+                              bottom_radius=0.30 * scale, top_radius=0.20 * scale,
+                              slice_count=12, material_name=m["bark"],
+                              parent_node_id=root, as_parent=True)
     # Leafy crown mass so the tree does not read as bare branches.
     for i in range(3):
         ca = 2.0 * math.pi * i / 3.0 + rng.uniform(-0.4, 0.4)
-        c.part("uv_sphere", f"{tag} Crown {i}",
-               [x + 0.45 * scale * math.cos(ca), y + trunk_h + 0.35 * scale,
-                z + 0.45 * scale * math.sin(ca)],
-               radius=rng.uniform(0.5, 0.65) * scale, slice_count=12, stack_count=9,
-               material_name=m["leaf" if i % 2 else "leaf2"],
-               parent_node_id=on_trunk)
+        batch.part("uv_sphere", f"{tag} Crown {i}",
+                   [x + 0.45 * scale * math.cos(ca), y + trunk_h + 0.35 * scale,
+                    z + 0.45 * scale * math.sin(ca)],
+                   radius=rng.uniform(0.5, 0.65) * scale, slice_count=12, stack_count=9,
+                   material_name=m["leaf" if i % 2 else "leaf2"],
+                   parent_node_id=trunk_handle)
 
     # Branch rings: (attach height fraction, branch count, upward pitch).
     # The ancient tree hangs a second, droopier ring below the crown.
     rings = [(1.0, 6, 0.55 if not ancient else 0.40)]
     if ancient:
         rings.append((0.68, 4, 0.25))
-    curtain_index = 0
+    branch_specs = []  # (pose-node handle, yaw, branch_dir, branch_len, ring_base)
     for ring_frac, ring_branches, ring_up in rings:
         ring_base = [x, y + trunk_h * ring_frac, z]
         for i in range(ring_branches):
@@ -610,58 +625,61 @@ def willow(c, tag, base, m, rng, sway_jobs, scale=1.0):
             out_dir = [math.cos(a), 0.0, math.sin(a)]
             branch_dir = v_norm([out_dir[0], ring_up, out_dir[2]])
             branch_len = rng.uniform(1.1, 1.5) * scale
-            # Pose-node part: the carrier id rig_sway gets is the UNSCALED
+            # Pose-node part: the carrier id rig_sway gets is the rigid
             # pose node (it grows a sensor body + curtain children).
-            result = c.part("cone", f"{tag} Branch {curtain_index}", ring_base,
-                            rotation_xyzw=align_y_quaternion(branch_dir),
-                            height=branch_len, bottom_radius=0.09 * scale,
-                            top_radius=0.05 * scale, slice_count=8,
-                            material_name=m["bark"], parent_node_id=on_trunk,
-                            as_parent=True)
-            branch_id = result.get("node_id")
-            carrier = branch_id if branch_id is not None else on_trunk
-            tip = v_add(ring_base, v_scale(branch_dir, branch_len))
+            handle = batch.part("cone", f"{tag} Branch {len(branch_specs)}", ring_base,
+                                rotation_xyzw=align_y_quaternion(branch_dir),
+                                height=branch_len, bottom_radius=0.09 * scale,
+                                top_radius=0.05 * scale, slice_count=8,
+                                material_name=m["bark"], parent_node_id=trunk_handle,
+                                as_parent=True)
+            branch_specs.append((handle, a, branch_dir, branch_len, ring_base))
+    batch.flush()
 
-            # Curtain root: small stub at the branch tip; its hull is the
-            # dynamic body all strands of this curtain ride.
-            result = c.shape("cone", f"{tag} Curtain {curtain_index}", tip,
-                             height=0.18 * scale, bottom_radius=0.05 * scale,
-                             top_radius=0.03 * scale, slice_count=6,
-                             material_name=m["bark"], parent_node_id=carrier,
-                             motion_mode="none")
-            curtain_id = result.get("node_id") if isinstance(result, dict) else None
-            if curtain_id is None:
-                curtain_index += 1
-                continue
-            # Static inner strands along the branch (inner foliage barely
-            # moves), then the swinging tip curtain.
-            for s in range(3):
-                frac = 0.35 + 0.2 * s
-                sp = v_add(ring_base, v_scale(branch_dir, branch_len * frac))
-                sa = a + rng.uniform(-0.8, 0.8)
-                sd = v_norm([math.cos(sa) * 0.22, -1.0, math.sin(sa) * 0.22])
-                length = rng.uniform(0.7, 1.0) * scale
-                blade(c, f"{tag} Inner {curtain_index}.{s}",
-                      v_add(sp, v_scale(sd, length * 0.5)),
-                      0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
-                      m["leaf" if s % 2 else "leaf2"], parent=carrier)
-            strands = rng.randint(8, 10)
-            for s in range(strands):
-                sa = a + rng.uniform(-0.9, 0.9)
-                sd = v_norm([math.cos(sa) * 0.30, -1.0, math.sin(sa) * 0.30])
-                length = rng.uniform(0.9, 1.4) * scale
-                blade(c, f"{tag} Strand {curtain_index}.{s}",
-                      v_add(tip, v_scale(sd, length * 0.5)),
-                      0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
-                      m["leaf" if s % 2 else "leaf2"], parent=curtain_id)
-            # Anchored to the BRANCH (rig_sway gives it a sensor carrier
-            # body), matching the docstring: the curtain stays attached when
-            # the tree is moved. (A world anchor here once left curtains
-            # floating behind a moved willow.)
-            sway_jobs.append((f"{tag} Curtain {curtain_index}", curtain_id, list(tip),
-                              "curtain_sway", 0.6 * scale * scale, 0.35 * scale, 0.5,
-                              carrier))
-            curtain_index += 1
+    foliage = c.part_batch()
+    for curtain_index, (handle, a, branch_dir, branch_len, ring_base) in enumerate(branch_specs):
+        carrier = handle.node_id if handle.node_id is not None else root
+        tip = v_add(ring_base, v_scale(branch_dir, branch_len))
+
+        # Curtain root: small stub at the branch tip; its hull is the
+        # dynamic body all strands of this curtain ride.
+        result = c.shape("cone", f"{tag} Curtain {curtain_index}", tip,
+                         height=0.18 * scale, bottom_radius=0.05 * scale,
+                         top_radius=0.03 * scale, slice_count=6,
+                         material_name=m["bark"], parent_node_id=carrier,
+                         motion_mode="none")
+        curtain_id = result.get("node_id") if isinstance(result, dict) else None
+        if curtain_id is None:
+            continue
+        # Static inner strands along the branch (inner foliage barely
+        # moves), then the swinging tip curtain.
+        for s in range(3):
+            frac = 0.35 + 0.2 * s
+            sp = v_add(ring_base, v_scale(branch_dir, branch_len * frac))
+            sa = a + rng.uniform(-0.8, 0.8)
+            sd = v_norm([math.cos(sa) * 0.22, -1.0, math.sin(sa) * 0.22])
+            length = rng.uniform(0.7, 1.0) * scale
+            blade(c, f"{tag} Inner {curtain_index}.{s}",
+                  v_add(sp, v_scale(sd, length * 0.5)),
+                  0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
+                  m["leaf" if s % 2 else "leaf2"], parent=carrier, batch=foliage)
+        strands = rng.randint(8, 10)
+        for s in range(strands):
+            sa = a + rng.uniform(-0.9, 0.9)
+            sd = v_norm([math.cos(sa) * 0.30, -1.0, math.sin(sa) * 0.30])
+            length = rng.uniform(0.9, 1.4) * scale
+            blade(c, f"{tag} Strand {curtain_index}.{s}",
+                  v_add(tip, v_scale(sd, length * 0.5)),
+                  0.22 * (scale ** 0.7), [0.18, length * 2.3 / (scale ** 0.7), 0.12], sd,
+                  m["leaf" if s % 2 else "leaf2"], parent=curtain_id, batch=foliage)
+        # Anchored to the BRANCH (rig_sway gives it a sensor carrier
+        # body), matching the docstring: the curtain stays attached when
+        # the tree is moved. (A world anchor here once left curtains
+        # floating behind a moved willow.)
+        sway_jobs.append((f"{tag} Curtain {curtain_index}", curtain_id, list(tip),
+                          "curtain_sway", 0.6 * scale * scale, 0.35 * scale, 0.5,
+                          carrier))
+    foliage.flush()
 
 
 def fallen_log(c, m, rng):

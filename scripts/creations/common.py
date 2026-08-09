@@ -553,27 +553,13 @@ class Creation:
             self._shape_pool[key] = brush_id
         return brush_id
 
-    def part(self, shape, name, position, rotation_xyzw=None, parent_node_id=None,
-             material_name=None, as_parent=False, **dims):
-        """Unit-geometry INSTANCED visual part (always motion_mode "none"):
-        every part with the same proportions shares one library brush, and
-        the instance is sized with node TRS scale - one geometry + GPU
-        allocation for N parts. Node scale scales the whole subtree, so the
-        scaled mesh must stay a LEAF: a part that will carry children
-        (as_parent=True) gets an extra unscaled pose node at position and
-        the scaled mesh hangs under it; children then attach to the pose
-        node with world positions as usual. Returns {"node_id": attach
-        point} (the pose node when as_parent).
-
-        dims per shape: box size=[x,y,z]; uv_sphere radius=r or
-        radii=[x,y,z] (+ slice_count/stack_count); cone height,
-        bottom_radius, top_radius (+ slice_count, use_top/use_bottom) - the
-        taper ratio is baked geometry and quantizes to 0.1 steps, radii and
-        height come from node scale.
-
-        NOT for physics parts: brush collision shapes and body shape="auto"
-        hulls ignore node scale - keep shape() for sway spines and static
-        colliders."""
+    def _unit_part_spec(self, shape, dims):
+        """Resolve a part's unit brush + node scale: (brush_id, scale3).
+        dims per shape: box size=[x,y,z]; uv_sphere radius=r or radii=[x,y,z]
+        (+ slice_count/stack_count); cone height, bottom_radius, top_radius
+        (+ slice_count, use_top/use_bottom) - the taper ratio is baked
+        geometry and quantizes to 0.1 steps, radii and height come from node
+        scale."""
         if shape == "box":
             size = dims.pop("size")
             geometry = {"size": [1.0, 1.0, 1.0], **dims}
@@ -594,21 +580,39 @@ class Creation:
             scale3 = [bottom, height, bottom]
         else:
             raise ValueError(f"part(): unsupported shape '{shape}'")
-        brush_id = self.unit_brush(shape, **geometry)
-        attach_id = None
-        mesh_parent = parent_node_id
-        mesh_name = name
-        if as_parent:
-            attach_id = self.group(name, position, parent_node_id=parent_node_id)
-            mesh_parent = attach_id
-            mesh_name = f"{name} Mesh"
+        return self.unit_brush(shape, **geometry), scale3
+
+    def part(self, shape, name, position, rotation_xyzw=None, parent_node_id=None,
+             material_name=None, as_parent=False, **dims):
+        """Unit-geometry INSTANCED visual part (always motion_mode "none"):
+        every part with the same proportions shares one library brush, and
+        the instance is sized with node TRS scale - one geometry + GPU
+        allocation for N parts. Node scale scales the whole subtree, so the
+        scaled mesh must stay a LEAF: a part that will carry children
+        (as_parent=True) asks the server for a pose node (position +
+        rotation, no scale; place_brush pose_node) and hangs the scaled
+        mesh under it - ONE call either way. Children then attach to the
+        pose node with world positions as usual. Returns {"node_id": attach
+        point} (the pose node when as_parent). See _unit_part_spec for the
+        dims contract. Many parts at once: use part_batch().
+
+        NOT for physics parts: brush collision shapes and body shape="auto"
+        hulls ignore node scale - keep shape() for sway spines and static
+        colliders."""
+        brush_id, scale3 = self._unit_part_spec(shape, dims)
+        if isinstance(parent_node_id, BatchHandle):
+            parent_node_id = parent_node_id.node_id
         result = self.place(brush_id, position, material_name=material_name,
-                            scale=scale3, motion_mode="none", name=mesh_name,
+                            scale=scale3, motion_mode="none", name=name,
                             rotation_xyzw=rotation_xyzw,
-                            parent_node_id=mesh_parent)
-        if attach_id is None:
-            attach_id = result.get("node_id") if isinstance(result, dict) else None
-        return {"node_id": attach_id}
+                            parent_node_id=parent_node_id,
+                            pose_node=True if as_parent else None)
+        return {"node_id": result.get("node_id") if isinstance(result, dict) else None}
+
+    def part_batch(self):
+        """Collect unit-geometry parts and place them all with ONE
+        place_brush_instances call - see PartBatch."""
+        return PartBatch(self)
 
     def _send_scene_settings(self, new_entries, ambient=None):
         """Send per-scene setting overrides. merge=True (server-side deep
@@ -753,6 +757,72 @@ class Creation:
             "scene_name": self.scene, "node_id": int(node_id),
             "type": "Node_physics",
         })
+
+
+class BatchHandle:
+    """Placeholder for a batched part's node id: usable as parent_node_id of
+    later parts in the SAME batch before flush() (server-side parent_index);
+    node_id resolves at flush and the handle keeps working afterwards."""
+    def __init__(self, index):
+        self.index = index
+        self.node_id = None
+
+
+class PartBatch:
+    """Collect unit-geometry parts (Creation.part semantics) and place them
+    all with ONE place_brush_instances call - one round trip, one editor
+    frame, one undo entry per flush. part() returns a BatchHandle usable as
+    the parent_node_id of LATER parts in the same batch, which is how
+    chained structures (branch segments, nested parts) batch; parents
+    outside the batch are plain node ids. flush() sends the batch and
+    resolves every handle."""
+    def __init__(self, creation):
+        self.c = creation
+        self._placements = []
+        self._handles = []
+
+    def part(self, shape, name, position, rotation_xyzw=None, parent_node_id=None,
+             material_name=None, as_parent=False, **dims):
+        brush_id, scale3 = self.c._unit_part_spec(shape, dims)
+        placement = {
+            "brush_id": brush_id, "name": name,
+            "position": [float(v) for v in position],
+            "scale": scale3, "motion_mode": "none",
+        }
+        if rotation_xyzw is not None:
+            placement["rotation_xyzw"] = rotation_xyzw
+        if material_name:
+            placement["material_name"] = material_name
+        if as_parent:
+            placement["pose_node"] = True
+        if isinstance(parent_node_id, BatchHandle):
+            if parent_node_id.node_id is not None:
+                placement["parent_node_id"] = int(parent_node_id.node_id)
+            else:
+                placement["parent_index"] = parent_node_id.index
+        elif parent_node_id is not None:
+            placement["parent_node_id"] = int(parent_node_id)
+        handle = BatchHandle(len(self._placements))
+        self._placements.append(placement)
+        self._handles.append(handle)
+        return handle
+
+    def flush(self):
+        """Place every collected part; returns their node ids in order."""
+        if not self._placements:
+            return []
+        result = self.c.mutate("place_brush_instances", {
+            "scene_name": self.c.scene, "placements": self._placements,
+        })
+        entries = result.get("placements", []) if isinstance(result, dict) else []
+        node_ids = []
+        for handle, entry in zip(self._handles, entries):
+            handle.node_id = entry.get("node_id")
+            node_ids.append(handle.node_id)
+        self._placements = []
+        self._handles = []
+        self.c._record_pause()
+        return node_ids
 
 
 class GraphBuilder:

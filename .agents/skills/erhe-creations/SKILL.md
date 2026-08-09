@@ -154,12 +154,20 @@ following its construction logic:
   children and it inserts an unscaled pose node as the attach point.
   NOT for physics parts - collision shapes and body shape="auto" hulls
   ignore node scale, so sway spines and static colliders keep `shape()`.
-  Also mind that an as_parent pose node is UNROTATED: a rest-pose sway
-  joint whose carrier is a pose node captures different constraint-frame
-  axes than a rotated mesh carrier (glade willow curtains settled at a
-  different angle after the retrofit - visually fine, but check probes).
-  Pilot numbers (windswept glade, 2026-08-09): create_shape 2231 -> 170
-  calls, wall 37.6 -> 33.0 s, viewport frame ~9.6 -> ~8.6 ms.
+  The pose node is RIGID (position + rotation, no scale; server-side via
+  place_brush pose_node), so joint carriers on pose nodes keep the same
+  rotated constraint frames a mesh carrier would have.
+- **Batch placements**: `batch = c.part_batch()` collects parts and
+  `batch.flush()` places them all with ONE `place_brush_instances` call
+  (one round trip, one editor frame). `batch.part()` returns a handle
+  usable as the parent_node_id of LATER parts in the same batch
+  (server-side parent_index) - whole branch chains batch; handles
+  resolve to real node ids at flush. Only spines/statics interleave:
+  create them with shape() (real ids), flush part batches around them.
+  Pilot numbers (windswept glade, 2026-08-09): baseline 37.6 s wall /
+  3060 MCP calls / 18.5 s MCP; unit-parts 33.0 s; + batching 25.8 s /
+  1099 calls / 5.8 s MCP (~2900 placements in 66 batch calls, 0.4 s);
+  create_shape 2231 -> 170; viewport frame ~9.6 -> ~8.2 ms.
 - **`set_node_transform`** sets a node's transform by id/NAME with NO
   selection: ABSOLUTE semantics, all provided components in one call,
   undoable, rigid body teleported to the pose. It retries client-side
