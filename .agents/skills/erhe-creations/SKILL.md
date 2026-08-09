@@ -480,6 +480,26 @@ advances). Wrappers: `c.advance_time(...)`, `c.run_simulation(seconds)`
   angular_damping 0.35 so rocks pile instead of scattering. Boulders
   > 1 m want the ANGULAR archetypes (an evenly-jittered 30-point hull
   reads as a geodesic ball at boulder scale).
+- Chamfer the visible rocks AFTER the settle: one `chamfer` call with a
+  `node_ids` batch (~50/call, bevel_ratio ~0.22) on every rock >= 0.45 m
+  - each instance silently goes private (deliberate; pebbles keep
+  sharing), pose + physics attachment survive, frozen bodies keep the
+  slightly-proud original hulls (invisible). If a staged builder DELETES
+  a body (cairn retry), prune its id from the chamfer list or the batch
+  fails on the missing node.
+- **Smooth sand mounds / dunes** (creation 17): ONE pooled
+  high-tessellation `uv_sphere` brush (slice 48 / stack 24, smooth
+  normals), instanced per mound with node TRS scale [rx, h, rz]
+  (motion_mode none), yawed to a shared wind heading and SUNK below
+  grade (drifts 0.42*h, real-crest dunes 0.30*h) so the skirt melts into
+  the ground. Do NOT reuse the ground texture on them: a mound's sphere
+  UV spans the whole sphere, so the ground's scale-90 fbm renders as
+  microscopic bright grain that detaches the mound (bread-loaf look) -
+  make a second graph with the SAME gradient at fbm scale ~5x3 and bind
+  it to a dedicated dune material with the ground's base_color.
+  Rejected smooth-mound alternatives: lattice-deformed stepped boxes
+  crease on the control grid, catmull_clark / smooth on hulls stays
+  polygonal at the silhouette.
 
 ## Load-bearing motor rigs (creation 14 carries reference code)
 
