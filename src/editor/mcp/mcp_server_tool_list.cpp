@@ -210,7 +210,7 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", {
             {"scene_name",     {{"type", "string"},  {"description", "Name of the scene"}}},
-            {"shape",          {{"type", "string"},  {"description", "Shape type: box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, regular_polyhedron or convex_hull"}}},
+            {"shape",          {{"type", "string"},  {"description", "Shape type: box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, regular_polyhedron, convex_hull or sweep"}}},
             {"name",           {{"type", "string"},  {"description", "Brush / instance name (default: shape type)"}}},
             {"instance",       {{"type", "boolean"}, {"description", "Place an instance node in the scene (default true)"}}},
             {"add_brush",      {{"type", "boolean"}, {"description", "Add the brush to the content library for later place_brush use (default false)"}}},
@@ -245,7 +245,15 @@ void Mcp_server::refresh_tool_list()
             {"front_face",     {{"type", "boolean"}, {"description", "rectangle: generate the +Z-facing face (default true)"}}},
             {"back_face",      {{"type", "boolean"}, {"description", "rectangle: generate the -Z-facing face (default true)"}}},
             {"kind",           {{"type", "string"},  {"description", "regular_polyhedron: tetrahedron, cube, octahedron, dodecahedron, icosahedron or cuboctahedron (default icosahedron)"}}},
-            {"points",         {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}}, {"description", "convex_hull: node-local points [[x,y,z], ...], at least 4 non-coplanar"}}}
+            {"points",         {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}}, {"description", "convex_hull: node-local points [[x,y,z], ...], at least 4 non-coplanar"}}},
+            {"profile",        {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}}}, {"description", "sweep: closed CCW cross-section polyline [[x,y], ...] (>= 3 points; sharp corners stay sharp, author smooth arcs as dense points)"}}},
+            {"profile_end",    {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}}}, {"description", "sweep: optional morph-target cross-section (same point count), linearly blended along the spine"}}},
+            {"spine",          {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 3}, {"maxItems", 3}}}, {"description", "sweep: bezier control points [[x,y,z], ...] (>= 2) the profile is swept along; frames are parallel-transported"}}},
+            {"spine_steps",    {{"type", "integer"}, {"description", "sweep: segments along the spine (default 16)"}}},
+            {"taper",          {{"type", "array"},   {"items", {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}}}, {"description", "sweep: (t, scale) keys scaling the cross-section along the spine; final scale ~0 collapses to a pointed tip"}}},
+            {"twist_deg",      {{"type", "number"},  {"description", "sweep: profile twist in degrees over the full spine (default 0)"}}},
+            {"start_cap",      {{"type", "boolean"}, {"description", "sweep: cap the spine start (default true)"}}},
+            {"end_cap",        {{"type", "boolean"}, {"description", "sweep: cap the spine end (default true; ignored when taper collapses the tip)"}}}
         }},
         {"required", json::array({"scene_name", "shape"})}
     }});

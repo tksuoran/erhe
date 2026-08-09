@@ -96,6 +96,8 @@ erhe_target_sources_grouped(
     erhe_geometry/shapes/regular_polyhedron.hpp
     erhe_geometry/shapes/sphere.cpp
     erhe_geometry/shapes/sphere.hpp
+    erhe_geometry/shapes/sweep.cpp
+    erhe_geometry/shapes/sweep.hpp
     erhe_geometry/shapes/torus.cpp
     erhe_geometry/shapes/torus.hpp
     erhe_geometry/types.hpp

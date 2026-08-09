@@ -23,6 +23,7 @@
 #include "erhe_geometry/shapes/disc.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
+#include "erhe_geometry/shapes/sweep.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
@@ -1435,9 +1436,9 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     if (
         (shape != "box")       && (shape != "uv_sphere") && (shape != "cone")               && (shape != "capsule")     &&
         (shape != "torus")     && (shape != "disc")      && (shape != "triangle")           && (shape != "quad")        &&
-        (shape != "rectangle") && (shape != "convex_hull") && (shape != "regular_polyhedron")
+        (shape != "rectangle") && (shape != "convex_hull") && (shape != "regular_polyhedron") && (shape != "sweep")
     ) {
-        json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, convex_hull or regular_polyhedron)");
+        json r = make_text_content("Invalid shape '" + shape + "' (expected box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, convex_hull, regular_polyhedron or sweep)");
         r["isError"] = true;
         return r.dump();
     }
@@ -1654,6 +1655,65 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             }
             brush = finish_brush(geometry, erhe::primitive::Normal_style::corner_normals);
             parameters_echo = {{"kind", kind}, {"radius", radius}};
+        } else if (shape == "sweep") {
+            erhe::geometry::shapes::Sweep_parameters parameters;
+            const auto parse_vec2_list = [&args](const char* key, std::vector<glm::vec2>& out) -> std::string {
+                const json list = args.value(key, json::array());
+                for (const auto& entry : list) {
+                    if (!entry.is_array() || (entry.size() != 2)) {
+                        return std::string{key} + " entries must be [x, y] arrays";
+                    }
+                    out.emplace_back(entry[0].get<float>(), entry[1].get<float>());
+                }
+                return {};
+            };
+            std::string parse_error = parse_vec2_list("profile", parameters.profile);
+            if (parse_error.empty()) { parse_error = parse_vec2_list("profile_end", parameters.profile_end); }
+            if (parse_error.empty()) { parse_error = parse_vec2_list("taper",       parameters.taper); }
+            if (parse_error.empty()) {
+                const json spine_json = args.value("spine", json::array());
+                for (const auto& entry : spine_json) {
+                    if (!entry.is_array() || (entry.size() != 3)) {
+                        parse_error = "spine entries must be [x, y, z] arrays";
+                        break;
+                    }
+                    parameters.spine.emplace_back(entry[0].get<float>(), entry[1].get<float>(), entry[2].get<float>());
+                }
+            }
+            if (parse_error.empty() && (parameters.profile.size() < 3)) {
+                parse_error = "sweep needs a profile of at least 3 [x, y] points (closed CCW cross-section)";
+            }
+            if (parse_error.empty() && !parameters.profile_end.empty() && (parameters.profile_end.size() != parameters.profile.size())) {
+                parse_error = "profile_end must have the same point count as profile";
+            }
+            if (parse_error.empty() && (parameters.spine.size() < 2)) {
+                parse_error = "sweep needs a spine of at least 2 [x, y, z] bezier control points";
+            }
+            if (!parse_error.empty()) {
+                json r = make_text_content(parse_error);
+                r["isError"] = true;
+                return r.dump();
+            }
+            parameters.spine_steps = std::max(1, args.value("spine_steps", 16));
+            parameters.twist       = glm::radians(args.value("twist_deg", 0.0f));
+            parameters.start_cap   = args.value("start_cap", true);
+            parameters.end_cap     = args.value("end_cap", true);
+            auto geometry = std::make_shared<erhe::geometry::Geometry>("sweep");
+            erhe::geometry::shapes::make_sweep(geometry->get_mesh(), parameters);
+            if (geometry->get_mesh().facets.nb() == 0) {
+                json r = make_text_content("sweep produced no facets");
+                r["isError"] = true;
+                return r.dump();
+            }
+            // Smooth normals: blades / vines / trim read as one fair surface;
+            // sharp profile corners still shade as creases via edge angles.
+            brush = finish_brush(geometry, erhe::primitive::Normal_style::point_normals);
+            parameters_echo = {
+                {"profile_points", parameters.profile.size()},
+                {"spine_points",   parameters.spine.size()},
+                {"spine_steps",    parameters.spine_steps},
+                {"twist_deg",      args.value("twist_deg", 0.0f)}
+            };
         } else { // convex_hull
             const json points_json = args.value("points", json::array());
             std::vector<glm::vec3> points;
