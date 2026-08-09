@@ -123,7 +123,24 @@ they carry the current idioms.
   viewport hover ray). Convex hulls bulge past their authored station
   points - place hull-hugging trim at `hit + normal * standoff` rather
   than iterating hug factors from screenshots (that guessing was the
-  single biggest time sink of the sail-ships bow sessions).
+  single biggest time sink of the sail-ships bow sessions). Probe
+  choice matters: closest_point answers "nearest surface anywhere" and
+  DRIFTS toward the bulkier body near curved ends - for "surface AT
+  this station" cast a RAY from outside toward the centerline
+  (creation 16 hull_surface()).
+- **Hull-hugging bands** (creation 16 stripes are the reference
+  implementation): probe stations with rays; ARC-LENGTH parameterize
+  the polyline (index parameterization on uneven stations bent the
+  cubic meters off course); split long runs so probes land on the
+  cubic fit stations (t = 0, 1/3, 2/3, 1) and give hard-turning ends
+  their own short run; roll the strip's face onto the surface normal
+  and TWIST via per-control-plane corner rotations when the normal
+  turns along the run (vertical cross-sections read as ledges on a
+  flared hull); add a small outward bias (0.03-0.06 x s) because
+  between fit stations the cubic cuts inside an outward-bulging
+  surface. STRIP_DEBUG=1 prints fit deviations + twist per strip -
+  a deviation of meters means broken parameterization, centimeters is
+  healthy hull curvature.
 
 ## Scene-graph hierarchy (MANDATORY for all creations)
 
