@@ -329,12 +329,13 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
         # jitter into the heading, so the branch rises from the trunk and
         # curves toward horizontal at the tip (real low boughs arch under
         # their own weight).
-        sub_n = max(2, curve_res)
+        sub_n = max(3, curve_res)
         sub_len = blen / sub_n
         r_tip = max(0.025, branch_r * 0.45)
         droop = rng.uniform(0.10, 0.22)
         handle = parent
         tip = bpos
+        segments = []               # (start, dir, handle) per sub-cone
         for si in range(sub_n):
             if si > 0:
                 d = v_norm(v_add(v_add(d, [0.0, -droop, 0.0]),
@@ -347,12 +348,44 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                                 top_radius=max(0.02, r_hi),
                                 slice_count=6, material_name=bark,
                                 parent_node_id=handle, as_parent=True)
+            segments.append((list(tip), list(d), handle))
             tip = v_add(tip, v_scale(d, sub_len))
+        can_r = p["leaf_r"][0] * (0.55 + 0.5 * min(1.05, frac)) * rng.uniform(0.85, 1.1)
         batch.part("uv_sphere", f"{tag} Low Canopy {i}", tip,
-                   radius=p["leaf_r"][0] * (0.55 + 0.5 * min(1.05, frac)) * rng.uniform(0.85, 1.1),
-                   slice_count=10, stack_count=8,
+                   radius=can_r, slice_count=10, stack_count=8,
                    material_name=leaf_materials[i % len(leaf_materials)],
                    parent_node_id=handle)
+        # Sub-branch subtree: none / a few forks off the main arc - each a
+        # short 2-cone arc splaying sideways with its own smaller canopy,
+        # so a low bough reads as a branch SYSTEM, not a lollipop stick.
+        for fi in range(rng.choice([0, 1, 1, 2, 2, 3])):
+            s_pos, s_dir, s_handle = segments[rng.randrange(1, len(segments))]
+            f_base = v_add(s_pos, v_scale(s_dir, sub_len * rng.uniform(0.15, 0.9)))
+            side = v_norm([-s_dir[2], 0.0, s_dir[0]]) if abs(s_dir[0]) + abs(s_dir[2]) > 1e-3 else [1.0, 0.0, 0.0]
+            sign = 1.0 if rng.random() < 0.5 else -1.0
+            f_dir = v_norm(v_add(
+                v_add(s_dir, v_scale(side, sign * rng.uniform(0.5, 1.1))),
+                [0.0, rng.uniform(-0.10, 0.30), 0.0]))
+            f_len = blen * rng.uniform(0.30, 0.50)
+            f_r = max(0.02, branch_r * 0.5)
+            f_handle = s_handle
+            f_tip = f_base
+            for fsi in range(2):
+                if fsi > 0:
+                    f_dir = v_norm(v_add(f_dir, [0.0, -rng.uniform(0.08, 0.22), 0.0]))
+                f_handle = batch.part("cone", f"{tag} Low Branch {i} Fork {fi}.{fsi}",
+                                      f_tip, rotation_xyzw=align_y_quaternion(f_dir),
+                                      height=f_len / 2.0,
+                                      bottom_radius=f_r * (1.0 - 0.35 * fsi),
+                                      top_radius=max(0.015, f_r * (0.65 - 0.35 * fsi)),
+                                      slice_count=5, material_name=bark,
+                                      parent_node_id=f_handle, as_parent=True)
+                f_tip = v_add(f_tip, v_scale(f_dir, f_len / 2.0))
+            batch.part("uv_sphere", f"{tag} Low Canopy {i} Fork {fi}", f_tip,
+                       radius=can_r * rng.uniform(0.45, 0.65),
+                       slice_count=8, stack_count=6,
+                       material_name=leaf_materials[(i + fi + 1) % len(leaf_materials)],
+                       parent_node_id=f_handle)
 
     leaves = []                         # (tip position, carrying branch id)
     seg_count = 0
@@ -502,7 +535,7 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
 
 def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
                              trunk_frac=0.22, tropism=None, tip_tropism=None,
-                             phyllotaxis=True, curve_res=3, root_count=5,
+                             phyllotaxis=True, curve_res=4, root_count=5,
                              trunk_branches=None, trunk_collider=False, tilt=None,
                              stubs=0.12, sway=None):
     """Derive a grow_tree species dict from a REAL target height (m).
@@ -552,16 +585,18 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                  trunk_r_frac=0.013, tip_rise=0.0, root_count=0,
                  sparse_lower=0, trunk_collider=False, sway_jobs=None,
                  sway_settings="tree_sway", sway_mass=25.0, sway_receptivity=6.0,
-                 curve_res=2):
+                 curve_res=3):
     """Excurrent (single-leader) conifer: straight trunk cone + whorls of
     branches whose length follows the Weber-Penn crown shape
     (1 - t)^shape from crown base (t=0) to tip (t=1). Each branch is a
     chain of curve_res sub-cones with a gentle per-branch vertical
     curvature (tip_rise > 0 replaces that with the explicit two-segment
-    down-then-up spruce sweep) and one elongated foliage sphere along it;
-    the leader gets a foliage spike. droop < 0 sweeps branches down
-    (spruce), > 0 up (young pine tops). Everything batches into one
-    call."""
+    down-then-up spruce sweep), one elongated foliage sphere along it,
+    and NONE / A FEW side twigs forking off the bough segments, each
+    with its own small foliage tuft (drooping on down-swept species -
+    the spruce hanging-branchlet look); the leader gets a foliage
+    spike. droop < 0 sweeps branches down (spruce), > 0 up (young pine
+    tops). Everything batches into one call."""
     x, y, z = base
     root = c.group(tag, base)
     batch = c.part_batch()
@@ -618,6 +653,7 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
             d = v_norm([math.cos(a), droop + rng.uniform(-0.06, 0.06), math.sin(a)])
             bpos = [x, y + hgt, z]
             branch_r = max(0.015, trunk_r * 0.28 * (1.0 - t) + 0.01)
+            segments = []          # (start, dir, handle, length) per sub-cone
             if tip_rise > 0.0:
                 # Down-swept bough whose outer part rises (spruce habit):
                 # inner cone along d, outer cone bent up, foliage on the
@@ -629,6 +665,7 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                                     top_radius=max(0.01, branch_r * 0.6),
                                     slice_count=5, material_name=bark,
                                     parent_node_id=trunk, as_parent=True)
+                segments.append((list(bpos), list(d), handle, inner_len))
                 d2 = v_norm(v_add(d, [0.0, tip_rise, 0.0]))
                 mid = v_add(bpos, v_scale(d, inner_len))
                 outer_len = blen * 0.5
@@ -638,6 +675,7 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                                    top_radius=max(0.008, branch_r * 0.25),
                                    slice_count=5, material_name=bark,
                                    parent_node_id=handle, as_parent=True)
+                segments.append((list(mid), list(d2), outer, outer_len))
                 fol_center = v_add(mid, v_scale(d2, outer_len * 0.55))
                 batch.part("uv_sphere", f"{tag} W{whorl}.{i} Foliage", fol_center,
                            rotation_xyzw=align_y_quaternion(d2),
@@ -669,6 +707,7 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                                         top_radius=max(0.008, r_hi),
                                         slice_count=5, material_name=bark,
                                         parent_node_id=handle, as_parent=True)
+                    segments.append((list(seg_pos), list(d), handle, sub_len))
                     lo = si * sub_len
                     if lo <= blen * 0.62 < lo + sub_len:
                         fol_center = v_add(seg_pos, v_scale(d, blen * 0.62 - lo))
@@ -683,6 +722,36 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                            radii=[blen * 0.24, blen * 0.52, blen * 0.24],
                            slice_count=8, stack_count=6, material_name=leaf,
                            parent_node_id=fol_handle)
+            # Side twigs: none / a few short shoots forking off the bough
+            # segments, each carrying its own small foliage tuft. Twig
+            # pitch inherits the species droop (down-swept spruce boughs
+            # hang their branchlets, level pine boughs spread theirs).
+            if blen > height * 0.05:
+                for ti in range(rng.randint(0, 2)):
+                    s_pos, s_dir, s_handle, s_len = segments[rng.randrange(len(segments))]
+                    t_base = v_add(s_pos, v_scale(s_dir, s_len * rng.uniform(0.25, 0.85)))
+                    if abs(s_dir[0]) + abs(s_dir[2]) < 1e-3:
+                        side = [1.0, 0.0, 0.0]
+                    else:
+                        side = v_norm([-s_dir[2], 0.0, s_dir[0]])
+                    sign = 1.0 if rng.random() < 0.5 else -1.0
+                    t_dir = v_norm(v_add(
+                        v_add(s_dir, v_scale(side, sign * rng.uniform(0.7, 1.3))),
+                        [0.0, droop * 0.6 + rng.uniform(-0.25, 0.10), 0.0]))
+                    t_len = blen * rng.uniform(0.22, 0.38)
+                    t_r = max(0.008, branch_r * 0.35)
+                    th = batch.part("cone", f"{tag} W{whorl}.{i} Twig {ti}", t_base,
+                                    rotation_xyzw=align_y_quaternion(t_dir),
+                                    height=t_len, bottom_radius=t_r,
+                                    top_radius=max(0.006, t_r * 0.3),
+                                    slice_count=4, material_name=bark,
+                                    parent_node_id=s_handle, as_parent=True)
+                    batch.part("uv_sphere", f"{tag} W{whorl}.{i} Twig {ti} Foliage",
+                               v_add(t_base, v_scale(t_dir, t_len * 0.65)),
+                               rotation_xyzw=align_y_quaternion(t_dir),
+                               radii=[t_len * 0.30, t_len * 0.55, t_len * 0.30],
+                               slice_count=6, stack_count=5, material_name=leaf,
+                               parent_node_id=th)
         hgt += step
         whorl += 1
     # Leader spike: narrow foliage cone capping the tip.
@@ -783,19 +852,44 @@ def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35,
                                 material_name=bark, parent_node_id=root,
                                 as_parent=True)
         tip = v_add(base, v_scale(d, spine_h))
-        sub_len = (stem_h - spine_h) / 2.0
-        radii = [r_mid, height * 0.009, height * 0.006]
-        for si in range(2):
-            d = v_norm(v_add(d, [math.cos(a) * 0.20 + rng.uniform(-0.06, 0.06),
-                                 -0.06,
-                                 math.sin(a) * 0.20 + rng.uniform(-0.06, 0.06)]))
-            handle = batch.part("cone", f"{tag} Stem {i}.{si}", tip,
+        sub_len = (stem_h - spine_h) / 3.0
+        radii = [r_mid, height * 0.010, height * 0.008, height * 0.006]
+        for si in range(3):
+            d = v_norm(v_add(d, [math.cos(a) * 0.14 + rng.uniform(-0.06, 0.06),
+                                 -0.05,
+                                 math.sin(a) * 0.14 + rng.uniform(-0.06, 0.06)]))
+            seg_start = tip
+            handle = batch.part("cone", f"{tag} Stem {i}.{si}", seg_start,
                                 rotation_xyzw=align_y_quaternion(d),
                                 height=sub_len, bottom_radius=radii[si],
                                 top_radius=radii[si + 1], slice_count=6,
                                 material_name=bark, parent_node_id=handle,
                                 as_parent=True)
             tip = v_add(tip, v_scale(d, sub_len))
+            # Side shoot: none / one per segment - a thin outward-and-up
+            # twig carrying its own small crown tuft, so a stem reads as a
+            # branching shrub rather than a bare pole with a ball on top.
+            if rng.random() < 0.65:
+                side = v_norm([-d[2], 0.0, d[0]]) if abs(d[0]) + abs(d[2]) > 1e-3 else [1.0, 0.0, 0.0]
+                sign = 1.0 if rng.random() < 0.5 else -1.0
+                sh_dir = v_norm(v_add(
+                    v_add(d, v_scale(side, sign * rng.uniform(0.5, 1.0))),
+                    [0.0, rng.uniform(0.05, 0.30), 0.0]))
+                sh_base = v_add(seg_start, v_scale(d, sub_len * rng.uniform(0.3, 0.85)))
+                sh_len = stem_h * rng.uniform(0.18, 0.30)
+                sh = batch.part("cone", f"{tag} Stem {i}.{si} Shoot", sh_base,
+                                rotation_xyzw=align_y_quaternion(sh_dir),
+                                height=sh_len, bottom_radius=radii[si + 1] * 0.8,
+                                top_radius=height * 0.004, slice_count=5,
+                                material_name=bark, parent_node_id=handle,
+                                as_parent=True)
+                sh_tip = v_add(sh_base, v_scale(sh_dir, sh_len))
+                sh_r = height * rng.uniform(0.09, 0.13)
+                batch.part("uv_sphere", f"{tag} Stem {i}.{si} Shoot Crown",
+                           [sh_tip[0], sh_tip[1] + sh_r * 0.3, sh_tip[2]],
+                           radii=[sh_r, sh_r * 0.8, sh_r],
+                           slice_count=8, stack_count=6, material_name=leaf,
+                           parent_node_id=sh)
         r = height * rng.uniform(0.20, 0.28)
         batch.part("uv_sphere", f"{tag} Crown {i}",
                    [tip[0], tip[1] + r * 0.4, tip[2]],

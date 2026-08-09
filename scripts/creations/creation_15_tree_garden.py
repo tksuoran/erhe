@@ -24,11 +24,14 @@ stir instead of wobbling. Built with the simulation OFF so the joints
 capture the authored pose; then wind + physics on.
 Each trunk rises from a root flare with surface roots; lower branches
 ladder evenly from mid-trunk to the crown as ARCHING sub-cone chains
-(some as broken stubs on the old oak/apple/elm); broadleaf crown
-segments draw at curve_res 3 and conifer boughs as curved 2-segment
-chains, so branches bend instead of reading as straight sticks; the
-cluster species (Hieskoivu, Harmaaleppä, Raita, Lehtotuomi) grow 2-3
-staggered trunks from a shared root mound.
+carrying none / a few FORKED sub-branches with their own smaller
+canopies (some as broken stubs on the old oak/apple/elm); broadleaf
+crown segments draw at curve_res 4 (gnarled oak 5), conifer boughs are
+curved 3-segment chains with side twigs + foliage tufts (drooping
+branchlets on the spruce), and shrub stems branch into side shoots
+with small crown tufts - so every branch reads as a branch SYSTEM, not
+a straight stick; the cluster species (Hieskoivu, Harmaaleppä, Raita,
+Lehtotuomi) grow 2-3 staggered trunks from a shared root mound.
 """
 
 import math
@@ -74,9 +77,14 @@ SPECIES = [
           branch_len_frac=0.15, shape=1.1, tip_rise=0.45)),
     ("Kotikataja", "Juniperus communis", 15.4, "columnar", "bark_grey", "leaf_grey",
      dict(width_frac=0.10, lobes=6)),
+    # The yew is a small DENSE evergreen - same trap as the juniper: the
+    # bucket-8 beam stiffness + 0.9h receptivity parked its trunk at the
+    # angular limit. Same treatment: stiffness x4, half range, receptivity
+    # to 0.3h.
     ("Euroopanmarjakuusi", "Taxus baccata", 8.4, "conifer", "bark_dark", "leaf_dark",
      dict(crown_frac=0.90, droop=-0.05, whorl_branches=6, whorl_step_frac=0.11,
-          branch_len_frac=0.30, shape=0.7)),
+          branch_len_frac=0.30, shape=0.7, sway_stiffness_scale=4.0,
+          sway_range_scale=0.5, sway_receptivity_frac=0.3)),
     ("Metsälehmus", "Tilia cordata", 36.5, "broadleaf", "bark_brown", "leaf_mid",
      dict(canopy=1.15)),
     ("Metsävaahtera", "Acer platanoides", 30.8, "broadleaf", "bark_grey", "leaf_light",
@@ -86,7 +94,7 @@ SPECIES = [
     ("Kynäjalava", "Ulmus laevis", 33.2, "broadleaf", "bark_brown", "leaf_mid",
      dict(spread=1.15)),
     ("Metsätammi", "Quercus robur", 32.0, "broadleaf", "bark_dark", "leaf_mid",
-     dict(spread=1.35, gnarl=1.8, canopy=1.2, trunk_frac=0.18, curve_res=3,
+     dict(spread=1.35, gnarl=1.8, canopy=1.2, trunk_frac=0.18, curve_res=5,
           stubs=0.35)),
     ("Lehtosaarni", "Fraxinus excelsior", 35.4, "broadleaf", "bark_grey", "leaf_mid",
      dict(canopy=0.9)),
@@ -201,10 +209,16 @@ def main():
         leaf_pair = [m[leaf], m["leaf_mid" if leaf != "leaf_mid" else "leaf_light"]]
         if habit == "conifer":
             kwargs.setdefault("root_count", 5)
+            stiff_scale = kwargs.pop("sway_stiffness_scale", 1.0)
+            range_scale = kwargs.pop("sway_range_scale", 1.0)
+            receptivity_frac = kwargs.pop("sway_receptivity_frac", 0.9)
             grow_conifer(c, tag, base, height, m[bark], m[leaf], rng,
                          sway_jobs=sway_jobs, sway_mass=3.0 * height,
-                         sway_receptivity=0.9 * height,
-                         sway_settings=sway_setting_for_height(c, height), **kwargs)
+                         sway_receptivity=receptivity_frac * height,
+                         sway_settings=sway_setting_for_height(
+                             c, height, stiffness_scale=stiff_scale,
+                             range_scale=range_scale),
+                         **kwargs)
         elif habit == "columnar":
             # A juniper column is a tight bundle of near-vertical stems, far
             # stiffer than a tapered trunk of the same height - and its sway
@@ -274,7 +288,8 @@ def main():
     c.set_physics(True)
     c.wake_physics()
     probe_tilt(c, ["Metsäkuusi Trunk", "Rauduskoivu Trunk", "Metsätammi Trunk",
-                   "Kotikataja Trunk", "Jokipaju Stem 0", "Orapaatsama Stem 0",
+                   "Kotikataja Trunk", "Euroopanmarjakuusi Trunk",
+                   "Jokipaju Stem 0", "Orapaatsama Stem 0",
                    "Suippuorapihlaja Stem 0"])
 
     # shadow_range(160) above also raised the camera far plane to 160 m

@@ -378,16 +378,25 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   phyllotaxis) are opt-in species keys: tropism / tip_tropism /
   phyllotaxis / pipe_exponent / curve_res. Reference use: creation 15
   tree garden (28 Finnish species, one PartBatch flush per tree, 281
-  MCP calls total). Branches want SUBDIVISION or they read as straight
-  sticks (2026-08-09): broadleaf curve_res default is 3, lower trunk
-  branches arch as sub-cone chains (per-sub downward blend + lateral
-  jitter), conifer boughs are curved 2-segment chains, shrub stems
-  carry a 2-cone outward-arching continuation above the single spine
-  hull. `sway_setting_for_height(c, h, stiffness_scale, range_scale)`
+  MCP calls total). Branches want SUBDIVISION + SUBTREES or they read
+  as lollipop sticks (2026-08-09): broadleaf curve_res default is 4,
+  lower trunk branches arch as sub-cone chains (per-sub downward blend
+  + lateral jitter) carrying none / a few 2-cone FORKS with their own
+  smaller canopies, conifer boughs are curved 3-segment chains with
+  0-2 side twigs + foliage tufts (twig pitch inherits species droop -
+  spruce hangs its branchlets), shrub stems carry a 3-cone
+  outward-arching continuation above the single spine hull with side
+  shoots + small crown tufts. Extra parts cost frame time (~19 ->
+  ~27 ms on the 28-tree garden) - keep fork/twig counts in the 0-3
+  range. `sway_setting_for_height(c, h, stiffness_scale, range_scale)`
   tunes habits off the tapered-beam rule: columnar juniper x4
   stiffness / half range (its sway body is only the short inner trunk,
   so joint angle is amplified over the full visual column), shrub
-  stems x3 / 0.6 + receptivity trimmed.
+  stems x3 / 0.6 + receptivity trimmed. Small DENSE evergreens hit the
+  same trap through the plain conifer path (the 8.4 m yew parked at
+  its angular limit like the juniper): creation 15 exposes
+  sway_stiffness_scale / sway_range_scale / sway_receptivity_frac as
+  species keys for that.
 - **Rig**: chain of Y-axis capsules (`create_shape capsule` is
   center-origin), coincident anchor child pairs at each pivot as above;
   the root anchor joints to a sensor-body carrier on the plant root
