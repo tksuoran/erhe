@@ -12,12 +12,14 @@ The editor must already be running (see AGENTS.md "In-editor MCP server").
 
 import argparse
 import atexit
+import contextlib
 import json
 import math
 import os
 import subprocess
 import sys
 import time
+import traceback
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from erhe_mcp import McpClient, wait_for_server  # noqa: E402
@@ -343,6 +345,40 @@ class Creation:
             raise RuntimeError(f"node_world_pose: no transform for '{node_name}'")
         return list(position), list(rotation)
 
+    def subtree_world_aabb(self, node_name):
+        """Merged world AABB (min, max) of every mesh in the node's subtree
+        (get_node_details subtree_world_aabb, 2026-08-09). Raises when the
+        subtree has no meshes."""
+        details = self.call("get_node_details",
+                            {"scene_name": self.scene, "node_name": node_name})
+        aabb = details.get("subtree_world_aabb")
+        if not aabb:
+            raise RuntimeError(f"subtree_world_aabb: '{node_name}' has no meshes")
+        return list(aabb["min"]), list(aabb["max"])
+
+    def frame(self, node_name, azimuth=35.0, elevation=18.0, margin=1.3):
+        """Auto-fit the camera to a node's SUBTREE: aggregate world AABB in
+        one call, then place the camera at the distance where the bounding
+        sphere fills the view (times `margin`), looking at the AABB center
+        from the given direction. azimuth is degrees around +Y (0 = looking
+        from +Z), elevation degrees above the horizon. Returns (eye, target)
+        so the pair can go straight into screenshot_views. Kills the framing
+        guesswork iteration class - a guessed eye can land INSIDE the
+        object; a fitted one cannot. shot_relative stays the tool for
+        authored close-ups."""
+        aabb_min, aabb_max = self.subtree_world_aabb(node_name)
+        center = [(a + b) * 0.5 for a, b in zip(aabb_min, aabb_max)]
+        radius = 0.5 * v_length(v_sub(aabb_max, aabb_min))
+        cameras = self.call("get_scene_cameras", {"scene_name": self.scene}).get("cameras", [])
+        fov_y = (cameras[0].get("fov_y") if cameras else 0.0) or math.radians(60.0)
+        distance = margin * max(radius, 1e-3) / math.sin(0.5 * fov_y)
+        az = math.radians(azimuth)
+        el = math.radians(elevation)
+        direction = [math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el)]
+        eye = v_add(center, v_scale(direction, distance))
+        self.place_camera(eye, center)
+        return eye, center
+
     def shot_relative(self, node_name, local_eye, local_target):
         """(eye, target) in world space from OBJECT-LOCAL offsets on a live
         node - one-liner object-relative cameras (a ship's bow close-up at
@@ -402,9 +438,9 @@ class Creation:
         self._presented_scene = self.scene
         self._my_viewport = mine
 
-    def screenshot(self, path):
+    def screenshot(self, path, settle_deadline_s=600.0):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        self.settle()
+        self.settle(deadline_s=settle_deadline_s)
         self.presentation()
         time.sleep(0.4)  # let a few frames render with final state
         try:
@@ -598,7 +634,11 @@ class Creation:
                     "position": [float(v) for v in position],
                     "motion_mode": motion_mode,
                 }
-                args.update({k: v for k, v in kwargs.items() if k not in self.SHAPE_GEOMETRY_KEYS})
+                # instance/add_brush are create_shape-only keys; place_brush
+                # rejects unrecognized arguments (strict since 2026-08-09).
+                args.update({k: v for k, v in kwargs.items()
+                             if k not in self.SHAPE_GEOMETRY_KEYS
+                             and k not in ("instance", "add_brush")})
                 result = self.mutate("place_brush", args)
                 self._record_pause()
                 return result
@@ -854,9 +894,18 @@ class Creation:
         an explicit 'enabled' since 2026-08-08)."""
         self.mutate("toggle_physics", {"enabled": bool(enabled)})
 
-    def wake_physics(self):
-        """Wake all dynamic bodies (they enter the world deactivated)."""
-        self.mutate("wake_physics_bodies", {"scene_name": self.scene})
+    def wake_physics(self, node_name=None, node_ids=None):
+        """Wake dynamic bodies (they enter the world deactivated). Scoped
+        since 2026-08-09: node_name wakes the SUBTREE under that node,
+        node_ids exactly those nodes (union when combined); no filter wakes
+        the whole scene. Scope iterative re-settles (--only) so settled
+        structures elsewhere stay asleep instead of getting toppled."""
+        args = {"scene_name": self.scene}
+        if node_name is not None:
+            args["node_name"] = str(node_name)
+        if node_ids:
+            args["node_ids"] = [int(i) for i in node_ids]
+        self.mutate("wake_physics_bodies", args)
 
     def advance_time(self, seconds=None, max_step_ms=None, mode=None):
         """Editor simulation clock control (advance_time MCP tool,
@@ -1286,6 +1335,92 @@ def hsv_to_rgb(h, s, v):
     q = v * (1.0 - f * s)
     t = v * (1.0 - (1.0 - f) * s)
     return [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][i]
+
+
+@contextlib.contextmanager
+def fail_soft(c, base_path, failed_glb=None):
+    """Fail-soft finalize: wrap the BUILD in
+
+        with common.fail_soft(c, "logs/creations/my_scene",
+                              failed_glb="res/editor/scenes/creations/my_scene_failed.glb"):
+            <build + settle + screenshots>
+
+    On any exception the aftermath is still captured before the process
+    exits - a screenshot at <base_path>_failed.png and (optionally) a saved
+    <name>_failed.glb - then the exception propagates. A late-failing script
+    otherwise loses ALL diagnostic output for the run (both aborted rockfall
+    builds died AFTER the expensive settle with nothing to look at). Every
+    capture step is best-effort: a broken editor state cannot turn the real
+    error into a hang or a secondary crash."""
+    try:
+        yield
+    except BaseException as error:
+        print(f"BUILD FAILED ({type(error).__name__}: {error}) - "
+              "capturing aftermath before exiting", flush=True)
+        traceback.print_exc()
+        root, ext = os.path.splitext(base_path)
+        steps = [
+            # A crash mid-settle can leave the manual clock running; restore
+            # wall clock so the captured aftermath is not frozen mid-tick.
+            ("restore wall clock", lambda: c.advance_time(mode="wall_clock")),
+            ("failure screenshot",
+             lambda: c.screenshot(f"{root}_failed{ext or '.png'}", settle_deadline_s=30.0)),
+        ]
+        if failed_glb:
+            steps.append(("failure save", lambda: c.save(failed_glb)))
+        for label, step in steps:
+            try:
+                step()
+            except BaseException as capture_error:  # noqa: BLE001 - diagnostics only
+                print(f"fail_soft: {label} failed: {capture_error}", flush=True)
+        raise
+
+
+# ------------------------------------------------- randomized placement math
+# Promoted from creation 17 (rock piles); same math, so reruns of scripts
+# that carried local copies stay rng-identical.
+
+def power_law_size(rng, s_min, s_max, alpha=2.2):
+    """Inverse-CDF sample of pdf ~ s^-alpha on [s_min, s_max]: many small
+    items, few big ones - the real talus / debris size distribution."""
+    a = 1.0 - alpha
+    u = rng.random()
+    return (s_min ** a + u * (s_max ** a - s_min ** a)) ** (1.0 / a)
+
+
+def quantize_scale(s, ratio=1.16, base=0.18):
+    """Multiplicative scale ladder: a number bake scale builds one extra
+    primitive per DISTINCT value per brush, so sizes snap to base*ratio^n."""
+    n = round(math.log(s / base) / math.log(ratio))
+    return round(base * (ratio ** n), 4)
+
+
+def rand_quat(rng):
+    """Uniform random rotation (Shoemake)."""
+    u1, u2, u3 = rng.random(), rng.random(), rng.random()
+    a, b = math.sqrt(1.0 - u1), math.sqrt(u1)
+    return [a * math.sin(2 * math.pi * u2), a * math.cos(2 * math.pi * u2),
+            b * math.sin(2 * math.pi * u3), b * math.cos(2 * math.pi * u3)]
+
+
+def tilt_yaw_quat(rng, max_tilt_deg):
+    """Near-upright orientation: random yaw + a small random tilt (cairn
+    slabs stay flattish instead of landing on edge)."""
+    yaw = rng.uniform(0.0, 2.0 * math.pi)
+    tilt = math.radians(rng.uniform(-max_tilt_deg, max_tilt_deg))
+    qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
+    qx = [math.sin(tilt / 2), 0.0, 0.0, math.cos(tilt / 2)]
+    return quat_mul(qy, qx)
+
+
+def sim(c, seconds, max_step_ms=500.0):
+    """Advance the (manual-mode) simulation by exactly `seconds` and block
+    until the queue drains. Unlike Creation.run_simulation this does NOT
+    switch modes - it is the mid-settle tick for staged construction
+    (place a body, tick, measure, place the next)."""
+    c.advance_time(seconds=seconds, max_step_ms=max_step_ms)
+    while c.advance_time().get("pending_seconds", 0.0) > 0.0:
+        time.sleep(0.05)
 
 
 def reframe(args, title, base_path, views):

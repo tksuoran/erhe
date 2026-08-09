@@ -21,11 +21,11 @@ frame rate - and the aftermath is frozen with toggle_physics.
 import math
 import os
 import sys
-import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
-    Creation, standard_args, reframe, align_y_quaternion, quat_mul,
+    Creation, standard_args, reframe, fail_soft, align_y_quaternion, quat_mul,
+    power_law_size, quantize_scale, rand_quat, tilt_yaw_quat, sim,
     v_add, v_norm, v_scale,
 )
 
@@ -80,43 +80,8 @@ def make_archetypes(rng):
     }
 
 
-def power_law_size(rng, s_min, s_max, alpha=2.2):
-    """Inverse-CDF sample of pdf ~ s^-alpha on [s_min, s_max]: many small
-    rocks, few boulders - the real talus size distribution."""
-    a = 1.0 - alpha
-    u = rng.random()
-    return (s_min ** a + u * (s_max ** a - s_min ** a)) ** (1.0 / a)
-
-
-def quantize_scale(s, ratio=1.16, base=0.18):
-    """Multiplicative scale ladder: a number bake scale builds one extra
-    primitive per DISTINCT value per brush, so sizes snap to base*ratio^n."""
-    n = round(math.log(s / base) / math.log(ratio))
-    return round(base * (ratio ** n), 4)
-
-
-def rand_quat(rng):
-    """Uniform random rotation (Shoemake)."""
-    u1, u2, u3 = rng.random(), rng.random(), rng.random()
-    a, b = math.sqrt(1.0 - u1), math.sqrt(u1)
-    return [a * math.sin(2 * math.pi * u2), a * math.cos(2 * math.pi * u2),
-            b * math.sin(2 * math.pi * u3), b * math.cos(2 * math.pi * u3)]
-
-
-def tilt_yaw_quat(rng, max_tilt_deg):
-    """Near-upright orientation: random yaw + a small random tilt (cairn
-    slabs stay flattish instead of landing on edge)."""
-    yaw = rng.uniform(0.0, 2.0 * math.pi)
-    tilt = math.radians(rng.uniform(-max_tilt_deg, max_tilt_deg))
-    qy = [0.0, math.sin(yaw / 2), 0.0, math.cos(yaw / 2)]
-    qx = [math.sin(tilt / 2), 0.0, 0.0, math.cos(tilt / 2)]
-    x1, y1, z1, w1 = qy
-    x2, y2, z2, w2 = qx
-    return [w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2]
-
+# power_law_size / quantize_scale / rand_quat / tilt_yaw_quat / sim were
+# promoted to common.py (2026-08-09) - import, never re-derive.
 
 # ---------------------------------------------------------------- pile logic
 
@@ -255,7 +220,11 @@ def stack_cairn(c, yard, rng):
                                 rotation=tilt_yaw_quat(rng, 2.0), friction=1.5)
             yard.apply_rock_friction()
             name = f"Cairn c{i} rock {yard.counter}"
-            c.wake_physics()
+            # Wake the whole cairn stack, not just the laid stone: the
+            # courses below must stay cooperative (compact under the new
+            # load) or stones slide off - a per-stone wake slumped the
+            # tower. The rest of the scene stays settled.
+            c.wake_physics(node_name="Cairn")
             sim(c, 1.2)
             position, _rotation = c.node_world_pose(name)
             if position[1] > top_y - half:
@@ -540,24 +509,24 @@ def build_pebbles(c, yard, rng):
 
 # ------------------------------------------------------------------ settling
 
-def sim(c, seconds):
-    """Advance the (manual-mode) simulation by exactly `seconds` and block
-    until the queue drains."""
-    c.advance_time(seconds=seconds, max_step_ms=500.0)
-    while c.advance_time().get("pending_seconds", 0.0) > 0.0:
-        time.sleep(0.05)
-
-
-def settle_rocks(c, cairn_stage=None, pre_s=7.0, post_s=3.0):
+def settle_rocks(c, cairn_stage=None, pre_s=7.0, post_s=3.0, wake_scope=True):
     """Deterministic physics settle under the MANUAL simulation clock
     (advance_time MCP tool): simulation time is frozen except explicit
     ticks, so mid-settle construction (the staged cairn) places bodies
     into a world that is standing still - regardless of wall clock,
-    frame rate or window visibility. Freezes the aftermath."""
+    frame rate or window visibility. Freezes the aftermath.
+
+    wake_scope: True wakes the whole scene (full build); a node name wakes
+    only that subtree (--only re-settles must not topple the piles that are
+    already built); None skips the wake (staged construction wakes each
+    body as it is laid)."""
     c.settle()
     c.advance_time(mode="manual", max_step_ms=500.0)
     c.set_physics(True)
-    c.wake_physics()
+    if wake_scope is True:
+        c.wake_physics()
+    elif wake_scope:
+        c.wake_physics(node_name=wake_scope)
     sim(c, pre_s)
     if cairn_stage is not None:
         cairn_stage()
@@ -615,14 +584,7 @@ def make_ground_texture(c):
     return "Dry Earth"
 
 
-def main():
-    args = standard_args("Rockfall")
-    if reframe(args, "Rockfall", "logs/creations/rockfall", SHOTS):
-        return
-    only = args.only
-    c = Creation("Rockfall", port=args.port, pause_s=args.pause,
-                 editor_exe=args.editor_exe,
-                 reuse=args.reuse or bool(only), keep_scenes=bool(only))
+def build(c, args, only):
     if only:
         scene = c.attach_scene()
         print(f"attached scene: {scene} (rebuilding only '{only}')")
@@ -708,13 +670,15 @@ def main():
             raise SystemExit(f"--only '{only}' unknown; objects: {list(piles)}")
         c.delete_nodes(names=[only])
         if only == "Cairn":
+            # wake_scope None: the staged cairn wakes each stone as it is
+            # laid; nothing else may wake or the settled piles could topple.
             settle_rocks(c, cairn_stage=lambda: stack_cairn(c, yard, rng),
-                         pre_s=0.5, post_s=2.0)
+                         pre_s=0.5, post_s=2.0, wake_scope=None)
         else:
             piles[only]()
             yard.apply_rock_friction()
             if only not in ("Pebbles", "Dunes", "Cacti", "Agaves"):
-                settle_rocks(c, pre_s=7.0, post_s=1.0)
+                settle_rocks(c, pre_s=7.0, post_s=1.0, wake_scope=only)
         yard.apply_chamfer()
         eye, target = c.shot_relative(only, [5.0, 2.6, 5.5], [0.0, 0.8, 0.0])
         c.screenshot_views("logs/creations/rockfall", [("only", eye, target)])
@@ -731,6 +695,21 @@ def main():
     if not args.no_save:
         c.save("res/editor/scenes/creations/rockfall.glb")
     print("Rockfall complete.")
+
+
+def main():
+    args = standard_args("Rockfall")
+    if reframe(args, "Rockfall", "logs/creations/rockfall", SHOTS):
+        return
+    only = args.only
+    c = Creation("Rockfall", port=args.port, pause_s=args.pause,
+                 editor_exe=args.editor_exe,
+                 reuse=args.reuse or bool(only), keep_scenes=bool(only))
+    # Fail-soft finalize (common.fail_soft, 2026-08-09): a crash after the
+    # expensive settle still screenshots the aftermath (rockfall_failed.png)
+    # before the process exits, instead of losing the whole run's evidence.
+    with fail_soft(c, "logs/creations/rockfall"):
+        build(c, args, only)
 
 
 if __name__ == "__main__":
