@@ -62,6 +62,16 @@ they carry the current idioms.
   `if common.reframe(args, title, base_path, SHOTS): return` at the
   top of main() (creation_16 is the pattern; creation_14 has the older
   hand-rolled version). EVERY new creation should wire this.
+- **`--only <object>` partial rebuild** (2026-08-09; creation_16 is the
+  pattern): attach to the running editor's scene (implies reuse +
+  keep-scenes), `c.delete_nodes(names=[obj])` the object's root group,
+  rebuild only that object, close-up screenshot via `shot_relative`.
+  Structure main() so it supports this: objects in a name -> builder
+  map, scene-level setup (ambience/lights/ground) gated on `not only`,
+  materials through `c.ensure_material` (returns the existing library
+  material by name instead of stacking suffixed duplicates). Measured
+  on creation 16: 182 vs 419 MCP calls for a one-ship change. EVERY
+  new creation should wire this too.
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
@@ -101,7 +111,19 @@ they carry the current idioms.
 - Screenshot from 2-3 angles per iteration
   (`c.screenshot_views(base, [(suffix, eye, target), ...])`) -
   composition problems (occlusion, a buried face, a floating prop) then
-  surface in ONE iteration instead of one per rerun.
+  surface in ONE iteration instead of one per rerun. Object-relative
+  cameras: `eye, target = c.shot_relative(node_name, local_eye,
+  local_target)` converts OBJECT-LOCAL offsets through the node's live
+  world transform - no hand heading trigonometry for close-ups.
+- **Probe the ACTUAL surface instead of guessing offsets**
+  (`geometry_query` MCP tool, 2026-08-09): `c.closest_points(points,
+  node_name="Hull")` returns closest surface point + unit normal +
+  distance per input point in ONE batched call;
+  `c.geometry_query([...])` also does raycasts (same mask as the
+  viewport hover ray). Convex hulls bulge past their authored station
+  points - place hull-hugging trim at `hit + normal * standoff` rather
+  than iterating hug factors from screenshots (that guessing was the
+  single biggest time sink of the sail-ships bow sessions).
 
 ## Scene-graph hierarchy (MANDATORY for all creations)
 
