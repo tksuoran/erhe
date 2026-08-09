@@ -29,7 +29,7 @@ Weber & Penn "Creation and Rendering of Realistic Trees" (SIGGRAPH 95)):
 import math
 
 from common import (
-    align_y_quaternion, v_add, v_cross, v_norm, v_rotate, v_scale,
+    BatchHandle, align_y_quaternion, v_add, v_cross, v_norm, v_rotate, v_scale,
 )
 
 GOLDEN_ANGLE = math.radians(137.5)
@@ -78,6 +78,31 @@ def grow_roots(batch, tag, base, trunk_r, bark, rng, root_count=5,
                    height=length, bottom_radius=trunk_r * rng.uniform(0.38, 0.52),
                    top_radius=trunk_r * 0.08, slice_count=6,
                    material_name=bark, parent_node_id=parent)
+
+
+def rig_tree_sway(c, sway_jobs):
+    """Glade-pattern rest-pose motor rig with HIERARCHY support: each spine
+    node becomes a wind-receptive dynamic body (shape="auto" hull of its
+    own mesh - spines must be REAL geometry, not unit-part instances)
+    jointed at its base to its carrier. A carrier that is itself a spine
+    (a limb jointed to its trunk) already has a dynamic body, so only
+    non-spine carriers get the tiny static sensor body. Jobs must list a
+    tree's trunk before its limbs so the trunk body exists when the limb
+    joints look it up. Run AFTER settle() with the simulation DISABLED so
+    the joints capture the authored rest pose."""
+    spine_ids = {job[1] for job in sway_jobs}
+    carriers_with_body = set()
+    for tag, node_id, base_pos, settings, mass, receptivity, ang_damp, carrier_id in sway_jobs:
+        if carrier_id not in carriers_with_body and carrier_id not in spine_ids:
+            c.body(carrier_id, shape="sphere", radius=0.05,
+                   motion_mode="static", is_trigger=True)
+            carriers_with_body.add(carrier_id)
+        c.body(node_id, shape="auto", motion_mode="dynamic", mass=mass,
+               gravity_factor=0.0, angular_damping=ang_damp,
+               linear_damping=0.05, wind_receptivity=receptivity)
+        anchor_id = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
+        c.joint(anchor_id, connected_node_id=carrier_id, settings_name=settings)
+    print(f"rigged {len(sway_jobs)} sway spines")
 
 
 def add_trunk_collider(c, tag, parent_node_id, base, height, bottom_radius, top_radius):
@@ -166,9 +191,17 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                      motion_mode="none")
     trunk_id = result.get("node_id") if isinstance(result, dict) else None
     parent = trunk_id if trunk_id is not None else root
+    # Optional "sway" dict tunes the rig (absent = glade defaults):
+    # trunk_settings/mass/receptivity/damping, and branch_sway=True turns
+    # major limbs (pipe share > branch_share_min) into second-level spines
+    # jointed to the trunk - hierarchical wind.
+    sway = p.get("sway") or {}
     if trunk_id is not None and sway_jobs is not None:
-        sway_jobs.append((tag, trunk_id, list(base), "tree_sway",
-                          25.0 * age * age, 6.0 * age, 0.8, root))
+        sway_jobs.append((tag, trunk_id, list(base),
+                          sway.get("trunk_settings", "tree_sway"),
+                          sway.get("trunk_mass", 25.0 * age * age),
+                          sway.get("trunk_receptivity", 6.0 * age),
+                          sway.get("trunk_damping", 0.8), root))
     # Whole branch + canopy structure goes out as ONE place_brush_instances
     # call: chained segments parent via in-batch handles.
     batch = c.part_batch()
@@ -178,26 +211,40 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
     if p.get("root_count"):
         grow_roots(batch, tag, base, trunk_r[0], bark, rng,
                    root_count=p["root_count"], parent=root)
-    # Optional lower trunk branches (opt-in "trunk_branches"): real trees
-    # carry branches down the trunk, not just the crown - lower ones grow
-    # LONGER (more light history), each tipped with a small foliage clump.
-    for i in range(p.get("trunk_branches", 0)):
-        frac = rng.uniform(0.35, 0.9)
-        a = rng.uniform(0.0, 2.0 * math.pi)
-        elev = rng.uniform(0.25, 0.55)
-        d = v_norm([math.cos(a), elev, math.sin(a)])
-        blen = seg_len * (1.15 - 0.55 * frac) * rng.uniform(0.8, 1.1)
+    # Optional lower trunk branches (opt-in "trunk_branches"): an EVEN
+    # golden-angle ladder from mid-trunk to the crown base, so there is no
+    # bare gap below the crown. Length and foliage grow toward the crown to
+    # meet the crown branches; thickness comes from the trunk they leave.
+    # "branch_stub_chance" turns some into short blunt stubs - broken
+    # branches on an old tree.
+    n_lower = p.get("trunk_branches", 0)
+    stub_chance = p.get("branch_stub_chance", 0.0)
+    for i in range(n_lower):
+        frac = min(0.98, 0.45 + 0.53 * (i + rng.uniform(0.2, 0.8)) / n_lower)
+        a = i * GOLDEN_ANGLE + rng.uniform(-0.5, 0.5)
         bpos = v_add(base, [0.0, trunk_h * frac, 0.0])
-        branch_r = max(0.03, trunk_r[1] * (0.5 - 0.25 * frac))
+        branch_r = max(0.04, trunk_r[1] * (0.62 - 0.22 * frac))
+        if rng.random() < stub_chance:
+            # Broken stub: short, blunt, near-horizontal, no foliage.
+            d = v_norm([math.cos(a), rng.uniform(-0.10, 0.15), math.sin(a)])
+            batch.part("cone", f"{tag} Stub {i}", bpos,
+                       rotation_xyzw=align_y_quaternion(d),
+                       height=seg_len * rng.uniform(0.10, 0.22),
+                       bottom_radius=branch_r * 1.15,
+                       top_radius=branch_r * 0.7, slice_count=6,
+                       material_name=bark, parent_node_id=parent)
+            continue
+        d = v_norm([math.cos(a), rng.uniform(0.20, 0.45), math.sin(a)])
+        blen = seg_len * (0.55 + 0.6 * frac) * rng.uniform(0.85, 1.1)
         handle = batch.part("cone", f"{tag} Low Branch {i}", bpos,
                             rotation_xyzw=align_y_quaternion(d),
                             height=blen, bottom_radius=branch_r,
-                            top_radius=max(0.02, branch_r * 0.5),
+                            top_radius=max(0.025, branch_r * 0.45),
                             slice_count=6, material_name=bark,
                             parent_node_id=parent, as_parent=True)
         tip = v_add(bpos, v_scale(d, blen))
         batch.part("uv_sphere", f"{tag} Low Canopy {i}", tip,
-                   radius=p["leaf_r"][0] * rng.uniform(0.6, 0.85),
+                   radius=p["leaf_r"][0] * (0.55 + 0.5 * frac) * rng.uniform(0.85, 1.1),
                    slice_count=10, stack_count=8,
                    material_name=leaf_materials[i % len(leaf_materials)],
                    parent_node_id=handle)
@@ -214,6 +261,14 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
     expanded = expand_lsystem(rng, iterations, weights)
     pipe_counts = distal_f_counts(expanded) if pipe_exponent else None
     pipe_total = max(pipe_counts) if pipe_counts else 1
+
+    # Hierarchical wind: the first segment of a depth-1 branch carrying a
+    # large enough share of the tree (a MAJOR limb) becomes a second-level
+    # sway spine - REAL geometry (shape="auto" hulls cannot see unit-part
+    # node scale), jointed to the trunk by rig_tree_sway.
+    branch_sway = bool(sway.get("branch_sway")) and (sway_jobs is not None) and (pipe_counts is not None)
+    branch_share_min = sway.get("branch_share_min", 0.12)
+    branch_head = False
 
     for char_index, ch in enumerate(expanded):
         if ch == "F":
@@ -234,6 +289,32 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
                 radius = max(0.03, p["seg_r"] * (age ** 0.8) * (share ** (1.0 / pipe_exponent)))
             else:
                 radius = max(0.03, p["seg_r"] * (age ** 0.8) * (p["r_falloff"] ** depth))
+            if (branch_sway and branch_head and (depth == 1)
+                    and (pipe_counts[char_index] / pipe_total) >= branch_share_min):
+                # Major limb spine: a REAL cone the rig can hull. Parented to
+                # the tree ROOT GROUP, not its visual parent chain - a
+                # dynamic body nested under another dynamic body (the trunk)
+                # double-drives the node transform and the crown collapses.
+                # The joint to the trunk body is the physical attachment.
+                result = c.shape("cone", f"{tag} Limb {seg_count}", list(pos),
+                                 rotation_xyzw=align_y_quaternion(heading),
+                                 height=length, bottom_radius=radius,
+                                 top_radius=max(0.025, radius * 0.7),
+                                 slice_count=8, material_name=bark,
+                                 parent_node_id=root, motion_mode="none")
+                limb_id = result.get("node_id") if isinstance(result, dict) else None
+                if limb_id is not None:
+                    sway_jobs.append((f"{tag} Limb {seg_count}", limb_id, list(pos),
+                                      sway.get("branch_settings", "branch_sway"),
+                                      sway.get("branch_mass", max(0.4, radius * length * 30.0)),
+                                      sway.get("branch_receptivity", 2.0),
+                                      0.8, trunk_id if trunk_id is not None else root))
+                    parent = limb_id
+                seg_count += 1
+                pos = v_add(pos, v_scale(heading, length))
+                branch_head = False
+                continue
+            branch_head = False
             # Curved branches: curve_res sub-cones, wobble + tropism
             # re-applied per sub-segment (Weber-Penn curve resolution).
             for sub in range(curve_res):
@@ -265,8 +346,10 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
         elif ch == "[":
             stack.append((list(pos), list(heading), list(left), depth, parent))
             depth += 1
+            branch_head = True
         elif ch == "]":
             pos, heading, left, depth, parent = stack.pop()
+            branch_head = False
         elif ch == "L":
             leaves.append((v_add(pos, v_scale(heading, 0.12)), parent))
 
@@ -308,7 +391,8 @@ def grow_tree(c, tag, base, species, bark, leaf_materials, rng, sway_jobs, age=1
 def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
                              trunk_frac=0.22, tropism=None, tip_tropism=None,
                              phyllotaxis=True, curve_res=2, root_count=5,
-                             trunk_branches=3, trunk_collider=True, tilt=None):
+                             trunk_branches=None, trunk_collider=False, tilt=None,
+                             stubs=0.12, sway=None):
     """Derive a grow_tree species dict from a REAL target height (m).
     spread widens branching (weights + pitch), gnarl adds wobble, canopy
     scales foliage clump size, tip_tropism droops the fine outer growth
@@ -319,6 +403,9 @@ def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
     tropism, 2 sub-cones per segment."""
     iterations = 5 if height > 30.0 else 4 if height > 14.0 else 3
     trunk_h = height * trunk_frac
+    if trunk_branches is None:
+        # Even ladder density scales with the bare trunk length.
+        trunk_branches = min(8, max(3, int(trunk_h * 0.7)))
     falloff = 0.76
     spine_depth = iterations + 2
     geometric_sum = (1.0 - falloff ** spine_depth) / (1.0 - falloff)
@@ -342,6 +429,8 @@ def broadleaf_species_params(height, spread=1.0, gnarl=1.0, canopy=1.0,
         "root_count": root_count,
         "trunk_branches": trunk_branches,
         "trunk_collider": trunk_collider,
+        "branch_stub_chance": stubs,
+        "sway": sway,
     }
 
 
@@ -349,7 +438,8 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
                  crown_frac=0.85, droop=-0.25, whorl_branches=5,
                  whorl_step_frac=0.05, branch_len_frac=0.16, shape=1.0,
                  trunk_r_frac=0.013, tip_rise=0.0, root_count=0,
-                 sparse_lower=0, trunk_collider=False):
+                 sparse_lower=0, trunk_collider=False, sway_jobs=None,
+                 sway_settings="tree_sway", sway_mass=25.0, sway_receptivity=6.0):
     """Excurrent (single-leader) conifer: straight trunk cone + whorls of
     branches whose length follows the Weber-Penn crown shape
     (1 - t)^shape from crown base (t=0) to tip (t=1). Each branch is one
@@ -360,10 +450,21 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
     root = c.group(tag, base)
     batch = c.part_batch()
     trunk_r = height * trunk_r_frac
-    trunk = batch.part("cone", f"{tag} Trunk", base, height=height * 0.97,
-                       bottom_radius=trunk_r, top_radius=max(0.02, trunk_r * 0.08),
-                       slice_count=10, material_name=bark,
-                       parent_node_id=root, as_parent=True)
+    if sway_jobs is not None:
+        # Sway spine trunk: REAL geometry so the rig's shape="auto" body
+        # hulls it; the whole whorl structure rides its node.
+        result = c.shape("cone", f"{tag} Trunk", base, height=height * 0.97,
+                         bottom_radius=trunk_r, top_radius=max(0.02, trunk_r * 0.08),
+                         slice_count=10, material_name=bark,
+                         parent_node_id=root, motion_mode="none")
+        trunk = result.get("node_id") if isinstance(result, dict) else root
+        sway_jobs.append((tag, trunk, list(base), sway_settings,
+                          sway_mass, sway_receptivity, 0.8, root))
+    else:
+        trunk = batch.part("cone", f"{tag} Trunk", base, height=height * 0.97,
+                           bottom_radius=trunk_r, top_radius=max(0.02, trunk_r * 0.08),
+                           slice_count=10, material_name=bark,
+                           parent_node_id=root, as_parent=True)
     if root_count:
         grow_roots(batch, tag, base, trunk_r, bark, rng,
                    root_count=root_count, parent=root)
@@ -456,16 +557,26 @@ def grow_conifer(c, tag, base, height, bark, leaf, rng,
 
 
 def grow_columnar(c, tag, base, height, bark, leaf, rng, width_frac=0.16,
-                  lobes=5, root_count=0, trunk_collider=False):
+                  lobes=5, root_count=0, trunk_collider=False, sway_jobs=None,
+                  sway_settings="tree_sway", sway_mass=8.0, sway_receptivity=4.0):
     """Columnar evergreen (juniper): short trunk + a stack of squashed
     foliage spheres narrowing toward the tip."""
     x, y, z = base
     root = c.group(tag, base)
     batch = c.part_batch()
-    trunk = batch.part("cone", f"{tag} Trunk", base, height=height * 0.35,
-                       bottom_radius=height * 0.02, top_radius=height * 0.012,
-                       slice_count=8, material_name=bark,
-                       parent_node_id=root, as_parent=True)
+    if sway_jobs is not None:
+        result = c.shape("cone", f"{tag} Trunk", base, height=height * 0.35,
+                         bottom_radius=height * 0.02, top_radius=height * 0.012,
+                         slice_count=8, material_name=bark,
+                         parent_node_id=root, motion_mode="none")
+        trunk = result.get("node_id") if isinstance(result, dict) else root
+        sway_jobs.append((tag, trunk, list(base), sway_settings,
+                          sway_mass, sway_receptivity, 0.8, root))
+    else:
+        trunk = batch.part("cone", f"{tag} Trunk", base, height=height * 0.35,
+                           bottom_radius=height * 0.02, top_radius=height * 0.012,
+                           slice_count=8, material_name=bark,
+                           parent_node_id=root, as_parent=True)
     if root_count:
         grow_roots(batch, tag, base, height * 0.02, bark, rng,
                    root_count=root_count, parent=root)
@@ -487,7 +598,8 @@ def grow_columnar(c, tag, base, height, bark, leaf, rng, width_frac=0.16,
 
 
 def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35,
-               root_count=0, trunk_collider=False):
+               root_count=0, trunk_collider=False, sway_jobs=None,
+               sway_settings="branch_sway", sway_mass=1.5, sway_receptivity=1.5):
     """Multi-stem shrub / small bushy tree: stems lean outward from the
     base, each carrying an elongated canopy blob at its tip. With
     root_count the stems rise from a shared root mound - branching that
@@ -503,12 +615,24 @@ def grow_shrub(c, tag, base, height, bark, leaf, rng, stems=4, spread=0.35,
         lean = spread * rng.uniform(0.6, 1.3)
         d = v_norm([math.cos(a) * lean, 1.0, math.sin(a) * lean])
         stem_h = height * rng.uniform(0.55, 0.75)
-        handle = batch.part("cone", f"{tag} Stem {i}", base,
-                            rotation_xyzw=align_y_quaternion(d),
-                            height=stem_h, bottom_radius=height * 0.018,
-                            top_radius=height * 0.008, slice_count=6,
-                            material_name=bark, parent_node_id=root,
-                            as_parent=True)
+        if sway_jobs is not None:
+            # Each stem is a light sway spine jointed to the shrub root.
+            result = c.shape("cone", f"{tag} Stem {i}", base,
+                             rotation_xyzw=align_y_quaternion(d),
+                             height=stem_h, bottom_radius=height * 0.018,
+                             top_radius=height * 0.008, slice_count=6,
+                             material_name=bark, parent_node_id=root,
+                             motion_mode="none")
+            handle = result.get("node_id") if isinstance(result, dict) else root
+            sway_jobs.append((f"{tag} Stem {i}", handle, list(base), sway_settings,
+                              sway_mass, sway_receptivity, 0.6, root))
+        else:
+            handle = batch.part("cone", f"{tag} Stem {i}", base,
+                                rotation_xyzw=align_y_quaternion(d),
+                                height=stem_h, bottom_radius=height * 0.018,
+                                top_radius=height * 0.008, slice_count=6,
+                                material_name=bark, parent_node_id=root,
+                                as_parent=True)
         tip = v_add(base, v_scale(d, stem_h))
         r = height * rng.uniform(0.20, 0.28)
         batch.part("uv_sphere", f"{tag} Crown {i}",

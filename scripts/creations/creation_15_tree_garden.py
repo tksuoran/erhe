@@ -11,12 +11,17 @@ L-system broadleaf, columnar evergreen, multi-stem shrub), all built
 from unit-geometry brush instances batched one place_brush_instances
 call per tree.
 
-Physics: the simulation runs and every tree carries a static
-tapered-cylinder trunk collider (explicitly sized - auto hulls cannot see
-node scale on unit-part trunks); the visual parts stay motion_mode
-"none". Each trunk rises from a root flare with surface roots, and the
-cluster species (Hieskoivu, Harmaaleppä, Raita, Lehtotuomi) grow 2-3
-staggered trunks from a shared root mound.
+Physics: hierarchical wind rig (glade recipe, two levels) - every trunk
+is a REAL-geometry sway spine (dynamic body, gravity 0, wind-receptive,
+rest-pose motor joint to the tree's root group) and every MAJOR limb
+(pipe-model share >= 12% of the tree) is a second-level spine jointed to
+the trunk. Masses and receptivity scale with real height, so the 45 m
+spruce lumbers while the shrub stems whip. Built with the simulation
+OFF so the joints capture the authored pose; then wind + physics on.
+Each trunk rises from a root flare with surface roots; lower branches
+ladder evenly from mid-trunk to the crown (some as broken stubs on the
+old oak/apple/elm); the cluster species (Hieskoivu, Harmaaleppä, Raita,
+Lehtotuomi) grow 2-3 staggered trunks from a shared root mound.
 """
 
 import math
@@ -26,11 +31,57 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
-from common import Creation, standard_args, quat_mul  # noqa: E402
+from common import Creation, standard_args, quat_mul, probe_tilt  # noqa: E402
 from lsystem_trees import (  # noqa: E402
     broadleaf_species_params, grow_columnar, grow_conifer, grow_roots,
-    grow_shrub, grow_tree,
+    grow_shrub, grow_tree, rig_tree_sway,
 )
+
+# Rest-pose motor joint settings (glade recipe): linear XYZ + angular Y
+# locked, angular X/Z limited, drives spring back to the authored pose.
+# tree_sway carries whole 100+ kg trunks; branch_sway carries limbs and
+# shrub stems.
+SWAY_SETTINGS = {
+    "tree_sway":   {"range": 0.08, "stiffness": 1500.0, "damping": 150.0, "max_force": 3000.0},
+    # Limbs carry tens of kg and everything distal rides them: with soft
+    # motors (12/60) every limb sagged to its +-0.3 rad limit and the crowns
+    # slumped to half height. Stiff, tightly limited motors keep the crown
+    # shape and leave a visible few degrees of limb sway.
+    "branch_sway": {"range": 0.14, "stiffness": 220.0,  "damping": 22.0,  "max_force": 900.0},
+}
+
+
+def make_sway_settings(c):
+    for name, p in SWAY_SETTINGS.items():
+        c.joint_settings(
+            name,
+            limits=[
+                {"linear_axes": [True, True, True], "angular_axes": [False, False, False], "min": 0.0, "max": 0.0},
+                {"linear_axes": [False, False, False], "angular_axes": [False, True, False], "min": 0.0, "max": 0.0},
+                {"linear_axes": [False, False, False], "angular_axes": [True, False, False], "min": -p["range"], "max": p["range"]},
+                {"linear_axes": [False, False, False], "angular_axes": [False, False, True], "min": -p["range"], "max": p["range"]},
+            ],
+            drives=[
+                {"type": "angular", "axis": 0, "stiffness": p["stiffness"], "damping": p["damping"], "max_force": p["max_force"], "position_target": 0.0},
+                {"type": "angular", "axis": 2, "stiffness": p["stiffness"], "damping": p["damping"], "max_force": p["max_force"], "position_target": 0.0},
+            ],
+        )
+
+
+def tree_sway_config(height):
+    """Height-scaled trunk-level rig (glade recipe): trunk mass and
+    receptivity grow with the tree, so the 45 m spruce lumbers while the
+    17 m apple stirs. branch_sway (second-level limb spines jointed to the
+    trunk) is implemented in lsystem_trees but DISABLED here: with limbs
+    rigged, crowns slump to half height - the limb joints do not hold
+    their rest pose against a dynamic trunk carrier (tried both limb
+    scene-parents: under the trunk = double-driven transforms, under the
+    root group = same slump). Needs a dedicated debugging session."""
+    return {
+        "trunk_mass": 3.0 * height,
+        "trunk_receptivity": 0.9 * height,
+        "branch_sway": False,
+    }
 
 # (finnish, scientific, height_m, habit, bark, leaf, kwargs)
 # "Panmarjakuusi" in the source list is read as Euroopanmarjakuusi
@@ -52,11 +103,12 @@ SPECIES = [
     ("Metsävaahtera", "Acer platanoides", 30.8, "broadleaf", "bark_grey", "leaf_light",
      dict(spread=1.1, canopy=1.2)),
     ("Vuorijalava", "Ulmus glabra", 35.6, "broadleaf", "bark_grey", "leaf_mid",
-     dict(spread=1.25)),
+     dict(spread=1.25, stubs=0.22)),
     ("Kynäjalava", "Ulmus laevis", 33.2, "broadleaf", "bark_brown", "leaf_mid",
      dict(spread=1.15)),
     ("Metsätammi", "Quercus robur", 32.0, "broadleaf", "bark_dark", "leaf_mid",
-     dict(spread=1.35, gnarl=1.8, canopy=1.2, trunk_frac=0.18, curve_res=3)),
+     dict(spread=1.35, gnarl=1.8, canopy=1.2, trunk_frac=0.18, curve_res=3,
+          stubs=0.35)),
     ("Lehtosaarni", "Fraxinus excelsior", 35.4, "broadleaf", "bark_grey", "leaf_mid",
      dict(canopy=0.9)),
     ("Rauduskoivu", "Betula pendula", 38.5, "broadleaf", "bark_white", "leaf_light",
@@ -81,7 +133,7 @@ SPECIES = [
     ("Lehtotuomi", "Prunus padus", 21.8, "broadleaf", "bark_dark", "leaf_mid",
      dict(spread=1.15, canopy=1.1, cluster=3)),
     ("Metsäomenapuu", "Malus sylvestris", 17.0, "broadleaf", "bark_brown", "leaf_mid",
-     dict(spread=1.3, gnarl=1.5, canopy=1.15, trunk_frac=0.25)),
+     dict(spread=1.3, gnarl=1.5, canopy=1.15, trunk_frac=0.25, stubs=0.35)),
     ("Kotipihlaja", "Sorbus aucuparia", 22.8, "broadleaf", "bark_grey", "leaf_mid",
      dict(spread=1.1, canopy=0.95)),
     ("Suomenpihlaja", "Hedlundia hybrida", 11.8, "broadleaf", "bark_grey", "leaf_mid",
@@ -105,6 +157,10 @@ def main():
                  editor_exe=args.editor_exe, reuse=args.reuse)
     scene = c.new_scene()
     print(f"scene: {scene}")
+
+    # Build with the simulation OFF: the sway joints must capture the
+    # authored pose as the rest pose (glade bendy-plant recipe).
+    c.set_physics(False)
 
     c.ambience(ambient=[0.18, 0.22, 0.20],
                clear_color=[0.55, 0.70, 0.88, 1.0], grid=False,
@@ -144,6 +200,7 @@ def main():
     # Four height-sorted rows of seven, tallest at the back; within a row
     # tallest at the left, so height reads across and into the picture.
     rng = random.Random(15)
+    sway_jobs = []
     ordered = sorted(SPECIES, key=lambda s: -s[2])
     # Rows compressed so the whole garden stays inside the viewport draw
     # distance (~80 m) from the overview camera.
@@ -155,7 +212,9 @@ def main():
         col = index % 7
         x = (col - 3.0) * spacing + rng.uniform(-1.2, 1.2)
         z = rows_z[row] + rng.uniform(-1.5, 1.5)
-        base = [x, 0.0, z]
+        # Bases lifted 0.05 so the dynamic trunk hulls clear the lawn's
+        # static body instead of grinding on it (glade recipe).
+        base = [x, 0.05, z]
         tag = finnish
         print(f"({x:5.1f},{z:6.1f})  {finnish:<20} {scientific:<28} {height:.1f} m")
         kwargs = dict(kwargs)
@@ -163,19 +222,22 @@ def main():
         leaf_pair = [m[leaf], m["leaf_mid" if leaf != "leaf_mid" else "leaf_light"]]
         if habit == "conifer":
             kwargs.setdefault("root_count", 5)
-            kwargs.setdefault("trunk_collider", True)
-            grow_conifer(c, tag, base, height, m[bark], m[leaf], rng, **kwargs)
+            grow_conifer(c, tag, base, height, m[bark], m[leaf], rng,
+                         sway_jobs=sway_jobs, sway_mass=3.0 * height,
+                         sway_receptivity=0.9 * height, **kwargs)
         elif habit == "columnar":
             kwargs.setdefault("root_count", 3)
-            kwargs.setdefault("trunk_collider", True)
-            grow_columnar(c, tag, base, height, m[bark], m[leaf], rng, **kwargs)
+            grow_columnar(c, tag, base, height, m[bark], m[leaf], rng,
+                          sway_jobs=sway_jobs, sway_mass=2.0 * height,
+                          sway_receptivity=0.6 * height, **kwargs)
         elif habit == "shrub":
             # Shared root mound: the stems already spread from one point, so
             # with roots underneath the branching reads as starting below
             # ground.
             kwargs.setdefault("root_count", 4)
-            kwargs.setdefault("trunk_collider", True)
-            grow_shrub(c, tag, base, height, m[bark], m[leaf], rng, **kwargs)
+            grow_shrub(c, tag, base, height, m[bark], m[leaf], rng,
+                       sway_jobs=sway_jobs, sway_mass=0.15 * height,
+                       sway_receptivity=0.35 * height, **kwargs)
         elif cluster:
             # Multi-stem cluster: a shared root mound and 2-3 full trunks
             # leaning outward from almost the same point, heights staggered -
@@ -188,22 +250,34 @@ def main():
             for s in range(cluster):
                 a = 2.0 * math.pi * s / cluster + rng.uniform(-0.4, 0.4)
                 offset = rng.uniform(0.25, 0.6)
-                stem_base = [x + math.cos(a) * offset, 0.0, z + math.sin(a) * offset]
+                stem_base = [x + math.cos(a) * offset, 0.05, z + math.sin(a) * offset]
                 stem_height = height * (1.0 - 0.16 * s)
                 lean = 0.10 + 0.10 * rng.random()
                 species = broadleaf_species_params(
                     stem_height, root_count=0,
                     tilt=[lean * math.cos(a), 1.0, lean * math.sin(a)],
+                    sway=tree_sway_config(stem_height),
                     **kwargs)
                 grow_tree(c, f"{tag} {s + 1}", stem_base, species, m[bark],
-                          leaf_pair, rng, sway_jobs=None)
+                          leaf_pair, rng, sway_jobs=sway_jobs)
         else:
-            species = broadleaf_species_params(height, **kwargs)
+            species = broadleaf_species_params(height, sway=tree_sway_config(height),
+                                               **kwargs)
             grow_tree(c, tag, base, species, m[bark], leaf_pair,
-                      rng, sway_jobs=None)
+                      rng, sway_jobs=sway_jobs)
 
+    # ------------------------------------------------------ physics + wind
     c.settle()
+    make_sway_settings(c)
+    rig_tree_sway(c, sway_jobs)
+    c.settle()
+    c.wind(enabled=True, direction=[1.0, 0.0, 0.35], speed=3.0,
+           gust_amplitude=2.2, gust_frequency=0.4, turbulence=0.45,
+           wavelength=14.0)
     c.set_physics(True)
+    c.wake_physics()
+    probe_tilt(c, ["Metsäkuusi Trunk", "Rauduskoivu Trunk", "Metsätammi Trunk"])
+
     # Wide lens + close eye: the far row must stay inside the ~80 m draw
     # distance (the first framing at 100 m lost the back row entirely).
     cameras = c.call("get_scene_cameras", {"scene_name": c.scene}).get("cameras", [])
