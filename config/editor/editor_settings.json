@@ -588,9 +588,17 @@
         "downstream_port": 34567
     },
     "physics": {
+        "_version": 2,
         "static_enable": true,
-        "dynamic_enable": true,
-        "debug_draw": false
+        "dynamic_enable": false,
+        "debug_draw": false,
+        "wind_enable": false,
+        "wind_direction": [1,0,0],
+        "wind_speed": 3,
+        "wind_gust_amplitude": 1.5,
+        "wind_gust_frequency": 0.4,
+        "wind_turbulence": 0.3,
+        "wind_wavelength": 8
     },
     "scene": {
         "imgui_window_scene_view": true,
@@ -631,7 +639,7 @@
         "checker_intensity_b": 1,
         "sun_intensity": 20,
         "march_steps": 32,
-        "observer_altitude_km": 0.5,
+        "observer_altitude_km": 0.01,
         "sun_angular_radius_deg": 0.5,
         "sun_disc_intensity": 30,
         "sun_elevation_deg": 45,
@@ -642,10 +650,11 @@
         "size_pixels": 256
     },
     "transform_tool": {
-        "_version": 23,
+        "_version": 24,
         "gizmo_scale": 1,
         "show_translate": true,
         "show_rotate": true,
+        "show_scale": true,
         "translate_negative_handles": false,
         "hover_preview": true,
         "rotate_visible_arcs_only": true,
