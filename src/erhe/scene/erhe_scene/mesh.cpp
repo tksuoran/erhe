@@ -181,7 +181,9 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
 void Mesh::handle_node_transform_update()
 {
     const glm::mat4& world_from_node = (get_node() != nullptr) ? get_node()->world_from_node() : glm::mat4{1.0f};
-    const float determinant = glm::determinant(world_from_node);
+    // Affine transform: det(mat4) == det(upper-left mat3); this runs for
+    // every mesh under a moving subtree, every frame.
+    const float determinant = glm::determinant(glm::mat3{world_from_node});
     if (determinant < 0.0f) {
         enable_flag_bits(Item_flags::negative_determinant);
     } else {

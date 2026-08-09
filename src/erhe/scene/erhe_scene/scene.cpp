@@ -361,14 +361,17 @@ void Scene::update_subtree_transforms(Node& node, const bool carry_body_driven)
     // before_physics_simulation runs node -> body for every body each frame
     // while the simulation runs, and on resume when it is paused).
     for (const auto& child : node.get_children()) {
-        const auto child_node = std::dynamic_pointer_cast<Node>(child);
-        if (!child_node) {
+        // Type-bit test + static_cast: this loop visits every node under a
+        // moving subtree each frame, so avoid dynamic_pointer_cast's RTTI
+        // walk and shared_ptr refcount traffic.
+        if (!erhe::is<Node>(child.get())) {
             continue;
         }
+        Node* const child_node = static_cast<Node*>(child.get());
         if (!carry_body_driven && child_node->is_no_transform_update()) {
             continue;
         }
-        if (!m_transform_update_visited.insert(child_node.get()).second) {
+        if (!m_transform_update_visited.insert(child_node).second) {
             continue;
         }
         child_node->update_transform(0);

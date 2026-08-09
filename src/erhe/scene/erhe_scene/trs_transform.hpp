@@ -37,19 +37,31 @@ public:
     void set(const glm::mat4& matrix);
     void set(const glm::mat4& matrix, const glm::mat4& inverse_matrix);
 
-    [[nodiscard]] auto get_scale      () const -> glm::vec3 { return m_scale;       }
-    [[nodiscard]] auto get_rotation   () const -> glm::quat { return m_rotation;    }
-    [[nodiscard]] auto get_translation() const -> glm::vec3 { return m_translation; }
-    [[nodiscard]] auto get_skew       () const -> glm::vec3 { return m_skew;        }
+    [[nodiscard]] auto get_scale      () const -> glm::vec3 { require_trs(); return m_scale;       }
+    [[nodiscard]] auto get_rotation   () const -> glm::quat { require_trs(); return m_rotation;    }
+    [[nodiscard]] auto get_translation() const -> glm::vec3 { require_trs(); return m_translation; }
+    [[nodiscard]] auto get_skew       () const -> glm::vec3 { require_trs(); return m_skew;        }
 
 private:
     void compose  ();
-    void decompose();
+    void decompose() const;
+    // Deferred decomposition: matrix writers (the world-transform propagation
+    // over subtrees, reparenting) only store the matrices and clear
+    // m_trs_valid; glm::decompose runs on the first TRS component read. Same
+    // thread-safety caveat as Transform::m_inverse_valid.
+    void require_trs() const
+    {
+        if (!m_trs_valid) {
+            decompose();
+            m_trs_valid = true;
+        }
+    }
 
-    glm::vec3 m_translation{0.0f};
-    glm::quat m_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 m_scale      {1.0f};
-    glm::vec3 m_skew       {0.0f};
+    mutable glm::vec3 m_translation{0.0f};
+    mutable glm::quat m_rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+    mutable glm::vec3 m_scale      {1.0f};
+    mutable glm::vec3 m_skew       {0.0f};
+    mutable bool      m_trs_valid  {true};
 };
 
 [[nodiscard]] auto translate  (const Trs_transform& t, glm::vec3 translation)             -> Trs_transform;

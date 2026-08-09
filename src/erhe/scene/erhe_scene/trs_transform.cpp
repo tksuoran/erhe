@@ -15,10 +15,10 @@ auto Trs_transform::operator=(const Trs_transform& t) -> Trs_transform& = defaul
 Trs_transform::Trs_transform(const mat4 m)
     : Transform{m}
 {
-    decompose();
+    m_trs_valid = false;
 }
 
-void Trs_transform::decompose()
+void Trs_transform::decompose() const
 {
     const glm::quat previous_rotation = m_rotation;
     const glm::vec3 previous_skew     = m_skew;
@@ -61,7 +61,7 @@ void Trs_transform::decompose()
 Trs_transform::Trs_transform(const mat4 matrix, const mat4 inverse_matrix)
     : Transform{matrix, inverse_matrix}
 {
-    decompose();
+    m_trs_valid = false;
 }
 
 Trs_transform::Trs_transform(const glm::vec3 translation)
@@ -112,6 +112,8 @@ void Trs_transform::compose()
 {
     m_matrix         = erhe::math::compose        (m_scale, m_rotation, m_translation, m_skew);
     m_inverse_matrix = erhe::math::compose_inverse(m_scale, m_rotation, m_translation, m_skew);
+    m_inverse_valid  = true;
+    m_trs_valid      = true;
 }
 
 auto translate(const Trs_transform& t, const glm::vec3 translation) -> Trs_transform
@@ -126,6 +128,7 @@ auto translate(const Trs_transform& t, const glm::vec3 translation) -> Trs_trans
 
 void Trs_transform::translate_by(glm::vec3 translation)
 {
+    require_trs(); // partial mutation composes from the other components
     m_translation = translation + m_translation;
     compose();
 }
@@ -142,6 +145,7 @@ auto rotate(const Trs_transform& t, const glm::quat rotation) -> Trs_transform
 
 void Trs_transform::rotate_by(glm::quat rotation)
 {
+    require_trs();
     m_rotation = rotation * m_rotation;
     compose();
 }
@@ -167,36 +171,42 @@ auto interpolate(const Trs_transform& t0, const Trs_transform& t1, float t) -> T
 
 void Trs_transform::scale_by(glm::vec3 scale)
 {
+    require_trs();
     m_scale = scale * m_scale;
     compose();
 }
 
 void Trs_transform::set_translation(const glm::vec3 translation)
 {
+    require_trs();
     m_translation = translation;
     compose();
 }
 
 void Trs_transform::set_rotation(const glm::quat rotation)
 {
+    require_trs();
     m_rotation = rotation;
     compose();
 }
 
 void Trs_transform::set_scale(const glm::vec3 scale)
 {
+    require_trs();
     m_scale = scale;
     compose();
 }
 
 void Trs_transform::set_skew(const glm::vec3 skew)
 {
+    require_trs();
     m_skew = skew;
     compose();
 }
 
 void Trs_transform::set_translation_and_rotation(const glm::vec3 translation, const glm::quat rotation)
 {
+    require_trs();
     m_rotation    = rotation;
     m_translation = translation;
     compose();
@@ -208,6 +218,7 @@ void Trs_transform::set_trs(
     const glm::vec3 scale
 )
 {
+    require_trs(); // skew is preserved
     m_scale       = scale;
     m_rotation    = rotation;
     m_translation = translation;
@@ -230,19 +241,17 @@ void Trs_transform::set(
 
 void Trs_transform::set(const mat4& matrix)
 {
-    m_matrix         = matrix;
-    m_inverse_matrix = glm::inverse(matrix);
-    decompose();
-
-    glm::mat4 check_matrix = erhe::math::compose(m_scale, m_rotation, m_translation, m_skew);
-
+    m_matrix        = matrix;
+    m_inverse_valid = false;
+    m_trs_valid     = false;
 }
 
 void Trs_transform::set(const mat4& matrix, const mat4& inverse_matrix)
 {
     m_matrix         = matrix;
     m_inverse_matrix = inverse_matrix;
-    decompose();
+    m_inverse_valid  = true;
+    m_trs_valid      = false;
 }
 
 auto operator*(const Trs_transform& lhs, const Trs_transform& rhs) -> Trs_transform

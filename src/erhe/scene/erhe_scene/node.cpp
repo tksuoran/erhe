@@ -20,12 +20,20 @@ namespace {
 // e.g. 0.001 -> 0.4, across the repeated set/decompose round-trips that parenting forces).
 [[nodiscard]] auto is_identity_transform(const Trs_transform& t) -> bool
 {
+    // Matrix comparison instead of TRS components: the TRS getters would
+    // force a deferred glm::decompose, and this is called on per-frame write
+    // paths (physics writeback, update_world_from_node).
     constexpr float eps = 1e-5f;
-    return
-        (glm::length(t.get_translation())                  < eps) &&
-        (glm::length(t.get_scale() - glm::vec3{1.0f})      < eps) &&
-        (glm::length(t.get_skew())                         < eps) &&
-        (std::abs(std::abs(t.get_rotation().w) - 1.0f)     < eps);
+    const glm::mat4& m = t.get_matrix();
+    const glm::mat4 identity{1.0f};
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            if (std::abs(m[column][row] - identity[column][row]) >= eps) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 }
@@ -396,17 +404,19 @@ void Node::update_transform(uint64_t serial)
         // }
 
         const glm::mat4 world_from_node = current_parent->world_from_node() * parent_from_node();
-        const glm::mat4 node_from_world = node_from_parent() * current_parent->node_from_world();
-        const float     determinant     = glm::determinant(world_from_node);
+        // Affine transform: det(mat4) == det(upper-left mat3), and the inverse
+        // is deferred (set(matrix) leaves it to the first node_from_world()
+        // read) - this loop runs for every node under a moving subtree.
+        const float determinant = glm::determinant(glm::mat3{world_from_node});
 
-        node_data.transforms.world_from_node.set(world_from_node, node_from_world);
-        handle_transform_update(serial);
+        node_data.transforms.world_from_node.set(world_from_node);
 
         if (determinant < 0.0f) {
             enable_flag_bits(erhe::Item_flags::negative_determinant);
         } else {
             disable_flag_bits(erhe::Item_flags::negative_determinant);
         }
+        handle_transform_update(serial);
     }
 }
 
@@ -414,10 +424,7 @@ void Node::update_world_from_node()
 {
     const auto& current_parent = get_parent_node();
     if (current_parent && !is_identity_transform(current_parent->world_from_node_transform())) {
-        node_data.transforms.world_from_node.set(
-            current_parent->world_from_node() * parent_from_node(),
-            node_from_parent() * current_parent->node_from_world()
-        );
+        node_data.transforms.world_from_node.set(current_parent->world_from_node() * parent_from_node());
     } else {
         // No parent, or an identity parent: world_from_node == parent_from_node. Copy the
         // TRS components rather than re-decomposing the matrix, so scale and rotation are
