@@ -70,44 +70,88 @@ Cost: O(target corners x log source tris) - a 40k-corner body against a
 few-thousand-facet proxy is instantaneous on the background evaluation
 thread; build the AABB once per evaluation.
 
-## Seams & discontinuities
+## Seams: value-space charts + exact seam imprinting
 
-Per-facet-local sampling alone still smears: with independent per-corner
-nearest queries, two corners of the SAME target facet can land on
-opposite sides of a source UV seam (u~0.99 next to u~0.01), and
-rasterization sweeps the whole texture backwards across that facet - the
-classic wrap-around stripe Blender Data Transfer / Houdini AttribTransfer
-show. The source seam does not align with target topology, so the
-discontinuity would cut THROUGH target facets, which corner-domain
-storage cannot represent.
+Requirements this section serves (2026-08-10 review): source texture
+coordinates are TILED - values run past 1 (repeating patterns) - and
+seams must transfer EXACTLY, not approximately.
 
-Fix: CHART-COHERENT sampling.
+### Value-space semantics for repeating UVs
 
-- Decompose the source into UV charts once per evaluation: connected
-  components of facets under "shares an edge whose corner values are
-  continuous across it (match within epsilon)". A cylindrical proxy is
-  one chart with one seam line; an atlas is many charts.
-- Build the triangulated copy + MeshFacetsAABB PER CHART (cheap; the
-  global nearest query runs on the union or on the full-mesh AABB).
-- Sample per TARGET FACET, not per corner: anchor the facet by its
-  centroid's globally nearest hit -> that hit's chart; then query ALL of
-  that facet's corners against that chart's AABB only.
-- Result: every target facet is internally chart-consistent, and the
-  discontinuity falls exactly on target facet BOUNDARIES - where
-  corner-domain attributes represent seams natively (adjacent facets
-  store different corner values at the shared vertices). The residual
-  artifact is benign and standard: a facet straddling the source seam
-  clamps its far corners to the chart boundary (a one-facet-wide stretch
-  band instead of a full texture sweep).
-- Channels without wrap topology (colors, normals, aniso control) do not
-  need chart gating, but running them through it is harmless - one code
-  path.
+Never fract()/wrap anywhere in the transfer. Tiling continuation
+(u: 0.8 -> 1.2 across an edge) is CONTINUOUS and must not be treated as
+a seam; a seam exists only where the two facets' corner values across a
+shared edge DISAGREE (author discontinuity, e.g. u jumps 3.95 -> 0.0).
+Chart decomposition therefore runs in VALUE space: connected components
+of source facets under "shared edge whose corner values match within
+epsilon". Projected values keep their > 1 ranges verbatim - the GPU's
+sampler wrap does the tiling, exactly as on the source.
+
+### Why naive sampling smears
+
+With independent per-corner nearest queries, two corners of the SAME
+target facet can land on opposite sides of a source seam (u~3.95 next
+to u~0.0), and rasterization sweeps the whole tiled texture backwards
+across that facet - the classic stripe Blender Data Transfer / Houdini
+AttribTransfer show. The seam does not align with target topology, so
+without topology changes the discontinuity would cut THROUGH target
+facets, which corner-domain storage cannot represent.
+
+### Exact seam imprinting (cut the target along the projected seam)
+
+Project the seam INTO the target: insert vertices and split crossed
+facets so the seam curve becomes real target edges, then sample each
+side from its own chart. Corner-domain values on the two sides of the
+new edges reproduce the source seam's two sides exactly.
+
+1. **Label** every target vertex with its nearest chart (per-chart
+   triangulated AABBs; only charts within the distance bound compete).
+   Facets whose vertices share one label - the vast majority - sample
+   that chart directly, no cutting.
+2. **Contour** mixed-label facets: for the two competing charts define
+   the scalar field d(v) = dist_chartA(v) - dist_chartB(v) on the
+   facet's vertices. Zero crossings along facet edges give cut points
+   (linear root first, refined by a few bisection steps against the
+   actual chart distances). Each crossing is computed ONCE per edge and
+   shared by both adjacent facets - watertight, no T-junctions.
+3. **Split** the facet along the crossing chord(s): convex facets by
+   chord insertion; multi-crossing / junction cases by a 2D CDT in the
+   facet plane. Crossings within epsilon of an existing vertex snap to
+   it (sliver control; the vertex becomes an on-seam vertex).
+4. **Sample** each sub-facet from its single chart as in the core
+   algorithm. The new edge chain IS the seam: both sides evaluate at
+   identical 3D positions against their own chart, so the value pairs
+   along the cut match the source seam's two sides exactly - including
+   tiled ranges (4.0 on one side, 0.0 on the other).
+
+New cut vertices ride the existing `Geometry_operation` machinery: an
+edge split at parameter t registers provenance weights (1-t, t) from the
+edge endpoints (a per-edge-position variant of `make_edge_midpoints`),
+so positions, normals and every OTHER attribute interpolate through the
+standard `interpolate_mesh_attributes()` path for free; only the
+projected channel is written by chart sampling.
+
+Why bisector contouring instead of geometrically projecting each source
+seam segment: the chart-distance zero set is a well-defined scalar
+contour evaluated ON the target surface - it cannot fold or
+self-intersect on concave targets, terminates/closes naturally, and is
+by construction consistent with the sampling rule (each side samples its
+nearest chart). Its deviation from the seam's true geometric image
+shrinks with proxy-target distance (zero for a proxy on the surface);
+for distant proxies the `along_normal` method constrains the
+correspondence if the geometric image is preferred.
+
+- `cut_seams` node parameter, default ON for UV-like channels; OFF falls
+  back to per-facet chart-coherent sampling (clamp band at seams, no
+  topology change) for consumers that must keep vertex count.
+- Vertex/facet growth is bounded by the number of seam-facet crossings -
+  a handful of cuts along one seam line on typical meshes.
+- Channels without wrap topology (colors, normals, aniso control) skip
+  cutting by default but share the chart-coherence code path.
 - Interactions: `max_distance` misses produce a hard projected/retained
   boundary by construction (only when the cap is opted into). Backface
-  rejection composes well - on thin shells the two sides are usually
-  distinct charts, so per-facet anchoring keeps each side sampling its
-  own side. Facet-level chart anchoring also makes the along_normal
-  method deterministic near seams.
+  rejection composes - on thin shells the two sides are distinct charts,
+  so labeling keeps each side sampling its own side.
 
 ## Graph integration
 
@@ -136,12 +180,15 @@ AUTHORED layouts; atlas alone gives arbitrary charts.
 ## Verification plan
 
 - gtest in erhe_geometry tests: cube -> displaced-cube projection
-  (channel values match analytically), seam preservation (cylinder-UV
-  source with a u-wrap seam -> NO target facet spans more than ~one
-  source cell in UV space, i.e. no wrap-around smear; per-facet chart
-  consistency asserted directly), miss fallback (max_distance small ->
-  target values retained), normal rejection (two-sided thin plate does
-  not sample the far side).
+  (channel values match analytically); tiled-UV seam imprint (cylinder
+  source with u in 0..4 and a 4.0 -> 0.0 seam projected onto a rotated
+  cylinder target: (a) after the cut NO facet straddles the seam, (b)
+  the cut-edge corners carry exactly 4.0 / 0.0 per side, (c) interior
+  tiling-continuation edges (u crossing 1.0, 2.0, ...) trigger NO cuts,
+  (d) watertightness - every cut point shared by both adjacent facets,
+  no T-junctions); miss fallback (max_distance small -> target values
+  retained); normal rejection (two-sided thin plate does not sample the
+  far side).
 - In-editor: fish body + cylinder proxy, ERHE_SHADER_DEBUG texcoord view
   (fract(v_texcoord_0) - creation 18's debug session) shows a continuous
   cylindrical gradient instead of per-quad moire.
