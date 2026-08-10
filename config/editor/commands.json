@@ -24,7 +24,7 @@
                 "_version": 2,
                 "directional_light_intensity": 4,
                 "directional_light_radius": 30,
-                "directional_light_height": 4.0,
+                "directional_light_height": 40.0,
                 "directional_light_shadow_count": 7,
                 "directional_light_no_shadow_count": 0,
                 "spot_light_intensity": 500,
@@ -49,16 +49,6 @@
         },
         {
             "name": "scene.add_platonic_solids",
-            "args": {
-                "instance_count": 1,
-                "instance_gap": 0.5,
-                "object_scale": 0.25,
-                "detail": 4,
-                "mass_scale": 0
-            }
-        },
-        {
-            "name": "scene.add_curved_shapes",
             "args": {
                 "instance_count": 1,
                 "instance_gap": 0.5,
