@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <future>
 #include <memory>
@@ -31,12 +32,16 @@ namespace erhe::primitive {
 namespace erhe::scene {
     class Node;
 }
+namespace erhe::scene_renderer {
+    enum class Shader_debug : uint16_t;
+}
 
 namespace editor {
 
 class App_context;
 class Brush;
 class Scene_root;
+class Viewport_scene_view;
 
 // Represents a single MCP tool descriptor
 struct Mcp_tool_info
@@ -244,6 +249,8 @@ private:
     auto action_create_physics_joint_settings(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_joint_settings  (const nlohmann::json& args) -> std::string;
     auto action_capture_screenshot           (const nlohmann::json& args) -> std::string;
+    auto action_push_shader_debug             (const nlohmann::json& args) -> std::string;
+    auto action_pop_shader_debug              (const nlohmann::json& args) -> std::string;
     auto action_set_mesh_component_mode       (const nlohmann::json& args) -> std::string;
     auto action_select_mesh_components        (const nlohmann::json& args) -> std::string;
     auto action_grow_mesh_selection           (const nlohmann::json& args) -> std::string;
@@ -377,6 +384,17 @@ private:
     // (e.g. a minimized window that never renders).
     bool                                             m_defer_current_request{false};
     std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
+
+    // Saved per-view shader debug modes for push_shader_debug /
+    // pop_shader_debug (LIFO). Views that disappear between push and pop
+    // (weak_ptr expired) are skipped on restore.
+    class Saved_shader_debug
+    {
+    public:
+        std::weak_ptr<Viewport_scene_view> scene_view;
+        erhe::scene_renderer::Shader_debug shader_debug;
+    };
+    std::vector<std::vector<Saved_shader_debug>>     m_shader_debug_stack;
 };
 
 } // namespace editor

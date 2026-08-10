@@ -684,6 +684,15 @@ void Mcp_server::refresh_tool_list()
             {"path", {{"type", "string"}, {"description", "Output PNG path (default logs/mcp_screenshot.png)"}}}
         }}
     }});
+    m_tool_infos.push_back({"push_shader_debug", "Push a shader debug view onto the viewport scene views: saves each affected view's current Shader Debug mode on a LIFO stack and sets the given mode, so pop_shader_debug can restore the user's own setting afterwards. Typical use: push texcoord debug, capture_screenshot, pop. Values follow erhe::scene_renderer::Shader_debug / the viewport's Shader Debug combo: 0 none, 1 vertex normal, 2 fragment normal, 4 tangent, 7 texcoord_0 (authored/interpolated UVs), 8 texcoord_1 (generated facet UVs), 9 base color texture, 10 vertex color RGB, 14 V.N, 24 metallic, 25 roughness, 32 texcoord_2 (lightmap UVs).", {
+        {"type", "object"},
+        {"properties", {
+            {"shader_debug", {{"type", "integer"}, {"description", "Shader debug mode to set (Shader_debug enum value, e.g. 7 = texcoord_0)"}}},
+            {"viewport",     {{"type", "string"},  {"description", "Viewport window title (see get_viewports) to affect only that view; default: all viewport scene views"}}}
+        }},
+        {"required", json::array({"shader_debug"})}
+    }});
+    m_tool_infos.push_back({"pop_shader_debug", "Pop the most recent push_shader_debug entry and restore the saved per-view Shader Debug modes. Views closed since the push are skipped. Errors when the stack is empty.", schema_no_args()});
     m_tool_infos.push_back({"set_ray_trace", "Enable/disable the GPU ray tracing renderer (issue #233: material-aware ray query compute shader with lights, traced shadows and glass, rendered into the texture shown in the Ray Trace window) and optionally show that window / adjust its settings. Returns supported/enabled state and the instance count gathered on the last traced frame. Requires a Vulkan device with ray query + position fetch support.", {
         {"type", "object"},
         {"properties", {

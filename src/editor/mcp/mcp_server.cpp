@@ -531,6 +531,8 @@ auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& ar
         { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
         { "get_prefabs",                    &Mcp_server::query_prefabs                        },
         { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
+        { "push_shader_debug",              &Mcp_server::action_push_shader_debug             },
+        { "pop_shader_debug",               &Mcp_server::action_pop_shader_debug              },
         { "wake_physics_bodies",            &Mcp_server::action_wake_physics_bodies           },
         { "get_physics_items",              &Mcp_server::query_physics_items                  },
         { "get_physics_state",              &Mcp_server::query_get_physics_state              },

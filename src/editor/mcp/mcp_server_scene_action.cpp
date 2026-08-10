@@ -15,7 +15,10 @@
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
 #include "windows/viewport_config_window.hpp"
+#include "windows/viewport_window.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
+#include "scene/viewport_scene_view.hpp"
+#include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -739,6 +742,80 @@ auto Mcp_server::action_lightmap_set_render(const json& args) -> std::string
     return make_json_content({
         {"render_with_lightmaps", m_context.lightmap_partitioner->get_render_with_lightmaps()},
         {"prepared",              m_context.lightmap_partitioner->is_prepared()}
+    }).dump();
+}
+
+auto Mcp_server::action_push_shader_debug(const json& args) -> std::string
+{
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("No scene views available");
+    }
+    if (!args.contains("shader_debug")) {
+        return make_error_content("Missing required argument: shader_debug (Shader_debug enum value, e.g. 7 = texcoord_0)");
+    }
+    const int  value       = args.value("shader_debug", 0);
+    const int  value_count = static_cast<int>(std::size(erhe::scene_renderer::c_shader_debug_strings));
+    if ((value < 0) || (value >= value_count)) {
+        return make_error_content(
+            fmt::format("shader_debug out of range: {} (valid range 0..{})", value, value_count - 1)
+        );
+    }
+    const std::string viewport_title = args.value("viewport", std::string{});
+
+    std::vector<Saved_shader_debug> saved{};
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+        if (!scene_view) {
+            continue;
+        }
+        if (!viewport_title.empty() && (viewport_window->get_title() != viewport_title)) {
+            continue;
+        }
+        saved.push_back(
+            Saved_shader_debug{
+                .scene_view   = scene_view,
+                .shader_debug = scene_view->get_shader_debug()
+            }
+        );
+        scene_view->set_shader_debug(static_cast<erhe::scene_renderer::Shader_debug>(value));
+    }
+    if (saved.empty()) {
+        return make_error_content(
+            viewport_title.empty()
+                ? std::string{"No viewport scene views available"}
+                : fmt::format("No viewport window titled '{}' (see get_viewports)", viewport_title)
+        );
+    }
+    const std::size_t viewport_count = saved.size();
+    m_shader_debug_stack.push_back(std::move(saved));
+    return make_json_content({
+        {"shader_debug", value},
+        {"mode",         erhe::scene_renderer::c_shader_debug_strings[value]},
+        {"viewports",    viewport_count},
+        {"depth",        m_shader_debug_stack.size()}
+    }).dump();
+}
+
+auto Mcp_server::action_pop_shader_debug(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_shader_debug_stack.empty()) {
+        return make_error_content("Shader debug stack is empty - nothing to pop (push_shader_debug first)");
+    }
+    const std::vector<Saved_shader_debug> saved = std::move(m_shader_debug_stack.back());
+    m_shader_debug_stack.pop_back();
+    std::size_t restored = 0;
+    for (const Saved_shader_debug& entry : saved) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = entry.scene_view.lock();
+        if (scene_view) {
+            scene_view->set_shader_debug(entry.shader_debug);
+            ++restored;
+        }
+    }
+    return make_json_content({
+        {"restored", restored},
+        {"skipped",  saved.size() - restored},
+        {"depth",    m_shader_debug_stack.size()}
     }).dump();
 }
 
