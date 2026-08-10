@@ -769,11 +769,11 @@ void main()
 #  elif ERHE_SHADER_DEBUG == 6 // bitangent
         out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * B);
 #  elif ERHE_SHADER_DEBUG == 7 // texcoord_0
-        out_color.rgb = srgb_to_linear(vec3(v_texcoord_0, 0.0));
+        out_color.rgb = srgb_to_linear(vec3(fract(v_texcoord_0), 0.0));
 #  elif ERHE_SHADER_DEBUG == 8 // texcoord_1
-        out_color.rgb = srgb_to_linear(vec3(v_texcoord_1, 0.0));
+        out_color.rgb = srgb_to_linear(vec3(fract(v_texcoord_1), 0.0));
 #  elif ERHE_SHADER_DEBUG == 32 // texcoord_2 (lightmap UVs)
-        out_color.rgb = srgb_to_linear(vec3(v_texcoord_2, 0.0));
+        out_color.rgb = srgb_to_linear(vec3(fract(v_texcoord_2), 0.0));
 #  elif ERHE_SHADER_DEBUG == 9 // base_color_texture
 #    ifdef ERHE_USE_BASE_COLOR_TEXTURE
         out_color.rgb = srgb_to_linear(base_color);
