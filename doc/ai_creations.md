@@ -8,7 +8,8 @@ end to end (geometry, materials, procedural textures, lighting, physics),
 frames the camera, screenshots itself for iteration, and saves the scene
 as glTF. Seventeen creations exist, from a Conway-automaton cathedral to
 physics-settled rock piles; `git log -- scripts/creations` carries the
-per-creation history.
+per-creation history, and video recordings are collected in the
+[erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N).
 
 This document maps the creation features to the editor features they are
 built on. The **canonical workflow guide** (read before building or
@@ -404,3 +405,6 @@ geometry-node sculpture built from a different Conway operator chain
   (181 tools as of 2026-08-10); `scripts/mcp_call.py --list` against a
   running editor prints the live list.
 - `scripts/creations/common.py` - the client API described above.
+- [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N) -
+  video recordings (the scripts' `--pause` flag exists exactly for
+  starting a screen recording before the scene builds up).
