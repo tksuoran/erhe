@@ -137,11 +137,14 @@ void Truncate::build()
             continue;
         }
 
+        // Split-point corners keep only this facet's share of the split
+        // vertex's corner sources so corner attributes (texcoord seams, hard
+        // corner normals) are not blended across the edge.
         const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(src_corner_count * 2);
         GEO::index_t dst_corner = 0;
         for (const auto& [a, b] : edge_pairs) {
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, a);
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, dst_corner++, b);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, dst_corner++, a, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, dst_corner++, b, src_facet);
         }
     }
 
@@ -175,9 +178,9 @@ void Truncate::build()
                 continue;
             }
             const GEO::index_t new_dst_facet = destination_mesh.facets.create_triangles(1);
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, 0, a_next);
-            make_new_dst_corner_from_dst_vertex(new_dst_facet, 1, b_prev);
-            make_new_dst_corner_from_src_corner(new_dst_facet, 2, src_corner);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 0, a_next, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 1, b_prev, src_facet);
+            make_new_dst_corner_from_src_corner            (new_dst_facet, 2, src_corner);
         }
     }
 

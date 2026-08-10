@@ -78,12 +78,16 @@ void Gyro::build()
                 next_edge_midpoint_0     == GEO::NO_VERTEX) {
                 continue;
             }
+            // Split-point corners keep only this facet's share of the split
+            // vertex's corner sources (registered with the ratio / 1 - ratio
+            // weights) so corner attributes (texcoord seams, hard corner
+            // normals) are not blended across the edge.
             const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 5);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 0, previous_edge_midpoint_0);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 1, previous_edge_midpoint_1);
-            make_new_dst_corner_from_src_corner        (new_dst_facet, 2, src_corner);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 3, next_edge_midpoint_0);
-            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 4, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 0, previous_edge_midpoint_0, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 1, previous_edge_midpoint_1, src_facet);
+            make_new_dst_corner_from_src_corner            (new_dst_facet, 2, src_corner);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 3, next_edge_midpoint_0, src_facet);
+            make_new_dst_corner_from_src_facet_centroid    (new_dst_facet, 4, src_facet);
         }
     }
 

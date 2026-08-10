@@ -81,9 +81,14 @@ public:
                 continue;
             }
 
+            // Midpoint corners keep only this facet's share of the midpoint
+            // vertex's corner sources so corner attributes (texcoord seams,
+            // hard corner normals) are not blended across the edge. The
+            // vertex-faces above have no single source facet and keep the
+            // cross-facet average.
             const GEO::index_t new_dst_facet = destination_mesh.facets.create_polygon(src_facet_corner_count);
             for (GEO::index_t i = 0; i < src_facet_corner_count; ++i) {
-                make_new_dst_corner_from_dst_vertex(new_dst_facet, i, midpoints[i]);
+                make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, i, midpoints[i], src_facet);
             }
         }
 

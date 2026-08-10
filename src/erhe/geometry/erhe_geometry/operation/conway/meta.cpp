@@ -114,15 +114,18 @@ void Meta::build()
             if (next_edge_midpoint == GEO::NO_VERTEX) {
                 continue;
             }
+            // Midpoint corners keep only this facet's share of the midpoint
+            // vertex's corner sources so corner attributes (texcoord seams,
+            // hard corner normals) are not blended across the edge.
             const GEO::index_t new_dst_facet_a = make_new_dst_facet_from_src_facet(src_facet, 3);
             const GEO::index_t new_dst_facet_b = make_new_dst_facet_from_src_facet(src_facet, 3);
-            make_new_dst_corner_from_src_facet_centroid(new_dst_facet_a, 0, src_facet);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet_a, 1, previous_edge_midpoint);
-            make_new_dst_corner_from_src_corner        (new_dst_facet_a, 2, src_corner);
+            make_new_dst_corner_from_src_facet_centroid    (new_dst_facet_a, 0, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet_a, 1, previous_edge_midpoint, src_facet);
+            make_new_dst_corner_from_src_corner            (new_dst_facet_a, 2, src_corner);
 
-            make_new_dst_corner_from_src_facet_centroid(new_dst_facet_b, 0, src_facet);
-            make_new_dst_corner_from_src_corner        (new_dst_facet_b, 1, src_corner);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet_b, 2, next_edge_midpoint);
+            make_new_dst_corner_from_src_facet_centroid    (new_dst_facet_b, 0, src_facet);
+            make_new_dst_corner_from_src_corner            (new_dst_facet_b, 1, src_corner);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet_b, 2, next_edge_midpoint, src_facet);
         }
     }
 

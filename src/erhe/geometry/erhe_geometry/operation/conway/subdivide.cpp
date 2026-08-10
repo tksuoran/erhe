@@ -111,11 +111,14 @@ void Subdivide::build()
             if (next_edge_midpoint == GEO::NO_VERTEX) {
                 continue;
             }
+            // Midpoint corners keep only this facet's share of the midpoint
+            // vertex's corner sources so corner attributes (texcoord seams,
+            // hard corner normals) are not blended across the edge.
             const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, 4);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 0, previous_edge_midpoint);
-            make_new_dst_corner_from_src_corner        (new_dst_facet, 1, src_corner);
-            make_new_dst_corner_from_dst_vertex        (new_dst_facet, 2, next_edge_midpoint);
-            make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 3, src_facet);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 0, previous_edge_midpoint, src_facet);
+            make_new_dst_corner_from_src_corner            (new_dst_facet, 1, src_corner);
+            make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, 2, next_edge_midpoint, src_facet);
+            make_new_dst_corner_from_src_facet_centroid    (new_dst_facet, 3, src_facet);
         }
     }
 

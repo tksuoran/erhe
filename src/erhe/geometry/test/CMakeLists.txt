@@ -18,6 +18,7 @@ add_executable(${_target}
     test_chamfer_self_intersection.cpp
     test_clip_tile_tree.cpp
     test_component_selection_remap.cpp
+    test_conway_texcoord_seam.cpp
     test_csg.cpp
     test_edge_sharpness.cpp
     test_geometry_operation.cpp

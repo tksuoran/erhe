@@ -78,7 +78,27 @@ lazy resize and `add(dst, weight, src)` API):
 
 - **`make_new_dst_corner_from_dst_vertex(dst_facet, local_corner, dst_vertex)`**
   - sets a corner's vertex to an existing destination vertex (e.g.,
-  an edge midpoint) and distributes corner sources.
+  an edge midpoint) and distributes corner sources. Note: a shared
+  midpoint vertex carries corner sources from every facet around the
+  edge, so this blends face-varying attributes (texcoord seams, hard
+  corner normals) across the edge. Facets that derive from a single
+  source facet should use one of the seam-aware variants instead.
+
+- **`make_new_dst_corner_from_dst_vertex_linear(dst_facet, local_corner, dst_vertex, src_corner_a, src_corner_b)`**
+  - seam-aware midpoint corner: sources corner attributes 0.5 / 0.5
+  from the two edge endpoint corners of the facet the destination
+  facet derives from (linear face-varying rule). Used by
+  Catmull-Clark.
+
+- **`make_new_dst_corner_from_dst_vertex_facet_local(dst_facet, local_corner, dst_vertex, src_facet)`**
+  - seam-aware midpoint corner: distributes only the vertex corner
+  sources whose corner belongs to `src_facet`, keeping their
+  registered split weights (works for non-0.5 splits, e.g. gyro /
+  truncate). Falls back to all sources when the vertex carries none
+  from `src_facet`. Used by the Conway operations and the boundary
+  splice. Facets that genuinely span several source facets (dual,
+  join, vertex-faces in ambo / truncate) keep the cross-facet
+  average - there is no facet-local value for them.
 
 ### Attribute Interpolation
 
