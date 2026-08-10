@@ -22,6 +22,13 @@ using erhe::geometry::operation::Geometry_component_selection;
 
 namespace {
 
+constexpr uint64_t full_flags =
+    Geometry::process_flag_connect |
+    Geometry::process_flag_build_edges |
+    Geometry::process_flag_compute_facet_centroids |
+    Geometry::process_flag_compute_smooth_vertex_normals |
+    Geometry::process_flag_generate_facet_texture_coordinates;
+
 // A subdivided box whose connectivity / edge caches exist (process() run), so the
 // selection-aware operations and the edge remap have edges to work with.
 auto make_box_geometry(const int div) -> std::unique_ptr<Geometry>
@@ -123,7 +130,7 @@ TEST(ComponentSelectionRemap, Face_CatmullClark_Maps_Selected_Facet_To_Its_Subfa
     Component_remap              remap{&remap_source, &remap_destination};
 
     std::unique_ptr<Geometry> result = std::make_unique<Geometry>("cc_face");
-    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, &selected_facets, &remap);
+    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, &selected_facets, &remap, full_flags, full_flags);
 
     const std::set<GEO::index_t> expected = facets_inside_source_facet_bbox(*box, 0, *result);
     EXPECT_EQ(expected.size(), 4u) << "Catmull-Clark of a quad facet should yield four sub-quads";
@@ -168,7 +175,7 @@ TEST(ComponentSelectionRemap, Vertex_CatmullClark_Maps_Selected_Vertices_To_Imag
     Component_remap               remap{&remap_source, &remap_destination};
 
     std::unique_ptr<Geometry> result = std::make_unique<Geometry>("cc_vertex");
-    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, nullptr, &remap);
+    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, nullptr, &remap, full_flags, full_flags);
 
     EXPECT_EQ(remap_destination.vertices, selected_vertices);
     EXPECT_TRUE(remap_destination.facets.empty());
@@ -198,7 +205,7 @@ TEST(ComponentSelectionRemap, Edge_CatmullClark_Splits_Selected_Edge_Into_Two_Su
     Component_remap              remap{&remap_source, &remap_destination};
 
     std::unique_ptr<Geometry> result = std::make_unique<Geometry>("cc_edge");
-    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, nullptr, &remap);
+    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, nullptr, &remap, full_flags, full_flags);
 
     ASSERT_EQ(remap_destination.edges.size(), 2u) << "a once-split edge should yield two sub-edges";
     EXPECT_TRUE(remap_destination.facets.empty());

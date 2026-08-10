@@ -25,6 +25,13 @@ using erhe::geometry::Geometry;
 
 namespace {
 
+constexpr uint64_t full_flags =
+    Geometry::process_flag_connect |
+    Geometry::process_flag_build_edges |
+    Geometry::process_flag_compute_facet_centroids |
+    Geometry::process_flag_compute_smooth_vertex_normals |
+    Geometry::process_flag_generate_facet_texture_coordinates;
+
 // A flat-shaded box stores one axis-aligned corner_normal on every surface
 // corner. "Axis-aligned" means the normal is (up to sign) one of the unit axes.
 auto is_axis_aligned(const GEO::vec3f n) -> bool
@@ -103,7 +110,7 @@ TEST(SelectiveOperationNormals, Selective_CatmullClark_Keeps_Unmodified_Region_F
 
     std::set<GEO::index_t> selected_facets{0};
     std::unique_ptr<Geometry> result = std::make_unique<Geometry>("cc_subset");
-    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, &selected_facets);
+    erhe::geometry::operation::catmull_clark_subdivision(*box, *result, &selected_facets, nullptr, full_flags, full_flags);
 
     const GEO::Mesh& mesh = result->get_mesh();
     const erhe::geometry::Mesh_attributes& attr = result->get_attributes();
@@ -637,7 +644,7 @@ TEST(SelectiveOperationNormals, Selective_Sqrt3_Watertight_And_Keeps_Unmodified_
     ASSERT_TRUE(interior_selected(0)) << "vertex 0 should be interior to the selection";
 
     std::unique_ptr<Geometry> result = std::make_unique<Geometry>("sqrt3_subset");
-    erhe::geometry::operation::sqrt3_subdivision(*box, *result, &selected_facets);
+    erhe::geometry::operation::sqrt3_subdivision(*box, *result, &selected_facets, nullptr, full_flags, full_flags);
 
     const GEO::Mesh& mesh = result->get_mesh();
     const erhe::geometry::Mesh_attributes& attr = result->get_attributes();

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/operation/post_processing.hpp"
 #include <geogram/mesh/mesh.h>
 
 #include <set>
@@ -94,7 +93,6 @@ public:
     // with no destination image are dropped. dst is cleared first.
     void remap_component_selection(const Geometry_component_selection& src, Geometry_component_selection& dst) const;
 
-protected:
     // Default finalization: rebuild connectivity / edges / centroids and
     // regenerate smooth vertex normals and facet texture coordinates.
     static constexpr uint64_t default_post_process_flags =
@@ -112,6 +110,7 @@ protected:
         erhe::geometry::Geometry::process_flag_build_edges |
         erhe::geometry::Geometry::process_flag_compute_facet_centroids;
 
+protected:
     void post_processing(uint64_t process_flags = default_post_process_flags);
 
     // regeneration_flags names the process flags whose regenerated channels
@@ -119,14 +118,9 @@ protected:
     // regenerates them itself (the single-argument overload passes
     // process_flags), or because the caller declared them throwaway (an
     // iterated subdivision chain processes intermediates structurally but
-    // passes default_post_process_flags here: the chain's final full
+    // passes flags that include them here: the chain's final full
     // post-processing re-derives those channels from positions anyway).
     void post_processing(uint64_t process_flags, uint64_t regeneration_flags);
-
-    // Maps the caller-facing Post_processing level to the process flag sets
-    // above, for entry points that let the caller choose (iterated
-    // subdivision chains).
-    [[nodiscard]] static auto post_process_flags(Post_processing post_processing_level) -> uint64_t;
 
     // Runs Geogram's exact-arithmetic mesh_boolean_operation() ("A+B",
     // "A*B", "A-B") for the two-source constructor. Geogram's CSG reads

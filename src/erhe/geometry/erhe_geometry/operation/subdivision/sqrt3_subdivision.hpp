@@ -1,9 +1,8 @@
 #pragma once
 
-#include "erhe_geometry/operation/post_processing.hpp"
-
 #include <geogram/basic/numeric.h>
 
+#include <cstdint>
 #include <set>
 
 namespace erhe::geometry { class Geometry; }
@@ -20,8 +19,9 @@ class Component_remap;
 // selected side) so the unselected neighbor welds to it, selection-boundary vertices
 // are pinned, and the unselected facets are copied through. The selected region stays
 // watertight with the rest of the mesh.
-// Iterated chains pass Post_processing::structural_only for intermediate
-// iterations (see post_processing.hpp); the final iteration keeps full_default.
-void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets = nullptr, Component_remap* remap = nullptr, Post_processing post_processing_level = Post_processing::full_default);
+// post_process_flags / regeneration_flags: exact Geometry::process_flag_* sets,
+// see catmull_clark_subdivision.hpp (pass post_process_flags again as
+// regeneration_flags for a standalone call).
+void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, uint64_t post_process_flags, uint64_t regeneration_flags);
 
 } // namespace erhe::geometry::operation

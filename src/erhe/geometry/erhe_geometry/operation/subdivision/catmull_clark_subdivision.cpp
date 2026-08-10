@@ -12,7 +12,7 @@ class Catmull_clark_subdivision : public Geometry_operation
 {
 public:
     Catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets);
-    void build(Post_processing post_processing_level);
+    void build(uint64_t post_process_flags, uint64_t regeneration_flags);
 };
 
 // E = average of two neighboring facet vertices and original endpoints
@@ -35,7 +35,7 @@ Catmull_clark_subdivision::Catmull_clark_subdivision(const Geometry& source, Geo
     m_selected_facets = selected_facets;
 }
 
-void Catmull_clark_subdivision::build(const Post_processing post_processing_level)
+void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const uint64_t regeneration_flags)
 {
     const GEO::index_t vertex_count = source_mesh.vertices.nb();
     const GEO::index_t edge_count   = source_mesh.edges.nb();
@@ -573,11 +573,7 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
     }
 #endif
 
-    // regeneration_flags is always the full default set: with structural_only
-    // the caller (an iterated chain) has declared the regenerated-class
-    // channels throwaway - the chain's final full post-processing re-derives
-    // them from positions - so their interpolation is skipped as well.
-    post_processing(post_process_flags(post_processing_level), default_post_process_flags);
+    post_processing(post_process_flags, regeneration_flags);
 
     // Propagate child sharpness onto the destination edges. This must run
     // after post_processing(): the destination edge store only exists once
@@ -615,10 +611,10 @@ void Catmull_clark_subdivision::build(const Post_processing post_processing_leve
     }
 }
 
-void catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const Post_processing post_processing_level)
+void catmull_clark_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const uint64_t post_process_flags, const uint64_t regeneration_flags)
 {
     Catmull_clark_subdivision operation{source, destination, selected_facets};
-    operation.build(post_processing_level);
+    operation.build(post_process_flags, regeneration_flags);
     if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
         operation.remap_component_selection(*remap->source, *remap->destination);
     }

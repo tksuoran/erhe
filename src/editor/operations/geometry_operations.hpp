@@ -13,16 +13,20 @@ namespace erhe::geometry { class Geometry; }
 
 namespace editor {
 
+// post_process_flags: exact Geometry::process_flag_* set the subdivision's
+// post-processing runs (must include connect + build_edges + centroids); the
+// Operations window composes it from the Generate UVs checkbox.
 class Catmull_clark_subdivision_operation : public Mesh_operation
 {
 public:
-    explicit Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context);
+    Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context, uint64_t post_process_flags);
 };
 
+// post_process_flags: see Catmull_clark_subdivision_operation.
 class Sqrt3_subdivision_operation : public Mesh_operation
 {
 public:
-    explicit Sqrt3_subdivision_operation(Mesh_operation_parameters&& context);
+    Sqrt3_subdivision_operation(Mesh_operation_parameters&& context, uint64_t post_process_flags);
 };
 
 class Triangulate_operation : public Mesh_operation

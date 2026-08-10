@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Operation_params",
-    version=1,
+    version=2,
     short_desc="Operation parameters",
     long_desc="Frozen snapshot of the Operations-window parameter sliders, captured when an operation is dragged into an inventory slot and replayed verbatim when the slot is invoked. An all-scalar superset of every operation's parameters; an operation reads only the field(s) it needs and ignores the rest.",
     developer=False,
@@ -17,6 +17,7 @@ struct("Operation_params",
         field("smooth_iterations",            Int,   added_in=1, default="5",          short_desc="Smooth iterations",          long_desc="Smooth: number of Taubin lambda/mu cycles.",                                         visible=True, developer=False),
         field("smooth_strength",              Float, added_in=1, default="0.5f",       short_desc="Smooth strength",            long_desc="Smooth: per-step Laplacian strength (lambda).",                                      visible=True, developer=False),
         field("remesh_regenerate_attributes", Bool,  added_in=1, default="true",       short_desc="Remesh regenerate attrs",    long_desc="When on, the remesh family recomputes smooth normals and texture coordinates.",      visible=True, developer=False),
+        field("subdivision_generate_texcoords", Bool, added_in=2, default="true",      short_desc="Subdivision generate UVs",   long_desc="Catmull-Clark / Sqrt3: when on, post-processing regenerates facet texture coordinates; when off the source UVs are interpolated through.", visible=True, developer=False),
         field("atlas_texcoord_slot",          Int,   added_in=1, default="0",          short_desc="Atlas texcoord slot",        long_desc="Make Atlas: target corner texcoord channel (0 or 1) the generated UVs overwrite.",   visible=True, developer=False),
         field("atlas_hard_angles_deg",        Float, added_in=1, default="45.0f",      short_desc="Atlas hard angles (deg)",    long_desc="Make Atlas: dihedral angle above which an edge becomes a chart boundary.",           visible=True, developer=False),
         field("atlas_parameterizer",          Int,   added_in=1, default="3",          short_desc="Atlas parameterizer",        long_desc="Make Atlas: per-chart parameterizer index (0 Projection, 1 LSCM, 2 Spectral, 3 ABF).", visible=True, developer=False),

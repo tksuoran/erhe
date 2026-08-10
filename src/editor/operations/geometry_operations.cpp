@@ -48,12 +48,12 @@ using erhe::geometry::to_geo_mat4f;
 
 namespace editor {
 
-Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context)
+Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_operation_parameters&& context, const uint64_t post_process_flags)
     : Mesh_operation{std::move(context)}
 {
     set_description("Catmull_clark");
     make_entries(
-        [](
+        [post_process_flags](
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
@@ -62,18 +62,18 @@ Catmull_clark_subdivision_operation::Catmull_clark_subdivision_operation(Mesh_op
             erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
             erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
-            erhe::geometry::operation::catmull_clark_subdivision(before_geometry, after_geometry, selected_facets, &remap);
+            erhe::geometry::operation::catmull_clark_subdivision(before_geometry, after_geometry, selected_facets, &remap, post_process_flags, post_process_flags);
         }
     );
     set_description(fmt::format("Catmull_clark {}", describe_entries()));
 }
 
-Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_parameters&& context)
+Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_parameters&& context, const uint64_t post_process_flags)
     : Mesh_operation{std::move(context)}
 {
     set_description("Sqrt3");
     make_entries(
-        [](
+        [post_process_flags](
             const erhe::geometry::Geometry& before_geometry,
             erhe::geometry::Geometry&       after_geometry,
             erhe::scene::Node*              /*node*/,
@@ -82,7 +82,7 @@ Sqrt3_subdivision_operation::Sqrt3_subdivision_operation(Mesh_operation_paramete
             erhe::geometry::operation::Geometry_component_selection*       remap_destination
         ) -> void {
             erhe::geometry::operation::Component_remap remap{remap_source, remap_destination};
-            erhe::geometry::operation::sqrt3_subdivision(before_geometry, after_geometry, selected_facets, &remap);
+            erhe::geometry::operation::sqrt3_subdivision(before_geometry, after_geometry, selected_facets, &remap, post_process_flags, post_process_flags);
         }
     );
     set_description(fmt::format("Sqrt3 {}", describe_entries()));

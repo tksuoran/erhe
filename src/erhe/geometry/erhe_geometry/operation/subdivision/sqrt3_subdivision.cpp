@@ -10,7 +10,7 @@ class Sqrt3_subdivision : public Geometry_operation
 public:
     Sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets);
 
-    void build(Post_processing post_processing_level);
+    void build(uint64_t post_process_flags, uint64_t regeneration_flags);
 };
 
 Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets)
@@ -32,7 +32,7 @@ Sqrt3_subdivision::Sqrt3_subdivision(const Geometry& source, Geometry& destinati
 //  (2) S(p) := (1 - alpha_n) p + alpha_n 1/n SUM p_i
 //
 //  (6) alpha_n = (4 - 2 cos(2Pi/n)) / 9
-void Sqrt3_subdivision::build(const Post_processing post_processing_level)
+void Sqrt3_subdivision::build(const uint64_t post_process_flags, const uint64_t regeneration_flags)
 {
     constexpr static float pi = 3.141592653589793238462643383279502884197169399375105820974944592308f;
 
@@ -153,17 +153,13 @@ void Sqrt3_subdivision::build(const Post_processing post_processing_level)
     }
 #endif
 
-    // regeneration_flags is always the full default set: with structural_only
-    // the caller (an iterated chain) has declared the regenerated-class
-    // channels throwaway - the chain's final full post-processing re-derives
-    // them from positions - so their interpolation is skipped as well.
-    post_processing(post_process_flags(post_processing_level), default_post_process_flags);
+    post_processing(post_process_flags, regeneration_flags);
 }
 
-void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const Post_processing post_processing_level)
+void sqrt3_subdivision(const Geometry& source, Geometry& destination, const std::set<GEO::index_t>* selected_facets, Component_remap* remap, const uint64_t post_process_flags, const uint64_t regeneration_flags)
 {
     Sqrt3_subdivision operation{source, destination, selected_facets};
-    operation.build(post_processing_level);
+    operation.build(post_process_flags, regeneration_flags);
     if ((remap != nullptr) && (remap->source != nullptr) && (remap->destination != nullptr)) {
         operation.remap_component_selection(*remap->source, *remap->destination);
     }

@@ -17,7 +17,6 @@
 
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/operation_timing.hpp"
-#include "erhe_geometry/operation/post_processing.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 
@@ -73,17 +72,25 @@ void run_catmull_clark_chain(const bool structural_intermediates)
         const GEO::index_t src_facet_count  = current->get_mesh().facets.nb();
         const GEO::index_t src_vertex_count = current->get_mesh().vertices.nb();
 
-        const erhe::geometry::operation::Post_processing post_processing_level =
+        constexpr uint64_t structural_flags =
+            erhe::geometry::Geometry::process_flag_connect |
+            erhe::geometry::Geometry::process_flag_build_edges |
+            erhe::geometry::Geometry::process_flag_compute_facet_centroids;
+        constexpr uint64_t full_flags =
+            structural_flags |
+            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+            erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+        const uint64_t post_process_flags =
             (structural_intermediates && ((i + 1) < iteration_count))
-                ? erhe::geometry::operation::Post_processing::structural_only
-                : erhe::geometry::operation::Post_processing::full_default;
+                ? structural_flags
+                : full_flags;
 
         erhe::geometry::operation::Operation_timing timing;
         erhe::geometry::operation::Operation_timing* const previous = erhe::geometry::operation::Operation_timing::install(&timing);
 
         std::unique_ptr<erhe::geometry::Geometry> next = std::make_unique<erhe::geometry::Geometry>("subdivided");
         const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
-        erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_processing_level);
+        erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_process_flags, full_flags);
         const std::chrono::steady_clock::time_point end_time = std::chrono::steady_clock::now();
 
         erhe::geometry::operation::Operation_timing::install(previous);

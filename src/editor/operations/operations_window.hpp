@@ -155,7 +155,9 @@ public:
 
     // Subdivision
     void catmull_clark();
+    void catmull_clark(bool generate_facet_texcoords);
     void sqrt3();
+    void sqrt3(bool generate_facet_texcoords);
 
     // Conway operations
     void dual();
@@ -318,6 +320,12 @@ private:
     erhe::commands::Lambda_command m_truncate_command;
     erhe::commands::Lambda_command m_gyro_command;
     erhe::commands::Lambda_command m_chamfer3_command;
+
+    // Shared by the subdivision operations (Catmull-Clark, Sqrt3): when on, their
+    // post-processing regenerates facet texture coordinates
+    // (process_flag_generate_facet_texture_coordinates); when off the source
+    // texture coordinates are carried through by interpolation instead.
+    bool  m_subdivision_generate_texcoords{true};
 
     float m_bevel_ratio{0.5f};
     float m_truncate_ratio{1.0f / 3.0f};

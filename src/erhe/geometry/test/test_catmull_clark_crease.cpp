@@ -13,7 +13,6 @@
 // midpoint of source edge e is destination vertex 8 + e.
 
 #include "erhe_geometry/geometry.hpp"
-#include "erhe_geometry/operation/post_processing.hpp"
 #include "erhe_geometry/operation/subdivision/catmull_clark_subdivision.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 
@@ -26,7 +25,6 @@
 
 using erhe::geometry::Geometry;
 using erhe::geometry::get_pointf;
-using erhe::geometry::operation::Post_processing;
 using erhe::geometry::operation::catmull_clark_subdivision;
 
 namespace {
@@ -69,10 +67,10 @@ void tag_top_loop(Geometry& geometry, const float sharpness)
     }
 }
 
-auto subdivide(const Geometry& source, const Post_processing post_processing_level = Post_processing::full_default) -> std::unique_ptr<Geometry>
+auto subdivide(const Geometry& source, const uint64_t post_process_flags = process_flags) -> std::unique_ptr<Geometry>
 {
     std::unique_ptr<Geometry> destination = std::make_unique<Geometry>("subdivided");
-    catmull_clark_subdivision(source, *destination, nullptr, nullptr, post_processing_level);
+    catmull_clark_subdivision(source, *destination, nullptr, nullptr, post_process_flags, process_flags);
     return destination;
 }
 
@@ -233,7 +231,11 @@ TEST(Catmull_clark_crease, sharpness_decays_across_chain)
     };
     for (std::size_t level = 0; level < expected_levels.size(); ++level) {
         const bool last = (level + 1) == expected_levels.size();
-        std::unique_ptr<Geometry> next = subdivide(*current, last ? Post_processing::full_default : Post_processing::structural_only);
+        const uint64_t structural_flags =
+            Geometry::process_flag_connect |
+            Geometry::process_flag_build_edges |
+            Geometry::process_flag_compute_facet_centroids;
+        std::unique_ptr<Geometry> next = subdivide(*current, last ? process_flags : structural_flags);
         const std::vector<float> values = collect_destination_sharpness(*next);
         EXPECT_EQ(values.size(), expected_levels[level].first) << "level " << level;
         for (const float value : values) {

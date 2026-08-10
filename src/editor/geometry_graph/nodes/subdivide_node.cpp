@@ -39,18 +39,25 @@ void Subdivide_node::evaluate(Geometry_graph&)
         // Intermediate iterations only need structure (connect + build_edges +
         // centroids): their normals / texture coordinates would be discarded
         // and re-derived from positions by the next iteration. The final
-        // iteration runs the full default post-processing so the output
-        // payload carries them.
-        const erhe::geometry::operation::Post_processing post_processing_level =
-            ((i + 1) < iterations)
-                ? erhe::geometry::operation::Post_processing::structural_only
-                : erhe::geometry::operation::Post_processing::full_default;
+        // iteration also regenerates smooth normals and facet texture
+        // coordinates so the output payload carries them; passing the final
+        // flag set as regeneration_flags throughout keeps the intermediates
+        // from interpolating those throwaway channels.
+        constexpr uint64_t structural_flags =
+            erhe::geometry::Geometry::process_flag_connect |
+            erhe::geometry::Geometry::process_flag_build_edges |
+            erhe::geometry::Geometry::process_flag_compute_facet_centroids;
+        constexpr uint64_t full_flags =
+            structural_flags |
+            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+            erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+        const uint64_t post_process_flags = ((i + 1) < iterations) ? structural_flags : full_flags;
         // No process_for_graph() here: both subdivision operations post-process
-        // internally with at least connect + build_edges (structural_only and
-        // full_default alike), so re-running them would be pure redundancy.
+        // internally with at least connect + build_edges, so re-running them
+        // would be pure redundancy.
         switch (m_mode) {
-            case Mode::catmull_clark: erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
-            case Mode::sqrt3:         erhe::geometry::operation::sqrt3_subdivision        (*current.get(), *next.get(), nullptr, nullptr, post_processing_level); break;
+            case Mode::catmull_clark: erhe::geometry::operation::catmull_clark_subdivision(*current.get(), *next.get(), nullptr, nullptr, post_process_flags, full_flags); break;
+            case Mode::sqrt3:         erhe::geometry::operation::sqrt3_subdivision        (*current.get(), *next.get(), nullptr, nullptr, post_process_flags, full_flags); break;
         }
         current = next;
     }

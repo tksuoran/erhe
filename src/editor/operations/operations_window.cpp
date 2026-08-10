@@ -857,8 +857,8 @@ Operations::Operations(
     m_param_invokers[&m_decimate_command]                      = [this](const Operation_params& p){ decimate(static_cast<unsigned int>(p.decimate_bins), p.remesh_regenerate_attributes); };
     m_param_invokers[&m_smooth_command]                        = [this](const Operation_params& p){ smooth(static_cast<unsigned int>(p.smooth_iterations), p.smooth_strength, p.remesh_regenerate_attributes); };
     m_param_invokers[&m_make_atlas_command]                    = [this](const Operation_params& p){ make_atlas(static_cast<std::size_t>(p.atlas_texcoord_slot), p.atlas_hard_angles_deg, p.atlas_parameterizer, p.atlas_packer); };
-    m_param_invokers[&m_catmull_clark_command]                 = [this](const Operation_params&  ){ catmull_clark(); };
-    m_param_invokers[&m_sqrt3_command]                         = [this](const Operation_params&  ){ sqrt3(); };
+    m_param_invokers[&m_catmull_clark_command]                 = [this](const Operation_params& p){ catmull_clark(p.subdivision_generate_texcoords); };
+    m_param_invokers[&m_sqrt3_command]                         = [this](const Operation_params& p){ sqrt3(p.subdivision_generate_texcoords); };
     m_param_invokers[&m_dual_command]                          = [this](const Operation_params&  ){ dual(); };
     m_param_invokers[&m_join_command]                          = [this](const Operation_params&  ){ join(); };
     m_param_invokers[&m_kis_command]                           = [this](const Operation_params& p){ kis(p.kis_height); };
@@ -1176,6 +1176,12 @@ void Operations::imgui()
     }
 
     if (section("Subdivision")) {
+        if (visible("Generate UVs")) {
+            ImGui::Checkbox("Generate UVs", &m_subdivision_generate_texcoords);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Catmull-Clark / Sqrt3: regenerate facet texture coordinates; off = interpolate the source UVs instead");
+            }
+        }
         if (visible("Catmull-Clark") && operation_button("Catmull-Clark", &m_catmull_clark_command, selection_aware_mode, button_size)) {
             catmull_clark();
         }
@@ -1387,6 +1393,7 @@ auto Operations::current_params() const -> Operation_params
     params.smooth_iterations            = m_smooth_iterations;
     params.smooth_strength              = m_smooth_strength;
     params.remesh_regenerate_attributes = m_remesh_regenerate_attributes;
+    params.subdivision_generate_texcoords = m_subdivision_generate_texcoords;
     params.atlas_texcoord_slot          = m_atlas_texcoord_slot;
     params.atlas_hard_angles_deg        = m_atlas_hard_angles_deg;
     params.atlas_parameterizer          = m_atlas_parameterizer;
@@ -2145,18 +2152,60 @@ void Operations::lattice_deform(erhe::geometry::operation::Lattice_deform_parame
     );
 }
 
+// Exact post-process flag set for the subdivision operations: structure plus
+// smooth vertex normals, with facet texture coordinate generation controlled by
+// the Subdivision section's Generate UVs checkbox.
+[[nodiscard]] static auto subdivision_post_process_flags(const bool generate_facet_texcoords) -> uint64_t
+{
+    uint64_t flags =
+        erhe::geometry::Geometry::process_flag_connect |
+        erhe::geometry::Geometry::process_flag_build_edges |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals;
+    if (generate_facet_texcoords) {
+        flags = flags | erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates;
+    }
+    return flags;
+}
+
 void Operations::catmull_clark()
 {
+    catmull_clark(m_subdivision_generate_texcoords);
+}
+
+void Operations::catmull_clark(const bool generate_facet_texcoords)
+{
+    const uint64_t post_process_flags = subdivision_post_process_flags(generate_facet_texcoords);
     // Selection-aware: when a face-mode mesh-component selection is active, only the
     // selected facets are subdivided (the rest of the mesh stays connected).
-    async_mesh_operation<Catmull_clark_subdivision_operation>(true);
+    async_for_selected_nodes_with_mesh(
+        [this, post_process_flags](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Catmull_clark_subdivision_operation>(std::move(params), post_process_flags)
+            );
+        },
+        true
+    );
 }
 
 void Operations::sqrt3()
 {
+    sqrt3(m_subdivision_generate_texcoords);
+}
+
+void Operations::sqrt3(const bool generate_facet_texcoords)
+{
+    const uint64_t post_process_flags = subdivision_post_process_flags(generate_facet_texcoords);
     // Selection-aware: when a face-mode mesh-component selection is active, only the
     // selected facets are subdivided (the rest of the mesh stays connected).
-    async_mesh_operation<Sqrt3_subdivision_operation>(true);
+    async_for_selected_nodes_with_mesh(
+        [this, post_process_flags](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Sqrt3_subdivision_operation>(std::move(params), post_process_flags)
+            );
+        },
+        true
+    );
 }
 
 void Operations::dual()
