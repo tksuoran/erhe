@@ -19,6 +19,7 @@
 #include "scene/generated/scene_settings_serialization.hpp"
 
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/layout.hpp"
@@ -131,7 +132,31 @@ public:
     const erhe::primitive::Material* material{nullptr};
     std::string                      slot;
     std::string                      graph_texture_name;
+    // Slot sampler state snapshot (graph-texture slots export no glTF
+    // texture, so no glTF sampler carries it - without this a wrap=repeat
+    // slot reloads as the clamp fallback). Absent when the slot has no
+    // explicit sampler.
+    bool                                has_sampler{false};
+    erhe::graphics::Sampler_address_mode wrap_u{erhe::graphics::Sampler_address_mode::clamp_to_edge};
+    erhe::graphics::Sampler_address_mode wrap_v{erhe::graphics::Sampler_address_mode::clamp_to_edge};
+    erhe::graphics::Filter               min_filter{erhe::graphics::Filter::linear};
+    erhe::graphics::Filter               mag_filter{erhe::graphics::Filter::linear};
 };
+
+[[nodiscard]] auto address_mode_name(const erhe::graphics::Sampler_address_mode mode) -> const char*
+{
+    switch (mode) {
+        case erhe::graphics::Sampler_address_mode::repeat:          return "repeat";
+        case erhe::graphics::Sampler_address_mode::clamp_to_edge:   return "clamp_to_edge";
+        case erhe::graphics::Sampler_address_mode::mirrored_repeat: return "mirrored_repeat";
+        default:                                                    return "clamp_to_edge";
+    }
+}
+
+[[nodiscard]] auto filter_name(const erhe::graphics::Filter filter) -> const char*
+{
+    return (filter == erhe::graphics::Filter::linear) ? "linear" : "nearest";
+}
 
 class Node_binding_record
 {
@@ -448,27 +473,100 @@ void add_gltf_editor_state(
             );
         }
     }
+    // Materials referenced only through graphs must be exported explicitly:
+    // graph-controlled meshes are excluded from export and the exporter's
+    // material pass is lazy (only mesh-referenced materials are written), so
+    // without this the graph output node's by-name material reference (and
+    // the material_bindings side table below) resolved nothing on load and
+    // reloaded graph meshes rendered with the default white material.
+    const auto add_extra_material = [&arguments](const std::shared_ptr<erhe::primitive::Material>& material) {
+        const auto it = std::find(arguments.extra_materials.begin(), arguments.extra_materials.end(), material);
+        if (it == arguments.extra_materials.end()) {
+            arguments.extra_materials.push_back(material);
+        }
+    };
+
     if (content_library && content_library->materials && content_library->graph_textures) {
         const auto add_binding = [&data](const erhe::primitive::Material& material, const char* slot, const erhe::primitive::Material_texture_sampler& sampler) {
             const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(sampler.texture_reference.get());
             if (graph_texture != nullptr) {
-                data->material_bindings.push_back(
-                    Material_binding_record{
-                        .material           = &material,
-                        .slot               = slot,
-                        .graph_texture_name = graph_texture->get_name(),
-                    }
-                );
+                Material_binding_record record{
+                    .material           = &material,
+                    .slot               = slot,
+                    .graph_texture_name = graph_texture->get_name(),
+                };
+                if (sampler.sampler) {
+                    const erhe::graphics::Sampler_create_info& create_info = sampler.sampler->get_create_info();
+                    record.has_sampler = true;
+                    record.wrap_u      = create_info.address_mode[0];
+                    record.wrap_v      = create_info.address_mode[1];
+                    record.min_filter  = create_info.min_filter;
+                    record.mag_filter  = create_info.mag_filter;
+                }
+                data->material_bindings.push_back(record);
             }
         };
         for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->materials->get_all<erhe::primitive::Material>()) {
             const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+            const std::size_t bindings_before = data->material_bindings.size();
             add_binding(*material, "base_color",         samplers.base_color);
             add_binding(*material, "metallic_roughness", samplers.metallic_roughness);
             add_binding(*material, "normal",             samplers.normal);
             add_binding(*material, "occlusion",          samplers.occlusion);
             add_binding(*material, "emissive",           samplers.emissive);
+            if (data->material_bindings.size() != bindings_before) {
+                add_extra_material(material);
+            }
         }
+    }
+
+    if (content_library && content_library->materials) {
+        // Walk the just-serialized graph JSON for output-node material
+        // references (geometry and texture graph output nodes all write
+        // parameters.material as a content-library material name).
+        const auto add_graph_output_materials = [&content_library, &add_extra_material](const nlohmann::json& graph_entries, const char* asset_kind) {
+            for (const nlohmann::json& entry : graph_entries) {
+                const auto graph_it = entry.find("graph");
+                if ((graph_it == entry.end()) || !graph_it->is_object()) {
+                    continue;
+                }
+                const auto nodes_it = graph_it->find("nodes");
+                if ((nodes_it == graph_it->end()) || !nodes_it->is_array()) {
+                    continue;
+                }
+                for (const nlohmann::json& node_entry : *nodes_it) {
+                    const auto parameters_it = node_entry.find("parameters");
+                    if ((parameters_it == node_entry.end()) || !parameters_it->is_object()) {
+                        continue;
+                    }
+                    const auto material_it = parameters_it->find("material");
+                    if ((material_it == parameters_it->end()) || !material_it->is_string()) {
+                        continue;
+                    }
+                    const std::string material_name = material_it->get<std::string>();
+                    if (material_name.empty()) {
+                        continue;
+                    }
+                    std::shared_ptr<erhe::primitive::Material> material{};
+                    for (const std::shared_ptr<erhe::primitive::Material>& candidate : content_library->materials->get_all<erhe::primitive::Material>()) {
+                        if (candidate->get_name() == material_name) {
+                            material = candidate;
+                            break;
+                        }
+                    }
+                    if (material) {
+                        add_extra_material(material);
+                    } else {
+                        log_parsers->warn(
+                            "glTF editor state: {} '{}' references material '{}' not found in the content library - reference will not resolve on load",
+                            asset_kind, entry.value("name", std::string{}), material_name
+                        );
+                    }
+                }
+            }
+        };
+        add_graph_output_materials(data->graph_meshes,   "Graph Mesh");
+        add_graph_output_materials(data->graph_textures, "Graph Texture");
     }
 
     // Asset-root payloads are resolved against glTF indices inside
@@ -528,13 +626,17 @@ void add_gltf_editor_state(
                         );
                         continue;
                     }
-                    material_bindings.push_back(
-                        nlohmann::json{
-                            {"material",      material_it->second},
-                            {"slot",          record.slot},
-                            {"graph_texture", record.graph_texture_name},
-                        }
-                    );
+                    nlohmann::json binding_entry{
+                        {"material",      material_it->second},
+                        {"slot",          record.slot},
+                        {"graph_texture", record.graph_texture_name},
+                    };
+                    if (record.has_sampler) {
+                        binding_entry["wrap"]       = {address_mode_name(record.wrap_u), address_mode_name(record.wrap_v)};
+                        binding_entry["min_filter"] = filter_name(record.min_filter);
+                        binding_entry["mag_filter"] = filter_name(record.mag_filter);
+                    }
+                    material_bindings.push_back(std::move(binding_entry));
                 }
                 if (!material_bindings.empty()) {
                     node_graphs["material_bindings"] = std::move(material_bindings);

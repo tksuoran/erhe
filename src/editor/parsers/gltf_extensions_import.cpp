@@ -19,6 +19,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/layout.hpp"
@@ -527,6 +528,35 @@ void import_node_graphs(
             else if (slot == "emissive")           sampler = &samplers.emissive;
             if (sampler != nullptr) {
                 sampler->texture_reference = graph_texture;
+                // Sampler state (wrap / filters): graph-texture slots export
+                // no glTF texture, so this is the only carrier - without it
+                // a wrap=repeat slot reloads as the clamp fallback.
+                if (binding.contains("wrap") && (context.graphics_device != nullptr)) {
+                    const auto parse_address_mode = [](const nlohmann::json& value) -> erhe::graphics::Sampler_address_mode {
+                        const std::string s = value.is_string() ? value.get<std::string>() : std::string{};
+                        if (s == "repeat")          return erhe::graphics::Sampler_address_mode::repeat;
+                        if (s == "mirrored_repeat") return erhe::graphics::Sampler_address_mode::mirrored_repeat;
+                        return erhe::graphics::Sampler_address_mode::clamp_to_edge;
+                    };
+                    const auto parse_filter = [](const nlohmann::json& parent, const char* key) -> erhe::graphics::Filter {
+                        return (parent.value(key, std::string{"linear"}) == "nearest")
+                            ? erhe::graphics::Filter::nearest
+                            : erhe::graphics::Filter::linear;
+                    };
+                    erhe::graphics::Sampler_create_info create_info{
+                        .min_filter  = parse_filter(binding, "min_filter"),
+                        .mag_filter  = parse_filter(binding, "mag_filter"),
+                        .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
+                        .debug_label = "ERHE_node_graphs material binding sampler"
+                    };
+                    const nlohmann::json& wrap = binding["wrap"];
+                    if (wrap.is_array() && (wrap.size() == 2)) {
+                        create_info.address_mode[0] = parse_address_mode(wrap[0]);
+                        create_info.address_mode[1] = parse_address_mode(wrap[1]);
+                        create_info.address_mode[2] = create_info.address_mode[1];
+                    }
+                    sampler->sampler = std::make_shared<erhe::graphics::Sampler>(*context.graphics_device, create_info);
+                }
             } else {
                 log_parsers->warn("glTF editor state: texture source binding has unknown slot '{}'", slot);
             }
