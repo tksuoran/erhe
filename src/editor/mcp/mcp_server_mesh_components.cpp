@@ -943,13 +943,16 @@ auto Mcp_server::action_catmull_clark(const json& args) -> std::string
     if (m_context.operations == nullptr) {
         return make_error_content("Operations not available");
     }
+    // Explicit-state rule (doc/mcp_api_guidelines.md): the argument default is
+    // fixed here, never read from the Operations window's Generate UVs checkbox.
+    const bool generate_texcoords = args.value("generate_texcoords", true);
     const std::string target_error = run_geometry_op_with_target(args, [&]() {
-        m_context.operations->catmull_clark();
+        m_context.operations->catmull_clark(generate_texcoords);
     });
     if (!target_error.empty()) {
         return make_error_content(target_error);
     }
-    return make_json_content({{"queued", true}}).dump();
+    return make_json_content({{"queued", true}, {"generate_texcoords", generate_texcoords}}).dump();
 }
 
 auto Mcp_server::action_generate_texture_coordinates(const json& args) -> std::string

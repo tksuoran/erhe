@@ -1082,9 +1082,11 @@ void Mcp_server::refresh_tool_list()
         {"node_id",    {{"type", "integer"}, {"description", "Single explicit target node id"}}},
         {"node_name",  {{"type", "string"},  {"description", "Single explicit target node name"}}}
     };
+    json catmull_clark_properties = geometry_target_properties;
+    catmull_clark_properties["generate_texcoords"] = {{"type", "boolean"}, {"description", "true (default): post-processing regenerates facet texture coordinates; false: the source UVs are interpolated through the subdivision instead. Independent of the Operations window's Generate UVs checkbox."}};
     m_tool_infos.push_back({"catmull_clark", "Apply one level of Catmull-Clark subdivision to the selected mesh node(s), or to explicit node targets (node_ids / node_id / node_name + scene_name; the previous selection is restored). Honors the per-edge edge_sharpness crease attribute (see set_edge_sharpness): sharp rules for sharpness levels, fractional blend, child edges carry decremented sharpness. Queued and undoable.", {
         {"type", "object"},
-        {"properties", geometry_target_properties}
+        {"properties", catmull_clark_properties}
     }});
     m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.", {
         {"type", "object"},
