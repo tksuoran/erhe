@@ -240,9 +240,12 @@ creations up beyond single showcase scenes.
 ## Creations timeline
 
 All seventeen creations, latest first. Each image is the creation's hero
-shot, captured with `capture_screenshot` from the saved scene
-(`res/editor/scenes/creations/<name>.glb`) loaded back into the editor -
-the same path any viewer takes. Dates are the scripts' first commits.
+shot, captured with `capture_screenshot` - most from the saved scene
+(`res/editor/scenes/creations/<name>.glb`) loaded back into the editor,
+the same path any viewer takes; creations 1 and 13 are captured from a
+fresh script build (geometry-graph mesh materials do not yet survive the
+glb round-trip, and the glade rebuild carried the willow-curtain joint
+fix). Dates are the scripts' first commits.
 
 ### 17 - Rockfall (2026-08-09)
 
