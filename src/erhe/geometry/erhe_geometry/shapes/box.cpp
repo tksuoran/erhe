@@ -121,13 +121,13 @@ public:
         return signed_pow(n, p);
     }
 
-    // Texture coordinate of grid index i: same repeating scale as the
-    // original generator (one tile per grid step per half-extent unit),
-    // expressed on centered indices.
+    // Texture coordinate of grid index i: spans -half_extent at i = 0 to
+    // +half_extent at i = cell_count, so one tile covers one unit of extent.
     [[nodiscard]] auto uv_rel(const int i, const int cell_count, const float half_extent) const -> float
     {
         const float centered = static_cast<float>(i) - 0.5f * static_cast<float>(cell_count);
-        return 0.5f + centered / half_extent;
+        const float result = 2.0f * half_extent * centered / static_cast<float>(cell_count);
+        return result;
     }
 
     auto make_vertex(const int x, const int y, const int z) -> GEO::index_t
