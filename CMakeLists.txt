@@ -834,6 +834,16 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
         set(CPP_RTTI_ENABLED ON)
         set(ENABLE_INSTALL OFF)
         set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF)
+        # Jolt 5.6 compute backends (all default ON) are unused by erhe; the
+        # Vulkan one also breaks builds where find_package(Vulkan) succeeds but
+        # glslc/dxc is absent (e.g. Android CI: Jolt derives its dxc path from
+        # Vulkan_GLSLC_EXECUTABLE, yielding a "...-NOTFOUND" compile command for
+        # its hair-skinning shaders). Revisit enabling these if erhe ever wants
+        # Jolt's GPU/CPU compute features (e.g. hair/soft body skinning).
+        set(JPH_USE_DX12 OFF)
+        set(JPH_USE_VK OFF)
+        set(JPH_USE_MTL OFF)
+        set(JPH_USE_CPU_COMPUTE OFF)
         add_subdirectory(${JoltPhysics_SOURCE_DIR}/Build ${JoltPhysics_BINARY_DIR})
     endif ()
     message(STATUS "Erhe configured to use jolt for physics.")
