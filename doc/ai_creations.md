@@ -237,17 +237,158 @@ artifact. WorldClaw's structure-first decomposition (global layout
 specification before local content) is a natural fit for scaling
 creations up beyond single showcase scenes.
 
-## Existing creations
+## Creations timeline
 
-`creation_1` .. `creation_17`: Conway cathedral, crystal garden, texture
-atelier, megalith henge, spiral reef, robot roll call, ragdoll rumble
-(physics joints), glass audience (transparency), sandbox afternoon
-(L-system oak), forest glade (two-species L-systems, ferns, flowers),
-monster portal island, UAP hangar, windswept glade (wind + rest-pose
-motor foliage), spider sentinel (motor-held standing ragdoll), tree
-garden (28 Finnish species via `lsystem_trees.py`), sail ships
-(CSG-carved convex-hull hulls + FFD-billowed sails), rockfall
-(physics-settled rock piles + staged cairn under the manual clock).
+All seventeen creations, latest first. Each image is the creation's hero
+shot, captured with `capture_screenshot` from the saved scene
+(`res/editor/scenes/creations/<name>.glb`) loaded back into the editor -
+the same path any viewer takes. Dates are the scripts' first commits.
+
+### 17 - Rockfall (2026-08-09)
+
+![Rockfall](images/creations/17_rockfall.jpg)
+
+Physics-settled rock piles: convex-hull rocks from jittered
+fibonacci-sphere point clouds, power-law sizes on pooled brushes, a
+talus cone settled deterministically under the `advance_time` manual
+clock, and a cairn STACKED course by course mid-simulation on measured
+poses. Post-settle chamfer batches, smooth sunken-sphere dunes, capsule
+cacti and swept-blade agave rosettes (the first use of the `sweep`
+shape).
+
+### 16 - Sail Ships (2026-08-09)
+
+![Sail Ships](images/creations/16_sail_ships.jpg)
+
+A fleet on open water: hulls are authored `convex_hull` silhouettes
+carved with batched CSG (deck wells, gunports, transom windows, the
+Amerigo Vespucci's concave clipper stem), sails are FFD-billowed boxes,
+and the hull stripes are lattice-bent strips fitted to raycast-probed
+surface stations.
+
+### 15 - Tree Garden (2026-08-09)
+
+![Tree Garden](images/creations/15_tree_garden.jpg)
+
+28 Finnish tree species at their real heights via the shared
+`lsystem_trees.py` module (tropism, phyllotaxis, pipe-model radii,
+curved branch chains with forks and twigs), each with beam-scaled
+two-level wind sway. Also the performance testbed that motivated
+`merge_static_subtree` (11057 -> 372 nodes, ~31 -> ~4 ms).
+
+### 14 - Spider Sentinel (2026-08-08)
+
+![Spider Sentinel](images/creations/14_spider_sentinel.jpg)
+
+A 50-part ragdoll spider that STANDS under full gravity on motorized
+leg joints - rest-pose six-dof drives sized from static hold torques -
+and staggers and recovers from an `apply_physics_force` shove.
+
+### 13 - Windswept Glade (2026-08-08)
+
+![Windswept Glade](images/creations/13_windswept_glade.jpg)
+
+The forest glade rebuilt with living foliage: one-spine physics LOD per
+plant (114 sway spines), rest-pose motor joints, per-body wind
+receptivity and the scene wind system (gusts, turbulence, wavelength).
+
+### 12 - UAP Hangar (2026-08-08)
+
+![UAP Hangar](images/creations/12_uap_hangar.jpg)
+
+A dim hangar with five classic UAP silhouettes hovering in their own
+light pools - TR-3B triangle, domed saucer, tic-tac, and friends - an
+indoor-lighting study (no sky, accent point lights, emissive shells,
+raster transparency).
+
+### 11 - Monster Portal Island (2026-08-07)
+
+![Monster Portal Island](images/creations/11_monster_portal_island.jpg)
+
+A tropical island with L-system palms and coral, a glowing portal ring,
+and primitive-built critters mid-invasion - a composition and accent
+lighting exercise (a 320-intensity portal light once turned the whole
+island pink).
+
+### 10 - Forest Glade (2026-08-07)
+
+![Forest Glade](images/creations/10_forest_glade.jpg)
+
+Two-species L-system trees, L-system bipinnate ferns and flowers, and a
+fallen log - the creation that established the mandatory scene-graph
+hierarchy rules (the L-system bracket stack IS the node parent stack;
+742 nodes, 37 roots, depth 7).
+
+### 9 - Sandbox Afternoon (2026-08-07)
+
+![Sandbox Afternoon](images/creations/09_sandbox_afternoon.jpg)
+
+A backyard sandbox scene grown around the first L-system oak - the
+proof that string-rewrite vegetation plus a 3D turtle works over the
+MCP shape tools.
+
+### 8 - The Glass Audience (2026-08-07)
+
+![The Glass Audience](images/creations/08_glass_audience.jpg)
+
+Two thrones facing each other through a clear glass wall, one seating a
+primitive-built skeleton under a swinging pendulum lamp - the
+transparency showcase (`blending_mode: "alpha_blend"` + opacity) and an
+early physics-pendulum rig.
+
+### 7 - Ragdoll Rumble (2026-08-07)
+
+![Ragdoll Rumble](images/creations/07_ragdoll_rumble.jpg)
+
+A golden protocol-droid homage vs a wrecking ball: every body part a
+dynamic rigid body laced with ball/hinge/weld joints - the first full
+physics-joint creation, frozen at the moment of impact aftermath.
+
+### 6 - Robot Roll Call (2026-08-07)
+
+![Robot Roll Call](images/creations/06_robot_roll_call.jpg)
+
+Three homage robots on lit showroom pedestals, each built entirely from
+parametric shapes so the silhouette carries the character.
+
+### 5 - The Spiral Reef (2026-08-07)
+
+![The Spiral Reef](images/creations/05_spiral_reef.jpg)
+
+A double golden-angle helix of organic forms rising from a shallow sea,
+sculpted after placement with direct MCP geometry operations.
+
+### 4 - Megalith Henge at Dusk (2026-08-07)
+
+![Megalith Henge](images/creations/04_megalith_henge.jpg)
+
+A weathered trilithon circle - the brush-reuse creation: monolith and
+capstone authored once with `create_shape add_brush`, erected with
+`place_brush`, surfaced with a procedural stone texture graph.
+
+### 3 - The Texture Atelier (2026-08-07)
+
+![The Texture Atelier](images/creations/03_texture_atelier.jpg)
+
+A gallery of spheres on plinths, each surfaced live by a different
+procedural texture graph (marble, lava, bricks with a normal map,
+voronoi stained glass, woven fabric, kaleidoscope).
+
+### 2 - Crystal Garden at Night (2026-08-07)
+
+![Crystal Garden](images/creations/02_crystal_garden.jpg)
+
+Emissive crystal clusters on a dark reflective ground, each cluster a
+geometry node graph: points scattered over a hidden dome, instanced
+with sharpened cones, realized into one mesh.
+
+### 1 - Cathedral of Conway (2026-08-07)
+
+![Cathedral of Conway](images/creations/01_conway_cathedral.jpg)
+
+The first creation: a circular colonnade of pedestals, each carrying a
+geometry-node sculpture built from a different Conway operator chain
+(gyro, kis, chamfer, truncate, meta...) around a central gyro-sphere.
 
 ## Pointers
 
