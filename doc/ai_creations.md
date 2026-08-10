@@ -42,10 +42,6 @@ editor subsystems                  scene graph, brushes, geometry,
   `127.0.0.1:8080` (fallback scan to 8100), runs on a background
   thread, and queues every call to the main thread - so it can drive a
   *running* editor safely, windowed or headless.
-- Creations work against the **windowed Release** build by default and
-  the **headless Vulkan** build (`build_vs2026_vulkan_headless`,
-  emulated swapchain) when no display is available. `capture_screenshot`
-  works in both.
 - Nothing in a creation is hand-edited in the UI: the script is the
   scene's source code, and only the script (plus `common.py` changes) is
   committed. Saved `.glb` outputs and screenshots are artifacts.
@@ -406,5 +402,4 @@ geometry-node sculpture built from a different Conway operator chain
   running editor prints the live list.
 - `scripts/creations/common.py` - the client API described above.
 - [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N) -
-  video recordings (the scripts' `--pause` flag exists exactly for
-  starting a screen recording before the scene builds up).
+  video recordings.
