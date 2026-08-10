@@ -96,9 +96,30 @@ lazy resize and `add(dst, weight, src)` API):
   registered split weights (works for non-0.5 splits, e.g. gyro /
   truncate). Falls back to all sources when the vertex carries none
   from `src_facet`. Used by the Conway operations and the boundary
-  splice. Facets that genuinely span several source facets (dual,
-  join, vertex-faces in ambo / truncate) keep the cross-facet
-  average - there is no facet-local value for them.
+  splice.
+
+### Known limitation: seams are NOT preserved by all operations
+
+The seam-aware helpers above only cover destination facets that lie
+within a single source facet (Catmull-Clark quads; Conway subdivide /
+meta / gyro fans, truncate shrunken faces and corner caps, ambo
+facet-faces). Operations that create a face where an edge or vertex
+used to be still produce cross-seam attribute mixing:
+
+- sqrt3: every flip triangle spans two source facets (one corner takes
+  the opposite facet's chart value), so face-varying attributes smear
+  across the triangle even though each individual corner value is
+  taken from a single facet.
+- dual, join, and the vertex-faces of ambo / truncate: these facets
+  span several source facets and their corners average attribute
+  values across all of them.
+
+This is fundamental, not an implementation gap: a facet that straddles
+a chart boundary has no single correct face-varying value. Preserving
+the seam would require creating additional geometry - splitting the
+new faces along the seam (extra faces / edges / corners) so each piece
+stays within one chart. Noted as future work; there are no plans to
+implement it.
 
 ### Attribute Interpolation
 
