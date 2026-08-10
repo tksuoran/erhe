@@ -520,11 +520,21 @@ class Creation:
         self.mutate("create_graph_texture", {"name": name, "scene_name": self.scene})
         return GraphBuilder(self, "texture_graph")
 
-    def bind_material_texture(self, material_name, graph_texture, slot="base_color"):
+    def bind_material_texture(self, material_name, graph_texture, slot="base_color",
+                              wrap=None):
+        """Bind a Graph Texture asset to a material slot. wrap sets the slot's
+        sampler wrap mode ('repeat' / 'clamp_to_edge' / 'mirrored_repeat', or a
+        [u, v] pair); slots without an explicit sampler render clamped, so
+        tiling textures want wrap='repeat'."""
         self.mutate("set_material_texture_source", {
             "scene_name": self.scene, "material_name": material_name,
             "slot": slot, "graph_texture": graph_texture,
         })
+        if wrap is not None:
+            self.mutate("edit_material", {
+                "scene_name": self.scene, "material_name": material_name,
+                "texture_samplers": {slot: {"wrap": wrap}},
+            })
 
     # ------------------------------------------------------- geometry graph
 

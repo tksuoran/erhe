@@ -11,6 +11,12 @@ DORSAL fin is a lattice-raked thin box; paired PECTORAL / PELVIC fins and the
 ANAL fin share one pooled sweep-blade brush. Eyes are placed by probing the
 actual body surface (geometry_query closest points).
 
+The body SKIN is two live procedural texture graphs bound to the Fish Body
+material: a quincunx scale-scallop height field (soft circle dome tiled twice
+with a half-cell stagger, merged with lighten = max) drives a colorized
+albedo with a soft-light fbm mottle, and the same field through normal_map
+gives per-scale relief.
+
     py -3 scripts/creations/creation_18_fish.py [--reuse] [--reframe GLB]
                                                 [--only Fish]
 """
@@ -51,6 +57,14 @@ SHIFT_X = [0.10, 0.04, 0.00, 0.00, 0.00, -0.08, -0.28]
 EDGE_TAPER = [0.45, 0.00, 0.78]
 
 FISH_POS = [0.0, 1.5, 0.0]  # world position of the body node
+
+# ---------------------------------------------------------------- skin graphs
+# Scale scallops per UV tile (the body's box-cage UVs survive as a few large
+# coherent tiles, so the pattern repeats per tile). 16 read as moire stripes
+# at fish scale; 6 reads as scales.
+SCALE_CELLS = 6.0
+ALBEDO_GRAPH = "Fish Scales Albedo"
+NORMAL_GRAPH = "Fish Scales Normal"
 
 
 def body_lattice_offsets():
@@ -112,9 +126,82 @@ def build_scene_setup(c):
                                     "flags": ["shadow_cast"], "enabled": False})
 
 
+def grad(stops, interpolation=1):
+    return {"interpolation": interpolation,
+            "stops": [{"pos": p, "color": list(col)} for p, col in stops]}
+
+
+def scallop_height(g):
+    """Quincunx scale scallop height field: one soft circle dome (edge 1.0 =
+    full radial falloff) tiled twice with repeat transforms, the second grid
+    staggered by half a cell, merged with lighten (= max). Returns the
+    grayscale node id."""
+    dome = g.add("shape", {"shape": 0, "radius": 0.95, "edge": 1.0})
+    rgba = g.add("ensure_rgba")
+    g.link(dome, rgba)
+    grids = []
+    for stagger in (0.0, 0.5):
+        tile = g.add("transform", {
+            "translate_x": stagger / SCALE_CELLS,
+            "translate_y": stagger / SCALE_CELLS,
+            "scale_x": 1.0 / SCALE_CELLS,
+            "scale_y": 1.0 / SCALE_CELLS,
+            "repeat": True,
+        })
+        g.link(rgba, tile)
+        grids.append(tile)
+    merge = g.add("blend", {"blend_type": 9, "amount": 1.0})  # lighten = max
+    g.link(grids[0], merge)
+    g.link(grids[1], merge, dst_slot=1)
+    grey = g.add("greyscale", {"mode": 4})  # max - undoes the vec3 spread
+    g.link(merge, grey)
+    return grey
+
+
+def build_skin_graphs(c):
+    """Two Graph_texture assets (one baked output each): scallop -> colorize
+    albedo and scallop -> normal_map. Skipped when they already exist
+    (--only reruns against a populated library)."""
+    listing = c.call("get_graph_textures", {"scene_name": c.scene})
+    existing = {entry.get("name") for entry in listing.get("graph_textures", [])}
+    if ALBEDO_GRAPH not in existing:
+        g = c.texture_graph(ALBEDO_GRAPH)
+        height = scallop_height(g)
+        color = g.add("colorize", {"gradient": grad([
+            (0.00, [0.28, 0.08, 0.02, 1.0]),   # crevice between scales
+            (0.45, [0.85, 0.34, 0.08, 1.0]),
+            (0.85, [1.00, 0.52, 0.14, 1.0]),   # body orange
+            (1.00, [1.00, 0.78, 0.34, 1.0])])})  # scale-center sheen
+        g.link(height, color)
+        mottle = g.add("fbm", {"noise": 1, "scale_x": 4.0, "scale_y": 4.0,
+                               "iterations": 5.0})
+        mottle_rgba = g.add("ensure_rgba")
+        g.link(mottle, mottle_rgba)
+        mix = g.add("blend", {"blend_type": 6, "amount": 0.20})  # soft light
+        g.link(mottle_rgba, mix)         # s1: mottle layer
+        g.link(color, mix, dst_slot=1)   # s2: scale albedo base
+        out = g.add("output", {"name": ALBEDO_GRAPH, "size": 1024})
+        g.link(mix, out, dst_slot=2)     # rgba slot
+    if NORMAL_GRAPH not in existing:
+        g = c.texture_graph(NORMAL_GRAPH)
+        height = scallop_height(g)
+        normal = g.add("normal_map", {"amount": 0.7, "size": 10})
+        g.link(height, normal)
+        out = g.add("output", {"name": NORMAL_GRAPH, "size": 1024})
+        g.link(normal, out, dst_slot=1)  # rgb slot
+
+
 def build_fish(c):
-    body_mat = c.ensure_material("Fish Body", base_color=[0.82, 0.44, 0.16],
+    # White base-color factor: the scales albedo graph carries the orange.
+    body_mat = c.ensure_material("Fish Body", base_color=[1.0, 1.0, 1.0],
                                  roughness=0.38, metallic=0.05)
+    # ensure_material returns a pre-existing material unchanged (--only path);
+    # the factor must be white or it tints the albedo texture.
+    c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
+                               "base_color": [1.0, 1.0, 1.0]})
+    build_skin_graphs(c)
+    c.bind_material_texture(body_mat, ALBEDO_GRAPH, slot="base_color", wrap="repeat")
+    c.bind_material_texture(body_mat, NORMAL_GRAPH, slot="normal", wrap="repeat")
     fin_mat = c.ensure_material("Fish Fin", base_color=[0.80, 0.30, 0.13],
                                 roughness=0.5, metallic=0.0,
                                 blending_mode="alpha_blend", opacity=0.95)
