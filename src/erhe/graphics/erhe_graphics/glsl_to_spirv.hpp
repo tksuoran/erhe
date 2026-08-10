@@ -27,7 +27,7 @@ public:
     Glslang_shader_stages(Shader_stages_prototype_impl& shader_stages_prototype, Spirv_cache* cache = nullptr);
     ~Glslang_shader_stages() noexcept;
 
-    auto link_program          () -> bool;
+    auto link_program          (Device& device) -> bool;
     auto compile_shader        (Device& device, const Shader_stage& shader) -> bool;
     auto get_spirv_binary      (Shader_type type) const -> std::span<const unsigned int>;
     auto get_last_compile_log  () const -> const std::string&;

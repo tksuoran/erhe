@@ -1905,6 +1905,9 @@ Device_impl::Device_impl(
     m_info.use_clip_distance           = (qf.shaderClipDistance == VK_TRUE);
     m_info.shader_float16              = (set_shader_float16_int8_features.shaderFloat16 == VK_TRUE);
     m_info.shader_int8                 = (set_shader_float16_int8_features.shaderInt8    == VK_TRUE);
+    m_info.shader_relaxed_extended_instruction =
+        m_device_extensions.m_VK_KHR_shader_relaxed_extended_instruction &&
+        (set_shader_relaxed_extended_instruction_features.shaderRelaxedExtendedInstruction == VK_TRUE);
     m_info.storage_buffer_16bit_access             = (set_vulkan_11_features.storageBuffer16BitAccess           == VK_TRUE);
     m_info.uniform_and_storage_buffer_16bit_access = (set_vulkan_11_features.uniformAndStorageBuffer16BitAccess == VK_TRUE);
     m_info.storage_push_constant_16                = (set_vulkan_11_features.storagePushConstant16              == VK_TRUE);

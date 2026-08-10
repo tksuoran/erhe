@@ -85,7 +85,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
 
     ERHE_VERIFY(m_state == Shader_build_state::shader_compilation_started);
 
-    if (!m_glslang_shader_stages.link_program()) {
+    if (!m_glslang_shader_stages.link_program(m_device)) {
         const std::string& link_log = m_glslang_shader_stages.get_last_link_log();
         std::string error_msg = fmt::format(
             "GLSL -> SPIR-V link failed for: {}\n{}",

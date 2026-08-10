@@ -28,6 +28,7 @@
 #include <SPIRV/disassemble.h>
 
 #include <algorithm>
+#include <cstring>
 #include <mutex>
 #include <sstream>
 
@@ -314,7 +315,38 @@ auto Glslang_shader_stages::get_last_link_log() const -> const std::string&
     return m_last_link_log;
 }
 
-auto Glslang_shader_stages::link_program() -> bool
+// True when the SPIR-V module declares the named OpExtension. Used to detect
+// SPV_KHR_relaxed_extended_instruction, which glslang emits when non-semantic
+// debug info needs forward references - a device without the matching Vulkan
+// feature must reject such a module at vkCreateShaderModule time.
+[[nodiscard]] auto spirv_declares_extension(const std::vector<unsigned int>& spirv, const char* extension_name) -> bool
+{
+    constexpr unsigned int op_extension = 10u;
+    constexpr unsigned int op_function  = 54u;
+    std::size_t word_index = 5; // skip header
+    while (word_index < spirv.size()) {
+        const unsigned int instruction = spirv[word_index];
+        const unsigned int opcode      = instruction & 0xffffu;
+        const unsigned int word_count  = instruction >> 16u;
+        if (word_count == 0) {
+            break; // malformed
+        }
+        if (opcode == op_function) {
+            break; // extensions only appear before functions
+        }
+        if ((opcode == op_extension) && (word_index + word_count <= spirv.size())) {
+            const char* const literal = reinterpret_cast<const char*>(&spirv[word_index + 1]);
+            const std::size_t max_length = (word_count - 1) * sizeof(unsigned int);
+            if (strncmp(literal, extension_name, max_length) == 0) {
+                return true;
+            }
+        }
+        word_index += word_count;
+    }
+    return false;
+}
+
+auto Glslang_shader_stages::link_program(Device& device) -> bool
 {
     if (m_glslang_shaders.empty()) {
         return false;
@@ -382,18 +414,19 @@ auto Glslang_shader_stages::link_program() -> bool
             }
         }
 
-        if (!from_cache) {
+        const auto generate = [&](const glslang::SpvOptions& options) {
             spv::SpvBuildLogger       logger;
             auto*                     intermediate  = m_glslang_program->getIntermediate(stage);
             std::vector<unsigned int> spirv_binary;
-            GlslangToSpv(*intermediate, spirv_binary, &logger, &spirv_options);
+            glslang::SpvOptions       options_copy = options; // GlslangToSpv takes a non-const pointer
+            GlslangToSpv(*intermediate, spirv_binary, &logger, &options_copy);
             const std::string spv_messages = logger.getAllMessages();
             if (!spv_messages.empty()) {
                 log_glsl->info("SPIR_V messages::\n{}\n", spv_messages);
             }
             m_spirv_shaders[stage] = std::move(spirv_binary);
-
-            // Store in cache
+        };
+        const auto store_in_cache = [&]() {
             if (m_cache != nullptr) {
                 for (const Shader_stage& shader : create_info.shaders) {
                     if (to_glslang(shader.type) == stage) {
@@ -402,6 +435,41 @@ auto Glslang_shader_stages::link_program() -> bool
                         break;
                     }
                 }
+            }
+        };
+
+        if (!from_cache) {
+            generate(spirv_options);
+            store_in_cache();
+        }
+
+        // Non-semantic debug info can force glslang to declare
+        // SPV_KHR_relaxed_extended_instruction (forward references in the
+        // debug instructions). A device without the matching feature must
+        // reject such a module, so recompile this stage without non-semantic
+        // debug info and overwrite the cache entry (also heals cache entries
+        // written by a run that did not have this fallback).
+        if (
+            !device.get_info().shader_relaxed_extended_instruction &&
+            spirv_declares_extension(m_spirv_shaders[stage], "SPV_KHR_relaxed_extended_instruction")
+        ) {
+            log_program->warn(
+                "{} {} stage SPIR-V declares SPV_KHR_relaxed_extended_instruction which this device does not support; "
+                "recompiling without non-semantic debug info",
+                create_info.name,
+                glslang_stage_name(stage)
+            );
+            glslang::SpvOptions fallback_options = spirv_options;
+            fallback_options.emitNonSemanticShaderDebugInfo   = false;
+            fallback_options.emitNonSemanticShaderDebugSource = false;
+            generate(fallback_options);
+            store_in_cache();
+            if (spirv_declares_extension(m_spirv_shaders[stage], "SPV_KHR_relaxed_extended_instruction")) {
+                log_program->error(
+                    "{} {} stage SPIR-V still declares SPV_KHR_relaxed_extended_instruction without non-semantic debug info",
+                    create_info.name,
+                    glslang_stage_name(stage)
+                );
             }
         }
 
@@ -420,7 +488,7 @@ auto Glslang_shader_stages::link_program() -> bool
     return true;
 }
 
-auto Glslang_shader_stages::try_load_all_from_cache(Device& /*device*/) -> bool
+auto Glslang_shader_stages::try_load_all_from_cache(Device& device) -> bool
 {
     if (m_cache == nullptr) {
         return false;
@@ -436,6 +504,12 @@ auto Glslang_shader_stages::try_load_all_from_cache(Device& /*device*/) -> bool
         std::vector<unsigned int> spirv = m_cache->get(source, shader.type);
         if (spirv.empty()) {
             return false; // Cache miss on any stage means we must compile all
+        }
+        if (
+            !device.get_info().shader_relaxed_extended_instruction &&
+            spirv_declares_extension(spirv, "SPV_KHR_relaxed_extended_instruction")
+        ) {
+            return false; // Unloadable on this device - recompile with the link_program fallback
         }
         cached_spirv[language] = std::move(spirv);
     }

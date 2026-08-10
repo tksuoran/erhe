@@ -213,6 +213,17 @@ public:
     // intersection_query via SPIRV-Cross); false on GL / Null.
     bool use_ray_query               {false};
 
+    // The device accepts SPIR-V modules declaring
+    // SPV_KHR_relaxed_extended_instruction, which glslang emits when
+    // NonSemantic.Shader.DebugInfo.100 needs forward references (large
+    // shaders). Vulkan sets this when the
+    // VK_KHR_shader_relaxed_extended_instruction feature was enabled; false
+    // elsewhere. Glslang_shader_stages::link_program falls back to compiling
+    // the affected stage without non-semantic debug info when unsupported -
+    // otherwise vkCreateShaderModule rejects the module
+    // (VK_ERROR_INITIALIZATION_FAILED on AMD).
+    bool shader_relaxed_extended_instruction {false};
+
     // The device supports ray query but use_ray_query was forced off because
     // Xcode's GPU frame-capture layer (GPUToolsCapture) is loaded - it
     // intermittently crashes every acceleration structure command encoder

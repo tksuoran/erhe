@@ -508,7 +508,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
     m_state = state_program_link_started;
 
 #if defined(ERHE_SPIRV)
-    m_glslang_shader_stages.link_program();
+    m_glslang_shader_stages.link_program(m_device);
 #endif
     post_link();
     return m_state == state_ready;

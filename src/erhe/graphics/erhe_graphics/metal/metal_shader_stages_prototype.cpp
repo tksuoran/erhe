@@ -402,7 +402,7 @@ auto Shader_stages_prototype_impl::link_program() -> bool
         return true;
     }
 
-    const bool link_ok = m_glslang_shader_stages.link_program();
+    const bool link_ok = m_glslang_shader_stages.link_program(m_device);
     if (!link_ok) {
         log_program->error("GLSL -> SPIR-V link failed for: {}", m_create_info.name);
         m_failed = true;
