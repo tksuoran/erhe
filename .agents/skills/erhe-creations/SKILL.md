@@ -383,6 +383,14 @@ file is read before any creation work:
   memory only POINT at git log and this skill - do not grow commit
   ledgers in them; git log is the history.
 - MCP node/material ids are per-session - never hardcode them.
+- **Box "steps" means SUBDIVISIONS since 2026-08-10** (breaking change,
+  user-approved): the create_shape/place pools still use the "steps" key,
+  but the value is now interior subdivision planes per axis - s gives
+  s + 1 cells, 0 = vertices only at that axis' min/max corners. The old
+  semantics produced 2*s cells, so existing scripts get roughly half the
+  resolution they used to; bump values where a lattice needs interior
+  vertices. The geometry-graph Box node parameter/serialized key is
+  renamed "subdivisions" outright.
 - `select_items` requires `scene_name`. `place_brush` takes the full
   placement set since 2026-08-09 (rotation_xyzw, parent_node_id, name,
   scale number-or-array, mass, motion_mode incl. "none", brush_name) -
