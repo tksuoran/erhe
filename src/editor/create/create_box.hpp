@@ -13,7 +13,9 @@ class Box_parameters
 {
 public:
     glm::vec3  size {1.0f, 1.0f, 1.0f};
-    glm::ivec3 steps{3, 3, 3};
+    // Interior subdivision planes per axis; 0 = vertices only at the
+    // min/max corners of that axis.
+    glm::ivec3 subdivisions{3, 3, 3};
     float      power{1.0f};
 };
 

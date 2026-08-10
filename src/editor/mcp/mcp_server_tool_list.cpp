@@ -223,7 +223,7 @@ void Mcp_server::refresh_tool_list()
             {"mass",           {{"type", "number"},  {"description", "Rigid body mass override for the instance; local inertia is rescaled to match (default: brush density x volume). Only meaningful with a physics motion_mode"}}},
             {"motion_mode",    {{"type", "string"},  {"description", "Physics motion mode for the instance: static, kinematic, dynamic (default dynamic), or none = no rigid body at all (pure visual part, e.g. children of a physics-driven assembly)"}}},
             {"size",           {{"type", "array"},   {"items", {{"type", "number"}}},  {"minItems", 3}, {"maxItems", 3}, {"description", "box: size [x, y, z]"}}},
-            {"steps",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "box: subdivision steps [x, y, z]"}}},
+            {"steps",          {{"type", "array"},   {"items", {{"type", "integer"}}}, {"minItems", 3}, {"maxItems", 3}, {"description", "box: interior subdivision planes per axis [x, y, z]; 0 = vertices only at that axis' min/max corners (semantics changed 2026-08-10: was cell-pair steps, now subdivisions = cells - 1)"}}},
             {"power",          {{"type", "number"},  {"description", "box: power"}}},
             {"radius",         {{"type", "number"},  {"description", "uv_sphere: radius"}}},
             {"height",         {{"type", "number"},  {"description", "cone: height"}}},

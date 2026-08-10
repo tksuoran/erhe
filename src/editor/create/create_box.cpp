@@ -47,7 +47,7 @@ void Create_box::imgui()
     ImGui::Text("Box Parameters");
 
     ImGui::SliderFloat3("Size",  &m_parameters.size.x,  0.0f, 10.0f);
-    ImGui::SliderInt3  ("Steps", &m_parameters.steps.x, 1,    10   );
+    ImGui::SliderInt3  ("Subdivisions", &m_parameters.subdivisions.x, 0, 10);
     ImGui::SliderFloat ("Power", &m_parameters.power,   0.0f, 10.0f);
 }
 
@@ -60,12 +60,12 @@ auto Create_box::create_brush(Brush_data& brush_create_info, const Box_parameter
 {
     auto geometry = std::make_shared<erhe::geometry::Geometry>("box");
     // The mat4_swap_xy below reorients the generated topology; it also swaps
-    // the world X/Y extents, so feed make_box pre-swapped size/steps to keep
-    // the FINAL world extents equal to parameters.size as given (callers -
-    // the Create tool UI and MCP create_shape - think in world axes).
-    const glm::vec3  swapped_size {parameters.size.y,  parameters.size.x,  parameters.size.z};
-    const glm::ivec3 swapped_steps{parameters.steps.y, parameters.steps.x, parameters.steps.z};
-    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(swapped_size), to_geo_vec3i(swapped_steps), parameters.power);
+    // the world X/Y extents, so feed make_box pre-swapped size/subdivisions
+    // to keep the FINAL world extents equal to parameters.size as given
+    // (callers - the Create tool UI and MCP create_shape - think in world axes).
+    const glm::vec3  swapped_size        {parameters.size.y,         parameters.size.x,         parameters.size.z};
+    const glm::ivec3 swapped_subdivisions{parameters.subdivisions.y, parameters.subdivisions.x, parameters.subdivisions.z};
+    erhe::geometry::shapes::make_box(geometry->get_mesh(), to_geo_vec3f(swapped_size), to_geo_vec3i(swapped_subdivisions), parameters.power);
     brush_create_info.geometry = geometry;
     transform(*geometry.get(), *geometry.get(), to_geo_mat4f(erhe::math::mat4_swap_xy));
     geometry->process(

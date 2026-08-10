@@ -1606,12 +1606,12 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     if (shape == "box") {
         Box_parameters parameters;
         read_vec3 ("size",  parameters.size);
-        read_ivec3("steps", parameters.steps);
+        read_ivec3("steps", parameters.subdivisions);
         parameters.power = args.value("power", parameters.power);
         brush = Create_box::create_brush(brush_create_info, parameters);
         parameters_echo = {
-            {"size",  {parameters.size.x,  parameters.size.y,  parameters.size.z}},
-            {"steps", {parameters.steps.x, parameters.steps.y, parameters.steps.z}},
+            {"size",  {parameters.size.x, parameters.size.y, parameters.size.z}},
+            {"steps", {parameters.subdivisions.x, parameters.subdivisions.y, parameters.subdivisions.z}},
             {"power", parameters.power}
         };
     } else if (shape == "uv_sphere") {

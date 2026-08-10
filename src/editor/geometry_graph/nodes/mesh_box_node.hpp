@@ -17,9 +17,11 @@ public:
     void read_parameters (const nlohmann::json& in) override;
 
 private:
-    glm::vec3  m_size {1.0f, 1.0f, 1.0f};
-    glm::ivec3 m_steps{1, 1, 1};
-    float      m_power{1.0f};
+    glm::vec3  m_size        {1.0f, 1.0f, 1.0f};
+    // Interior subdivision planes per axis; 0 = vertices only at the
+    // min/max corners of that axis.
+    glm::ivec3 m_subdivisions{1, 1, 1};
+    float      m_power       {1.0f};
 };
 
 }

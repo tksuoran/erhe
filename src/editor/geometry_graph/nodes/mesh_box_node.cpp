@@ -28,7 +28,7 @@ void Mesh_box_node::evaluate(Geometry_graph&)
     erhe::geometry::shapes::make_box(
         geometry->get_mesh(),
         GEO::vec3f{x_size, y_size, z_size},
-        erhe::geometry::to_geo_vec3i(m_steps),
+        erhe::geometry::to_geo_vec3i(m_subdivisions),
         m_power
     );
     process_for_graph(*geometry.get());
@@ -40,9 +40,9 @@ void Mesh_box_node::imgui()
     ImGui::TextUnformatted("Size");
     ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat3("##size", &m_size.x, 0.01f, 0.01f, 100.0f)) { mark_dirty(); }
-    ImGui::TextUnformatted("Steps");
+    ImGui::TextUnformatted("Subdivisions");
     ImGui::SetNextItemWidth(140.0f * content_scale());
-    if (ImGui::DragInt3("##steps", &m_steps.x, 0.1f, 1, 16)) { mark_dirty(); }
+    if (ImGui::DragInt3("##subdivisions", &m_subdivisions.x, 0.1f, 0, 16)) { mark_dirty(); }
     ImGui::TextUnformatted("Power");
     ImGui::SetNextItemWidth(140.0f * content_scale());
     if (ImGui::DragFloat("##power", &m_power, 0.01f, 0.1f, 10.0f)) { mark_dirty(); }
@@ -56,16 +56,16 @@ void Mesh_box_node::imgui()
 
 void Mesh_box_node::write_parameters(nlohmann::json& out) const
 {
-    write_vec3 (out, "size",  m_size);
-    write_ivec3(out, "steps", m_steps);
+    write_vec3 (out, "size",         m_size);
+    write_ivec3(out, "subdivisions", m_subdivisions);
     out["power"] = m_power;
 }
 
 void Mesh_box_node::read_parameters(const nlohmann::json& in)
 {
-    m_size  = read_vec3 (in, "size",  m_size);
-    m_steps = read_ivec3(in, "steps", m_steps);
-    m_power = in.value("power", m_power);
+    m_size         = read_vec3 (in, "size",         m_size);
+    m_subdivisions = read_ivec3(in, "subdivisions", m_subdivisions);
+    m_power        = in.value("power", m_power);
     mark_dirty();
 }
 
