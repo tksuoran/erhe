@@ -103,6 +103,14 @@ pose needs no new machinery - six-dof drives ARE the rest-pose motor:
   center-origin), coincident anchor child pairs at each pivot as above;
   the root anchor joints to a sensor-body carrier on the plant root
   (world joints pin the plant in place - see the sway bullet above).
+  The anchor pair is BOTH-SIDED: jointing the spine anchor straight to
+  the carrier NODE puts the carrier-side constraint frame at the
+  carrier's origin, and locked linear axes drag the spine body there -
+  creation 13's willow curtains (tip anchor, carrier at the branch
+  ring base) all snapped to the trunk top this way for two days before
+  anyone noticed (fixed 2026-08-10; rig_tree_sway had the same fix
+  earlier as "crowns slumped to half height"). Plants whose anchor and
+  carrier positions coincide mask the bug.
 - **Sibling spines need a collision filter** (2026-08-09): a joint
   disables collision only for ITS pair, so spines jointed to the same
   carrier still collide with each other - shrub stems fanning out of one
