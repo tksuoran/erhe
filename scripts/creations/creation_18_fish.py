@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Creation 18: a smooth fish, sculpted procedurally.
 
-The BODY is a geometry graph (box cage -> bezier lattice FFD -> Catmull-Clark
-x3): seven lattice stations squeeze the cage toward the centerline (hard tail
-pinch, belly at mid-forward, converging snout with a slight droop) and a
+The BODY is a geometry graph (box cage, subdivisions [2, 1, 0] -> one level
+of Catmull-Clark -> bezier lattice FFD -> one more subdivision level): seven
+lattice stations squeeze the cage toward the centerline (hard tail pinch,
+belly at mid-forward, converging snout with a slight droop) and a
 per-height-row extra beam squeeze rounds the cross-section into a fish oval.
 The TAIL is a lattice-fanned thin box forked with a CSG cylinder cut; the
 DORSAL fin is a lattice-raked thin box; paired PECTORAL / PELVIC fins and the
@@ -31,7 +32,8 @@ SAVE_GLB = "res/editor/scenes/creations/fish.glb"
 # ----------------------------------------------------------------- body graph
 # Body axes: +X nose, -X tail, Y up, Z beam (laterally compressed).
 BODY_SIZE = [3.0, 1.3, 0.72]
-BODY_STEPS = [8, 4, 4]
+# Interior subdivision planes per axis (0 = corner vertices only).
+BODY_SUBDIVISIONS = [2, 1, 0]
 DIVISIONS = [6, 2, 2]  # 7 x 3 x 3 control points
 
 # Per-station squeeze toward the centerline, i = 0 (tail) .. 6 (nose), as a
@@ -121,17 +123,23 @@ def build_fish(c):
 
     # ------------------------------------------------------------- body graph
     g = c.geometry_graph("Fish Body Graph")
-    box = g.add("box", {"size": BODY_SIZE, "steps": BODY_STEPS, "power": 1.0})
+    box = g.add("box", {"size": BODY_SIZE, "subdivisions": BODY_SUBDIVISIONS, "power": 1.0})
+    subdivide_pre = g.add("subdivide", {"mode": 0, "iterations": 1})
     lattice = g.add("lattice", {
-        "auto_fit": True,
+        # Explicit cage at the box bounds: the offsets are authored in this
+        # frame, and one Catmull-Clark level shrinks the mesh inside it, so
+        # auto-fit would rescale the sculpt unpredictably.
+        "auto_fit": False,
+        "cage_min": [-0.5 * v for v in BODY_SIZE],
+        "cage_max": [0.5 * v for v in BODY_SIZE],
         "divisions": DIVISIONS,
         "interpolation": 1,  # bezier FFD - globally smooth
         "show_cage": False,
         "offsets": body_lattice_offsets(),
     })
-    subdivide = g.add("subdivide", {"mode": 0, "iterations": 3})
+    subdivide_post = g.add("subdivide", {"mode": 0, "iterations": 1})
     out = g.add("output", {"material": body_mat})
-    g.chain([box, lattice, subdivide, out])
+    g.chain([box, subdivide_pre, lattice, subdivide_post, out])
     c.call("get_geometry_graph")  # evaluation barrier
 
     body = c.bind_node_mesh("Fish", "Fish Body Graph")
