@@ -121,8 +121,18 @@ def rig_sway(c, sway_jobs):
         c.body(node_id, shape="auto", motion_mode="dynamic", mass=mass,
                gravity_factor=0.0, angular_damping=ang_damp,
                linear_damping=0.05, wind_receptivity=receptivity)
+        # Ragdoll pattern (creations 7/14, same fix as rig_tree_sway): TWO
+        # coincident anchors at the pivot, one per body. Connecting the
+        # spine anchor straight to the carrier NODE put the carrier-side
+        # constraint frame at the carrier's origin - for a willow curtain
+        # jointed to its BRANCH pose node (which sits at the branch ring
+        # base) the locked linear axes then yanked every curtain from its
+        # branch tip to the trunk top, clustering all strands into a spike
+        # ball and leaving the branches bare. Plants whose anchor and
+        # carrier coincide (trunk base on the root group) never showed it.
         anchor_id = c.anchor(f"{tag} Sway Anchor", node_id, base_pos)
-        c.joint(anchor_id, connected_node_id=carrier_id, settings_name=settings)
+        carrier_anchor_id = c.anchor(f"{tag} Carrier Anchor", carrier_id, base_pos)
+        c.joint(anchor_id, connected_node_id=carrier_anchor_id, settings_name=settings)
     print(f"rigged {len(sway_jobs)} sway spines on {len(carriers_with_body)} carriers")
 
 
