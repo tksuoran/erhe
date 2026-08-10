@@ -21,13 +21,14 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_17_rock_piles` (henge,
+`creation_1_conway_cathedral` … `creation_18_fish` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
 tree garden = 28 Finnish species via lsystem_trees.py, sail ships =
 CSG-carved convex-hull hulls + FFD-billowed sails, rockfall =
-physics-settled rock piles + staged cairn under the manual clock).
+physics-settled rock piles + staged cairn under the manual clock,
+fish = geometry-graph body box->lattice->subdivide + CSG-forked tail).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -92,6 +93,21 @@ they carry the current idioms.
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
+- **Wireframe overlay in screenshots**: the per-viewport Visual Style
+  defaults come from `config/editor/default_viewport_config.json`, read
+  at EVERY viewport construction (`make_viewport_config`). If the user's
+  file has `edge_lines: true`, dense subdivided meshes read as black.
+  There is no MCP toggle: back the file up, set both render styles'
+  `edge_lines` false, create the scene (its fresh viewport picks the
+  file up - no restart), and RESTORE the file when done.
+- **AMD iGPU (Radeon 890M) machine notes** (2026-08-10): GPU ray tracing
+  crashes the editor at startup - `config/editor/erhe_graphics.json`
+  `vulkan: {"_version": 2, "disable_ray_tracing": true}` keeps it off
+  (Device_info::use_ray_query false; ray-trace renderer + lightmap baker
+  report unsupported). The `_version: 2` is REQUIRED (versionless JSON
+  parses as v1 and drops the field). The same driver also lacks
+  VK_KHR_shader_relaxed_extended_instruction; the glslang layer now
+  auto-recompiles affected shaders without non-semantic debug info.
 - Outputs: screenshots `logs/creations/*.png`, headless-saved scenes
   `res/editor/scenes/creations/*.glb` (untracked; loadable with
   `load_scene`). Only the script is committed.
@@ -352,6 +368,10 @@ file is read before any creation work:
   cacti. Creation 17.
 - `references/blades_sweep.md` - the sweep shape for blades / leaves
   (agave rosettes). Creation 17.
+- `references/geometry_graph_sculpt.md` - smooth organic bodies as live
+  geometry graphs (box -> lattice FFD -> subdivide via MCP: offsets array
+  layout, station-squeeze sculpting, cap rounding, cross-section shaping,
+  probed attachments). Creation 18.
 
 ## Conventions
 
