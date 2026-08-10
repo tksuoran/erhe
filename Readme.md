@@ -129,7 +129,7 @@ The editor is a sandbox application for 3D scene creation and manipulation.
 -   Shader hot-reload via shader monitor
 -   GL state dump to clipboard
 -   Tracy profiler integration
--   Built-in MCP server: scene inspection and editing, screenshots, and tool automation for AI-agent and scripted workflows
+-   Built-in MCP server: scene inspection and editing, screenshots, and tool automation for AI-agent and scripted workflows — see [AI creations](doc/ai_creations.md) for agent-built showcase scenes and the editor features they exercise
 
 ## Libraries
 
