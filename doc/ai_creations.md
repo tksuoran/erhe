@@ -185,6 +185,58 @@ re-derive" rule). Highlights:
   bracket structure becomes the node parent structure), verified with a
   root-count/depth histogram.
 
+## Relation to Tencent Hunyuan3D WorldClaw
+
+[WorldClaw](https://tencent-hunyuan.github.io/Hunyuan3D-WorldClaw/)
+(Tencent Hunyuan3D, "Agentic 3D Open-World Generation at Scale") is a
+coarse-to-fine agentic framework that turns one open-ended text prompt
+into an explicit, explorable, editable 3D world: intent becomes a
+structured specification, a global terrain with region-aware semantics
+is constructed, objects are generated only where regions call for
+detail, and render-guided agents refine appearance, arrangement and
+object-terrain contact - all driving Blender, with terrain materials
+authored as executable Blender node graphs and shader scripts.
+
+The two systems approach the same goal - agent-built, *editable* 3D
+scenes - from opposite ends, and erhe's creation stack is essentially a
+working instance of both items in WorldClaw's stated future work:
+
+- **"Code-native 3D modeling."** WorldClaw notes that generative 3D
+  backbones rarely recover explicit part hierarchies, parametric
+  structure, articulation, or interaction logic, and proposes extending
+  its code-authored terrain materials to object generation. erhe
+  creations are code-native throughout: every object is an executable
+  script over parametric generators, with an explicit part hierarchy
+  (the mandatory one-subtree-per-object rule; L-system bracket
+  structure mirrored in the node graph), adjustable parameters (species
+  dicts, ship-yard knobs, profile/spine/taper sweeps), material logic
+  as executable texture graphs, and articulation + interaction as real
+  physics - six-dof joints with rest-pose motor drives, collision
+  filters, wind receptivity. Composition and parameters stay explicitly
+  editable because the script *is* the source: `--only` regenerates one
+  object, `--reframe` re-runs only the camera stage, and every mutation
+  is undoable in the editor.
+- **"Production engine integration."** WorldClaw observes that Blender
+  lacks runtime procedural generation, physics, and interaction, and
+  calls for pairing its planning with engine-side procedural tooling.
+  erhe's MCP server is exactly that engine-side tooling: the agent
+  scripts the live engine/editor itself, so physics settling, wind,
+  joints, rendering and persistence are the engine's own runtime
+  systems, and the output loads back into the same engine with its
+  physics rig and brush pool intact.
+
+The honest converse: WorldClaw operates at open-world scale from a
+single free-form prompt, uses generative backbones for object content,
+and closes its quality loop with autonomous render-guided refinement
+agents. erhe creations are scene-scale, purely procedural (no learned
+3D generation - geometry comes from parametric generators, hulls,
+sweeps, CSG and L-systems), and close the loop with the agent judging
+`capture_screenshot` output between runs - the same render-guided
+refinement idea, in miniature and with a human-readable program as the
+artifact. WorldClaw's structure-first decomposition (global layout
+specification before local content) is a natural fit for scaling
+creations up beyond single showcase scenes.
+
 ## Existing creations
 
 `creation_1` .. `creation_17`: Conway cathedral, crystal garden, texture
