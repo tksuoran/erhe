@@ -429,7 +429,10 @@ void Mcp_server::refresh_tool_list()
             {"tex_coord", {{"type", "integer"}, {"minimum", 0},  {"description", "UV channel index (e.g. 0 for TEXCOORD_0)"}}},
             {"rotation",  {{"type", "number"}, {"description", "UV rotation in radians"}}},
             {"offset",    {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV offset [u, v]"}}},
-            {"scale",     {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v]"}}}
+            {"scale",     {{"type", "array"},  {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v]"}}},
+            {"wrap",       {{"description", "Sampler wrap (address) mode: a single string applied to both axes, or an array of 2 strings [u, v]. Values: 'repeat', 'clamp_to_edge', 'mirrored_repeat'. Slots without an explicit sampler render as clamp_to_edge; set 'repeat' for tiling textures. Replaces the slot's sampler (undoable)."}}},
+            {"min_filter", {{"type", "string"}, {"enum", json::array({"nearest", "linear"})}, {"description", "Sampler minification filter (default linear)"}}},
+            {"mag_filter", {{"type", "string"}, {"enum", json::array({"nearest", "linear"})}, {"description", "Sampler magnification filter (default linear)"}}}
         }}
     };
     // Material fields shared by edit_material and create_material (the

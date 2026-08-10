@@ -5,6 +5,8 @@
 
 #include "assets/asset_manager.hpp"
 
+#include "erhe_graphics/sampler.hpp"
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -120,7 +122,60 @@ public:
     std::optional<float>                     rotation{};
     std::optional<glm::vec2>                 offset{};
     std::optional<glm::vec2>                 scale{};
+    // Sampler state: wrap is [u, v]; a present entry replaces the slot's
+    // sampler with a freshly created one (never mutated in place, so the
+    // Material_data before/after snapshot sees the pointer change).
+    std::optional<std::array<erhe::graphics::Sampler_address_mode, 2>> wrap{};
+    std::optional<erhe::graphics::Filter>                              min_filter{};
+    std::optional<erhe::graphics::Filter>                              mag_filter{};
+
+    [[nodiscard]] auto has_sampler_edit() const -> bool
+    {
+        return wrap.has_value() || min_filter.has_value() || mag_filter.has_value();
+    }
 };
+
+[[nodiscard]] auto parse_address_mode(const json& ref, erhe::graphics::Sampler_address_mode& out, std::string& out_error) -> bool
+{
+    if (!ref.is_string()) {
+        out_error = "wrap entries must be strings ('repeat', 'clamp_to_edge', 'mirrored_repeat')";
+        return false;
+    }
+    const std::string s = ref.get<std::string>();
+    if (s == "repeat")          { out = erhe::graphics::Sampler_address_mode::repeat;          return true; }
+    if (s == "clamp_to_edge")   { out = erhe::graphics::Sampler_address_mode::clamp_to_edge;   return true; }
+    if (s == "mirrored_repeat") { out = erhe::graphics::Sampler_address_mode::mirrored_repeat; return true; }
+    out_error = "wrap must be one of 'repeat', 'clamp_to_edge', 'mirrored_repeat' (got '" + s + "')";
+    return false;
+}
+
+[[nodiscard]] auto address_mode_name(const erhe::graphics::Sampler_address_mode mode) -> const char*
+{
+    switch (mode) {
+        case erhe::graphics::Sampler_address_mode::repeat:          return "repeat";
+        case erhe::graphics::Sampler_address_mode::clamp_to_edge:   return "clamp_to_edge";
+        case erhe::graphics::Sampler_address_mode::mirrored_repeat: return "mirrored_repeat";
+        default:                                                    return "?";
+    }
+}
+
+[[nodiscard]] auto parse_filter(const json& ref, const char* key, erhe::graphics::Filter& out, std::string& out_error) -> bool
+{
+    if (!ref.is_string()) {
+        out_error = std::string{key} + " must be a string ('nearest' or 'linear')";
+        return false;
+    }
+    const std::string s = ref.get<std::string>();
+    if (s == "nearest") { out = erhe::graphics::Filter::nearest; return true; }
+    if (s == "linear")  { out = erhe::graphics::Filter::linear;  return true; }
+    out_error = std::string{key} + " must be 'nearest' or 'linear' (got '" + s + "')";
+    return false;
+}
+
+[[nodiscard]] auto filter_name(const erhe::graphics::Filter filter) -> const char*
+{
+    return (filter == erhe::graphics::Filter::linear) ? "linear" : "nearest";
+}
 
 [[nodiscard]] auto find_texture_in_library(
     const std::vector<std::shared_ptr<erhe::graphics::Texture>>& tex_list,
@@ -232,10 +287,52 @@ public:
         case Field_status::Invalid:    return false;
         case Field_status::NotPresent: break;
     }
+
+    const auto wrap_it = slot_json.find("wrap");
+    if (wrap_it != slot_json.end()) {
+        std::array<erhe::graphics::Sampler_address_mode, 2> wrap{};
+        if (wrap_it->is_array()) {
+            if (wrap_it->size() != 2) {
+                out_error = "wrap must be a string or an array of 2 strings [u, v]";
+                return false;
+            }
+            if (!parse_address_mode((*wrap_it)[0], wrap[0], out_error)) {
+                return false;
+            }
+            if (!parse_address_mode((*wrap_it)[1], wrap[1], out_error)) {
+                return false;
+            }
+        } else {
+            // A single string applies to both axes.
+            if (!parse_address_mode(*wrap_it, wrap[0], out_error)) {
+                return false;
+            }
+            wrap[1] = wrap[0];
+        }
+        out_edit.wrap = wrap;
+    }
+
+    erhe::graphics::Filter filter_tmp{};
+    const auto min_filter_it = slot_json.find("min_filter");
+    if (min_filter_it != slot_json.end()) {
+        if (!parse_filter(*min_filter_it, "min_filter", filter_tmp, out_error)) {
+            return false;
+        }
+        out_edit.min_filter = filter_tmp;
+    }
+    const auto mag_filter_it = slot_json.find("mag_filter");
+    if (mag_filter_it != slot_json.end()) {
+        if (!parse_filter(*mag_filter_it, "mag_filter", filter_tmp, out_error)) {
+            return false;
+        }
+        out_edit.mag_filter = filter_tmp;
+    }
     return true;
 }
 
-void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sampler& target)
+// device may be null only when the edit has no sampler fields (the caller
+// rejects sampler edits without a device before applying).
+void apply_slot_edit(const Slot_edit& edit, erhe::graphics::Device* device, erhe::primitive::Material_texture_sampler& target)
 {
     // Assigning (or nulling) a plain texture replaces any previous binding on
     // the slot, including a Graph_texture reference - the slot is a single
@@ -245,6 +342,43 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
     if (edit.rotation.has_value()) target.rotation  = edit.rotation.value();
     if (edit.offset.has_value())   target.offset    = edit.offset.value();
     if (edit.scale.has_value())    target.scale     = edit.scale.value();
+
+    if (edit.has_sampler_edit()) {
+        // Start from the slot's current sampler state; a null sampler edits
+        // as the renderer's effective fallback (linear filtering, clamp wrap
+        // - see Material_buffer::m_linear_sampler), so only the supplied
+        // fields change the look.
+        erhe::graphics::Sampler_create_info create_info =
+            target.sampler
+                ? target.sampler->get_create_info()
+                : erhe::graphics::Sampler_create_info{
+                      .min_filter  = erhe::graphics::Filter::linear,
+                      .mag_filter  = erhe::graphics::Filter::linear,
+                      .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
+                      .debug_label = "edit_material texture sampler"
+                  };
+        if (edit.wrap.has_value()) {
+            create_info.address_mode[0] = edit.wrap.value()[0];
+            create_info.address_mode[1] = edit.wrap.value()[1];
+            create_info.address_mode[2] = edit.wrap.value()[1];
+        }
+        if (edit.min_filter.has_value()) {
+            create_info.min_filter = edit.min_filter.value();
+        }
+        if (edit.mag_filter.has_value()) {
+            create_info.mag_filter = edit.mag_filter.value();
+        }
+        // Keep the sampler pointer stable when nothing effectively changes,
+        // so a repeated identical edit reports changed: false.
+        const bool same =
+            target.sampler &&
+            (target.sampler->get_create_info().address_mode == create_info.address_mode) &&
+            (target.sampler->get_create_info().min_filter   == create_info.min_filter  ) &&
+            (target.sampler->get_create_info().mag_filter   == create_info.mag_filter  );
+        if (!same) {
+            target.sampler = std::make_shared<erhe::graphics::Sampler>(*device, create_info);
+        }
+    }
 }
 
 [[nodiscard]] auto slot_edit_summary(const Slot_edit& edit) -> json
@@ -263,6 +397,11 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
     if (edit.rotation.has_value())  entry["rotation"]  = edit.rotation.value();
     if (edit.offset.has_value())    entry["offset"]    = {edit.offset->x, edit.offset->y};
     if (edit.scale.has_value())     entry["scale"]     = {edit.scale->x,  edit.scale->y};
+    if (edit.wrap.has_value()) {
+        entry["wrap"] = {address_mode_name(edit.wrap.value()[0]), address_mode_name(edit.wrap.value()[1])};
+    }
+    if (edit.min_filter.has_value()) entry["min_filter"] = filter_name(edit.min_filter.value());
+    if (edit.mag_filter.has_value()) entry["mag_filter"] = filter_name(edit.mag_filter.value());
     return entry;
 }
 
@@ -273,6 +412,7 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
 [[nodiscard]] auto apply_material_fields(
     const json&                             args,
     const std::shared_ptr<Content_library>& library,
+    erhe::graphics::Device*                 device,
     erhe::primitive::Material_data&         after,
     json&                                   applied
 ) -> std::optional<std::string>
@@ -456,12 +596,15 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
             if (!parse_slot_edit(*slot_it, tex_list, edit, slot_error)) {
                 return std::string{slot.slot_name} + ": " + slot_error;
             }
+            if (edit.has_sampler_edit() && (device == nullptr)) {
+                return std::string{slot.slot_name} + ": sampler edits (wrap / min_filter / mag_filter) need a graphics device";
+            }
             parsed_edits.emplace_back(&slot, std::move(edit));
         }
 
         json applied_textures = json::object();
         for (auto& [slot, edit] : parsed_edits) {
-            apply_slot_edit(edit, *slot->target);
+            apply_slot_edit(edit, device, *slot->target);
             applied_textures[slot->slot_name] = slot_edit_summary(edit);
         }
         if (!applied_textures.empty()) {
@@ -583,7 +726,7 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
     erhe::primitive::Material_data       after  = before;
 
     json applied = json::object();
-    const std::optional<std::string> field_error = apply_material_fields(args, library, after, applied);
+    const std::optional<std::string> field_error = apply_material_fields(args, library, m_context.graphics_device, after, applied);
     if (field_error.has_value()) {
         json r = make_text_content(field_error.value());
         r["isError"] = true;
@@ -655,7 +798,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
 
     erhe::primitive::Material_data data{};
     json applied = json::object();
-    const std::optional<std::string> field_error = apply_material_fields(args, library, data, applied);
+    const std::optional<std::string> field_error = apply_material_fields(args, library, m_context.graphics_device, data, applied);
     if (field_error.has_value()) {
         json r = make_text_content(field_error.value());
         r["isError"] = true;
