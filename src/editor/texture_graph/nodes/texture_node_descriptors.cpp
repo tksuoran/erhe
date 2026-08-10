@@ -649,7 +649,11 @@ auto build_brightness_contrast() -> Node_descriptor
 // core of Material Maker normal_map.mmg (MIT). Material Maker's node is a
 // compound graph (buffer + switch + edge-detect); this MVP flattens it to the
 // edge-detect shader alone, with the height input sampled as a function-form
-// input at eight offsets, and only the "Default" output format.
+// input at eight offsets. All three of Material Maker's output formats are
+// kept, but the DEFAULT here is "opengl" (+Z out of the surface), not
+// Material Maker's "default": MM-default encodes -Z (its internal preview
+// convention), which erhe's standard.frag - expecting the glTF/OpenGL
+// tangent-space convention - decodes as a normal pointing into the surface.
 auto build_normal_map() -> Node_descriptor
 {
     Node_descriptor d{};
@@ -659,8 +663,25 @@ auto build_normal_map() -> Node_descriptor
     d.global =
         "vec3 process_normal_default(vec3 v, float multiplier) {\n"
         "    return 0.5*normalize(v.xyz*multiplier+vec3(0.0, 0.0, -1.0))+vec3(0.5);\n"
+        "}\n"
+        "\n"
+        "vec3 process_normal_opengl(vec3 v, float multiplier) {\n"
+        "    return 0.5*normalize(v.xyz*multiplier+vec3(0.0, 0.0, 1.0))+vec3(0.5);\n"
+        "}\n"
+        "\n"
+        "vec3 process_normal_directx(vec3 v, float multiplier) {\n"
+        "    return 0.5*normalize(v.xyz*vec3(1.0, -1.0, 1.0)*multiplier+vec3(0.0, 0.0, 1.0))+vec3(0.5);\n"
         "}\n";
     add_input(d, "in", Value_type::grayscale, "0.0", true);
+    add_enum(
+        d, "format", "Format",
+        {
+            Enum_value{"Material Maker", "default"},
+            Enum_value{"OpenGL",         "opengl"},
+            Enum_value{"DirectX",        "directx"}
+        },
+        1 // OpenGL - what erhe's standard.frag expects
+    );
     add_float(d, "amount", "Amount", 0.5f, 0.0f, 2.0f, 0.01f);
     add_size (d, "size",   "Size",   4, 12, 9);
     d.code =
@@ -673,7 +694,7 @@ auto build_normal_map() -> Node_descriptor
         "$(name_uv)_rv += vec2(-2.0, 0.0)*$in($uv-$(name_uv)_e.xz);\n"
         "$(name_uv)_rv += vec2(0.0, 2.0)*$in($uv+$(name_uv)_e.zx);\n"
         "$(name_uv)_rv += vec2(0.0, -2.0)*$in($uv-$(name_uv)_e.zx);\n";
-    add_output(d, Value_type::rgb, "process_normal_default(vec3($(name_uv)_rv, 0.0), $amount*$size/128.0)");
+    add_output(d, Value_type::rgb, "process_normal_$format(vec3($(name_uv)_rv, 0.0), $amount*$size/128.0)");
     return d;
 }
 
