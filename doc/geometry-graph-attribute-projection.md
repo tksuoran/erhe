@@ -51,8 +51,9 @@ rhs=source; CSG already uses this shape).
    - Map the triangle's vertices to the original source facet's CORNERS
      (vertex-match within that one facet) and blend the source corner
      values with those weights. Sampling stays inside ONE source facet,
-     which is exactly what keeps UV SEAMS correct - never average
-     corners across facets.
+     so no individual sample ever averages corners across a seam.
+     (Necessary but NOT sufficient for seams - see "Seams &
+     discontinuities" below.)
    - Blend per the channel's `Interpolation_mode` (linear; normalized =
      re-normalize after blending, for normal-like channels).
    - Respect `Attribute_present` flags: only sample where the source has
@@ -68,6 +69,45 @@ rhs=source; CSG already uses this shape).
 Cost: O(target corners x log source tris) - a 40k-corner body against a
 few-thousand-facet proxy is instantaneous on the background evaluation
 thread; build the AABB once per evaluation.
+
+## Seams & discontinuities
+
+Per-facet-local sampling alone still smears: with independent per-corner
+nearest queries, two corners of the SAME target facet can land on
+opposite sides of a source UV seam (u~0.99 next to u~0.01), and
+rasterization sweeps the whole texture backwards across that facet - the
+classic wrap-around stripe Blender Data Transfer / Houdini AttribTransfer
+show. The source seam does not align with target topology, so the
+discontinuity would cut THROUGH target facets, which corner-domain
+storage cannot represent.
+
+Fix: CHART-COHERENT sampling.
+
+- Decompose the source into UV charts once per evaluation: connected
+  components of facets under "shares an edge whose corner values are
+  continuous across it (match within epsilon)". A cylindrical proxy is
+  one chart with one seam line; an atlas is many charts.
+- Build the triangulated copy + MeshFacetsAABB PER CHART (cheap; the
+  global nearest query runs on the union or on the full-mesh AABB).
+- Sample per TARGET FACET, not per corner: anchor the facet by its
+  centroid's globally nearest hit -> that hit's chart; then query ALL of
+  that facet's corners against that chart's AABB only.
+- Result: every target facet is internally chart-consistent, and the
+  discontinuity falls exactly on target facet BOUNDARIES - where
+  corner-domain attributes represent seams natively (adjacent facets
+  store different corner values at the shared vertices). The residual
+  artifact is benign and standard: a facet straddling the source seam
+  clamps its far corners to the chart boundary (a one-facet-wide stretch
+  band instead of a full texture sweep).
+- Channels without wrap topology (colors, normals, aniso control) do not
+  need chart gating, but running them through it is harmless - one code
+  path.
+- Interactions: `max_distance` misses produce a hard projected/retained
+  boundary by construction (only when the cap is opted into). Backface
+  rejection composes well - on thin shells the two sides are usually
+  distinct charts, so per-facet anchoring keeps each side sampling its
+  own side. Facet-level chart anchoring also makes the along_normal
+  method deterministic near seams.
 
 ## Graph integration
 
@@ -96,10 +136,12 @@ AUTHORED layouts; atlas alone gives arbitrary charts.
 ## Verification plan
 
 - gtest in erhe_geometry tests: cube -> displaced-cube projection
-  (channel values match analytically), seam preservation (source with a
-  UV seam projects without cross-seam bleeding), miss fallback
-  (max_distance small -> target values retained), normal rejection
-  (two-sided thin plate does not sample the far side).
+  (channel values match analytically), seam preservation (cylinder-UV
+  source with a u-wrap seam -> NO target facet spans more than ~one
+  source cell in UV space, i.e. no wrap-around smear; per-facet chart
+  consistency asserted directly), miss fallback (max_distance small ->
+  target values retained), normal rejection (two-sided thin plate does
+  not sample the far side).
 - In-editor: fish body + cylinder proxy, ERHE_SHADER_DEBUG texcoord view
   (fract(v_texcoord_0) - creation 18's debug session) shows a continuous
   cylindrical gradient instead of per-quad moire.
