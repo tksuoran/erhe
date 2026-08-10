@@ -47,6 +47,7 @@
 #include "erhe_imgui/imgui_helpers.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_physics/collision_filter.hpp"
@@ -1805,6 +1806,65 @@ void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Ite
                         int tex_coord = static_cast<int>(sampler->tex_coord);
                         if (ImGui::SliderInt("##", &tex_coord, 0, 1)) {
                             sampler->tex_coord = static_cast<uint32_t>(tex_coord);
+                        }
+                    });
+                    // Sampler state rows. Every edit REPLACES the slot's
+                    // sampler with a freshly created one (never mutates in
+                    // place), so the material inspect snapshot sees the
+                    // pointer change and undo works. A slot without an
+                    // explicit sampler renders with the fallback (linear
+                    // filtering, clamp-to-edge wrap - see
+                    // Material_buffer::m_linear_sampler), which is what the
+                    // rows display before the first edit.
+                    const auto current_create_info = [](erhe::primitive::Material_texture_sampler* slot) -> erhe::graphics::Sampler_create_info {
+                        if (slot->sampler) {
+                            return slot->sampler->get_create_info();
+                        }
+                        return erhe::graphics::Sampler_create_info{
+                            .min_filter  = erhe::graphics::Filter::linear,
+                            .mag_filter  = erhe::graphics::Filter::linear,
+                            .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::nearest,
+                            .debug_label = "material texture sampler"
+                        };
+                    };
+                    const auto replace_sampler = [this](erhe::primitive::Material_texture_sampler* slot, const erhe::graphics::Sampler_create_info& create_info) {
+                        slot->sampler = std::make_shared<erhe::graphics::Sampler>(*m_context.graphics_device, create_info);
+                    };
+                    // Value order matches erhe::graphics::Sampler_address_mode.
+                    static const char* const c_wrap_names[] = {"Repeat", "Clamp to Edge", "Mirrored Repeat"};
+                    // Value order matches erhe::graphics::Filter.
+                    static const char* const c_filter_names[] = {"Nearest", "Linear"};
+                    add_entry(label + " Wrap U", [sampler, current_create_info, replace_sampler]() {
+                        erhe::graphics::Sampler_create_info create_info = current_create_info(sampler);
+                        int current = static_cast<int>(create_info.address_mode[0]);
+                        if (ImGui::Combo("##", &current, c_wrap_names, IM_ARRAYSIZE(c_wrap_names))) {
+                            create_info.address_mode[0] = static_cast<erhe::graphics::Sampler_address_mode>(current);
+                            replace_sampler(sampler, create_info);
+                        }
+                    });
+                    add_entry(label + " Wrap V", [sampler, current_create_info, replace_sampler]() {
+                        erhe::graphics::Sampler_create_info create_info = current_create_info(sampler);
+                        int current = static_cast<int>(create_info.address_mode[1]);
+                        if (ImGui::Combo("##", &current, c_wrap_names, IM_ARRAYSIZE(c_wrap_names))) {
+                            create_info.address_mode[1] = static_cast<erhe::graphics::Sampler_address_mode>(current);
+                            create_info.address_mode[2] = create_info.address_mode[1];
+                            replace_sampler(sampler, create_info);
+                        }
+                    });
+                    add_entry(label + " Min Filter", [sampler, current_create_info, replace_sampler]() {
+                        erhe::graphics::Sampler_create_info create_info = current_create_info(sampler);
+                        int current = static_cast<int>(create_info.min_filter);
+                        if (ImGui::Combo("##", &current, c_filter_names, IM_ARRAYSIZE(c_filter_names))) {
+                            create_info.min_filter = static_cast<erhe::graphics::Filter>(current);
+                            replace_sampler(sampler, create_info);
+                        }
+                    });
+                    add_entry(label + " Mag Filter", [sampler, current_create_info, replace_sampler]() {
+                        erhe::graphics::Sampler_create_info create_info = current_create_info(sampler);
+                        int current = static_cast<int>(create_info.mag_filter);
+                        if (ImGui::Combo("##", &current, c_filter_names, IM_ARRAYSIZE(c_filter_names))) {
+                            create_info.mag_filter = static_cast<erhe::graphics::Filter>(current);
+                            replace_sampler(sampler, create_info);
                         }
                     });
                 }
