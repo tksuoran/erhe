@@ -41,23 +41,21 @@ MCP. Creation 18 (fish) is the reference implementation.
   a backlit fin washes out white against the sky.
 - **Graph-mesh materials do not survive scene save/load** (SKILL.md open
   bugs): screenshot from the live build, not a reloaded glb.
-- **Graph-body UVs are unusable for texturing** (probed 2026-08-10 on the
-  fish): the box cage's per-face UVs survive lattice + subdivision but
-  collapse - most of the deformed surface maps to a tiny UV patch (renders
-  as flat color) with dense stripe bands at the old box-face seams. A bound
-  Graph_texture DOES sample and re-evaluate live (albedo + normal slots via
-  `set_material_texture_source`), so texturing is blocked ONLY on UVs.
-  Fix options: (a) a geometry-graph UV node - either Geogram atlas like the
-  `generate_texture_coordinates` op, or a simple cylindrical/box projection
-  (cylindrical along the body axis suits fish-like bodies); (b) workaround
-  today: realize the graph output to a static mesh, then run
-  `generate_texture_coordinates` once - loses live graph editing;
-  (c) designed 2026-08-10: a `project_attribute` node transferring a chosen
-  attribute (UVs) from a clean proxy branch onto the sculpted target -
-  see doc/geometry-graph-attribute-projection.md.
-- Scales texture recipe (validated compose, blocked on body UVs): `shape`
+- **Graph-body UVs are usable but rough** (fish, 2026-08-10): after the
+  seam-aware CC interpolation fix and the coarse box-subdivisions pipeline,
+  the cage's per-face UVs survive as a few large coherent tiles - good
+  enough for an even scale pattern, though tile scale varies (denser pattern
+  where tiles compress) and some tiles run past [0, 1]. TWO requirements:
+  (a) **wrap=repeat on the material slots** - the clamp default smears
+  out-of-range UV regions into stripe bands
+  (`bind_material_texture(..., wrap="repeat")`); (b) coarse cell counts -
+  16 cells/tile aliased into moire stripes at fish size, 6 reads as scales.
+  A proper per-axis UV control is still future work
+  (doc/geometry-graph-attribute-projection.md `project_attribute` node).
+- Scales texture recipe (LANDED in creation 18, 2026-08-10): `shape`
   (circle, edge 1.0) -> `ensure_rgba` -> two `transform` repeats (scale
   1/cells, second offset by half a cell) -> `blend` lighten (=max) = quincunx
-  scallop height; -> `colorize` for albedo, -> `greyscale` -> `normal_map`
-  in a SECOND graph for the normal slot (one output per Graph_texture;
-  creation 3's bricks_normal is the binding pattern).
+  scallop height; -> `greyscale` -> `colorize` (+ soft-light fbm mottle,
+  amount ~0.2) for albedo; same field -> `normal_map` in a SECOND graph for
+  the normal slot (one output per Graph_texture; creation 3's bricks_normal
+  is the binding pattern). Both slots bound wrap="repeat".

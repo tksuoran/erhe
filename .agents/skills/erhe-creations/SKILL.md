@@ -306,6 +306,14 @@ following its construction logic:
 - Procedural texture graphs (`c.texture_graph` + fbm/noise/colorize ->
   output, `bind_material_texture`) give sand/granite-style surfaces;
   box-face UV tiling repeats per face at box default steps.
+- **Texture slots default to clamp-to-edge** (2026-08-10): a material
+  slot without an explicit sampler renders clamped, so any UV that runs
+  past [0, 1] smears the edge texel into stripe bands. Tiling textures
+  need `bind_material_texture(..., wrap="repeat")`, which routes through
+  the `edit_material` per-slot sampler args (`wrap` string or [u, v]
+  pair: repeat / clamp_to_edge / mirrored_repeat, plus `min_filter` /
+  `mag_filter` nearest|linear). The Properties window has matching
+  Wrap/Filter rows per bound slot.
 
 ## Lighting
 
