@@ -51,7 +51,10 @@ MCP. Creation 18 (fish) is the reference implementation.
   `generate_texture_coordinates` op, or a simple cylindrical/box projection
   (cylindrical along the body axis suits fish-like bodies); (b) workaround
   today: realize the graph output to a static mesh, then run
-  `generate_texture_coordinates` once - loses live graph editing.
+  `generate_texture_coordinates` once - loses live graph editing;
+  (c) designed 2026-08-10: a `project_attribute` node transferring a chosen
+  attribute (UVs) from a clean proxy branch onto the sculpted target -
+  see doc/geometry-graph-attribute-projection.md.
 - Scales texture recipe (validated compose, blocked on body UVs): `shape`
   (circle, edge 1.0) -> `ensure_rgba` -> two `transform` repeats (scale
   1/cells, second offset by half a cell) -> `blend` lighten (=max) = quincunx
