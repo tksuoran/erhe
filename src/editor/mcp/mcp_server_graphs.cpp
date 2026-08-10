@@ -300,6 +300,11 @@ auto Mcp_server::action_geometry_graph_add_node(const json& args) -> std::string
     if (node == nullptr) {
         return make_error_content("Unknown geometry graph node type: " + type_name);
     }
+    // Structural MCP edits schedule the shared DAG auto layout: scripted
+    // graph construction never places nodes, so without this the canvas
+    // ends up a spawn-grid pile. Applied deferred, once the window has
+    // drawn every node with a stable measured size.
+    window->request_automatic_layout();
     return make_json_content(geometry_graph_node_json(*node)).dump();
 }
 
@@ -315,6 +320,7 @@ auto Mcp_server::action_geometry_graph_remove_node(const json& args) -> std::str
         return make_error_content("Node not found");
     }
     window->remove_node(std::dynamic_pointer_cast<Geometry_graph_node>(node->node_from_this()));
+    window->request_automatic_layout();
 
     json result;
     result["removed"] = true;
@@ -439,6 +445,7 @@ auto Mcp_server::action_geometry_graph_connect(const json& args) -> std::string
     if (!connected) {
         return make_error_content("Connect failed (pin key mismatch, or the link would create a cycle)");
     }
+    window->request_automatic_layout();
 
     json result;
     result["connected"] = true;
@@ -465,6 +472,7 @@ auto Mcp_server::action_geometry_graph_disconnect(const json& args) -> std::stri
         return make_error_content("Pin slot out of range");
     }
     window->disconnect(&source_node->get_output_pins().at(source_slot), &sink_node->get_input_pins().at(sink_slot));
+    window->request_automatic_layout();
 
     json result;
     result["disconnected"] = true;
@@ -1313,6 +1321,8 @@ auto Mcp_server::action_texture_graph_add_node(const json& args) -> std::string
         const float x = args["position"][0].get<float>();
         const float y = args["position"][1].get<float>();
         window->set_node_position(*node, ImVec2{x, y});
+    } else {
+        window->request_automatic_layout();
     }
     return make_json_content(texture_graph_node_json(*window, *node)).dump();
 }
@@ -1329,6 +1339,7 @@ auto Mcp_server::action_texture_graph_remove_node(const json& args) -> std::stri
         return make_error_content("Node not found");
     }
     window->remove_node(std::dynamic_pointer_cast<Texture_graph_node>(node->node_from_this()));
+    window->request_automatic_layout();
 
     json result;
     result["removed"] = true;
@@ -1387,6 +1398,7 @@ auto Mcp_server::action_texture_graph_connect(const json& args) -> std::string
     if (!connected) {
         return make_error_content("Connect failed (pin key mismatch, or the link would create a cycle)");
     }
+    window->request_automatic_layout();
 
     json result;
     result["connected"] = true;
@@ -1413,6 +1425,7 @@ auto Mcp_server::action_texture_graph_disconnect(const json& args) -> std::strin
         return make_error_content("Pin slot out of range");
     }
     window->disconnect(&source_node->get_output_pins().at(source_slot), &sink_node->get_input_pins().at(sink_slot));
+    window->request_automatic_layout();
 
     json result;
     result["disconnected"] = true;

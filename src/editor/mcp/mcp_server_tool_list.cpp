@@ -1256,7 +1256,7 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
         }}
     }});
-    m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout.", {
+    m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout. Structural edits (add/remove/connect/disconnect) schedule the automatic DAG canvas layout, applied when the window next draws.", {
         {"type", "object"},
         {"properties", {
             {"type", {{"type", "string"}, {"enum", json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "lattice", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "passthrough", "output"})}, {"description", "Node type to create"}}}
@@ -1457,11 +1457,11 @@ void Mcp_server::refresh_tool_list()
     }
     texture_node_type_enum.push_back("output");
     texture_node_type_enum.push_back("material_output");
-    m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout.", {
+    m_tool_infos.push_back({"texture_graph_add_node", "Add a node to the texture node graph. Returns the new node's id, parameters and pin layout. Structural edits (add/remove/connect/disconnect) schedule the automatic DAG canvas layout, applied when the window next draws.", {
         {"type", "object"},
         {"properties", {
             {"type", {{"type", "string"}, {"enum", texture_node_type_enum}, {"description", "Node type to create"}}},
-            {"position", {{"type", "array"}, {"items", {{"type", "number"}}}, {"description", "Optional [x, y] canvas position; defaults to the next spawn-grid slot"}}}
+            {"position", {{"type", "array"}, {"items", {{"type", "number"}}}, {"description", "Optional [x, y] canvas position; skips the automatic layout for this call, but any later structural edit re-lays the whole graph"}}}
         }},
         {"required", json::array({"type"})}
     }});
