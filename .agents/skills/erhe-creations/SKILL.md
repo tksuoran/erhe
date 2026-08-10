@@ -418,9 +418,10 @@ file is read before any creation work:
 - Graphics preset High once shipped `shadow_light_count 32` (~2.1 GiB
   VRAM per view -> OOM with two scenes); trimmed to 8 locally in
   `config/editor/graphics_presets.json` - coordinate before reverting.
-- **Geometry-graph mesh materials do not survive scene save/load**
-  (found 2026-08-10 capturing the doc gallery): reloading
-  `conway_cathedral.glb` renders every graph-mesh sculpture with the
-  default white material (the graph re-evaluates, its output material
-  binding is lost). Screenshots of graph-mesh creations must come from
-  a fresh script build, not a loaded glb; fix the round-trip if asked.
+- (The graph-mesh material save/load loss is FIXED 2026-08-10 late: the
+  exporter's lazy material pass dropped materials referenced only by
+  graph output nodes because graph-controlled meshes are excluded from
+  export; they now export via extra_materials, and graph-texture slot
+  bindings carry sampler wrap/filter state. Files saved BEFORE the fix
+  stay broken - the material is simply absent from them; re-save from a
+  fresh build.)

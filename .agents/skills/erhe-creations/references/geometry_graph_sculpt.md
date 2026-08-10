@@ -39,8 +39,9 @@ MCP. Creation 18 (fish) is the reference implementation.
   with one CSG cylinder difference; small paired fins are pooled `sweep`
   blades. Translucent fin material: alpha_blend opacity ~0.9-0.95 - at 0.85
   a backlit fin washes out white against the sky.
-- **Graph-mesh materials do not survive scene save/load** (SKILL.md open
-  bugs): screenshot from the live build, not a reloaded glb.
+- Graph-mesh materials survive scene save/load since 2026-08-10 late
+  (exported via extra_materials; older .glb files saved before the fix
+  lack the material entirely - re-save from a fresh build).
 - **Graph-body UVs are usable but rough** (fish, 2026-08-10): after the
   seam-aware CC interpolation fix and the coarse box-subdivisions pipeline,
   the cage's per-face UVs survive as a few large coherent tiles - good
