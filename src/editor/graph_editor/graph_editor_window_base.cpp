@@ -77,15 +77,21 @@ auto Graph_editor_window_base::get_layout_node_id(const erhe::graph::Node& node)
 
 void Graph_editor_window_base::request_automatic_layout()
 {
-    m_layout_mode = Layout_mode::dag;
-    m_automatic_layout_pending = true;
+    const erhe::graph::Graph* graph = get_current_graph();
+    if (graph == nullptr) {
+        return;
+    }
+    m_pending_layouts[graph] = Layout_mode::dag;
     m_layout_size_sum = -1.0f;
 }
 
 void Graph_editor_window_base::request_grid_layout()
 {
-    m_layout_mode = Layout_mode::grid;
-    m_automatic_layout_pending = true;
+    const erhe::graph::Graph* graph = get_current_graph();
+    if (graph == nullptr) {
+        return;
+    }
+    m_pending_layouts[graph] = Layout_mode::grid;
     m_layout_size_sum = -1.0f;
 }
 
@@ -119,12 +125,132 @@ void Graph_editor_window_base::add_all_palette_nodes()
     request_grid_layout();
 }
 
+void Graph_editor_window_base::sync_canvas_with_model()
+{
+    erhe::graph::Graph* graph = get_current_graph();
+    ax::NodeEditor::EditorContext* node_editor = get_node_editor();
+    if ((graph == nullptr) || (node_editor == nullptr)) {
+        return;
+    }
+    std::unordered_map<std::size_t, std::pair<float, float>> next_synced;
+    for (erhe::graph::Node* graph_node : graph->get_nodes()) {
+        Graph_editor_node* node = dynamic_cast<Graph_editor_node*>(graph_node);
+        if (node == nullptr) {
+            continue;
+        }
+        const std::size_t            id = get_layout_node_id(*graph_node);
+        const ax::NodeEditor::NodeId node_id{id};
+        ImVec2 context_position = node_editor->GetNodePosition(node_id);
+        const auto synced_it = m_synced_positions.find(id);
+        if (synced_it == m_synced_positions.end()) {
+            // First time this window draws the node: seed the canvas from
+            // the model, or adopt the spawn/default position into it.
+            if (node->has_canvas_position()) {
+                context_position = ImVec2{node->get_canvas_x(), node->get_canvas_y()};
+                node_editor->SetNodePosition(node_id, context_position);
+            } else {
+                node->set_canvas_position(context_position.x, context_position.y);
+            }
+        } else if ((context_position.x != synced_it->second.first) || (context_position.y != synced_it->second.second)) {
+            // Moved locally since the last agreement (drag, resize adopt,
+            // paste, automatic layout): the model follows, live.
+            node->set_canvas_position(context_position.x, context_position.y);
+        } else if ((node->get_canvas_x() != context_position.x) || (node->get_canvas_y() != context_position.y)) {
+            // Unchanged here but the model moved elsewhere (another window
+            // instance, MCP): adopt.
+            context_position = ImVec2{node->get_canvas_x(), node->get_canvas_y()};
+            node_editor->SetNodePosition(node_id, context_position);
+        }
+        next_synced.emplace(id, std::pair<float, float>{context_position.x, context_position.y});
+    }
+    // The swap also prunes entries of nodes no longer drawn.
+    m_synced_positions.swap(next_synced);
+
+    // Same three-way reconciliation for link wire routing (mid points +
+    // curve params), stored on the erhe::graph::Link.
+    std::unordered_map<const erhe::graph::Link*, Synced_link_routing> next_synced_links;
+    std::vector<erhe::graph::Link_mid_point> canvas_mid_points;
+    erhe::graph::Link_curve_params           canvas_curve_params;
+    for (const std::unique_ptr<erhe::graph::Link>& link_ptr : graph->get_links()) {
+        erhe::graph::Link* link = link_ptr.get();
+        read_link_routing_from_canvas(*node_editor, *link, canvas_mid_points, canvas_curve_params);
+        const auto synced_it = m_synced_link_routing.find(link);
+        if (synced_it == m_synced_link_routing.end()) {
+            // First time this window sees the link: seed the canvas from
+            // the model, or adopt the canvas state (paste writes routing to
+            // the canvas before the model has any) into it.
+            if (link->has_routing()) {
+                apply_link_routing_to_canvas(*node_editor, *link);
+                canvas_mid_points   = link->get_mid_points();
+                canvas_curve_params = link->get_curve_params();
+            } else {
+                link->set_mid_points(canvas_mid_points);
+                link->set_curve_params(canvas_curve_params);
+            }
+        } else if ((canvas_mid_points != synced_it->second.mid_points) || !(canvas_curve_params == synced_it->second.curve_params)) {
+            // Edited locally (pen-tool gestures, Node Properties link rows).
+            link->set_mid_points(canvas_mid_points);
+            link->set_curve_params(canvas_curve_params);
+        } else if ((canvas_mid_points != link->get_mid_points()) || !(canvas_curve_params == link->get_curve_params())) {
+            // Changed elsewhere (another window, MCP, load): adopt.
+            apply_link_routing_to_canvas(*node_editor, *link);
+            canvas_mid_points   = link->get_mid_points();
+            canvas_curve_params = link->get_curve_params();
+        }
+        next_synced_links.emplace(
+            link,
+            Synced_link_routing{
+                .mid_points   = canvas_mid_points,
+                .curve_params = canvas_curve_params
+            }
+        );
+    }
+    m_synced_link_routing.swap(next_synced_links);
+}
+
 void Graph_editor_window_base::apply_automatic_layout()
 {
+    erhe::graph::Graph* graph = get_current_graph();
+
+    // Legacy fallback: a graph saved before canvas positions were stored on
+    // the nodes has no arrangement anywhere - every node lands on one spot.
+    // Detect it when the drawn target changes (after
+    // sync_canvas_positions_with_model has seeded this window's canvas, so
+    // graphs WITH stored positions never trip this) and self-request the
+    // DAG layout.
+    if (graph != m_last_drawn_graph) {
+        m_last_drawn_graph = graph;
+        ax::NodeEditor::EditorContext* node_editor_for_probe = get_node_editor();
+        if ((graph != nullptr) && (node_editor_for_probe != nullptr) && (m_pending_layouts.find(graph) == m_pending_layouts.end())) {
+            const std::vector<erhe::graph::Node*>& probe_nodes = graph->get_nodes();
+            if (probe_nodes.size() > 1) {
+                bool   all_on_one_spot = true;
+                ImVec2 first_position{};
+                for (std::size_t i = 0, end = probe_nodes.size(); i < end; ++i) {
+                    const ImVec2 position = node_editor_for_probe->GetNodePosition(ax::NodeEditor::NodeId{get_layout_node_id(*probe_nodes[i])});
+                    if (i == 0) {
+                        first_position = position;
+                    } else if ((position.x != first_position.x) || (position.y != first_position.y)) {
+                        all_on_one_spot = false;
+                        break;
+                    }
+                }
+                if (all_on_one_spot) {
+                    m_pending_layouts[graph] = Layout_mode::dag;
+                }
+            }
+        }
+    }
+
+    // The layout for the CURRENT graph, if one is pending. Requests for
+    // other graphs stay queued until their graph becomes the drawn target.
+    const auto pending_it = (graph != nullptr) ? m_pending_layouts.find(graph) : m_pending_layouts.end();
+    const bool pending = (graph != nullptr) && (pending_it != m_pending_layouts.end());
+
     // Frame the content the frame after the layout applied: NavigateToContent
     // uses the content bounds End() computed, which reflect the new positions
     // only after the nodes have been drawn there once.
-    if (m_navigate_to_content_pending && !m_automatic_layout_pending) {
+    if (m_navigate_to_content_pending && !pending) {
         m_navigate_to_content_pending = false;
         ax::NodeEditor::EditorContext* node_editor = get_node_editor();
         if (node_editor != nullptr) {
@@ -132,19 +258,24 @@ void Graph_editor_window_base::apply_automatic_layout()
         }
         return;
     }
-    if (!m_automatic_layout_pending) {
+    if (!pending) {
         return;
     }
-    erhe::graph::Graph* graph = get_current_graph();
     ax::NodeEditor::EditorContext* node_editor = get_node_editor();
-    if ((graph == nullptr) || (node_editor == nullptr)) {
-        m_automatic_layout_pending = false;
+    if (node_editor == nullptr) {
         return;
     }
     const std::vector<erhe::graph::Node*>& nodes = graph->get_nodes();
     if (nodes.empty()) {
-        m_automatic_layout_pending = false;
+        m_pending_layouts.erase(pending_it);
         return;
+    }
+
+    // The size-settle tracking below is for one graph at a time; restart it
+    // when the drawn target changed since the last attempt.
+    if (graph != m_layout_size_graph) {
+        m_layout_size_graph = graph;
+        m_layout_size_sum   = -1.0f;
     }
 
     // Wait until every node has been drawn (nonzero measured size) and the
@@ -163,13 +294,14 @@ void Graph_editor_window_base::apply_automatic_layout()
         m_layout_size_sum = size_sum;
         return; // sizes still settling - retry next frame
     }
-    m_automatic_layout_pending = false;
+    const Layout_mode layout_mode = pending_it->second;
+    m_pending_layouts.erase(pending_it);
 
     const auto node_size_for = [this, node_editor](const erhe::graph::Node& node) -> ImVec2 {
         return node_editor->GetNodeSize(ax::NodeEditor::NodeId{get_layout_node_id(node)});
     };
 
-    if (m_layout_mode == Layout_mode::grid) {
+    if (layout_mode == Layout_mode::grid) {
         // Uniform cells sized to the largest node, so the grid stays aligned
         // and nothing overlaps whatever mix of node heights is present (a
         // Gradient node is several times taller than an Invert). Roughly
@@ -569,6 +701,9 @@ void Graph_editor_window_base::node_background_context_menu(ax::NodeEditor::Edit
         const ImVec2 spawn_position = node_editor.ScreenToCanvas(ImGui::GetMousePosOnOpeningCurrentPopup());
         if (ImGui::MenuItem("Paste", "Ctrl+V", false, can_paste())) {
             paste_clipboard(spawn_position);
+        }
+        if (ImGui::MenuItem("Automatic Layout", nullptr, false, get_current_graph() != nullptr)) {
+            request_automatic_layout();
         }
         ImGui::Separator();
         build_palette();

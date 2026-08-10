@@ -78,7 +78,7 @@ namespace {
     }
     json parameters = json::object();
     node.write_parameters(parameters);
-    return json{
+    json result{
         {"id",              node.get_id()},
         {"name",            node.get_name()},
         {"parameters",      parameters},
@@ -86,6 +86,12 @@ namespace {
         {"outputs",         outputs},
         {"output_payloads", output_payloads}
     };
+    // Canvas position now lives on the node (shared by every editor window,
+    // persisted with the graph).
+    if (node.has_canvas_position()) {
+        result["position"] = {node.get_canvas_x(), node.get_canvas_y()};
+    }
+    return result;
 }
 
 [[nodiscard]] auto find_geometry_graph_node(
@@ -211,22 +217,19 @@ auto Mcp_server::query_geometry_graph(const json& args) -> std::string
             {"sink_node_id",   link->get_sink()->get_owner_node()->get_id()},
             {"sink_slot",      link->get_sink()->get_slot()}
         };
-        // Canvas routing mid points, [x, y] pairs or pen-tool tangent objects
+        // Wire routing mid points, [x, y] pairs or pen-tool tangent objects
         // (see geometry_graph_set_link_mid_points / graph_link_routing.hpp).
-        ax::NodeEditor::EditorContext* node_editor = window->get_node_editor();
-        const ax::NodeEditor::LinkId link_id{link.get()};
-        json mid_points = write_link_mid_points_json(*node_editor, link_id);
+        // Read from the MODEL (erhe::graph::Link) - the shared, serialized
+        // authority every window canvas syncs against.
+        json mid_points = link_routing_to_json(*link);
         if (!mid_points.empty()) {
             link_json["mid_points"] = std::move(mid_points);
         }
         // Per-link curve shape (see geometry_graph_set_link_curve); omitted
         // at the all-zero default.
-        float tension    = 0.0f;
-        float continuity = 0.0f;
-        float bias       = 0.0f;
-        node_editor->GetLinkCurveParams(link_id, &tension, &continuity, &bias);
-        if ((tension != 0.0f) || (continuity != 0.0f) || (bias != 0.0f)) {
-            link_json["curve"] = {tension, continuity, bias};
+        const erhe::graph::Link_curve_params& curve = link->get_curve_params();
+        if ((curve.tension != 0.0f) || (curve.continuity != 0.0f) || (curve.bias != 0.0f)) {
+            link_json["curve"] = {curve.tension, curve.continuity, curve.bias};
         }
         links.push_back(link_json);
     }
@@ -512,11 +515,10 @@ auto Mcp_server::action_geometry_graph_set_link_mid_points(const json& args) -> 
     }
 
     const json mid_points_json = args.value("mid_points", json::array());
-    const bool applied = read_link_mid_points_json(
-        *window->get_node_editor(),
-        ax::NodeEditor::LinkId{graph_link},
-        mid_points_json
-    );
+    // Write the MODEL (erhe::graph::Link); every window canvas adopts it on
+    // its next sync pass - works with the window hidden, and the routing is
+    // serialized with the graph.
+    const bool applied = link_routing_from_json(*graph_link, mid_points_json);
     if (!applied) {
         return make_error_content("'mid_points' entries must be [x, y] pairs or {pos, mode, in, out} objects (see graph_link_routing.hpp)");
     }
@@ -560,22 +562,22 @@ auto Mcp_server::action_geometry_graph_set_link_curve(const json& args) -> std::
         return make_error_content("No link between the given pins");
     }
 
-    const float tension    = args.value("tension",    0.0f);
-    const float continuity = args.value("continuity", 0.0f);
-    const float bias       = args.value("bias",       0.0f);
-    ax::NodeEditor::EditorContext* node_editor = window->get_node_editor();
-    const ax::NodeEditor::LinkId link_id{graph_link};
-    node_editor->SetLinkCurveParams(link_id, tension, continuity, bias);
+    // Write the MODEL (erhe::graph::Link), clamped like the canvas clamps;
+    // every window canvas adopts it on its next sync pass.
+    const erhe::graph::Link_curve_params curve_params{
+        .tension    = std::clamp(args.value("tension",    0.0f), -1.0f, 1.0f),
+        .continuity = std::clamp(args.value("continuity", 0.0f), -1.0f, 1.0f),
+        .bias       = std::clamp(args.value("bias",       0.0f), -1.0f, 1.0f)
+    };
+    graph_link->set_curve_params(curve_params);
     // Make the curve change observable in the next capture_screenshot.
     window->request_window_focus();
 
     // Echo back the applied (clamped) values.
-    float applied[3] = {0.0f, 0.0f, 0.0f};
-    node_editor->GetLinkCurveParams(link_id, &applied[0], &applied[1], &applied[2]);
     json result;
-    result["tension"]    = applied[0];
-    result["continuity"] = applied[1];
-    result["bias"]       = applied[2];
+    result["tension"]    = curve_params.tension;
+    result["continuity"] = curve_params.continuity;
+    result["bias"]       = curve_params.bias;
     return make_json_content(result).dump();
 }
 

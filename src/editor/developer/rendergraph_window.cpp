@@ -179,7 +179,7 @@ auto Rendergraph_window::get_node_position(const Graph_editor_node& node) -> ImV
     return m_node_editor->GetNodePosition(ax::NodeEditor::NodeId{node.get_id()});
 }
 
-void Rendergraph_window::set_node_position(const Graph_editor_node& node, const ImVec2& position)
+void Rendergraph_window::set_node_position(Graph_editor_node& node, const ImVec2& position)
 {
     m_node_editor->SetNodePosition(ax::NodeEditor::NodeId{node.get_id()}, position);
 }

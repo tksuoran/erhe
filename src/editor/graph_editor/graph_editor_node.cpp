@@ -83,6 +83,28 @@ void Graph_editor_node::set_ui_size(const float width, const float height)
     m_ui_height = std::clamp(height, 0.0f, 4096.0f);
 }
 
+auto Graph_editor_node::has_canvas_position() const -> bool
+{
+    return m_has_canvas_position;
+}
+
+auto Graph_editor_node::get_canvas_x() const -> float
+{
+    return m_canvas_x;
+}
+
+auto Graph_editor_node::get_canvas_y() const -> float
+{
+    return m_canvas_y;
+}
+
+void Graph_editor_node::set_canvas_position(const float x, const float y)
+{
+    m_canvas_x = x;
+    m_canvas_y = y;
+    m_has_canvas_position = true;
+}
+
 auto Graph_editor_node::get_pin_label_width() const -> float
 {
     return m_pin_label_width;

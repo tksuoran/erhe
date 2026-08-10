@@ -247,9 +247,13 @@ auto Geometry_graph_window::get_node_position(const Graph_editor_node& node) -> 
     return m_node_editor->GetNodePosition(ax::NodeEditor::NodeId{node.get_id()});
 }
 
-void Geometry_graph_window::set_node_position(const Graph_editor_node& node, const ImVec2& position)
+void Geometry_graph_window::set_node_position(Graph_editor_node& node, const ImVec2& position)
 {
     m_node_editor->SetNodePosition(ax::NodeEditor::NodeId{node.get_id()}, position);
+    // Write-through to the model (the shared, serialized position store) so
+    // positions set while the window is hidden (MCP, spawn grid) reach a
+    // scene save even before the first draw / sync pass.
+    node.set_canvas_position(position.x, position.y);
 }
 
 void Geometry_graph_window::select_canvas_nodes(const std::vector<std::size_t>& node_ids)
@@ -1159,6 +1163,11 @@ void Geometry_graph_window::imgui()
     // Interactive node resizing (edge / corner drags): adopt the dragged
     // size into the node's requested extent.
     apply_node_resize(*m_node_editor.get());
+
+    // Reconcile this window's canvas with the layout stored in the graph
+    // model (node positions, link routing) - local edits flow to the model,
+    // model changes from other windows / MCP flow to this canvas.
+    sync_canvas_with_model();
 
     // Pending automatic layout (palette "Automatic Layout" button); waits
     // for stable measured node sizes, then frames the result.

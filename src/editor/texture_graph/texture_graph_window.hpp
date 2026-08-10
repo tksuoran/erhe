@@ -144,7 +144,7 @@ public:
     // graph-independent (no Graph_texture argument); selected nodes are the
     // canvas selection (issue #252 - not the global selection).
     [[nodiscard]] auto get_node_position(const Graph_editor_node& node) -> ImVec2 override;
-    void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
+    void set_node_position(Graph_editor_node& node, const ImVec2& position) override;
     [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
     [[nodiscard]] auto get_node_editor() -> ax::NodeEditor::EditorContext* override { return m_node_editor.get(); }
     void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;

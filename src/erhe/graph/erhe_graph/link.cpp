@@ -49,4 +49,53 @@ void Link::disconnect()
     m_sink   = nullptr;
 }
 
+auto operator==(const Link_mid_point& lhs, const Link_mid_point& rhs) -> bool
+{
+    return
+        (lhs.position_x    == rhs.position_x   ) &&
+        (lhs.position_y    == rhs.position_y   ) &&
+        (lhs.mode          == rhs.mode         ) &&
+        (lhs.tangent_in_x  == rhs.tangent_in_x ) &&
+        (lhs.tangent_in_y  == rhs.tangent_in_y ) &&
+        (lhs.tangent_out_x == rhs.tangent_out_x) &&
+        (lhs.tangent_out_y == rhs.tangent_out_y);
+}
+
+auto operator==(const Link_curve_params& lhs, const Link_curve_params& rhs) -> bool
+{
+    return
+        (lhs.tension    == rhs.tension   ) &&
+        (lhs.continuity == rhs.continuity) &&
+        (lhs.bias       == rhs.bias      );
+}
+
+auto Link::get_mid_points() const -> const std::vector<Link_mid_point>&
+{
+    return m_mid_points;
+}
+
+auto Link::get_curve_params() const -> const Link_curve_params&
+{
+    return m_curve_params;
+}
+
+auto Link::has_routing() const -> bool
+{
+    return
+        !m_mid_points.empty() ||
+        (m_curve_params.tension    != 0.0f) ||
+        (m_curve_params.continuity != 0.0f) ||
+        (m_curve_params.bias       != 0.0f);
+}
+
+void Link::set_mid_points(std::vector<Link_mid_point> mid_points)
+{
+    m_mid_points = std::move(mid_points);
+}
+
+void Link::set_curve_params(const Link_curve_params& curve_params)
+{
+    m_curve_params = curve_params;
+}
+
 } // namespace erhe::graph

@@ -2,11 +2,14 @@
 
 #include "erhe_imgui/imgui_window.hpp"
 
+#include "erhe_graph/link.hpp"
+
 #include <nlohmann/json_fwd.hpp>
 
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct ImVec2;
@@ -66,7 +69,9 @@ public:
     // context (graph-independent). Size is the content-derived on-canvas
     // extent (read-only by nature; adjust through the node's ui scale).
     [[nodiscard]] virtual auto get_node_position(const Graph_editor_node& node) -> ImVec2 = 0;
-    virtual void set_node_position(const Graph_editor_node& node, const ImVec2& position) = 0;
+    // Non-const: the position is stored on the node (the model authority)
+    // in addition to this window's canvas context.
+    virtual void set_node_position(Graph_editor_node& node, const ImVec2& position) = 0;
     [[nodiscard]] virtual auto get_node_size(const Graph_editor_node& node) -> ImVec2 = 0;
 
     // The window's ax::NodeEditor context (canvas state: node positions, link
@@ -180,6 +185,20 @@ protected:
     // (NavigateToContent). Call right after the canvas End().
     void apply_automatic_layout();
 
+    // Reconciles this window's canvas with the layout state stored IN THE
+    // GRAPH MODEL - node positions on the nodes
+    // (Graph_editor_node::set_canvas_position) and link wire routing on the
+    // links (erhe::graph::Link mid points + curve params). The model is the
+    // shared authority, so every window shows the same layout and it
+    // persists with the graph. Per item: one this window has not seen yet
+    // seeds the canvas from the model (or adopts the canvas default into
+    // the model); canvas state that changed since the last agreement here
+    // (drag, resize, paste, layout, pen-tool gestures) is written to the
+    // model; otherwise a model change from elsewhere (another window, MCP,
+    // load) is pushed to the canvas. Call right after the canvas End(),
+    // before apply_automatic_layout().
+    void sync_canvas_with_model();
+
     // Canvas node id for a graph node. The graph editors draw graph nodes
     // directly, so the canvas id is the node's item id (default); the
     // rendergraph viewer draws proxy nodes and overrides this to map to them.
@@ -267,12 +286,37 @@ private:
     std::vector<std::size_t>                        m_pending_canvas_selection;
     // Automatic layout request state (apply_automatic_layout()): the layout
     // waits for every node's measured size to be stable across two frames
-    // before applying, then frames the content one frame later.
+    // before applying, then frames the content one frame later. Requests are
+    // keyed PER GRAPH (get_current_graph()), not per window: MCP builds
+    // several graphs back to back, retargeting the window between requests
+    // while it is hidden - a window-level flag would lay out only the graph
+    // that happens to be current at the first draw and silently drop the
+    // others (they then showed as a stack of overlapping nodes). A pending
+    // entry applies whenever its graph becomes the drawn target. Entries of
+    // deleted graphs are never dereferenced - the key is only compared
+    // against the live current graph.
     enum class Layout_mode : unsigned int { dag = 0, grid = 1 };
-    Layout_mode                                     m_layout_mode{Layout_mode::dag};
-    bool                                            m_automatic_layout_pending {false};
+    std::unordered_map<const erhe::graph::Graph*, Layout_mode> m_pending_layouts;
     bool                                            m_navigate_to_content_pending{false};
+    const erhe::graph::Graph*                       m_layout_size_graph{nullptr};
     float                                           m_layout_size_sum{-1.0f};
+    // Last graph this window drew: when it changes, a graph whose nodes all
+    // sit on one spot in THIS window's canvas AND carry no model positions
+    // (legacy files saved before positions were stored on the nodes)
+    // self-requests the DAG layout.
+    const erhe::graph::Graph*                       m_last_drawn_graph{nullptr};
+    // Per-node canvas position this window last agreed on with the model
+    // (sync_canvas_with_model); keyed by canvas node id. Entries for nodes
+    // no longer drawn are pruned each sync pass.
+    std::unordered_map<std::size_t, std::pair<float, float>> m_synced_positions;
+    // Per-link wire routing this window last agreed on with the model.
+    class Synced_link_routing
+    {
+    public:
+        std::vector<erhe::graph::Link_mid_point> mid_points;
+        erhe::graph::Link_curve_params           curve_params;
+    };
+    std::unordered_map<const erhe::graph::Link*, Synced_link_routing> m_synced_link_routing;
     // Reused scratch for the context menu / shortcut selection queries
     // (cleared at point of use, capacity kept).
     std::vector<std::shared_ptr<Graph_editor_node>> m_selected_nodes_scratch;

@@ -65,6 +65,17 @@ public:
     [[nodiscard]] auto get_ui_height() const -> float;
     void set_ui_size(float width, float height);
 
+    // Canvas position in canvas units, stored ON THE NODE so every graph
+    // editor window shows the same layout and it persists with the graph
+    // (each window's ax::NodeEditor context is synced against this model by
+    // Graph_editor_window_base::sync_canvas_positions_with_model()). A node
+    // that has never been placed reports has_canvas_position() false and
+    // adopts the first window's spawn/default position.
+    [[nodiscard]] auto has_canvas_position() const -> bool;
+    [[nodiscard]] auto get_canvas_x() const -> float;
+    [[nodiscard]] auto get_canvas_y() const -> float;
+    void set_canvas_position(float x, float y);
+
     // Pin label column width in canvas units: the space reserved on each pin
     // edge for the pin labels (labels wider than this clip). Editors whose
     // pins carry longer names raise it (the rendergraph viewer). Adjusted
@@ -137,6 +148,9 @@ protected:
     float       m_content_scale{1.0f};
     float       m_ui_width {0.0f}; // canvas units; <= 0 = automatic
     float       m_ui_height{0.0f}; // canvas units; <= 0 = automatic
+    float       m_canvas_x{0.0f};  // canvas units; valid when m_has_canvas_position
+    float       m_canvas_y{0.0f};
+    bool        m_has_canvas_position{false};
     float       m_pin_label_width{default_pin_label_width}; // canvas units
     // Bottom of the requested node content extent in screen space (0 = no
     // requested height); set per frame by node_editor(), consumed by the

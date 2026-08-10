@@ -44,7 +44,7 @@ public:
     void collect_selected_nodes(std::vector<std::shared_ptr<Graph_editor_node>>& out) override;
     [[nodiscard]] auto find_graph_editor_node(std::size_t node_id) -> std::shared_ptr<Graph_editor_node> override;
     [[nodiscard]] auto get_node_position(const Graph_editor_node& node) -> ImVec2 override;
-    void set_node_position(const Graph_editor_node& node, const ImVec2& position) override;
+    void set_node_position(Graph_editor_node& node, const ImVec2& position) override;
     [[nodiscard]] auto get_node_size(const Graph_editor_node& node) -> ImVec2 override;
     [[nodiscard]] auto get_node_editor() -> ax::NodeEditor::EditorContext* override;
     // The automatic layout addresses proxies, not the rendergraph nodes.

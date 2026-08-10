@@ -2,6 +2,7 @@
 
 #include "editor_log.hpp"
 #include "graph_editor/graph_editor_node.hpp"
+#include "graph_editor/graph_link_routing.hpp"
 #include "graph_editor/node_edge.hpp"
 
 #include "erhe_graph/graph.hpp"
@@ -22,9 +23,11 @@ class App_context;
 
 // Payload-agnostic (de)serialization of a graph asset's node graph, shared by
 // the geometry graph (Graph_mesh) and the texture graph (Graph_texture). The
-// format is v1: nodes carry their factory type + parameters, links reference
-// node indices + pin slots (canvas positions live in the editor window, not the
-// asset). See doc/graph-editor-shared-plan.md (C4).
+// format is v1: nodes carry their factory type + parameters + canvas layout
+// (position, size, pin edges); links reference node indices + pin slots and
+// carry their wire routing (mid points + curve params). Everything that
+// affects how the graph LOOKS is stored with the graph - the editor windows
+// sync their canvases against it. See doc/graph-editor-shared-plan.md (C4).
 
 // Serialize the node graph to JSON. NodeT is deduced from the node vector.
 // graph is non-const because erhe::graph::Graph::get_links() is non-const.
@@ -61,6 +64,11 @@ template <typename NodeT>
         if (node->get_output_pin_edge() != Node_edge::right) {
             node_json["output_edge"] = node->get_output_pin_edge();
         }
+        // Canvas position (model-side; every editor window syncs to it).
+        if (node->has_canvas_position()) {
+            node_json["x"] = node->get_canvas_x();
+            node_json["y"] = node->get_canvas_y();
+        }
         nodes_json.push_back(node_json);
     }
     root["nodes"] = nodes_json;
@@ -81,12 +89,22 @@ template <typename NodeT>
         if ((source_node < 0) || (sink_node < 0)) {
             continue;
         }
-        links_json.push_back({
+        nlohmann::json link_json{
             {"source_node", source_node},
             {"source_slot", link->get_source()->get_slot()},
             {"sink_node",   sink_node},
             {"sink_slot",   link->get_sink()->get_slot()}
-        });
+        };
+        // Wire routing (model-side, see erhe::graph::Link); optional,
+        // defaults to no mid points and all-zero curve params.
+        if (!link->get_mid_points().empty()) {
+            link_json["mid_points"] = link_routing_to_json(*link);
+        }
+        const erhe::graph::Link_curve_params& curve = link->get_curve_params();
+        if ((curve.tension != 0.0f) || (curve.continuity != 0.0f) || (curve.bias != 0.0f)) {
+            link_json["curve"] = {curve.tension, curve.continuity, curve.bias};
+        }
+        links_json.push_back(std::move(link_json));
     }
     root["links"] = links_json;
     return root;
@@ -141,6 +159,9 @@ auto read_graph_asset_json(
         node->set_pin_label_width(node_json.value("pin_label_width", Graph_editor_node::default_pin_label_width));
         node->set_input_pin_edge (node_json.value("input_edge",  Node_edge::left));
         node->set_output_pin_edge(node_json.value("output_edge", Node_edge::right));
+        if (node_json.contains("x") && node_json.contains("y") && node_json["x"].is_number() && node_json["y"].is_number()) {
+            node->set_canvas_position(node_json["x"].template get<float>(), node_json["y"].template get<float>());
+        }
         new_nodes.push_back(node);
     }
 
@@ -200,6 +221,23 @@ auto read_graph_asset_json(
         erhe::graph::Link* link = graph.connect(&source->get_output_pins().at(source_slot), &sink->get_input_pins().at(sink_slot));
         if (link == nullptr) {
             log_graph_editor->warn("{} load: link {} refused (cycle?)", log_label, link_index);
+        } else {
+            // Wire routing back into the model; every window canvas syncs
+            // from it. A malformed array is dropped with a warning (the
+            // link itself stays).
+            if (link_json.contains("mid_points") && !link_routing_from_json(*link, link_json["mid_points"])) {
+                log_graph_editor->warn("{} load: link {} mid_points malformed - routing dropped", log_label, link_index);
+            }
+            const nlohmann::json curve_json = link_json.value("curve", nlohmann::json::array());
+            if (curve_json.is_array() && (curve_json.size() == 3) && curve_json.at(0).is_number() && curve_json.at(1).is_number() && curve_json.at(2).is_number()) {
+                link->set_curve_params(
+                    erhe::graph::Link_curve_params{
+                        .tension    = curve_json.at(0).get<float>(),
+                        .continuity = curve_json.at(1).get<float>(),
+                        .bias       = curve_json.at(2).get<float>()
+                    }
+                );
+            }
         }
         ++link_index;
     }
