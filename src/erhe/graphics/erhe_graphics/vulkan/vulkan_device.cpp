@@ -774,7 +774,7 @@ auto Device_impl::choose_physical_device(
         for (uint32_t physical_device_index = 0; physical_device_index < physical_device_count; ++physical_device_index) {
             const VkPhysicalDevice physical_device = physical_devices[physical_device_index];
 
-            const float score = get_physical_device_score(physical_device, surface_impl);
+            const float score = get_physical_device_score(physical_device, surface_impl, m_graphics_config.vulkan.disable_ray_tracing);
             if (score > best_score) {
                 best_score      = score;
                 selected_device = physical_device;
@@ -805,11 +805,11 @@ auto Device_impl::choose_physical_device(
     }
 
     const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
-    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless);
+    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless, m_graphics_config.vulkan.disable_ray_tracing);
     return true;
 }
 
-auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float
+auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl, const bool disable_ray_tracing) -> float
 {
     VkPhysicalDeviceProperties device_properties{};
     vkGetPhysicalDeviceProperties(vulkan_physical_device, &device_properties);
@@ -833,7 +833,7 @@ auto Device_impl::get_physical_device_score(VkPhysicalDevice vulkan_physical_dev
 
     Device_extensions device_extensions{};
     const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
-    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr, headless);
+    const float extension_score = query_device_extensions(vulkan_physical_device, device_extensions, nullptr, headless, disable_ray_tracing);
 
     return device_type_score + extension_score;
 }
@@ -924,7 +924,8 @@ auto Device_impl::query_device_extensions(
     VkPhysicalDevice          vulkan_physical_device,
     Device_extensions&        device_extensions_out,
     std::vector<const char*>* device_extensions_c_str,
-    const bool                headless
+    const bool                headless,
+    const bool                disable_ray_tracing
 ) -> float
 {
     float total_score = 0.0f;
@@ -991,13 +992,21 @@ auto Device_impl::query_device_extensions(
     // enabled alongside it. The feature structs are queried/enabled in
     // Device_impl's constructor; Device_info::use_ray_query is set only when
     // all three extensions AND their features are available.
-    check_device_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,         device_extensions_out.m_VK_KHR_acceleration_structure        , 2.0f);
-    check_device_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME,                      device_extensions_out.m_VK_KHR_ray_query                     , 2.0f);
-    check_device_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,       device_extensions_out.m_VK_KHR_deferred_host_operations      , 0.0f);
-    // Optional on top of ray query: lets ray query shaders read the committed
-    // triangle's object-space vertex positions (used for geometric normals
-    // without binding every mesh vertex buffer to the shader).
-    check_device_extension(VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME,     device_extensions_out.m_VK_KHR_ray_tracing_position_fetch    , 1.0f);
+    // vulkan.disable_ray_tracing (erhe_graphics.json) skips all of them, so
+    // Device_info::use_ray_query stays false and GPU ray tracing consumers
+    // report unsupported - workaround for broken driver ray tracing
+    // implementations (crashes observed on AMD integrated graphics).
+    if (!disable_ray_tracing) {
+        check_device_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,     device_extensions_out.m_VK_KHR_acceleration_structure        , 2.0f);
+        check_device_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME,                  device_extensions_out.m_VK_KHR_ray_query                     , 2.0f);
+        check_device_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,   device_extensions_out.m_VK_KHR_deferred_host_operations      , 0.0f);
+        // Optional on top of ray query: lets ray query shaders read the committed
+        // triangle's object-space vertex positions (used for geometric normals
+        // without binding every mesh vertex buffer to the shader).
+        check_device_extension(VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME, device_extensions_out.m_VK_KHR_ray_tracing_position_fetch    , 1.0f);
+    } else {
+        log_context->info("Vulkan ray tracing disabled via erhe_graphics.json vulkan.disable_ray_tracing");
+    }
     // Conservative rasterization (overestimation) for the lightmap G-buffer
     // raster (one pass instead of the 9-tap jitter fallback). Properties-only
     // extension: no feature struct to query/enable; per-pipeline opt-in via

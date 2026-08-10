@@ -426,7 +426,7 @@ private:
     // the log skimmable.
     void set_state(Device_frame_state new_state, const char* site);
 
-    [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl) -> float;
+    [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl, bool disable_ray_tracing) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,
         Surface_impl*    surface_impl,
@@ -437,7 +437,8 @@ private:
         VkPhysicalDevice          vulkan_physical_device,
         Device_extensions&        device_extensions_out,
         std::vector<const char*>* device_extensions_c_str,
-        bool                      headless
+        bool                      headless,
+        bool                      disable_ray_tracing
     ) -> float;
     [[nodiscard]] auto choose_physical_device(Surface_impl* surface_impl, std::vector<const char*>& device_extensions_c_str) -> bool;
 

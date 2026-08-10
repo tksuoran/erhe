@@ -1,11 +1,21 @@
 from erhe_codegen import *
 
 struct("Vulkan_config",
-    version=1,
+    version=2,
     short_desc="Vulkan-specific Graphics Settings",
     long_desc="Debug overrides for the Vulkan backend.",
     developer=False,
     fields=[
+        field(
+            "disable_ray_tracing",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Disable Vulkan Ray Tracing",
+            long_desc="Skips enabling VK_KHR_acceleration_structure / VK_KHR_ray_query / VK_KHR_deferred_host_operations / VK_KHR_ray_tracing_position_fetch on the Vulkan device, so Device_info::use_ray_query stays false and every GPU ray tracing consumer (ray trace renderer, lightmap baker) reports unsupported. Workaround for drivers whose ray tracing implementation is broken (e.g. crashes observed on AMD integrated graphics). Change requires restart.",
+            visible=True,
+            developer=False
+        ),
         field(
             "vulkan_validation_layers",
             Bool,
