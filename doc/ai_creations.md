@@ -1,0 +1,210 @@
+# AI creations: MCP-driven scene building in the erhe editor
+
+"Creations" are showcase scenes built by an AI agent (or any script)
+driving the **in-editor MCP server** - the editor's live JSON-RPC
+scripting surface - from self-contained Python scripts in
+`scripts/creations/`. Each script launches the editor, builds one scene
+end to end (geometry, materials, procedural textures, lighting, physics),
+frames the camera, screenshots itself for iteration, and saves the scene
+as glTF. Seventeen creations exist, from a Conway-automaton cathedral to
+physics-settled rock piles; `git log -- scripts/creations` carries the
+per-creation history.
+
+This document maps the creation features to the editor features they are
+built on. The **canonical workflow guide** (read before building or
+revising a creation) is the `erhe-creations` skill:
+`.agents/skills/erhe-creations/SKILL.md` plus its domain recipe files in
+`.agents/skills/erhe-creations/references/`. The MCP server itself is
+documented in `AGENTS.md` ("In-editor MCP server") and the repo-root
+`mcp_server_usage.md`.
+
+## Architecture
+
+```
+creation script (scripts/creations/creation_N_*.py)
+        |  imports
+scripts/creations/common.py        shared Creation API + math helpers
+        |  uses
+scripts/erhe_mcp.py                JSON-RPC client (retry, bearer token)
+        |  HTTP POST http://127.0.0.1:8080/mcp
+src/editor/mcp/mcp_server.*        in-editor MCP server (~180 tools)
+        |  dispatches on the main thread, once per frame
+editor subsystems                  scene graph, brushes, geometry,
+                                   graphs, physics, renderer, glTF I/O
+```
+
+- The `editor` executable embeds the MCP server
+  (`src/editor/mcp/mcp_server.{hpp,cpp}`, tool implementations split
+  into `mcp_server_scene_query.cpp`, `mcp_server_scene_action.cpp`,
+  `mcp_server_physics.cpp`, `mcp_server_graphs.cpp`, and friends;
+  schemas in `mcp_server_tool_list.cpp`). It listens on
+  `127.0.0.1:8080` (fallback scan to 8100), runs on a background
+  thread, and queues every call to the main thread - so it can drive a
+  *running* editor safely, windowed or headless.
+- Creations work against the **windowed Release** build by default and
+  the **headless Vulkan** build (`build_vs2026_vulkan_headless`,
+  emulated swapchain) when no display is available. `capture_screenshot`
+  works in both.
+- Nothing in a creation is hand-edited in the UI: the script is the
+  scene's source code, and only the script (plus `common.py` changes) is
+  committed. Saved `.glb` outputs and screenshots are artifacts.
+
+## Editor features the creations are built on
+
+### Scene construction
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `create_shape` (box, uv_sphere, cone, capsule, torus, disc, triangle, quad, rectangle, regular_polyhedron, convex_hull, sweep) | The Create-window brush generators (`Create_box`, `Create_uv_sphere`, ...) and `erhe_geometry::shapes` generators (`make_convex_hull` via Geogram Delaunay, `make_sweep` - closed profile swept along a bezier spine with parallel-transported frames) |
+| One-call posed placement (`position`, `rotation_xyzw`, `scale`, `mass`, `motion_mode`, `parent_node_id`) | `Brush` instancing (`place_brush_in_scene`), node TRS transforms, rigid-body creation with inertia rescale; `motion_mode: "none"` detaches the physics attachment for pure-visual parts |
+| Geometry reuse: pooled brushes, `place_brush`, `place_brush_instances` (N placements, one frame, one undo entry, `parent_index` chaining), pose nodes for scaled parents | The **content library** (per-scene brush/material/texture collections): every placement of one brush shares its `Primitive` (GPU buffers, raytrace shape); brushes persist in saved scenes via the `ERHE_brushes` glTF extension |
+| `create_node` groups / joint anchors (mandatory one-subtree-per-object hierarchy) | Scene graph nodes with world-preserving reparent (`Node::set_parent`), `Item_insert_remove_operation` |
+| `set_node_transform` (absolute, selection-free, undoable) | `Node_transform_operation`; teleports the rigid body to the pose without impulses |
+| `create_material` / `edit_material` (base color, metallic, roughness, emissive, `blending_mode` + `opacity` for raster transparency, `transmission` for the ray tracer) | The PBR material system and per-scene material library |
+| `create_light` / `edit_light`, `edit_camera` (`exposure`, `shadow_range`, `z_far`) | Scene lights (directional/point/spot) with shadow maps, camera projection and shadow-fit machinery |
+| `set_scene_settings` (sky, grid, clear color, physics/wind overrides; `merge: true` deep merge) | Versioned per-scene `Scene_settings` (codegen serialization; unversioned sub-objects are rejected loudly - a missing `_version` would silently drop newer fields) |
+| Undo safety everywhere | Every mutating tool goes through the editor's `Operation_stack`, so an AI-built scene is fully undoable in the UI |
+
+**Strict tool arguments** (2026-08-09): `create_shape`, `place_brush`
+and `place_brush_instances` reject unrecognized argument keys against
+per-shape allowlists instead of silently applying defaults (a silently
+ignored capsule `radius=` once cost a whole build); batch placements are
+validated before any placement applies.
+
+### Geometry processing
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `csg` (union/intersection/difference, batched tool lists, world-space composed) | The CSG boolean mesh operation: replaces the target's primitives in place (id, transform, children, material, physics attachment survive), removes the tool nodes, rebuilds collision as a convex hull |
+| `lattice_deform` (sparse FFD control-point offsets, bezier/linear, auto-fit cage) | Free-form deformation over the mesh's local bounds - billowed sails, bent trim strips, rippled pennants |
+| `chamfer`, `remesh`, `decimate`, `smooth`, `catmull_clark`, `merge_faces`, ... with `node_ids` batches (no selection dance) | The async geometry operation framework (`operations/geometry_operations.*`): queued, undoable, previous selection restored server-side; edited pooled instances silently go private |
+| `merge_static_subtree` | Transform-flattening operation that bakes a subtree into few nodes (built for the 11k-node tree garden -> 372 nodes, ~31 ms -> ~4 ms) |
+| Mesh component selection (`select_mesh_components`, grow/shrink, attribute dumps) | The mesh-component editing mode; `get_mesh_attribute_values` exposes raw vertex/corner/facet attributes for offline analysis |
+
+### Procedural graphs
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `c.texture_graph()` + `texture_graph_*` tools (fbm, noise, colorize, math, output nodes), `set_material_texture_source` | The **texture graph** editor: GPU-evaluated procedural textures bound to material texture slots as live graph outputs |
+| `c.geometry_graph()` + `geometry_graph_*` tools, `set_node_graph_mesh` | The **geometry graph** (geometry nodes) editor: node-based mesh generation bound to scene nodes as `Graph_mesh` assets |
+
+### Physics
+
+All physics is Jolt underneath (`erhe_physics`); the MCP layer exposes it
+per node.
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `create_physics_body` (`shape: "auto"` mesh hulls, mass, `gravity_factor`, `wind_receptivity`, `wake`), `edit_physics_body` | `Node_physics` attachments over Jolt rigid bodies; `auto` builds a convex hull of the node's own mesh |
+| `create_physics_joint` + shared `create_physics_joint_settings` (limits + per-axis drives) | Six-dof Jolt constraints; drives with `position_target 0` act as **rest-pose motors** - the basis for swaying foliage and the standing spider ragdoll |
+| `create_collision_filter` (self-denylist groups) | Jolt collision layers/filters - e.g. sibling sway spines that must not collide with each other |
+| Scene wind (`common.wind`, `wind_*` settings) | Per-step force `receptivity * (wind_velocity - body_velocity)` on every receptive body, with gusts, turbulence and a wavelength phase field |
+| `advance_time` (manual simulation clock: queue exact simulated seconds, `wall_clock`/`paused`/`manual` modes) | The editor's simulation time source - deterministic settles regardless of frame rate, window visibility or wall clock; ~10 simulated seconds settle in under a second |
+| `toggle_physics {enabled}`, `wake_physics_bodies` (scoped: `node_ids` or a `node_name`/`node_id` subtree) | The dynamic-simulation enable and Jolt body activation; scoping keeps `--only` re-settles from waking (and toppling) already-settled structures elsewhere |
+| `apply_physics_force` (force/torque/impulse at a point) | Direct Jolt body pokes - shove tests for balance rigs |
+
+The combination enables **staged construction**: with the sim frozen
+between explicit ticks, a script can place a body, tick 1.2 s, read the
+landed pose (`get_node_details`), and place the next course on the
+measured top - creation 17's cairn is stacked stone by stone this way,
+with per-course verification and retry.
+
+### Queries, verification, iteration
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `capture_screenshot` (both builds) | Headless: synchronous emulated-swapchain readback; windowed: one-shot swapchain copy armed a frame ahead (`Device::request_frame_capture`) - captures the editor's own composited frame, immune to window occlusion |
+| `get_scene_nodes`, `get_node_details` (transforms, attachments, per-mesh `world_aabb`, subtree-merged `subtree_world_aabb`) | Scene graph introspection; the subtree AABB feeds `common.frame()` camera auto-fit in one call |
+| `geometry_query` (batched raycasts + closest-point-on-mesh), `raycast`, `pick_at` | The editor's raytrace scene (same mask as the viewport hover ray) and closest-point queries - probe the *actual* surface instead of guessing offsets (convex hulls bulge past their authored points) |
+| `get_async_status` (pending + running + queued operations) | The async operation queue - `common.settle()` polls it to zero instead of sleeping fixed amounts |
+| `batch` (N tool calls, one request, one frame, one undo entry) | Server-side sub-call dispatch for burst construction |
+| `set_window_visibility`, `get_viewports` | ImGui window management - `presentation()` hides clutter and focuses the creation's viewport before captures |
+| `select_items`, `get_selection`, `get_undo_redo_stack`, `delete_nodes` | Selection, undo stack introspection, recursive delete (the `--only` partial-rebuild primitive) |
+
+### Persistence
+
+| Creation feature | Editor feature underneath |
+|---|---|
+| `save_scene` / `load_scene` (`res/editor/scenes/creations/*.glb`) | The glTF exporter/importer with erhe extensions: `ERHE_brushes` (content-library brushes), `ERHE_physics` (bodies, joints, wind receptivity), `ERHE_scene` (scene settings) - a saved creation round-trips with its physics rig and brush pool intact |
+| `export_gltf` / `import_gltf`, prefabs, asset manager tools | The broader asset pipeline (see `doc/asset_manager.md`) |
+
+## The Python layer
+
+`scripts/creations/common.py` is the shared client API; scripts import
+it rather than re-deriving anything (the skill's "IMPORT these, never
+re-derive" rule). Highlights:
+
+- **`Creation`**: scene bootstrap (`new_scene`/`load`/`attach_scene`),
+  busy-retry transport with mutation-safe timeout handling, per-tool
+  call telemetry printed at exit, `settle()` on the async queue.
+- **Shape pooling**: `shape()` keys on shape type + geometry parameters
+  and turns repeated calls into `place_brush` instances of one brush;
+  `part()`/`part_batch()` place unit-geometry parts sized by node TRS
+  scale, flushed through `place_brush_instances`.
+- **Cameras**: `place_camera(eye, target)` look-at,
+  `shot_relative(node, local_eye, local_target)` object-local close-ups
+  through the live world transform, `frame(node, azimuth, elevation,
+  margin)` AABB-fitted framing (a fitted eye cannot land inside the
+  object), `screenshot_views()` multi-angle capture.
+- **Physics helpers**: `body()`, `joint()`, `joint_settings()`,
+  `anchor()`, `wind()`, `set_physics()`, scoped `wake_physics()`,
+  `advance_time()` / `run_simulation()` / `sim()` for the manual clock.
+- **Fail-soft finalize**: `with common.fail_soft(c, base_path,
+  failed_glb=None):` around the build - a crash still screenshots the
+  aftermath (`<base>_failed.png`, optional `*_failed.glb`) and restores
+  the wall clock before the exception propagates.
+- **Placement math**: quaternion kit (`align_y_quaternion`, `quat_mul`,
+  `quat_rotate`, `look_at_quaternion`), randomized-placement kit
+  (`rand_quat` Shoemake, `tilt_yaw_quat`, `power_law_size`,
+  `quantize_scale`), pose probes (`probe_tilt`, `probe_pose`,
+  `hierarchy_report`).
+- **Standard flags** (`standard_args`): `--reuse` (attach to the running
+  editor, close previous scenes), `--editor-exe` (pick a build),
+  `--pause N` (recording pause), `--no-save`, `--reframe <glb>`
+  (camera/screenshot stage only, seconds instead of a rebuild),
+  `--only <object>` (delete + rebuild one object's subtree against the
+  live scene - measured ~2x fewer MCP calls than a full run).
+
+## Workflow properties
+
+- **Reproducible**: scripts self-launch the editor with
+  `--commands config/editor/commands_empty.json` (the creation is the
+  only scene), seed their own RNGs, and settle physics under the manual
+  clock - the same script rebuilds the same scene windowed or headless
+  at any frame rate (deterministic in simulated time; Jolt threading is
+  not bit-identical across runs, so staged builders verify and retry).
+- **Iterative by screenshot**: judge the PNG in `logs/creations/`, fix,
+  rerun; composition problems (occlusion, framing, washed lighting) are
+  the usual finds. Multi-angle shots surface them in one iteration.
+- **Probed, not guessed**: surface-relative placement uses
+  `geometry_query`, framing uses AABB fitting, and first use of any new
+  tool/shape/parameter goes into a 30-second scratch-scene probe before
+  a full run.
+- **Hierarchy-disciplined**: every logical object is one subtree under
+  its own group node, nesting mirrors construction logic (L-system
+  bracket structure becomes the node parent structure), verified with a
+  root-count/depth histogram.
+
+## Existing creations
+
+`creation_1` .. `creation_17`: Conway cathedral, crystal garden, texture
+atelier, megalith henge, spiral reef, robot roll call, ragdoll rumble
+(physics joints), glass audience (transparency), sandbox afternoon
+(L-system oak), forest glade (two-species L-systems, ferns, flowers),
+monster portal island, UAP hangar, windswept glade (wind + rest-pose
+motor foliage), spider sentinel (motor-held standing ragdoll), tree
+garden (28 Finnish species via `lsystem_trees.py`), sail ships
+(CSG-carved convex-hull hulls + FFD-billowed sails), rockfall
+(physics-settled rock piles + staged cairn under the manual clock).
+
+## Pointers
+
+- `.agents/skills/erhe-creations/SKILL.md` - canonical workflow,
+  hierarchy rules, gotcha index; domain recipes in
+  `references/{vegetation,physics_rigs,csg_hulls,settling_rock_piles,blades_sweep}.md`.
+- `AGENTS.md` "In-editor MCP server" + repo-root `mcp_server_usage.md` -
+  server transport, ports, auth, headless vs windowed, Quest forwarding.
+- `src/editor/mcp/mcp_server_tool_list.cpp` - the full tool schema
+  (181 tools as of 2026-08-10); `scripts/mcp_call.py --list` against a
+  running editor prints the live list.
+- `scripts/creations/common.py` - the client API described above.
