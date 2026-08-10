@@ -19,6 +19,8 @@
         "force_glsl_version": 0
     },
     "vulkan": {
+        "_version": 2,
+        "disable_ray_tracing": true,
         "vulkan_validation_layers": false,
         "use_kosmickrisp": false,
         "use_moltenvk": false
