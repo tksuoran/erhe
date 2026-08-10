@@ -341,6 +341,44 @@ auto Geometry_operation::make_new_dst_corner_from_dst_vertex(
     return dst_corner;
 }
 
+auto Geometry_operation::make_new_dst_corner_from_dst_vertex_linear(
+    const GEO::index_t dst_facet,
+    const GEO::index_t dst_local_facet_corner,
+    const GEO::index_t dst_vertex,
+    const GEO::index_t src_corner_a,
+    const GEO::index_t src_corner_b
+) -> GEO::index_t
+{
+    destination_mesh.facets.set_vertex(dst_facet, dst_local_facet_corner, dst_vertex);
+    const GEO::index_t dst_corner = destination_mesh.facets.corner(dst_facet, dst_local_facet_corner);
+    add_corner_source(dst_corner, 0.5f, src_corner_a);
+    add_corner_source(dst_corner, 0.5f, src_corner_b);
+    return dst_corner;
+}
+
+auto Geometry_operation::make_new_dst_corner_from_dst_vertex_facet_local(
+    const GEO::index_t dst_facet,
+    const GEO::index_t dst_local_facet_corner,
+    const GEO::index_t dst_vertex,
+    const GEO::index_t src_facet
+) -> GEO::index_t
+{
+    destination_mesh.facets.set_vertex(dst_facet, dst_local_facet_corner, dst_vertex);
+    const GEO::index_t dst_corner = destination_mesh.facets.corner(dst_facet, dst_local_facet_corner);
+    const std::vector<std::pair<float, GEO::index_t>>& vertex_corner_sources = m_dst_vertex_corner_sources.get(dst_vertex);
+    bool any_facet_local = false;
+    for (const std::pair<float, GEO::index_t>& vertex_corner_source : vertex_corner_sources) {
+        if (source.get_corner_facet(vertex_corner_source.second) == src_facet) {
+            add_corner_source(dst_corner, vertex_corner_source.first, vertex_corner_source.second);
+            any_facet_local = true;
+        }
+    }
+    if (!any_facet_local) {
+        distribute_corner_sources(dst_corner, 1.0f, dst_vertex);
+    }
+    return dst_corner;
+}
+
 auto Geometry_operation::make_new_dst_corner_from_src_corner(
     const GEO::index_t dst_facet,
     const GEO::index_t dst_local_facet_corner,
@@ -599,7 +637,11 @@ void Geometry_operation::emit_unselected_facets_with_boundary_splice()
         const GEO::index_t new_dst_facet = make_new_dst_facet_from_src_facet(src_facet, static_cast<GEO::index_t>(entries.size()));
         for (GEO::index_t slot = 0; slot < static_cast<GEO::index_t>(entries.size()); ++slot) {
             if (entries[slot].is_midpoint) {
-                make_new_dst_corner_from_dst_vertex(new_dst_facet, slot, entries[slot].value);
+                // Spliced midpoint corners keep only this facet's share of the
+                // midpoint vertex's corner sources so corner attributes (texcoord
+                // seams, hard corner normals) are not blended across the
+                // interface edge from the selected side.
+                make_new_dst_corner_from_dst_vertex_facet_local(new_dst_facet, slot, entries[slot].value, src_facet);
             } else {
                 make_new_dst_corner_from_src_corner(new_dst_facet, slot, entries[slot].value);
             }

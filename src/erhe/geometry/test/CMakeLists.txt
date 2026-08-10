@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_capsule.cpp
     test_catmull_clark_crease.cpp
+    test_catmull_clark_texcoord_seam.cpp
     test_chamfer_diagnostics.cpp
     test_chamfer_self_intersection.cpp
     test_clip_tile_tree.cpp

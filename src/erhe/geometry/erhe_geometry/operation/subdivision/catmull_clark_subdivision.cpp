@@ -423,10 +423,15 @@ void Catmull_clark_subdivision::build(const uint64_t post_process_flags, const u
                 }
                 const GEO::index_t new_dst_facet           = next_dst_facet++;
                 map_dst_facet_from_src_facet(new_dst_facet, src_facet);
+                // Midpoint corners source their attributes from this facet's own
+                // edge endpoint corners (linear face-varying rule) instead of the
+                // shared midpoint vertex's cross-facet corner sources, so corner
+                // attribute discontinuities (texcoord seams, hard corner normals)
+                // are not blended across the edge.
                 make_new_dst_corner_from_src_facet_centroid(new_dst_facet, 0, src_facet);
-                make_new_dst_corner_from_dst_vertex        (new_dst_facet, 1, previous_edge_midpoint);
+                make_new_dst_corner_from_dst_vertex_linear (new_dst_facet, 1, previous_edge_midpoint, prev_src_corner, src_corner);
                 make_new_dst_corner_from_src_corner        (new_dst_facet, 2, src_corner);
-                make_new_dst_corner_from_dst_vertex        (new_dst_facet, 3, next_edge_midpoint);
+                make_new_dst_corner_from_dst_vertex_linear (new_dst_facet, 3, next_edge_midpoint, src_corner, next_corner);
             }
         }
         // Every batch created quad must have been consumed; a mismatch

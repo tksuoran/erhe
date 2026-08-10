@@ -262,6 +262,33 @@ protected:
 
     auto make_new_dst_corner_from_dst_vertex(GEO::index_t dst_facet, GEO::index_t dst_local_facet_corner, GEO::index_t dst_point) -> GEO::index_t;
 
+    // Seam-aware variant of make_new_dst_corner_from_dst_vertex for an
+    // edge-midpoint corner: instead of distributing the destination vertex's
+    // corner sources (which mix corners of every facet around the edge and thus
+    // blend corner attributes like texcoords across seams), sources the corner
+    // attributes only from the two edge endpoint corners of the facet the
+    // destination facet derives from (linear face-varying rule: 0.5 / 0.5).
+    auto make_new_dst_corner_from_dst_vertex_linear(
+        GEO::index_t dst_facet,
+        GEO::index_t dst_local_facet_corner,
+        GEO::index_t dst_vertex,
+        GEO::index_t src_corner_a,
+        GEO::index_t src_corner_b
+    ) -> GEO::index_t;
+
+    // Seam-aware variant of make_new_dst_corner_from_dst_vertex for facets
+    // re-emitted from a known source facet (boundary splice): distributes only
+    // the destination vertex's corner sources whose source corner belongs to
+    // src_facet, keeping their registered split weights, so corner attributes
+    // never blend across the interface edge. Falls back to distributing all
+    // sources when the vertex carries none from src_facet.
+    auto make_new_dst_corner_from_dst_vertex_facet_local(
+        GEO::index_t dst_facet,
+        GEO::index_t dst_local_facet_corner,
+        GEO::index_t dst_vertex,
+        GEO::index_t src_facet
+    ) -> GEO::index_t;
+
     auto make_new_dst_corner_from_src_corner(GEO::index_t dst_facet, GEO::index_t dst_local_facet_corner, GEO::index_t src_corner) -> GEO::index_t;
 
     void add_facet_corners(GEO::index_t dst_facet, GEO::index_t src_facet);
