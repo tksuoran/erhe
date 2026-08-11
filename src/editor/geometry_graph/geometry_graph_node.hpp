@@ -31,8 +31,10 @@ void process_for_graph(erhe::geometry::Geometry& geometry);
 
 // JSON helpers for node parameter (de)serialization.
 void write_vec3 (nlohmann::json& out, const char* key, const glm::vec3& value);
+void write_vec4 (nlohmann::json& out, const char* key, const glm::vec4& value);
 void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value);
 [[nodiscard]] auto read_vec3 (const nlohmann::json& in, const char* key, const glm::vec3& fallback) -> glm::vec3;
+[[nodiscard]] auto read_vec4 (const nlohmann::json& in, const char* key, const glm::vec4& fallback) -> glm::vec4;
 [[nodiscard]] auto read_ivec3(const nlohmann::json& in, const char* key, const glm::ivec3& fallback) -> glm::ivec3;
 
 // Base class for all geometry graph nodes.

@@ -73,6 +73,11 @@ void write_vec3(nlohmann::json& out, const char* key, const glm::vec3& value)
     out[key] = { value.x, value.y, value.z };
 }
 
+void write_vec4(nlohmann::json& out, const char* key, const glm::vec4& value)
+{
+    out[key] = { value.x, value.y, value.z, value.w };
+}
+
 void write_ivec3(nlohmann::json& out, const char* key, const glm::ivec3& value)
 {
     out[key] = { value.x, value.y, value.z };
@@ -82,6 +87,14 @@ auto read_vec3(const nlohmann::json& in, const char* key, const glm::vec3& fallb
 {
     if (in.contains(key) && in[key].is_array() && (in[key].size() == 3)) {
         return glm::vec3{in[key][0].get<float>(), in[key][1].get<float>(), in[key][2].get<float>()};
+    }
+    return fallback;
+}
+
+auto read_vec4(const nlohmann::json& in, const char* key, const glm::vec4& fallback) -> glm::vec4
+{
+    if (in.contains(key) && in[key].is_array() && (in[key].size() == 4)) {
+        return glm::vec4{in[key][0].get<float>(), in[key][1].get<float>(), in[key][2].get<float>(), in[key][3].get<float>()};
     }
     return fallback;
 }
