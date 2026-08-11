@@ -10,8 +10,8 @@ scripting surface - from self-contained Python scripts in
 `scripts/creations/`. Each script launches the editor, builds one scene
 end to end (geometry, materials, procedural textures, lighting, physics),
 frames the camera, screenshots itself for iteration, and saves the scene
-as glTF. Nineteen creations exist, from a Conway-automaton cathedral to
-a live geometry-graph dolphin; `git log -- scripts/creations` carries the
+as glTF. Twenty creations exist, from a Conway-automaton cathedral to
+a live geometry-graph frog; `git log -- scripts/creations` carries the
 per-creation history, and video recordings are collected in the
 [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N).
 
@@ -239,6 +239,25 @@ specification before local content) is a natural fit for scaling
 creations up beyond single showcase scenes.
 
 ## Creations timeline
+
+### 20 - Frog (2026-08-11)
+
+![Frog](images/creations/20_frog.png)
+
+A green frog sitting on a lily pad in a dark pond, the second creature
+built as ONE editable geometry graph and the first to pose a full limb
+set: eleven coarse box cages (body-with-head, paired eye bulges,
+folded thigh lumps, webbed hind feet, straight forelegs, front feet)
+each Catmull-Clark subdivided and bezier-lattice sculpted, posed by
+quaternion Transform nodes, merged by Join and welded with a single
+Boolean union, then faired by a final subdivision and a
+`smooth_normals` pass. The forelegs are aligned to an authored
+shoulder-to-wrist segment so the arm, wrist and front foot land
+exactly on the pad - the recipe now lives in the skill's
+`geometry_graph_sculpt.md`. The pupils are two scene-node spheres
+outside the union, keeping their own dark material against the
+single-material graph output; cattails and floating pads fill out the
+pond.
 
 ### 19 - Dolphin (2026-08-11)
 
