@@ -3,10 +3,20 @@
 
 A green frog sitting on a lily pad in a dark pond, built the same way as
 the dolphin (creation 19): every body part is a coarse box cage ->
-subdivide -> lattice FFD chain, appendages are posed by Transform nodes
-(quaternion rotation mode), then Join -> ONE Boolean union -> final
+subdivide -> lattice FFD chain, then Join -> ONE Boolean union -> final
 subdivide -> smooth_normals -> Output. Drag any lattice point in the
 node editor and the whole frog re-evaluates.
+
+RIG (v3): every part pose is a `transform_from_node` graph node driven
+by an empty scene node under Frog > "Frog Rig" (30 drivers: eyes,
+thighs, knees, shanks, ankles, feet, toes, arms, wrists, front feet,
+front toes). Move a driver in the viewport (or Hierarchy) and that part
+re-poses live - the frog's pose is editable without touching the graph.
+Drivers are FLAT under the rig, each carrying its full pose in frog
+space (a transform_from_node captures one node's LOCAL transform, not a
+parent chain, so nesting drivers would not cascade). The bound "Frog"
+node and the rig are created BEFORE the graph so the name references
+resolve as the graph builds; the mesh is bound to the Frog node last.
 
 Detail pass (v2, ~25 graph parts instead of 11):
 
@@ -37,6 +47,7 @@ editor.
 import math
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
@@ -166,13 +177,14 @@ def part_chain(g, size, subdivisions, lattice_divisions, offsets, iterations=1):
     return lattice
 
 
-def segment_part(g, tools, thickness, keep, anchor_a, anchor_b,
-                 over_a=0.06, over_b=0.05):
+def segment_part(g, tools, make_pose, name, thickness, keep, anchor_a,
+                 anchor_b, over_a=0.06, over_b=0.05):
     """Spindle limb segment aligned to the anchor_a -> anchor_b segment
     (align-+X) and EXTENDED past both anchors by over_a/over_b: the
     squeezed, CC-shrunk caps must stay buried inside the joint masses -
     segments that merely touch their anchors tip-to-tip read as
-    disconnected. Appends its Transform to tools."""
+    disconnected. Pose via make_pose (rig driver + transform_from_node);
+    appends the pose to tools."""
     direction = v_norm(v_sub(anchor_b, anchor_a))
     a = v_add(anchor_a, v_scale(direction, -over_a))
     b = v_add(anchor_b, v_scale(direction, over_b))
@@ -185,27 +197,24 @@ def segment_part(g, tools, thickness, keep, anchor_a, anchor_b,
             keep=keep,
             shift_x=[0.02] + [0.0] * (stations - 1) + [-0.02],
             shift_y=[0.0] * (stations + 1)))
-    pose = g.add("transform", {
-        "translation": v_scale(v_add(a, b), 0.5),
-        "rotation_mode": 1,
-        "rotation_quaternion": align_x_quaternion(direction),
-    })
+    pose = make_pose(name, v_scale(v_add(a, b), 0.5),
+                     align_x_quaternion(direction))
     g.link(part, pose)
     tools.append(pose)
     return pose
 
 
-def joint_ball(g, tools, center, size):
+def joint_ball(g, tools, make_pose, name, center, size):
     """CC'd cube sphere welding two limb segments at a joint."""
     ball_box = g.add("box", {"size": [size, size, size],
                              "subdivisions": [0, 0, 0], "power": 1.0})
     ball_cc = g.add("subdivide", {"mode": 0, "iterations": 2})
-    ball_pose = g.add("transform", {"translation": list(center)})
+    ball_pose = make_pose(name, list(center), None)
     g.chain([ball_box, ball_cc, ball_pose])
     tools.append(ball_pose)
 
 
-def toe(g, tools, root, direction, length, thickness):
+def toe(g, tools, make_pose, name, root, direction, length, thickness):
     """Slim toe spindle with a bulbed tip, root buried in the foot/paddle."""
     d = v_norm(direction)
     part = part_chain(
@@ -216,11 +225,7 @@ def toe(g, tools, root, direction, length, thickness):
             shift_x=[0.02, 0.0, 0.0, -0.01],
             shift_y=[0.0, 0.0, 0.0, 0.0]))
     center = v_add(root, v_scale(d, 0.5 * length - 0.02))
-    pose = g.add("transform", {
-        "translation": center,
-        "rotation_mode": 1,
-        "rotation_quaternion": align_x_quaternion(d),
-    })
+    pose = make_pose(name, center, align_x_quaternion(d))
     g.link(part, pose)
     tools.append(pose)
 
@@ -234,7 +239,32 @@ def yaw_about_y(direction, degrees):
 def build_frog(c, skin):
     """Build the frog geometry graph, bind it to a scene node, sit it on
     the lily pad. Returns the bound node's name."""
+    # The bound node and the rig exist BEFORE the graph so every
+    # transform_from_node's name reference resolves as the graph builds.
+    # Drivers are FLAT under the rig (a transform_from_node captures one
+    # node's LOCAL transform, not a parent chain), each carrying its full
+    # pose in frog space; the rig rides under the Frog node so driver
+    # gizmos sit on the actual parts in the viewport.
+    c.mutate("create_node", {"name": "Frog", "scene_name": c.scene})
+    deadline = time.time() + 20.0
+    while c.node_by_name("Frog") is None:
+        if time.time() > deadline:
+            raise RuntimeError("create_node 'Frog' did not appear")
+        time.sleep(0.1)
+    frog_node_id = c.node_by_name("Frog")["id"]
+    rig_id = c.group("Frog Rig", [0.0, 0.0, 0.0], parent_node_id=frog_node_id)
+
     g = c.geometry_graph(GRAPH_NAME)
+
+    def make_pose(name, translation, rotation=None):
+        """One rig driver scene node + the transform_from_node reading it.
+        Frog and rig are at identity while building, so world == local
+        pose here; once the Frog node is lifted onto the pad the drivers'
+        parent-relative transforms (what space=local captures) stay put."""
+        c.group(name, translation, parent_node_id=rig_id)
+        if rotation is not None:
+            c.set_node_transform(name, rotation_xyzw=rotation)
+        return g.add("transform_from_node", {"transform_node": name, "space": 0})
 
     # Body (torso + head merged): 0.95 m along X, +X = snout. Nine
     # stations i=0 (rump) .. 8 (snout): raised rump, arched back
@@ -257,11 +287,11 @@ def build_frog(c, skin):
     # Eye bulges: CC'd cubes on the skull corners (iris/pupil spheres are
     # scene nodes placed later - they keep their own materials).
     for side in (1.0, -1.0):
+        s = "L" if side > 0.0 else "R"
         eye_box = g.add("box", {"size": [0.21, 0.19, 0.19],
                                 "subdivisions": [0, 0, 0], "power": 1.0})
         eye_cc = g.add("subdivide", {"mode": 0, "iterations": 2})
-        eye_pose = g.add("transform", {
-            "translation": [0.24, 0.24, 0.16 * side]})
+        eye_pose = make_pose(f"Rig eye {s}", [0.24, 0.24, 0.16 * side])
         g.chain([eye_box, eye_cc, eye_pose])
         tools.append(eye_pose)
 
@@ -269,17 +299,18 @@ def build_frog(c, skin):
     # back-out-up, ankle tucked forward-down - thigh and shank are
     # spindles aligned to the hip->knee and knee->ankle segments.
     for side in (1.0, -1.0):
+        s = "L" if side > 0.0 else "R"
         hip = [-0.16, 0.00, 0.20 * side]
         knee = [-0.44, 0.06, 0.335 * side]
         ankle = [-0.28, -0.185, 0.38 * side]
-        segment_part(g, tools, [0.27, 0.22],
+        segment_part(g, tools, make_pose, f"Rig thigh {s}", [0.27, 0.22],
                      [0.60, 1.0, 0.95, 0.65], hip, knee,
                      over_a=0.10, over_b=0.05)
-        joint_ball(g, tools, knee, 0.15)
-        segment_part(g, tools, [0.14, 0.13],
+        joint_ball(g, tools, make_pose, f"Rig knee {s}", knee, 0.15)
+        segment_part(g, tools, make_pose, f"Rig shank {s}", [0.14, 0.13],
                      [0.72, 1.0, 0.90, 0.62], knee, ankle,
                      over_a=0.08, over_b=0.05)
-        joint_ball(g, tools, ankle, 0.11)
+        joint_ball(g, tools, make_pose, f"Rig ankle {s}", ankle, 0.11)
 
         # Webbed foot: paddle splayed forward-outward, root buried in
         # the ankle ball.
@@ -296,35 +327,32 @@ def build_frog(c, skin):
         rotation = axis_angle_quaternion([0.0, 1.0, 0.0], theta)
         tip_dir = quat_rotate(rotation, [0.0, 0.0, 1.0])
         center = v_add(ankle, v_scale(tip_dir, foot_half[2] - 0.08))
-        foot_pose = g.add("transform", {
-            "translation": center,
-            "rotation_mode": 1,
-            "rotation_quaternion": rotation,
-        })
+        foot_pose = make_pose(f"Rig foot {s}", center, rotation)
         g.link(foot, foot_pose)
         tools.append(foot_pose)
 
         # Three toes rooted INSIDE the paddle (mid-plane, near mid-span)
         # so the union welds them, poking past the paddle tip with a
         # slight droop onto the pad.
-        for fan_deg in (-20.0, 0.0, 20.0):
+        for toe_index, fan_deg in enumerate((-20.0, 0.0, 20.0)):
             fan_dir = yaw_about_y(tip_dir, fan_deg)
             root = v_add([ankle[0], -0.19, ankle[2]],
                          v_scale([fan_dir[0], 0.0, fan_dir[2]], 0.13))
-            toe(g, tools, root, [fan_dir[0], -0.05, fan_dir[2]],
-                0.26, 0.05)
+            toe(g, tools, make_pose, f"Rig toe {s}{toe_index + 1}", root,
+                [fan_dir[0], -0.05, fan_dir[2]], 0.26, 0.05)
 
     # Front legs: foreleg aligned to the shoulder->wrist segment so arm,
     # wrist, foot and toes land exactly (exact-landing recipe).
     ffoot_size = [0.14, 0.04, 0.22]
     ffoot_half = [0.5 * v for v in ffoot_size]
     for side in (1.0, -1.0):
+        s = "L" if side > 0.0 else "R"
         shoulder = [0.26, 0.02, 0.17 * side]
         wrist = [0.40, -0.205, 0.235 * side]
-        segment_part(g, tools, [0.11, 0.11],
+        segment_part(g, tools, make_pose, f"Rig arm {s}", [0.11, 0.11],
                      [0.90, 1.0, 0.90, 0.75], shoulder, wrist,
                      over_a=0.08, over_b=0.03)
-        joint_ball(g, tools, wrist, 0.09)
+        joint_ball(g, tools, make_pose, f"Rig wrist {s}", wrist, 0.09)
 
         ffoot = part_chain(
             g, ffoot_size, [1, 0, 1], [2, 1, 2],
@@ -337,22 +365,18 @@ def build_frog(c, skin):
         foot_rotation = axis_angle_quaternion([0.0, 1.0, 0.0], theta)
         tip_dir = quat_rotate(foot_rotation, [0.0, 0.0, 1.0])
         center = v_add(wrist, v_scale(tip_dir, ffoot_half[2] - 0.05))
-        ffoot_pose = g.add("transform", {
-            "translation": center,
-            "rotation_mode": 1,
-            "rotation_quaternion": foot_rotation,
-        })
+        ffoot_pose = make_pose(f"Rig front foot {s}", center, foot_rotation)
         g.link(ffoot, ffoot_pose)
         tools.append(ffoot_pose)
 
         # Three small front toes rooted inside the paddle, splayed on
         # the pad.
-        for fan_deg in (-24.0, 0.0, 24.0):
+        for toe_index, fan_deg in enumerate((-24.0, 0.0, 24.0)):
             fan_dir = yaw_about_y(tip_dir, fan_deg)
             root = v_add([wrist[0], -0.205, wrist[2]],
                          v_scale([fan_dir[0], 0.0, fan_dir[2]], 0.05))
-            toe(g, tools, root, [fan_dir[0], -0.02, fan_dir[2]],
-                0.15, 0.038)
+            toe(g, tools, make_pose, f"Rig front toe {s}{toe_index + 1}",
+                root, [fan_dir[0], -0.02, fan_dir[2]], 0.15, 0.038)
 
     # Join merges the posed parts into ONE tool solid, a single boolean
     # union welds them into the body, the extra subdivide fairs the
@@ -369,11 +393,17 @@ def build_frog(c, skin):
     g.chain([boolean, final, normals, out])
     c.call("get_geometry_graph")  # evaluation barrier
 
-    # Sit on the lily pad: pad top is at y ~= 0.11 at the center, a bit
-    # lower where the feet land; the feet/wrists sit at local y -0.205.
-    frog = c.bind_node_mesh("Frog", GRAPH_NAME)
-    c.set_node_transform(frog, translation=[0.0, 0.32, 0.0])
-    return frog
+    # Bind the mesh to the pre-created Frog node, then sit it on the
+    # lily pad: pad top is at y ~= 0.11 at the center, a bit lower where
+    # the feet land; the feet/wrists sit at local y -0.205. The rig
+    # rides along; driver LOCAL transforms (what the graph captures) are
+    # unaffected by the lift.
+    c.mutate("set_node_graph_mesh", {
+        "node_name": "Frog", "graph_mesh": GRAPH_NAME, "scene_name": c.scene,
+    })
+    c.call("get_geometry_graph")  # evaluation barrier
+    c.set_node_transform("Frog", translation=[0.0, 0.32, 0.0])
+    return "Frog"
 
 
 def build_skin_graph(c):
@@ -405,18 +435,25 @@ def decorate_frog(c, frog, materials):
     for side in (1.0, -1.0):
         # Eye: gold iris dome + horizontal slit pupil layered along the
         # gaze direction on the skin bulge (bulge center local
-        # [0.24, 0.24, +-0.16], frog node at y 0.32).
+        # [0.24, 0.24, +-0.16], frog node at y 0.32). PARENTED to the
+        # eye's rig driver so moving "Rig eye L/R" carries them along
+        # with the graph's eye bulge.
+        s = "L" if side > 0.0 else "R"
+        eye_driver = c.node_by_name(f"Rig eye {s}")
+        eye_driver_id = eye_driver["id"] if eye_driver else None
         eye_center = [0.24, 0.56, 0.16 * side]
         gaze = v_norm([0.72, 0.30, 0.30 * side])
-        c.shape("uv_sphere", f"Iris {'L' if side > 0 else 'R'}",
+        c.shape("uv_sphere", f"Iris {s}",
                 v_add(eye_center, v_scale(gaze, 0.052)),
                 radius=0.050, slice_count=20, stack_count=12,
-                material_name=iris_gold, motion_mode="none")
-        c.shape("uv_sphere", f"Pupil {'L' if side > 0 else 'R'}",
+                material_name=iris_gold, motion_mode="none",
+                parent_node_id=eye_driver_id)
+        c.shape("uv_sphere", f"Pupil {s}",
                 v_add(eye_center, v_scale(gaze, 0.085)),
                 radius=1.0, slice_count=16, stack_count=10,
                 material_name=eye_black, motion_mode="none",
-                scale=[0.034, 0.017, 0.044])
+                scale=[0.034, 0.017, 0.044],
+                parent_node_id=eye_driver_id)
 
     # Nostrils + tympanum probed onto the actual surface (guessed
     # offsets miss - the subdivided skin sits inside the cage).
