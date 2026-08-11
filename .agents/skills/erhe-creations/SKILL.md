@@ -35,7 +35,9 @@ Join + single Boolean union + final subdivide, see csg_hulls.md +
 geometry_graph_sculpt.md,
 frog = sitting frog on a lily pad, same one-graph recipe scaled to 25
 parts: segment-aligned articulated legs + toes, probed surface accents
-(iris/nostril/tympanum), low-frequency mottle texture, CSG pad slits -
+(iris/nostril/tympanum), low-frequency mottle texture, CSG pad slits,
+and a LIVE POSE RIG - every part posed by a transform_from_node driven
+by a scene node under Frog > "Frog Rig" -
 see geometry_graph_sculpt.md + csg_hulls.md).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.

@@ -72,6 +72,21 @@ MCP. Creation 18 (fish) is the reference implementation.
   mass. Root toes at the paddle mid-plane near mid-span (not near the
   tip) for the same reason. Verify with a dedicated limb close-up
   shot - joint gaps are invisible in full-body views.
+- **Pose rig via `transform_from_node` drivers** (frog v3, 2026-08-11):
+  pose every part with a `transform_from_node` graph node referencing an
+  empty scene node instead of an authored Transform node - the pose
+  becomes live-editable by moving scene nodes (viewport gizmo or MCP).
+  Recipe: (a) create the bound scene node and a rig group under it plus
+  one flat driver node per part BEFORE building the graph, so the name
+  references resolve as the graph builds; bind the mesh afterwards with
+  `set_node_graph_mesh`. (b) Drivers stay FLAT under the rig, each
+  carrying its full pose in body space - the node captures ONE node's
+  LOCAL transform, not a parent chain, so nested drivers do not
+  cascade. (c) Use space=local so moving the bound node (or the rig)
+  never disturbs captured poses. (d) Parent per-part decoration shapes
+  (irises, pupils) under their drivers so they ride along.
+  `make_pose(name, translation, rotation)` in creation_20 is the
+  pattern (driver create + `transform_from_node` add in one helper).
 - **Texturing a unioned multi-part body: LOW-FREQUENCY layers only**
   (frog detail pass, 2026-08-11): the union's surviving UV tiles vary
   wildly in scale, and any high-frequency texture layer (wart/speckle
