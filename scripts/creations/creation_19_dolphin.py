@@ -157,13 +157,19 @@ def paddle_offsets(divisions, half, sweep, keep_chord, keep_thick):
 
 # ------------------------------------------------------------------- dolphin
 
-def part_chain(g, size, subdivisions, lattice_divisions, offsets):
-    """box -> subdivide(2) -> lattice; returns the lattice node id (the
+def part_chain(g, size, subdivisions, lattice_divisions, offsets, iterations=1):
+    """box -> subdivide -> lattice; returns the lattice node id (the
     chain's output end). Explicit cage at the box bounds: subdivision
-    shrinks the mesh inside it, auto-fit would rescale the sculpt."""
+    shrinks the mesh inside it, auto-fit would rescale the sculpt.
+
+    ROUNDNESS RULE (user-tuned live in the node editor, 2026-08-11):
+    keep box subdivisions LOW - often 0 on at least one axis - and use a
+    SINGLE Catmull-Clark iteration per part. Higher box subdivisions pin
+    the subdivision limit surface to the box shape (increasingly square
+    look); the coarse cage + CC is what reads round."""
     box = g.add("box", {"size": size, "subdivisions": subdivisions,
                         "power": 1.0})
-    subdivide = g.add("subdivide", {"mode": 0, "iterations": 2})
+    subdivide = g.add("subdivide", {"mode": 0, "iterations": iterations})
     lattice = g.add("lattice", {
         "auto_fit": False,
         "cage_min": [-0.5 * v for v in size],
@@ -185,8 +191,9 @@ def build_dolphin(c, skin):
     # Trunk: 2.4 m spindle, +X = nose. Stations i=0 (tail) .. 6 (head).
     trunk_size = [2.4, 0.60, 0.50]
     trunk = part_chain(
-        g, trunk_size, [10, 4, 4], [6, 2, 2],
-        spindle_offsets(
+        g, trunk_size, [2, 0, 0], [6, 2, 2],
+        iterations=2,
+        offsets=spindle_offsets(
             [6, 2, 2], [0.5 * v for v in trunk_size],
             keep=[0.24, 0.44, 0.70, 0.93, 1.00, 0.86, 0.45],
             shift_x=[0.18, 0.0, 0.0, 0.0, 0.0, 0.0, -0.26],
@@ -198,7 +205,7 @@ def build_dolphin(c, skin):
     # Rostrum: short blunt beak, slightly below the axis (melon overhang).
     ros_size = [0.36, 0.15, 0.17]
     rostrum = part_chain(
-        g, ros_size, [4, 2, 2], [3, 1, 1],
+        g, ros_size, [1, 0, 0], [3, 1, 1],
         spindle_offsets(
             [3, 1, 1], [0.5 * v for v in ros_size],
             keep=[1.0, 0.80, 0.60, 0.42],
@@ -211,7 +218,7 @@ def build_dolphin(c, skin):
     # Dorsal fin: falcate blade over the mid-back.
     dor_size = [0.52, 0.46, 0.055]
     dorsal = part_chain(
-        g, dor_size, [4, 4, 1], [2, 3, 1],
+        g, dor_size, [1, 1, 0], [2, 3, 1],
         blade_offsets(
             [2, 3, 1], [0.5 * v for v in dor_size],
             sweep=[0.0, -0.05, -0.15, -0.26],
@@ -237,7 +244,7 @@ def build_dolphin(c, skin):
         shoulder = [0.62, -0.10, 0.17 * side]
         center = v_add(shoulder, v_scale(tip_dir, flip_half[2] - 0.05))
         flipper = part_chain(
-            g, flip_size, [3, 1, 4], [2, 1, 3],
+            g, flip_size, [1, 0, 2], [2, 1, 3],
             paddle_offsets(
                 [2, 1, 3], flip_half,
                 sweep=[0.0, -0.03, -0.10, -0.18],
@@ -254,7 +261,7 @@ def build_dolphin(c, skin):
     # Tail flukes: one crescent blade across the raised peduncle.
     flu_size = [0.44, 0.08, 1.10]
     flukes = part_chain(
-        g, flu_size, [4, 1, 8], [2, 1, 6],
+        g, flu_size, [1, 0, 2], [2, 1, 6],
         fluke_offsets(
             [2, 1, 6], [0.5 * v for v in flu_size],
             sweep=[0.0, -0.04, -0.15, -0.34],
@@ -276,8 +283,12 @@ def build_dolphin(c, skin):
     g.link(trunk, boolean, dst_slot=0)            # A: trunk
     g.link(join, boolean, dst_slot=1)             # B: merged appendages
     final = g.add("subdivide", {"mode": 0, "iterations": 1})
+    # Explicit smooth-vertex-normal pass between the last subdivision and
+    # the output, so the baked surface shades smooth regardless of what
+    # the upstream nodes' post-processing left behind.
+    normals = g.add("smooth_normals")
     out = g.add("output", {"material": skin})
-    g.chain([boolean, final, out])
+    g.chain([boolean, final, normals, out])
     c.call("get_geometry_graph")  # evaluation barrier
 
     # Leap pose on the bound scene node: up over the water, nose pitched up.
