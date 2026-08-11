@@ -29,6 +29,21 @@ void Smooth_normals::build()
         erhe::geometry::Geometry::process_flag_compute_facet_centroids |
         erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals;
     destination.process({.flags = flags});
+
+    // Computing vertex_normal_smooth alone does not change SHADING: the
+    // renderable-mesh build resolves the lighting normal per corner as
+    // corner_normal, else facet_normal, else vertex_normal, else the
+    // computed facet normal - vertex_normal_smooth only feeds the
+    // separate smooth-normal vertex slot (edge lines). Publish the
+    // smooth result into vertex_normal and clear the per-corner /
+    // per-facet normals that would outrank it, so the surface actually
+    // shades smooth.
+    Mesh_attributes& attributes = destination.get_attributes();
+    for (GEO::index_t vertex : destination_mesh.vertices) {
+        attributes.vertex_normal.set(vertex, attributes.vertex_normal_smooth.get(vertex));
+    }
+    attributes.corner_normal.clear();
+    attributes.facet_normal .clear();
 }
 
 void smooth_normals(const Geometry& source, Geometry& destination)
