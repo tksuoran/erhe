@@ -74,6 +74,7 @@ SHOTS = [
     ("_front", [2.5, 0.9, 0.3], [0.0, 0.35, 0.0]),
     ("_top",   [0.5, 3.2, 0.9], [0.0, 0.3, 0.0]),
     ("_close", [1.25, 0.85, 1.05], [0.1, 0.45, 0.0]),
+    ("_leg",   [-1.15, 0.75, 1.55], [-0.28, 0.28, 0.33]),
 ]
 
 BASE = "logs/creations/frog"
@@ -165,11 +166,17 @@ def part_chain(g, size, subdivisions, lattice_divisions, offsets, iterations=1):
     return lattice
 
 
-def segment_part(g, tools, size, keep, anchor_a, anchor_b, embed=0.0):
+def segment_part(g, tools, thickness, keep, anchor_a, anchor_b,
+                 over_a=0.06, over_b=0.05):
     """Spindle limb segment aligned to the anchor_a -> anchor_b segment
-    (align-+X); embed slides it toward a so the root sinks into the
-    parent mass. Appends its Transform to tools."""
+    (align-+X) and EXTENDED past both anchors by over_a/over_b: the
+    squeezed, CC-shrunk caps must stay buried inside the joint masses -
+    segments that merely touch their anchors tip-to-tip read as
+    disconnected. Appends its Transform to tools."""
     direction = v_norm(v_sub(anchor_b, anchor_a))
+    a = v_add(anchor_a, v_scale(direction, -over_a))
+    b = v_add(anchor_b, v_scale(direction, over_b))
+    size = [v_length(v_sub(b, a)), thickness[0], thickness[1]]
     stations = len(keep) - 1
     part = part_chain(
         g, size, [1, 0, 0], [stations, 1, 1],
@@ -178,16 +185,24 @@ def segment_part(g, tools, size, keep, anchor_a, anchor_b, embed=0.0):
             keep=keep,
             shift_x=[0.02] + [0.0] * (stations - 1) + [-0.02],
             shift_y=[0.0] * (stations + 1)))
-    center = v_add(v_scale(v_add(anchor_a, anchor_b), 0.5),
-                   v_scale(direction, -embed))
     pose = g.add("transform", {
-        "translation": center,
+        "translation": v_scale(v_add(a, b), 0.5),
         "rotation_mode": 1,
         "rotation_quaternion": align_x_quaternion(direction),
     })
     g.link(part, pose)
     tools.append(pose)
     return pose
+
+
+def joint_ball(g, tools, center, size):
+    """CC'd cube sphere welding two limb segments at a joint."""
+    ball_box = g.add("box", {"size": [size, size, size],
+                             "subdivisions": [0, 0, 0], "power": 1.0})
+    ball_cc = g.add("subdivide", {"mode": 0, "iterations": 2})
+    ball_pose = g.add("transform", {"translation": list(center)})
+    g.chain([ball_box, ball_cc, ball_pose])
+    tools.append(ball_pose)
 
 
 def toe(g, tools, root, direction, length, thickness):
@@ -257,12 +272,17 @@ def build_frog(c, skin):
         hip = [-0.16, 0.00, 0.20 * side]
         knee = [-0.44, 0.06, 0.335 * side]
         ankle = [-0.28, -0.185, 0.38 * side]
-        segment_part(g, tools, [0.36, 0.27, 0.22],
-                     [0.55, 1.0, 0.95, 0.60], hip, knee, embed=0.02)
-        segment_part(g, tools, [0.30, 0.14, 0.13],
-                     [0.70, 1.0, 0.88, 0.55], knee, ankle, embed=0.01)
+        segment_part(g, tools, [0.27, 0.22],
+                     [0.60, 1.0, 0.95, 0.65], hip, knee,
+                     over_a=0.10, over_b=0.05)
+        joint_ball(g, tools, knee, 0.15)
+        segment_part(g, tools, [0.14, 0.13],
+                     [0.72, 1.0, 0.90, 0.62], knee, ankle,
+                     over_a=0.08, over_b=0.05)
+        joint_ball(g, tools, ankle, 0.11)
 
-        # Webbed foot: paddle splayed forward-outward from the ankle.
+        # Webbed foot: paddle splayed forward-outward, root buried in
+        # the ankle ball.
         foot_size = [0.24, 0.05, 0.40]
         foot_half = [0.5 * v for v in foot_size]
         foot = part_chain(
@@ -270,12 +290,12 @@ def build_frog(c, skin):
             paddle_offsets(
                 [2, 1, 3], foot_half,
                 sweep=[0.0, -0.02, -0.05, -0.10],
-                keep_chord=[0.45, 0.75, 1.0, 0.62],
+                keep_chord=[0.55, 0.80, 1.0, 0.62],
                 keep_thick=[1.0, 0.85, 0.65, 0.45]))
         theta = math.atan2(0.88, 0.48 * side)
         rotation = axis_angle_quaternion([0.0, 1.0, 0.0], theta)
         tip_dir = quat_rotate(rotation, [0.0, 0.0, 1.0])
-        center = v_add(ankle, v_scale(tip_dir, foot_half[2] - 0.04))
+        center = v_add(ankle, v_scale(tip_dir, foot_half[2] - 0.08))
         foot_pose = g.add("transform", {
             "translation": center,
             "rotation_mode": 1,
@@ -284,14 +304,15 @@ def build_frog(c, skin):
         g.link(foot, foot_pose)
         tools.append(foot_pose)
 
-        # Three toes fanning past the paddle tip, slight droop onto the pad.
+        # Three toes rooted INSIDE the paddle (mid-plane, near mid-span)
+        # so the union welds them, poking past the paddle tip with a
+        # slight droop onto the pad.
         for fan_deg in (-20.0, 0.0, 20.0):
-            toe_dir = v_norm(v_add(yaw_about_y(tip_dir, fan_deg),
-                                   [0.0, -0.10, 0.0]))
-            root = v_add(ankle, v_scale(toe_dir, 0.22))
-            root[1] = -0.20
-            toe(g, tools, root, [toe_dir[0], -0.03, toe_dir[2]],
-                0.22, 0.05)
+            fan_dir = yaw_about_y(tip_dir, fan_deg)
+            root = v_add([ankle[0], -0.19, ankle[2]],
+                         v_scale([fan_dir[0], 0.0, fan_dir[2]], 0.13))
+            toe(g, tools, root, [fan_dir[0], -0.05, fan_dir[2]],
+                0.26, 0.05)
 
     # Front legs: foreleg aligned to the shoulder->wrist segment so arm,
     # wrist, foot and toes land exactly (exact-landing recipe).
@@ -300,20 +321,22 @@ def build_frog(c, skin):
     for side in (1.0, -1.0):
         shoulder = [0.26, 0.02, 0.17 * side]
         wrist = [0.40, -0.205, 0.235 * side]
-        segment_part(g, tools, [0.36, 0.11, 0.11],
-                     [0.90, 1.0, 0.90, 0.72], shoulder, wrist, embed=0.05)
+        segment_part(g, tools, [0.11, 0.11],
+                     [0.90, 1.0, 0.90, 0.75], shoulder, wrist,
+                     over_a=0.08, over_b=0.03)
+        joint_ball(g, tools, wrist, 0.09)
 
         ffoot = part_chain(
             g, ffoot_size, [1, 0, 1], [2, 1, 2],
             paddle_offsets(
                 [2, 1, 2], ffoot_half,
                 sweep=[0.0, -0.02, -0.05],
-                keep_chord=[0.55, 1.0, 0.60],
+                keep_chord=[0.62, 1.0, 0.60],
                 keep_thick=[1.0, 0.75, 0.50]))
         theta = math.atan2(0.94, 0.22 * side)
         foot_rotation = axis_angle_quaternion([0.0, 1.0, 0.0], theta)
         tip_dir = quat_rotate(foot_rotation, [0.0, 0.0, 1.0])
-        center = v_add(wrist, v_scale(tip_dir, ffoot_half[2] - 0.03))
+        center = v_add(wrist, v_scale(tip_dir, ffoot_half[2] - 0.05))
         ffoot_pose = g.add("transform", {
             "translation": center,
             "rotation_mode": 1,
@@ -322,14 +345,14 @@ def build_frog(c, skin):
         g.link(ffoot, ffoot_pose)
         tools.append(ffoot_pose)
 
-        # Three small front toes splayed on the pad.
+        # Three small front toes rooted inside the paddle, splayed on
+        # the pad.
         for fan_deg in (-24.0, 0.0, 24.0):
-            toe_dir = v_norm(v_add(yaw_about_y(tip_dir, fan_deg),
-                                   [0.0, -0.06, 0.0]))
-            root = v_add(wrist, v_scale(toe_dir, 0.07))
-            root[1] = -0.21
-            toe(g, tools, root, [toe_dir[0], -0.02, toe_dir[2]],
-                0.13, 0.038)
+            fan_dir = yaw_about_y(tip_dir, fan_deg)
+            root = v_add([wrist[0], -0.205, wrist[2]],
+                         v_scale([fan_dir[0], 0.0, fan_dir[2]], 0.05))
+            toe(g, tools, root, [fan_dir[0], -0.02, fan_dir[2]],
+                0.15, 0.038)
 
     # Join merges the posed parts into ONE tool solid, a single boolean
     # union welds them into the body, the extra subdivide fairs the
