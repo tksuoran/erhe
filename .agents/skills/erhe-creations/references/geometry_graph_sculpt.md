@@ -63,6 +63,15 @@ MCP. Creation 18 (fish) is the reference implementation.
   Same for welding: a foot paddle only unions onto its leg if its root
   tucks INSIDE the leg mass (ankle up under the thigh lump); a
   surface-adjacent root leaves a visibly separate floating part.
+  **Segments must OVERLAP their anchors, not touch them** (frog fix,
+  2026-08-11): a spindle whose cage ends exactly at the joint points
+  reads disconnected - the squeezed caps + CC shrink pull the real
+  solid well inside the cage. Extend the cage past both anchors
+  (~0.05-0.10 m at this body scale) AND drop a CC'd-cube joint ball at
+  each joint (knee/ankle/wrist) so the union always has a welding
+  mass. Root toes at the paddle mid-plane near mid-span (not near the
+  tip) for the same reason. Verify with a dedicated limb close-up
+  shot - joint gaps are invisible in full-body views.
 - **Texturing a unioned multi-part body: LOW-FREQUENCY layers only**
   (frog detail pass, 2026-08-11): the union's surviving UV tiles vary
   wildly in scale, and any high-frequency texture layer (wart/speckle
