@@ -17,10 +17,17 @@ MCP. Creation 18 (fish) is the reference implementation.
   SQUARE no matter how many CC levels follow. Only add box
   subdivisions where the lattice needs interior stations along its
   squeeze axis.
-- **`smooth_normals` node** (043366e0): explicit smooth-vertex-normal
-  pass (topology/positions/UVs untouched). Put one between the last
-  subdivision and the output so the baked surface shades smooth
-  regardless of upstream nodes' post-processing.
+- **`smooth_normals` node** (043366e0 + 881d14e4): explicit
+  smooth-normal pass (topology/positions/UVs untouched). Put one
+  between the last subdivision and the output so the baked surface
+  shades smooth regardless of upstream nodes' post-processing.
+  SHADING-NORMAL TRUTH (cost a faceted-dolphin round): the
+  renderable-mesh build resolves the lighting normal per corner as
+  corner_normal > facet_normal > vertex_normal (plain) > computed
+  facet normal; `vertex_normal_smooth` feeds ONLY the separate
+  smooth-normal vertex slot (edge lines). An op that wants smooth
+  SHADING must write vertex_normal and clear corner/facet normals -
+  computing vertex_normal_smooth alone changes nothing visible.
 - **Lattice node parameters go through `geometry_graph_set_parameter` as one
   JSON object**: `auto_fit`, `divisions` [dx,dy,dz], `interpolation`
   (0 trilinear, 1 bezier), `show_cage` (set false - the cage renders as
