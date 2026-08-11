@@ -93,7 +93,18 @@ public:
     // visible ancestor of a hovered node folded out of view with a plain
     // per-row flag test instead of walking the hierarchy.
     static constexpr uint64_t descendant_hovered_in_viewport = (uint64_t{1} << 33);
-    static constexpr uint64_t count                     = 34;
+    // Graph-editor hover (maintained by the geometry graph window): the scene
+    // node referenced by the graph node under the mouse on the node-editor
+    // canvas. Exactly zero or one node carries hovered_in_graph at a time;
+    // when it changes, every ancestor gets child_hovered_in_graph and every
+    // descendant gets ancestor_hovered_in_graph (all three cleared and
+    // re-derived together, and refreshed when the scene tree structure
+    // changes). Lets item trees highlight graph hovering with plain per-row
+    // flag tests, like viewport hovering.
+    static constexpr uint64_t hovered_in_graph          = (uint64_t{1} << 34);
+    static constexpr uint64_t child_hovered_in_graph    = (uint64_t{1} << 35);
+    static constexpr uint64_t ancestor_hovered_in_graph = (uint64_t{1} << 36);
+    static constexpr uint64_t count                     = 37;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -101,6 +112,7 @@ public:
     // mutation serial, so they do not invalidate cached item tree rows.
     static constexpr uint64_t transient =
         selected | hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
+        hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
         negative_determinant | affects_shadow;
 
     static constexpr const char* c_bit_labels[] =
@@ -139,6 +151,9 @@ public:
         "Render Proxy",
         "Proxy Hidden",
         "Descendant Hovered in Viewport",
+        "Hovered in Graph",
+        "Child Hovered in Graph",
+        "Ancestor Hovered in Graph",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
