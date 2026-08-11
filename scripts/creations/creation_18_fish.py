@@ -39,7 +39,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common  # noqa: E402
 from common import (  # noqa: E402
-    axis_angle_quaternion, quat_mul, quat_rotate, v_add, v_scale, v_sub,
+    axis_angle_quaternion, quat_mul, quat_rotate, v_add, v_cross, v_dot,
+    v_norm, v_scale, v_sub,
 )
 
 TITLE = "Fish"
@@ -127,7 +128,9 @@ def _mandarin_v2_config():
     cfg = _mandarin_v1_config()
     cfg.update({
         "suffix": " V2",
-        "pos": [2.9, 0.45, 1.9],
+        # 2.4 spacing along the row: body ~1.6 + tail fan + swept fins need
+        # ~2.25 so neighbors never overlap in the lineup.
+        "pos": [3.8, 0.45, 1.9],
         "size": [1.6, 0.55, 0.62],
         "divisions": [8, 2, 2],
         "squeeze_y": [0.80, 0.66, 0.45, 0.24, 0.10, 0.04, 0.06, 0.16, 0.55],
@@ -152,7 +155,7 @@ def _mandarin_v3_config():
     cfg = _mandarin_v2_config()
     cfg.update({
         "suffix": " V3",
-        "pos": [4.4, 0.45, 1.9],
+        "pos": [6.2, 0.45, 1.9],
         "skin": "v3",
         "squeeze_y": [0.80, 0.66, 0.45, 0.24, 0.10, 0.05, 0.10, 0.24, 0.58],
         "squeeze_z": [0.90, 0.76, 0.52, 0.26, 0.10, 0.05, 0.06, 0.12, 0.48],
@@ -177,7 +180,7 @@ def _mandarin_v4_config():
     cfg = _mandarin_v3_config()
     cfg.update({
         "suffix": " V4",
-        "pos": [5.9, 0.45, 1.9],
+        "pos": [8.6, 0.45, 1.9],
         "lattice_fins": True,
         "parts": [
             {"part": "", "size": [1.15, 0.52, 0.58], "divisions": [6, 2, 2],
@@ -216,14 +219,26 @@ def _mandarin_v5_config():
     cfg = _mandarin_v4_config()
     cfg.update({
         "suffix": " V5",
-        "pos": [7.4, 0.45, 1.9],
+        "pos": [11.0, 0.45, 1.9],
         "textured_fins": True,
+        "mouth": True,
         # White factors: the fin/tail texture graphs carry the color.
         "fin_color": [1.0, 1.0, 1.0],
         "tail_color": [1.0, 1.0, 1.0],
         # Blue rim now comes from the tail texture's border band.
         "tail": {"w": 0.58, "h": 0.64, "t": 0.028, "attach": 0.30,
                  "rim": False},
+    })
+    # Face pass: blunter, SMALLER face than V4's ball - flattened crown
+    # (negative shift_y ramp), drooping snout, narrower final station, fuller
+    # cheeks low (edge_taper belly row down).
+    cfg["parts"] = [dict(part) for part in cfg["parts"]]
+    cfg["parts"][1].update({
+        "squeeze_y": [0.06, 0.03, 0.08, 0.24, 0.62],
+        "squeeze_z": [0.08, 0.04, 0.06, 0.16, 0.55],
+        "shift_y":   [0.00, 0.00, -0.01, -0.05, -0.11],
+        "shift_x":   [0.05, 0.00, 0.00, -0.04, -0.16],
+        "edge_taper": [0.22, 0.00, 0.42],
     })
     return cfg
 
@@ -1293,6 +1308,30 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
                     radius=0.042, slice_count=20, stack_count=12,
                     material_name=eye_mat, parent_node_id=body_id,
                     motion_mode="none")
+
+    # ----------------------------------------------------------------- mouth
+    # Small protrusible tube mouth (front-view refs): a torus at the snout
+    # tip, slightly below the midline, ring axis facing forward - reads as
+    # puckered lips.
+    if cfg.get("mouth"):
+        mouth_mat = c.ensure_material(f"Mandarin{sfx} Mouth",
+                                      base_color=[0.95, 0.48, 0.38],
+                                      roughness=0.4, metallic=0.0)
+        # Probe LOW on the face (the mouth sits well below the eye line);
+        # normal-aligning on the curved snout proved unreliable, so the ring
+        # simply faces forward (+X) like the fish does.
+        snout = c.closest_points(
+            [[nose_x + 0.2, mid_y - 0.16, z0]], node_name=eye_node)
+        hit = snout[0].get("position", [nose_x - 0.02, mid_y - 0.16, z0])
+        p = v_add(hit, [0.004, 0.0, 0.0])
+        # The editor torus ring lies in XY (axis +Z, verified empirically -
+        # a Z-rotation left it edge-on); +90 deg about Y points it at +X.
+        q = axis_angle_quaternion([0.0, 1.0, 0.0], math.radians(90.0))
+        c.shape("torus", f"Mandarin{sfx} Mouth", p,
+                major_radius=0.026, minor_radius=0.011,
+                major_steps=18, minor_steps=10,
+                material_name=mouth_mat, rotation_xyzw=q,
+                parent_node_id=body_id, motion_mode="none")
 
     c.settle()
     return body
