@@ -246,18 +246,23 @@ creations up beyond single showcase scenes.
 
 A green frog sitting on a lily pad in a dark pond, the second creature
 built as ONE editable geometry graph and the first to pose a full limb
-set: eleven coarse box cages (body-with-head, paired eye bulges,
-folded thigh lumps, webbed hind feet, straight forelegs, front feet)
-each Catmull-Clark subdivided and bezier-lattice sculpted, posed by
-quaternion Transform nodes, merged by Join and welded with a single
-Boolean union, then faired by a final subdivision and a
-`smooth_normals` pass. The forelegs are aligned to an authored
-shoulder-to-wrist segment so the arm, wrist and front foot land
-exactly on the pad - the recipe now lives in the skill's
-`geometry_graph_sculpt.md`. The pupils are two scene-node spheres
-outside the union, keeping their own dark material against the
-single-material graph output; cattails and floating pads fill out the
-pond.
+set: twenty-five coarse box cages - a nine-station body with arched
+back and throat bulge, eye bulges, hind legs articulated into thigh
+(hip-to-knee) and shank (knee-to-ankle) spindles, webbed feet, and
+bulb-tipped toes on all four feet - each Catmull-Clark subdivided and
+bezier-lattice sculpted, posed by quaternion Transform nodes, merged
+by Join and welded with a single Boolean union, then faired by a final
+subdivision and a `smooth_normals` pass. Limbs are aligned to authored
+anchor segments so every foot lands exactly on the pad (the
+exact-landing recipe in the skill's `geometry_graph_sculpt.md`).
+Anything needing its own material sits outside the single-material
+union, probed onto the evaluated surface with `closest_points`: gold
+iris domes with horizontal slit pupils, nostrils, and tympanum discs.
+The skin is a procedural low-frequency fbm mottle bound to the
+material's base-color slot (high-frequency layers alias on the union's
+compressed UV tiles - a lesson now in the skill). Lily pads carry
+their signature radial slit via a CSG box difference, cattails top the
+reeds, and a dragonfly hovers in the frog's gaze.
 
 ### 19 - Dolphin (2026-08-11)
 
