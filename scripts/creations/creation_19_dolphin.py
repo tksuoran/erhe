@@ -338,8 +338,14 @@ def main():
         # Tight shadow fit: a 3 m subject at range 60 gave blocky shadows
         # + acne speckles. 44 m sea diag = 31 m stays inside range 48.
         c.shadow_range(48.0, z_far=300.0)
-        c.shape("box", "Sea", [0.0, -0.04, 0.0], size=[44.0, 0.08, 44.0],
-                material_name=water, motion_mode="none")
+        sea = c.shape("box", "Sea", [0.0, -0.04, 0.0], size=[44.0, 0.08, 44.0],
+                      material_name=water, motion_mode="none")
+        # The translucent sea surface must not cast a shadow (it darkened
+        # everything under it, including the dolphin's own shadow).
+        c.mutate("set_item_flags", {
+            "scene_name": c.scene, "ids": [int(sea["node_id"])],
+            "flags": ["shadow_cast"], "enabled": False,
+        })
 
         build_dolphin(c, skin)
 
