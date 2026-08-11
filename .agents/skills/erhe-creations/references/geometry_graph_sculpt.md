@@ -53,6 +53,16 @@ MCP. Creation 18 (fish) is the reference implementation.
   anchors and probe the real surface with `c.closest_points` for flank/back
   anchors (the subdivided surface sits well inside the cage - guessing
   offsets from cage numbers misses).
+- **Limb chains that must land exactly** (frog, 2026-08-11): when a
+  limb's far end has a required world position (a foreleg tip on the
+  ground, a foot at a wrist), author the anchor SEGMENT (shoulder ->
+  wrist points), align the limb's long axis to it with an align-+X
+  quaternion (axis = cross(+X, dir), angle = acos(dx)) and place the
+  next part at the same wrist point - hand-tuned pitch/yaw angles left
+  the frog's arm tips buried in the pad with the feet floating apart.
+  Same for welding: a foot paddle only unions onto its leg if its root
+  tucks INSIDE the leg mass (ankle up under the thigh lump); a
+  surface-adjacent root leaves a visibly separate floating part.
 - Fins/appendages on such a body: thin box + `c.lattice_deform` fan/rake +
   2x `catmull_clark` (one level per MCP call, no iterations param), forked
   with one CSG cylinder difference; small paired fins are pooled `sweep`

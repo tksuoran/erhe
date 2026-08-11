@@ -21,7 +21,7 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_19_dolphin` (henge,
+`creation_1_conway_cathedral` … `creation_20_frog` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
@@ -32,7 +32,9 @@ fish = geometry-graph body box->lattice->subdivide + CSG-forked tail,
 dolphin = organic body as ONE editable geometry graph: per-part
 box->subdivide->lattice chains, Transform-posed (quaternion mode),
 Join + single Boolean union + final subdivide, see csg_hulls.md +
-geometry_graph_sculpt.md).
+geometry_graph_sculpt.md,
+frog = sitting frog on a lily pad, same one-graph recipe with limbs
+aligned to authored anchor segments - see geometry_graph_sculpt.md).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
