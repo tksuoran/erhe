@@ -21,14 +21,16 @@ and prompt_queue.txt only point here.
 
 ## Existing creations
 
-`creation_1_conway_cathedral` … `creation_18_fish` (henge,
+`creation_1_conway_cathedral` … `creation_19_dolphin` (henge,
 reef, robots, ragdoll, glass audience, sandbox + L-system oak, forest
 glade, monster portal island, UAP hangar, windswept glade = glade +
 physics foliage + wind, spider sentinel = motor-held STANDING ragdoll,
 tree garden = 28 Finnish species via lsystem_trees.py, sail ships =
 CSG-carved convex-hull hulls + FFD-billowed sails, rockfall =
 physics-settled rock piles + staged cairn under the manual clock,
-fish = geometry-graph body box->lattice->subdivide + CSG-forked tail).
+fish = geometry-graph body box->lattice->subdivide + CSG-forked tail,
+dolphin = SCENE-OP organic body: box->catmull_clark->lattice parts
+welded by one csg union + extra CC, see csg_hulls.md).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 

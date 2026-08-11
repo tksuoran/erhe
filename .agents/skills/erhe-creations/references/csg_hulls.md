@@ -2,7 +2,33 @@
 
 Boolean carving, authored convex-hull silhouettes and lattice (FFD)
 deformation. New tools 2026-08-09; creation 16 (sail ships) is the
-reference implementation.
+reference implementation. Creation 19 (dolphin) is the reference for
+ORGANIC UNION bodies: box -> catmull_clark -> lattice parts placed in
+final relative pose, welded with one csg union, extra CC on the result.
+
+- **Organic union bodies (creation 19 lessons, 2026-08-11)**:
+  - Catmull-Clark of the CSG's TRIANGULATED output weaves the
+    alternating diagonals into real geometric bumps on near-planar
+    strips (a body crest reads as a jagged zigzag silhouette + white
+    sliver flecks). Fix: subdivide each part TWICE before the union so
+    its triangles are fine, then only ONE post-union catmull_clark.
+  - The MCP `catmull_clark` leaves the mesh FLAT-shaded (parts read
+    smooth only because `lattice_deform` regenerate_attributes rebuilt
+    their vertex normals). After the final CC, run a ZERO-OFFSET
+    `lattice_deform` (offsets [[0,0,0,0,0,0]], divisions [1,1,1]) - it
+    moves nothing but regenerates smooth vertex normals.
+  - The Laplacian `smooth` MCP op is BROKEN (2026-08-11): no visible
+    effect at sane settings, and strength 1.0 / 20 iterations EXPLODES
+    the mesh into giant polygons. Do not use until fixed.
+  - Station-table lattice sculpting (spindle keep/shift tables, blade
+    sweep/chord tables) carries over 1:1 from the geometry-graph
+    recipe (geometry_graph_sculpt.md) to `c.lattice_deform` - same
+    cage math, offsets are mesh-LOCAL so posing at create_shape time
+    is safe.
+  - Mirroring a one-sided swept paddle to the other flank is a pure
+    rotation when the blade is symmetric in its thin axis: droop
+    theta about X on one side pairs with (180 - theta) on the other
+    (the mesh tip is ALWAYS local +Z), yaw sign follows the side.
 
 - **`c.csg(target, tools, operation)`** (union / intersection /
   difference, WORLD-space composed): the result REPLACES the target
