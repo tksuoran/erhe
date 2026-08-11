@@ -8,25 +8,25 @@ subdivide -> lattice FFD chain, appendages are posed by Transform nodes
 subdivide -> smooth_normals -> Output. Drag any lattice point in the
 node editor and the whole frog re-evaluates.
 
-  Body:        box -> subdivide(2) -> lattice -------------------> Boolean.A
-  Eyes (x2):   box -> subdivide(2) -> transform ---------------+
-  Thighs (x2): box -> subdivide(2) -> lattice -> transform ----+-> Join -> Boolean.B
-  Feet (x2):   box -> subdivide(1) -> lattice -> transform ----+
-  Arms (x2):   box -> subdivide(2) -> lattice -> transform ----+
-  Front feet:  box -> subdivide(1) -> lattice -> transform ----+   (x2)
-  Boolean(union) -> subdivide(1) -> smooth_normals -> Output
+Detail pass (v2, ~25 graph parts instead of 11):
 
-ROUNDNESS RULE (geometry_graph_sculpt.md): coarse box subdivisions -
-often 0 per axis - and a single CC iteration per part read round; dense
-cages read square. Caps are pinched hard because bezier FFD softens
-interior stations but applies endpoints exactly.
+  Body:        9-station spindle with arched back, throat bulge, blunt snout
+  Eyes (x2):   CC'd cube domes; gold iris + slit pupil are scene spheres
+  Hind legs:   articulated thigh (hip->knee) + shank (knee->ankle) + webbed
+               foot + 3 toes with bulb tips, per side
+  Front legs:  foreleg aligned shoulder->wrist + foot + 3 toes, per side
+  All parts -> Join -> Boolean(union) -> subdivide -> smooth_normals -> Out
 
-The frog's crouch lives in the lattice tables (arched back, raised
-rump) and the appendage Transform quaternions (folded thighs hugging
-the flanks, webbed feet splayed forward, straight forelegs propping the
-chest). Black pupils are two small scene-node spheres placed on the eye
-bulges - they are not part of the union so they keep their own dark
-material.
+Limbs are aligned to authored anchor SEGMENTS (hip/knee/ankle,
+shoulder/wrist) with align-+X quaternions - see the skill's
+geometry_graph_sculpt.md exact-landing recipe. Nostrils and tympanum
+discs are probed onto the actual evaluated surface with
+`closest_points`. The skin is a procedural mottle (fbm -> green
+colorize + wart speckle, soft light) bound to the skin material's
+base_color slot with wrap=repeat over the graph body's rough-but-
+coherent UV tiles. Lily pads get their signature radial slit via a CSG
+box difference (the scaled pooled instance goes private, documented
+behavior), and a dragonfly hovers in the frog's gaze.
 
 NOTE --only is not supported: the frog is one geometry graph and graph
 assets cannot be recreated under the same name. Iterate with a full
@@ -41,14 +41,18 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from common import (  # noqa: E402
     Creation, standard_args, reframe, fail_soft,
-    axis_angle_quaternion, quat_mul, quat_rotate, v_add, v_scale,
-    v_sub, v_length,
+    axis_angle_quaternion, align_y_quaternion, quat_mul, quat_rotate,
+    v_add, v_scale, v_sub, v_length,
 )
+
+
+def v_norm(v):
+    return v_scale(v, 1.0 / v_length(v))
 
 
 def align_x_quaternion(direction):
     """Quaternion rotating local +X onto the given unit direction."""
-    d = v_scale(direction, 1.0 / v_length(direction))
+    d = v_norm(direction)
     dot = max(-1.0, min(1.0, d[0]))
     axis = [0.0, -d[2], d[1]]  # cross(+X, d)
     length = math.sqrt(axis[1] * axis[1] + axis[2] * axis[2])
@@ -58,16 +62,24 @@ def align_x_quaternion(direction):
         axis = [0.0, axis[1] / length, axis[2] / length]
     return axis_angle_quaternion(axis, math.acos(dot))
 
+
+def grad(stops, interpolation=1):
+    return {"interpolation": interpolation,
+            "stops": [{"pos": p, "color": list(c)} for p, c in stops]}
+
+
 SHOTS = [
     ("",       [1.9, 1.1, 2.3], [0.0, 0.35, 0.0]),
     ("_side",  [0.1, 0.7, 2.6], [0.0, 0.35, 0.0]),
     ("_front", [2.5, 0.9, 0.3], [0.0, 0.35, 0.0]),
     ("_top",   [0.5, 3.2, 0.9], [0.0, 0.3, 0.0]),
+    ("_close", [1.25, 0.85, 1.05], [0.1, 0.45, 0.0]),
 ]
 
 BASE = "logs/creations/frog"
 GLB = "res/editor/scenes/creations/frog.glb"
 GRAPH_NAME = "Frog Graph"
+SKIN_GRAPH = "Frog Skin Mottle"
 
 
 # ------------------------------------------------------------- lattice tables
@@ -91,23 +103,26 @@ def put(flat, divisions, i, j, k, dx, dy, dz):
 
 
 def spindle_offsets(divisions, half, keep, shift_x, shift_y,
-                    top_taper=0.0, belly_taper=0.0):
+                    top_taper=0.0, belly_taper=0.0, belly_drop=None):
     """Body along X: per-station (i) squeeze of Y/Z toward the centerline
     (keep[i] = surviving fraction), axial cap shifts and dorsoventral
     shifts; top/belly rows get extra beam (Z) squeeze for the oval
-    cross-section."""
+    cross-section; belly_drop[i] pushes the belly row down (throat/
+    dewlap bulge)."""
     di, dj, dk = divisions
     flat = make_flat(divisions)
     for i in range(di + 1):
         squeeze = 1.0 - keep[i]
+        drop = belly_drop[i] if belly_drop else 0.0
         for j in range(dj + 1):
             y = (2.0 * j / dj - 1.0) * half[1]
             extra = top_taper if j == dj else (belly_taper if j == 0 else 0.0)
             sz = squeeze + (1.0 - squeeze) * extra
+            dy_extra = -drop if j == 0 else 0.0
             for k in range(dk + 1):
                 z = (2.0 * k / dk - 1.0) * half[2]
                 put(flat, divisions, i, j, k,
-                    shift_x[i], -y * squeeze + shift_y[i], -z * sz)
+                    shift_x[i], -y * squeeze + shift_y[i] + dy_extra, -z * sz)
     return flat
 
 
@@ -150,67 +165,106 @@ def part_chain(g, size, subdivisions, lattice_divisions, offsets, iterations=1):
     return lattice
 
 
+def segment_part(g, tools, size, keep, anchor_a, anchor_b, embed=0.0):
+    """Spindle limb segment aligned to the anchor_a -> anchor_b segment
+    (align-+X); embed slides it toward a so the root sinks into the
+    parent mass. Appends its Transform to tools."""
+    direction = v_norm(v_sub(anchor_b, anchor_a))
+    stations = len(keep) - 1
+    part = part_chain(
+        g, size, [1, 0, 0], [stations, 1, 1],
+        spindle_offsets(
+            [stations, 1, 1], [0.5 * v for v in size],
+            keep=keep,
+            shift_x=[0.02] + [0.0] * (stations - 1) + [-0.02],
+            shift_y=[0.0] * (stations + 1)))
+    center = v_add(v_scale(v_add(anchor_a, anchor_b), 0.5),
+                   v_scale(direction, -embed))
+    pose = g.add("transform", {
+        "translation": center,
+        "rotation_mode": 1,
+        "rotation_quaternion": align_x_quaternion(direction),
+    })
+    g.link(part, pose)
+    tools.append(pose)
+    return pose
+
+
+def toe(g, tools, root, direction, length, thickness):
+    """Slim toe spindle with a bulbed tip, root buried in the foot/paddle."""
+    d = v_norm(direction)
+    part = part_chain(
+        g, [length, thickness, thickness], [1, 0, 0], [3, 1, 1],
+        spindle_offsets(
+            [3, 1, 1], [0.5 * length, 0.5 * thickness, 0.5 * thickness],
+            keep=[0.75, 1.0, 0.72, 0.95],  # dip then bulb = toe pad tip
+            shift_x=[0.02, 0.0, 0.0, -0.01],
+            shift_y=[0.0, 0.0, 0.0, 0.0]))
+    center = v_add(root, v_scale(d, 0.5 * length - 0.02))
+    pose = g.add("transform", {
+        "translation": center,
+        "rotation_mode": 1,
+        "rotation_quaternion": align_x_quaternion(d),
+    })
+    g.link(part, pose)
+    tools.append(pose)
+
+
+def yaw_about_y(direction, degrees):
+    return quat_rotate(
+        axis_angle_quaternion([0.0, 1.0, 0.0], math.radians(degrees)),
+        direction)
+
+
 def build_frog(c, skin):
     """Build the frog geometry graph, bind it to a scene node, sit it on
     the lily pad. Returns the bound node's name."""
     g = c.geometry_graph(GRAPH_NAME)
 
-    # Body (torso + head merged, frogs have no neck): 0.95 m along X,
-    # +X = snout. Stations i=0 (rump) .. 6 (snout tip): big raised rump,
-    # arched back sloping down to a blunt wide snout.
+    # Body (torso + head merged): 0.95 m along X, +X = snout. Nine
+    # stations i=0 (rump) .. 8 (snout): raised rump, arched back
+    # sloping over the shoulders, wide blunt snout; the belly row drops
+    # under the head for the throat.
     body_size = [0.95, 0.44, 0.66]
     body = part_chain(
-        g, body_size, [2, 0, 0], [6, 2, 2],
+        g, body_size, [3, 1, 1], [8, 3, 3],
         iterations=2,
         offsets=spindle_offsets(
-            [6, 2, 2], [0.5 * v for v in body_size],
-            keep=[0.42, 0.88, 1.00, 0.96, 0.86, 0.76, 0.52],
-            shift_x=[0.12, 0.0, 0.0, 0.0, 0.0, 0.0, -0.08],
-            shift_y=[0.02, 0.08, 0.10, 0.08, 0.05, 0.04, 0.04],
-            top_taper=0.20, belly_taper=0.04))
+            [8, 3, 3], [0.5 * v for v in body_size],
+            keep=[0.40, 0.78, 0.97, 1.00, 0.97, 0.93, 0.87, 0.74, 0.50],
+            shift_x=[0.11, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.10],
+            shift_y=[0.03, 0.09, 0.12, 0.11, 0.08, 0.06, 0.05, 0.05, 0.05],
+            belly_drop=[0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.03, 0.05, 0.02],
+            top_taper=0.22, belly_taper=0.05))
 
     tools = []
 
-    # Eye bulges: two spheres-from-boxes on top of the head, wide apart
-    # (frog eyes sit on the skull corners). No lattice needed - a single
-    # CC'd cube is already the dome; the union trims the buried half.
+    # Eye bulges: CC'd cubes on the skull corners (iris/pupil spheres are
+    # scene nodes placed later - they keep their own materials).
     for side in (1.0, -1.0):
-        eye_box = g.add("box", {"size": [0.19, 0.17, 0.17],
+        eye_box = g.add("box", {"size": [0.21, 0.19, 0.19],
                                 "subdivisions": [0, 0, 0], "power": 1.0})
         eye_cc = g.add("subdivide", {"mode": 0, "iterations": 2})
         eye_pose = g.add("transform", {
-            "translation": [0.24, 0.235, 0.155 * side]})
+            "translation": [0.24, 0.24, 0.16 * side]})
         g.chain([eye_box, eye_cc, eye_pose])
         tools.append(eye_pose)
 
-    # Folded hind legs: one bean-shaped mass per side hugging the rear
-    # flank (thigh + shank read as one lump on a crouched frog), long
-    # axis along the body, bulging up and out.
-    thigh_size = [0.56, 0.30, 0.24]
+    # Hind legs: articulated fold. Hip high on the flank, knee swept
+    # back-out-up, ankle tucked forward-down - thigh and shank are
+    # spindles aligned to the hip->knee and knee->ankle segments.
     for side in (1.0, -1.0):
-        thigh = part_chain(
-            g, thigh_size, [1, 0, 0], [3, 1, 1],
-            spindle_offsets(
-                [3, 1, 1], [0.5 * v for v in thigh_size],
-                keep=[0.45, 1.0, 0.95, 0.55],
-                shift_x=[0.06, 0.0, 0.0, -0.05],
-                shift_y=[0.0, 0.02, 0.01, -0.02]))
-        yaw = axis_angle_quaternion([0.0, 1.0, 0.0],
-                                    math.radians(-12.0 * side))
-        thigh_pose = g.add("transform", {
-            "translation": [-0.28, 0.0, 0.30 * side],
-            "rotation_mode": 1,
-            "rotation_quaternion": yaw,
-        })
-        g.link(thigh, thigh_pose)
-        tools.append(thigh_pose)
+        hip = [-0.16, 0.00, 0.20 * side]
+        knee = [-0.44, 0.06, 0.335 * side]
+        ankle = [-0.28, -0.185, 0.38 * side]
+        segment_part(g, tools, [0.36, 0.27, 0.22],
+                     [0.55, 1.0, 0.95, 0.60], hip, knee, embed=0.02)
+        segment_part(g, tools, [0.30, 0.14, 0.13],
+                     [0.70, 1.0, 0.88, 0.55], knee, ankle, embed=0.01)
 
-    # Webbed hind feet: flat paddles splayed forward-outward beside the
-    # body, ankle at the folded leg. Paddle tip is local +Z; rotating +Z
-    # about Y by theta gives [sin, 0, cos], so theta = atan2(fwd, out).
-    foot_size = [0.24, 0.05, 0.42]
-    foot_half = [0.5 * v for v in foot_size]
-    for side in (1.0, -1.0):
+        # Webbed foot: paddle splayed forward-outward from the ankle.
+        foot_size = [0.24, 0.05, 0.40]
+        foot_half = [0.5 * v for v in foot_size]
         foot = part_chain(
             g, foot_size, [1, 0, 2], [2, 1, 3],
             paddle_offsets(
@@ -221,9 +275,6 @@ def build_frog(c, skin):
         theta = math.atan2(0.88, 0.48 * side)
         rotation = axis_angle_quaternion([0.0, 1.0, 0.0], theta)
         tip_dir = quat_rotate(rotation, [0.0, 0.0, 1.0])
-        # Ankle tucked up under the thigh lump so the union welds foot
-        # to leg (iteration 2 had the paddle floating below the thigh).
-        ankle = [-0.27, -0.185, 0.33 * side]
         center = v_add(ankle, v_scale(tip_dir, foot_half[2] - 0.04))
         foot_pose = g.add("transform", {
             "translation": center,
@@ -233,38 +284,25 @@ def build_frog(c, skin):
         g.link(foot, foot_pose)
         tools.append(foot_pose)
 
-    # Front legs: straight props from the chest down to the pad. The arm
-    # is built along X and ALIGNED to the shoulder->wrist segment, so the
-    # forearm, wrist and front foot connect exactly (iteration 1 had the
-    # arm tip buried in the pad and the foot floating apart from it).
-    arm_size = [0.36, 0.11, 0.11]
+        # Three toes fanning past the paddle tip, slight droop onto the pad.
+        for fan_deg in (-20.0, 0.0, 20.0):
+            toe_dir = v_norm(v_add(yaw_about_y(tip_dir, fan_deg),
+                                   [0.0, -0.10, 0.0]))
+            root = v_add(ankle, v_scale(toe_dir, 0.22))
+            root[1] = -0.20
+            toe(g, tools, root, [toe_dir[0], -0.03, toe_dir[2]],
+                0.22, 0.05)
+
+    # Front legs: foreleg aligned to the shoulder->wrist segment so arm,
+    # wrist, foot and toes land exactly (exact-landing recipe).
     ffoot_size = [0.14, 0.04, 0.22]
     ffoot_half = [0.5 * v for v in ffoot_size]
     for side in (1.0, -1.0):
         shoulder = [0.26, 0.02, 0.17 * side]
         wrist = [0.40, -0.205, 0.235 * side]
-        arm_dir = v_sub(wrist, shoulder)
-        arm_dir = v_scale(arm_dir, 1.0 / v_length(arm_dir))
-        arm = part_chain(
-            g, arm_size, [1, 0, 0], [3, 1, 1],
-            spindle_offsets(
-                [3, 1, 1], [0.5 * v for v in arm_size],
-                keep=[0.90, 1.0, 0.90, 0.72],
-                shift_x=[0.02, 0.0, 0.0, -0.02],
-                shift_y=[0.0, 0.0, 0.0, 0.0]))
-        rotation = align_x_quaternion(arm_dir)
-        # Root end embeds in the chest; +X tip lands on the wrist.
-        center = v_add(wrist, v_scale(arm_dir, -0.5 * arm_size[0] + 0.05))
-        arm_pose = g.add("transform", {
-            "translation": center,
-            "rotation_mode": 1,
-            "rotation_quaternion": rotation,
-        })
-        g.link(arm, arm_pose)
-        tools.append(arm_pose)
+        segment_part(g, tools, [0.36, 0.11, 0.11],
+                     [0.90, 1.0, 0.90, 0.72], shoulder, wrist, embed=0.05)
 
-        # Front foot: small paddle forward from the wrist, resting on
-        # the pad.
         ffoot = part_chain(
             g, ffoot_size, [1, 0, 1], [2, 1, 2],
             paddle_offsets(
@@ -284,15 +322,24 @@ def build_frog(c, skin):
         g.link(ffoot, ffoot_pose)
         tools.append(ffoot_pose)
 
-    # Join merges the posed appendages into ONE tool solid, a single
-    # boolean union welds them into the body, the extra subdivide fairs
-    # the union seams and smooth_normals fixes the shading.
+        # Three small front toes splayed on the pad.
+        for fan_deg in (-24.0, 0.0, 24.0):
+            toe_dir = v_norm(v_add(yaw_about_y(tip_dir, fan_deg),
+                                   [0.0, -0.06, 0.0]))
+            root = v_add(wrist, v_scale(toe_dir, 0.07))
+            root[1] = -0.21
+            toe(g, tools, root, [toe_dir[0], -0.02, toe_dir[2]],
+                0.13, 0.038)
+
+    # Join merges the posed parts into ONE tool solid, a single boolean
+    # union welds them into the body, the extra subdivide fairs the
+    # union seams and smooth_normals fixes the shading.
     join = g.add("join")
     for tool in tools:
         g.link(tool, join)
     boolean = g.add("boolean", {"operation": 0})  # union
     g.link(body, boolean, dst_slot=0)             # A: body
-    g.link(join, boolean, dst_slot=1)             # B: merged appendages
+    g.link(join, boolean, dst_slot=1)             # B: merged parts
     final = g.add("subdivide", {"mode": 0, "iterations": 1})
     normals = g.add("smooth_normals")
     out = g.add("output", {"material": skin})
@@ -304,6 +351,113 @@ def build_frog(c, skin):
     frog = c.bind_node_mesh("Frog", GRAPH_NAME)
     c.set_node_transform(frog, translation=[0.0, 0.32, 0.0])
     return frog
+
+
+def build_skin_graph(c):
+    """Procedural mottled frog skin: fbm -> green colorize base with a
+    wart-speckle noise layer soft-lit on top. Bound to the skin
+    material's base_color slot (wrap=repeat - graph-body UV tiles run
+    past [0,1])."""
+    g = c.texture_graph(SKIN_GRAPH)
+    # Low-frequency fbm only: a high-frequency wart-noise layer aliased
+    # into dirty dark speckle where the unioned body's UV tiles compress.
+    field = g.add("fbm", {"noise": 1, "scale_x": 3.5, "scale_y": 3.5,
+                          "iterations": 4.0})
+    base = g.add("colorize", {"gradient": grad([
+        (0.00, [0.11, 0.28, 0.08, 1.0]),   # deep moss shadow
+        (0.35, [0.16, 0.38, 0.11, 1.0]),
+        (0.65, [0.23, 0.49, 0.15, 1.0]),   # body green
+        (0.85, [0.33, 0.57, 0.19, 1.0]),
+        (1.00, [0.45, 0.63, 0.24, 1.0])])})  # highlight green
+    g.link(field, base)
+    out = g.add("output", {"name": SKIN_GRAPH, "size": 1024})
+    g.link(base, out, dst_slot=2)    # rgba slot
+
+
+def decorate_frog(c, frog, materials):
+    """Scene-node details on the evaluated body: two-tone eyes, probed
+    nostrils and tympanum discs (single-material graph output - anything
+    needing its own material lives outside the union)."""
+    iris_gold, eye_black, tympanum_mat = materials
+    for side in (1.0, -1.0):
+        # Eye: gold iris dome + horizontal slit pupil layered along the
+        # gaze direction on the skin bulge (bulge center local
+        # [0.24, 0.24, +-0.16], frog node at y 0.32).
+        eye_center = [0.24, 0.56, 0.16 * side]
+        gaze = v_norm([0.72, 0.30, 0.30 * side])
+        c.shape("uv_sphere", f"Iris {'L' if side > 0 else 'R'}",
+                v_add(eye_center, v_scale(gaze, 0.052)),
+                radius=0.050, slice_count=20, stack_count=12,
+                material_name=iris_gold, motion_mode="none")
+        c.shape("uv_sphere", f"Pupil {'L' if side > 0 else 'R'}",
+                v_add(eye_center, v_scale(gaze, 0.085)),
+                radius=1.0, slice_count=16, stack_count=10,
+                material_name=eye_black, motion_mode="none",
+                scale=[0.034, 0.017, 0.044])
+
+    # Nostrils + tympanum probed onto the actual surface (guessed
+    # offsets miss - the subdivided skin sits inside the cage).
+    probes = c.closest_points(
+        [[0.56, 0.44, 0.055], [0.56, 0.44, -0.055],    # nostrils
+         [0.13, 0.46, 0.45], [0.13, 0.46, -0.45]],     # tympani
+        node_name=frog)
+    for index, side in enumerate((1.0, -1.0)):
+        hit = probes[index].get("position", [0.50, 0.42, 0.05 * side])
+        c.shape("uv_sphere", f"Nostril {'L' if side > 0 else 'R'}", hit,
+                radius=0.012, slice_count=10, stack_count=6,
+                material_name=eye_black, motion_mode="none")
+    for index, side in enumerate((1.0, -1.0)):
+        probe = probes[2 + index]
+        hit = probe.get("position", [0.13, 0.42, 0.30 * side])
+        normal = probe.get("normal", [0.0, 0.0, side])
+        c.shape("uv_sphere", f"Tympanum {'L' if side > 0 else 'R'}",
+                v_add(hit, v_scale(normal, 0.004)),
+                radius=1.0, slice_count=14, stack_count=8,
+                material_name=tympanum_mat, motion_mode="none",
+                rotation_xyzw=align_y_quaternion(normal),
+                scale=[0.055, 0.012, 0.055])
+
+
+def build_dragonfly(c, position):
+    """A small dragonfly hovering in the frog's gaze: slim two-segment
+    body, dark head, two pairs of translucent swept wings."""
+    body_mat = c.ensure_material("dragonfly", base_color=[0.05, 0.42, 0.48],
+                                 roughness=0.3, metallic=0.1)
+    head_mat = c.ensure_material("dragonfly head", base_color=[0.03, 0.03, 0.04],
+                                 roughness=0.25, metallic=0.0)
+    wing_mat = c.ensure_material("dragonfly wing", base_color=[0.9, 0.95, 1.0],
+                                 roughness=0.15, metallic=0.0,
+                                 blending_mode="alpha_blend", opacity=0.45)
+    root = c.group("Dragonfly", position)
+    c.shape("uv_sphere", "Dragonfly Thorax", position,
+            radius=1.0, slice_count=12, stack_count=8,
+            material_name=body_mat, motion_mode="none",
+            scale=[0.075, 0.017, 0.017], parent_node_id=root)
+    c.shape("uv_sphere", "Dragonfly Tail",
+            v_add(position, [-0.115, 0.004, 0.0]),
+            radius=1.0, slice_count=12, stack_count=8,
+            material_name=body_mat, motion_mode="none",
+            scale=[0.085, 0.009, 0.009], parent_node_id=root)
+    c.shape("uv_sphere", "Dragonfly Head",
+            v_add(position, [0.075, 0.006, 0.0]),
+            radius=0.014, slice_count=12, stack_count=8,
+            material_name=head_mat, motion_mode="none", parent_node_id=root)
+    # Two wing pairs, swept slightly back, near-horizontal. Wing long
+    # axis is local +Z; yaw about Y maps +Z to [sin, 0, cos], so
+    # theta = atan2(dir.x, dir.z).
+    for pair, sweep_deg, attach_x in (("A", 18.0, 0.015), ("B", 42.0, -0.02)):
+        for side in (1.0, -1.0):
+            a = math.radians(sweep_deg)
+            wing_dir = v_norm([-math.sin(a), 0.08, math.cos(a) * side])
+            center = v_add(v_add(position, [attach_x, 0.014, 0.0]),
+                           v_scale(wing_dir, 0.080))
+            c.shape("box", f"Dragonfly Wing {pair}{'L' if side > 0 else 'R'}",
+                    center, size=[0.042, 0.0025, 0.165],
+                    material_name=wing_mat, motion_mode="none",
+                    rotation_xyzw=axis_angle_quaternion(
+                        [0.0, 1.0, 0.0],
+                        math.atan2(wing_dir[0], wing_dir[2])),
+                    parent_node_id=root)
 
 
 # ---------------------------------------------------------------------- main
@@ -328,8 +482,12 @@ def main():
                    clear_color=[0.45, 0.58, 0.52, 1.0], grid=False,
                    sky={"_version": 3, "enabled": True, "mode": 1})
 
-        skin = c.ensure_material("frog skin", base_color=[0.23, 0.46, 0.16],
-                                 roughness=0.52, metallic=0.0)
+        # Near-white base color: the mottle graph carries the green.
+        skin = c.ensure_material("frog skin", base_color=[0.95, 1.0, 0.90],
+                                 roughness=0.50, metallic=0.0)
+        build_skin_graph(c)
+        c.bind_material_texture(skin, SKIN_GRAPH, slot="base_color",
+                                wrap="repeat")
         pad_green = c.ensure_material("lily pad", base_color=[0.10, 0.34, 0.12],
                                       roughness=0.42, metallic=0.0)
         # Mid roughness: at 0.08 the sun/sky sheen washed the dark base
@@ -339,6 +497,11 @@ def main():
                                   blending_mode="alpha_blend", opacity=0.94)
         eye_black = c.ensure_material("eye black", base_color=[0.02, 0.02, 0.02],
                                       roughness=0.18, metallic=0.0)
+        iris_gold = c.ensure_material("iris gold", base_color=[0.85, 0.60, 0.12],
+                                      roughness=0.35, metallic=0.15)
+        tympanum_mat = c.ensure_material("tympanum",
+                                         base_color=[0.15, 0.30, 0.11],
+                                         roughness=0.65, metallic=0.0)
         reed_green = c.ensure_material("reed", base_color=[0.18, 0.36, 0.14],
                                        roughness=0.6, metallic=0.0)
         cattail_brown = c.ensure_material("cattail", base_color=[0.30, 0.17, 0.08],
@@ -353,32 +516,51 @@ def main():
         c.set_node_transform("Sun", rotation_xyzw=quat_mul(qy, qx))
         c.light("point", "Sky Fill", [-8.0, 9.0, 10.0],
                 [0.60, 0.72, 0.66], 110.0, range=45.0, cast_shadow=False)
-        c.shadow_range(30.0, z_far=300.0)
+        # Tight fit: range 30 over a 26 m pond speckled the pads with
+        # shadow acne. 20 m pond half-diagonal 14.1 m fits range 16.
+        c.shadow_range(16.0, z_far=300.0)
 
         # Pond: thin translucent slab; it must not cast a shadow
         # (dolphin lesson - the surface darkened everything below it).
         pond = c.shape("box", "Pond", [0.0, -0.04, 0.0],
-                       size=[26.0, 0.08, 26.0],
+                       size=[20.0, 0.08, 20.0],
                        material_name=water, motion_mode="none")
         c.mutate("set_item_flags", {
             "scene_name": c.scene, "ids": [int(pond["node_id"])],
             "flags": ["shadow_cast"], "enabled": False,
         })
 
-        # Lily pads: squashed spheres read as round pads (no new shape
-        # types). The frog's pad is the big one at the origin.
+        # Lily pads: squashed spheres with the signature radial slit cut
+        # by a thin CSG box (the scaled pooled instance goes private -
+        # documented behavior). notch_deg aims each slit differently.
         pads = [
-            ([0.0, 0.055, 0.0], [1.05, 0.055, 1.05]),
-            ([1.9, 0.045, -1.1], [0.72, 0.045, 0.72]),
-            ([-1.6, 0.045, 1.3], [0.62, 0.045, 0.62]),
-            ([-2.3, 0.045, -1.7], [0.80, 0.045, 0.80]),
-            ([1.3, 0.045, 1.9], [0.52, 0.045, 0.52]),
+            ([0.0, 0.055, 0.0], [1.05, 0.055, 1.05], 40.0),
+            ([1.9, 0.045, -1.1], [0.72, 0.045, 0.72], 160.0),
+            ([-1.6, 0.045, 1.3], [0.62, 0.045, 0.62], 250.0),
+            ([-2.3, 0.045, -1.7], [0.80, 0.045, 0.80], 320.0),
+            ([1.3, 0.045, 1.9], [0.52, 0.045, 0.52], 100.0),
         ]
-        for index, (position, radii) in enumerate(pads):
-            c.shape("uv_sphere", f"Lily Pad {index + 1}", position,
-                    radius=1.0, slice_count=24, stack_count=12,
-                    material_name=pad_green, motion_mode="none",
-                    scale=radii)
+        notch_jobs = []
+        for index, (position, radii, notch_deg) in enumerate(pads):
+            pad = c.shape("uv_sphere", f"Lily Pad {index + 1}", position,
+                          radius=1.0, slice_count=24, stack_count=12,
+                          material_name=pad_green, motion_mode="none",
+                          scale=radii)
+            phi = math.radians(notch_deg)
+            direction = [math.cos(phi), 0.0, math.sin(phi)]
+            r = radii[0]
+            notch = c.shape(
+                "box", f"Pad Notch {index + 1}",
+                v_add(position, v_scale(direction, 0.60 * r)),
+                size=[0.95 * r, 0.3, max(0.05, 0.09 * r)],
+                motion_mode="none", reuse=False,
+                rotation_xyzw=axis_angle_quaternion(
+                    [0.0, 1.0, 0.0], -phi))
+            notch_jobs.append((pad["node_id"], notch["node_id"]))
+        for pad_id, notch_id in notch_jobs:
+            c.csg(int(pad_id), int(notch_id), operation="difference",
+                  wait=False)
+        c.settle()
 
         # A cattail cluster off to the side (not directly behind the
         # frog's head) plus one lone reed on the right, for depth.
@@ -392,8 +574,8 @@ def main():
                     slice_count=10, material_name=reed_green,
                     motion_mode="none", rotation_xyzw=rotation)
             # Brown cattail head near the tip (lean rotates about Z at
-            # the base, so the tip shifts by h*sin(lean) in -X... +X for
-            # negative lean; a scaled sphere avoids new shape types).
+            # the base, so the tip shifts in X; a scaled sphere avoids
+            # new shape types).
             head_h = 0.80 * height
             head_x = x - head_h * math.sin(math.radians(lean))
             c.shape("uv_sphere", f"Cattail {index + 1}",
@@ -402,16 +584,9 @@ def main():
                     material_name=cattail_brown, motion_mode="none",
                     scale=[0.085, 0.24, 0.085])
 
-        build_frog(c, skin)
-
-        # Pupils: small dark spheres on the eye bulges (scene nodes, not
-        # part of the union, so they keep their own material). Eye bulge
-        # centers in world = frog local + frog translation [0, 0.34, 0].
-        for side in (1.0, -1.0):
-            c.shape("uv_sphere", f"Pupil {'L' if side > 0 else 'R'}",
-                    [0.315, 0.60, 0.165 * side],
-                    radius=0.038, slice_count=16, stack_count=8,
-                    material_name=eye_black, motion_mode="none")
+        frog = build_frog(c, skin)
+        decorate_frog(c, frog, (iris_gold, eye_black, tympanum_mat))
+        build_dragonfly(c, [0.85, 0.80, 0.55])
 
         c.clear_selection()
         c.screenshot_views(BASE, SHOTS)
