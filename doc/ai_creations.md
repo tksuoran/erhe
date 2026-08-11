@@ -264,6 +264,15 @@ compressed UV tiles - a lesson now in the skill). Lily pads carry
 their signature radial slit via a CSG box difference, cattails top the
 reeds, and a dragonfly hovers in the frog's gaze.
 
+The frog is also the first RIGGED creation: every part pose is a
+`transform_from_node` graph node driven by an empty scene node under
+the frog's "Frog Rig" group (thirty drivers - eyes, thighs, knees,
+shanks, ankles, feet, individual toes, arms, wrists). Grab a driver in
+the viewport and that part re-poses live while the Boolean union
+re-evaluates - the frog's pose is editable without opening the node
+graph; the eye decorations (iris, pupil) are parented under the eye
+drivers and ride along.
+
 ### 19 - Dolphin (2026-08-11)
 
 ![Dolphin](images/creations/19_dolphin.png)
