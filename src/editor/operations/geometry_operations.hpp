@@ -5,6 +5,7 @@
 
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_geometry/operation/make_atlas.hpp"
+#include "erhe_geometry/operation/project_texcoords.hpp"
 
 #include <unordered_map>
 #include <vector>
@@ -181,6 +182,19 @@ public:
         Mesh_operation_parameters&&                            context,
         erhe::geometry::operation::Lattice_deform_parameters&& lattice_parameters,
         bool                                                   auto_fit_cage
+    );
+};
+
+// Overwrite corner texcoord channel 0 with a parametric projection (planar /
+// cylindrical / spherical, see erhe_geometry project_texcoords.hpp) computed
+// from each mesh's local bounds. Runs cleanly after deformations whose
+// inherited parametrization is unusable (lattice-fanned fins).
+class Project_texcoords_operation : public Mesh_operation
+{
+public:
+    Project_texcoords_operation(
+        Mesh_operation_parameters&&                            context,
+        erhe::geometry::operation::Project_texcoords_parameters parameters
     );
 };
 

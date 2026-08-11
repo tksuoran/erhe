@@ -14,6 +14,7 @@
 #include "scene/scene_builder.hpp"
 #include "operations/mesh_operation.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
+#include "erhe_geometry/operation/project_texcoords.hpp"
 #include "windows/property_editor.hpp"
 
 #include <imgui/imgui.h>
@@ -152,6 +153,9 @@ public:
 
     // Free-form deformation (no UI button; driven via MCP lattice_deform)
     void lattice_deform(erhe::geometry::operation::Lattice_deform_parameters&& parameters, bool auto_fit_cage);
+
+    // Parametric UV projection (no UI button; driven via MCP project_texcoords)
+    void project_texcoords(erhe::geometry::operation::Project_texcoords_parameters parameters);
 
     // Subdivision
     void catmull_clark();

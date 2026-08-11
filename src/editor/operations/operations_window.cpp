@@ -2152,6 +2152,17 @@ void Operations::lattice_deform(erhe::geometry::operation::Lattice_deform_parame
     );
 }
 
+void Operations::project_texcoords(const erhe::geometry::operation::Project_texcoords_parameters parameters)
+{
+    async_for_selected_nodes_with_mesh(
+        [this, parameters](Mesh_operation_parameters&& params) {
+            m_context.operation_stack->queue_from_thread(
+                std::make_shared<Project_texcoords_operation>(std::move(params), parameters)
+            );
+        }
+    );
+}
+
 // Exact post-process flag set for the subdivision operations: structure plus
 // smooth vertex normals, with facet texture coordinate generation controlled by
 // the Subdivision section's Generate UVs checkbox.

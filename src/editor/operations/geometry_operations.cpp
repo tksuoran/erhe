@@ -288,6 +288,21 @@ Normalize_operation::Normalize_operation(Mesh_operation_parameters&& context)
     set_description(fmt::format("Normalize {}", describe_entries()));
 }
 
+Project_texcoords_operation::Project_texcoords_operation(
+    Mesh_operation_parameters&&                             context,
+    erhe::geometry::operation::Project_texcoords_parameters parameters
+)
+    : Mesh_operation{std::move(context)}
+{
+    set_description("Project texcoords");
+    make_entries(
+        [parameters](const erhe::geometry::Geometry& source, erhe::geometry::Geometry& destination) {
+            erhe::geometry::operation::project_texcoords(source, destination, parameters);
+        }
+    );
+    set_description(fmt::format("Project texcoords {}", describe_entries()));
+}
+
 Generate_tangents_operation::Generate_tangents_operation(Mesh_operation_parameters&& context)
     : Mesh_operation{std::move(context)}
 {

@@ -1100,6 +1100,15 @@ void Mcp_server::refresh_tool_list()
         {"type", "object"},
         {"properties", catmull_clark_properties}
     }});
+    json project_texcoords_properties = geometry_target_properties;
+    project_texcoords_properties["projection"] = {{"type", "string"}, {"description", "planar (default), cylindrical or spherical"}};
+    project_texcoords_properties["axis"]       = {{"type", "integer"}, {"description", "0=X 1=Y 2=Z (default 2). planar: the projection plane's normal; cylindrical/spherical: the major axis"}};
+    project_texcoords_properties["scale"]      = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV scale [u, v] applied after projection (default [1,1])"}};
+    project_texcoords_properties["offset"]     = {{"type", "array"}, {"items", {{"type", "number"}}}, {"minItems", 2}, {"maxItems", 2}, {"description", "UV offset [u, v] applied after scale (default [0,0])"}};
+    m_tool_infos.push_back({"project_texcoords", "Overwrite corner texcoord channel 0 of the selected mesh node(s) with a parametric projection computed from each mesh's LOCAL bounds: planar (bbox-normalized coordinates in the plane, one tile spans the mesh), cylindrical (azimuth around the axis x normalized height) or spherical (azimuth x polar angle); azimuth wrap facets are lifted so repeat-wrap samplers render them contiguously. Positions, topology and all other attributes pass through unchanged - THE tool for regenerating usable UVs AFTER lattice/subdivision deformations. Queued, undoable. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.", {
+        {"type", "object"},
+        {"properties", project_texcoords_properties}
+    }});
     m_tool_infos.push_back({"merge_faces", "Merge (dissolve) the selected facets of the mesh node(s) into one polygon per edge-connected group: facets connected through a shared EDGE (not merely a shared vertex) become a single polygon spanning their boundary loop, dropping the now-interior edges and vertices. Requires an active FACE-mode mesh-component selection (set_mesh_component_mode face + select_mesh_components). A group whose boundary is not a single simple loop (encloses a hole / pinches) is left unchanged. Queued; the rest of the mesh stays watertight. Node targets (node_ids / node_id / node_name + scene_name) override the object selection.", {
         {"type", "object"},
         {"properties", geometry_target_properties}

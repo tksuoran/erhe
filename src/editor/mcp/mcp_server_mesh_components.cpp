@@ -924,6 +924,43 @@ auto Mcp_server::action_lattice_deform(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_project_texcoords(const json& args) -> std::string
+{
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    erhe::geometry::operation::Project_texcoords_parameters parameters{};
+    // Explicit-state rule (doc/mcp_api_guidelines.md): fixed defaults here,
+    // never state read from any window.
+    const std::string projection = args.value("projection", "planar");
+    if      (projection == "planar")      parameters.projection = erhe::geometry::operation::Texcoord_projection::planar;
+    else if (projection == "cylindrical") parameters.projection = erhe::geometry::operation::Texcoord_projection::cylindrical;
+    else if (projection == "spherical")   parameters.projection = erhe::geometry::operation::Texcoord_projection::spherical;
+    else {
+        return make_error_content("Unknown projection: " + projection + " (planar|cylindrical|spherical)");
+    }
+    parameters.axis = std::clamp(args.value("axis", 2), 0, 2);
+    const json scale_json = args.value("scale", json::array({1.0f, 1.0f}));
+    const json offset_json = args.value("offset", json::array({0.0f, 0.0f}));
+    if ((!scale_json.is_array()) || (scale_json.size() != 2) || (!offset_json.is_array()) || (offset_json.size() != 2)) {
+        return make_error_content("scale and offset must be [u, v] arrays");
+    }
+    parameters.scale  = glm::vec2{scale_json [0].get<float>(), scale_json [1].get<float>()};
+    parameters.offset = glm::vec2{offset_json[0].get<float>(), offset_json[1].get<float>()};
+
+    const std::string target_error = run_geometry_op_with_target(args, [&]() {
+        m_context.operations->project_texcoords(parameters);
+    });
+    if (!target_error.empty()) {
+        return make_error_content(target_error);
+    }
+    return make_json_content({
+        {"queued",     true},
+        {"projection", projection},
+        {"axis",       parameters.axis}
+    }).dump();
+}
+
 auto Mcp_server::action_merge_faces(const json& args) -> std::string
 {
     if (m_context.operations == nullptr) {
