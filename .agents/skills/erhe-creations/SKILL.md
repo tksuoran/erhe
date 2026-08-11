@@ -33,8 +33,10 @@ dolphin = organic body as ONE editable geometry graph: per-part
 box->subdivide->lattice chains, Transform-posed (quaternion mode),
 Join + single Boolean union + final subdivide, see csg_hulls.md +
 geometry_graph_sculpt.md,
-frog = sitting frog on a lily pad, same one-graph recipe with limbs
-aligned to authored anchor segments - see geometry_graph_sculpt.md).
+frog = sitting frog on a lily pad, same one-graph recipe scaled to 25
+parts: segment-aligned articulated legs + toes, probed surface accents
+(iris/nostril/tympanum), low-frequency mottle texture, CSG pad slits -
+see geometry_graph_sculpt.md + csg_hulls.md).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 
@@ -99,6 +101,13 @@ they carry the current idioms.
 - When done: commit the script (see Conventions), restore the ini (if
   headless was used), then run the script windowed with `--no-save` so
   the user can watch it build; the editor is left open.
+- **Windowed screenshot pollution + tiny-viewport gotchas (2026-08-11)**:
+  (a) if the physical mouse cursor sits inside the viewport, the hotbar
+  and the hover label (+ leader line) render into `capture_screenshot`
+  frames - check every batch and retake if polluted; (b) after several
+  `--reuse` scene close/reopen cycles the fresh scene's viewport window
+  can spawn as a tiny corner window instead of taking the docked slot -
+  kill and relaunch the editor (fresh launch restores the user layout).
 - **Wireframe overlay in screenshots**: the per-viewport Visual Style
   defaults come from `config/editor/default_viewport_config.json`, read
   at EVERY viewport construction (`make_viewport_config`). If the user's

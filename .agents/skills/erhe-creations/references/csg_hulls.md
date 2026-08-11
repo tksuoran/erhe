@@ -8,6 +8,10 @@ part box -> subdivide -> lattice, Transform-posed, Join -> Boolean
 union -> final subdivide -> Output); the scene-op form (csg union of
 lattice-sculpted parts) is in its git history (26ac7567).
 
+- CSG works on a node-SCALED pooled brush instance (TRS scale
+  [x, y, z]): the op composes in world space, so the scaled shape is
+  carved as seen, and the edited instance silently goes private
+  (frog's lily-pad slit notches, 2026-08-11).
 - **Organic union bodies (creation 19 lessons, 2026-08-11)**:
   - Catmull-Clark of the CSG's TRIANGULATED output weaves the
     alternating diagonals into real geometric bumps on near-planar

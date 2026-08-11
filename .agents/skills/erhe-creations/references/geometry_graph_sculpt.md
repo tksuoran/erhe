@@ -63,6 +63,16 @@ MCP. Creation 18 (fish) is the reference implementation.
   Same for welding: a foot paddle only unions onto its leg if its root
   tucks INSIDE the leg mass (ankle up under the thigh lump); a
   surface-adjacent root leaves a visibly separate floating part.
+- **Texturing a unioned multi-part body: LOW-FREQUENCY layers only**
+  (frog detail pass, 2026-08-11): the union's surviving UV tiles vary
+  wildly in scale, and any high-frequency texture layer (wart/speckle
+  noise) aliases into dirty dark patches where tiles compress - it
+  reads as artifact, not detail. A low-frequency fbm -> colorize
+  mottle (scale ~3.5 on a 1 m body) survives everywhere. Same-material
+  accents that need their own color (iris, nostrils, tympanum) go
+  OUTSIDE the union as scene-node spheres/discs, probed onto the
+  surface with closest_points and oriented with align_y_quaternion
+  (normal).
 - Fins/appendages on such a body: thin box + `c.lattice_deform` fan/rake +
   2x `catmull_clark` (one level per MCP call, no iterations param), forked
   with one CSG cylinder difference; small paired fins are pooled `sweep`
