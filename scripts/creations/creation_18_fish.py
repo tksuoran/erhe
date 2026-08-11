@@ -145,7 +145,30 @@ def _mandarin_v2_config():
     return cfg
 
 
-MANDARIN_VERSIONS = [_mandarin_v1_config(), _mandarin_v2_config()]
+def _mandarin_v3_config():
+    """V3: vibrant color pass (user direction: side-view reference colors).
+    Layered albedo composition (see mandarin_v3_albedo), saturated fin/tail/
+    eye materials, wet-sheen roughness; head slimmed slightly from V2's bulb."""
+    cfg = _mandarin_v2_config()
+    cfg.update({
+        "suffix": " V3",
+        "pos": [4.4, 0.45, 1.9],
+        "skin": "v3",
+        "squeeze_y": [0.80, 0.66, 0.45, 0.24, 0.10, 0.05, 0.10, 0.24, 0.58],
+        "squeeze_z": [0.90, 0.76, 0.52, 0.26, 0.10, 0.05, 0.06, 0.12, 0.48],
+        # Deeper attach: the slimmer V3 peduncle left the V2-depth fan
+        # floating off the body tip.
+        "tail": {"w": 0.58, "h": 0.64, "t": 0.028, "attach": 0.30, "rim": True},
+        "fin_color": [0.02, 0.32, 1.00],
+        "tail_color": [1.00, 0.42, 0.02],
+        "eye_ring_color": [0.90, 0.20, 0.05],
+        "body_roughness": 0.24,
+    })
+    return cfg
+
+
+MANDARIN_VERSIONS = [_mandarin_v1_config(), _mandarin_v2_config(),
+                     _mandarin_v3_config()]
 
 # ---------------------------------------------------------------- skin graphs
 # Scale scallops per UV tile (the body's box-cage UVs survive as a few large
@@ -497,6 +520,78 @@ def mandarin_maze_albedo(g, name, fbm_params, stops, speckle=None):
     g.link(top, out, dst_slot=2)     # rgba slot
 
 
+def mandarin_v3_albedo(g, name):
+    """V3: vibrant layered composition (side-view reference). One shared fbm
+    field feeds a VIVID blue colorize (base) and an alpha-masked orange-band
+    colorize (labyrinth stripes with navy rims) composited with blend normal
+    - the blend node multiplies opacity by s1.alpha, so the colorize alpha
+    stops ARE the stripe mask. A linear-gradient node (alpha ramp along u)
+    tints the head zone green-teal, voronoi distance-to-center makes
+    scattered yellow spots, and the whole composite goes through warp driven
+    by a low-frequency fbm so every line wiggles organically."""
+    navy = [0.01, 0.04, 0.30, 1.0]
+    field = g.add("fbm", {"noise": 1, "scale_x": 4.5, "scale_y": 3.0,
+                          "iterations": 4.0})
+    base = g.add("colorize", {"gradient": grad([
+        (0.00, [0.00, 0.02, 0.22, 1.0]),   # deep navy crevice
+        (0.25, [0.01, 0.22, 0.90, 1.0]),   # cobalt
+        (0.50, [0.02, 0.42, 1.00, 1.0]),   # vivid blue
+        (0.72, [0.05, 0.65, 1.00, 1.0]),   # azure
+        (0.88, [0.15, 0.85, 1.00, 1.0]),   # cyan
+        (1.00, [0.55, 0.98, 1.00, 1.0])])})
+    g.link(field, base)
+    orange = g.add("colorize", {"gradient": grad([
+        (0.00, [0.0, 0.0, 0.0, 0.0]),
+        (0.36, [0.0, 0.0, 0.0, 0.0]),
+        (0.40, navy),                      # rim
+        (0.43, [1.00, 0.42, 0.02, 1.0]),   # band 1
+        (0.50, [1.00, 0.58, 0.08, 1.0]),
+        (0.53, navy),                      # rim
+        (0.57, [0.0, 0.0, 0.0, 0.0]),
+        (0.68, [0.0, 0.0, 0.0, 0.0]),
+        (0.71, navy),                      # rim
+        (0.74, [1.00, 0.45, 0.03, 1.0]),   # band 2
+        (0.80, [1.00, 0.50, 0.05, 1.0]),
+        (0.83, navy),                      # rim
+        (0.87, [0.0, 0.0, 0.0, 0.0]),
+        (1.00, [0.0, 0.0, 0.0, 0.0])])})
+    g.link(field, orange)
+    comp1 = g.add("blend", {"blend_type": 0, "amount": 1.0})  # normal
+    g.link(orange, comp1)            # s1: masked orange bands
+    g.link(base, comp1, dst_slot=1)  # s2: blue base
+    # Head-zone green tint: linear gradient along u, alpha 0 over most of the
+    # tile. Box-cage tile orientation varies, so this is an experiment - if a
+    # tile flips u the tint lands at the wrong end of that tile.
+    head = g.add("gradient", {"rotate": 0.0, "repeat": 1.0, "gradient": grad([
+        (0.00, [0.0, 0.0, 0.0, 0.0]),
+        (0.70, [0.0, 0.0, 0.0, 0.0]),
+        (0.85, [0.25, 0.75, 0.45, 0.45]),
+        (1.00, [0.50, 0.85, 0.35, 0.65])])})
+    comp2 = g.add("blend", {"blend_type": 0, "amount": 1.0})
+    g.link(head, comp2)
+    g.link(comp1, comp2, dst_slot=1)
+    # Yellow spots: voronoi output 0 = intensity-scaled distance to the cell
+    # center (0 at each center), randomness 1 scatters organically.
+    spots_src = g.add("voronoi", {"scale_x": 12.0, "scale_y": 12.0,
+                                  "randomness": 1.0, "intensity": 0.75})
+    spots = g.add("colorize", {"gradient": grad([
+        (0.00, [1.00, 0.90, 0.30, 1.0]),
+        (0.10, [1.00, 0.85, 0.25, 1.0]),
+        (0.18, [0.0, 0.0, 0.0, 0.0]),
+        (1.00, [0.0, 0.0, 0.0, 0.0])])})
+    g.link(spots_src, spots)
+    comp3 = g.add("blend", {"blend_type": 0, "amount": 0.9})
+    g.link(spots, comp3)
+    g.link(comp2, comp3, dst_slot=1)
+    wiggle = g.add("fbm", {"noise": 1, "scale_x": 1.6, "scale_y": 1.6,
+                           "iterations": 2.0})
+    warped = g.add("warp", {"amount": 0.06})
+    g.link(comp3, warped)                # in
+    g.link(wiggle, warped, dst_slot=1)   # d: displacement height
+    out = g.add("output", {"name": name, "size": 1024})
+    g.link(warped, out, dst_slot=2)      # rgba slot
+
+
 M_RIM = [0.01, 0.09, 0.34, 1.0]  # dark navy rim around every orange band
 
 MANDARIN_SKINS = {
@@ -551,6 +646,12 @@ MANDARIN_SKINS = {
                         (1.00, [1.00, 0.88, 0.38, 1.0])]},
         "normal_amount": 0.20,
     },
+    # v3: layered vibrant composition - see mandarin_v3_albedo.
+    "v3": {
+        "albedo_fn": mandarin_v3_albedo,
+        "fbm": {"noise": 1, "scale_x": 4.5, "scale_y": 3.0, "iterations": 4.0},
+        "normal_amount": 0.15,
+    },
 }
 
 
@@ -565,8 +666,11 @@ def build_mandarin_skin(c, cfg):
     existing = {entry.get("name") for entry in listing.get("graph_textures", [])}
     if albedo_name not in existing:
         g = c.texture_graph(albedo_name)
-        mandarin_maze_albedo(g, albedo_name, skin["fbm"], skin["stops"],
-                             skin["speckle"])
+        if "albedo_fn" in skin:
+            skin["albedo_fn"](g, albedo_name)
+        else:
+            mandarin_maze_albedo(g, albedo_name, skin["fbm"], skin["stops"],
+                                 skin["speckle"])
     if normal_name not in existing:
         g = c.texture_graph(normal_name)
         height = g.add("fbm", skin["fbm"])
@@ -583,28 +687,26 @@ def build_mandarin(c, cfg=None):
     # White base-color factor: the maze albedo graph carries the pattern.
     body_mat = c.ensure_material(f"Mandarin{sfx} Body",
                                  base_color=[1.0, 1.0, 1.0],
-                                 roughness=0.28, metallic=0.02)
+                                 roughness=cfg.get("body_roughness", 0.28),
+                                 metallic=0.02)
     c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
                                "base_color": [1.0, 1.0, 1.0]})
     albedo_name, normal_name = build_mandarin_skin(c, cfg)
     c.bind_material_texture(body_mat, albedo_name, slot="base_color", wrap="repeat")
     c.bind_material_texture(body_mat, normal_name, slot="normal", wrap="repeat")
-    # Fins: blue membranes; tail: orange with its blue rim as GEOMETRY (fins
-    # have no texcoords, so rims cannot come from textures).
-    fin_mat = c.ensure_material(f"Mandarin{sfx} Fin",
-                                base_color=[0.10, 0.32, 0.92],
-                                roughness=0.45, metallic=0.0,
-                                blending_mode="alpha_blend", opacity=0.92)
-    tail_mat = c.ensure_material(f"Mandarin{sfx} Tail",
-                                 base_color=[0.96, 0.45, 0.08],
-                                 roughness=0.5, metallic=0.0,
-                                 blending_mode="alpha_blend", opacity=0.95)
-    eye_mat = c.ensure_material(f"Mandarin{sfx} Eye",
-                                base_color=[0.30, 0.06, 0.04],
-                                roughness=0.25, metallic=0.0)
-
     # ------------------------------------------------------------- body graph
+    # Reuse an existing body-graph asset (rebuilds after a fin/pose-only fix:
+    # graph assets cannot be created twice, and the body is unchanged).
     size = cfg["size"]
+    graph_listing = c.call("get_graph_meshes", {"scene_name": c.scene})
+    existing_graphs = {entry.get("name")
+                       for entry in graph_listing.get("graph_meshes", [])}
+    if f"Mandarin{sfx} Body Graph" in existing_graphs:
+        body = c.bind_node_mesh(f"Mandarin{sfx}", f"Mandarin{sfx} Body Graph")
+        pos = cfg["pos"]
+        c.move_node(body, translation=pos)
+        c.settle()
+        return _mandarin_attachments(c, cfg, body)
     g = c.geometry_graph(f"Mandarin{sfx} Body Graph")
     box = g.add("box", {"size": size, "subdivisions": M_SUBDIVISIONS, "power": 1.0})
     subdivide_pre = g.add("subdivide", {"mode": 0, "iterations": 1})
@@ -626,9 +728,30 @@ def build_mandarin(c, cfg=None):
     c.call("get_geometry_graph")  # evaluation barrier
 
     body = c.bind_node_mesh(f"Mandarin{sfx}", f"Mandarin{sfx} Body Graph")
-    pos = cfg["pos"]
-    c.move_node(body, translation=pos)
+    c.move_node(body, translation=cfg["pos"])
     c.settle()
+    return _mandarin_attachments(c, cfg, body)
+
+
+def _mandarin_attachments(c, cfg, body):
+    """Everything attached to the body: tail fan (+rim), dorsals, blade fins,
+    eyes. Separate from build_mandarin so a rebuild that only changes
+    attachments can reuse the existing body-graph asset."""
+    sfx = cfg["suffix"]
+    pos = cfg["pos"]
+    # Fins: blue membranes; tail: orange with its blue rim as GEOMETRY (fins
+    # have no texcoords, so rims cannot come from textures).
+    fin_mat = c.ensure_material(f"Mandarin{sfx} Fin",
+                                base_color=cfg.get("fin_color", [0.10, 0.32, 0.92]),
+                                roughness=0.45, metallic=0.0,
+                                blending_mode="alpha_blend", opacity=0.92)
+    tail_mat = c.ensure_material(f"Mandarin{sfx} Tail",
+                                 base_color=cfg.get("tail_color", [0.96, 0.45, 0.08]),
+                                 roughness=0.5, metallic=0.0,
+                                 blending_mode="alpha_blend", opacity=0.95)
+    eye_mat = c.ensure_material(f"Mandarin{sfx} Eye",
+                                base_color=[0.30, 0.06, 0.04],
+                                roughness=0.25, metallic=0.0)
     body_id = c.node_by_name(body)["id"]
 
     aabb_min, aabb_max = c.subtree_world_aabb(body)
@@ -796,7 +919,8 @@ def build_mandarin(c, cfg=None):
         node_name=body)
     if cfg["eye"] == "ring":
         ring_mat = c.ensure_material(f"Mandarin{sfx} Eye Ring",
-                                     base_color=[0.80, 0.28, 0.10],
+                                     base_color=cfg.get("eye_ring_color",
+                                                        [0.80, 0.28, 0.10]),
                                      roughness=0.35, metallic=0.0)
         pupil_mat = c.ensure_material(f"Mandarin{sfx} Eye Pupil",
                                       base_color=[0.02, 0.02, 0.03],
