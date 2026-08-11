@@ -157,16 +157,34 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
         set_pointf(mesh.vertices, tip_vertex, GEO::vec3f{tip.x, tip.y, tip.z});
     }
 
+    // Texture coordinates use the sweep's natural parametrization:
+    // u = spine parameter t (0 at start, 1 at end), v = position around the
+    // profile (j / profile_count). Written on the CORNER domain so the
+    // profile wrap seam carries v = 1 (not 0) on its far side, exactly like
+    // the box's face seams.
+    Mesh_attributes attributes{mesh};
+    const auto ring_u = [&](const int ring) -> float {
+        return static_cast<float>(ring) / static_cast<float>(spine_steps);
+    };
+    const auto profile_v = [&](const std::size_t j) -> float {
+        return static_cast<float>(j) / static_cast<float>(profile_count);
+    };
+
     // Side walls between consecutive rings.
     for (int i = 0; i + 1 < ring_count; ++i) {
         for (std::size_t j = 0; j < profile_count; ++j) {
             const std::size_t jn = (j + 1) % profile_count;
-            mesh.facets.create_quad(
+            const GEO::index_t facet = mesh.facets.create_quad(
                 ring_vertex(i,     j),
                 ring_vertex(i,     jn),
                 ring_vertex(i + 1, jn),
                 ring_vertex(i + 1, j)
             );
+            // v from j + 1 (not the wrapped jn) so the last quad spans ..1.
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(i    ), profile_v(j)});
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(i    ), profile_v(j + 1)});
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{ring_u(i + 1), profile_v(j + 1)});
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 3), GEO::vec2f{ring_u(i + 1), profile_v(j)});
         }
     }
     if (tip_collapse) {
@@ -177,20 +195,37 @@ void make_sweep(GEO::Mesh& mesh, const Sweep_parameters& parameters)
             mesh.facets.set_vertex(facet, 0, ring_vertex(last, j));
             mesh.facets.set_vertex(facet, 1, ring_vertex(last, jn));
             mesh.facets.set_vertex(facet, 2, tip_vertex);
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 0), GEO::vec2f{ring_u(last), profile_v(j)});
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 1), GEO::vec2f{ring_u(last), profile_v(j + 1)});
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, 2), GEO::vec2f{1.0f, profile_v(j) + 0.5f / static_cast<float>(profile_count)});
         }
     }
+
+    // Caps: planar map of the profile itself, normalized into [0, 1] around
+    // the profile's bounding extent.
+    float profile_extent = 1.0e-9f;
+    for (const glm::vec2& p : parameters.profile) {
+        profile_extent = std::max(profile_extent, std::max(std::abs(p.x), std::abs(p.y)));
+    }
+    const auto cap_uv = [&](const std::size_t j) -> GEO::vec2f {
+        const glm::vec2 p = parameters.profile[j];
+        return GEO::vec2f{0.5f + 0.5f * p.x / profile_extent, 0.5f + 0.5f * p.y / profile_extent};
+    };
 
     if (parameters.start_cap) {
         // Outward normal is -tangent: reverse the CCW profile order.
         const GEO::index_t facet = mesh.facets.create_polygon(static_cast<GEO::index_t>(profile_count));
         for (std::size_t j = 0; j < profile_count; ++j) {
-            mesh.facets.set_vertex(facet, static_cast<GEO::index_t>(j), ring_vertex(0, profile_count - 1 - j));
+            const std::size_t source = profile_count - 1 - j;
+            mesh.facets.set_vertex(facet, static_cast<GEO::index_t>(j), ring_vertex(0, source));
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(source));
         }
     }
     if (parameters.end_cap && !tip_collapse) {
         const GEO::index_t facet = mesh.facets.create_polygon(static_cast<GEO::index_t>(profile_count));
         for (std::size_t j = 0; j < profile_count; ++j) {
             mesh.facets.set_vertex(facet, static_cast<GEO::index_t>(j), ring_vertex(ring_count - 1, j));
+            attributes.corner_texcoord_0.set(mesh.facets.corner(facet, static_cast<GEO::index_t>(j)), cap_uv(j));
         }
     }
 }
