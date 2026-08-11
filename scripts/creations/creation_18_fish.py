@@ -206,8 +206,31 @@ def _mandarin_v4_config():
     return cfg
 
 
+def _mandarin_v5_config():
+    """V5 (user direction): TEXTURED fins. Every fin/tail part gets planar-
+    projected UVs (new project_texcoords MCP op, run after the fan deform +
+    CC so the projection ignores the pinch-compressed inherited UVs) and
+    white-factor materials sourcing dedicated texture graphs: fin-ray
+    stripes for the paired fins/sail, radial orange rays + blue rim for the
+    tail (so the geometry rim sandwich is retired)."""
+    cfg = _mandarin_v4_config()
+    cfg.update({
+        "suffix": " V5",
+        "pos": [7.4, 0.45, 1.9],
+        "textured_fins": True,
+        # White factors: the fin/tail texture graphs carry the color.
+        "fin_color": [1.0, 1.0, 1.0],
+        "tail_color": [1.0, 1.0, 1.0],
+        # Blue rim now comes from the tail texture's border band.
+        "tail": {"w": 0.58, "h": 0.64, "t": 0.028, "attach": 0.30,
+                 "rim": False},
+    })
+    return cfg
+
+
 MANDARIN_VERSIONS = [_mandarin_v1_config(), _mandarin_v2_config(),
-                     _mandarin_v3_config(), _mandarin_v4_config()]
+                     _mandarin_v3_config(), _mandarin_v4_config(),
+                     _mandarin_v5_config()]
 
 # ---------------------------------------------------------------- skin graphs
 # Scale scallops per UV tile (the body's box-cage UVs survive as a few large
@@ -846,6 +869,61 @@ MANDARIN_SKINS = {
 }
 
 
+def build_mandarin_fin_skins(c, sfx):
+    """V5+ fin/tail texture graphs, sampled through planar-projected UVs
+    (project_texcoords maps each fin's bbox to one [0,1] tile: u = spine->tip,
+    v = across the fan). Fin: blue ray stripes (gradient repeat across v)
+    with an orange trailing-edge tint. Tail: orange ray stripes with the blue
+    rim as border bands - retires the V4 geometry rim sandwich."""
+    fin_name = f"Mandarin{sfx} Fin Rays"
+    tail_name = f"Mandarin{sfx} Tail Rays"
+    listing = c.call("get_graph_textures", {"scene_name": c.scene})
+    existing = {entry.get("name") for entry in listing.get("graph_textures", [])}
+    clear = [0.0, 0.0, 0.0, 0.0]
+    if fin_name not in existing:
+        g = c.texture_graph(fin_name)
+        rays = g.add("gradient", {"rotate": 90.0, "repeat": 7.0, "gradient": grad([
+            (0.00, [0.01, 0.14, 0.60, 1.0]),
+            (0.35, [0.10, 0.45, 1.00, 1.0]),
+            (0.65, [0.10, 0.45, 1.00, 1.0]),
+            (1.00, [0.01, 0.14, 0.60, 1.0])])})
+        edge = g.add("gradient", {"rotate": 0.0, "repeat": 1.0, "gradient": grad([
+            (0.00, clear), (0.80, clear),
+            (0.92, [1.00, 0.50, 0.05, 0.55]),
+            (1.00, [1.00, 0.58, 0.10, 0.85])])})
+        mix = g.add("blend", {"blend_type": 0, "amount": 1.0})  # normal
+        g.link(edge, mix)
+        g.link(rays, mix, dst_slot=1)
+        out = g.add("output", {"name": fin_name, "size": 512})
+        g.link(mix, out, dst_slot=2)
+    if tail_name not in existing:
+        g = c.texture_graph(tail_name)
+        rays = g.add("gradient", {"rotate": 90.0, "repeat": 9.0, "gradient": grad([
+            (0.00, [0.80, 0.28, 0.01, 1.0]),
+            (0.35, [1.00, 0.58, 0.10, 1.0]),
+            (0.65, [1.00, 0.58, 0.10, 1.0]),
+            (1.00, [0.80, 0.28, 0.01, 1.0])])})
+        # Blue rim: trailing edge is u = 0 (the attach column at u = 1 hides
+        # inside the body), plus thin bands on both v borders.
+        rim_u = g.add("gradient", {"rotate": 0.0, "repeat": 1.0, "gradient": grad([
+            (0.00, [0.04, 0.30, 0.95, 0.95]),
+            (0.10, [0.04, 0.30, 0.95, 0.75]),
+            (0.22, clear), (1.00, clear)])})
+        rim_v = g.add("gradient", {"rotate": 90.0, "repeat": 1.0, "gradient": grad([
+            (0.00, [0.04, 0.30, 0.95, 0.85]),
+            (0.07, clear), (0.93, clear),
+            (1.00, [0.04, 0.30, 0.95, 0.85])])})
+        mix1 = g.add("blend", {"blend_type": 0, "amount": 1.0})
+        g.link(rim_u, mix1)
+        g.link(rays, mix1, dst_slot=1)
+        mix2 = g.add("blend", {"blend_type": 0, "amount": 1.0})
+        g.link(rim_v, mix2)
+        g.link(mix1, mix2, dst_slot=1)
+        out = g.add("output", {"name": tail_name, "size": 512})
+        g.link(mix2, out, dst_slot=2)
+    return fin_name, tail_name
+
+
 def build_mandarin_skin(c, name_key, skin_key):
     """Two Graph_texture assets per version/part (see MANDARIN_SKINS).
     Dragonets are scaleless, so the normal is only a faint fbm slime
@@ -974,6 +1052,21 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
     eye_mat = c.ensure_material(f"Mandarin{sfx} Eye",
                                 base_color=[0.30, 0.06, 0.04],
                                 roughness=0.25, metallic=0.0)
+    textured_fins = cfg.get("textured_fins", False)
+    if textured_fins:
+        fin_graph, tail_graph = build_mandarin_fin_skins(c, sfx)
+        c.bind_material_texture(fin_mat, fin_graph, slot="base_color", wrap="repeat")
+        c.bind_material_texture(tail_mat, tail_graph, slot="base_color", wrap="repeat")
+
+    def maybe_project(node_name):
+        """V5+: overwrite the fan-pinch-compressed inherited UVs with a
+        planar projection (local bbox -> one [0,1] tile; the fins are thin
+        boxes in the local XY plane, so axis 2 is always right)."""
+        if textured_fins:
+            c.mutate("project_texcoords", {"scene_name": c.scene,
+                                           "node_name": node_name,
+                                           "projection": "planar", "axis": 2})
+
     body_id = c.node_by_name(body)["id"]
 
     aabb_min, aabb_max = c.subtree_world_aabb(body)
@@ -1013,6 +1106,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
             material_name=tail_mat, reuse=False, parent_node_id=body_id,
             motion_mode="none")
     fan_deform(f"Mandarin{sfx} Tail Fin", tail_h, 0.10)
+    maybe_project(f"Mandarin{sfx} Tail Fin")
     if tail.get("rim"):
         rim_w, rim_h = tail_w + 0.06, tail_h + 0.10
         rim_center = [tail_center[0] - 0.025, mid_y, z0]
@@ -1051,6 +1145,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
     for _ in range(2):
         c.mutate("catmull_clark", {"scene_name": c.scene,
                                    "node_name": f"Mandarin{sfx} Dorsal Sail"})
+    maybe_project(f"Mandarin{sfx} Dorsal Sail")
     # Low second dorsal near the tail base.
     d2 = cfg["dorsal2"]
     d2_center = [pos[0] - 0.42, rear_y + d2["h"] / 2.0 - 0.05, z0]
@@ -1067,6 +1162,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
     for _ in range(2):
         c.mutate("catmull_clark", {"scene_name": c.scene,
                                    "node_name": f"Mandarin{sfx} Dorsal Fin"})
+    maybe_project(f"Mandarin{sfx} Dorsal Fin")
     c.settle()
 
     # ------------------------------------------------ fan fins: sweep blades
@@ -1112,6 +1208,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
                 material_name=fin_mat, reuse=False, parent_node_id=body_id,
                 motion_mode="none")
         fan_deform(name, h, 0.25 * w)
+        maybe_project(name)
         c.set_node_transform(name, rotation_xyzw=q)
 
     fin = fan_fin if cfg.get("lattice_fins") else blade
