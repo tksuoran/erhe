@@ -10,8 +10,8 @@ scripting surface - from self-contained Python scripts in
 `scripts/creations/`. Each script launches the editor, builds one scene
 end to end (geometry, materials, procedural textures, lighting, physics),
 frames the camera, screenshots itself for iteration, and saves the scene
-as glTF. Eighteen creations exist, from a Conway-automaton cathedral to
-a procedurally sculpted fish; `git log -- scripts/creations` carries the
+as glTF. Nineteen creations exist, from a Conway-automaton cathedral to
+a live geometry-graph dolphin; `git log -- scripts/creations` carries the
 per-creation history, and video recordings are collected in the
 [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N).
 
@@ -239,6 +239,24 @@ specification before local content) is a natural fit for scaling
 creations up beyond single showcase scenes.
 
 ## Creations timeline
+
+### 19 - Dolphin (2026-08-11)
+
+![Dolphin](images/creations/19_dolphin.png)
+
+A leaping bottlenose dolphin, and the first creature built as ONE
+editable geometry graph: six coarse box cages (trunk, rostrum, dorsal
+fin, paired flippers, tail flukes) each Catmull-Clark subdivided and
+sculpted by a bezier lattice, posed by Transform nodes (the flippers
+via the node's new quaternion rotation mode), merged by a Join node
+and welded with a single Boolean union, then faired by a final
+subdivision and an explicit `smooth_normals` pass. Drag any lattice
+control point and the whole dolphin re-evaluates live. The build
+established the roundness rule (low box subdivisions + a single
+Catmull-Clark iteration per part read round; dense cages read square)
+and added three editor features along the way: the quaternion
+Transform mode, the `smooth_normals` operation/node, and the
+evaluation-aware automatic graph layout.
 
 ### 18 - Fish (2026-08-10)
 
