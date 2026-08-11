@@ -501,6 +501,7 @@ void Geometry_graph_window::build_palette()
             .entries = {
                 Palette_entry{.type_name = "subdivide",   .label = "Subdivide"},
                 Palette_entry{.type_name = "transform",   .label = "Transform"},
+                Palette_entry{.type_name = "transform_from_node", .label = "Transform From Node"},
                 Palette_entry{.type_name = "lattice",     .label = "Lattice"},
                 Palette_entry{.type_name = "triangulate", .label = "Triangulate"},
                 Palette_entry{.type_name = "normalize",   .label = "Normalize"},

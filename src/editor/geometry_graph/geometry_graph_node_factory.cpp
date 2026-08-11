@@ -17,6 +17,7 @@
 #include "geometry_graph/nodes/mesh_torus_node.hpp"
 #include "geometry_graph/nodes/passthrough_node.hpp"
 #include "geometry_graph/nodes/subdivide_node.hpp"
+#include "geometry_graph/nodes/transform_from_node.hpp"
 #include "geometry_graph/nodes/transform_node.hpp"
 #include "geometry_graph/nodes/value_nodes.hpp"
 
@@ -41,6 +42,7 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "subdivide")    { node = std::make_shared<Subdivide_node  >(); }
     else if (type_name == "conway")       { node = std::make_shared<Conway_node     >(); } // legacy combo node: read_parameters adopts the saved operation
     else if (type_name == "transform")    { node = std::make_shared<Transform_node  >(); }
+    else if (type_name == "transform_from_node") { node = std::make_shared<Transform_from_node>(context); }
     else if (type_name == "lattice")      { node = std::make_shared<Lattice_node    >(context); }
     else if (type_name == "triangulate")  { node = std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
     else if (type_name == "normalize")    { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }

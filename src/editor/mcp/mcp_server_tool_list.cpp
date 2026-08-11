@@ -1268,7 +1268,7 @@ void Mcp_server::refresh_tool_list()
     m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout. Structural edits (add/remove/connect/disconnect) schedule the automatic DAG canvas layout, applied when the window next draws.", {
         {"type", "object"},
         {"properties", {
-            {"type", {{"type", "string"}, {"enum", json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "lattice", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "passthrough", "output"})}, {"description", "Node type to create"}}}
+            {"type", {{"type", "string"}, {"enum", json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "transform_from_node", "lattice", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "passthrough", "output"})}, {"description", "Node type to create"}}}
         }},
         {"required", json::array({"type"})}
     }});

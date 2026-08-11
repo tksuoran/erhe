@@ -240,6 +240,8 @@ erhe_target_sources_grouped(
     geometry_graph/nodes/passthrough_node.hpp
     geometry_graph/nodes/subdivide_node.cpp
     geometry_graph/nodes/subdivide_node.hpp
+    geometry_graph/nodes/transform_from_node.cpp
+    geometry_graph/nodes/transform_from_node.hpp
     geometry_graph/nodes/transform_node.cpp
     geometry_graph/nodes/transform_node.hpp
     geometry_graph/nodes/value_nodes.cpp
