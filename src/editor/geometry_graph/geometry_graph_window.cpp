@@ -436,6 +436,21 @@ auto Geometry_graph_window::get_current_graph() -> erhe::graph::Graph*
     return graph_mesh ? &graph_mesh->graph() : nullptr;
 }
 
+auto Geometry_graph_window::is_layout_input_settled() -> bool
+{
+    // Any in-flight background run counts, not just one targeting the
+    // edited graph: runs are serialized (one at a time), so a foreign
+    // run also delays the edited graph's turn.
+    if (m_evaluation_run) {
+        return false;
+    }
+    const std::shared_ptr<Graph_mesh>& graph_mesh = get_current_graph_mesh();
+    if (!graph_mesh) {
+        return true;
+    }
+    return !graph_mesh->graph().is_evaluation_needed();
+}
+
 auto Geometry_graph_window::paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t>
 {
     // By value: get_current_graph_mesh() returns a reference to m_graph_mesh,

@@ -278,6 +278,14 @@ void Graph_editor_window_base::apply_automatic_layout()
         m_layout_size_sum   = -1.0f;
     }
 
+    // Node content still in flux (async evaluation / preview thumbnails
+    // pending): the measured sizes are about to grow, so a layout now would
+    // overlap. Restart the size settle and retry next frame.
+    if (!is_layout_input_settled()) {
+        m_layout_size_sum = -1.0f;
+        return;
+    }
+
     // Wait until every node has been drawn (nonzero measured size) and the
     // sizes are stable across two consecutive frames - a node can grow a
     // frame after it first appears (preview thumbnail arriving).

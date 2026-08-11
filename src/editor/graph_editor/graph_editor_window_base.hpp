@@ -204,6 +204,15 @@ protected:
     // rendergraph viewer draws proxy nodes and overrides this to map to them.
     [[nodiscard]] virtual auto get_layout_node_id(const erhe::graph::Node& node) const -> std::size_t;
 
+    // A pending automatic layout also waits for this: false while the
+    // graph's node CONTENT is still in flux - e.g. async evaluation
+    // results (payload rows) and the preview thumbnails they trigger,
+    // which grow the nodes seconds after an MCP build requested the
+    // layout. The two-frame measured-size settle alone cannot see growth
+    // that arrives after such a pause, and a layout applied to the small
+    // pre-evaluation sizes overlaps once the nodes grow.
+    [[nodiscard]] virtual auto is_layout_input_settled() -> bool { return true; }
+
     // Cut / Copy / Paste / Duplicate for canvas nodes. The clipboard is
     // editor-global (one per process, tagged with clipboard_kind()), so nodes
     // copy between windows - and between graphs - of the same editor kind.

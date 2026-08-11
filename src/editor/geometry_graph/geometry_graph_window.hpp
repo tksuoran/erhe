@@ -189,6 +189,11 @@ private:
     // Paste / Duplicate in the canvas context menus and shortcuts).
     [[nodiscard]] auto clipboard_kind() const -> const char* override;
     [[nodiscard]] auto get_current_graph() -> erhe::graph::Graph* override;
+    // Automatic layout gate: false while the edited graph still has a
+    // background evaluation pending or in flight - its results (payload
+    // rows, preview thumbnails) grow the nodes, and a layout applied to
+    // the small pre-evaluation sizes overlaps.
+    [[nodiscard]] auto is_layout_input_settled() -> bool override;
     auto paste_nodes(const nlohmann::json& clipboard, const ImVec2& position) -> std::vector<std::size_t> override;
     void remove_nodes(const std::vector<std::shared_ptr<Graph_editor_node>>& nodes) override;
     // Issue #252: the target-item selector row drawn at the top of the
