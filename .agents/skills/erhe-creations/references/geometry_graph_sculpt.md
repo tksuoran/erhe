@@ -5,10 +5,22 @@ MCP. Creation 18 (fish) is the reference implementation.
 
 - **Pipeline**: `c.geometry_graph(name)` then `box -> lattice -> subdivide ->
   output` (`g.add` + `g.chain`). Box cage sized to the body's bounding
-  proportions with steps ~[8,4,4]; lattice sculpts the cage; `subdivide`
-  (mode 0 = catmull_clark, iterations 3) delivers the fair surface. Bind
+  proportions; lattice sculpts the cage; `subdivide`
+  (mode 0 = catmull_clark) delivers the fair surface. Bind
   with `c.bind_node_mesh(node_name, graph_name)`, then `move_node` - the
   bound node appears at the origin.
+- **ROUNDNESS RULE (user-established, 2026-08-11, dolphin)**: for a
+  round organic look keep box subdivisions LOW - often 0 on at least
+  one axis (e.g. trunk [2,0,0], fins [1,0,2]) - and use a SINGLE
+  Catmull-Clark iteration per part. Dense box subdivisions pin the
+  subdivision limit surface to the box shape, reading increasingly
+  SQUARE no matter how many CC levels follow. Only add box
+  subdivisions where the lattice needs interior stations along its
+  squeeze axis.
+- **`smooth_normals` node** (043366e0): explicit smooth-vertex-normal
+  pass (topology/positions/UVs untouched). Put one between the last
+  subdivision and the output so the baked surface shades smooth
+  regardless of upstream nodes' post-processing.
 - **Lattice node parameters go through `geometry_graph_set_parameter` as one
   JSON object**: `auto_fit`, `divisions` [dx,dy,dz], `interpolation`
   (0 trilinear, 1 bezier), `show_cage` (set false - the cage renders as
