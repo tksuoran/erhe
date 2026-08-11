@@ -1,13 +1,17 @@
 # AI creations: MCP-driven scene building in the erhe editor
 
+![Fish](images/creations/18_fish.png)
+
+*One weekend experiment to see what kind of content Claude Fable 5 can do with erhe editor*
+
 "Creations" are showcase scenes built by an AI agent (or any script)
 driving the **in-editor MCP server** - the editor's live JSON-RPC
 scripting surface - from self-contained Python scripts in
 `scripts/creations/`. Each script launches the editor, builds one scene
 end to end (geometry, materials, procedural textures, lighting, physics),
 frames the camera, screenshots itself for iteration, and saves the scene
-as glTF. Seventeen creations exist, from a Conway-automaton cathedral to
-physics-settled rock piles; `git log -- scripts/creations` carries the
+as glTF. Eighteen creations exist, from a Conway-automaton cathedral to
+a procedurally sculpted fish; `git log -- scripts/creations` carries the
 per-creation history, and video recordings are collected in the
 [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N).
 
@@ -236,13 +240,18 @@ creations up beyond single showcase scenes.
 
 ## Creations timeline
 
-All seventeen creations, latest first. Each image is the creation's hero
-shot, captured with `capture_screenshot` - most from the saved scene
-(`res/editor/scenes/creations/<name>.glb`) loaded back into the editor,
-the same path any viewer takes; creations 1 and 13 are captured from a
-fresh script build (geometry-graph mesh materials do not yet survive the
-glb round-trip, and the glade rebuild carried the willow-curtain joint
-fix). Dates are the scripts' first commits.
+### 18 - Fish (2026-08-10)
+
+![Fish](images/creations/18_fish.png)
+
+A smooth fish sculpted procedurally: the body is a geometry graph (box
+cage with interior subdivisions -> Catmull-Clark -> bezier lattice FFD
+-> another subdivision level) squeezed station by station into a
+laterally compressed fish oval, with lattice-fanned tail, CSG tail
+fork, and pooled sweep-blade fins. The skin is two live procedural
+texture graphs on one material - a quincunx scale-scallop field driving
+both a colorized, fbm-mottled albedo and per-scale `normal_map` relief
+- the first creation to use texture graphs.
 
 ### 17 - Rockfall (2026-08-09)
 
