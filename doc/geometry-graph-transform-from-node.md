@@ -1,6 +1,11 @@
 # Geometry graph: `transform_from_node` — transform sourced from a scene node
 
-Status: RESEARCH / DESIGN — not implemented. 2026-08-11.
+Status: IMPLEMENTED 2026-08-11 per this design (node type
+`transform_from_node`; MCP-verified: identity passthrough, drive-by-name,
+live re-evaluation on driver move, parameter round trip, clear, and a full
+scene save/load round trip with reference re-resolution). The optional items
+(uid-in-key persistence, mat4 output pin, Lattice UI refactor to
+`item_reference_imgui`) remain open.
 
 Goal: a new geometry-graph node that takes its transform from a scene-graph
 node. The geometry graph lives in the Content library, which is owned by the
