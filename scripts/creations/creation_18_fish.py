@@ -222,6 +222,13 @@ def _mandarin_v5_config():
         "pos": [11.0, 0.45, 1.9],
         "textured_fins": True,
         "mouth": True,
+        # Dedicated sail graph (wavy orange bands over blue, not generic
+        # fin rays) + perching pelvic fans: bigger, taller aspect, spread
+        # flatter and further down so the tips reach toward the seabed.
+        "sail_graph": True,
+        "fan_bow": 0.32,
+        "pelvic_scale": 1.7, "pelvic_h_scale": 1.95,
+        "pelvic_pitch": 55.0, "pelvic_roll": 60.0, "pelvic_yaw": 30.0,
         # White factors: the fin/tail texture graphs carry the color.
         "fin_color": [1.0, 1.0, 1.0],
         "tail_color": [1.0, 1.0, 1.0],
@@ -884,7 +891,39 @@ MANDARIN_SKINS = {
 }
 
 
-def build_mandarin_fin_skins(c, sfx):
+def mandarin_v5_sail_albedo(g, name):
+    """First-dorsal sail (side-view ref): vivid blue membrane crossed by
+    narrow wavy orange bands with navy rims, plus sparse yellow dots.
+    Projected sail UVs: u = fore-aft, v = base->top."""
+    _layered_albedo(
+        g, name,
+        field_params={"noise": 1, "scale_x": 3.0, "scale_y": 2.2,
+                      "iterations": 3.0},
+        base_stops=[
+            (0.00, [0.01, 0.10, 0.45, 1.0]),   # deep blue
+            (0.35, [0.03, 0.30, 0.95, 1.0]),   # cobalt
+            (0.70, [0.08, 0.50, 1.00, 1.0]),   # vivid blue
+            (1.00, [0.30, 0.80, 1.00, 1.0])],  # cyan sheen
+        band_stops=[
+            (0.00, [0.0, 0.0, 0.0, 0.0]),
+            (0.40, [0.0, 0.0, 0.0, 0.0]),
+            (0.43, M_NAVY),
+            (0.46, [1.00, 0.52, 0.06, 1.0]),   # narrow band 1
+            (0.51, [1.00, 0.60, 0.12, 1.0]),
+            (0.54, M_NAVY),
+            (0.58, [0.0, 0.0, 0.0, 0.0]),
+            (0.72, [0.0, 0.0, 0.0, 0.0]),
+            (0.75, M_NAVY),
+            (0.78, [1.00, 0.55, 0.08, 1.0]),   # narrow band 2
+            (0.82, [0.98, 0.50, 0.06, 1.0]),
+            (0.85, M_NAVY),
+            (0.89, [0.0, 0.0, 0.0, 0.0]),
+            (1.00, [0.0, 0.0, 0.0, 0.0])],
+        spot_scale=8.0, spot_stops=M_SPOTS, spot_amount=0.65,
+        warp_amount=0.08)
+
+
+def build_mandarin_fin_skins(c, sfx, sail=False):
     """V5+ fin/tail texture graphs, sampled through planar-projected UVs
     (project_texcoords maps each fin's bbox to one [0,1] tile: u = spine->tip,
     v = across the fan). Fin: blue ray stripes (gradient repeat across v)
@@ -936,7 +975,13 @@ def build_mandarin_fin_skins(c, sfx):
         g.link(mix1, mix2, dst_slot=1)
         out = g.add("output", {"name": tail_name, "size": 512})
         g.link(mix2, out, dst_slot=2)
-    return fin_name, tail_name
+    sail_name = None
+    if sail:
+        sail_name = f"Mandarin{sfx} Sail Weave"
+        if sail_name not in existing:
+            g = c.texture_graph(sail_name)
+            mandarin_v5_sail_albedo(g, sail_name)
+    return fin_name, tail_name, sail_name
 
 
 def build_mandarin_skin(c, name_key, skin_key):
@@ -1068,10 +1113,20 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
                                 base_color=[0.30, 0.06, 0.04],
                                 roughness=0.25, metallic=0.0)
     textured_fins = cfg.get("textured_fins", False)
+    sail_mat = fin_mat
     if textured_fins:
-        fin_graph, tail_graph = build_mandarin_fin_skins(c, sfx)
+        fin_graph, tail_graph, sail_graph = build_mandarin_fin_skins(
+            c, sfx, sail=cfg.get("sail_graph", False))
         c.bind_material_texture(fin_mat, fin_graph, slot="base_color", wrap="repeat")
         c.bind_material_texture(tail_mat, tail_graph, slot="base_color", wrap="repeat")
+        if sail_graph is not None:
+            sail_mat = c.ensure_material(f"Mandarin{sfx} Sail",
+                                         base_color=[1.0, 1.0, 1.0],
+                                         roughness=0.45, metallic=0.0,
+                                         blending_mode="alpha_blend",
+                                         opacity=0.94)
+            c.bind_material_texture(sail_mat, sail_graph, slot="base_color",
+                                    wrap="repeat")
 
     def maybe_project(node_name):
         """V5+: overwrite the fan-pinch-compressed inherited UVs with a
@@ -1146,7 +1201,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
     sail_center = [pos[0] + 0.16, sail_y + sail_h / 2.0 - 0.08, z0]
     c.shape("box", f"Mandarin{sfx} Dorsal Sail", sail_center,
             size=[sail_w, sail_h, sail_t], steps=[4, 4, 1],
-            material_name=fin_mat, reuse=False, parent_node_id=body_id,
+            material_name=sail_mat, reuse=False, parent_node_id=body_id,
             motion_mode="none")
     rake = []
     for k in range(2):
@@ -1222,7 +1277,7 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
         c.shape("box", name, center, size=[w, h, 0.012], steps=[6, 6, 1],
                 material_name=fin_mat, reuse=False, parent_node_id=body_id,
                 motion_mode="none")
-        fan_deform(name, h, 0.25 * w)
+        fan_deform(name, h, cfg.get("fan_bow", 0.25) * w)
         maybe_project(name)
         c.set_node_transform(name, rotation_xyzw=q)
 
@@ -1259,8 +1314,10 @@ def _mandarin_attachments(c, cfg, body, eye_node=None):
         p = probe.get("position", [pos[0] + 0.32, mid_y - 0.2, z0 + side * 0.1])
         p = v_add(p, [0.0, -0.03, side * 0.02])
         fin(f"Mandarin{sfx} Pelvic Fin {'L' if side > 0 else 'R'}", p,
-            yaw_deg=180.0 + side * 20.0, pitch_deg=cfg["pelvic_pitch"],
-            roll_deg=side * cfg["pelvic_roll"], scale=[vs, vs, vs])
+            yaw_deg=180.0 + side * cfg.get("pelvic_yaw", 20.0),
+            pitch_deg=cfg["pelvic_pitch"],
+            roll_deg=side * cfg["pelvic_roll"],
+            scale=[vs, cfg.get("pelvic_h_scale", vs), vs])
     anal_p = v_add(belly[2].get("position", [pos[0] - 0.40, mid_y - 0.2, z0]),
                    [0.0, -0.03, 0.0])
     a_s = cfg["anal_scale"]
