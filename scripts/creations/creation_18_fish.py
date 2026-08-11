@@ -39,7 +39,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common  # noqa: E402
 from common import (  # noqa: E402
-    axis_angle_quaternion, quat_mul, v_add,
+    axis_angle_quaternion, quat_mul, quat_rotate, v_add, v_scale, v_sub,
 )
 
 TITLE = "Fish"
@@ -167,8 +167,47 @@ def _mandarin_v3_config():
     return cfg
 
 
+def _mandarin_v4_config():
+    """V4 (user direction): body SPLIT into trunk + head parts - separate
+    graph meshes, materials and texture graphs, so the green vermiculated
+    head is a real region instead of tile-luck; all paired fins become
+    lattice-fanned thin boxes (rounded paddles) instead of sweep blades.
+    The head box overlaps the trunk front by 0.20 so the two independently
+    subdivided surfaces hide their seam inside each other."""
+    cfg = _mandarin_v3_config()
+    cfg.update({
+        "suffix": " V4",
+        "pos": [5.9, 0.45, 1.9],
+        "lattice_fins": True,
+        "parts": [
+            {"part": "", "size": [1.15, 0.52, 0.58], "divisions": [6, 2, 2],
+             "squeeze_y": [0.80, 0.62, 0.38, 0.16, 0.06, 0.04, 0.06],
+             "squeeze_z": [0.90, 0.72, 0.46, 0.20, 0.08, 0.05, 0.08],
+             "shift_y":   [0.00, 0.01, 0.02, 0.01, 0.00, 0.00, 0.00],
+             "shift_x":   [0.07, 0.03, 0.00, 0.00, 0.00, 0.00, -0.04],
+             "edge_taper": [0.28, 0.00, 0.40],
+             "offset": [0.0, 0.0, 0.0],
+             "skin": "v4_trunk"},
+            # Head spans trunk-local x [0.33, 0.93]: slightly SMALLER than
+            # the trunk cross-section with a fat rear and a deep 0.245
+            # overlap, so it tucks inside the trunk's front dome (joint
+            # numbers tuned live 2026-08-11 - the first cut read as a ball
+            # stuck on the front).
+            {"part": " Head", "size": [0.60, 0.50, 0.58], "divisions": [4, 2, 2],
+             "squeeze_y": [0.06, 0.03, 0.06, 0.20, 0.55],
+             "squeeze_z": [0.08, 0.04, 0.04, 0.10, 0.45],
+             "shift_y":   [0.00, 0.00, 0.00, -0.02, -0.06],
+             "shift_x":   [0.05, 0.00, 0.00, -0.03, -0.14],
+             "edge_taper": [0.25, 0.00, 0.35],
+             "offset": [0.63, 0.01, 0.0],
+             "skin": "v4_head"},
+        ],
+    })
+    return cfg
+
+
 MANDARIN_VERSIONS = [_mandarin_v1_config(), _mandarin_v2_config(),
-                     _mandarin_v3_config()]
+                     _mandarin_v3_config(), _mandarin_v4_config()]
 
 # ---------------------------------------------------------------- skin graphs
 # Scale scallops per UV tile (the body's box-cage UVs survive as a few large
@@ -220,12 +259,50 @@ def _mandarin_shots():
     return shots
 
 
-SHOTS = [
+BASE_SHOTS = [
     ("side",    [0.3, 1.9, 6.4], [0.2, 1.2, 0.4]),
     ("quarter", [4.0, 2.6, 4.8], [0.3, 1.2, 0.4]),
     ("front",   [5.2, 1.5, 2.2], [0.3, 1.2, 0.5]),
     ("top",     [0.6, 6.8, 1.8], [0.4, 1.0, 0.6]),
-] + _mandarin_shots()
+]
+# --reframe needs one flat list; live runs isolate the mandarin close-ups
+# via isolated_mandarin_shots instead.
+SHOTS = BASE_SHOTS + _mandarin_shots()
+
+
+def isolated_mandarin_shots(c):
+    """Per-version close-ups with every OTHER creature subtree hidden - a
+    lineup of versions photobombs any single-version shot otherwise."""
+    nodes = c.nodes()
+    children = {}
+    by_name = {}
+    for n in nodes:
+        children.setdefault(n.get("parent_id"), []).append(n["id"])
+        by_name[n.get("name")] = n["id"]
+
+    def subtree(root_id):
+        out, stack = [], [root_id]
+        while stack:
+            nid = stack.pop()
+            out.append(nid)
+            stack.extend(children.get(nid, []))
+        return out
+
+    creatures = ["Fish"] + [f"Mandarin{cfg['suffix']}"
+                            for cfg in MANDARIN_VERSIONS]
+    c.mutate("select_items", {"scene_name": c.scene, "ids": []})  # no gizmo
+    for (tag, eye, target), cfg in zip(_mandarin_shots(), MANDARIN_VERSIONS):
+        name = f"Mandarin{cfg['suffix']}"
+        if name not in by_name:
+            continue
+        hide = [nid for other in creatures
+                if other != name and other in by_name
+                for nid in subtree(by_name[other])]
+        c.mutate("set_item_flags", {"scene_name": c.scene, "ids": hide,
+                                    "flags": ["visible"], "enabled": False})
+        c.screenshot_views(BASE, [(tag, eye, target)])
+        c.mutate("set_item_flags", {"scene_name": c.scene, "ids": hide,
+                                    "flags": ["visible"], "enabled": True})
 
 
 def build_scene_setup(c):
@@ -592,6 +669,109 @@ def mandarin_v3_albedo(g, name):
     g.link(warped, out, dst_slot=2)      # rgba slot
 
 
+def _layered_albedo(g, name, field_params, base_stops, band_stops,
+                    spot_scale, spot_stops, spot_amount, warp_amount):
+    """Shared V3/V4 layered composition: one fbm field -> base colorize +
+    alpha-masked band colorize (blend normal, opacity = amount * s1.alpha),
+    voronoi center-distance spots, low-frequency warp over the composite."""
+    field = g.add("fbm", field_params)
+    base = g.add("colorize", {"gradient": grad(base_stops)})
+    g.link(field, base)
+    bands = g.add("colorize", {"gradient": grad(band_stops)})
+    g.link(field, bands)
+    comp = g.add("blend", {"blend_type": 0, "amount": 1.0})  # normal
+    g.link(bands, comp)
+    g.link(base, comp, dst_slot=1)
+    spots_src = g.add("voronoi", {"scale_x": spot_scale, "scale_y": spot_scale,
+                                  "randomness": 1.0, "intensity": 0.75})
+    spots = g.add("colorize", {"gradient": grad(spot_stops)})
+    g.link(spots_src, spots)
+    comp2 = g.add("blend", {"blend_type": 0, "amount": spot_amount})
+    g.link(spots, comp2)
+    g.link(comp, comp2, dst_slot=1)
+    wiggle = g.add("fbm", {"noise": 1, "scale_x": 1.6, "scale_y": 1.6,
+                           "iterations": 2.0})
+    warped = g.add("warp", {"amount": warp_amount})
+    g.link(comp2, warped)                # in
+    g.link(wiggle, warped, dst_slot=1)   # d: displacement height
+    out = g.add("output", {"name": name, "size": 1024})
+    g.link(warped, out, dst_slot=2)      # rgba slot
+
+
+M_NAVY = [0.01, 0.04, 0.30, 1.0]
+M_BLUE_BASE = [
+    (0.00, [0.00, 0.02, 0.22, 1.0]),   # deep navy crevice
+    (0.25, [0.01, 0.22, 0.90, 1.0]),   # cobalt
+    (0.50, [0.02, 0.42, 1.00, 1.0]),   # vivid blue
+    (0.72, [0.05, 0.65, 1.00, 1.0]),   # azure
+    (0.88, [0.15, 0.85, 1.00, 1.0]),   # cyan
+    (1.00, [0.55, 0.98, 1.00, 1.0])]
+M_ORANGE_BANDS = [
+    (0.00, [0.0, 0.0, 0.0, 0.0]),
+    (0.36, [0.0, 0.0, 0.0, 0.0]),
+    (0.40, M_NAVY),                    # rim
+    (0.43, [1.00, 0.42, 0.02, 1.0]),   # band 1
+    (0.50, [1.00, 0.58, 0.08, 1.0]),
+    (0.53, M_NAVY),                    # rim
+    (0.57, [0.0, 0.0, 0.0, 0.0]),
+    (0.68, [0.0, 0.0, 0.0, 0.0]),
+    (0.71, M_NAVY),                    # rim
+    (0.74, [1.00, 0.45, 0.03, 1.0]),   # band 2
+    (0.80, [1.00, 0.50, 0.05, 1.0]),
+    (0.83, M_NAVY),                    # rim
+    (0.87, [0.0, 0.0, 0.0, 0.0]),
+    (1.00, [0.0, 0.0, 0.0, 0.0])]
+M_SPOTS = [
+    (0.00, [1.00, 0.90, 0.30, 1.0]),
+    (0.10, [1.00, 0.85, 0.25, 1.0]),
+    (0.18, [0.0, 0.0, 0.0, 0.0]),
+    (1.00, [0.0, 0.0, 0.0, 0.0])]
+
+
+def mandarin_v4_trunk_albedo(g, name):
+    """V4 trunk: the V3 composition WITHOUT the head-gradient layer - the
+    head is its own mesh + texture now."""
+    _layered_albedo(
+        g, name,
+        field_params={"noise": 1, "scale_x": 4.5, "scale_y": 3.0,
+                      "iterations": 4.0},
+        base_stops=M_BLUE_BASE, band_stops=M_ORANGE_BANDS,
+        spot_scale=12.0, spot_stops=M_SPOTS, spot_amount=0.9,
+        warp_amount=0.06)
+
+
+def mandarin_v4_head_albedo(g, name):
+    """V4 head: front-view refs - olive-green/teal face, BLUE vermiculation
+    lines (alpha-masked cobalt bands with navy rims), dense yellow dots."""
+    _layered_albedo(
+        g, name,
+        field_params={"noise": 1, "scale_x": 5.0, "scale_y": 4.0,
+                      "iterations": 4.0},
+        base_stops=[
+            (0.00, [0.02, 0.14, 0.18, 1.0]),   # deep teal shadow
+            (0.30, [0.05, 0.45, 0.40, 1.0]),   # teal-green
+            (0.60, [0.22, 0.62, 0.32, 1.0]),   # olive green
+            (0.85, [0.50, 0.78, 0.30, 1.0]),   # yellow-green
+            (1.00, [0.75, 0.88, 0.42, 1.0])],
+        band_stops=[
+            (0.00, [0.0, 0.0, 0.0, 0.0]),
+            (0.38, [0.0, 0.0, 0.0, 0.0]),
+            (0.42, M_NAVY),
+            (0.45, [0.04, 0.30, 0.95, 1.0]),   # cobalt line
+            (0.51, [0.10, 0.45, 1.00, 1.0]),
+            (0.54, M_NAVY),
+            (0.58, [0.0, 0.0, 0.0, 0.0]),
+            (0.70, [0.0, 0.0, 0.0, 0.0]),
+            (0.73, M_NAVY),
+            (0.76, [0.05, 0.32, 0.96, 1.0]),   # cobalt line 2
+            (0.81, [0.08, 0.40, 1.00, 1.0]),
+            (0.84, M_NAVY),
+            (0.88, [0.0, 0.0, 0.0, 0.0]),
+            (1.00, [0.0, 0.0, 0.0, 0.0])],
+        spot_scale=16.0, spot_stops=M_SPOTS, spot_amount=0.95,
+        warp_amount=0.05)
+
+
 M_RIM = [0.01, 0.09, 0.34, 1.0]  # dark navy rim around every orange band
 
 MANDARIN_SKINS = {
@@ -652,16 +832,27 @@ MANDARIN_SKINS = {
         "fbm": {"noise": 1, "scale_x": 4.5, "scale_y": 3.0, "iterations": 4.0},
         "normal_amount": 0.15,
     },
+    # v4: split-body skins - trunk (blue maze) + head (green vermiculated).
+    "v4_trunk": {
+        "albedo_fn": mandarin_v4_trunk_albedo,
+        "fbm": {"noise": 1, "scale_x": 4.5, "scale_y": 3.0, "iterations": 4.0},
+        "normal_amount": 0.15,
+    },
+    "v4_head": {
+        "albedo_fn": mandarin_v4_head_albedo,
+        "fbm": {"noise": 1, "scale_x": 5.0, "scale_y": 4.0, "iterations": 4.0},
+        "normal_amount": 0.12,
+    },
 }
 
 
-def build_mandarin_skin(c, cfg):
-    """Two Graph_texture assets per version (see MANDARIN_SKINS). Dragonets
-    are scaleless, so the normal is only a faint fbm slime relief."""
-    sfx = cfg["suffix"]
-    albedo_name = f"Mandarin{sfx} Maze Albedo"
-    normal_name = f"Mandarin{sfx} Maze Normal"
-    skin = MANDARIN_SKINS[cfg["skin"]]
+def build_mandarin_skin(c, name_key, skin_key):
+    """Two Graph_texture assets per version/part (see MANDARIN_SKINS).
+    Dragonets are scaleless, so the normal is only a faint fbm slime
+    relief. name_key: suffix (+ part) that keys the asset names."""
+    albedo_name = f"Mandarin{name_key} Maze Albedo"
+    normal_name = f"Mandarin{name_key} Maze Normal"
+    skin = MANDARIN_SKINS[skin_key]
     listing = c.call("get_graph_textures", {"scene_name": c.scene})
     existing = {entry.get("name") for entry in listing.get("graph_textures", [])}
     if albedo_name not in existing:
@@ -681,64 +872,95 @@ def build_mandarin_skin(c, cfg):
     return albedo_name, normal_name
 
 
-def build_mandarin(c, cfg=None):
-    cfg = cfg or MANDARIN_VERSIONS[0]
+def _mandarin_body_part(c, cfg, part):
+    """One body-part mesh: material + skin graphs + geometry graph + bound
+    node. Reuses an existing body-graph asset (rebuilds after a fin/pose-only
+    fix: graph assets cannot be created twice)."""
     sfx = cfg["suffix"]
-    # White base-color factor: the maze albedo graph carries the pattern.
-    body_mat = c.ensure_material(f"Mandarin{sfx} Body",
+    key = f"{sfx}{part.get('part', '')}"
+    node_name = f"Mandarin{key}"
+    graph_name = f"Mandarin{key} Body Graph"
+    # White base-color factor: the albedo graph carries the pattern.
+    body_mat = c.ensure_material(f"Mandarin{key} Body",
                                  base_color=[1.0, 1.0, 1.0],
                                  roughness=cfg.get("body_roughness", 0.28),
                                  metallic=0.02)
     c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
                                "base_color": [1.0, 1.0, 1.0]})
-    albedo_name, normal_name = build_mandarin_skin(c, cfg)
+    albedo_name, normal_name = build_mandarin_skin(
+        c, key, part.get("skin", cfg["skin"]))
     c.bind_material_texture(body_mat, albedo_name, slot="base_color", wrap="repeat")
     c.bind_material_texture(body_mat, normal_name, slot="normal", wrap="repeat")
-    # ------------------------------------------------------------- body graph
-    # Reuse an existing body-graph asset (rebuilds after a fin/pose-only fix:
-    # graph assets cannot be created twice, and the body is unchanged).
-    size = cfg["size"]
+
+    size = part["size"]
+    pos = v_add(cfg["pos"], part.get("offset", [0.0, 0.0, 0.0]))
     graph_listing = c.call("get_graph_meshes", {"scene_name": c.scene})
     existing_graphs = {entry.get("name")
                        for entry in graph_listing.get("graph_meshes", [])}
-    if f"Mandarin{sfx} Body Graph" in existing_graphs:
-        body = c.bind_node_mesh(f"Mandarin{sfx}", f"Mandarin{sfx} Body Graph")
-        pos = cfg["pos"]
-        c.move_node(body, translation=pos)
-        c.settle()
-        return _mandarin_attachments(c, cfg, body)
-    g = c.geometry_graph(f"Mandarin{sfx} Body Graph")
-    box = g.add("box", {"size": size, "subdivisions": M_SUBDIVISIONS, "power": 1.0})
-    subdivide_pre = g.add("subdivide", {"mode": 0, "iterations": 1})
-    lattice = g.add("lattice", {
-        "auto_fit": False,
-        "cage_min": [-0.5 * v for v in size],
-        "cage_max": [0.5 * v for v in size],
-        "divisions": cfg["divisions"],
-        "interpolation": 1,  # bezier FFD
-        "show_cage": False,
-        "offsets": lattice_offsets(size, cfg["divisions"], cfg["squeeze_y"],
-                                   cfg["squeeze_z"], cfg["shift_y"],
-                                   cfg["shift_x"], cfg["edge_taper"]),
-    })
-    subdivide_post = g.add("subdivide", {"mode": 0,
-                                         "iterations": cfg["post_subdiv"]})
-    out = g.add("output", {"material": body_mat})
-    g.chain([box, subdivide_pre, lattice, subdivide_post, out])
-    c.call("get_geometry_graph")  # evaluation barrier
+    if graph_name not in existing_graphs:
+        g = c.geometry_graph(graph_name)
+        box = g.add("box", {"size": size, "subdivisions": M_SUBDIVISIONS,
+                            "power": 1.0})
+        subdivide_pre = g.add("subdivide", {"mode": 0, "iterations": 1})
+        lattice = g.add("lattice", {
+            "auto_fit": False,
+            "cage_min": [-0.5 * v for v in size],
+            "cage_max": [0.5 * v for v in size],
+            "divisions": part["divisions"],
+            "interpolation": 1,  # bezier FFD
+            "show_cage": False,
+            "offsets": lattice_offsets(size, part["divisions"],
+                                       part["squeeze_y"], part["squeeze_z"],
+                                       part["shift_y"], part["shift_x"],
+                                       part["edge_taper"]),
+        })
+        subdivide_post = g.add("subdivide", {"mode": 0,
+                                             "iterations": cfg["post_subdiv"]})
+        out = g.add("output", {"material": body_mat})
+        g.chain([box, subdivide_pre, lattice, subdivide_post, out])
+        c.call("get_geometry_graph")  # evaluation barrier
 
-    body = c.bind_node_mesh(f"Mandarin{sfx}", f"Mandarin{sfx} Body Graph")
-    c.move_node(body, translation=cfg["pos"])
+    body = c.bind_node_mesh(node_name, graph_name)
+    c.move_node(body, translation=pos)
     c.settle()
-    return _mandarin_attachments(c, cfg, body)
+    return body
 
 
-def _mandarin_attachments(c, cfg, body):
-    """Everything attached to the body: tail fan (+rim), dorsals, blade fins,
-    eyes. Separate from build_mandarin so a rebuild that only changes
-    attachments can reuse the existing body-graph asset."""
+def build_mandarin(c, cfg=None):
+    cfg = cfg or MANDARIN_VERSIONS[0]
+    parts = cfg.get("parts")
+    if parts is None:
+        # Single-body versions (v1-v3) as a one-part list.
+        parts = [{"part": "", "size": cfg["size"],
+                  "divisions": cfg["divisions"],
+                  "squeeze_y": cfg["squeeze_y"], "squeeze_z": cfg["squeeze_z"],
+                  "shift_y": cfg["shift_y"], "shift_x": cfg["shift_x"],
+                  "edge_taper": cfg["edge_taper"],
+                  "offset": [0.0, 0.0, 0.0], "skin": cfg["skin"]}]
+    node_names = [_mandarin_body_part(c, cfg, part) for part in parts]
+    body = node_names[0]
+    if len(node_names) > 1:
+        # One subtree per version: --only deletion and the per-version shots
+        # depend on the extra parts hanging under the first (root) part.
+        root_id = c.node_by_name(body)["id"]
+        for child in node_names[1:]:
+            child_id = c.node_by_name(child)["id"]
+            c.mutate("reparent_node", {"scene_name": c.scene,
+                                       "node_id": child_id,
+                                       "parent_node_id": root_id})
+        c.settle()
+    # Eyes probe the LAST part (the head when split, the body otherwise).
+    return _mandarin_attachments(c, cfg, body, eye_node=node_names[-1])
+
+
+def _mandarin_attachments(c, cfg, body, eye_node=None):
+    """Everything attached to the body: tail fan (+rim), dorsals, paired
+    fins, eyes. Separate from build_mandarin so a rebuild that only changes
+    attachments can reuse the existing body-graph asset. eye_node: the mesh
+    the eye probes hit (the head part on split bodies)."""
     sfx = cfg["suffix"]
     pos = cfg["pos"]
+    eye_node = eye_node or body
     # Fins: blue membranes; tail: orange with its blue rim as GEOMETRY (fins
     # have no texcoords, so rims cannot come from textures).
     fin_mat = c.ensure_material(f"Mandarin{sfx} Fin",
@@ -869,13 +1091,38 @@ def _mandarin_attachments(c, cfg, body):
                 material_name=fin_mat, rotation_xyzw=q, scale=scale,
                 parent_node_id=body_id, motion_mode="none")
 
+    def fan_fin(name, position, yaw_deg, pitch_deg, roll_deg, scale):
+        """Lattice-fanned rounded paddle (V4+): thin box + the same
+        pinch-and-bow fan deform as the tail, built axis-aligned, then posed.
+        Same call signature as blade(); position is the attach point (the
+        fan's pinched +X column lands there after the pose rotation)."""
+        w, h = 0.30 * scale[0], 0.26 * scale[1]
+        q = quat_mul(
+            axis_angle_quaternion([0.0, 1.0, 0.0], math.radians(yaw_deg)),
+            quat_mul(
+                axis_angle_quaternion([0.0, 0.0, 1.0], math.radians(pitch_deg)),
+                axis_angle_quaternion([1.0, 0.0, 0.0], math.radians(roll_deg))))
+        # The fan opens toward local -X (attach column at +X); the blade
+        # poses assume the fin extends along the post-yaw spine direction,
+        # so flip 180 about local Y to match.
+        q = quat_mul(q, axis_angle_quaternion([0.0, 1.0, 0.0], math.pi))
+        center = v_sub(position,
+                       v_scale(quat_rotate(q, [1.0, 0.0, 0.0]), w / 2.0))
+        c.shape("box", name, center, size=[w, h, 0.012], steps=[6, 6, 1],
+                material_name=fin_mat, reuse=False, parent_node_id=body_id,
+                motion_mode="none")
+        fan_deform(name, h, 0.25 * w)
+        c.set_node_transform(name, rotation_xyzw=q)
+
+    fin = fan_fin if cfg.get("lattice_fins") else blade
+
     # Trailing filament on the sail's rear top corner (side view + line art).
     if sail.get("filament"):
         fil_p = [sail_center[0] - sail_w * 0.30,
                  sail_center[1] + sail_h * 0.42, z0]
-        blade(f"Mandarin{sfx} Dorsal Filament", fil_p,
-              yaw_deg=180.0, pitch_deg=-32.0, roll_deg=0.0,
-              scale=[0.5, 0.35, 0.35])
+        fin(f"Mandarin{sfx} Dorsal Filament", fil_p,
+            yaw_deg=180.0, pitch_deg=-32.0, roll_deg=0.0,
+            scale=[0.5, 0.35, 0.35])
 
     # Pectoral fans on the flanks behind the head.
     flank = c.closest_points(
@@ -886,9 +1133,9 @@ def _mandarin_attachments(c, cfg, body):
     for side, probe in zip((1.0, -1.0), flank):
         p = probe.get("position", [pos[0] + 0.30, mid_y, z0 + side * 0.25])
         p = v_add(p, [0.0, 0.0, side * 0.02])
-        blade(f"Mandarin{sfx} Pectoral Fin {'L' if side > 0 else 'R'}", p,
-              yaw_deg=180.0 + side * 35.0, pitch_deg=12.0, roll_deg=side * 55.0,
-              scale=[ps, ps, ps])
+        fin(f"Mandarin{sfx} Pectoral Fin {'L' if side > 0 else 'R'}", p,
+            yaw_deg=180.0 + side * 35.0, pitch_deg=12.0, roll_deg=side * 55.0,
+            scale=[ps, ps, ps])
     # Oversized pelvic perching fans below the head + anal fin at the rear.
     belly = c.closest_points(
         [[pos[0] + 0.32, aabb_min[1] + 0.06, z0 + 0.12],
@@ -899,14 +1146,14 @@ def _mandarin_attachments(c, cfg, body):
     for side, probe in zip((1.0, -1.0), belly[:2]):
         p = probe.get("position", [pos[0] + 0.32, mid_y - 0.2, z0 + side * 0.1])
         p = v_add(p, [0.0, -0.03, side * 0.02])
-        blade(f"Mandarin{sfx} Pelvic Fin {'L' if side > 0 else 'R'}", p,
-              yaw_deg=180.0 + side * 20.0, pitch_deg=cfg["pelvic_pitch"],
-              roll_deg=side * cfg["pelvic_roll"], scale=[vs, vs, vs])
+        fin(f"Mandarin{sfx} Pelvic Fin {'L' if side > 0 else 'R'}", p,
+            yaw_deg=180.0 + side * 20.0, pitch_deg=cfg["pelvic_pitch"],
+            roll_deg=side * cfg["pelvic_roll"], scale=[vs, vs, vs])
     anal_p = v_add(belly[2].get("position", [pos[0] - 0.40, mid_y - 0.2, z0]),
                    [0.0, -0.03, 0.0])
     a_s = cfg["anal_scale"]
-    blade(f"Mandarin{sfx} Anal Fin", anal_p, yaw_deg=180.0, pitch_deg=64.0,
-          roll_deg=0.0, scale=[a_s, a_s, a_s])
+    fin(f"Mandarin{sfx} Anal Fin", anal_p, yaw_deg=180.0, pitch_deg=64.0,
+        roll_deg=0.0, scale=[a_s, a_s, a_s])
 
     # ------------------------------------------------------------------ eyes
     # Frog-like eyes sit on TOP of the head (front-view refs), protruding -
@@ -916,7 +1163,7 @@ def _mandarin_attachments(c, cfg, body):
     eyes = c.closest_points(
         [[nose_x - 0.26, top_y + 0.4, z0 + 0.3],
          [nose_x - 0.26, top_y + 0.4, z0 - 0.3]],
-        node_name=body)
+        node_name=eye_node)
     if cfg["eye"] == "ring":
         ring_mat = c.ensure_material(f"Mandarin{sfx} Eye Ring",
                                      base_color=cfg.get("eye_ring_color",
@@ -984,7 +1231,9 @@ def main():
             for version_cfg in MANDARIN_VERSIONS:
                 build_mandarin(c, version_cfg)
         common.hierarchy_report(c, "fish hierarchy")
-        c.screenshot_views(BASE, SHOTS)
+        c.mutate("select_items", {"scene_name": c.scene, "ids": []})
+        c.screenshot_views(BASE, BASE_SHOTS)
+        isolated_mandarin_shots(c)
         if not args.no_save:
             c.save(SAVE_GLB)
     print("fish creation complete.")
