@@ -1,24 +1,35 @@
 #!/usr/bin/env python3
-"""Creation 18: a smooth fish, sculpted procedurally.
+"""Creation 18: two smooth fish, sculpted procedurally.
 
-The BODY is a geometry graph (box cage, subdivisions [2, 1, 0] -> one level
-of Catmull-Clark -> bezier lattice FFD -> one more subdivision level): seven
-lattice stations squeeze the cage toward the centerline (hard tail pinch,
-belly at mid-forward, converging snout with a slight droop) and a
-per-height-row extra beam squeeze rounds the cross-section into a fish oval.
-The TAIL is a lattice-fanned thin box forked with a CSG cylinder cut; the
-DORSAL fin is a lattice-raked thin box; paired PECTORAL / PELVIC fins and the
-ANAL fin share one pooled sweep-blade brush. Eyes are placed by probing the
-actual body surface (geometry_query closest points).
+FISH ONE (generic orange fish) - the BODY is a geometry graph (box cage,
+subdivisions [2, 1, 0] -> one level of Catmull-Clark -> bezier lattice FFD ->
+one more subdivision level): seven lattice stations squeeze the cage toward
+the centerline (hard tail pinch, belly at mid-forward, converging snout with
+a slight droop) and a per-height-row extra beam squeeze rounds the
+cross-section into a fish oval. The TAIL is a lattice-fanned thin box forked
+with a CSG cylinder cut; the DORSAL fin is a lattice-raked thin box; paired
+PECTORAL / PELVIC fins and the ANAL fin share one pooled sweep-blade brush.
+Eyes are placed by probing the actual body surface (geometry_query closest
+points). The body SKIN is two live procedural texture graphs bound to the
+Fish Body material: a quincunx scale-scallop height field (soft circle dome
+tiled twice with a half-cell stagger, merged with lighten = max) drives a
+colorized albedo with a soft-light fbm mottle, and the same field through
+normal_map gives per-scale relief.
 
-The body SKIN is two live procedural texture graphs bound to the Fish Body
-material: a quincunx scale-scallop height field (soft circle dome tiled twice
-with a half-cell stagger, merged with lighten = max) drives a colorized
-albedo with a soft-light fbm mottle, and the same field through normal_map
-gives per-scale relief.
+FISH TWO (Synchiropus splendidus, mandarin dragonet) - same body-graph
+machinery with its own cage: rounder cross-section (dragonets are not
+laterally compressed), broad flattened head with a blunt face, hard pinch at
+the tail base. The TAIL is a rounded fan (convex trailing edge - no fork
+cut); a tall raked first-dorsal SAIL plus a low second dorsal; oversized
+rounded PELVIC fans (the perching fans), pectoral fans and an anal fin from
+a pooled sweep-blade brush; protruding frog-like eyes probed onto the TOP of
+the head. The skin is scaleless: an fbm field colorized through a gradient
+whose tight orange stops cut labyrinth bands with dark rims out of the blue
+base (the classic contour-band read of the mandarin maze), plus a faint
+normal for slime relief.
 
     py -3 scripts/creations/creation_18_fish.py [--reuse] [--reframe GLB]
-                                                [--only Fish]
+                                                [--only Fish|Mandarin]
 """
 
 import math
@@ -58,6 +69,25 @@ EDGE_TAPER = [0.45, 0.00, 0.78]
 
 FISH_POS = [0.0, 1.5, 0.0]  # world position of the body node
 
+# ------------------------------------------------------- mandarin body graph
+# Synchiropus splendidus. References: side view (body plan + maze pattern),
+# front views (broad flattened head, eyes on TOP, round cross-section),
+# line art (silhouette: two dorsals, rounded fan tail, big pelvic fans).
+# Dragonets are NOT laterally compressed: beam ~ height, blunt face,
+# hard pinch at the tail base only.
+M_SIZE = [1.5, 0.55, 0.60]
+M_SUBDIVISIONS = [2, 1, 0]
+M_DIVISIONS = [6, 2, 2]
+M_SQUEEZE_Y = [0.78, 0.58, 0.32, 0.10, 0.04, 0.12, 0.52]
+M_SQUEEZE_Z = [0.88, 0.68, 0.38, 0.12, 0.04, 0.08, 0.42]
+# Nearly flat back line - the head is flattened, not arched.
+M_SHIFT_Y = [0.00, 0.01, 0.02, 0.01, 0.00, -0.01, -0.05]
+M_SHIFT_X = [0.06, 0.02, 0.00, 0.00, 0.00, -0.04, -0.14]
+# Belly flat-ish (they perch on it), back gently rounded.
+M_EDGE_TAPER = [0.30, 0.00, 0.42]
+
+M_POS = [1.4, 0.45, 1.9]  # hovering just above the seabed, like the refs
+
 # ---------------------------------------------------------------- skin graphs
 # Scale scallops per UV tile (the body's box-cage UVs survive as a few large
 # coherent tiles, so the pattern repeats per tile). 16 read as moire stripes
@@ -65,14 +95,17 @@ FISH_POS = [0.0, 1.5, 0.0]  # world position of the body node
 SCALE_CELLS = 6.0
 ALBEDO_GRAPH = "Fish Scales Albedo"
 NORMAL_GRAPH = "Fish Scales Normal"
+M_ALBEDO_GRAPH = "Mandarin Maze Albedo"
+M_NORMAL_GRAPH = "Mandarin Maze Normal"
 
 
-def body_lattice_offsets():
+def lattice_offsets(size, divisions, squeeze_y, squeeze_z, shift_y, shift_x,
+                    edge_taper):
     """Flat offsets array in lattice_offset_index order:
     index = i + (nx) * (j + (ny) * k)."""
-    dx, dy, dz = DIVISIONS
+    dx, dy, dz = divisions
     counts = (dx + 1, dy + 1, dz + 1)
-    half = [BODY_SIZE[0] / 2.0, BODY_SIZE[1] / 2.0, BODY_SIZE[2] / 2.0]
+    half = [size[0] / 2.0, size[1] / 2.0, size[2] / 2.0]
     offsets = [0.0] * (counts[0] * counts[1] * counts[2] * 3)
     for k in range(counts[2]):
         z = -half[2] + 2.0 * half[2] * k / dz
@@ -80,20 +113,26 @@ def body_lattice_offsets():
             y = -half[1] + 2.0 * half[1] * j / dy
             for i in range(counts[0]):
                 index = 3 * (i + counts[0] * (j + counts[1] * k))
-                z_squeeze = SQUEEZE_Z[i] + (1.0 - SQUEEZE_Z[i]) * EDGE_TAPER[j]
-                offsets[index + 0] = SHIFT_X[i]
-                offsets[index + 1] = -y * SQUEEZE_Y[i] + SHIFT_Y[i]
+                z_squeeze = squeeze_z[i] + (1.0 - squeeze_z[i]) * edge_taper[j]
+                offsets[index + 0] = shift_x[i]
+                offsets[index + 1] = -y * squeeze_y[i] + shift_y[i]
                 offsets[index + 2] = -z * z_squeeze
     return offsets
+
+
+def body_lattice_offsets():
+    return lattice_offsets(BODY_SIZE, DIVISIONS, SQUEEZE_Y, SQUEEZE_Z,
+                           SHIFT_Y, SHIFT_X, EDGE_TAPER)
 
 
 # -------------------------------------------------------------------- camera
 # (suffix, eye, target) world-space shots; hoisted for --reframe.
 SHOTS = [
-    ("side",    [0.3, 1.9, 5.6],  [0.0, 1.4, 0.0]),
-    ("quarter", [3.6, 2.6, 4.2],  [0.1, 1.4, 0.0]),
-    ("front",   [4.6, 1.5, 1.6],  [0.0, 1.45, 0.0]),
-    ("top",     [0.4, 6.4, 1.6],  [0.0, 1.4, 0.0]),
+    ("side",     [0.3, 1.9, 6.4],  [0.2, 1.2, 0.4]),
+    ("quarter",  [4.0, 2.6, 4.8],  [0.3, 1.2, 0.4]),
+    ("front",    [5.2, 1.5, 2.2],  [0.3, 1.2, 0.5]),
+    ("top",      [0.6, 6.8, 1.8],  [0.4, 1.0, 0.6]),
+    ("mandarin", [2.7, 1.15, 3.7], [1.35, 0.5, 1.85]),
 ]
 
 
@@ -364,23 +403,271 @@ def build_fish(c):
     return body
 
 
+def build_mandarin_skin(c):
+    """Two Graph_texture assets for the mandarin. The maze: one fbm field
+    colorized through a gradient whose tight orange stops (with dark-navy rim
+    stops on both shoulders) cut contour bands out of the blue base - where
+    the noise crosses a band range the surface reads as a wavy orange
+    labyrinth stripe with a dark rim, which is exactly the mandarin pattern.
+    Dragonets are scaleless, so the normal is only a faint fbm slime relief."""
+    listing = c.call("get_graph_textures", {"scene_name": c.scene})
+    existing = {entry.get("name") for entry in listing.get("graph_textures", [])}
+    rim = [0.01, 0.09, 0.34, 1.0]  # dark navy rim around every orange band
+    if M_ALBEDO_GRAPH not in existing:
+        g = c.texture_graph(M_ALBEDO_GRAPH)
+        maze = g.add("fbm", {"noise": 1, "scale_x": 3.0, "scale_y": 3.0,
+                             "iterations": 4.0})
+        bands = g.add("colorize", {"gradient": grad([
+            (0.00, [0.02, 0.07, 0.30, 1.0]),   # deep blue shadow
+            (0.18, [0.05, 0.28, 0.80, 1.0]),   # body blue
+            (0.30, rim),
+            (0.34, [0.98, 0.44, 0.05, 1.0]),   # orange band 1
+            (0.44, [1.00, 0.52, 0.10, 1.0]),
+            (0.48, rim),
+            (0.56, [0.06, 0.34, 0.86, 1.0]),   # blue between the bands
+            (0.62, rim),
+            (0.66, [1.00, 0.55, 0.10, 1.0]),   # orange band 2
+            (0.74, [0.96, 0.44, 0.06, 1.0]),
+            (0.78, rim),
+            (0.88, [0.05, 0.30, 0.82, 1.0]),
+            (1.00, [0.25, 0.72, 0.62, 1.0])])})  # green-cyan face highlight
+        g.link(maze, bands)
+        # Fine soft-light speckle: the yellow-dot texture of the face/back.
+        speckle = g.add("fbm", {"noise": 1, "scale_x": 9.0, "scale_y": 9.0,
+                                "iterations": 3.0})
+        speckle_rgba = g.add("ensure_rgba")
+        g.link(speckle, speckle_rgba)
+        mix = g.add("blend", {"blend_type": 6, "amount": 0.18})  # soft light
+        g.link(speckle_rgba, mix)        # s1: speckle layer
+        g.link(bands, mix, dst_slot=1)   # s2: maze base
+        out = g.add("output", {"name": M_ALBEDO_GRAPH, "size": 1024})
+        g.link(mix, out, dst_slot=2)     # rgba slot
+    if M_NORMAL_GRAPH not in existing:
+        g = c.texture_graph(M_NORMAL_GRAPH)
+        height = g.add("fbm", {"noise": 1, "scale_x": 3.0, "scale_y": 3.0,
+                               "iterations": 4.0})
+        normal = g.add("normal_map", {"amount": 0.25, "size": 10})
+        g.link(height, normal)
+        out = g.add("output", {"name": M_NORMAL_GRAPH, "size": 1024})
+        g.link(normal, out, dst_slot=1)  # rgb slot
+
+
+def build_mandarin(c):
+    # White base-color factor: the maze albedo graph carries the pattern.
+    body_mat = c.ensure_material("Mandarin Body", base_color=[1.0, 1.0, 1.0],
+                                 roughness=0.28, metallic=0.02)
+    c.mutate("edit_material", {"scene_name": c.scene, "material_name": body_mat,
+                               "base_color": [1.0, 1.0, 1.0]})
+    build_mandarin_skin(c)
+    c.bind_material_texture(body_mat, M_ALBEDO_GRAPH, slot="base_color", wrap="repeat")
+    c.bind_material_texture(body_mat, M_NORMAL_GRAPH, slot="normal", wrap="repeat")
+    # Fins: blue membranes; tail: orange with its blue rim carried by the fin
+    # material edging in the refs - approximated with two plain materials.
+    fin_mat = c.ensure_material("Mandarin Fin", base_color=[0.10, 0.32, 0.92],
+                                roughness=0.45, metallic=0.0,
+                                blending_mode="alpha_blend", opacity=0.92)
+    tail_mat = c.ensure_material("Mandarin Tail", base_color=[0.96, 0.45, 0.08],
+                                 roughness=0.5, metallic=0.0,
+                                 blending_mode="alpha_blend", opacity=0.95)
+    eye_mat = c.ensure_material("Mandarin Eye", base_color=[0.30, 0.06, 0.04],
+                                roughness=0.25, metallic=0.0)
+
+    # ------------------------------------------------------------- body graph
+    g = c.geometry_graph("Mandarin Body Graph")
+    box = g.add("box", {"size": M_SIZE, "subdivisions": M_SUBDIVISIONS, "power": 1.0})
+    subdivide_pre = g.add("subdivide", {"mode": 0, "iterations": 1})
+    lattice = g.add("lattice", {
+        "auto_fit": False,
+        "cage_min": [-0.5 * v for v in M_SIZE],
+        "cage_max": [0.5 * v for v in M_SIZE],
+        "divisions": M_DIVISIONS,
+        "interpolation": 1,  # bezier FFD
+        "show_cage": False,
+        "offsets": lattice_offsets(M_SIZE, M_DIVISIONS, M_SQUEEZE_Y,
+                                   M_SQUEEZE_Z, M_SHIFT_Y, M_SHIFT_X,
+                                   M_EDGE_TAPER),
+    })
+    subdivide_post = g.add("subdivide", {"mode": 0, "iterations": 1})
+    out = g.add("output", {"material": body_mat})
+    g.chain([box, subdivide_pre, lattice, subdivide_post, out])
+    c.call("get_geometry_graph")  # evaluation barrier
+
+    body = c.bind_node_mesh("Mandarin", "Mandarin Body Graph")
+    c.move_node(body, translation=M_POS)
+    c.settle()
+    body_id = c.node_by_name(body)["id"]
+
+    aabb_min, aabb_max = c.subtree_world_aabb(body)
+    tail_x = aabb_min[0]
+    nose_x = aabb_max[0]
+    top_y = aabb_max[1]
+    mid_y = (aabb_min[1] + aabb_max[1]) * 0.5
+    z0 = M_POS[2]
+
+    # -------------------------------------------------------------- tail fan
+    # Rounded fan, NOT forked: pinch the attach column, and bow the middle of
+    # the trailing edge rearward so Catmull-Clark rounds it convex (line-art
+    # silhouette). Orange with the fin-blue kept for the paired fins.
+    tail_w, tail_h, tail_t = 0.55, 0.62, 0.028
+    tail_center = [tail_x - tail_w / 2.0 + 0.17, mid_y, z0]
+    c.shape("box", "Mandarin Tail Fin", tail_center,
+            size=[tail_w, tail_h, tail_t], steps=[6, 6, 1],
+            material_name=tail_mat, reuse=False, parent_node_id=body_id,
+            motion_mode="none")
+    fan = []
+    for j in range(3):
+        for k in range(2):
+            y = -1.0 + j  # -1, 0, +1 row factor
+            fan.append([2, j, k, 0.0, -y * 0.80 * (tail_h / 2.0), 0.0])
+            fan.append([1, j, k, 0.0, -y * 0.30 * (tail_h / 2.0), 0.0])
+            if j == 1:
+                fan.append([0, j, k, -0.10, 0.0, 0.0])  # convex trailing edge
+    c.lattice_deform("Mandarin Tail Fin", fan, divisions=[2, 2, 1],
+                     interpolation="bezier", wait=True)
+    for _ in range(2):  # one level per call
+        c.mutate("catmull_clark", {"scene_name": c.scene,
+                                   "node_name": "Mandarin Tail Fin"})
+    c.settle()
+
+    # ------------------------------------------------- dorsal sail + 2nd fin
+    # Probe the actual back line at both fin bases.
+    back = c.closest_points(
+        [[M_POS[0] + 0.10, top_y + 0.4, z0], [M_POS[0] + 0.25, top_y + 0.4, z0],
+         [M_POS[0] - 0.35, top_y + 0.4, z0], [M_POS[0] - 0.50, top_y + 0.4, z0]],
+        node_name=body)
+    sail_y = min(p.get("position", [0.0, top_y, z0])[1] for p in back[:2])
+    rear_y = min(p.get("position", [0.0, top_y, z0])[1] for p in back[2:])
+    # Tall raked first-dorsal sail just behind the head.
+    sail_w, sail_h, sail_t = 0.34, 0.44, 0.02
+    sail_center = [M_POS[0] + 0.16, sail_y + sail_h / 2.0 - 0.08, z0]
+    c.shape("box", "Mandarin Dorsal Sail", sail_center,
+            size=[sail_w, sail_h, sail_t], steps=[4, 4, 1],
+            material_name=fin_mat, reuse=False, parent_node_id=body_id,
+            motion_mode="none")
+    rake = []
+    for k in range(2):
+        for i in range(3):
+            x = -1.0 + i
+            rake.append([i, 2, k, -0.24 + x * -0.03, -0.10 if i == 0 else 0.0, 0.0])
+        rake.append([2, 1, k, -0.05, 0.0, 0.0])
+    c.lattice_deform("Mandarin Dorsal Sail", rake, divisions=[2, 2, 1],
+                     interpolation="bezier", wait=True)
+    for _ in range(2):
+        c.mutate("catmull_clark", {"scene_name": c.scene,
+                                   "node_name": "Mandarin Dorsal Sail"})
+    # Low second dorsal near the tail base.
+    d2_w, d2_h, d2_t = 0.30, 0.20, 0.018
+    d2_center = [M_POS[0] - 0.42, rear_y + d2_h / 2.0 - 0.05, z0]
+    c.shape("box", "Mandarin Dorsal Fin", d2_center,
+            size=[d2_w, d2_h, d2_t], steps=[4, 3, 1],
+            material_name=fin_mat, reuse=False, parent_node_id=body_id,
+            motion_mode="none")
+    rake2 = []
+    for k in range(2):
+        for i in range(3):
+            rake2.append([i, 2, k, -0.10, 0.0, 0.0])
+    c.lattice_deform("Mandarin Dorsal Fin", rake2, divisions=[2, 2, 1],
+                     interpolation="bezier", wait=True)
+    for _ in range(2):
+        c.mutate("catmull_clark", {"scene_name": c.scene,
+                                   "node_name": "Mandarin Dorsal Fin"})
+    c.settle()
+
+    # ------------------------------------------------ fan fins: sweep blades
+    # Broader, shorter blade than fish one - mandarin fans are round paddles.
+    blade_profile = [[0.0, -0.05], [0.5, -0.02], [1.0, 0.0],
+                     [0.5, 0.02], [0.0, 0.05], [-0.5, 0.02], [-1.0, 0.0],
+                     [-0.5, -0.02]]
+    blade_profile = [[0.16 * px, 0.30 * py] for px, py in blade_profile]
+
+    def blade(name, position, yaw_deg, pitch_deg, roll_deg, scale):
+        q = quat_mul(
+            axis_angle_quaternion([0.0, 1.0, 0.0], math.radians(yaw_deg)),
+            quat_mul(
+                axis_angle_quaternion([0.0, 0.0, 1.0], math.radians(pitch_deg)),
+                axis_angle_quaternion([1.0, 0.0, 0.0], math.radians(roll_deg))))
+        c.shape("sweep", name, position,
+                profile=blade_profile,
+                spine=[[0.0, 0.0, 0.0], [0.10, -0.02, 0.0],
+                       [0.20, -0.05, 0.0], [0.28, -0.10, 0.0]],
+                spine_steps=10,
+                taper=[[0.0, 0.8], [0.45, 1.0], [1.0, 0.15]],
+                material_name=fin_mat, rotation_xyzw=q, scale=scale,
+                parent_node_id=body_id, motion_mode="none")
+
+    # Pectoral fans on the flanks behind the head.
+    flank = c.closest_points(
+        [[M_POS[0] + 0.30, mid_y + 0.03, z0 + 0.5],
+         [M_POS[0] + 0.30, mid_y + 0.03, z0 - 0.5]],
+        node_name=body)
+    for side, probe in zip((1.0, -1.0), flank):
+        p = probe.get("position", [M_POS[0] + 0.30, mid_y, z0 + side * 0.25])
+        p = v_add(p, [0.0, 0.0, side * 0.02])
+        blade(f"Mandarin Pectoral Fin {'L' if side > 0 else 'R'}", p,
+              yaw_deg=180.0 + side * 35.0, pitch_deg=12.0, roll_deg=side * 55.0,
+              scale=[0.9, 0.9, 0.9])
+    # Oversized pelvic perching fans below the head + anal fin at the rear.
+    belly = c.closest_points(
+        [[M_POS[0] + 0.32, aabb_min[1] + 0.06, z0 + 0.12],
+         [M_POS[0] + 0.32, aabb_min[1] + 0.06, z0 - 0.12],
+         [M_POS[0] - 0.40, aabb_min[1] + 0.06, z0]],
+        node_name=body)
+    for side, probe in zip((1.0, -1.0), belly[:2]):
+        p = probe.get("position", [M_POS[0] + 0.32, mid_y - 0.2, z0 + side * 0.1])
+        p = v_add(p, [0.0, -0.03, side * 0.02])
+        blade(f"Mandarin Pelvic Fin {'L' if side > 0 else 'R'}", p,
+              yaw_deg=180.0 + side * 20.0, pitch_deg=48.0, roll_deg=side * 30.0,
+              scale=[1.35, 1.35, 1.35])
+    anal_p = v_add(belly[2].get("position", [M_POS[0] - 0.40, mid_y - 0.2, z0]),
+                   [0.0, -0.03, 0.0])
+    blade("Mandarin Anal Fin", anal_p, yaw_deg=180.0, pitch_deg=64.0,
+          roll_deg=0.0, scale=[0.9, 0.9, 0.9])
+
+    # ------------------------------------------------------------------ eyes
+    # Frog-like eyes sit on TOP of the head (front-view refs), protruding -
+    # probe the upper head surface and push the sphere slightly OUT along the
+    # normal instead of embedding it.
+    eyes = c.closest_points(
+        [[nose_x - 0.26, top_y + 0.4, z0 + 0.3],
+         [nose_x - 0.26, top_y + 0.4, z0 - 0.3]],
+        node_name=body)
+    for side, probe in zip((1.0, -1.0), eyes):
+        hit = probe.get("position")
+        normal = probe.get("normal", [0.0, 0.7, side * 0.7])
+        p = v_add(hit, [0.012 * n for n in normal]) if hit else \
+            [nose_x - 0.26, top_y - 0.05, z0 + side * 0.12]
+        c.shape("uv_sphere", f"Mandarin Eye {'L' if side > 0 else 'R'}", p,
+                radius=0.042, slice_count=20, stack_count=12,
+                material_name=eye_mat, parent_node_id=body_id,
+                motion_mode="none")
+
+    c.settle()
+    return body
+
+
 def main():
-    args = common.standard_args("creation 18: smooth fish")
+    args = common.standard_args("creation 18: smooth fish + mandarin dragonet")
     if common.reframe(args, TITLE, BASE, SHOTS):
         return
     c = common.Creation(TITLE, port=args.port, pause_s=args.pause,
                         editor_exe=args.editor_exe,
                         reuse=args.reuse or bool(args.only),
                         keep_scenes=args.keep_scenes or bool(args.only))
+    builders = {"Fish": build_fish, "Mandarin": build_mandarin}
     with common.fail_soft(c, BASE, failed_glb=None):
         if args.only:
+            builder = builders.get(args.only)
+            if builder is None:
+                raise SystemExit(
+                    f"--only must be one of {sorted(builders)}, got '{args.only}'")
             c.attach_scene()
             c.delete_nodes(names=[args.only])
-            build_fish(c)
+            builder(c)
         else:
             c.new_scene()
             build_scene_setup(c)
             build_fish(c)
+            build_mandarin(c)
         common.hierarchy_report(c, "fish hierarchy")
         c.screenshot_views(BASE, SHOTS)
         if not args.no_save:
