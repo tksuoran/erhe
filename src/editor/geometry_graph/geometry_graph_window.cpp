@@ -504,6 +504,7 @@ void Geometry_graph_window::build_palette()
                 Palette_entry{.type_name = "lattice",     .label = "Lattice"},
                 Palette_entry{.type_name = "triangulate", .label = "Triangulate"},
                 Palette_entry{.type_name = "normalize",   .label = "Normalize"},
+                Palette_entry{.type_name = "smooth_normals", .label = "Smooth Normals"},
                 Palette_entry{.type_name = "reverse",     .label = "Reverse"},
                 Palette_entry{.type_name = "repair",      .label = "Repair"}
             }

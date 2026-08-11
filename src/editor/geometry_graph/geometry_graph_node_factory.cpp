@@ -21,6 +21,7 @@
 #include "geometry_graph/nodes/value_nodes.hpp"
 
 #include "erhe_geometry/operation/normalize.hpp"
+#include "erhe_geometry/operation/smooth_normals.hpp"
 #include "erhe_geometry/operation/repair.hpp"
 #include "erhe_geometry/operation/reverse.hpp"
 #include "erhe_geometry/operation/triangulate.hpp"
@@ -43,6 +44,7 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "lattice")      { node = std::make_shared<Lattice_node    >(context); }
     else if (type_name == "triangulate")  { node = std::make_shared<Geometry_unary_operation_node>("Triangulate", &erhe::geometry::operation::triangulate); }
     else if (type_name == "normalize")    { node = std::make_shared<Geometry_unary_operation_node>("Normalize",   &erhe::geometry::operation::normalize); }
+    else if (type_name == "smooth_normals") { node = std::make_shared<Geometry_unary_operation_node>("Smooth Normals", &erhe::geometry::operation::smooth_normals); }
     else if (type_name == "reverse")      { node = std::make_shared<Geometry_unary_operation_node>("Reverse",     &erhe::geometry::operation::reverse); }
     else if (type_name == "repair")       { node = std::make_shared<Geometry_unary_operation_node>("Repair",      &erhe::geometry::operation::repair); }
     else if (type_name == "distribute")   { node = std::make_shared<Distribute_points_node >(); }
