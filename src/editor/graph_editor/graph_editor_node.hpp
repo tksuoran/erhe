@@ -45,6 +45,10 @@ public:
     virtual void mark_dirty ();
     void clear_dirty();
 
+    // True while this node is the ax::NodeEditor hovered node (updated as
+    // the node draws; at most one node per canvas is hovered per frame).
+    [[nodiscard]] auto is_hovered_in_editor() const -> bool { return m_is_hovered; }
+
     // Node content widgets. Concrete nodes override; the base is empty.
     virtual void imgui();
 

@@ -18,11 +18,15 @@
 struct ImVec2;
 
 namespace erhe {
+    class Hierarchy;
     class Item_base;
 }
 namespace erhe::graph {
     class Graph;
     class Pin;
+}
+namespace erhe::scene {
+    class Node;
 }
 namespace erhe::imgui {
     class Imgui_renderer;
@@ -159,6 +163,13 @@ public:
     void update_evaluation();
     void wait_for_idle_evaluation();
 
+    // Graph-hover -> scene highlight flag maintenance. The PRIMARY window
+    // runs this from update_evaluation(); EXTRA instances (issue #252,
+    // "Geometry Graph [N]") are ticked by Editor_windows::
+    // update_once_per_frame() - only their imgui() runs otherwise, and the
+    // flags must also clear on frames where the canvas does not draw.
+    void update_graph_hover_flags();
+
     // Non-undoable primitives used by the geometry graph operations
     // (and scene load); prefer the undoable edits above. They target a
     // specific Graph_mesh so undo/redo stays correct even if the
@@ -268,6 +279,19 @@ private:
     // few per frame. Called from update_evaluation().
     void update_node_previews();
 
+    // Graph-hover -> scene highlight (Item_flags::hovered_in_graph and
+    // friends). record_canvas_hover() runs right after the canvas draw and
+    // stores the scene node referenced by the hovered graph node (at most
+    // one graph node is hovered per frame); update_graph_hover_flags()
+    // (public, see above) runs once per frame - also when the window is not
+    // drawn, so the flags clear when the canvas disappears or hover ends -
+    // and re-derives the flag sets like Hover_tool does for viewport hover:
+    // the node gets hovered_in_graph, every ancestor child_hovered_in_graph,
+    // every descendant ancestor_hovered_in_graph; the previously flagged
+    // items are cleared first, and the sets refresh when the scene tree
+    // structure changes (item mutation serial).
+    void record_canvas_hover();
+
     App_context&                                      m_app_context;
     // The explicit target this window edits (issue #252). weak_ptr so a
     // deleted asset clears the target automatically. Bound to the target
@@ -286,6 +310,12 @@ private:
     // a re-render on every cached preview (see update_node_previews).
     Preview_edge_lines_config                         m_preview_edge_lines_snapshot{};
     bool                                              m_preview_edge_lines_snapshot_valid{false};
+    // Graph-hover -> scene highlight state (see record_canvas_hover()).
+    std::weak_ptr<erhe::scene::Node>                  m_canvas_hovered_scene_node;
+    bool                                              m_canvas_hover_fresh{false};
+    std::weak_ptr<erhe::scene::Node>                  m_graph_hover_flagged_node;
+    std::vector<std::weak_ptr<erhe::Hierarchy>>       m_graph_hover_flagged_items;
+    uint64_t                                          m_graph_hover_flagged_serial{0};
 };
 
 }

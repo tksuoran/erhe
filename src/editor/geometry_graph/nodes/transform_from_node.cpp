@@ -30,6 +30,11 @@ void Transform_from_node::set_transform_node(const std::shared_ptr<erhe::scene::
     mark_dirty();
 }
 
+auto Transform_from_node::get_referenced_scene_node() const -> std::shared_ptr<erhe::scene::Node>
+{
+    return m_transform_node_reference.get_as<erhe::scene::Node>();
+}
+
 void Transform_from_node::resolve_transform_reference()
 {
     // Main thread only (the manager verifies).

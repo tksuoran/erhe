@@ -247,6 +247,14 @@ void Editor_windows::update_once_per_frame()
     prune_closed(m_properties_windows);
     prune_closed(m_geometry_graph_windows);
     prune_closed(m_texture_graph_windows);
+
+    // Graph-hover -> scene highlight flags: the primary Geometry Graph
+    // window runs this from its update_evaluation(); the extra instances
+    // only draw, so they are ticked here (the flags must also clear on
+    // frames where an extra window's canvas does not draw).
+    for (const std::shared_ptr<Geometry_graph_window>& window : m_geometry_graph_windows) {
+        window->update_graph_hover_flags();
+    }
 }
 
 auto Editor_windows::get_extra_geometry_graph_windows() const -> const std::vector<std::shared_ptr<Geometry_graph_window>>&

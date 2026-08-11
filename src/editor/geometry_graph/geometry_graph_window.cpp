@@ -830,6 +830,8 @@ void Geometry_graph_window::update_evaluation()
 
     update_live_nodes();
 
+    update_graph_hover_flags();
+
     process_attachment_push_requests();
 
     if (m_evaluation_run) {
@@ -845,6 +847,74 @@ void Geometry_graph_window::update_evaluation()
     }
 
     update_node_previews();
+}
+
+void Geometry_graph_window::record_canvas_hover()
+{
+    // Right after the canvas draw: at most one graph node reports
+    // is_hovered_in_editor() (ax::NodeEditor has a single hovered node).
+    std::shared_ptr<erhe::scene::Node> hovered_scene_node{};
+    for (erhe::graph::Node* node : graph().get_nodes()) {
+        const Geometry_graph_node* geometry_graph_node = dynamic_cast<const Geometry_graph_node*>(node);
+        if ((geometry_graph_node != nullptr) && geometry_graph_node->is_hovered_in_editor()) {
+            hovered_scene_node = geometry_graph_node->get_referenced_scene_node();
+            break;
+        }
+    }
+    m_canvas_hovered_scene_node = hovered_scene_node;
+    m_canvas_hover_fresh        = true;
+}
+
+void Geometry_graph_window::update_graph_hover_flags()
+{
+    // Once per frame, also when the window is not drawn: a canvas that did
+    // not draw since the last update has no hover, so the flags clear when
+    // the window closes or the mouse leaves.
+    const std::shared_ptr<erhe::scene::Node> hovered =
+        m_canvas_hover_fresh ? m_canvas_hovered_scene_node.lock() : std::shared_ptr<erhe::scene::Node>{};
+    m_canvas_hover_fresh = false;
+
+    const bool hover_changed     = (hovered != m_graph_hover_flagged_node.lock());
+    const bool structure_changed = (m_graph_hover_flagged_serial != erhe::get_item_mutation_serial());
+    if (!hover_changed && !structure_changed) {
+        return;
+    }
+
+    // Clear all three bits from everything previously flagged, then
+    // re-derive (Hover_tool's viewport-hover ancestor pattern).
+    constexpr uint64_t all_graph_hover_bits =
+        erhe::Item_flags::hovered_in_graph |
+        erhe::Item_flags::child_hovered_in_graph |
+        erhe::Item_flags::ancestor_hovered_in_graph;
+    for (const std::weak_ptr<erhe::Hierarchy>& flagged_weak : m_graph_hover_flagged_items) {
+        const std::shared_ptr<erhe::Hierarchy> flagged = flagged_weak.lock();
+        if (flagged) {
+            flagged->disable_flag_bits(all_graph_hover_bits);
+        }
+    }
+    m_graph_hover_flagged_items.clear();
+
+    if (hovered) {
+        hovered->enable_flag_bits(erhe::Item_flags::hovered_in_graph);
+        m_graph_hover_flagged_items.push_back(hovered);
+        std::shared_ptr<erhe::Hierarchy> ancestor = hovered->get_parent().lock();
+        while (ancestor) {
+            ancestor->enable_flag_bits(erhe::Item_flags::child_hovered_in_graph);
+            m_graph_hover_flagged_items.push_back(ancestor);
+            ancestor = ancestor->get_parent().lock();
+        }
+        hovered->for_each_child<erhe::Hierarchy>(
+            [this](erhe::Hierarchy& descendant) -> bool {
+                descendant.enable_flag_bits(erhe::Item_flags::ancestor_hovered_in_graph);
+                m_graph_hover_flagged_items.push_back(
+                    std::static_pointer_cast<erhe::Hierarchy>(descendant.shared_from_this())
+                );
+                return true;
+            }
+        );
+    }
+    m_graph_hover_flagged_node   = hovered;
+    m_graph_hover_flagged_serial = erhe::get_item_mutation_serial();
 }
 
 void Geometry_graph_window::set_node_previews_enabled(const bool enabled)
@@ -1176,6 +1246,10 @@ void Geometry_graph_window::imgui()
     node_background_context_menu(*m_node_editor.get());
 
     m_node_editor->End();
+
+    // Graph-hover -> scene highlight: capture which scene node the hovered
+    // graph node references (flags applied from update_evaluation()).
+    record_canvas_hover();
 
     // Interactive node resizing (edge / corner drags): adopt the dragged
     // size into the node's requested extent.

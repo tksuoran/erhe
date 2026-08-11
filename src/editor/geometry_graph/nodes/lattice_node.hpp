@@ -58,6 +58,9 @@ public:
     // Binds the driver node and captures its transform (main thread; null clears).
     void set_transform_node(const std::shared_ptr<erhe::scene::Node>& node);
 
+    // The resolved driver (graph-hover -> scene highlight).
+    [[nodiscard]] auto get_referenced_scene_node() const -> std::shared_ptr<erhe::scene::Node> override;
+
 private:
     // Main-thread lazy resolution of the stored driver key (scene_local
     // misses do not latch; update_live doubles as the per-frame retry).

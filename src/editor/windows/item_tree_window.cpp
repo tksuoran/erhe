@@ -944,7 +944,11 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
         m_shift_down_range_selection_started = false;
     }
 
-    if (item->is_hovered() || hovered_in_folded_subtree) {
+    // Graph hovering highlights like viewport hovering: the geometry graph
+    // window maintains Item_flags::hovered_in_graph on the scene node
+    // referenced by the hovered graph node (plus child/ancestor companions).
+    const bool hovered_in_graph = erhe::utility::test_bit_set(item->get_flag_bits(), erhe::Item_flags::hovered_in_graph);
+    if (item->is_hovered() || hovered_in_graph || hovered_in_folded_subtree) {
         const ImVec2 rect_min = ImGui::GetItemRectMin();
         const ImVec2 rect_max = ImGui::GetItemRectMax();
         const ImRect rect{rect_min, rect_max};
@@ -1368,11 +1372,16 @@ void Item_tree::imgui_row(const Flat_row& row)
                 ERHE_PROFILE_SCOPE("update");
                 // A closed row hides its subtree, so when the viewport-hovered
                 // node is inside (descendant_hovered_in_viewport, maintained
-                // by Hover_tool), this row is its closest visible ancestor and
+                // by Hover_tool) - or the graph-hovered node is
+                // (child_hovered_in_graph, maintained by the geometry graph
+                // window) - this row is its closest visible ancestor and
                 // takes over the hover highlight.
                 const bool hovered_in_folded_subtree =
                     !is_open &&
-                    erhe::utility::test_bit_set(row.item->get_flag_bits(), erhe::Item_flags::descendant_hovered_in_viewport);
+                    erhe::utility::test_any_rhs_bits_set(
+                        row.item->get_flag_bits(),
+                        erhe::Item_flags::descendant_hovered_in_viewport | erhe::Item_flags::child_hovered_in_graph
+                    );
                 item_update_selection(row.item, hovered_in_folded_subtree);
             }
         }

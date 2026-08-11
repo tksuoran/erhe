@@ -14,6 +14,7 @@
 namespace ax::NodeEditor { class EditorContext; }
 namespace erhe::graphics { class Texture; }
 namespace erhe::primitive { class Primitive; }
+namespace erhe::scene { class Node; }
 namespace erhe::scene_renderer { class Mesh_memory; }
 
 namespace editor {
@@ -95,6 +96,12 @@ public:
     // re-captures its transform-driver scene node's transform and marks
     // itself dirty when the node moved. Must be cheap; default no-op.
     virtual void update_live() {}
+
+    // The scene node this graph node references, if any (a resolved
+    // transform driver - Transform_from_node, Lattice_node). Main thread,
+    // live nodes only; used by the graph editor's hover -> scene highlight
+    // (Item_flags::hovered_in_graph and friends).
+    [[nodiscard]] virtual auto get_referenced_scene_node() const -> std::shared_ptr<erhe::scene::Node> { return {}; }
 
     // Evaluation-snapshot hooks (Geometry_graph_window::launch_evaluation).
     // prepare_for_evaluation() runs on the LIVE node on the main thread just
