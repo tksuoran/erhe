@@ -29,8 +29,10 @@ tree garden = 28 Finnish species via lsystem_trees.py, sail ships =
 CSG-carved convex-hull hulls + FFD-billowed sails, rockfall =
 physics-settled rock piles + staged cairn under the manual clock,
 fish = geometry-graph body box->lattice->subdivide + CSG-forked tail,
-dolphin = SCENE-OP organic body: box->catmull_clark->lattice parts
-welded by one csg union + extra CC, see csg_hulls.md).
+dolphin = organic body as ONE editable geometry graph: per-part
+box->subdivide->lattice chains, Transform-posed (quaternion mode),
+Join + single Boolean union + final subdivide, see csg_hulls.md +
+geometry_graph_sculpt.md).
 Look at the two or three most recent scripts before writing a new one -
 they carry the current idioms.
 

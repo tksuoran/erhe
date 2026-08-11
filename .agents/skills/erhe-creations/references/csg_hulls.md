@@ -3,8 +3,10 @@
 Boolean carving, authored convex-hull silhouettes and lattice (FFD)
 deformation. New tools 2026-08-09; creation 16 (sail ships) is the
 reference implementation. Creation 19 (dolphin) is the reference for
-ORGANIC UNION bodies: box -> catmull_clark -> lattice parts placed in
-final relative pose, welded with one csg union, extra CC on the result.
+ORGANIC UNION bodies - now built as ONE editable geometry graph (per
+part box -> subdivide -> lattice, Transform-posed, Join -> Boolean
+union -> final subdivide -> Output); the scene-op form (csg union of
+lattice-sculpted parts) is in its git history (26ac7567).
 
 - **Organic union bodies (creation 19 lessons, 2026-08-11)**:
   - Catmull-Clark of the CSG's TRIANGULATED output weaves the
@@ -29,6 +31,19 @@ final relative pose, welded with one csg union, extra CC on the result.
     rotation when the blade is symmetric in its thin axis: droop
     theta about X on one side pairs with (180 - theta) on the other
     (the mesh tip is ALWAYS local +Z), yaw sign follows the side.
+  - GRAPH EQUIVALENCE (verified in code, 2026-08-11): the scene csg
+    op merges ALL tools into one rhs geometry then runs ONE binary
+    boolean - the graph's multi-input Join node is exactly that
+    merge, so Join(tools) -> Boolean.B == csg tool_node_ids in one
+    pass. The boolean backend (run_mesh_boolean_operation) converts
+    to double precision internally, so graph and scene-op booleans
+    are equally robust. In the graph, the final `subdivide`
+    regenerates smooth vertex normals - no zero-offset-lattice
+    normals pass needed. The Transform node has a QUATERNION
+    rotation mode (rotation_mode 1 + rotation_quaternion [x,y,z,w],
+    0e854feb) for poses authored as quats. Graph edit cost: each
+    lattice tweak re-runs the union (~50k tris) + final subdivide,
+    ~a second, evaluated async in the background.
 
 - **`c.csg(target, tools, operation)`** (union / intersection /
   difference, WORLD-space composed): the result REPLACES the target
