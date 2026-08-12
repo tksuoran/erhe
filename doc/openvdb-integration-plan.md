@@ -25,10 +25,11 @@ to be planned in detail.
 
 ## Background / findings (2026-08-12)
 
-- Local clones: `D:\openvdb` (upstream master), `D:\PicoGKRuntime` (LEAP71's
-  ~2.5k-line C++ layer over OpenVDB; useful as a *recipe book* for level-set
-  conventions -- GRID_LEVEL_SET class, narrow band 3 voxels, uniform linear
-  transform -- not as a dependency).
+- Reference material (clone locations are machine-local; see
+  memory-bank/local): the upstream openvdb repository, and LEAP71's
+  PicoGKRuntime (a ~2.5k-line C++ layer over OpenVDB; useful as a *recipe
+  book* for level-set conventions -- GRID_LEVEL_SET class, narrow band 3
+  voxels, uniform linear transform -- not as a dependency).
 - **Minimal OpenVDB core dependency set** (verified against upstream CMake):
   - **TBB -- mandatory** (`find_package(TBB REQUIRED)` in
     `openvdb/openvdb/CMakeLists.txt`).
@@ -138,18 +139,44 @@ Detail to be firmed up when Phase 1 lands; intended scope:
   that voxelizes the selected mesh and re-meshes it into the scene --
   MCP-verifiable end to end.
 
-## Phase 3 -- SDF in geometry-graph nodes (plan in detail later)
+## Phase 3 -- SDF in geometry-graph nodes
 
-- New pin/value type in the geometry graph: SDF grid
-  (`src/editor/geometry_graph/`), following the existing node-factory and
-  payload patterns; grids are immutable payloads (copy-on-write via deep
-  copy) to fit the shadow-clone async evaluation model.
-- Node set (initial): SDF primitives (sphere/box/capsule), voxelize
-  (mesh->SDF), boolean (union/subtract/intersect), offset, smooth,
-  mesh (SDF->mesh, feeding the existing mesh output path).
-- Voxel size / narrow band as node parameters with sane defaults.
-- Undo/serialization: decide whether grids serialize with the graph
-  (`.vdb` blobs) or are always re-evaluated; leaning re-evaluate.
+Design (2026-08-12, as implemented):
+
+- Payload: `Geometry_pin_key::sdf` (= 11) + variant alternative
+  `std::shared_ptr<erhe::voxel::Grid>` in `Geometry_payload`. The header is
+  unconditional (`Grid` is forward-declarable thanks to the pimpl); only the
+  accumulate path in geometry_payload.cpp is `#if ERHE_VOXEL_LIBRARY_OPENVDB`
+  guarded. Multi-link accumulation on sdf pins = union into a new grid
+  (mismatched voxel sizes keep the first value). Grids on pins are immutable
+  by convention (operation nodes deep-copy), and are never serialized --
+  always re-evaluated from parameters.
+- Nodes (`geometry_graph/nodes/sdf_nodes.{hpp,cpp}`, compiled only when the
+  option is on; factory names in parens): SDF Sphere (`sdf_sphere`),
+  SDF Capsule (`sdf_capsule`), Voxelize (`voxelize`, geometry -> sdf),
+  SDF Mesh (`sdf_mesh`, sdf -> geometry via volumeToMesh + adaptivity,
+  runs process_for_graph), SDF Boolean (`sdf_boolean`,
+  union/intersection/difference; voxel-size mismatch passes input a through
+  and shows a warning), SDF Offset (`sdf_offset`), SDF Smooth (`sdf_smooth`).
+  Creator nodes own a voxel-size parameter (`Sdf_create_parameters`);
+  operation nodes inherit the resolution of their input grid.
+- Registration: factory + "SDF" palette category + orchid pin color, all
+  `#if`-guarded; editor CMakeLists adds the sources and links erhe::voxel
+  only when `ERHE_VOXEL_LIBRARY=openvdb`.
+- Threading: grids flow only through payloads, so the shadow-clone snapshot
+  model needs no extra hooks; OpenVDB ops are safe on the evaluation worker.
+
+Deferred within Phase 3:
+
+- SDF box primitive node (sphere/capsule landed first).
+- Narrow band width as a node parameter (fixed at 3 voxels for now).
+- Resampling to combine grids of mismatched voxel sizes.
+- KNOWN DEBT -- cross-build asset compatibility: a graph asset containing
+  sdf nodes fails to load in an `ERHE_VOXEL_LIBRARY=none` build, and the
+  unknown-node-type policy in read_graph_asset_json drops the WHOLE graph
+  (not just the sdf nodes). Needs a placeholder-node or skip-with-warning
+  policy in graph serialization (the same issue exists generically for
+  assets from newer editors carrying node types older builds lack).
 
 ## Phase 4+ -- later ideas (unplanned)
 
