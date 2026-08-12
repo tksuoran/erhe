@@ -197,12 +197,12 @@ void Grid::to_geometry(erhe::geometry::Geometry& destination, const float adapti
     );
 
     GEO::Mesh& mesh = destination.get_mesh();
-    mesh.vertices.create_vertices(static_cast<GEO::index_t>(points.size()));
+    const GEO::index_t base_vertex = mesh.vertices.create_vertices(static_cast<GEO::index_t>(points.size()));
     for (std::size_t i = 0; i < points.size(); ++i) {
         const openvdb::Vec3s& p = points[i];
         erhe::geometry::set_pointf(
             mesh.vertices,
-            static_cast<GEO::index_t>(i),
+            base_vertex + static_cast<GEO::index_t>(i),
             GEO::vec3f{p.x(), p.y(), p.z()}
         );
     }
@@ -212,17 +212,17 @@ void Grid::to_geometry(erhe::geometry::Geometry& destination, const float adapti
     // counter-clockwise-out convention (same flip PicoGK applies).
     for (const openvdb::Vec3I& triangle : triangles) {
         mesh.facets.create_triangle(
-            static_cast<GEO::index_t>(triangle[2]),
-            static_cast<GEO::index_t>(triangle[1]),
-            static_cast<GEO::index_t>(triangle[0])
+            base_vertex + static_cast<GEO::index_t>(triangle[2]),
+            base_vertex + static_cast<GEO::index_t>(triangle[1]),
+            base_vertex + static_cast<GEO::index_t>(triangle[0])
         );
     }
     for (const openvdb::Vec4I& quad : quads) {
         mesh.facets.create_quad(
-            static_cast<GEO::index_t>(quad[3]),
-            static_cast<GEO::index_t>(quad[2]),
-            static_cast<GEO::index_t>(quad[1]),
-            static_cast<GEO::index_t>(quad[0])
+            base_vertex + static_cast<GEO::index_t>(quad[3]),
+            base_vertex + static_cast<GEO::index_t>(quad[2]),
+            base_vertex + static_cast<GEO::index_t>(quad[1]),
+            base_vertex + static_cast<GEO::index_t>(quad[0])
         );
     }
     mesh.facets.connect();
