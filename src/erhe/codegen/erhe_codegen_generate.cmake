@@ -33,6 +33,55 @@ set(ERHE_PYTHON3_EXECUTABLE "${Python3_EXECUTABLE}" CACHE INTERNAL "Python3 inte
 # AND adds a build-time custom command that re-runs when .py files change.
 # Extra definition directories are loaded for StructRef/EnumRef resolution
 # but their types are NOT generated into the output directory.
+# Usage:
+#   erhe_codegen_source_settings(<file> ...)
+#
+# Marks erhe_codegen output as GENERATED and, on MSVC, compiles the generated
+# translation units unoptimized and without the shared precompiled header.
+#
+# The generated serialization units are long straight-line JSON glue plus a
+# large static Field_info table per struct. MSVC's optimizer cost grows
+# super-linearly in that shape: at /O2 a single 2500-line unit
+# (transform_tool_config.cpp) took 4m04s to compile, and five such units made
+# up 8 minutes of a 13m30s full rebuild -- a serial tail with 21 of 24 cores
+# idle. The code runs only when a config is loaded or saved, so optimizing it
+# buys nothing measurable. /Od took the editor target from ~11 min to ~2m20s.
+#
+# SKIP_PRECOMPILE_HEADERS is required rather than cosmetic: erhe_pch is built
+# at /O2, and MSVC answers a mismatched optimization level in a unit that
+# consumes that PCH with C4653 "current command-line option ignored" -- the
+# /Od is silently dropped, and /WX turns the warning into a hard error. The
+# generated units include little beyond their own headers and simdjson, so
+# losing the PCH costs them very little (62 config units compile in 19s).
+#
+# Call this from the directory that COMPILES the files: source file properties
+# are directory-scoped, and several libraries generate serialization .cpp that
+# is compiled in a consuming target's directory instead (see the
+# "compiles in the editor" notes at those call sites).
+function(erhe_codegen_source_settings)
+    set_source_files_properties(${ARGN} PROPERTIES GENERATED TRUE)
+
+    if (NOT MSVC)
+        return()
+    endif()
+
+    # Headers appear in these lists too; compile options belong on the units.
+    set(_translation_units "")
+    foreach (_file IN LISTS ARGN)
+        if (_file MATCHES "\\.(c|cc|cpp|cxx)$")
+            list(APPEND _translation_units "${_file}")
+        endif()
+    endforeach()
+
+    if (_translation_units)
+        set_source_files_properties(
+            ${_translation_units} PROPERTIES
+            COMPILE_OPTIONS         "/Od"
+            SKIP_PRECOMPILE_HEADERS TRUE
+        )
+    endif()
+endfunction()
+
 function(erhe_codegen_generate)
     cmake_parse_arguments(ARG "" "TARGET;DEFINITIONS_DIR;OUTPUT_DIR" "DEFINITIONS;OUTPUTS;EXTRA_DEFINITIONS_DIRS" ${ARGN})
 

@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Text_renderer_config",
+    reflect=True,
     version=1,
     short_desc="",
     long_desc="",

@@ -135,6 +135,7 @@ struct("Inventory_slot",
 )
 
 struct("Inventory_config",
+    reflect=True,
     version=1,
     short_desc="Inventory",
     long_desc="Inventory and hotbar layout configuration",

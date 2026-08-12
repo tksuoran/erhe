@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Load_config",
+    reflect=True,
     version=1,
     short_desc="Loading",
     long_desc="glTF import/open performance options.",

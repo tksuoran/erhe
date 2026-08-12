@@ -7,7 +7,6 @@
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
-#include "config/generated/editor_settings_config_serialization.hpp"
 #include "editor_log.hpp"
 #include "editor_settings_store.hpp"
 #include "grid/grid.hpp"

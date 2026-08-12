@@ -80,7 +80,7 @@ set(_gfx_ser_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_gfx_ser_sources})
 target_sources(${_target} PRIVATE ${_gfx_ser_sources})
 source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
@@ -89,7 +89,7 @@ set(_scene_renderer_ser_sources
     ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
     ${_scene_renderer_gen}/mesh_memory_config.cpp
 )
-set_source_files_properties(${_scene_renderer_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_scene_renderer_ser_sources})
 target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
@@ -110,7 +110,7 @@ set(_rt_ser_sources
     ${_rt_config_out}/rendering_test_settings_serialization.hpp
     ${_rt_config_out}/rendering_test_settings.cpp
 )
-set_source_files_properties(${_rt_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_rt_ser_sources})
 target_sources(${_target} PRIVATE ${_rt_ser_sources})
 source_group("codegen generated/rendering_test" FILES ${_rt_ser_sources})
 

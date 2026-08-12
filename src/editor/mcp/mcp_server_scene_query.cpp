@@ -1,35 +1,85 @@
 // Mcp_server scene query tools (scenes, nodes, cameras, lights, materials, textures, brushes, selection, undo/redo, async status).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "app_settings.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "brushes/brush.hpp"
+#include "brushes/brush_placement.hpp"
+#include "content_library/content_library.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/graph_mesh.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
 #include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
+#include "rendergraph/shadow_render_node.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
+#include "scene/node_joint.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
+#include "scene/scene_root.hpp"
+#include "scene/shadow_fit_debug.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "tools/bone_visualization.hpp"
+#include "tools/mesh_component_selection.hpp"
+#include "tools/selection_tool.hpp"
+#include "transform/transform_tool.hpp"
 #include "windows/viewport_window.hpp"
 
+#include "config/generated/editor_settings_config.hpp"
+
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_math/aabb.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_raytrace/iinstance.hpp"
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_raytrace/ray.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/mesh_raytrace.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 #include <geogram/mesh/mesh.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "scene/generated/scene_settings_serialization.hpp"
 

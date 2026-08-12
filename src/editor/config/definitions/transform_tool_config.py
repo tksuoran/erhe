@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Transform_tool_config",
+    reflect=True,
     version=24,
     short_desc="Transform Tool",
     long_desc="",

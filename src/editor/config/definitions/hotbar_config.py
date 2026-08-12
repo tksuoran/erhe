@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Hotbar_config",
+    reflect=True,
     version=4,
     short_desc="Hotbar",
     long_desc="",

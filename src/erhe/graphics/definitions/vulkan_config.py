@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Vulkan_config",
+    reflect=True,
     version=2,
     short_desc="Vulkan-specific Graphics Settings",
     long_desc="Debug overrides for the Vulkan backend.",

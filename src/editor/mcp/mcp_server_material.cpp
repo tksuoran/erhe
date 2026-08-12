@@ -1,11 +1,38 @@
 // Mcp_server material editing tool (edit_material and its field / texture-slot helpers).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "content_library/content_library.hpp"
+#include "operations/material_change_operation.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
+#include "texture_graph/graph_texture.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/texture.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace editor {
 

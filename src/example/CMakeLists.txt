@@ -86,7 +86,7 @@ set(_example_codegen_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-set_source_files_properties(${_example_codegen_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_example_codegen_sources})
 target_sources(${_target} PRIVATE ${_example_codegen_sources})
 source_group("codegen generated" FILES ${_example_codegen_sources})
 
@@ -95,7 +95,7 @@ set(_scene_renderer_ser_sources
     ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
     ${_scene_renderer_gen}/mesh_memory_config.cpp
 )
-set_source_files_properties(${_scene_renderer_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_scene_renderer_ser_sources})
 target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 

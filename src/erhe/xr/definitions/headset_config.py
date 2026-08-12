@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Headset_config",
+    reflect=True,
     version=2,
     short_desc="Virtual Reality Headset",
     long_desc="",

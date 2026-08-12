@@ -1,13 +1,61 @@
 // Mcp_server graph tools (geometry graph, graph textures / meshes, texture graph).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "app_scenes.hpp"
+#include "content_library/content_library.hpp"
+#include "geometry_graph/geometry_graph.hpp"
+#include "geometry_graph/geometry_graph_mesh.hpp"
+#include "geometry_graph/geometry_graph_node.hpp"
 #include "geometry_graph/geometry_graph_operations.hpp"
+#include "geometry_graph/geometry_graph_window.hpp"
+#include "geometry_graph/graph_mesh.hpp"
 #include "graph/node_properties.hpp"
 #include "graph_editor/graph_link_routing.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
+#include "texture_graph/graph_texture.hpp"
+#include "texture_graph/texture_graph.hpp"
+#include "texture_graph/texture_graph_compose.hpp"
+#include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_graph_window.hpp"
+#include "texture_graph/texture_payload.hpp"
+#include "texture_graph/texture_renderer.hpp"
+#include "texture_graph/nodes/texture_material_output_node.hpp"
+#include "texture_graph/nodes/texture_node_descriptors.hpp"
+#include "windows/editor_windows.hpp"
 
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_graph/link.hpp"
+#include "erhe_graph/pin.hpp"
+#include "erhe_graphics/image_writer.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_node_editor.h"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_texgen/composer.hpp"
+#include "erhe_texgen/shader_code.hpp"
+
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <span>
+#include <string>
+#include <system_error>
+#include <variant>
+#include <vector>
 
 #if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
 #   include "erhe_voxel/voxel.hpp"

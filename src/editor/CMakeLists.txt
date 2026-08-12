@@ -23,6 +23,7 @@ erhe_target_sources_grouped(
     config/editor/erhe_graphics.json
     config/editor/graphics_presets.json
     config/editor/logging.json
+    config/editor/mcp_tools.json
     config/editor/mesh_memory.json
     config/editor/openxr_commands.json
     config/editor/openxr_windows.json
@@ -315,6 +316,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_physics.cpp
     mcp/mcp_server_scene_action.cpp
     mcp/mcp_server_scene_query.cpp
+    mcp/mcp_server_shared.cpp
     mcp/mcp_server_shared.hpp
     mcp/mcp_server_tool_list.cpp
     operations/ambient_light_operation.cpp
@@ -704,7 +706,7 @@ erhe_codegen_generate(
         "${_codegen_defs}/lightmap_tile_override.py"
         "${_codegen_defs}/scene_settings.py"
 )
-set_source_files_properties(${_codegen_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_codegen_sources})
 target_sources(${_target} PRIVATE ${_codegen_sources})
 source_group("codegen generated/scene" FILES ${_codegen_sources})
 
@@ -897,7 +899,7 @@ erhe_codegen_generate(
         "${_scene_renderer_defs}:erhe_scene_renderer/generated/"
         "${_xr_config_defs}:erhe_xr/generated/"
 )
-set_source_files_properties(${_config_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_config_sources})
 target_sources(${_target} PRIVATE ${_config_sources})
 source_group("codegen generated/config" FILES ${_config_sources})
 
@@ -914,7 +916,7 @@ set(_gfx_ser_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_gfx_ser_sources})
 target_sources(${_target} PRIVATE ${_gfx_ser_sources})
 source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 
@@ -923,7 +925,7 @@ set(_renderer_ser_sources
     ${_renderer_gen}/visualization_mode.hpp
     ${_renderer_gen}/visualization_mode.cpp
 )
-set_source_files_properties(${_renderer_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_renderer_ser_sources})
 target_sources(${_target} PRIVATE ${_renderer_ser_sources})
 source_group("codegen generated/renderer" FILES ${_renderer_ser_sources})
 
@@ -934,7 +936,7 @@ set(_scene_renderer_ser_sources
     ${_scene_renderer_gen}/mesh_memory_config_serialization.hpp
     ${_scene_renderer_gen}/mesh_memory_config.cpp
 )
-set_source_files_properties(${_scene_renderer_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_scene_renderer_ser_sources})
 target_sources(${_target} PRIVATE ${_scene_renderer_ser_sources})
 source_group("codegen generated/scene_renderer" FILES ${_scene_renderer_ser_sources})
 
@@ -945,7 +947,7 @@ set(_xr_ser_sources
     ${_xr_gen}/perf_settings_level.cpp
     ${_xr_gen}/foveation_level.cpp
 )
-set_source_files_properties(${_xr_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_xr_ser_sources})
 target_sources(${_target} PRIVATE ${_xr_ser_sources})
 source_group("codegen generated/xr" FILES ${_xr_ser_sources})
 

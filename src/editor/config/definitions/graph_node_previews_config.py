@@ -8,6 +8,7 @@ from erhe_codegen import *
 # node's preview; it pauses while the preview is being drag-rotated
 # (arcball) and resumes after.
 struct("Graph_node_previews_config",
+    reflect=True,
     version=1,
     short_desc="Graph Node Previews",
     long_desc="Geometry graph per-node mesh preview thumbnails",

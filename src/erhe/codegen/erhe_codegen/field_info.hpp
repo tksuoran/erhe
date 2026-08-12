@@ -64,6 +64,16 @@ struct Enum_info
     std::span<const Enum_value_info> values;
 };
 
+// Runtime reflection for a single field, consumed by the generic config UI
+// (editor::add_config_section / editor::imgui_field).
+//
+// Every member here must have a reader. Members that carried no reader were
+// removed: `added_in` (the generator already resolves versioning when it emits
+// deserialize), `path` (emitted empty for all 789 fields in the tree),
+// `default_value`, and the `is_numeric` / `is_enum` predicates -- the latter
+// two are derivable from `field_type` and `enum_info` respectively, so storing
+// them per field only invited the two to disagree. Add a member back together
+// with the code that reads it.
 struct Field_info
 {
     const char*      name;
@@ -71,15 +81,10 @@ struct Field_info
     Field_type       field_type;
     std::size_t      offset;
     std::size_t      size;
-    uint32_t         added_in;
     uint32_t         removed_in;
     const char*      short_desc;
     const char*      long_desc;
-    const char*      path;
-    const char*      default_value;
     Numeric_limits   numeric_limits;
-    bool             is_numeric;
-    bool             is_enum;
     bool             visible;
     bool             developer;
     const Enum_info* enum_info;
@@ -88,9 +93,7 @@ struct Field_info
 struct Struct_info
 {
     const char*                     name;
-    uint32_t                        version;
     const char*                     short_desc;
-    const char*                     long_desc;
     bool                            developer;
     std::span<const Field_info>     fields;
 };

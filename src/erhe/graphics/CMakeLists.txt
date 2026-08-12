@@ -420,7 +420,7 @@ set(_gfx_config_hpps
     ${_gfx_config_out}/vulkan_config.hpp
     ${_gfx_config_out}/metal_config.hpp
 )
-set_source_files_properties(${_gfx_config_hpps} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_gfx_config_hpps})
 target_sources(${_target} PRIVATE ${_gfx_config_hpps})
 source_group("codegen generated" FILES ${_gfx_config_hpps})
 

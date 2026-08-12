@@ -9,6 +9,7 @@ from erhe_codegen import *
 # Negative line / point widths are in screen-space pixels and do not scale by
 # distance.
 struct("Render_style_appearance",
+    reflect=True,
     version=1,
     short_desc="Render Style Appearance",
     long_desc="Editor-global colors, widths and color sources for a render style",

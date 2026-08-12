@@ -59,7 +59,7 @@ erhe_codegen_generate(
 )
 
 # Only the enum header -- serialize/deserialize .cpp compiles in the editor
-set_source_files_properties(${_renderer_gen}/visualization_mode.hpp PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_renderer_gen}/visualization_mode.hpp)
 target_sources(${_target} PRIVATE ${_renderer_gen}/visualization_mode.hpp)
 source_group("codegen generated" FILES ${_renderer_gen}/visualization_mode.hpp)
 

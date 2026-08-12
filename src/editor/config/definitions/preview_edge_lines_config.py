@@ -9,6 +9,7 @@ from erhe_codegen import *
 # the toggle is inert). Two instances live in Editor_settings_config:
 # graph_node_preview_edge_lines and brush_preview_edge_lines.
 struct("Preview_edge_lines_config",
+    reflect=True,
     version=1,
     short_desc="Preview Edge Lines",
     long_desc="Edge-line overlay for preview thumbnails (solid-wireframe pass over the polygon fill)",

@@ -79,8 +79,19 @@ def _is_enum_field(t: TypeBase) -> bool:
 
 
 def _numeric_limits_code(f: FieldSchema, indent: str) -> str:
-    """Generate Numeric_limits initializer."""
-    if not _is_numeric(f.type):
+    """Generate Numeric_limits initializer.
+
+    Only fields that actually declare a bound get the spelled-out initializer.
+    A numeric field with no bounds is value-initialized exactly like a
+    non-numeric one: of 306 numeric fields in the tree only 6 declare any
+    limit, so emitting the full eight-member block for the other 300 cost
+    ~2700 lines of generated code that said nothing.
+    """
+    declares_limit = (
+        f.ui_min is not None or f.ui_max is not None
+        or f.hard_min is not None or f.hard_max is not None
+    )
+    if not _is_numeric(f.type) or not declares_limit:
         return f"{indent}.numeric_limits = {{}},"
 
     parts = []
@@ -138,15 +149,10 @@ def emit_struct_reflect(s: StructSchema) -> str:
         lines.append(f"        .field_type    = {_field_type_enum(f.type)},")
         lines.append(f"        .offset        = offsetof({s.name}, {f.name}),")
         lines.append(f"        .size          = sizeof({_cpp_type_name(f.type)}),")
-        lines.append(f"        .added_in      = {f.added_in},")
         lines.append(f"        .removed_in    = {f.removed_in if f.removed_in is not None else 0},")
         lines.append(f"        .short_desc    = {_c_string_literal(f.short_desc)},")
         lines.append(f"        .long_desc     = {_c_string_literal(f.long_desc)},")
-        lines.append(f"        .path          = {_c_string_literal(f.path)},")
-        lines.append(f"        .default_value = {_c_string_literal(f.default)},")
         lines.append(_numeric_limits_code(f, "        "))
-        lines.append(f"        .is_numeric    = {'true' if _is_numeric(f.type) else 'false'},")
-        lines.append(f"        .is_enum       = {'true' if _is_enum_field(f.type) else 'false'},")
         lines.append(f"        .visible       = {'true' if f.visible else 'false'},")
         lines.append(f"        .developer     = {'true' if f.developer else 'false'},")
         lines.append(f"        .enum_info     = {_enum_info_ptr(f.type)},")
@@ -158,9 +164,7 @@ def emit_struct_reflect(s: StructSchema) -> str:
     # Struct_info
     lines.append(f"static const erhe::codegen::Struct_info {snake}_struct_info = {{")
     lines.append(f"    .name       = \"{s.name}\",")
-    lines.append(f"    .version    = {s.version},")
     lines.append(f"    .short_desc = {_c_string_literal(s.short_desc)},")
-    lines.append(f"    .long_desc  = {_c_string_literal(s.long_desc)},")
     lines.append(f"    .developer  = {'true' if s.developer else 'false'},")
     lines.append(f"    .fields     = {snake}_fields,")
     lines.append("};")

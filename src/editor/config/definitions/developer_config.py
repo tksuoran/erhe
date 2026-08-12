@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Developer_config",
+    reflect=True,
     version=1,
     short_desc="Developer",
     long_desc="",

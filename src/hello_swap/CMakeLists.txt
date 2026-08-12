@@ -31,7 +31,7 @@ set(_gfx_ser_sources
     ${_gfx_gen}/metal_config_serialization.hpp
     ${_gfx_gen}/metal_config.cpp
 )
-set_source_files_properties(${_gfx_ser_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_gfx_ser_sources})
 target_sources(${_target} PRIVATE ${_gfx_ser_sources})
 source_group("codegen generated/graphics" FILES ${_gfx_ser_sources})
 

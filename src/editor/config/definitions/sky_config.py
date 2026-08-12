@@ -4,6 +4,7 @@ from erhe_codegen import *
 # physically-based atmosphere (sky_atmosphere.frag).
 # Defaults match the previously hardcoded shader values.
 struct("Sky_config",
+    reflect=True,
     version=3,
     short_desc="Sky",
     long_desc="Sky shader settings",

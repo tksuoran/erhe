@@ -1,23 +1,44 @@
 // Mcp_server lifecycle, HTTP routing, JSON-RPC handling and tool dispatch.
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/ray_trace_config.hpp"
+#include "editor_log.hpp"
+#include "operations/operation_stack.hpp"
 #include "renderers/ray_trace_renderer.hpp"
+#include "scene/scene_root.hpp"
 
+#include "erhe_commands/commands.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
 
+#include <httplib.h>
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <future>
 #include <iterator>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <span>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace editor {
 
@@ -25,19 +46,6 @@ using namespace mcp_server_detail;
 
 namespace {
 
-// Name -> handler dispatch table type (the table itself lives inside
-// Mcp_server::dispatch_tool_call(), which has access to the private
-// handler members). A table, not an if/else-if chain: MSVC counts each
-// else-if as a nested block and aborts with C1061 ("blocks nested too
-// deeply") once the tool count passes its limit (~120).
-using Tool_handler = auto (Mcp_server::*)(const nlohmann::json&) -> std::string;
-
-class Tool_dispatch_entry
-{
-public:
-    const char*  name;
-    Tool_handler handler;
-};
 
 } // anonymous namespace
 
@@ -90,6 +98,7 @@ void Mcp_server::start()
     log_mcp->info("MCP server: starting on port {}", m_port);
 
     refresh_tool_list();
+    validate_tool_list_against_dispatch();
 
     // Bind the preferred port, falling back through up to k_port_retry_count-1
     // successors (e.g. 8080..8099) when it is already in use. This matters on
@@ -426,12 +435,10 @@ auto Mcp_server::process_queued_requests() -> int
     return count;
 }
 
-auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& arguments) -> std::string
+auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispatch_entry>
 {
     // Member-function-local: the handlers are private members, so their
-    // addresses can only be taken from inside the class. A table, not an
-    // if/else-if chain: MSVC counts each else-if as a nested block and
-    // aborts with C1061 once the tool count passes its limit (~120).
+    // addresses can only be taken from inside the class.
     static constexpr Tool_dispatch_entry c_tool_dispatch[] = {
         { "batch",                          &Mcp_server::action_batch                         },
         { "list_scenes",                    &Mcp_server::query_list_scenes                    },
@@ -618,11 +625,18 @@ auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& ar
         { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
         { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
     };
-    for (const Tool_dispatch_entry& entry : c_tool_dispatch) {
+    return c_tool_dispatch;
+}
+
+auto Mcp_server::dispatch_tool_call(const std::string& tool_name, const json& arguments) -> std::string
+{
+    for (const Tool_dispatch_entry& entry : get_dispatch_table()) {
         if (tool_name == entry.name) {
             return (this->*entry.handler)(arguments);
         }
     }
+    // Not a statically dispatched tool: the remaining tools are the editor
+    // commands refresh_tool_list() appends at runtime.
     return execute_command(tool_name);
 }
 

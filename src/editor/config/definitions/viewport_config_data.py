@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Viewport_config_data",
+    reflect=True,
     version=1,
     short_desc="Default Viewport",
     long_desc="Fallback default Visual Style for new scene viewports. Used only when config/editor/default_viewport_config.json is absent; once a viewport has its own Visual Style (edited from its toolbar Visual Style popup) that per-view style overrides these values.",

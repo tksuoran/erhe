@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Graphics_config",
+    reflect=True,
     version=1,
     short_desc="Graphics Settings",
     long_desc="",

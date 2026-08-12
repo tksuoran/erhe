@@ -22,7 +22,7 @@ set(_generated_sources
     ${_codegen_out}/demo_slot_serialization.hpp
     ${_codegen_out}/demo_slot.cpp
 )
-set_source_files_properties(${_generated_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_generated_sources})
 target_sources(${_target} PRIVATE ${_generated_sources})
 
 target_include_directories(${_target}

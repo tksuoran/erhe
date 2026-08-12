@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -104,6 +105,28 @@ private:
     auto handle_error     (const std::string& id, int code, const std::string& message) -> std::string;
 
     void refresh_tool_list();
+
+    // Name -> handler dispatch table. A table, not an if/else-if chain: MSVC
+    // counts each else-if as a nested block and aborts with C1061 ("blocks
+    // nested too deeply") once the tool count passes its limit (~120).
+    //
+    // Nested in the class (rather than file-local in mcp_server.cpp) so that
+    // the table's initializer can take the addresses of the private handler
+    // members, while refresh_tool_list() in another translation unit can still
+    // read the names to check them against config/editor/mcp_tools.json.
+    class Tool_dispatch_entry
+    {
+    public:
+        const char* name;
+        auto (Mcp_server::*handler)(const nlohmann::json&) -> std::string;
+    };
+    [[nodiscard]] static auto get_dispatch_table() -> std::span<const Tool_dispatch_entry>;
+
+    // Logs any disagreement between the advertised static tool list and the
+    // dispatch table. Advertising a tool with no handler is not fatal (the
+    // call falls through to execute_command() and reports an error), but it
+    // means the JSON and the handlers have drifted apart.
+    void validate_tool_list_against_dispatch();
 
     // Query handlers (run on main thread)
     auto find_scene             (const std::string& name) -> Scene_root*;

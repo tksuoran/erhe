@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Physics_config",
+    reflect=True,
     version=2,
     short_desc="Physics",
     long_desc="",

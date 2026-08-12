@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Scene_config",
+    reflect=True,
     version=1,
     short_desc="Default Scene Configuration",
     long_desc="Used to configure Default Scene",

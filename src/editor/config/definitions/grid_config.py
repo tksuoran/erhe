@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Grid_config",
+    reflect=True,
     version=3,
     short_desc="Grid",
     long_desc="",

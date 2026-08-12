@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Window_config",
+    reflect=True,
     version=3,
     short_desc="",
     long_desc="",

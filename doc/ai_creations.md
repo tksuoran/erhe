@@ -42,7 +42,7 @@ editor subsystems                  scene graph, brushes, geometry,
   (`src/editor/mcp/mcp_server.{hpp,cpp}`, tool implementations split
   into `mcp_server_scene_query.cpp`, `mcp_server_scene_action.cpp`,
   `mcp_server_physics.cpp`, `mcp_server_graphs.cpp`, and friends;
-  schemas in `mcp_server_tool_list.cpp`). It listens on
+  schemas in `config/editor/mcp_tools.json`). It listens on
   `127.0.0.1:8080` (fallback scan to 8100), runs on a background
   thread, and queues every call to the main thread - so it can drive a
   *running* editor safely, windowed or headless.
@@ -457,9 +457,12 @@ geometry-node sculpture built from a different Conway operator chain
   `references/{vegetation,physics_rigs,csg_hulls,settling_rock_piles,blades_sweep}.md`.
 - `AGENTS.md` "In-editor MCP server" + repo-root `mcp_server_usage.md` -
   server transport, ports, auth, headless vs windowed, Quest forwarding.
-- `src/editor/mcp/mcp_server_tool_list.cpp` - the full tool schema
-  (181 tools as of 2026-08-10); `scripts/mcp_call.py --list` against a
-  running editor prints the live list.
+- `config/editor/mcp_tools.json` - the full tool schema, loaded at
+  runtime (184 built-in tools as of 2026-08-12; the editor commands are
+  added on top at runtime by `mcp_server_tool_list.cpp`). Editing a
+  description here needs only an editor restart, not a rebuild;
+  `scripts/mcp_call.py --list` against a running editor prints the live
+  list.
 - `scripts/creations/common.py` - the client API described above.
 - [erhe YouTube playlist](https://youtube.com/playlist?list=PLkxdzwaNHiJZVrlre-Y_LBxCzZaOObH9N) -
   video recordings.

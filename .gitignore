@@ -15,6 +15,7 @@ claude.sh
 .mcp.json
 .lsai/
 build_ninja_win_vulkan
+build_ninja_win_vulkan_release
 build_ninja_win_clang
 erhe_cmake_profiling.json
 **/__pycache__/

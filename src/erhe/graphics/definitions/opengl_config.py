@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Opengl_config",
+    reflect=True,
     version=1,
     short_desc="OpenGL-specific Graphics Settings",
     long_desc="Debug overrides for the OpenGL backend.",

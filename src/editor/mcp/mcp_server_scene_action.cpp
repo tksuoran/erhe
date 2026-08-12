@@ -1,13 +1,29 @@
 // Mcp_server scene action tools (select, transform, brush, shapes, nodes, lights, cameras, reparent, lock, tags).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "app_settings.hpp"
+#include "brushes/brush.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "content_library/content_library.hpp"
+#include "create/create_box.hpp"
+#include "create/create_capsule.hpp"
+#include "create/create_cone.hpp"
+#include "create/create_torus.hpp"
+#include "create/create_uv_sphere.hpp"
+#include "geometry_graph/geometry_graph_node.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_static_subtree_operation.hpp"
 #include "operations/node_transform_operation.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/operations_window.hpp"
 #include "time.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -16,28 +32,59 @@
 #include "windows/lightmap_window.hpp"
 #include "windows/viewport_config_window.hpp"
 #include "windows/viewport_window.hpp"
+#include "scene/attachment_types.hpp"
 #include "scene/generated/scene_settings_serialization.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/scene_commands.hpp"
+#include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
+#include "tools/selection_tool.hpp"
+#include "transform/transform_tool.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/make_atlas.hpp"
 #include "erhe_geometry/shapes/convex_hull.hpp"
 #include "erhe_geometry/shapes/disc.hpp"
 #include "erhe_geometry/shapes/regular_polygon.hpp"
 #include "erhe_geometry/shapes/regular_polyhedron.hpp"
 #include "erhe_geometry/shapes/sweep.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <simdjson.h>
 
 #include <fmt/format.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <filesystem>
 #include <iterator>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <set>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace editor {
 
@@ -1617,7 +1664,7 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
     // NOT on a capsule (which takes bottom_radius / top_radius), so a global
     // allowlist would not catch the cross-shape traps this check exists for.
     // Keep in sync with the parsing below and the create_shape tool schema
-    // (mcp_server_tool_list.cpp).
+    // (config/editor/mcp_tools.json).
     {
         const Key_list creation_keys{"shape", "instance", "add_brush"};
         Key_list geometry_keys{};

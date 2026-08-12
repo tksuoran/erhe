@@ -2,17 +2,34 @@
 // Animation window / Animation_player, and edit keyframes (undoable).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
 #include "animation/animation_edit.hpp"
 #include "animation/animation_keying.hpp"
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
+#include "app_context.hpp"
+#include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
+#include "content_library/content_library.hpp"
 #include "operations/animation_edit_operation.hpp"
 #include "operations/content_library_attach_operation.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "scene/scene_root.hpp"
+#include "tools/selection_tool.hpp"
 
+#include "erhe_item/item.hpp"
 #include "erhe_scene/animation.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <nlohmann/json.hpp>
+
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace editor {
 

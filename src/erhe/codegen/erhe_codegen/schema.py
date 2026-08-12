@@ -121,6 +121,7 @@ class StructSchema:
         long_desc: Optional[str] = None,
         developer: bool = False,
         omit_defaults: bool = False,
+        reflect: bool = False,
     ):
         self.name = name
         self.fields = fields
@@ -128,6 +129,13 @@ class StructSchema:
         self.short_desc = short_desc
         self.long_desc = long_desc
         self.developer = developer
+        # When True, emit the runtime reflection tables (Field_info[] /
+        # Struct_info) plus get_fields() / get_struct_info(). Only structs the
+        # generic config UI renders need them -- see erhe_codegen_source_settings
+        # in erhe_codegen_generate.cmake for why the volume matters. Forgetting
+        # the flag on a struct that the UI does render is a compile error at the
+        # add_config_section<T> instantiation, not a silent behaviour change.
+        self.reflect = reflect
         # When True, serialize() skips any field whose value equals its current default
         # (and absent fields keep their member-initializer default on deserialize).
         self.omit_defaults = omit_defaults
@@ -230,10 +238,11 @@ def struct(
     long_desc: Optional[str] = None,
     developer: bool = False,
     omit_defaults: bool = False,
+    reflect: bool = False,
     fields: list[FieldSchema],
 ) -> StructSchema:
     """Register a struct definition."""
-    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer, omit_defaults=omit_defaults)
+    schema = StructSchema(name, fields, version=version, short_desc=short_desc, long_desc=long_desc, developer=developer, omit_defaults=omit_defaults, reflect=reflect)
     _validate_struct(schema)
     _struct_registry[name] = schema
     return schema

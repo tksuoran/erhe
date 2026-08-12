@@ -61,7 +61,7 @@ set(_xr_config_hpps
     ${_xr_config_out}/perf_settings_level.hpp
     ${_xr_config_out}/foveation_level.hpp
 )
-set_source_files_properties(${_xr_config_hpps} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_xr_config_hpps})
 target_sources(${_target} PRIVATE ${_xr_config_hpps})
 source_group("codegen generated" FILES ${_xr_config_hpps})
 

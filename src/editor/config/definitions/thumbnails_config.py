@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Thumbnails_config",
+    reflect=True,
     version=1,
     short_desc="",
     long_desc="",

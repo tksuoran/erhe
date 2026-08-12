@@ -469,9 +469,10 @@ def emit_struct_cpp(s: StructSchema) -> str:
     lines.append("}")
     lines.append("")
 
-    # --- Reflection ---
-    from erhe_codegen.emit_reflect import emit_struct_reflect
-    lines.append(emit_struct_reflect(s))
+    # --- Reflection (opt-in: struct(..., reflect=True)) ---
+    if s.reflect:
+        from erhe_codegen.emit_reflect import emit_struct_reflect
+        lines.append(emit_struct_reflect(s))
 
     if needs_guard:
         lines.append("#if defined(__GNUC__) || defined(__clang__)")

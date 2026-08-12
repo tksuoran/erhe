@@ -86,12 +86,12 @@ erhe_codegen_generate(
 )
 
 # Only the enum header -- serialize/deserialize .cpp compiles in the editor
-set_source_files_properties(${_scene_renderer_gen}/primitive_color_source.hpp PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_scene_renderer_gen}/primitive_color_source.hpp)
 target_sources(${_target} PRIVATE ${_scene_renderer_gen}/primitive_color_source.hpp)
 source_group("codegen generated" FILES ${_scene_renderer_gen}/primitive_color_source.hpp)
 
 # Mesh_memory_config struct -- header only here, serialization .cpp compiles in the editor
-set_source_files_properties(${_scene_renderer_gen}/mesh_memory_config.hpp PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_scene_renderer_gen}/mesh_memory_config.hpp)
 target_sources(${_target} PRIVATE ${_scene_renderer_gen}/mesh_memory_config.hpp)
 source_group("codegen generated" FILES ${_scene_renderer_gen}/mesh_memory_config.hpp)
 

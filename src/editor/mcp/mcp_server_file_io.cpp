@@ -1,17 +1,38 @@
 // Mcp_server file I/O tools (save/load scene, glTF export/import, screenshot capture).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "app_scenes.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_extensions_export.hpp"
+#include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
+#include "scene/scene_root.hpp"
 
+#include "erhe_dataformat/dataformat.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_graphics/image_writer.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_primitive/build_info.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
+
+#include <cstddef>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <vector>
 
 namespace editor {
 

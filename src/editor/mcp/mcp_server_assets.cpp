@@ -5,15 +5,31 @@
 // R3) drives the tool-held Asset_references the same way.
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
 #include "assets/asset_key.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference.hpp"
 #include "assets/asset_workflow.hpp"
+#include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
+#include "content_library/content_library.hpp"
+#include "scene/scene_root.hpp"
 #include "tools/material_paint_tool.hpp"
 #include "windows/inventory_window.hpp"
+
+#include "erhe_item/item.hpp"
+#include "erhe_primitive/material.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <nlohmann/json.hpp>
+
+#include <filesystem>
+#include <memory>
+#include <mutex>
+#include <string>
 
 namespace editor {
 

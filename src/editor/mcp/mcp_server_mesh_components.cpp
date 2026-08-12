@@ -1,9 +1,58 @@
 // Mcp_server mesh component tools (component selection, geometry ops, transform modes).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "app_scenes.hpp"
+#include "app_settings.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/mesh_transform_mode.hpp"
+#include "geometry_graph/geometry_graph_node.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "operations/operations_window.hpp"
+#include "operations/set_edge_sharpness_operation.hpp"
+#include "renderers/id_renderer.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/scene_root.hpp"
+#include "tools/mesh_component_selection.hpp"
+#include "tools/mesh_component_selection_tool.hpp"
+#include "tools/selection_tool.hpp"
+#include "transform/transform_tool.hpp"
+#include "transform/transform_tool_settings.hpp"
+
+#include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/operation/lattice_deform.hpp"
+#include "erhe_geometry/operation/project_texcoords.hpp"
+#include "erhe_item/item.hpp"
+#include "erhe_math/math_util.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+#include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
+
 #include <fmt/format.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
 
 namespace editor {
 

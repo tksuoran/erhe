@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Mesh_component_style",
+    reflect=True,
     version=1,
     short_desc="Mesh Component Style",
     long_desc="Visual style for mesh component (vertex / edge / face) selection",

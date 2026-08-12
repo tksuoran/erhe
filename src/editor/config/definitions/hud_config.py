@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Hud_config",
+    reflect=True,
     version=2,
     short_desc="HUD",
     long_desc="HUD is intended for Virtual Reality - It can show ImGui UI in VR surface",

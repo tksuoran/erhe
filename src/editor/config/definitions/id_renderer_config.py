@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Id_renderer_config",
+    reflect=True,
     version=2,
     short_desc="ID Renderer",
     long_desc="",

@@ -1,9 +1,36 @@
 // Mcp_server physics tools (bodies, joints, materials, collision filters, joint settings).
 // Split out of mcp_server.cpp; shares helpers via mcp_server_shared.hpp.
 
+#include "mcp/mcp_server.hpp"
 #include "mcp/mcp_server_shared.hpp"
 
+#include "app_context.hpp"
+#include "content_library/content_library.hpp"
+#include "operations/item_insert_remove_operation.hpp"
+#include "operations/operation_stack.hpp"
+#include "scene/node_joint.hpp"
+#include "scene/node_physics.hpp"
+#include "scene/physics_edits.hpp"
+#include "scene/scene_commands.hpp"
+#include "scene/scene_root.hpp"
+
+#include "erhe_math/math_util.hpp"
+#include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/icollision_shape.hpp"
+#include "erhe_physics/irigid_body.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
+
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
+
+#include <cstddef>
+#include <memory>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace editor {
 

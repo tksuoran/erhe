@@ -99,7 +99,7 @@ erhe_codegen_generate(
     OUTPUT_DIR      "${_imgui_gen}"
     OUTPUTS         ${_imgui_codegen_sources}
 )
-set_source_files_properties(${_imgui_codegen_sources} PROPERTIES GENERATED TRUE)
+erhe_codegen_source_settings(${_imgui_codegen_sources})
 target_sources(${_target} PRIVATE ${_imgui_codegen_sources})
 source_group("codegen generated" FILES ${_imgui_codegen_sources})
 

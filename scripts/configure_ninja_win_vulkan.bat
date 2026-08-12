@@ -1,6 +1,47 @@
 @echo off
 setlocal
 
+rem Usage:
+rem   configure_ninja_win_vulkan.bat [Debug|Release] [extra cmake args...]
+rem
+rem Ninja is a single-configuration generator, so the build type is baked into
+rem the build directory at configure time and each configuration needs its own:
+rem
+rem   Debug   (default) -> build_ninja_win_vulkan
+rem   Release           -> build_ninja_win_vulkan_release
+rem
+rem Everything that is not the configuration keyword is forwarded to cmake, in
+rem the same position %* held before -- i.e. before this script's own -D
+rem options, which therefore still win on a conflict (cmake takes the last
+rem value given for a repeated -D). Same convention as the other configure
+rem scripts here.
+
+set "ERHE_CONFIG=Debug"
+set "ERHE_BUILD_DIR=build_ninja_win_vulkan"
+set "ERHE_EXTRA_ARGS="
+
+:parse_args
+if "%~1"=="" goto args_parsed
+if /i "%~1"=="Debug" (
+    set "ERHE_CONFIG=Debug"
+    set "ERHE_BUILD_DIR=build_ninja_win_vulkan"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="Release" (
+    set "ERHE_CONFIG=Release"
+    set "ERHE_BUILD_DIR=build_ninja_win_vulkan_release"
+    shift
+    goto parse_args
+)
+rem %1 rather than %~1: keep any quoting the caller used around -D values.
+set "ERHE_EXTRA_ARGS=%ERHE_EXTRA_ARGS% %1"
+shift
+goto parse_args
+:args_parsed
+
+echo Configuring %ERHE_CONFIG% build in %ERHE_BUILD_DIR%
+
 rem Locate VS 2026 (v18) with the C++ toolset via vswhere, the official
 rem edition- and install-path-independent locator shipped by the VS installer.
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -27,12 +68,12 @@ if errorlevel 1 exit /b 1
 
 cmake ^
  -G Ninja ^
- -B build_ninja_win_vulkan ^
+ -B %ERHE_BUILD_DIR% ^
  -S . ^
  -Wno-dev ^
- -DCMAKE_BUILD_TYPE=Debug ^
+ -DCMAKE_BUILD_TYPE=%ERHE_CONFIG% ^
  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ^
- %* ^
+ %ERHE_EXTRA_ARGS% ^
  -DERHE_USE_PRECOMPILED_HEADERS=ON ^
  -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
  -DERHE_GLTF_LIBRARY=fastgltf ^
@@ -44,6 +85,7 @@ cmake ^
  -DERHE_RAYTRACE_LIBRARY=bvh ^
  -DERHE_SVG_LIBRARY=plutosvg ^
  -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
+ -DERHE_VOXEL_LIBRARY=openvdb ^
  -DERHE_WINDOW_LIBRARY=sdl ^
  -DERHE_XR_LIBRARY=openxr ^
  -DERHE_USE_ASAN:BOOL=OFF ^

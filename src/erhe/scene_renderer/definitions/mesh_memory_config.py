@@ -1,6 +1,7 @@
 from erhe_codegen import *
 
 struct("Mesh_memory_config",
+    reflect=True,
     version=1,
     short_desc="Mesh Memory",
     long_desc="",

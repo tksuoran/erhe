@@ -7,6 +7,7 @@ from erhe_codegen import *
 # High color / width at Frequency. Negative widths are constant screen-space
 # pixel widths.
 struct("Selection_outline_style",
+    reflect=True,
     version=1,
     short_desc="Selection Outline",
     long_desc="Editor-global appearance of the selection outline highlight",

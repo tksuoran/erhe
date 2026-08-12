@@ -10,6 +10,7 @@ from erhe_codegen import *
 # flatter but more predictable), so both are kept and chosen here. Defaults match
 # the Content_wide_line_renderer member defaults.
 struct("Content_edge_lines_config",
+    reflect=True,
     version=2,
     short_desc="Content Edge Lines",
     long_desc="Editor-global content edge-line (wide-line) method and bias tuning",

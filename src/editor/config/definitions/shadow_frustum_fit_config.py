@@ -6,6 +6,7 @@ from erhe_codegen import *
 # defaults match the C++ member defaults: with all tightening steps off the
 # fit is identical to the legacy stable bounding-sphere fit.
 struct("Shadow_frustum_fit_config",
+    reflect=True,
     version=2,
     short_desc="Shadow Frustum Fit",
     long_desc="Directional light shadow frustum fitting settings",
