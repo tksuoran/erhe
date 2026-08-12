@@ -42,6 +42,13 @@ void Mesh::update_rt_primitives()
             );
         }
     }
+    // Freshly created instances default to the identity transform and are
+    // uncommitted; seed them with the node's current world transform (and
+    // commit) the same way a node move would. Without this, swapping
+    // primitives on an already-placed node (e.g. a geometry graph re-bake)
+    // leaves the raytrace instances at the origin - hover / picking misses
+    // the mesh until the node next moves.
+    handle_node_transform_update();
 }
 
 void Mesh::add_primitive(
