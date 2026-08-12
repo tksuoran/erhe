@@ -16,8 +16,12 @@ redirection + GEOGRAM_WITH_TBB + smoke gtest, 2/2 pass in
 build_vs2026_vulkan_openvdb Release; default configs verified untouched).
 Note learned in Phase 1: OpenVDB *master* has regressed to
 CMAKE_SOURCE_DIR-relative CMake paths and cannot be add_subdirectory'd --
-stay on release tags (v13.0.0). Phase 2 in outline below, later phases
-sketched only (to be planned in detail as we go).
+stay on release tags (v13.0.0). **Phase 2 DONE 2026-08-12** (commit
+b850bf57: erhe_voxel wrapper library with pimpl Grid type, mesh<->SDF
+conversions vs erhe::geometry::Geometry, primitives/CSG/offset/smooth,
+8/8 tests pass; the optional MCP-op stretch goal was not done -- editor
+linkage comes with Phase 3). Next: Phase 3 (SDF in geometry-graph nodes),
+to be planned in detail.
 
 ## Background / findings (2026-08-12)
 
