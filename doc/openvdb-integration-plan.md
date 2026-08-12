@@ -1,11 +1,11 @@
 # OpenVDB integration plan
 
-Goal: SDF (signed distance field) support in erhe geometry-graph nodes — SDF
-primitives, voxel booleans/offsets/smoothing, mesh↔SDF conversion — built on
+Goal: SDF (signed distance field) support in erhe geometry-graph nodes -- SDF
+primitives, voxel booleans/offsets/smoothing, mesh<->SDF conversion -- built on
 OpenVDB, introduced incrementally behind a CMake option.
 
 Decision (2026-08-12): **full OpenVDB core from Phase 1** ("Route A").
-Every dependency we will need later is included from the start — notably
+Every dependency we will need later is included from the start -- notably
 TBB, which is mandatory for OpenVDB core. No NanoVDB-only interim step.
 Once TBB is in the dependency set, it becomes a shared erhe facility usable
 by other libraries that support it (Geogram has `GEOGRAM_WITH_TBB`).
@@ -15,7 +15,7 @@ oneTBB v2022.3.0 + OpenVDB v13.0.0 static core + find_package(TBB)
 redirection + GEOGRAM_WITH_TBB + smoke gtest, 2/2 pass in
 build_vs2026_vulkan_openvdb Release; default configs verified untouched).
 Note learned in Phase 1: OpenVDB *master* has regressed to
-CMAKE_SOURCE_DIR-relative CMake paths and cannot be add_subdirectory'd —
+CMAKE_SOURCE_DIR-relative CMake paths and cannot be add_subdirectory'd --
 stay on release tags (v13.0.0). Phase 2 in outline below, later phases
 sketched only (to be planned in detail as we go).
 
@@ -23,23 +23,23 @@ sketched only (to be planned in detail as we go).
 
 - Local clones: `D:\openvdb` (upstream master), `D:\PicoGKRuntime` (LEAP71's
   ~2.5k-line C++ layer over OpenVDB; useful as a *recipe book* for level-set
-  conventions — GRID_LEVEL_SET class, narrow band 3 voxels, uniform linear
-  transform — not as a dependency).
+  conventions -- GRID_LEVEL_SET class, narrow band 3 voxels, uniform linear
+  transform -- not as a dependency).
 - **Minimal OpenVDB core dependency set** (verified against upstream CMake):
-  - **TBB — mandatory** (`find_package(TBB REQUIRED)` in
+  - **TBB -- mandatory** (`find_package(TBB REQUIRED)` in
     `openvdb/openvdb/CMakeLists.txt`).
-  - **Boost — NOT needed** when `OPENVDB_USE_DELAYED_LOADING=OFF`
+  - **Boost -- NOT needed** when `OPENVDB_USE_DELAYED_LOADING=OFF`
     (the `Boost::iostreams` requirement is inside that guard).
-  - **Blosc/ZLib — optional** (`USE_BLOSC=OFF USE_ZLIB=OFF`): only affects
+  - **Blosc/ZLib -- optional** (`USE_BLOSC=OFF USE_ZLIB=OFF`): only affects
     `.vdb` file compression; files written uncompressed remain valid.
-  - Imath half — optional (`USE_IMATH_HALF=OFF` uses internal half type).
+  - Imath half -- optional (`USE_IMATH_HALF=OFF` uses internal half type).
 - Geogram (already an erhe dependency via CPM, tksuoran fork) has
   `GEOGRAM_WITH_TBB`, and its `cmake/onetbb.cmake` begins with
-  `if(TARGET TBB::tbb)` — it adopts an externally provided TBB target
+  `if(TARGET TBB::tbb)` -- it adopts an externally provided TBB target
   instead of fetching its own. So one CPM-provided `TBB::tbb` can serve
   both OpenVDB and Geogram.
 - NanoVDB lives in the same repo (`nanovdb/nanovdb`, header-only) and can be
-  enabled later at zero dependency cost (`OPENVDB_BUILD_NANOVDB=ON`) — of
+  enabled later at zero dependency cost (`OPENVDB_BUILD_NANOVDB=ON`) -- of
   interest for GPU-side SDF sampling (PNanoVDB.h in shaders), not needed
   for the CPU pipeline.
 - Recast (2.5D span heightfields) and Geogram (has signed-distance
@@ -50,9 +50,9 @@ sketched only (to be planned in detail as we go).
   `set_option(ERHE_*_LIBRARY ...)` selector strings, one `CPMAddPackage` per
   dependency in the top-level `CMakeLists.txt`, thin `erhe_*` wrapper libs
   under `src/erhe/`.
-- License: OpenVDB is Apache-2.0; oneTBB is Apache-2.0 — fine for erhe.
+- License: OpenVDB is Apache-2.0; oneTBB is Apache-2.0 -- fine for erhe.
 
-## Phase 1 — CMake option: OpenVDB core + TBB, full final dependency set
+## Phase 1 -- CMake option: OpenVDB core + TBB, full final dependency set
 
 Deliverable: `ERHE_VOXEL_LIBRARY` option; when `openvdb`, static OpenVDB
 core + TBB build as part of erhe, and a smoke gtest proves the core tools
@@ -68,7 +68,7 @@ impact on existing builds.
    - Integration wrinkle to solve here: upstream OpenVDB calls
      `find_package(TBB REQUIRED)` rather than checking for an existing
      target. Candidate fixes, in preference order:
-     (a) CMake ≥3.24 `FetchContent` find_package redirection
+     (a) CMake >=3.24 `FetchContent` find_package redirection
          (`OVERRIDE_FIND_PACKAGE` / `CMAKE_FIND_PACKAGE_REDIRECTS_DIR`
          with a tiny `TBBConfig` shim that just asserts the target exists);
      (b) point `TBB_DIR` at oneTBB's build-tree export;
@@ -78,7 +78,7 @@ impact on existing builds.
    upstream CMake (`add_subdirectory` through CPM `OPTIONS`):
    - `OPENVDB_BUILD_CORE=ON`, `OPENVDB_CORE_SHARED=OFF`,
      `OPENVDB_CORE_STATIC=ON` (static lib; consumers need
-     `OPENVDB_STATICLIB` define — upstream target usage requirements
+     `OPENVDB_STATICLIB` define -- upstream target usage requirements
      should handle this, verify on MSVC),
    - `OPENVDB_BUILD_BINARIES=OFF`, `OPENVDB_BUILD_UNITTESTS=OFF`,
    - `OPENVDB_USE_DELAYED_LOADING=OFF` (drops Boost),
@@ -96,22 +96,22 @@ impact on existing builds.
    the option is on:
    - `openvdb::initialize()`,
    - `tools::createLevelSetSphere`, sample known distances
-     (center clamped to background, surface ≈ 0, outside positive),
+     (center clamped to background, surface ~ 0, outside positive),
    - one `csgUnion` of two spheres + `volumeToMesh` producing a nonzero
-     triangle count — proves the exact tool set the end goal needs, and
+     triangle count -- proves the exact tool set the end goal needs, and
      exercises TBB's thread pool.
 7. Build verification per repo convention: `build_vs2026_vulkan`-style
    configure with the option ON, plus one existing configuration with it
    OFF to prove zero impact. MSVC first, then ninja/clang. Watch: OpenVDB
    header-heaviness (`/bigobj` may be needed on MSVC for the smoke TU),
    warnings suppressed via `SYSTEM` includes. Android/Quest build cost is
-   accepted later — the option stays `none` there until needed.
+   accepted later -- the option stays `none` there until needed.
 
 Commits: (1) TBB + find_package redirection plumbing, (2) OpenVDB package +
-option + defines, (3) smoke test, (4) `GEOGRAM_WITH_TBB` enablement —
+option + defines, (3) smoke test, (4) `GEOGRAM_WITH_TBB` enablement --
 each built and tested before commit (split-commit convention).
 
-## Phase 2 — do something minimal but real with it
+## Phase 2 -- do something minimal but real with it
 
 Deliverable: a small `erhe_voxel` static library (`src/erhe/voxel/`)
 wrapping OpenVDB behind erhe-style types, still no geometry-graph coupling.
@@ -122,32 +122,32 @@ Detail to be firmed up when Phase 1 lands; intended scope:
   configurable narrow band, default 3), exposes voxel size, bbox, memory
   usage, sampling.
 - Conversions using erhe's own geometry types:
-  mesh→SDF (`tools::meshToLevelSet`) and SDF→mesh (`tools::volumeToMesh`
+  mesh->SDF (`tools::meshToLevelSet`) and SDF->mesh (`tools::volumeToMesh`
   + quad split), converting to/from `erhe::geometry::Geometry`.
 - Level-set primitives (sphere, tapered capsule via `LevelSetTubes.h`),
-  grid CSG (union/subtract/intersect), `LevelSetFilter` offset/smooth —
+  grid CSG (union/subtract/intersect), `LevelSetFilter` offset/smooth --
   each a thin wrapper, mirroring `PicoGKVdbVoxels.h` recipes.
 - gtests: mesh round-trip (voxelize a box, mesh it back, sane bbox/volume),
   CSG identities, offset grows/shrinks measured volume
   (`tools::levelSetVolume`).
 - Optional stretch (proves editor linkage, not required): an MCP debug op
-  that voxelizes the selected mesh and re-meshes it into the scene —
+  that voxelizes the selected mesh and re-meshes it into the scene --
   MCP-verifiable end to end.
 
-## Phase 3 — SDF in geometry-graph nodes (plan in detail later)
+## Phase 3 -- SDF in geometry-graph nodes (plan in detail later)
 
 - New pin/value type in the geometry graph: SDF grid
   (`src/editor/geometry_graph/`), following the existing node-factory and
   payload patterns; grids are immutable payloads (copy-on-write via deep
   copy) to fit the shadow-clone async evaluation model.
 - Node set (initial): SDF primitives (sphere/box/capsule), voxelize
-  (mesh→SDF), boolean (union/subtract/intersect), offset, smooth,
-  mesh (SDF→mesh, feeding the existing mesh output path).
+  (mesh->SDF), boolean (union/subtract/intersect), offset, smooth,
+  mesh (SDF->mesh, feeding the existing mesh output path).
 - Voxel size / narrow band as node parameters with sane defaults.
 - Undo/serialization: decide whether grids serialize with the graph
   (`.vdb` blobs) or are always re-evaluated; leaning re-evaluate.
 
-## Phase 4+ — later ideas (unplanned)
+## Phase 4+ -- later ideas (unplanned)
 
 - Implicit-function node (expression/texgen-driven SDF into a grid,
   cf. PicoGK `RenderImplicit`).
