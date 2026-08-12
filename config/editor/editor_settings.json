@@ -408,7 +408,7 @@
             }
         }
     ],
-    "developer": { "enable": true },
+    "developer": { "enable": false },
     "grid": {
         "_version": 3,
         "snap_enabled": true,
