@@ -6,7 +6,13 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.7.3'
+        // 8.13.x is the newest AGP that still supports the legacy variant API
+        // (applicationVariants.all, used by app/build.gradle for asset and
+        // jniLibs staging) and Gradle 8.x. AGP 8.7.3's bundled lint crashes on
+        // JDK 25 - the JDK Android Studio now bundles - failing every release
+        // build in lintVitalAnalyze with a bare "> 25.0.2". Moving to AGP 9.x
+        // additionally requires Gradle 9.5 and a rewrite onto androidComponents.
+        classpath 'com.android.tools.build:gradle:8.13.2'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

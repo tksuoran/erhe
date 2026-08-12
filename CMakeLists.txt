@@ -540,7 +540,7 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     # onto the desired upstream ref, push the branch plus a snapshot tag,
     # then run "py -3 scripts/update_sdl.py". See doc/android.md, section
     # "Updating SDL".
-    set(ERHE_SDL_GIT_TAG "e3ecf679bf00793c9e0768b816fb86fb6d24a1e1")
+    set(ERHE_SDL_GIT_TAG "25f9daced52394e5f5eea8d4fd19e9a1d0835e07")
     CPMAddPackage(
         NAME              sdl
         GIT_TAG           ${ERHE_SDL_GIT_TAG}

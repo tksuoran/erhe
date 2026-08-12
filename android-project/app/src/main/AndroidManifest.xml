@@ -60,15 +60,11 @@
     <!-- Allow access to the vibrator -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Internet permission. Required by the in-editor MCP server
-         (src/editor/mcp/mcp_server.cpp), which binds a loopback TCP port
-         (default 127.0.0.1:8080, reached on device via `adb forward`).
-         Android gates ALL socket creation - even loopback - behind this
-         permission: an app not in the AID_INET group gets EACCES from
-         socket()/bind() on every port, which is why the MCP server's
-         20-port fallback reported "failed to bind any port" on Quest
-         until this was granted. -->
+    <!-- Allow access to Internet -->
+    <!-- if you want to connect to the network or internet, uncomment this. -->
+    <!--
     <uses-permission android:name="android.permission.INTERNET" />
+    -->
 
     <!-- ErheActivity is erhe's SDLActivity subclass (see
          app/src/main/java/org/libsdl/app/ErheActivity.java). It overrides
@@ -79,7 +75,7 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:theme="@style/AppTheme"
-        android:enableOnBackInvokedCallback="false"
+        android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true" >
 
         <!-- SDL3's Java shim dlopen()s the shared library named here. The
