@@ -10,8 +10,14 @@ TBB, which is mandatory for OpenVDB core. No NanoVDB-only interim step.
 Once TBB is in the dependency set, it becomes a shared erhe facility usable
 by other libraries that support it (Geogram has `GEOGRAM_WITH_TBB`).
 
-Status: Phase 1 planned in detail, Phase 2 in outline, later phases sketched
-only (to be planned in detail as we go).
+Status: **Phase 1 DONE 2026-08-12** (commits ba13d048 + 56571fbb: option +
+oneTBB v2022.3.0 + OpenVDB v13.0.0 static core + find_package(TBB)
+redirection + GEOGRAM_WITH_TBB + smoke gtest, 2/2 pass in
+build_vs2026_vulkan_openvdb Release; default configs verified untouched).
+Note learned in Phase 1: OpenVDB *master* has regressed to
+CMAKE_SOURCE_DIR-relative CMake paths and cannot be add_subdirectory'd —
+stay on release tags (v13.0.0). Phase 2 in outline below, later phases
+sketched only (to be planned in detail as we go).
 
 ## Background / findings (2026-08-12)
 
