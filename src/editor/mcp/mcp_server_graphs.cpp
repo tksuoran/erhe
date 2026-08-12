@@ -9,6 +9,10 @@
 
 #include "erhe_imgui/imgui_node_editor.h"
 
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+#   include "erhe_voxel/voxel.hpp"
+#endif
+
 namespace editor {
 
 using namespace mcp_server_detail;
@@ -56,6 +60,16 @@ namespace {
         const glm::vec3 v = payload.get_vec3();
         return json{{"type", "vec3"}, {"value", {v.x, v.y, v.z}}};
     }
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+    const std::shared_ptr<erhe::voxel::Grid> sdf = payload.get_sdf();
+    if (sdf) {
+        return json{
+            {"type",               "sdf"},
+            {"active_voxel_count", sdf->get_active_voxel_count()},
+            {"voxel_size",         sdf->get_voxel_size()}
+        };
+    }
+#endif
     if (!payload.has_value()) {
         return json{{"type", "empty"}};
     }

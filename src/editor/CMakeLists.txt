@@ -645,6 +645,15 @@ if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 
+if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
+    erhe_target_sources_grouped(
+        ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+        geometry_graph/nodes/sdf_nodes.cpp
+        geometry_graph/nodes/sdf_nodes.hpp
+    )
+    target_link_libraries(${_target} PRIVATE erhe::voxel)
+endif ()
+
 if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()

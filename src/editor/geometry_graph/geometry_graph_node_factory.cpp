@@ -16,6 +16,9 @@
 #include "geometry_graph/nodes/mesh_sphere_node.hpp"
 #include "geometry_graph/nodes/mesh_torus_node.hpp"
 #include "geometry_graph/nodes/passthrough_node.hpp"
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+#   include "geometry_graph/nodes/sdf_nodes.hpp"
+#endif
 #include "geometry_graph/nodes/subdivide_node.hpp"
 #include "geometry_graph/nodes/transform_from_node.hpp"
 #include "geometry_graph/nodes/transform_node.hpp"
@@ -63,6 +66,15 @@ auto make_geometry_graph_node(App_context& context, const std::string& type_name
     else if (type_name == "group_input")  { node = std::make_shared<Group_input_node    >(); }
     else if (type_name == "group_output") { node = std::make_shared<Group_output_node   >(); }
     else if (type_name == "group")        { node = std::make_shared<Group_node          >(context); }
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+    else if (type_name == "sdf_sphere")   { node = std::make_shared<Sdf_sphere_node       >(); }
+    else if (type_name == "sdf_capsule")  { node = std::make_shared<Sdf_capsule_node      >(); }
+    else if (type_name == "voxelize")     { node = std::make_shared<Sdf_from_geometry_node>(); }
+    else if (type_name == "sdf_mesh")     { node = std::make_shared<Sdf_to_geometry_node  >(); }
+    else if (type_name == "sdf_boolean")  { node = std::make_shared<Sdf_boolean_node      >(); }
+    else if (type_name == "sdf_offset")   { node = std::make_shared<Sdf_offset_node       >(); }
+    else if (type_name == "sdf_smooth")   { node = std::make_shared<Sdf_smooth_node       >(); }
+#endif
     if (!node) {
         // Per-operator Conway types ("conway_ambo" ... "conway_gyro").
         for (const Conway_node::Operation_info& info : Conway_node::c_operation_infos) {

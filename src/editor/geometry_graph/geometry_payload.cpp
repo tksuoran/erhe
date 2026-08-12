@@ -4,6 +4,10 @@
 
 #include "erhe_geometry/geometry.hpp"
 
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+#   include "erhe_voxel/voxel.hpp"
+#endif
+
 namespace editor {
 
 auto Geometry_payload::has_value() const -> bool
@@ -69,6 +73,12 @@ auto Geometry_payload::get_instances() const -> std::shared_ptr<Geometry_instanc
 {
     const std::shared_ptr<Geometry_instances>* instances = std::get_if<std::shared_ptr<Geometry_instances>>(&value);
     return (instances != nullptr) ? *instances : std::shared_ptr<Geometry_instances>{};
+}
+
+auto Geometry_payload::get_sdf() const -> std::shared_ptr<erhe::voxel::Grid>
+{
+    const std::shared_ptr<erhe::voxel::Grid>* sdf = std::get_if<std::shared_ptr<erhe::voxel::Grid>>(&value);
+    return (sdf != nullptr) ? *sdf : std::shared_ptr<erhe::voxel::Grid>{};
 }
 
 auto Geometry_instances::instance_count() const -> std::size_t
@@ -181,7 +191,30 @@ auto Geometry_payload::operator+=(const Geometry_payload& rhs) -> Geometry_paylo
         return *this;
     }
 
-    // Other types (bool, mat4, material): keep the first connected value.
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+    if (std::holds_alternative<std::shared_ptr<erhe::voxel::Grid>>(value) &&
+        std::holds_alternative<std::shared_ptr<erhe::voxel::Grid>>(rhs.value)
+    ) {
+        // Union into a new grid; neither input is modified. Grids with
+        // mismatched voxel sizes cannot be combined - keep the first.
+        const std::shared_ptr<erhe::voxel::Grid> lhs_sdf = get_sdf();
+        const std::shared_ptr<erhe::voxel::Grid> rhs_sdf = rhs.get_sdf();
+        if (!lhs_sdf) {
+            value = rhs.value;
+            return *this;
+        }
+        if (!rhs_sdf || (lhs_sdf->get_voxel_size() != rhs_sdf->get_voxel_size())) {
+            return *this;
+        }
+        std::shared_ptr<erhe::voxel::Grid> combined = std::make_shared<erhe::voxel::Grid>(*lhs_sdf.get());
+        combined->union_with(*rhs_sdf.get());
+        value = combined;
+        return *this;
+    }
+#endif
+
+    // Other types (bool, mat4, material; SDF grids without voxel support):
+    // keep the first connected value.
     return *this;
 }
 

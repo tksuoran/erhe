@@ -527,6 +527,20 @@ void Geometry_graph_window::build_palette()
                 Palette_entry{.type_name = "boolean", .label = "Boolean"}
             }
         },
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+        Palette_category{
+            .name    = "SDF",
+            .entries = {
+                Palette_entry{.type_name = "sdf_sphere",  .label = "SDF Sphere"},
+                Palette_entry{.type_name = "sdf_capsule", .label = "SDF Capsule"},
+                Palette_entry{.type_name = "voxelize",    .label = "Voxelize"},
+                Palette_entry{.type_name = "sdf_boolean", .label = "SDF Boolean"},
+                Palette_entry{.type_name = "sdf_offset",  .label = "SDF Offset"},
+                Palette_entry{.type_name = "sdf_smooth",  .label = "SDF Smooth"},
+                Palette_entry{.type_name = "sdf_mesh",    .label = "SDF Mesh"}
+            }
+        },
+#endif
         Palette_category{
             .name    = "Values",
             .entries = {

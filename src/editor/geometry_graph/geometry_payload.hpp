@@ -9,6 +9,7 @@
 
 namespace erhe::geometry  { class Geometry; }
 namespace erhe::primitive { class Material; }
+namespace erhe::voxel     { class Grid; }
 
 namespace editor {
 
@@ -29,6 +30,7 @@ public:
     static constexpr std::size_t material    = 8;
     static constexpr std::size_t points      = 9;
     static constexpr std::size_t instances   = 10;
+    static constexpr std::size_t sdf         = 11;
 };
 
 // Points scattered on a surface, flowing through "points" pins
@@ -76,7 +78,8 @@ public:
         glm::mat4,
         std::shared_ptr<erhe::primitive::Material>,
         std::shared_ptr<Point_cloud>,
-        std::shared_ptr<Geometry_instances>
+        std::shared_ptr<Geometry_instances>,
+        std::shared_ptr<erhe::voxel::Grid>
     >;
 
     [[nodiscard]] auto has_value    () const -> bool;
@@ -90,12 +93,14 @@ public:
     [[nodiscard]] auto get_material () const -> std::shared_ptr<erhe::primitive::Material>;
     [[nodiscard]] auto get_points   () const -> std::shared_ptr<Point_cloud>;
     [[nodiscard]] auto get_instances() const -> std::shared_ptr<Geometry_instances>;
+    [[nodiscard]] auto get_sdf      () const -> std::shared_ptr<erhe::voxel::Grid>;
 
     // Accumulation used when multiple links feed one input pin:
     // - empty += x adopts x
     // - numeric and vector types add
     // - geometries merge into a newly allocated combined geometry
     // - point clouds and instances concatenate into newly allocated sets
+    // - SDF grids union into a newly allocated grid (matching voxel sizes only)
     // - materials keep the first connected value
     auto operator+=(const Geometry_payload& rhs) -> Geometry_payload&;
 

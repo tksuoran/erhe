@@ -1265,10 +1265,16 @@ void Mcp_server::refresh_tool_list()
             {"scene_name", {{"type", "string"}, {"description", "Scene to search (default: all scenes)"}}}
         }}
     }});
+    json geometry_node_types = json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "transform_from_node", "lattice", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "passthrough", "output"});
+#if defined(ERHE_VOXEL_LIBRARY_OPENVDB)
+    for (const char* sdf_type : {"sdf_sphere", "sdf_capsule", "voxelize", "sdf_mesh", "sdf_boolean", "sdf_offset", "sdf_smooth"}) {
+        geometry_node_types.push_back(sdf_type);
+    }
+#endif
     m_tool_infos.push_back({"geometry_graph_add_node", "Add a node to the geometry node graph. Returns the new node's id and pin layout. Structural edits (add/remove/connect/disconnect) schedule the automatic DAG canvas layout, applied when the window next draws.", {
         {"type", "object"},
         {"properties", {
-            {"type", {{"type", "string"}, {"enum", json::array({"box", "sphere", "torus", "cone", "disc", "subdivide", "conway", "transform", "transform_from_node", "lattice", "triangulate", "normalize", "reverse", "repair", "join", "boolean", "float", "integer", "vector", "math", "passthrough", "output"})}, {"description", "Node type to create"}}}
+            {"type", {{"type", "string"}, {"enum", geometry_node_types}, {"description", "Node type to create"}}}
         }},
         {"required", json::array({"type"})}
     }});

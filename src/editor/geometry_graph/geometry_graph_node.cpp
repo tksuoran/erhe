@@ -41,6 +41,7 @@ auto Geometry_graph_node::pin_key_color(const std::size_t key) const -> ImU32
         case Geometry_pin_key::material:    return IM_COL32(235, 122,  82, 255); // orange
         case Geometry_pin_key::points:      return IM_COL32(110, 205, 230, 255); // light cyan
         case Geometry_pin_key::instances:   return IM_COL32(130, 215, 120, 255); // spring green
+        case Geometry_pin_key::sdf:         return IM_COL32(186,  85, 211, 255); // medium orchid
         default:                            return IM_COL32( 68,  68,  68, 255);
     }
 }

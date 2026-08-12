@@ -15,7 +15,9 @@ class Geometry_graph_node;
 // is the legacy combo node kept for old graph files), transform,
 // triangulate, normalize, reverse, repair, distribute, instance,
 // realize, join, boolean, float, integer, vector, math, passthrough,
-// output, group_input, group_output, group.
+// output, group_input, group_output, group. When ERHE_VOXEL_LIBRARY=openvdb
+// also: sdf_sphere, sdf_capsule, voxelize, sdf_mesh, sdf_boolean,
+// sdf_offset, sdf_smooth.
 //
 // Shared by Geometry_graph_window (toolbar, load) and Group_node
 // (loading group assets into a private subgraph). Returns nullptr for
