@@ -61,6 +61,7 @@ set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
+set_option(ERHE_VOXEL_LIBRARY              "Voxel/SDF library to use with erhe. Either openvdb or none"                 "none"     "openvdb;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
 set_option(ERHE_USE_MIMALLOC               "Enable mimalloc"                                                            "OFF"      "ON;OFF")
@@ -140,6 +141,117 @@ endif ()
 # Dependencies
 message("Fetching dependencies")
 
+# Voxel/SDF library (OpenVDB + TBB). This block runs before the Geogram
+# CPMAddPackage below on purpose: it defines the TBB::tbb target, and
+# Geogram's GEOGRAM_WITH_TBB support adopts an existing TBB::tbb target
+# (its cmake/onetbb.cmake early-returns) instead of fetching its own copy.
+# See doc/openvdb-integration-plan.md.
+set(ERHE_GEOGRAM_WITH_TBB OFF)
+if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
+    if (CMAKE_VERSION VERSION_LESS 3.24)
+        message(FATAL_ERROR "ERHE_VOXEL_LIBRARY=openvdb requires CMake >= 3.24 (required by OpenVDB itself and by the find_package(TBB) redirection below).")
+    endif ()
+    if (MSVC AND NOT CMAKE_MSVC_RUNTIME_LIBRARY)
+        # OpenVDB's static-library configuration force-switches to the static
+        # MSVC runtime (/MT) when CMAKE_MSVC_RUNTIME_LIBRARY is unset -- and
+        # does so with PUBLIC compile options, poisoning every consumer. Pin
+        # CMake's default (/MD) explicitly so OpenVDB leaves the runtime
+        # selection alone. (JoltPhysicsCompatibility.cmake sets the same
+        # value, but only when ERHE_PHYSICS_LIBRARY=jolt.)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    endif ()
+
+    # Static oneTBB, providing the TBB::tbb target for OpenVDB (mandatory
+    # dependency) and Geogram (optional, see GEOGRAM_WITH_TBB below).
+    # BUILD_SHARED_LIBS is saved/restored around the package because oneTBB
+    # keys shared-vs-static off it (same push/pop Geogram's onetbb.cmake does).
+    set(ERHE_SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
+    CPMAddPackage(
+        NAME              oneTBB
+        VERSION           2022.3.0
+        GIT_TAG           v2022.3.0
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY uxlfoundation/oneTBB
+        OPTIONS
+            "TBB_TEST OFF"
+            "TBB_EXAMPLES OFF"
+            "TBB_STRICT OFF"
+            "TBBMALLOC_BUILD OFF"
+            "TBB_INSTALL OFF"
+    )
+    set(BUILD_SHARED_LIBS ${ERHE_SAVED_BUILD_SHARED_LIBS})
+    unset(ERHE_SAVED_BUILD_SHARED_LIBS)
+    if (NOT TARGET TBB::tbb)
+        message(FATAL_ERROR "oneTBB did not define the TBB::tbb target")
+    endif ()
+    # With a static TBB the MSVC auto-linking pragmas in the oneTBB headers
+    # (tbb12.lib / tbb12_debug.lib) must not fire; consumers link the CMake
+    # target explicitly. Same define Geogram's onetbb.cmake applies.
+    target_compile_definitions(tbb PUBLIC __TBB_NO_IMPLICIT_LINKAGE=1)
+
+    # OpenVDB calls find_package(TBB REQUIRED) instead of checking for an
+    # existing target. Satisfy it with a find_package redirection (CMake
+    # >= 3.24) that resolves to the build-tree targets defined above.
+    file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/tbb-config.cmake"
+[=[
+if (NOT TARGET TBB::tbb)
+    message(FATAL_ERROR "tbb-config.cmake redirect: the TBB::tbb target is not defined")
+endif ()
+set(TBB_VERSION 2022.3.0)
+set(TBB_FOUND TRUE)
+foreach (erhe_tbb_component IN LISTS TBB_FIND_COMPONENTS)
+    set(TBB_${erhe_tbb_component}_FOUND TRUE)
+endforeach ()
+]=])
+    file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/tbb-config-version.cmake"
+[=[
+set(PACKAGE_VERSION 2022.3.0)
+set(PACKAGE_VERSION_COMPATIBLE TRUE)
+if (PACKAGE_FIND_VERSION STREQUAL PACKAGE_VERSION)
+    set(PACKAGE_VERSION_EXACT TRUE)
+endif ()
+]=])
+    set(ERHE_GEOGRAM_WITH_TBB ON)
+
+    # Static OpenVDB core in its minimal configuration: TBB is the only
+    # dependency. Delayed loading OFF also drops the Boost requirement;
+    # Blosc/ZLib only affect .vdb file compression (files are written
+    # uncompressed and remain valid). v13.0.0 is the newest release whose
+    # CMake works as an add_subdirectory subproject (master has regressed
+    # to CMAKE_SOURCE_DIR-relative paths).
+    CPMAddPackage(
+        NAME              openvdb
+        VERSION           13.0.0
+        GIT_TAG           v13.0.0
+        GIT_SHALLOW       TRUE
+        GITHUB_REPOSITORY AcademySoftwareFoundation/openvdb
+        OPTIONS
+            "OPENVDB_BUILD_CORE ON"
+            "OPENVDB_CORE_SHARED OFF"
+            "OPENVDB_CORE_STATIC ON"
+            "OPENVDB_BUILD_BINARIES OFF"
+            "OPENVDB_BUILD_UNITTESTS OFF"
+            "OPENVDB_BUILD_DOCS OFF"
+            "OPENVDB_BUILD_NANOVDB OFF"
+            "OPENVDB_USE_DELAYED_LOADING OFF"
+            "OPENVDB_ENABLE_RPATH OFF"
+            "OPENVDB_ENABLE_UNINSTALL OFF"
+            "OPENVDB_CXX_STRICT OFF"
+            "USE_BLOSC OFF"
+            "USE_ZLIB OFF"
+            "USE_IMATH_HALF OFF"
+            "USE_EXPLICIT_INSTANTIATION OFF"
+            "USE_CCACHE OFF"
+            "USE_PKGCONFIG OFF"
+    )
+    message(STATUS "Erhe configured to use OpenVDB for voxels/SDF.")
+    add_definitions(-DERHE_VOXEL_LIBRARY_OPENVDB)
+else ()
+    message(STATUS "Erhe configured to disable voxels/SDF.")
+    add_definitions(-DERHE_VOXEL_LIBRARY_NONE)
+endif ()
+
 if(CMAKE_SYSTEM_NAME MATCHES Linux)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64)
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -189,7 +301,7 @@ CPMAddPackage(
                     "GEOGRAM_WITH_FPG ON"
             "GEOGRAM_USE_SYSTEM_GLFW3 OFF"
               "GEOGRAM_WITH_GARGANTUA OFF"
-                    "GEOGRAM_WITH_TBB OFF"
+                    "GEOGRAM_WITH_TBB ${ERHE_GEOGRAM_WITH_TBB}"
 )
 
 # Geogram's exact geometric predicates REQUIRE that the compiler not fuse their
