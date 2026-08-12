@@ -11,11 +11,16 @@ CPMAddPackage(
 set(_target "erhe_voxel_tests")
 add_executable(${_target}
     main.cpp
+    test_grid.cpp
     test_openvdb_smoke.cpp
 )
 
 target_link_libraries(${_target}
     PRIVATE
+        erhe::voxel
+        erhe::geometry
+        erhe::log
+        erhe::math
         openvdb
         GTest::gtest
 )
