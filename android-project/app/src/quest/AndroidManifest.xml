@@ -16,6 +16,16 @@
     <uses-feature android:name="com.oculus.feature.PASSTHROUGH"
                   android:required="false" />
 
+    <!-- Controller render models (XR_FB_render_model): like passthrough
+         above, the runtime hides the extension from extension enumeration
+         unless BOTH the uses-feature AND the uses-permission are declared
+         (the runtime logs each missing string separately under the
+         OpenXR_Properties tag). Not required: the editor falls back to the
+         torus placeholder controller mesh without it. -->
+    <uses-feature android:name="com.oculus.feature.RENDER_MODEL"
+                  android:required="false" />
+    <uses-permission android:name="com.oculus.permission.RENDER_MODEL" />
+
     <!-- OpenXR loader broker permissions. Source of truth: the merge
          manifest shipped by KhronosGroup/OpenXR-SDK-Source at
          src/loader/AndroidManifest.xml.in (CPM-fetched). We are not

@@ -154,6 +154,7 @@ public:
         bool FB_foveation                      {false};
         bool FB_foveation_configuration        {false};
         bool FB_foveation_vulkan               {false};
+        bool FB_render_model                   {false};
     };
     Extensions extensions{};
 
@@ -191,6 +192,11 @@ public:
 
     // XR_META_boundary_visibility
     PFN_xrRequestBoundaryVisibilityMETA    xrRequestBoundaryVisibilityMETA   {nullptr};
+
+    // XR_FB_render_model
+    PFN_xrEnumerateRenderModelPathsFB      xrEnumerateRenderModelPathsFB     {nullptr};
+    PFN_xrGetRenderModelPropertiesFB       xrGetRenderModelPropertiesFB      {nullptr};
+    PFN_xrLoadRenderModelFB                xrLoadRenderModelFB               {nullptr};
 
     // XR_EXT_performance_settings
     PFN_xrPerfSettingsSetPerformanceLevelEXT xrPerfSettingsSetPerformanceLevelEXT{nullptr};

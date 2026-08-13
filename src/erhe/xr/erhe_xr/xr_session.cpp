@@ -282,6 +282,87 @@ auto Xr_session::create_session() -> bool
     return true;
 }
 
+// XR_FB_render_model diagnostics: enumerate the runtime-provided render
+// model paths and log properties + GLB size for each. Proves on-device
+// that the runtime serves controller models before any loading is wired
+// up. Must run with the session running: xrGetRenderModelPropertiesFB
+// returns XR_ERROR_SESSION_NOT_RUNNING before xrBeginSession (observed on
+// Quest 3). XR_RENDER_MODEL_UNAVAILABLE_FB is a success code meaning the
+// device for that path is not connected (yet); the model can become
+// available later.
+void Xr_session::log_render_models()
+{
+    if (!m_instance.extensions.FB_render_model) {
+        return;
+    }
+    uint32_t path_count{0};
+    XrResult enumerate_paths_result = m_instance.xrEnumerateRenderModelPathsFB(m_xr_session, 0, &path_count, nullptr);
+    if ((enumerate_paths_result == XR_SUCCESS) && (path_count > 0)) {
+        const XrRenderModelPathInfoFB empty_path_info{
+            .type = XR_TYPE_RENDER_MODEL_PATH_INFO_FB,
+            .next = nullptr,
+            .path = XR_NULL_PATH
+        };
+        std::vector<XrRenderModelPathInfoFB> path_infos(path_count, empty_path_info);
+        uint32_t path_count2 = path_count;
+        enumerate_paths_result = m_instance.xrEnumerateRenderModelPathsFB(m_xr_session, path_count, &path_count2, path_infos.data());
+        if (enumerate_paths_result == XR_SUCCESS) {
+            log_xr->info("Render model paths:");
+            for (uint32_t i = 0; i < path_count2; ++i) {
+                const std::string path_string = m_instance.get_path_string(path_infos[i].path);
+                XrRenderModelCapabilitiesRequestFB capabilities_request{
+                    .type  = XR_TYPE_RENDER_MODEL_CAPABILITIES_REQUEST_FB,
+                    .next  = nullptr,
+                    .flags =
+                        XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_1_BIT_FB |
+                        XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_2_BIT_FB
+                };
+                XrRenderModelPropertiesFB properties{
+                    .type         = XR_TYPE_RENDER_MODEL_PROPERTIES_FB,
+                    .next         = &capabilities_request,
+                    .vendorId     = 0,
+                    .modelName    = {},
+                    .modelKey     = XR_NULL_RENDER_MODEL_KEY_FB,
+                    .modelVersion = 0,
+                    .flags        = 0
+                };
+                const XrResult properties_result = m_instance.xrGetRenderModelPropertiesFB(m_xr_session, path_infos[i].path, &properties);
+                if ((properties_result != XR_SUCCESS) || (properties.modelKey == XR_NULL_RENDER_MODEL_KEY_FB)) {
+                    log_xr->info("    {}: properties result {}, model unavailable", path_string, c_str(properties_result));
+                    continue;
+                }
+                XrRenderModelLoadInfoFB load_info{
+                    .type     = XR_TYPE_RENDER_MODEL_LOAD_INFO_FB,
+                    .next     = nullptr,
+                    .modelKey = properties.modelKey
+                };
+                XrRenderModelBufferFB model_buffer{
+                    .type                = XR_TYPE_RENDER_MODEL_BUFFER_FB,
+                    .next                = nullptr,
+                    .bufferCapacityInput = 0,
+                    .bufferCountOutput   = 0,
+                    .buffer              = nullptr
+                };
+                const XrResult size_query_result = m_instance.xrLoadRenderModelFB(m_xr_session, &load_info, &model_buffer);
+                log_xr->info(
+                    "    {}: name '{}' vendor {} key {} version {} flags {:#x} glb size query result {} size {} bytes",
+                    path_string,
+                    properties.modelName,
+                    properties.vendorId,
+                    properties.modelKey,
+                    properties.modelVersion,
+                    properties.flags,
+                    c_str(size_query_result),
+                    model_buffer.bufferCountOutput
+                );
+            }
+        }
+    }
+    if (enumerate_paths_result != XR_SUCCESS) {
+        log_xr->warn("xrEnumerateRenderModelPathsFB() failed with error {}", c_str(enumerate_paths_result));
+    }
+}
+
 Xr_session::~Xr_session() noexcept
 {
     log_xr->trace("{}", __func__);
@@ -1008,6 +1089,9 @@ auto Xr_session::begin_session() -> bool
     // m_instance.set_environment_depth_estimation(m_session, true);
 
     m_session_running = true;
+
+    log_render_models();
+
     return true;
 }
 

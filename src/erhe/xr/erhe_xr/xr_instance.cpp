@@ -462,6 +462,15 @@ auto Xr_instance::create_instance() -> bool
         extensions.META_performance_metrics = true;
         enabled_extensions.push_back(XR_META_PERFORMANCE_METRICS_EXTENSION_NAME);
     }
+    // XR_FB_render_model: runtime-provided controller GLB models. On Quest the
+    // runtime hides this extension from enumeration unless the Android
+    // manifest declares the com.oculus.feature.RENDER_MODEL uses-feature (the
+    // runtime logs the missing string under the OpenXR_Properties tag).
+    // Without the extension the editor keeps the torus placeholder.
+    if (has_extension(XR_FB_RENDER_MODEL_EXTENSION_NAME)) {
+        extensions.FB_render_model = true;
+        enabled_extensions.push_back(XR_FB_RENDER_MODEL_EXTENSION_NAME);
+    }
 
 #if defined(XR_USE_GRAPHICS_API_VULKAN)
     // OpenXR fixed foveated rendering (issue #208). All-or-nothing: FFR needs the
@@ -675,6 +684,12 @@ auto Xr_instance::create_instance() -> bool
 
     if (extensions.META_boundary_visibility) {
         xrRequestBoundaryVisibilityMETA  = get_proc_addr<PFN_xrRequestBoundaryVisibilityMETA >("xrRequestBoundaryVisibilityMETA");
+    }
+
+    if (extensions.FB_render_model) {
+        xrEnumerateRenderModelPathsFB = get_proc_addr<PFN_xrEnumerateRenderModelPathsFB>("xrEnumerateRenderModelPathsFB");
+        xrGetRenderModelPropertiesFB  = get_proc_addr<PFN_xrGetRenderModelPropertiesFB >("xrGetRenderModelPropertiesFB");
+        xrLoadRenderModelFB           = get_proc_addr<PFN_xrLoadRenderModelFB          >("xrLoadRenderModelFB");
     }
 
     if (extensions.FB_color_space) {

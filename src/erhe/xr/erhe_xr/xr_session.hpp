@@ -165,6 +165,8 @@ public:
     void set_boundary_visibility(XrBoundaryVisibilityMETA boundary_visibility);
 
 private:
+    void log_render_models();
+
     [[nodiscard]] auto color_space_score          (const XrColorSpaceFB color_space) const -> int;
     [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;
     [[nodiscard]] auto depth_stencil_format_score (const erhe::dataformat::Format pixelformat) const -> int;
