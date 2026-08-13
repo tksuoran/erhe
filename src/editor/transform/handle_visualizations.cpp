@@ -1209,13 +1209,43 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
     const Gizmo_sizes gz = get_gizmo_sizes(m_context.editor_settings->transform_tool);
 
     std::optional<Handle_pick> best;
-    // Strictly-nearer replacement keeps the earlier candidate on ties, so the
-    // consider() call order below breaks overlapping-handle ties (translate
-    // before scale, matching how the handles visually stack).
-    const auto consider = [&best](const Handle handle, const float t, const vec3& position) {
-        if (!best.has_value() || (t < best->t)) {
-            best = Handle_pick{handle, t, position};
+    float                      best_miss{0.0f};
+    // Two-tier candidate ranking. Every candidate carries a normalized miss
+    // in [0, 1]: 0 means the ray passes through the handle's visible
+    // geometry (a direct hit); positive means the ray only came within the
+    // handle's pick tolerance, normalized by that tolerance. A direct hit
+    // beats every tolerance-only candidate regardless of ray-t, so a handle
+    // that is merely near the ray can no longer steal hover from the handle
+    // the ray actually goes through. Direct hits rank among themselves by
+    // nearest t; tolerance-only hits by smallest normalized miss, which is
+    // fair between handles with different pick radii. Strictly-better
+    // replacement keeps the earlier candidate on ties, so the consider()
+    // call order below breaks overlapping-handle ties (translate before
+    // scale, matching how the handles visually stack).
+    const auto consider = [&best, &best_miss](const Handle handle, const float t, const vec3& position, const float miss) {
+        bool better;
+        if (!best.has_value()) {
+            better = true;
+        } else if ((miss <= 0.0f) != (best_miss <= 0.0f)) {
+            better = (miss <= 0.0f);
+        } else if (miss <= 0.0f) {
+            better = (t < best->t);
+        } else {
+            better = (miss < best_miss);
         }
+        if (better) {
+            best      = Handle_pick{handle, t, position};
+            best_miss = miss;
+        }
+    };
+    // Normalized miss for a capsule test: 0 while the ray is inside the
+    // handle's visible core radius, ramping to 1 at the pick radius.
+    const auto capsule_miss = [](const float dist, const float core_radius, const float pick_radius) -> float {
+        const float span = pick_radius - core_radius;
+        if (!(span > 0.0f)) {
+            return 0.0f;
+        }
+        return std::max(0.0f, (dist - core_radius) / span);
     };
 
     const Transform_tool_settings& settings = m_context.transform_tool->shared.settings;
@@ -1285,13 +1315,17 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
                 ray_segment_distance(ray_origin, d, c + (s * start) * dir, c + (s * (start + gz.arrow_shaft_length)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_shaft_pick_radius)
             ) {
-                consider(handle, t, q);
+                // The drawn shaft is pixel-thin, so there is no direct core;
+                // the whole capsule is tolerance, normalized by its radius.
+                consider(handle, t, q, dist / (s * gz.arrow_shaft_pick_radius));
             }
             if (
                 ray_segment_distance(ray_origin, d, c + (s * (start + gz.arrow_shaft_length)) * dir, c + (s * (start + head_pick_end)) * dir, t, q, dist) &&
                 (dist <= s * gz.translate_head_pick_radius)
             ) {
-                consider(handle, t, q);
+                // Direct core: the cone's base radius - the ray visibly goes
+                // through the drawn arrow head.
+                consider(handle, t, q, capsule_miss(dist, s * std::min(gz.translate_cone_radius, gz.translate_head_pick_radius), s * gz.translate_head_pick_radius));
             }
         }
     }
@@ -1329,7 +1363,12 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
         if ((r < s * (inner_radius - sector_pick_margin)) || (r > s * (outer_radius + sector_pick_margin))) {
             return;
         }
-        consider(handle, t, q);
+        // Inside the drawn sector bounds the plane hit is a direct hit;
+        // within the radial margin it is a tolerance hit, normalized by
+        // the margin.
+        const float overshoot = std::max(std::max(s * inner_radius - r, r - s * outer_radius), 0.0f);
+        const float margin    = s * sector_pick_margin;
+        consider(handle, t, q, (margin > 0.0f) ? (overshoot / margin) : 0.0f);
     };
     // Mirrors render()'s shell layout, reflowed from the visibility toggles.
     const bool box_mode = settings.scale_gizmo_mode == Scale_gizmo_mode::bounding_box;
@@ -1388,7 +1427,7 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
                 ray_segment_distance(ray_origin, d, c + (s * start) * dir, c + (s * (start + shaft)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_shaft_pick_radius)
             ) {
-                consider(handle, t, q);
+                consider(handle, t, q, dist / (s * gz.arrow_shaft_pick_radius));
             }
             // Head capsule with a half-cube grab margin past the cube. In
             // combined mode the whole (short) handle is covered at head
@@ -1399,7 +1438,8 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
                 ray_segment_distance(ray_origin, d, c + (s * head_pick_start) * dir, c + (s * (start + shaft + 3.0f * gz.scale_cube_half_length)) * dir, t, q, dist) &&
                 (dist <= s * gz.arrow_head_pick_radius)
             ) {
-                consider(handle, t, q);
+                // Direct core: the tip cube's half edge length.
+                consider(handle, t, q, capsule_miss(dist, s * std::min(gz.scale_cube_half_length, gz.arrow_head_pick_radius), s * gz.arrow_head_pick_radius));
             }
         }
     }
@@ -1441,13 +1481,17 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
                 if (t <= 0.0f) {
                     continue;
                 }
-                if (best.has_value() && (t >= best->t)) {
+                const float dist        = glm::length(point - (ray_origin + t * d));
+                const float pick_radius = s * m_context.editor_settings->transform_tool.ring_pick_radius;
+                if (dist > pick_radius) {
                     continue;
                 }
-                if (glm::length(point - (ray_origin + t * d)) > s * m_context.editor_settings->transform_tool.ring_pick_radius) {
-                    continue;
-                }
-                consider(handle, t, point);
+                // The drawn ring line is pixel-thin: every ring sample is a
+                // tolerance-only candidate, so a direct hit on any other
+                // handle always outranks the ring, and against other
+                // tolerance candidates the ring competes by miss distance,
+                // not by being nearer along the ray.
+                consider(handle, t, point, dist / pick_radius);
             }
         }
     }
@@ -1468,13 +1512,12 @@ auto Handle_visualizations::pick(const glm::vec3& eye_position, const glm::vec3&
             if (t <= 0.0f) {
                 continue;
             }
-            if (best.has_value() && (t >= best->t)) {
+            const float dist        = glm::length(point - (ray_origin + t * d));
+            const float pick_radius = s * m_context.editor_settings->transform_tool.ring_pick_radius;
+            if (dist > pick_radius) {
                 continue;
             }
-            if (glm::length(point - (ray_origin + t * d)) > s * m_context.editor_settings->transform_tool.ring_pick_radius) {
-                continue;
-            }
-            consider(handle, t, point);
+            consider(handle, t, point, dist / pick_radius);
         }
     }
 
