@@ -164,6 +164,10 @@ private:
     std::weak_ptr<erhe::scene::Node>          m_drag_node;
     bool                                      m_mesh_visible{true};
 
+    // Initial visibility from hud config "show": false keeps the Hud hidden
+    // until the user summons it with the usual toggle button.
+    bool                                      m_show_on_attach{false};
+
     // Stored at construction so the scene-dependent Quad_view can be built later
     // in attach_to_scene() once a scene exists (the scene.create startup command
     // creates it after all parts are constructed).

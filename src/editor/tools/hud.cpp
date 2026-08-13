@@ -149,6 +149,7 @@ Hud::Hud(
     m_ppm             = hud_config.ppm;
 
     m_enabled = hud_config.enabled;
+    m_show_on_attach = hud_config.show;
     m_x       = hud_config.x;
     m_y       = hud_config.y;
     m_z       = hud_config.z;
@@ -286,7 +287,7 @@ void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
         m_context.imgui_windows->set_default_host(host);
     }
 
-    set_mesh_visibility(true);
+    set_mesh_visibility(m_show_on_attach);
 }
 
 void Hud::detach_from_scene()
