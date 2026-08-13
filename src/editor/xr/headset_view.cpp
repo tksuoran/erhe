@@ -26,6 +26,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
+#include "tools/hud.hpp"
 #include "tools/tools.hpp"
 #include "transform/transform_tool.hpp"
 #include "xr/controller_visualization.hpp"
@@ -400,6 +401,14 @@ void Headset_view::render(const Render_context& render_context)
         line_renderer.add_lines({{finger_input.finger_point, finger_input.point}});
     }
 
+    // No ray while the Hud is grab-dragged: hover picking is inhibited (see
+    // update_pointer_context_from_controller), so the ray would only draw a
+    // stale or meaningless line through the quad being moved. The controller
+    // visualization mesh stays.
+    if ((m_context.hud != nullptr) && m_context.hud->is_dragging()) {
+        return;
+    }
+
     erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
     erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
     erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
@@ -638,6 +647,15 @@ void Headset_view::update_pointer_context_from_controller()
             : left_aim_pose;
 
     if (pose == nullptr) {
+        return;
+    }
+
+    // While the Hud is grab-dragged the controller is a grab handle, not a
+    // pointer: skip all hover picking and clear stale hover entries so no
+    // tool acts on hits from before the drag. The drag itself does not use
+    // the control ray (it follows get_world_from_controller()).
+    if ((m_context.hud != nullptr) && m_context.hud->is_dragging()) {
+        reset_hover_slots();
         return;
     }
 
@@ -1854,6 +1872,30 @@ auto Headset_view::get_controller_ray_origin(const erhe::xr::Xr_action_pose& pos
         }
     }
     return pose.position + get_camera_offset();
+}
+
+auto Headset_view::get_world_from_controller() const -> std::optional<glm::mat4>
+{
+    if (m_headset == nullptr) {
+        return {};
+    }
+    erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
+    erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
+    erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
+    erhe::xr::Xr_action_pose* right_aim_pose = (right_actions != nullptr) ? right_actions->aim_pose : nullptr;
+    erhe::xr::Xr_action_pose* pose =
+        (
+            (right_aim_pose != nullptr) &&
+            (right_aim_pose->location.locationFlags != 0)
+        )
+            ? right_aim_pose
+            : left_aim_pose;
+    if (pose == nullptr) {
+        return {};
+    }
+    const glm::mat4 orientation = glm::mat4_cast(pose->orientation);
+    const glm::mat4 translation = glm::translate(glm::mat4{1}, pose->position + get_camera_offset());
+    return translation * orientation;
 }
 
 auto Headset_view::get_root_node() const -> std::shared_ptr<erhe::scene::Node>

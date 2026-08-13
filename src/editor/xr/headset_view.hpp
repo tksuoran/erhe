@@ -200,6 +200,14 @@ public:
     // intersects with the same ray the user sees.
     [[nodiscard]] auto get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
 
+    // World-space transform of the physical controller aim pose (right hand
+    // when located, else left; camera offset applied) - explicitly
+    // independent of the controller ray mode, unlike get_world_from_control().
+    // Rigid drags (e.g. the Hud grab) follow this so pushing / pulling the
+    // controller moves the dragged object even in head-attached ray mode,
+    // where the control-ray origin only moves with the head.
+    [[nodiscard]] auto get_world_from_controller() const -> std::optional<glm::mat4>;
+
     // Path-B quad composition layers (Quad_view) have no scene mesh, so the
     // raytrace / ID-render pickers can never produce a rendertarget hover
     // for them. Registered quad views are ray-tested analytically each frame

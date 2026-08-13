@@ -128,12 +128,22 @@ public:
     void on_drag       ();
     void end_drag      ();
 
+    // True while a Hud grab-drag is in progress (either path). The headset
+    // view inhibits ray casting for the duration: no hover picking and no
+    // visible ray, the controller acts purely as a grab handle.
+    [[nodiscard]] auto is_dragging() const -> bool;
+
     [[nodiscard]] auto world_from_node() const -> glm::mat4;
     [[nodiscard]] auto node_from_world() const -> glm::mat4;
     [[nodiscard]] auto intersect_ray  (const glm::vec3& ray_origin_in_world, const glm::vec3& ray_direction_in_world) -> std::optional<glm::vec3>;
 
 private:
     void update_node_transform(const glm::mat4& world_from_hud);
+
+    // Reference transform for the rigid drag: the physical controller aim
+    // pose in XR (independent of the controller ray mode, so push / pull
+    // moves the Hud), the scene view's control transform otherwise.
+    [[nodiscard]] auto get_drag_world_from_control(Scene_view* scene_view) const -> std::optional<glm::mat4>;
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     Toggle_hud_visibility_command m_toggle_visibility_command;

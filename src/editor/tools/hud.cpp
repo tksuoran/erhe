@@ -349,6 +349,25 @@ auto Hud::intersect_ray(const glm::vec3& ray_origin_in_world, const glm::vec3& r
     };
 }
 
+auto Hud::get_drag_world_from_control(Scene_view* scene_view) const -> std::optional<glm::mat4>
+{
+    // Reference transform for the rigid Hud drag. In XR this is the physical
+    // controller aim pose - explicitly NOT the mode-specific control ray: in
+    // head-attached ray mode the control-ray origin only moves with the head,
+    // which would demand leaning forward / back to push / pull the Hud. The
+    // grab test (does the ray point at the quad) still uses the control ray,
+    // so grabbing follows the ray the user sees.
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_context.OpenXR && (m_headset_view != nullptr)) {
+        const std::optional<glm::mat4> world_from_controller = m_headset_view->get_world_from_controller();
+        if (world_from_controller.has_value()) {
+            return world_from_controller;
+        }
+    }
+#endif
+    return scene_view->get_world_from_control();
+}
+
 auto Hud::try_begin_drag() -> bool
 {
     m_node_from_control.reset();
@@ -363,6 +382,11 @@ auto Hud::try_begin_drag() -> bool
     if (!world_from_control_opt.has_value()) {
         return false;
     }
+    const std::optional<glm::mat4> drag_world_from_control_opt = get_drag_world_from_control(scene_view);
+    if (!drag_world_from_control_opt.has_value()) {
+        return false;
+    }
+    const glm::mat4 drag_world_from_control = drag_world_from_control_opt.value();
 
     if ((m_quad_view != nullptr) && m_quad_view->uses_composition_layer()) {
         // Path B: there is no scene mesh to hover. Grab the quad when the
@@ -374,7 +398,7 @@ auto Hud::try_begin_drag() -> bool
         if (!m_quad_view->intersect_ray(ray_origin, ray_direction).has_value()) {
             return false;
         }
-        m_drag_control_from_quad = glm::inverse(world_from_control) * m_quad_view->get_world_from_quad();
+        m_drag_control_from_quad = glm::inverse(drag_world_from_control) * m_quad_view->get_world_from_quad();
         m_path_b_dragging = true;
         return true;
     }
@@ -399,10 +423,8 @@ auto Hud::try_begin_drag() -> bool
         return false;
     }
 
-    const glm::mat4 world_from_control = world_from_control_opt.value();
-    const glm::mat4 node_from_world    = drag_node->node_from_world();
-    const glm::mat4 world_from_node    = drag_node->world_from_node();
-    m_node_from_control = node_from_world * world_from_control;
+    const glm::mat4 node_from_world = drag_node->node_from_world();
+    m_node_from_control = node_from_world * drag_world_from_control;
     return true;
 }
 
@@ -413,18 +435,21 @@ void Hud::on_drag()
         return;
     }
 
+    const std::optional<glm::mat4> drag_world_from_control_opt = get_drag_world_from_control(scene_view);
+    if (!drag_world_from_control_opt.has_value()) {
+        return;
+    }
+
     if (m_path_b_dragging) {
-        const auto world_from_control_opt = scene_view->get_world_from_control();
-        if (!world_from_control_opt.has_value() || (m_quad_view == nullptr)) {
+        if (m_quad_view == nullptr) {
             return;
         }
-        const glm::mat4 world_from_quad = world_from_control_opt.value() * m_drag_control_from_quad;
+        const glm::mat4 world_from_quad = drag_world_from_control_opt.value() * m_drag_control_from_quad;
         m_quad_view->set_world_from_node(world_from_quad);
         return;
     }
 
-    const auto control_from_world_opt = scene_view->get_control_from_world();
-    if (!control_from_world_opt.has_value() || !m_node_from_control.has_value()) {
+    if (!m_node_from_control.has_value()) {
         return;
     }
 
@@ -433,7 +458,7 @@ void Hud::on_drag()
         return;
     }
 
-    const glm::mat4 control_from_world = control_from_world_opt.value();
+    const glm::mat4 control_from_world = glm::inverse(drag_world_from_control_opt.value());
     const glm::mat4 node_from_world    = m_node_from_control.value() * control_from_world;
     drag_node->set_node_from_world(node_from_world);
 }
@@ -443,6 +468,11 @@ void Hud::end_drag()
     m_node_from_control.reset();
     m_drag_node.reset();
     m_path_b_dragging = false;
+}
+
+auto Hud::is_dragging() const -> bool
+{
+    return m_path_b_dragging || m_node_from_control.has_value();
 }
 
 void Hud::update_node_transform(const glm::mat4& world_from_hud)
