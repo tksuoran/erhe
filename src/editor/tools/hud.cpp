@@ -266,6 +266,15 @@ void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
         }
     );
 
+    // In OpenXR mode there is no desktop window imgui host, so windows are
+    // registered with a null host and would never be drawn. Make the Hud's
+    // rendertarget host the default: windows restored as open (from
+    // openxr_windows.json) and windows registered later become visible in
+    // the Hud. On desktop the window imgui host stays the default.
+    if (m_context.OpenXR && (m_context.imgui_windows != nullptr)) {
+        m_context.imgui_windows->set_default_host(host);
+    }
+
     set_mesh_visibility(true);
 }
 
@@ -279,6 +288,12 @@ void Hud::detach_from_scene()
     Rendertarget_imgui_host* host = m_quad_view->get_imgui_host();
     if ((host != nullptr) && (m_context.imgui_windows != nullptr)) {
         erhe::imgui::Imgui_host* window_host = m_context.imgui_windows->get_window_imgui_host().get();
+        // In OpenXR mode this host is the default host (see attach_to_scene);
+        // hand the default back (to null) so re-homed windows are not
+        // re-attached to the destroyed host on later registration.
+        if (m_context.OpenXR) {
+            m_context.imgui_windows->set_default_host(window_host);
+        }
         for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
             if (window->get_imgui_host() == host) {
                 window->set_imgui_host(window_host);

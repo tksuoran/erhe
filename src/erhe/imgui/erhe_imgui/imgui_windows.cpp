@@ -41,6 +41,7 @@ Imgui_windows::Imgui_windows(
             *context_window,
             erhe::utility::Debug_label{m_config_path + "window_imgui_host"}
         );
+        m_default_host = m_window_imgui_host.get();
     }
 }
 
@@ -99,7 +100,24 @@ void Imgui_windows::register_imgui_window(Imgui_window* window)
         );
     }
 
-    window->set_imgui_host(m_window_imgui_host.get());
+    window->set_imgui_host(m_default_host);
+}
+
+void Imgui_windows::set_default_host(Imgui_host* imgui_host)
+{
+    ERHE_VERIFY(!m_iterating);
+    const std::lock_guard<std::recursive_mutex> lock{m_mutex};
+
+    Imgui_host* old_default_host = m_default_host;
+    m_default_host = imgui_host;
+    if (old_default_host == imgui_host) {
+        return;
+    }
+    for (Imgui_window* window : m_imgui_windows) {
+        if (window->get_imgui_host() == old_default_host) {
+            window->set_imgui_host(imgui_host);
+        }
+    }
 }
 
 void Imgui_windows::unregister_imgui_window(Imgui_window* window)

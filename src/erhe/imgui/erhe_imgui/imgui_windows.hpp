@@ -67,6 +67,13 @@ public:
     void save_imgui_ini         (const std::string& path);
     void load_imgui_ini         (const std::string& path);
 
+    // The host newly registered windows are attached to. Defaults to the
+    // window imgui host (null in OpenXR mode, where there is no desktop
+    // window host). Setting a new default host also re-homes every window
+    // currently attached to the old default host, so windows restored as
+    // open before the host existed become visible in it.
+    void set_default_host(Imgui_host* imgui_host);
+
     [[nodiscard]] auto get_window_imgui_host     () -> std::shared_ptr<Window_imgui_host>;
     [[nodiscard]] auto want_capture_keyboard     () const -> bool;
     [[nodiscard]] auto want_capture_mouse        () const -> bool;
@@ -106,6 +113,7 @@ private:
 
     mutable std::unique_ptr<Windows_visibility_config> m_windows_config;
     std::shared_ptr<Window_imgui_host>                 m_window_imgui_host;
+    Imgui_host*                                        m_default_host{nullptr};
 };
 
 } // namespace erhe::imgui
