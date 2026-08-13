@@ -2061,6 +2061,11 @@ auto Headset_view::update_actions() -> bool
     for (erhe::xr::Xr_action_boolean& action : instance->get_boolean_actions()) {
         action.get(xr_session);
         if (action.state.changedSinceLastSync == XR_TRUE) {
+            log_xr->debug(
+                "XR input inject: boolean '{}' -> {}",
+                action.name,
+                (action.state.currentState == XR_TRUE)
+            );
             input_events.push_back(
                 erhe::window::Input_event{
                     .type = erhe::window::Input_event_type::xr_boolean_event,

@@ -792,7 +792,9 @@ auto Commands::on_xr_boolean_event(const erhe::window::Input_event& input_event)
             continue;
         }
         log_input->trace(
-            " P: {} C: {} E: {}",
+            " XR bool '{}' = {} P: {} C: {} E: {}",
+            (xr_boolean_event.action != nullptr) ? xr_boolean_event.action->name : "<null>",
+            xr_boolean_event.value,
             binding.get_command()->get_priority(),
             binding.get_command()->get_name(),
             binding.is_command_host_enabled() ? "host enabled" : "host disabled"
@@ -804,6 +806,12 @@ auto Commands::on_xr_boolean_event(const erhe::window::Input_event& input_event)
         auto* const command = binding.get_command();
         ERHE_VERIFY(command != nullptr);
         if (binding.on_value_changed(input)) {
+            log_input->trace(
+                " XR bool '{}' = {} CONSUMED by command {}",
+                (xr_boolean_event.action != nullptr) ? xr_boolean_event.action->name : "<null>",
+                xr_boolean_event.value,
+                command->get_name()
+            );
             return true;
         }
     }
