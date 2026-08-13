@@ -455,6 +455,26 @@ void Rendertarget_imgui_host::begin_imgui_frame()
 void Rendertarget_imgui_host::end_imgui_frame()
 {
     //SPDLOG_LOGGER_TRACE(log_rendertarget_imgui_windows, "Rendertarget_imgui_host::end_imgui_frame()");
+
+    // XR hover feedback: a one-pixel green outline over the finished ImGui
+    // frame while the controller ray is on this quad. Drawn into the
+    // rendertarget texture (foreground draw list, on top of every window),
+    // so both presentation paths - scene rendertarget mesh and OpenXR quad
+    // composition layer - show it without path-specific code.
+    if (m_app_context.OpenXR && m_has_cursor && (m_view != nullptr)) {
+        ImDrawList* const draw_list = ImGui::GetForegroundDrawList();
+        // Half-pixel inset centers the one-pixel stroke on the edge pixel
+        // rows/columns, keeping the outline crisp and fully inside the quad.
+        draw_list->AddRect(
+            ImVec2{0.5f, 0.5f},
+            ImVec2{m_view->get_width() - 0.5f, m_view->get_height() - 0.5f},
+            IM_COL32(0, 255, 0, 255),
+            0.0f,
+            0,
+            1.0f
+        );
+    }
+
     ImGui::PopFont();
     ImGui::EndFrame();
     ImGui::Render();
