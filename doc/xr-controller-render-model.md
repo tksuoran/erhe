@@ -4,16 +4,19 @@ Research notes, 2026-08-13. Goal: show the real controller model in OpenXR
 sessions instead of the torus placeholder created in
 `src/editor/xr/controller_visualization.cpp`. Torus remains the fallback.
 
-**Status 2026-08-13: IMPLEMENTED (untextured), Quest-3-verified.** The
-XR_FB_render_model path is live: manifest declarations + extension enable +
-session diagnostics, in-memory GLB parse, per-hand grip-pose nodes with the
-runtime Touch Plus models, torus fallback retained. Remaining follow-up:
-KTX2/BasisU texture transcoding (see "Gaps to close" item 3) - models
-currently render with material factors only. Note learned on device: the
-runtime demands BOTH the `com.oculus.feature.RENDER_MODEL` uses-feature AND
-the `com.oculus.permission.RENDER_MODEL` uses-permission, and
+**Status 2026-08-13: IMPLEMENTED INCLUDING TEXTURES, Quest-3-verified.**
+The XR_FB_render_model path is live: manifest declarations + extension
+enable + session diagnostics, in-memory GLB parse, per-hand grip-pose nodes
+with the runtime Touch Plus models, torus fallback retained. KTX2/BasisU
+textures decode through the Basis Universal transcoder (basis_universal
+v2_50, transcode-to-RGBA in Image_loader; native ASTC/BC7 output remains
+possible future work). Notes learned on device: the runtime demands BOTH
+the `com.oculus.feature.RENDER_MODEL` uses-feature AND the
+`com.oculus.permission.RENDER_MODEL` uses-permission;
 xrGetRenderModelPropertiesFB fails with XR_ERROR_SESSION_NOT_RUNNING until
-xrBeginSession.
+xrBeginSession; and the controller GLBs reference their KTX2 image only
+through KHR_texture_basisu's extension-side `source`, which the glTF
+parser now resolves.
 
 ## Verdict
 
