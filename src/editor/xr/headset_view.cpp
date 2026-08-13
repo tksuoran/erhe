@@ -2117,16 +2117,20 @@ auto Headset_view::update_actions() -> bool
     }
 
     if (m_controller_visualization) {
-        // TODO both controllers
-        erhe::xr::Xr_actions*     left_actions   = m_headset->get_actions_left();
-        erhe::xr::Xr_actions*     right_actions  = m_headset->get_actions_right();
-        erhe::xr::Xr_action_pose* left_aim_pose  = (left_actions  != nullptr) ? left_actions ->aim_pose : nullptr;
-        erhe::xr::Xr_action_pose* right_aim_pose = (right_actions != nullptr) ? right_actions->aim_pose : nullptr;
-        auto* pose = ((right_aim_pose != nullptr) && (right_aim_pose->location.locationFlags != 0)) ? right_aim_pose : left_aim_pose;
-        if (pose != nullptr) {
-            erhe::xr::Xr_action_pose pose_with_offset = *pose;
-            pose_with_offset.position += get_camera_offset();
-            m_controller_visualization->update(&pose_with_offset);
+        // One-shot fetch of the runtime controller render models
+        // (XR_FB_render_model): needs a running session and the frame's
+        // command buffer (Image_transfer); until both are available the
+        // attempt is retried on later frames.
+        if (!m_controller_render_models_loaded && session->is_session_running() && (m_app_context.current_command_buffer != nullptr)) {
+            m_controller_visualization->load_render_models(m_app_context, *session);
+            m_controller_render_models_loaded = true;
+        }
+        const glm::vec3 camera_offset = get_camera_offset();
+        for (const bool right_hand : { false, true }) {
+            erhe::xr::Xr_actions*     actions = right_hand ? m_headset->get_actions_right() : m_headset->get_actions_left();
+            erhe::xr::Xr_action_pose* grip    = (actions != nullptr) ? actions->grip_pose : nullptr;
+            erhe::xr::Xr_action_pose* aim     = (actions != nullptr) ? actions->aim_pose  : nullptr;
+            m_controller_visualization->update_hand(right_hand, grip, aim, camera_offset);
         }
     }
     //if (m_hand_tracker)

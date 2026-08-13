@@ -290,77 +290,174 @@ auto Xr_session::create_session() -> bool
 // Quest 3). XR_RENDER_MODEL_UNAVAILABLE_FB is a success code meaning the
 // device for that path is not connected (yet); the model can become
 // available later.
-void Xr_session::log_render_models()
+auto Xr_session::enumerate_render_model_paths() -> std::vector<XrRenderModelPathInfoFB>
 {
     if (!m_instance.extensions.FB_render_model) {
-        return;
+        return {};
     }
     uint32_t path_count{0};
     XrResult enumerate_paths_result = m_instance.xrEnumerateRenderModelPathsFB(m_xr_session, 0, &path_count, nullptr);
-    if ((enumerate_paths_result == XR_SUCCESS) && (path_count > 0)) {
-        const XrRenderModelPathInfoFB empty_path_info{
-            .type = XR_TYPE_RENDER_MODEL_PATH_INFO_FB,
-            .next = nullptr,
-            .path = XR_NULL_PATH
-        };
-        std::vector<XrRenderModelPathInfoFB> path_infos(path_count, empty_path_info);
-        uint32_t path_count2 = path_count;
-        enumerate_paths_result = m_instance.xrEnumerateRenderModelPathsFB(m_xr_session, path_count, &path_count2, path_infos.data());
-        if (enumerate_paths_result == XR_SUCCESS) {
-            log_xr->info("Render model paths:");
-            for (uint32_t i = 0; i < path_count2; ++i) {
-                const std::string path_string = m_instance.get_path_string(path_infos[i].path);
-                XrRenderModelCapabilitiesRequestFB capabilities_request{
-                    .type  = XR_TYPE_RENDER_MODEL_CAPABILITIES_REQUEST_FB,
-                    .next  = nullptr,
-                    .flags =
-                        XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_1_BIT_FB |
-                        XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_2_BIT_FB
-                };
-                XrRenderModelPropertiesFB properties{
-                    .type         = XR_TYPE_RENDER_MODEL_PROPERTIES_FB,
-                    .next         = &capabilities_request,
-                    .vendorId     = 0,
-                    .modelName    = {},
-                    .modelKey     = XR_NULL_RENDER_MODEL_KEY_FB,
-                    .modelVersion = 0,
-                    .flags        = 0
-                };
-                const XrResult properties_result = m_instance.xrGetRenderModelPropertiesFB(m_xr_session, path_infos[i].path, &properties);
-                if ((properties_result != XR_SUCCESS) || (properties.modelKey == XR_NULL_RENDER_MODEL_KEY_FB)) {
-                    log_xr->info("    {}: properties result {}, model unavailable", path_string, c_str(properties_result));
-                    continue;
-                }
-                XrRenderModelLoadInfoFB load_info{
-                    .type     = XR_TYPE_RENDER_MODEL_LOAD_INFO_FB,
-                    .next     = nullptr,
-                    .modelKey = properties.modelKey
-                };
-                XrRenderModelBufferFB model_buffer{
-                    .type                = XR_TYPE_RENDER_MODEL_BUFFER_FB,
-                    .next                = nullptr,
-                    .bufferCapacityInput = 0,
-                    .bufferCountOutput   = 0,
-                    .buffer              = nullptr
-                };
-                const XrResult size_query_result = m_instance.xrLoadRenderModelFB(m_xr_session, &load_info, &model_buffer);
-                log_xr->info(
-                    "    {}: name '{}' vendor {} key {} version {} flags {:#x} glb size query result {} size {} bytes",
-                    path_string,
-                    properties.modelName,
-                    properties.vendorId,
-                    properties.modelKey,
-                    properties.modelVersion,
-                    properties.flags,
-                    c_str(size_query_result),
-                    model_buffer.bufferCountOutput
-                );
-            }
+    if ((enumerate_paths_result != XR_SUCCESS) || (path_count == 0)) {
+        if (enumerate_paths_result != XR_SUCCESS) {
+            log_xr->warn("xrEnumerateRenderModelPathsFB() failed with error {}", c_str(enumerate_paths_result));
         }
+        return {};
     }
+    const XrRenderModelPathInfoFB empty_path_info{
+        .type = XR_TYPE_RENDER_MODEL_PATH_INFO_FB,
+        .next = nullptr,
+        .path = XR_NULL_PATH
+    };
+    std::vector<XrRenderModelPathInfoFB> path_infos(path_count, empty_path_info);
+    uint32_t path_count2 = path_count;
+    enumerate_paths_result = m_instance.xrEnumerateRenderModelPathsFB(m_xr_session, path_count, &path_count2, path_infos.data());
     if (enumerate_paths_result != XR_SUCCESS) {
         log_xr->warn("xrEnumerateRenderModelPathsFB() failed with error {}", c_str(enumerate_paths_result));
+        return {};
     }
+    path_infos.resize(path_count2);
+    return path_infos;
+}
+
+// Get model properties for a path, acknowledging both FB support levels
+// (SUBSET_1: single mesh / single texture / no transparency / unlit,
+// SUBSET_2: adds multiple meshes / textures / transparency). Both levels
+// use KHR_texture_basisu (KTX2) textures. Returns XR_NULL_RENDER_MODEL_KEY_FB
+// in .modelKey when the model is unavailable.
+namespace {
+
+auto get_render_model_properties(Xr_instance& instance, XrSession session, XrPath path) -> XrRenderModelPropertiesFB
+{
+    XrRenderModelCapabilitiesRequestFB capabilities_request{
+        .type  = XR_TYPE_RENDER_MODEL_CAPABILITIES_REQUEST_FB,
+        .next  = nullptr,
+        .flags =
+            XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_1_BIT_FB |
+            XR_RENDER_MODEL_SUPPORTS_GLTF_2_0_SUBSET_2_BIT_FB
+    };
+    XrRenderModelPropertiesFB properties{
+        .type         = XR_TYPE_RENDER_MODEL_PROPERTIES_FB,
+        .next         = &capabilities_request,
+        .vendorId     = 0,
+        .modelName    = {},
+        .modelKey     = XR_NULL_RENDER_MODEL_KEY_FB,
+        .modelVersion = 0,
+        .flags        = 0
+    };
+    const XrResult properties_result = instance.xrGetRenderModelPropertiesFB(session, path, &properties);
+    if (properties_result != XR_SUCCESS) {
+        properties.modelKey = XR_NULL_RENDER_MODEL_KEY_FB;
+    }
+    return properties;
+}
+
+}
+
+void Xr_session::log_render_models()
+{
+    const std::vector<XrRenderModelPathInfoFB> path_infos = enumerate_render_model_paths();
+    if (path_infos.empty()) {
+        return;
+    }
+    log_xr->info("Render model paths:");
+    for (const XrRenderModelPathInfoFB& path_info : path_infos) {
+        const std::string path_string = m_instance.get_path_string(path_info.path);
+        const XrRenderModelPropertiesFB properties = get_render_model_properties(m_instance, m_xr_session, path_info.path);
+        if (properties.modelKey == XR_NULL_RENDER_MODEL_KEY_FB) {
+            log_xr->info("    {}: model unavailable", path_string);
+            continue;
+        }
+        XrRenderModelLoadInfoFB load_info{
+            .type     = XR_TYPE_RENDER_MODEL_LOAD_INFO_FB,
+            .next     = nullptr,
+            .modelKey = properties.modelKey
+        };
+        XrRenderModelBufferFB model_buffer{
+            .type                = XR_TYPE_RENDER_MODEL_BUFFER_FB,
+            .next                = nullptr,
+            .bufferCapacityInput = 0,
+            .bufferCountOutput   = 0,
+            .buffer              = nullptr
+        };
+        const XrResult size_query_result = m_instance.xrLoadRenderModelFB(m_xr_session, &load_info, &model_buffer);
+        log_xr->info(
+            "    {}: name '{}' vendor {} key {} version {} flags {:#x} glb size query result {} size {} bytes",
+            path_string,
+            properties.modelName,
+            properties.vendorId,
+            properties.modelKey,
+            properties.modelVersion,
+            properties.flags,
+            c_str(size_query_result),
+            model_buffer.bufferCountOutput
+        );
+    }
+}
+
+auto Xr_session::load_controller_render_model(const bool right_hand) -> Render_model_data
+{
+    Render_model_data result;
+    if (!m_instance.extensions.FB_render_model || !m_session_running) {
+        return result;
+    }
+    const char* const wanted_path_string = right_hand ? "/model_fb/controller/right" : "/model_fb/controller/left";
+    XrPath wanted_path{XR_NULL_PATH};
+    const XrResult string_to_path_result = xrStringToPath(m_instance.get_xr_instance(), wanted_path_string, &wanted_path);
+    if (string_to_path_result != XR_SUCCESS) {
+        return result;
+    }
+
+    // Spec: paths must be enumerated before querying properties
+    // (XR_ERROR_CALL_ORDER_INVALID otherwise).
+    const std::vector<XrRenderModelPathInfoFB> path_infos = enumerate_render_model_paths();
+    const bool path_found = std::any_of(
+        path_infos.begin(),
+        path_infos.end(),
+        [wanted_path](const XrRenderModelPathInfoFB& path_info) {
+            return path_info.path == wanted_path;
+        }
+    );
+    if (!path_found) {
+        log_xr->info("Render model path {} not enumerated by the runtime", wanted_path_string);
+        return result;
+    }
+
+    const XrRenderModelPropertiesFB properties = get_render_model_properties(m_instance, m_xr_session, wanted_path);
+    if (properties.modelKey == XR_NULL_RENDER_MODEL_KEY_FB) {
+        log_xr->info("Render model {} unavailable", wanted_path_string);
+        return result;
+    }
+
+    XrRenderModelLoadInfoFB load_info{
+        .type     = XR_TYPE_RENDER_MODEL_LOAD_INFO_FB,
+        .next     = nullptr,
+        .modelKey = properties.modelKey
+    };
+    XrRenderModelBufferFB model_buffer{
+        .type                = XR_TYPE_RENDER_MODEL_BUFFER_FB,
+        .next                = nullptr,
+        .bufferCapacityInput = 0,
+        .bufferCountOutput   = 0,
+        .buffer              = nullptr
+    };
+    XrResult load_result = m_instance.xrLoadRenderModelFB(m_xr_session, &load_info, &model_buffer);
+    if ((load_result != XR_SUCCESS) || (model_buffer.bufferCountOutput == 0)) {
+        log_xr->warn("xrLoadRenderModelFB({}) size query failed with {}", wanted_path_string, c_str(load_result));
+        return result;
+    }
+    result.data.resize(model_buffer.bufferCountOutput);
+    model_buffer.bufferCapacityInput = model_buffer.bufferCountOutput;
+    model_buffer.buffer              = result.data.data();
+    load_result = m_instance.xrLoadRenderModelFB(m_xr_session, &load_info, &model_buffer);
+    if (load_result != XR_SUCCESS) {
+        log_xr->warn("xrLoadRenderModelFB({}) failed with {}", wanted_path_string, c_str(load_result));
+        result.data.clear();
+        return result;
+    }
+    result.data.resize(model_buffer.bufferCountOutput);
+    result.name = properties.modelName;
+    log_xr->info("Loaded render model {}: '{}', {} bytes", wanted_path_string, result.name, result.data.size());
+    return result;
 }
 
 Xr_session::~Xr_session() noexcept

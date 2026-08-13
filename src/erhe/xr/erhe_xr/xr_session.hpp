@@ -60,6 +60,17 @@ public:
     uint32_t                 height                      {0};
 };
 
+// A runtime-provided render model asset (XR_FB_render_model): the GLB
+// bytes plus the runtime's model name. `data` is empty when the model is
+// unavailable (extension missing, session not running, device not
+// connected, or no model for the requested capability levels).
+class Render_model_data
+{
+public:
+    std::string          name;
+    std::vector<uint8_t> data;
+};
+
 class Xr_session
 {
 public:
@@ -164,8 +175,19 @@ public:
     // requests the boundary back.
     void set_boundary_visibility(XrBoundaryVisibilityMETA boundary_visibility);
 
+    // Load the runtime-provided controller GLB (XR_FB_render_model path
+    // /model_fb/controller/left|right). Requires the session to be running;
+    // returns empty data when the model is unavailable. Loading copies the
+    // whole GLB out of the runtime and can be slow; call it once and keep
+    // the result, not per frame.
+    [[nodiscard]] auto load_controller_render_model(bool right_hand) -> Render_model_data;
+
 private:
     void log_render_models();
+    // Enumerate XR_FB_render_model paths (two-call idiom). Empty when the
+    // extension is disabled or enumeration fails. Enumerating is also the
+    // spec-required first step before xrGetRenderModelPropertiesFB.
+    [[nodiscard]] auto enumerate_render_model_paths() -> std::vector<XrRenderModelPathInfoFB>;
 
     [[nodiscard]] auto color_space_score          (const XrColorSpaceFB color_space) const -> int;
     [[nodiscard]] auto color_format_score         (const erhe::dataformat::Format pixelformat) const -> int;

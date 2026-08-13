@@ -314,6 +314,9 @@ private:
     // switches modes (e.g. during shader reloads).
     std::vector<std::shared_ptr<Headset_view_resources>> m_multiview_view_resources;
     std::unique_ptr<Controller_visualization>            m_controller_visualization;
+    // One-shot XR_FB_render_model fetch: set once load_render_models() has
+    // run (needs a running session + the frame command buffer).
+    bool                                                 m_controller_render_models_loaded{false};
     std::vector<Finger_point>                            m_finger_inputs;
 
     // TODO Shader_debug selection
