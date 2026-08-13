@@ -373,6 +373,20 @@ using erhe::geometry::get_mesh_info;
     return fastgltf::MimeType::None;
 }
 
+// The image referenced by a texture: KHR_texture_basisu / EXT_texture_webp /
+// MSFT_texture_dds carry the image index on the texture's extension object
+// instead of the core `source` field (e.g. OpenXR XR_FB_render_model
+// controller GLBs reference their KTX2 image only through
+// KHR_texture_basisu). The core index wins when present.
+[[nodiscard]] auto texture_image_index(const fastgltf::Texture& texture) -> std::optional<std::size_t>
+{
+    if (texture.imageIndex      .has_value()) return texture.imageIndex      .value();
+    if (texture.basisuImageIndex.has_value()) return texture.basisuImageIndex.value();
+    if (texture.webpImageIndex  .has_value()) return texture.webpImageIndex  .value();
+    if (texture.ddsImageIndex   .has_value()) return texture.ddsImageIndex   .value();
+    return std::nullopt;
+}
+
 // erhe Item flags that round-trip through glTF node "extras" as
 // {"erhe_flags": ["<name>", ...]}. Neither glTF 2.0 core nor the glTF 2.1
 // proposals (KhronosGroup/glTF#2585 and related) define per-node
@@ -1449,10 +1463,11 @@ private:
                 return;
             }
             const fastgltf::Texture& texture = m_asset->textures[texture_info.textureIndex];
-            if (!texture.imageIndex.has_value() || (texture.imageIndex.value() >= image_count)) {
+            const std::optional<std::size_t> resolved_image_index = texture_image_index(texture);
+            if (!resolved_image_index.has_value() || (resolved_image_index.value() >= image_count)) {
                 return;
             }
-            const std::size_t image_index = texture.imageIndex.value();
+            const std::size_t image_index = resolved_image_index.value();
             if (image_used[image_index] == 0) {
                 image_used  [image_index] = 1;
                 image_linear[image_index] = linear ? 1 : 0;
@@ -1605,8 +1620,9 @@ private:
         )
         {
             const fastgltf::Texture& texture = m_asset->textures[gltf_texture_info.textureIndex];
-            if (texture.imageIndex.has_value()) {
-                erhe_texture_sampler.texture_reference = get_image(texture.imageIndex.value(), linear);
+            const std::optional<std::size_t> resolved_image_index = texture_image_index(texture);
+            if (resolved_image_index.has_value()) {
+                erhe_texture_sampler.texture_reference = get_image(resolved_image_index.value(), linear);
             }
             if (texture.samplerIndex.has_value()) {
                 erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
