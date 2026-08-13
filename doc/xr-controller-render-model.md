@@ -35,6 +35,42 @@ vectors relative to neutral) by the stick vector. The oculus/menu button
 joint stays static (not exposed to apps). Extracted reference copies of
 the runtime GLBs live in `res/editor/assets/Quest/`.
 
+## Battery indicator quad (investigated 2026-08-13, DECISION PENDING)
+
+`<side>_batteryIndicatorQuad` is a 4-vertex quad (~2 x 9 mm) on the top
+face next to the thumbstick, skinned 100% to the root joint, with its own
+material `batteryIndicator_mat` and its own dedicated 256x64 KTX2 texture
+(`controller_right_img0.ktx2` in the extracted asset; the main controller
+texture is the 512x512 one). The texture is a FOUR-CELL battery-level
+atlas: four glowing discs, dim yellow (low) to bright white (full). The
+quad's UVs as shipped span the full 0..1 atlas; the consuming app is
+expected to window them to one 64x64 cell by battery level (Horizon's
+shell uses these meshes itself - `HsrControllerMeshInfo` logcat lines).
+Rendered naively it shows all four discs squashed onto the quad - the
+current small bright blob on the controller.
+
+Can it be LIVE? Controller battery is NOT available to third-party apps
+on Quest today: the ratified `XR_EXT_interaction_profile_battery_state_display`
+(chains `XrBatteryStateDisplayEXT` with a `batteryLevel` float onto
+`xrGetCurrentInteractionProfile`; present in our vendored registry) is
+absent from the runtime's 77 enumerated extensions and from its
+hidden-pending-manifest log lines (verified in launch capture
+2026-08-13). `XR_FBX1_touch_controller_extras` exists but is gated to
+first-party apps (`isFirstPartyApp=false` -> skipped). Re-check after OS
+updates. Headset battery IS available now via Android `BatteryManager`
+(sticky `ACTION_BATTERY_CHANGED`, no permission), if showing headset
+charge on the controller is acceptable UX.
+
+Display mechanics once a data source exists: remap the quad's
+`TEXCOORD_0` from full-atlas to the level bucket's cell and rebuild the
+4-vertex renderable when the bucket changes (rare, cheap). Options until
+then: hide the quad by mesh name at load, or statically clamp UVs to the
+"full" cell. Neither is implemented yet - decision pending.
+
+Tooling note: `basisu.exe` (KTX2/Basis decode to PNG) is built at
+`.cpm_cache/basis_universal/<hash>/bin/basisu.exe` (built 2026-08-13 with
+`-unpack -no_ktx`; rebuild via CMake+ninja from that source dir if gone).
+
 ## Verdict
 
 - `XR_EXT_interaction_render_model` + `XR_EXT_render_model` (the new
