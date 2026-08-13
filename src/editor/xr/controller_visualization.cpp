@@ -15,10 +15,13 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_xr/xr_action.hpp"
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_session.hpp"
+
+#include <filesystem>
 
 using erhe::geometry::transform_mesh;
 using erhe::geometry::to_geo_mat4f;
@@ -111,9 +114,6 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     }
 
     // Parse the GLB under a detached node; attach only on success.
-    // Textures are currently NOT decoded: the runtime models use
-    // KHR_texture_basisu (KTX2) images which the image loader does not
-    // handle yet, so materials render with their factors only.
     std::shared_ptr<erhe::scene::Node> model_root = std::make_shared<erhe::scene::Node>(
         right_hand ? "Controller model right" : "Controller model left"
     );
@@ -136,6 +136,17 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
         .primitive_types = { .fill_triangles = true },
         .buffer_info     = m_mesh_memory.make_primitive_buffer_info()
     };
+    // The controller meshes are skinned: buttons / triggers / thumbstick are
+    // bones ("skeleton #1", one joint per control), and the root joint
+    // carries a basis-change rotation that only the joint-matrix path
+    // applies. Rendering them unskinned leaves those vertex clusters
+    // untransformed (visible as spikes), so skinned meshes get the skinned
+    // vertex format (joint indices + weights -> USE_SKINNING), mirroring
+    // finalize_imported_meshes().
+    const erhe::primitive::Build_info skinned_build_info{
+        .primitive_types = { .fill_triangles = true },
+        .buffer_info     = m_mesh_memory.make_skinned_primitive_buffer_info()
+    };
     std::size_t renderable_primitive_count = 0;
     for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
         if (!node) {
@@ -151,8 +162,9 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
         // Renderable fill triangles only: no edges, and deliberately no
         // raytrace - the controller ray originates next to the model and
         // must never hover-pick the controller itself.
+        const erhe::primitive::Build_info& mesh_build_info = mesh->skin ? skinned_build_info : build_info;
         for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
-            const bool renderable_ok = mesh_primitive.primitive->make_renderable_mesh(build_info, erhe::primitive::Normal_style::corner_normals);
+            const bool renderable_ok = mesh_primitive.primitive->make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals);
             if (renderable_ok) {
                 ++renderable_primitive_count;
             } else {
