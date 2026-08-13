@@ -2131,6 +2131,7 @@ auto Headset_view::update_actions() -> bool
             erhe::xr::Xr_action_pose* grip    = (actions != nullptr) ? actions->grip_pose : nullptr;
             erhe::xr::Xr_action_pose* aim     = (actions != nullptr) ? actions->aim_pose  : nullptr;
             m_controller_visualization->update_hand(right_hand, grip, aim, camera_offset);
+            m_controller_visualization->update_hand_controls(right_hand, actions);
         }
     }
     //if (m_hand_tracker)

@@ -18,6 +18,23 @@ xrBeginSession; and the controller GLBs reference their KTX2 image only
 through KHR_texture_basisu's extension-side `source`, which the glTF
 parser now resolves.
 
+**Status update 2026-08-13 (later session): control bones are DRIVEN from
+input state, Quest-3-verified.** The models are skinned with one joint per
+control (buttons, triggers, thumbstick), and the GLB carries one animation
+("All Animations", 24 fps) whose specific frames hold each control's
+actuated pose — the frame layout, identical for both hands, is documented
+in `controller_visualization.cpp`. At load,
+`Controller_visualization::setup_control_drives()` samples the neutral and
+actuated pose per joint from that animation (input cannot be mapped to
+animation *time* because the values step at the pose frames rather than
+ramp); per frame, `update_hand_controls()` blends them by the mapped
+`Xr_actions` value (a/b/x/y click, trigger_value, squeeze_value) and sets
+the joint nodes' local transforms — the skinned-mesh joint-matrix path
+does the rest. The thumbstick blends four cardinal tilt poses (rotation
+vectors relative to neutral) by the stick vector. The oculus/menu button
+joint stays static (not exposed to apps). Extracted reference copies of
+the runtime GLBs live in `res/editor/assets/Quest/`.
+
 ## Verdict
 
 - `XR_EXT_interaction_render_model` + `XR_EXT_render_model` (the new

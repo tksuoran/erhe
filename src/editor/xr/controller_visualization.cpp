@@ -6,6 +6,7 @@
 
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_graphics/buffer_transfer_queue.hpp"
 #include "erhe_geometry/shapes/torus.hpp"
 #include "erhe_math/math_util.hpp"
@@ -21,12 +22,103 @@
 #include "erhe_xr/xr_log.hpp"
 #include "erhe_xr/xr_session.hpp"
 
+#include <algorithm>
 #include <filesystem>
+#include <string_view>
 
 using erhe::geometry::transform_mesh;
 using erhe::geometry::to_geo_mat4f;
 
 namespace editor {
+
+namespace {
+
+// The runtime controller GLB carries one animation, "All Animations", a
+// 24 fps timeline where specific frames hold each control's actuated pose
+// (verified offline by dumping the channels of both hands' GLBs; both use
+// the same layout):
+//
+//   frame  0 - every control neutral
+//   frame  5 - A / X button fully pressed
+//   frame  8 - B / Y button fully pressed
+//   frame 16 - trigger fully pulled
+//   frame 21 - grip trigger fully squeezed
+//   frame 24 - oculus button pressed (not driven - not exposed to apps)
+//   frame 29 / 31 - thumbstick tilted fully forward / back  (stick +y / -y)
+//   frame 34 / 32 - thumbstick tilted fully right / left    (stick +x / -x)
+//
+// The values ramp only across the one or two frames next to each pose, so
+// input cannot be mapped to animation *time*; instead the poses are sampled
+// once at load and blended per frame by the input value.
+constexpr int   frame_primary_button_pressed  {5};
+constexpr int   frame_secondary_button_pressed{8};
+constexpr int   frame_trigger_pulled          {16};
+constexpr int   frame_grip_squeezed           {21};
+constexpr int   frame_thumbstick_forward      {29};
+constexpr int   frame_thumbstick_back         {31};
+constexpr int   frame_thumbstick_left         {32};
+constexpr int   frame_thumbstick_right        {34};
+constexpr float frames_per_second             {24.0f};
+
+[[nodiscard]] auto key_time(const int frame) -> float
+{
+    return static_cast<float>(frame) / frames_per_second;
+}
+
+class Joint_sample
+{
+public:
+    bool      ok         {false};
+    glm::vec3 translation{0.0f};
+    glm::quat rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+[[nodiscard]] auto sample_joint(erhe::scene::Animation& animation, const std::string_view joint_name, const float time) -> Joint_sample
+{
+    Joint_sample result{};
+    for (erhe::scene::Animation_channel& channel : animation.channels) {
+        if (!channel.target || (channel.target->get_name() != joint_name)) {
+            continue;
+        }
+        const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
+        const glm::vec4 value = sampler.evaluate(channel, time);
+        if (channel.path == erhe::scene::Animation_path::TRANSLATION) {
+            result.translation = glm::vec3{value};
+            result.ok = true;
+        } else if (channel.path == erhe::scene::Animation_path::ROTATION) {
+            result.rotation = glm::quat{value.w, value.x, value.y, value.z};
+            result.ok = true;
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] auto find_joint_node(erhe::scene::Animation& animation, const std::string_view joint_name) -> std::shared_ptr<erhe::scene::Node>
+{
+    for (const erhe::scene::Animation_channel& channel : animation.channels) {
+        if (channel.target && (channel.target->get_name() == joint_name)) {
+            return channel.target;
+        }
+    }
+    return {};
+}
+
+// Rotation vector (axis * angle, in the joint's parent space) carrying the
+// neutral rotation onto the actuated one: actuated = exp(v) * neutral.
+[[nodiscard]] auto rotation_vector_between(const glm::quat& neutral, const glm::quat& actuated) -> glm::vec3
+{
+    glm::quat relative = actuated * glm::inverse(neutral);
+    if (relative.w < 0.0f) {
+        relative = -relative;
+    }
+    const float angle = glm::angle(relative);
+    if (angle < 1.0e-6f) {
+        return glm::vec3{0.0f};
+    }
+    return glm::axis(relative) * angle;
+}
+
+} // anonymous namespace
 
 Controller_visualization::Controller_visualization(
     erhe::scene::Node*                 view_root,
@@ -186,12 +278,107 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     model_root->set_parent(hand.node.get());
     hand.node->detach(hand.placeholder_mesh.get());
     hand.has_render_model = true;
+    if (!gltf_data.animations.empty() && gltf_data.animations.front()) {
+        setup_control_drives(hand, *gltf_data.animations.front(), right_hand);
+    } else {
+        log_xr->warn("Controller render model '{}': no animation - control joints stay static", model.name);
+    }
     log_xr->info(
         "Controller render model '{}' loaded for {} hand: {} renderable primitives",
         model.name,
         right_hand ? "right" : "left",
         renderable_primitive_count
     );
+}
+
+void Controller_visualization::setup_control_drives(Hand& hand, erhe::scene::Animation& animation, const bool right_hand)
+{
+    const auto make_drive = [&animation](const std::string_view joint_name, const int actuated_frame) -> Control_drive {
+        Control_drive drive{};
+        drive.node = find_joint_node(animation, joint_name);
+        if (!drive.node) {
+            log_xr->warn("Controller render model: no animation channels for joint '{}'", joint_name);
+            return drive;
+        }
+        const Joint_sample neutral  = sample_joint(animation, joint_name, key_time(0));
+        const Joint_sample actuated = sample_joint(animation, joint_name, key_time(actuated_frame));
+        drive.neutral_translation  = neutral.translation;
+        drive.neutral_rotation     = neutral.rotation;
+        drive.actuated_translation = actuated.translation;
+        drive.actuated_rotation    = actuated.rotation;
+        return drive;
+    };
+
+    hand.primary_button   = make_drive(right_hand ? "b_button_a" : "b_button_x", frame_primary_button_pressed);
+    hand.secondary_button = make_drive(right_hand ? "b_button_b" : "b_button_y", frame_secondary_button_pressed);
+    hand.trigger          = make_drive("b_trigger_front", frame_trigger_pulled);
+    hand.grip_trigger     = make_drive("b_trigger_grip",  frame_grip_squeezed);
+
+    hand.thumbstick = Thumbstick_drive{};
+    hand.thumbstick.node = find_joint_node(animation, "b_thumbstick");
+    if (hand.thumbstick.node) {
+        const Joint_sample neutral = sample_joint(animation, "b_thumbstick", key_time(0));
+        hand.thumbstick.translation      = neutral.translation;
+        hand.thumbstick.neutral_rotation = neutral.rotation;
+        hand.thumbstick.tilt_x_positive  = rotation_vector_between(neutral.rotation, sample_joint(animation, "b_thumbstick", key_time(frame_thumbstick_right  )).rotation);
+        hand.thumbstick.tilt_x_negative  = rotation_vector_between(neutral.rotation, sample_joint(animation, "b_thumbstick", key_time(frame_thumbstick_left   )).rotation);
+        hand.thumbstick.tilt_y_positive  = rotation_vector_between(neutral.rotation, sample_joint(animation, "b_thumbstick", key_time(frame_thumbstick_forward)).rotation);
+        hand.thumbstick.tilt_y_negative  = rotation_vector_between(neutral.rotation, sample_joint(animation, "b_thumbstick", key_time(frame_thumbstick_back   )).rotation);
+    } else {
+        log_xr->warn("Controller render model: no animation channels for joint 'b_thumbstick'");
+    }
+}
+
+void Controller_visualization::update_hand_controls(const bool right_hand, const erhe::xr::Xr_actions* actions)
+{
+    Hand& hand = get_hand(right_hand);
+    if (!hand.has_render_model || (actions == nullptr)) {
+        return;
+    }
+
+    const auto boolean_weight = [](const erhe::xr::Xr_action_boolean* action) -> float {
+        const bool pressed = (action != nullptr) && (action->state.isActive == XR_TRUE) && (action->state.currentState == XR_TRUE);
+        return pressed ? 1.0f : 0.0f;
+    };
+    const auto float_weight = [](const erhe::xr::Xr_action_float* action) -> float {
+        const bool active = (action != nullptr) && (action->state.isActive == XR_TRUE);
+        return active ? std::clamp(action->state.currentState, 0.0f, 1.0f) : 0.0f;
+    };
+    const auto apply_drive = [](const Control_drive& drive, const float weight) {
+        if (!drive.node) {
+            return;
+        }
+        erhe::scene::Trs_transform transform = drive.node->parent_from_node_transform();
+        transform.set_translation_and_rotation(
+            glm::mix  (drive.neutral_translation, drive.actuated_translation, weight),
+            glm::slerp(drive.neutral_rotation,    drive.actuated_rotation,    weight)
+        );
+        drive.node->set_parent_from_node(transform);
+    };
+
+    apply_drive(hand.primary_button,   boolean_weight(right_hand ? actions->a_click : actions->x_click));
+    apply_drive(hand.secondary_button, boolean_weight(right_hand ? actions->b_click : actions->y_click));
+    apply_drive(hand.trigger,          float_weight(actions->trigger_value));
+    apply_drive(hand.grip_trigger,     float_weight(actions->squeeze_value));
+
+    const Thumbstick_drive& thumbstick = hand.thumbstick;
+    if (thumbstick.node != nullptr) {
+        glm::vec2 stick{0.0f};
+        if ((actions->thumbstick != nullptr) && (actions->thumbstick->state.isActive == XR_TRUE)) {
+            stick.x = std::clamp(actions->thumbstick->state.currentState.x, -1.0f, 1.0f);
+            stick.y = std::clamp(actions->thumbstick->state.currentState.y, -1.0f, 1.0f);
+        }
+        const glm::vec3 tilt =
+            ((stick.x >= 0.0f) ? (stick.x * thumbstick.tilt_x_positive) : (-stick.x * thumbstick.tilt_x_negative)) +
+            ((stick.y >= 0.0f) ? (stick.y * thumbstick.tilt_y_positive) : (-stick.y * thumbstick.tilt_y_negative));
+        const float angle = glm::length(tilt);
+        const glm::quat deflection = (angle > 1.0e-6f)
+            ? glm::angleAxis(angle, tilt / angle)
+            : glm::quat{1.0f, 0.0f, 0.0f, 0.0f};
+        erhe::scene::Trs_transform transform = thumbstick.node->parent_from_node_transform();
+        transform.set_translation_and_rotation(thumbstick.translation, deflection * thumbstick.neutral_rotation);
+        thumbstick.node->set_parent_from_node(transform);
+    }
 }
 
 void Controller_visualization::update_hand(
