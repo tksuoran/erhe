@@ -183,6 +183,11 @@ public:
     // rendered, so the correct instance is selected by construction.
     void render_debug_visualizations(const Render_context& context);
 
+    // This view's Debug Visualizations toggles; read by the solid-bone
+    // composition pass gate (App_rendering), which is per view through
+    // Render_context::scene_view.
+    [[nodiscard]] auto get_debug_visualizations_settings() const -> const Debug_visualizations_settings&;
+
     [[nodiscard]] auto get_config                               () -> Viewport_config&;
     [[nodiscard]] auto get_world_from_control                   () const -> std::optional<glm::mat4>;
     [[nodiscard]] auto get_control_from_world                   () const -> std::optional<glm::mat4>;

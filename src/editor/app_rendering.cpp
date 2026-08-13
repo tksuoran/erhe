@@ -23,7 +23,10 @@
 #include "renderers/viewport_config.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
+#include "tools/debug_visualizations.hpp"
+#include "tools/mesh_component_selection.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -662,9 +665,28 @@ App_rendering::App_rendering(
             // proxies must stay visible to be pickable whether or not the solid
             // style is on. Without this the solid bones drew in bone mode
             // regardless of the setting, so the toggle looked dead.
+            //
+            // bone_solid selects only HOW bones render (solid octahedra vs
+            // skeleton lines); WHETHER they render is the per-view Skins
+            // visualization mode - plus always in bone selection mode, where
+            // the proxies are pickable and you cannot click what you cannot
+            // see. Without the Skins gate any skinned asset (e.g. the XR
+            // controller render models) grew permanent bone spikes.
             .is_enabled                   {
                 [](const Render_context& context) -> bool {
-                    return context.app_context.editor_settings->debug_visualizations_style.bone_solid;
+                    if (!context.app_context.editor_settings->debug_visualizations_style.bone_solid) {
+                        return false;
+                    }
+                    const bool bone_mode = (context.app_context.mesh_component_selection != nullptr) &&
+                        (context.app_context.mesh_component_selection->get_mode() == Mesh_component_mode::bone);
+                    if (bone_mode) {
+                        return true;
+                    }
+                    const std::shared_ptr<Scene_root> scene_root = context.scene_view.get_scene_root();
+                    if (!scene_root) {
+                        return false;
+                    }
+                    return Debug_visualizations::skins_shown(context.scene_view.get_debug_visualizations_settings(), *scene_root);
                 }
             }
         },

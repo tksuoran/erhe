@@ -177,6 +177,11 @@ void Scene_view::render_debug_visualizations(const Render_context& context)
     m_debug_visualizations.render(context);
 }
 
+auto Scene_view::get_debug_visualizations_settings() const -> const Debug_visualizations_settings&
+{
+    return m_debug_visualizations.get_settings();
+}
+
 void Scene_view::set_shadow_fit_override_camera(const std::weak_ptr<erhe::scene::Camera>& camera)
 {
     m_shadow_fit_override_camera = camera;

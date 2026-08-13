@@ -21,6 +21,7 @@
 #include "scene/scene_view.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "tools/bone_visualization.hpp"
+#include "tools/mesh_component_selection.hpp"
 #include "tools/selection_tool.hpp"
 #include "transform/transform_tool.hpp"
 
@@ -114,6 +115,38 @@ constexpr vec3 axis_z         { 0.0f,  0.0f, 1.0f};
     return should_visualize(mode, item->is_selected(), item->is_hovered());
 }
 
+}
+
+auto Debug_visualizations::skins_shown(const Debug_visualizations_settings& settings, Scene_root& scene_root) -> bool
+{
+    if (settings.skins == Visualization_mode::off) {
+        return false;
+    }
+    if (settings.skins == Visualization_mode::all) {
+        return true;
+    }
+    // selected / hovered: a skin qualifies when its mesh or any of its joints
+    // carries the flag - the same skin-level aggregation the skeleton line
+    // drawing uses (in bone selection mode the flags land on joint nodes).
+    for (erhe::scene::Mesh_layer* layer : scene_root.layers().mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            if (!mesh->skin) {
+                continue;
+            }
+            bool selected = mesh->is_selected();
+            bool hovered  = mesh->is_hovered();
+            for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
+                if (joint) {
+                    selected = selected || joint->is_selected();
+                    hovered  = hovered  || joint->is_hovered();
+                }
+            }
+            if (should_visualize(settings.skins, selected, hovered)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void Debug_visualizations::read_config(const Debug_visualizations_settings& settings)
@@ -2159,36 +2192,40 @@ void Debug_visualizations::render(const Render_context& context)
     // Visualize each skin only once.
     // In the solid style the pickable bone proxies ARE the bone display, so the
     // line drawing would just double up on them.
-    if (
-        (m_settings.skins != Visualization_mode::off) &&
-        !context.app_context.editor_settings->debug_visualizations_style.bone_solid
-    ) {
-        std::set<erhe::scene::Skin*> skins;
-        for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
-            for (const auto& mesh : layer->meshes) {
-                if (!mesh->skin) {
-                    continue;
-                }
-                // In bone selection mode, selection and hover land on the
-                // JOINT nodes, never on the skinned mesh - so a skin also
-                // counts as selected / hovered when any of its joints is.
-                // Without this, skins=Selected shows no skeleton lines
-                // exactly when working with bones in the line style.
-                bool selected = mesh->is_selected();
-                bool hovered  = mesh->is_hovered();
-                for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
-                    if (joint) {
-                        selected = selected || joint->is_selected();
-                        hovered  = hovered  || joint->is_hovered();
+    // Bone selection mode shows every skeleton regardless of the Skins mode:
+    // the bones are pickable there, and you cannot click what you cannot see.
+    {
+        const bool bone_mode = (context.app_context.mesh_component_selection != nullptr) &&
+            (context.app_context.mesh_component_selection->get_mode() == Mesh_component_mode::bone);
+        const bool line_style = !context.app_context.editor_settings->debug_visualizations_style.bone_solid;
+        if (line_style && (bone_mode || (m_settings.skins != Visualization_mode::off))) {
+            std::set<erhe::scene::Skin*> skins;
+            for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
+                for (const auto& mesh : layer->meshes) {
+                    if (!mesh->skin) {
+                        continue;
+                    }
+                    // In bone selection mode, selection and hover land on the
+                    // JOINT nodes, never on the skinned mesh - so a skin also
+                    // counts as selected / hovered when any of its joints is.
+                    // Without this, skins=Selected shows no skeleton lines
+                    // exactly when working with bones in the line style.
+                    bool selected = mesh->is_selected();
+                    bool hovered  = mesh->is_hovered();
+                    for (const std::shared_ptr<erhe::scene::Node>& joint : mesh->skin->skin_data.joints) {
+                        if (joint) {
+                            selected = selected || joint->is_selected();
+                            hovered  = hovered  || joint->is_hovered();
+                        }
+                    }
+                    if (bone_mode || should_visualize(m_settings.skins, selected, hovered)) {
+                        skins.insert(mesh->skin.get());
                     }
                 }
-                if (should_visualize(m_settings.skins, selected, hovered)) {
-                    skins.insert(mesh->skin.get());
-                }
             }
-        }
-        for (auto* skin : skins) {
-            skin_visualization(context, *skin);
+            for (auto* skin : skins) {
+                skin_visualization(context, *skin);
+            }
         }
     }
 

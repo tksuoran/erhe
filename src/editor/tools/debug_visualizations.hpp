@@ -78,6 +78,20 @@ public:
     // pass, since Texel_renderer samples the shadow map in the vertex stage.
     [[nodiscard]] auto is_shadow_debug_enabled() const -> bool { return m_settings.shadow_debug; }
 
+    // The per-view toggles; the solid-bone composition pass reads the Skins
+    // visualization mode of the view being rendered through this (via
+    // Scene_view::get_debug_visualizations_settings).
+    [[nodiscard]] auto get_settings() const -> const Debug_visualizations_settings& { return m_settings; }
+
+    // Whether the given Skins visualization mode shows at least one skin of
+    // the scene: off = none, all = any, selected / hovered = a skin whose
+    // mesh or any joint has the flag (the same skin-level aggregation the
+    // skeleton line drawing uses). Used by the solid-bone composition pass
+    // gate; pass granularity means that with selected / hovered ANY
+    // qualifying skin shows every skin's proxies - per-skin subsetting would
+    // need per-view mesh flags, which do not exist.
+    [[nodiscard]] static auto skins_shown(const Debug_visualizations_settings& settings, Scene_root& scene_root) -> bool;
+
     // Bone display settings (solid style, bone width) live in the editor-global
     // Debug_visualizations_style, not here: they drive Bone_visualization, whose
     // proxies are shared by every scene view.
