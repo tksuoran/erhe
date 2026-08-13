@@ -229,6 +229,15 @@ auto Imgui_host::get_imgui_ini_path() const -> const std::string&
     return m_imgui_ini_path;
 }
 
+void Imgui_host::set_imgui_ini_path(const std::string& path)
+{
+    // io.IniFilename points at m_imgui_ini_path's buffer; re-point it after
+    // every assignment (and clear it when persistence is disabled).
+    m_imgui_ini_path = path;
+    ImGuiIO& io = m_imgui_context->IO;
+    io.IniFilename = m_imgui_ini_path.empty() ? nullptr : m_imgui_ini_path.c_str();
+}
+
 auto Imgui_host::want_capture_keyboard() const -> bool
 {
     ImGuiIO& io = m_imgui_context->IO;

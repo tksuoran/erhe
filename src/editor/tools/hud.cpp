@@ -241,6 +241,17 @@ void Hud::attach_to_scene(const std::shared_ptr<Scene_root>& scene_root)
 
     Rendertarget_imgui_host* host = m_quad_view->get_imgui_host();
 
+    // In OpenXR mode persist the Hud window layout under config/editor/ so it
+    // ships with the app: the whole config/ tree is bundled into the APK and
+    // migrated to writable storage on first launch, making a repo-committed
+    // layout the default for clean installs. The automatic path ("Hud
+    // Viewport_imgui.ini" in the working directory) stays for desktop. Must
+    // happen before this host's first imgui frame (ini is loaded on first
+    // NewFrame).
+    if (m_context.OpenXR) {
+        host->set_imgui_ini_path("config/editor/openxr_hud_imgui.ini");
+    }
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
     // In OpenXR mode the Headset_view_node must be the rendergraph sink
     // (everything before it, nothing after). Otherwise this orphan

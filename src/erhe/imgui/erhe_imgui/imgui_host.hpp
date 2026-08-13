@@ -94,6 +94,13 @@ public:
     // does not persist its layout.
     [[nodiscard]] auto get_imgui_ini_path() const -> const std::string&;
 
+    // Replace the automatic layout ini path (derived from the debug label) with
+    // an explicit one, or disable persistence with an empty path. Must be called
+    // before this host's first imgui frame: ImGui loads io.IniFilename on the
+    // first NewFrame, so a later change would skip the load (and split saves
+    // across two files).
+    void set_imgui_ini_path(const std::string& path);
+
 protected:
     std::function<void(Imgui_host& viewport)> m_begin_callback;
     std::string     m_imgui_ini_path;
