@@ -457,6 +457,15 @@ void Brush_tool::on_motion()
         Hover_entry::rendertarget_bit
     );
     if ((nearest_hover == nullptr) || (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
+        if ((nearest_hover != nullptr) && (nearest_hover->slot == Hover_entry::rendertarget_slot)) {
+            // The ray is on a rendertarget quad (HUD / Hotbar): treat like
+            // leaving the scene viewport. Clearing m_hover also takes
+            // try_insert_ready() (and pick / rotate) out of play, so the
+            // insert command cannot consume the XR button events the quad's
+            // ImGui host needs for its click handling.
+            m_hover = Hover_entry{};
+            remove_preview_mesh();
+        }
         return;
     }
     m_hover = *nearest_hover;
