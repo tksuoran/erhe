@@ -19,6 +19,17 @@ Editor_settings_store::Editor_settings_store()
         c_editor_settings_file_path, Editor_settings_config::current_version, upgraded
     );
 
+#if defined(ERHE_OS_ANDROID) && defined(ERHE_XR_LIBRARY_OPENXR)
+    // The only Android flavor that links OpenXR is `quest`, which always runs
+    // an immersive session (editor.cpp force-enables headset.openxr later,
+    // after this store is constructed). Force the flag here too so the FIRST
+    // run on a fresh install already selects the OpenXR settings file below -
+    // otherwise the whole first session runs on the shared file's desktop
+    // settings (e.g. hotbar placement values that put it off screen in XR)
+    // and only the autosaved openxr flag fixes the second launch.
+    m_settings.headset.openxr = true;
+#endif
+
     // Separate settings per mode (see class comment): the shared file's
     // headset.openxr selects the mode; under OpenXR, switch to the OpenXR
     // settings file, seeding it from the shared file on first OpenXR run.
