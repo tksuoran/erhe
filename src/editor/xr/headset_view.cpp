@@ -11,6 +11,7 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "quad_view.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "renderers/id_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_renderer.hpp"
@@ -655,6 +656,50 @@ void Headset_view::update_pointer_context_from_controller()
     // previous frame's update_id_render() and merges any closer hit.
     update_hover_with_id_render();
     this->Scene_view::update_grid_hover();
+    update_quad_layer_hover();
+}
+
+void Headset_view::update_quad_layer_hover()
+{
+    const std::optional<glm::vec3> origin_opt    = get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> direction_opt = get_control_ray_direction_in_world();
+    if (!origin_opt.has_value() || !direction_opt.has_value()) {
+        return;
+    }
+    for (Quad_view* quad_view : m_quad_views) {
+        if ((quad_view == nullptr) || !quad_view->is_quad_visible()) {
+            continue;
+        }
+        const std::optional<glm::vec3> hit_position = quad_view->intersect_ray(origin_opt.value(), direction_opt.value());
+        if (!hit_position.has_value()) {
+            continue;
+        }
+        // Mesh-less entry: the quad layer is not a scene mesh. Consumers of
+        // the rendertarget slot null-check scene_mesh_weak; the ones that
+        // matter here (Hotbar thumbstick yield, controller ray stop,
+        // selection suppression) only read valid / position.
+        Hover_entry entry{
+            .slot     = Hover_entry::rendertarget_slot,
+            .mask     = Hover_entry::raytrace_slot_masks[Hover_entry::rendertarget_slot],
+            .valid    = true,
+            .position = hit_position.value(),
+            .normal   = quad_view->get_plane_world_normal()
+        };
+        merge_hover(Hover_entry::rendertarget_slot, entry);
+    }
+}
+
+void Headset_view::register_quad_view(Quad_view* quad_view)
+{
+    m_quad_views.push_back(quad_view);
+}
+
+void Headset_view::unregister_quad_view(Quad_view* quad_view)
+{
+    m_quad_views.erase(
+        std::remove(m_quad_views.begin(), m_quad_views.end(), quad_view),
+        m_quad_views.end()
+    );
 }
 
 void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buffer)

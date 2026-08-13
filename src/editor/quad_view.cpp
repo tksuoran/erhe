@@ -68,6 +68,11 @@ Quad_view::Quad_view(
             );
             if (m_quad_layer && m_quad_layer->is_valid()) {
                 m_uses_composition_layer = true;
+                // The quad layer has no scene mesh, so the raytrace / ID
+                // pickers cannot hover it; the headset view ray-tests
+                // registered quad views analytically each frame and merges
+                // the hits into the rendertarget hover slot.
+                headset_view->register_quad_view(this);
             } else {
                 m_quad_layer.reset();
             }
@@ -115,7 +120,14 @@ Quad_view::Quad_view(
     );
 }
 
-Quad_view::~Quad_view() noexcept = default;
+Quad_view::~Quad_view() noexcept
+{
+#if defined(ERHE_XR_LIBRARY_OPENXR)
+    if (m_uses_composition_layer && (m_headset_view != nullptr)) {
+        m_headset_view->unregister_quad_view(this);
+    }
+#endif
+}
 
 auto Quad_view::uses_composition_layer() const -> bool
 {

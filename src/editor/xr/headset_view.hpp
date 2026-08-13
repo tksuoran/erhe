@@ -53,6 +53,7 @@ class App_rendering;
 class App_settings;
 class Fly_camera_tool;
 class Hud;
+class Quad_view;
 class Scene_builder;
 class Scene_root;
 class Time;
@@ -192,6 +193,21 @@ public:
     [[nodiscard]] auto is_active                            () const -> bool;
     [[nodiscard]] auto get_camera_offset                    () const -> glm::vec3;
 
+    // Mode-dependent world-space ray origin for the given controller aim
+    // pose: the aim pose position (aim mode) or the head-lamp point above
+    // the headset (head-lamp mode). Camera offset is already applied.
+    // Public so quad-based UI (Rendertarget_imgui_host's OpenXR pointer)
+    // intersects with the same ray the user sees.
+    [[nodiscard]] auto get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
+
+    // Path-B quad composition layers (Quad_view) have no scene mesh, so the
+    // raytrace / ID-render pickers can never produce a rendertarget hover
+    // for them. Registered quad views are ray-tested analytically each frame
+    // (update_quad_layer_hover) and merged into the rendertarget hover slot.
+    // Quad_view registers itself only when it uses a composition layer.
+    void register_quad_view  (Quad_view* quad_view);
+    void unregister_quad_view(Quad_view* quad_view);
+
     void render(const Render_context&) override;
 
 private:
@@ -209,10 +225,11 @@ private:
     void update_camera_node();
     void update_pointer_context_from_controller();
 
-    // Mode-dependent world-space ray origin for the given controller aim
-    // pose: the aim pose position (aim mode) or the head-lamp point above
-    // the headset (head-lamp mode). Camera offset is already applied.
-    [[nodiscard]] auto get_controller_ray_origin(const erhe::xr::Xr_action_pose& pose) const -> glm::vec3;
+    // Merge control-ray hits on registered quad composition layers into the
+    // rendertarget hover slot (mesh-less Hover_entry: valid + position +
+    // normal only). Runs from update_pointer_context_from_controller() after
+    // the raytrace / grid hover passes.
+    void update_quad_layer_hover();
 
     // Combined stereo culling frustum for the shadow fit. OpenXR has no API
     // for a single frustum bounding both eyes, so the headset builds one from
@@ -249,6 +266,9 @@ private:
     Headset_ray_log_command                              m_ray_log_left_command;
     Headset_ray_log_command                              m_ray_log_right_command;
     bool                                                 m_head_attached_ray_mode{false};
+
+    // Quad composition layers to hover-test (see register_quad_view()).
+    std::vector<Quad_view*>                              m_quad_views;
 
     App_context&                                         m_app_context;
     erhe::window::Context_window&                        m_context_window;
