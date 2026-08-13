@@ -2850,12 +2850,14 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
 
-    log_gltf->info("glTF loading {}", arguments.path.string());
+    log_gltf->info("glTF loading {}{}", arguments.path.string(), arguments.glb_data.empty() ? "" : " (from memory)");
 
     erhe::time::Timer timer{"parse_gltf"};
     timer.begin();
 
-    fastgltf::Expected<fastgltf::GltfDataBuffer> data = fastgltf::GltfDataBuffer::FromPath(arguments.path);
+    fastgltf::Expected<fastgltf::GltfDataBuffer> data = arguments.glb_data.empty()
+        ? fastgltf::GltfDataBuffer::FromPath(arguments.path)
+        : fastgltf::GltfDataBuffer::FromBytes(arguments.glb_data.data(), arguments.glb_data.size());
     if (data.error() != fastgltf::Error::None) {
         log_gltf->error("glTF load error: {}", fastgltf::getErrorMessage(data.error()));
         return {};

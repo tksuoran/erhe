@@ -10,6 +10,7 @@
 #include <memory>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -193,6 +194,11 @@ struct Gltf_parse_arguments
     // executor tasks (GPU uploads always stay on the calling thread). When
     // false every parse step runs inline, serially.
     bool                                      parallel{true};
+    // When non-empty, parse this in-memory GLB instead of reading `path`
+    // (`path` is then used only for logging and base-directory resolution).
+    // All buffers and images must be embedded in the GLB, as with assets
+    // delivered by OpenXR XR_FB_render_model / XR_EXT_render_model.
+    std::span<const std::byte>                glb_data{};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;

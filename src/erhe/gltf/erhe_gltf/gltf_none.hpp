@@ -10,6 +10,7 @@
 #include <memory>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -154,6 +155,7 @@ struct Gltf_parse_arguments
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
     bool                                      parallel{true};
+    std::span<const std::byte>                glb_data{};
 };
 
 [[nodiscard]] auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data;
