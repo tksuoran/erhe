@@ -1078,11 +1078,18 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         return;
     }
 
+    // In XR the context menu opens on the right-button press edge (the
+    // trigger pull) so it appears immediately; desktop keeps the
+    // conventional open-on-release.
+    const bool context_menu_click = m_context.OpenXR
+        ? ImGui::IsMouseClicked(ImGuiMouseButton_Right)
+        : ImGui::IsMouseReleased(ImGuiMouseButton_Right);
     if (
-        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+        context_menu_click &&
         ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
         !m_popup_item
     ) {
+        log_tree->debug("Item context menu OPEN: '{}' (ImGui right-button {} over hovered item)", item->get_name(), m_context.OpenXR ? "press" : "release");
         m_popup_item = item;
         m_popup_id_string = fmt::format("{}##{}-popup-menu", item->get_name(), item->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());
@@ -1244,11 +1251,16 @@ void Item_tree::root_popup_menu()
         return;
     }
 
+    // Press-edge in XR, release on desktop - see item_popup_menu().
+    const bool context_menu_click = m_context.OpenXR
+        ? ImGui::IsMouseClicked(ImGuiMouseButton_Right)
+        : ImGui::IsMouseReleased(ImGuiMouseButton_Right);
     static bool opened = false;
     if (
-        ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+        context_menu_click &&
         !m_popup_item
     ) {
+        log_tree->debug("Root context menu OPEN: '{}' (ImGui right-button {} over hovered window)", m_root->get_name(), m_context.OpenXR ? "press" : "release");
         m_popup_item = m_root;
         m_popup_id_string = fmt::format("{}##{}-popup-menu", m_root->get_name(), m_root->get_id());
         m_popup_id = ImGui::GetID(m_popup_id_string.c_str());

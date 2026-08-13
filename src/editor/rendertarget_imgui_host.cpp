@@ -98,6 +98,13 @@ auto Rendertarget_imgui_host::get_scale_value() const -> float
 auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_event& input_event) -> bool
 {
     const erhe::window::Xr_boolean_event& xr_boolean_event = input_event.u.xr_boolean_event;
+    log_input->debug(
+        "Rendertarget_imgui_host({}): on_xr_boolean_event action '{}' value {} has_cursor {}",
+        get_debug_label().data(),
+        (xr_boolean_event.action != nullptr) ? xr_boolean_event.action->name : "<null>",
+        xr_boolean_event.value,
+        m_has_cursor
+    );
     if (!m_has_cursor) {
         return false; // TODO Is this needed? Should not be.
     }
@@ -114,14 +121,17 @@ auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_even
         return false;
     }
 
+    // Right-click sources. The right trigger is the right button here (see
+    // on_xr_float_event, trigger_value > 0) - it only acts on this quad
+    // while the ray cursor is on it, so it does not collide with the
+    // trigger's scene roles. thumbrest_touch and thumbstick_click were
+    // right-click sources before, but a resting thumb toggles the thumbrest
+    // touch sensor (opening context menus by itself - logcat-verified) and
+    // the thumbstick click doubles as the ray-mode toggle, so both are gone.
     if (actions_right != nullptr) {
-        erhe::xr::Xr_action_boolean* trigger_click = actions_right->trigger_click;
-        erhe::xr::Xr_action_boolean* a_click       = actions_right->a_click;
-        if ((trigger_click != nullptr) && (xr_boolean_event.action == trigger_click)) {
-            io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
-            return true;
-        }
+        erhe::xr::Xr_action_boolean* a_click = actions_right->a_click;
         if ((a_click != nullptr) && (xr_boolean_event.action == a_click)) {
+            log_input->debug("Rendertarget_imgui_host({}): right a_click -> ImGui LEFT button {}", get_debug_label().data(), xr_boolean_event.value);
             io.AddMouseButtonEvent(ImGuiMouseButton_Left, xr_boolean_event.value);
             return true;
         }
@@ -130,31 +140,23 @@ auto Rendertarget_imgui_host::on_xr_boolean_event(const erhe::window::Input_even
     if (actions_left != nullptr) {
         erhe::xr::Xr_action_boolean* menu_click = actions_left->menu_click;
         if ((menu_click != nullptr) && (xr_boolean_event.action == menu_click)) {
+            log_input->debug("Rendertarget_imgui_host({}): left menu_click -> ImGui RIGHT button {}", get_debug_label().data(), xr_boolean_event.value);
             io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
             return true;
         }
     }
 
-    // The thumbrest is not present for the second edition of the Oculus Touch (Rift S and Quest)
-    if (actions_right != nullptr) {
-        erhe::xr::Xr_action_boolean* r_thumbrest_touch = actions_right->thumbrest_touch;
-        if ((r_thumbrest_touch != nullptr) && (xr_boolean_event.action == r_thumbrest_touch)) {
-            io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
-            return true;
-        }
-
-        erhe::xr::Xr_action_boolean* r_thumbstick_click = actions_right->thumbstick_click;
-        if ((r_thumbstick_click != nullptr) && (xr_boolean_event.action == r_thumbstick_click)) {
-            io.AddMouseButtonEvent(ImGuiMouseButton_Right, xr_boolean_event.value);
-            return true;
-        }
-    }
+    log_input->debug("Rendertarget_imgui_host({}): action not mapped to any ImGui mouse button", get_debug_label().data());
     return false;
 }
 
 auto Rendertarget_imgui_host::on_xr_float_event(const erhe::window::Input_event&) -> bool
 {
-    // TODO
+    // The right trigger's right-mouse-button role is driven by polling the
+    // trigger_value action state in begin_imgui_frame(), not by these
+    // events: commands (e.g. Physics_tool.drag) also bind trigger_value and
+    // can consume the event before this host sees it, which made the
+    // event-driven right button fire only intermittently.
     return false;
 }
 
@@ -431,6 +433,34 @@ void Rendertarget_imgui_host::begin_imgui_frame()
                         }
                     );
                 }
+            }
+        }
+
+        // Right trigger analog value acts as the ImGui right mouse button
+        // on this quad: pressed while value > 0, released at 0. The press
+        // edge is accepted only while the ray cursor is on the quad; the
+        // release edge is always delivered once this host owns the press,
+        // so the button can not stay stuck down after the cursor leaves.
+        // Polled from the action state rather than the XR float input
+        // events: commands (e.g. Physics_tool.drag) also bind trigger_value
+        // and can consume those events before this host sees them, which
+        // made the event-driven right button fire only intermittently.
+        {
+            erhe::xr::Xr_action_float* trigger_value = (actions_right != nullptr) ? actions_right->trigger_value : nullptr;
+            const float value =
+                ((trigger_value != nullptr) && (trigger_value->state.isActive == XR_TRUE))
+                    ? trigger_value->state.currentState
+                    : 0.0f;
+            const bool pressed = value > 0.0f;
+            if ((pressed != m_trigger_right_button_down) && (!pressed || m_has_cursor)) {
+                m_trigger_right_button_down = pressed;
+                log_input->debug(
+                    "Rendertarget_imgui_host({}): right trigger_value {} -> ImGui RIGHT button {}",
+                    get_debug_label().data(),
+                    value,
+                    pressed
+                );
+                io.AddMouseButtonEvent(ImGuiMouseButton_Right, pressed);
             }
         }
     }

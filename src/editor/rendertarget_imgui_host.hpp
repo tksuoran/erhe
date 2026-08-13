@@ -64,6 +64,10 @@ private:
     Rendertarget_view* m_view{nullptr};
     float              m_last_mouse_x{0.0f};
     float              m_last_mouse_y{0.0f};
+    // Right trigger analog value > 0 acts as the ImGui right mouse button
+    // on this quad (see on_xr_float_event); tracks the press edge so the
+    // release is delivered even after the cursor leaves the quad.
+    bool               m_trigger_right_button_down{false};
     bool               m_is_visible{false};
     float              m_this_frame_dt_s{0.0};
     int64_t            m_time_ns{};
