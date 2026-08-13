@@ -625,6 +625,23 @@ if (ERHE_USE_FPNG)
     message(STATUS "Erhe configured to build the fpng image writer (fast PNG save).")
 endif ()
 
+# basis_universal provides the transcoder for KTX2 / Basis supercompressed
+# textures (glTF KHR_texture_basisu images, e.g. the OpenXR
+# XR_FB_render_model controller models). Fetched download-only; the
+# transcoder source (plus its bundled zstd, needed for zstd-supercompressed
+# KTX2 payloads) is compiled into erhe::graphics directly (see
+# src/erhe/graphics/CMakeLists.txt) - the repo's own CMake also builds the
+# encoder and tools, which erhe does not need.
+CPMAddPackage(
+    NAME              basis_universal
+    # v1_60 fails to compile on the NDK (ambiguous safe_shift_left overloads
+    # in basisu_containers.h); v2_50 builds on both MSVC and clang.
+    GIT_TAG           v2_50
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY BinomialLLC/basis_universal
+    DOWNLOAD_ONLY     YES
+)
+
 if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
     CPMAddPackage(
         NAME              recastnavigation

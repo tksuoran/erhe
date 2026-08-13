@@ -1,4 +1,5 @@
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/image_loader_ktx2.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -374,21 +375,43 @@ Image_loader::~Image_loader() noexcept
 
 auto Image_loader::open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool
 {
+    // Route .ktx2 files by extension: the wuffs path memory-maps the file
+    // itself, and sniffing the magic here would open the file twice.
+    m_use_ktx2 = path.extension() == std::filesystem::path{".ktx2"};
+    if (m_use_ktx2) {
+        if (!m_ktx2) {
+            m_ktx2 = std::make_unique<Image_loader_ktx2>();
+        }
+        return m_ktx2->open(path, image_info, linear);
+    }
     return m_impl->open(path, image_info, linear);
 }
 
 auto Image_loader::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool
 {
+    m_use_ktx2 = Image_loader_ktx2::is_ktx2(buffer_view);
+    if (m_use_ktx2) {
+        if (!m_ktx2) {
+            m_ktx2 = std::make_unique<Image_loader_ktx2>();
+        }
+        return m_ktx2->open(buffer_view, image_info, linear);
+    }
     return m_impl->open(buffer_view, image_info, linear);
 }
 
 auto Image_loader::load(std::span<std::uint8_t> transfer_buffer) -> bool
 {
+    if (m_use_ktx2) {
+        return m_ktx2->load(transfer_buffer);
+    }
     return m_impl->load(transfer_buffer);
 }
 
 void Image_loader::close()
 {
+    if (m_ktx2) {
+        m_ktx2->close();
+    }
     return m_impl->close();
 }
 

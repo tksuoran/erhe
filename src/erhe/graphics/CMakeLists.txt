@@ -38,6 +38,8 @@ erhe_target_sources_grouped(
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
     erhe_graphics/image_loader.hpp
+    erhe_graphics/image_loader_ktx2.cpp
+    erhe_graphics/image_loader_ktx2.hpp
     erhe_graphics/image_loader_wuffs.cpp
     erhe_graphics/image_loader_wuffs.hpp
     erhe_graphics/image_writer.hpp
@@ -448,6 +450,39 @@ target_link_libraries(${_target}
         erhe::utility
         erhe::verify
 )
+
+# KTX2 / Basis Universal transcoder (image_loader_ktx2): compiled straight
+# into this target from the download-only basis_universal package, like fpng
+# below. BASISD defaults already enable KTX2 + zstd supercompression support;
+# the zstd source bundled with basis_universal provides the ZSTD_* symbols.
+target_sources(${_target} PRIVATE
+    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+)
+# External sources must not consume this target's C++ precompiled header
+# (zstd.c is C and PCH consumption is a hard error there).
+set_source_files_properties(
+    "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+    "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON
+)
+if (MSVC)
+    # Third-party source: exempt from warnings-as-errors; C4828 fires on a
+    # non-UTF-8 byte inside a basis_universal comment under /utf-8. The
+    # warning also fires in image_loader_ktx2.cpp, which includes the
+    # offending basis_universal header - that file keeps /WX and disables
+    # only C4828.
+    set_source_files_properties(
+        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+        "${basis_universal_SOURCE_DIR}/zstd/zstd.c"
+        PROPERTIES COMPILE_OPTIONS "/WX-;/wd4828"
+    )
+    set_source_files_properties(
+        erhe_graphics/image_loader_ktx2.cpp
+        PROPERTIES COMPILE_OPTIONS "/wd4828"
+    )
+endif ()
+target_include_directories(${_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
 
 # Image writer backend selection. The fpng (fast PNG) backend is used whenever
 # ERHE_USE_FPNG is set; this is independent of ERHE_WINDOW_LIBRARY so a headless

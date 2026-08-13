@@ -29,6 +29,7 @@ public:
 };
 
 class Image_loader_impl;
+class Image_loader_ktx2;
 
 class Image_loader
 {
@@ -46,7 +47,12 @@ public:
     void close();
 
 private:
+    // Routing: KTX2 containers (identified by magic) decode through the
+    // Basis Universal transcoder; everything else through wuffs. m_use_ktx2
+    // records which backend the last successful open() selected.
     std::unique_ptr<Image_loader_impl> m_impl;
+    std::unique_ptr<Image_loader_ktx2> m_ktx2;
+    bool                               m_use_ktx2{false};
 };
 
 } // namespace erhe::graphics
