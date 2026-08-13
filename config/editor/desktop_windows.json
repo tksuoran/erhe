@@ -9,6 +9,7 @@
         "clipboard": false,
         "commands": false,
         "composer": false,
+        "controller_inputs": false,
         "create": false,
         "depth_visualization": false,
         "fly_camera": false,

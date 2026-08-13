@@ -114,6 +114,7 @@
 #include "transform/rotate_tool.hpp"
 #include "transform/scale_tool.hpp"
 #include "windows/editor_windows.hpp"
+#include "windows/controller_inputs_window.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "windows/lightmap_texture_window.hpp"
 #include "windows/lightmap_window.hpp"
@@ -2051,6 +2052,7 @@ public:
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
+                m_controller_inputs_window = std::make_unique<Controller_inputs_window     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_lightmap_window        = std::make_unique<Lightmap_window                 >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_lightmap_texture_window = std::make_unique<Lightmap_texture_window        >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_app_context.lightmap_texture_window = m_lightmap_texture_window.get();
@@ -3966,6 +3968,7 @@ public:
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;
+    std::unique_ptr<Controller_inputs_window        >        m_controller_inputs_window;
     std::unique_ptr<Lightmap_window                 >        m_lightmap_window;
     std::unique_ptr<Lightmap_texture_window         >        m_lightmap_texture_window;
     std::unique_ptr<Rendergraph_window              >        m_rendergraph_window;

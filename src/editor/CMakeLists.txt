@@ -588,6 +588,8 @@ erhe_target_sources_grouped(
     windows/config_ui.hpp
     windows/editor_windows.cpp
     windows/editor_windows.hpp
+    windows/controller_inputs_window.cpp
+    windows/controller_inputs_window.hpp
     windows/frame_pacing_window.cpp
     windows/frame_pacing_window.hpp
     windows/lightmap_texture_window.cpp
