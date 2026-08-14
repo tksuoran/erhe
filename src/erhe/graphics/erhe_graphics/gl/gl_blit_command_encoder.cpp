@@ -3,10 +3,12 @@
 #include "erhe_graphics/gl/gl_device.hpp"
 #include "erhe_graphics/gl/gl_render_pass.hpp"
 #include "erhe_graphics/gl/gl_texture.hpp"
+#include "erhe_gl/gl_helpers.hpp"
 #include "erhe_gl/wrapper_functions.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -169,6 +171,20 @@ void Blit_command_encoder_impl::copy_from_buffer(
     int gl_destination_y = destination_origin.y;
     int gl_destination_z = destination_origin.z;
     convert_texture_offset_to_gl(gl_destination_texture_target, gl_destination_x, gl_destination_y, gl_destination_z, static_cast<int>(destination_slice));
+
+    if (erhe::dataformat::is_block_compressed(destination_texture->get_pixelformat())) {
+        copy_from_buffer_compressed(
+            source_buffer,
+            source_offset,
+            source_bytes_per_image,
+            destination_texture,
+            gl_destination_texture_target,
+            destination_level,
+            gl_destination_x, gl_destination_y, gl_destination_z,
+            gl_width, gl_height, gl_depth
+        );
+        return;
+    }
 
     const std::size_t gl_bytes_per_pixel = get_gl_pixel_byte_count(destination_texture->get_pixelformat());
 
@@ -399,6 +415,138 @@ void Blit_command_encoder_impl::copy_from_buffer(
         }
     }
 #endif
+}
+
+// Block-compressed destination path of buffer->texture copy_from_buffer.
+//
+// GL_UNPACK_ROW_LENGTH / GL_UNPACK_IMAGE_HEIGHT / GL_UNPACK_ALIGNMENT do not
+// apply to compressed uploads (only GL_UNPACK_COMPRESSED_BLOCK_* would, and
+// those are left at 0), so the source data must be tightly packed and
+// imageSize carries the full byte count.
+void Blit_command_encoder_impl::copy_from_buffer_compressed(
+    const Buffer* const      source_buffer,
+    const std::uintptr_t     source_offset,
+    const std::uintptr_t     source_bytes_per_image,
+    const Texture* const     destination_texture,
+    const gl::Texture_target gl_destination_texture_target,
+    const std::uintptr_t     destination_level,
+    const int gl_destination_x, const int gl_destination_y, const int gl_destination_z,
+    const int gl_width, const int gl_height, const int gl_depth
+)
+{
+    const std::optional<gl::Internal_format> gl_internal_format_opt = gl_helpers::convert_to_gl(destination_texture->get_pixelformat());
+    ERHE_VERIFY(gl_internal_format_opt.has_value());
+    // glCompressedTex(ture)SubImage*D take the compressed internal format enum
+    // in their format parameter; the generated wrappers type it as Pixel_format.
+    const gl::Pixel_format gl_format  = static_cast<gl::Pixel_format>(gl_internal_format_opt.value());
+    const GLsizei          image_size = static_cast<GLsizei>(source_bytes_per_image) * std::max(gl_depth, 1);
+
+    const int  storage_dimensions = destination_texture->get_impl().get_storage_dimensions(gl_destination_texture_target);
+    const bool is_cube_map        = (gl_destination_texture_target == gl::Texture_target::texture_cube_map);
+
+#if defined(__APPLE__)
+    // See copy_from_buffer: PBO-based uploads are unreliable on the macOS GL
+    // driver, so read back to CPU and upload directly.
+    std::vector<std::byte> cpu_buffer(static_cast<std::size_t>(image_size));
+    {
+        auto guard = m_device.get_impl().get_binding_state().push_buffer(
+            gl::Buffer_target::copy_read_buffer, source_buffer->get_impl().gl_name()
+        );
+        gl::get_buffer_sub_data(
+            gl::Buffer_target::copy_read_buffer,
+            static_cast<GLintptr>(source_offset),
+            static_cast<GLsizeiptr>(image_size),
+            cpu_buffer.data()
+        );
+    }
+    const char* data_pointer = reinterpret_cast<const char*>(cpu_buffer.data());
+    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, 0);
+    const bool use_dsa = false;
+#else
+    gl::bind_buffer(gl::Buffer_target::pixel_unpack_buffer, source_buffer->get_impl().gl_name());
+    const char* data_pointer = reinterpret_cast<const char*>(source_offset);
+    const bool use_dsa = m_device.get_info().use_direct_state_access;
+#endif
+
+    std::optional<Texture_binding_guard> texture_guard;
+    if (!use_dsa) {
+        constexpr GLuint scratch_unit = Gl_binding_state::s_max_texture_units - 1;
+        texture_guard.emplace(
+            m_device.get_impl().get_binding_state().push_texture(
+                scratch_unit, gl_destination_texture_target, destination_texture->get_impl().gl_name()
+            )
+        );
+    }
+
+    if (is_cube_map) {
+        if (use_dsa) {
+            // DSA addresses a cube face as the z layer of a 3D sub-image by texture name.
+            gl::compressed_texture_sub_image_3d(
+                destination_texture->get_impl().gl_name(),
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y, gl_destination_z,
+                gl_width, gl_height, gl_depth, gl_format, image_size, data_pointer
+            );
+        } else {
+            // Classic GL: one face at a time through the per-face 2D target
+            // (see copy_from_buffer for rationale).
+            ERHE_VERIFY(gl_depth == 1);
+            const gl::Texture_target face_target = static_cast<gl::Texture_target>(
+                static_cast<unsigned int>(gl::Texture_target::texture_cube_map_positive_x) +
+                static_cast<unsigned int>(gl_destination_z)
+            );
+            gl::compressed_tex_sub_image_2d(
+                face_target,
+                static_cast<GLint>(destination_level),
+                gl_destination_x, gl_destination_y,
+                gl_width, gl_height, gl_format, image_size, data_pointer
+            );
+        }
+    } else {
+        switch (storage_dimensions) {
+            case 2: {
+                if (use_dsa) {
+                    gl::compressed_texture_sub_image_2d(
+                        destination_texture->get_impl().gl_name(),
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y,
+                        gl_width, gl_height, gl_format, image_size, data_pointer
+                    );
+                } else {
+                    gl::compressed_tex_sub_image_2d(
+                        gl_destination_texture_target,
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y,
+                        gl_width, gl_height, gl_format, image_size, data_pointer
+                    );
+                }
+                break;
+            }
+
+            case 3: {
+                if (use_dsa) {
+                    gl::compressed_texture_sub_image_3d(
+                        destination_texture->get_impl().gl_name(),
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y, gl_destination_z,
+                        gl_width, gl_height, gl_depth, gl_format, image_size, data_pointer
+                    );
+                } else {
+                    gl::compressed_tex_sub_image_3d(
+                        gl_destination_texture_target,
+                        static_cast<GLint>(destination_level),
+                        gl_destination_x, gl_destination_y, gl_destination_z,
+                        gl_width, gl_height, gl_depth, gl_format, image_size, data_pointer
+                    );
+                }
+                break;
+            }
+
+            default: {
+                ERHE_FATAL("Bad texture target for compressed upload");
+            }
+        }
+    }
 }
 
 // Copy from texture to buffer

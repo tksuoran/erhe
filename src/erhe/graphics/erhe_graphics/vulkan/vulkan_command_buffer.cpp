@@ -406,6 +406,8 @@ void Command_buffer_impl::upload_to_texture(
 {
     ERHE_VERIFY(m_device_impl != nullptr);
     ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
+    // Block-compressed uploads go through Blit_command_encoder::copy_from_buffer
+    ERHE_VERIFY(!erhe::dataformat::is_block_compressed(pixelformat));
 
     if ((data == nullptr) || (width <= 0) || (height <= 0)) {
         return;

@@ -250,10 +250,14 @@ void Blit_command_encoder_impl::copy_from_buffer(
     const VkBuffer vk_source_buffer     = source_buffer->get_impl().get_vk_buffer();
     const VkImage  vk_destination_image = destination_texture->get_impl().get_vk_image();
 
-    // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes
-    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(destination_texture->get_pixelformat());
-    const uint32_t    buffer_row_length   = (bytes_per_pixel > 0) ? static_cast<uint32_t>(source_bytes_per_row / bytes_per_pixel) : 0;
-    const uint32_t    buffer_image_height = (source_bytes_per_row > 0) ? static_cast<uint32_t>(source_bytes_per_image / source_bytes_per_row) : 0;
+    // bufferRowLength is in texels, not bytes; bufferImageHeight is in rows, not bytes.
+    // For block-compressed destinations the source data is required to be tightly
+    // packed; 0 tells Vulkan to derive the pitch from imageExtent.
+    const erhe::dataformat::Format destination_format = destination_texture->get_pixelformat();
+    const bool        is_compressed       = erhe::dataformat::is_block_compressed(destination_format);
+    const std::size_t bytes_per_pixel     = erhe::dataformat::get_format_size_bytes(destination_format);
+    const uint32_t    buffer_row_length   = (!is_compressed && (bytes_per_pixel > 0)) ? static_cast<uint32_t>(source_bytes_per_row / bytes_per_pixel) : 0;
+    const uint32_t    buffer_image_height = (!is_compressed && (source_bytes_per_row > 0)) ? static_cast<uint32_t>(source_bytes_per_image / source_bytes_per_row) : 0;
 
     const VkBufferImageCopy region{
         .bufferOffset      = source_offset,

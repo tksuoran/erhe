@@ -303,6 +303,9 @@ void Command_buffer_impl::upload_to_texture(
         return;
     }
 
+    // Block-compressed uploads go through Blit_command_encoder::copy_from_buffer
+    ERHE_VERIFY(!erhe::dataformat::is_block_compressed(pixelformat));
+
     const std::size_t pixel_size = erhe::dataformat::get_format_size_bytes(pixelformat);
     const std::size_t src_stride = (row_stride > 0)
         ? static_cast<std::size_t>(row_stride)

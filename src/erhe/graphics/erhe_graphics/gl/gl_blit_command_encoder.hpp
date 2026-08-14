@@ -3,6 +3,7 @@
 #include "erhe_graphics/blit_command_encoder.hpp"
 #include "erhe_graphics/gl/gl_command_encoder.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_gl/wrapper_enums.hpp"
 
 namespace erhe::graphics {
 
@@ -25,6 +26,20 @@ public:
     void copy_from_texture(const Texture* source_texture, std::uintptr_t source_slice, std::uintptr_t source_level, const Texture* destination_texture, std::uintptr_t destination_slice, std::uintptr_t destination_level, std::uintptr_t slice_count, std::uintptr_t level_count);
     void copy_from_texture(const Texture* source_texture, const Texture* destination_texture);
     void copy_from_buffer (const Buffer*  source_buffer,  std::uintptr_t source_offset, const Buffer* destination_buffer, std::uintptr_t destination_offset, std::uintptr_t size);
+
+private:
+    // Block-compressed (BC) destination path of buffer->texture copy_from_buffer.
+    // Source data must be tightly packed.
+    void copy_from_buffer_compressed(
+        const Buffer*      source_buffer,
+        std::uintptr_t     source_offset,
+        std::uintptr_t     source_bytes_per_image,
+        const Texture*     destination_texture,
+        gl::Texture_target gl_destination_texture_target,
+        std::uintptr_t     destination_level,
+        int gl_destination_x, int gl_destination_y, int gl_destination_z,
+        int gl_width, int gl_height, int gl_depth
+    );
 };
 
 } // namespace erhe::graphics

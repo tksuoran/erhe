@@ -1469,6 +1469,9 @@ void Device_impl::upload_to_texture(
     const int                    row_stride
 )
 {
+    // Block-compressed uploads go through Blit_command_encoder::copy_from_buffer
+    ERHE_VERIFY(!erhe::dataformat::is_block_compressed(pixelformat));
+
     gl::Pixel_format gl_format{};
     gl::Pixel_type   gl_type{};
     const bool format_ok = get_format_and_type(pixelformat, gl_format, gl_type);
