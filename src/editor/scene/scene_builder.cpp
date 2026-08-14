@@ -1437,26 +1437,55 @@ auto Scene_builder::add_lights(const Add_lights_args& args) -> bool
     std::vector<std::shared_ptr<erhe::scene::Node>> light_nodes;
     light_nodes.reserve(static_cast<std::size_t>(directional_light_count + spot_light_count + point_light_count));
 
-    for (int i = 0; i < directional_light_count; ++i) {
-        const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
-        const float R   = directional_light_radius;
-        const float h   = rel * 360.0f;
-        const float s   = (directional_light_count > 1) ? 0.5f : 0.0f;
-        const float v   = 1.0f;
-        float r, g, b;
-
-        erhe::math::hsv_to_rgb(h, s, v, r, g, b);
-
-        const vec3        color       = vec3{r, g, b};
-        const float       intensity   = directional_light_intensity / static_cast<float>(directional_light_count);
-        const bool        cast_shadow = (i < directional_light_shadow_count);
-        const std::string name        = fmt::format(
-            "Directional light {}{}", i, cast_shadow ? "" : " (no shadow)"
+    if (args.directional_sun_fill && (directional_light_count == 2)) {
+        // Warm main sun plus a dimmer, cooler fill light for pleasant default
+        // visuals. Both honor the layout radius / height args; the fill comes
+        // from roughly the opposite azimuth at a lower elevation, so it
+        // softens the sun's shadow side without reading as a second sun.
+        const float R           = directional_light_radius;
+        const float h           = directional_light_height;
+        const bool  sun_shadow  = directional_light_shadow_count >= 1;
+        const bool  fill_shadow = directional_light_shadow_count >= 2;
+        light_nodes.push_back(
+            make_directional_light(
+                sun_shadow ? "Sun" : "Sun (no shadow)",
+                vec3{-0.4f * R, h, 0.9f * R},
+                vec3{1.0f, 0.96f, 0.88f},
+                0.75f * directional_light_intensity,
+                sun_shadow
+            )
         );
-        const float       x_pos       = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f + glm::pi<float>());
-        const float       z_pos       = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f + glm::pi<float>());
-        const vec3        position    = vec3{x_pos, directional_light_height, z_pos};
-        light_nodes.push_back(make_directional_light(name, position, color, intensity, cast_shadow));
+        light_nodes.push_back(
+            make_directional_light(
+                fill_shadow ? "Fill light" : "Fill light (no shadow)",
+                vec3{0.8f * R, 0.45f * h, -0.7f * R},
+                vec3{0.75f, 0.85f, 1.0f},
+                0.25f * directional_light_intensity,
+                fill_shadow
+            )
+        );
+    } else {
+        for (int i = 0; i < directional_light_count; ++i) {
+            const float rel = static_cast<float>(i) / static_cast<float>(directional_light_count);
+            const float R   = directional_light_radius;
+            const float h   = rel * 360.0f;
+            const float s   = (directional_light_count > 1) ? 0.5f : 0.0f;
+            const float v   = 1.0f;
+            float r, g, b;
+
+            erhe::math::hsv_to_rgb(h, s, v, r, g, b);
+
+            const vec3        color       = vec3{r, g, b};
+            const float       intensity   = directional_light_intensity / static_cast<float>(directional_light_count);
+            const bool        cast_shadow = (i < directional_light_shadow_count);
+            const std::string name        = fmt::format(
+                "Directional light {}{}", i, cast_shadow ? "" : " (no shadow)"
+            );
+            const float       x_pos       = R * std::sin(rel * glm::two_pi<float>() + 1.0f / 7.0f + glm::pi<float>());
+            const float       z_pos       = R * std::cos(rel * glm::two_pi<float>() + 1.0f / 7.0f + glm::pi<float>());
+            const vec3        position    = vec3{x_pos, directional_light_height, z_pos};
+            light_nodes.push_back(make_directional_light(name, position, color, intensity, cast_shadow));
+        }
     }
 
     for (int i = 0; i < spot_light_count; ++i) {

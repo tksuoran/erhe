@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Add_lights_args",
-    version=1,
+    version=2,
     short_desc="Args for scene.add_lights",
     long_desc="Per-invocation argument block consumed by scene.add_lights. Configures the directional, spot and point lights placed by the default scene-light setup.",
     developer=False,
@@ -53,6 +53,16 @@ struct("Add_lights_args",
             default="0",
             short_desc="Directional Light No-Shadow Count",
             long_desc="Number of additional directional lights to create that do not cast shadows.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "directional_sun_fill",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Directional Sun + Fill",
+            long_desc="When true and exactly two directional lights are requested, place them as a warm main sun and a dimmer cool fill light instead of the equal-intensity hue-circle layout.",
             visible=True,
             developer=False
         ),
