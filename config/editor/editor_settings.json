@@ -1,5 +1,4 @@
 {
-    "_version": 19,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -11,7 +10,6 @@
         "turn_speed": 1
     },
     "debug_visualizations_style": {
-        "_version": 4,
         "shadow_fit_casters_color": [0.2,1,0.3,0.6],
         "shadow_fit_casters_culled_color": [1,0.2,0.2,0.4],
         "shadow_fit_casters_width": 1,
@@ -128,7 +126,6 @@
     },
     "clear_color": [0,0,0,0.4],
     "content_edge_lines": {
-        "_version": 2,
         "use_tent": false,
         "line_bias_margin": 1024,
         "line_bias_clamp": 2048,
@@ -150,10 +147,8 @@
     },
     "scene_views": [
         {
-            "_version": 2,
             "name": "Headset",
             "debug_visualizations": {
-                "_version": 11,
                 "lights": "off",
                 "cameras": "off",
                 "layouts": "off",
@@ -202,9 +197,7 @@
                 "vertex_positions": false
             },
             "viewport_config": {
-                "_version": 2,
                 "render_style_not_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": true,
                     "solid_wireframe": false,
@@ -212,7 +205,6 @@
                     "corner_points": false
                 },
                 "render_style_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": true,
                     "solid_wireframe": false,
@@ -236,10 +228,8 @@
             }
         },
         {
-            "_version": 2,
             "name": "Default Viewport",
             "debug_visualizations": {
-                "_version": 11,
                 "lights": "off",
                 "cameras": "off",
                 "layouts": "off",
@@ -288,9 +278,7 @@
                 "vertex_positions": false
             },
             "viewport_config": {
-                "_version": 2,
                 "render_style_not_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": false,
                     "solid_wireframe": false,
@@ -298,7 +286,6 @@
                     "corner_points": false
                 },
                 "render_style_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": false,
                     "solid_wireframe": false,
@@ -322,10 +309,8 @@
             }
         },
         {
-            "_version": 2,
             "name": "Scene 1",
             "debug_visualizations": {
-                "_version": 11,
                 "lights": "off",
                 "cameras": "off",
                 "layouts": "off",
@@ -374,9 +359,7 @@
                 "vertex_positions": false
             },
             "viewport_config": {
-                "_version": 2,
                 "render_style_not_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": true,
                     "solid_wireframe": false,
@@ -384,7 +367,6 @@
                     "corner_points": false
                 },
                 "render_style_selected": {
-                    "_version": 2,
                     "polygon_fill": true,
                     "edge_lines": true,
                     "solid_wireframe": false,
@@ -408,9 +390,8 @@
             }
         }
     ],
-    "developer": { "enable": false },
+    "developer": { "enable": true },
     "grid": {
-        "_version": 3,
         "snap_enabled": true,
         "visible": true,
         "cell_size": 1,
@@ -431,7 +412,6 @@
         "level3_width": 0.006
     },
     "headset": {
-        "_version": 2,
         "openxr": false,
         "openxr_mirror": false,
         "quad_view": false,
@@ -454,7 +434,6 @@
         "foveation_dynamic": true
     },
     "hotbar": {
-        "_version": 4,
         "enabled": true,
         "show": true,
         "use_radial": false,
@@ -465,7 +444,6 @@
         "padding": 0.01
     },
     "hud": {
-        "_version": 2,
         "enabled": false,
         "show": false,
         "locked": false,
@@ -478,7 +456,6 @@
         "summon_distance": 0.4
     },
     "id_renderer": {
-        "_version": 2,
         "enabled": false,
         "box_select_use_compute": true
     },
@@ -488,7 +465,6 @@
         "max_bounces": 8
     },
     "lightmap": {
-        "_version": 11,
         "cell_size_m": 10,
         "hard_angles_deg": 60,
         "uv_parameterizer": 4,
@@ -511,69 +487,74 @@
     },
     "inventory": {
         "grid_slots": [
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 },
-            { "_version": 4 }
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            },
+            {
+            }
         ],
         "hotbar_slots": [
+            { "tool_name": "Move Tool" },
+            { "tool_name": "Rotate" },
+            { "tool_name": "Scale" },
+            { "tool_name": "Brush Tool" },
+            { "tool_name": "Material Paint Tool (command host)" },
+            { "tool_name": "Paint Tool" },
+            { "tool_name": "Physics Tool" },
+            { "tool_name": "Selection Tool" },
             {
-                "_version": 4,
-                "tool_name": "Move Tool"
             },
             {
-                "_version": 4,
-                "tool_name": "Rotate"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Scale"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Brush Tool"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Material Paint Tool (command host)"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Paint Tool"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Physics Tool"
-            },
-            {
-                "_version": 4,
-                "tool_name": "Selection Tool"
-            },
-            { "_version": 4 },
-            { "_version": 4 }
+            }
         ]
     },
     "load": {
@@ -588,7 +569,6 @@
         "downstream_port": 34567
     },
     "physics": {
-        "_version": 2,
         "static_enable": true,
         "dynamic_enable": false,
         "debug_draw": false,
@@ -610,7 +590,6 @@
         "make_curved_brushes": true
     },
     "shadow_frustum_fit": {
-        "_version": 2,
         "fit_to_view_frustum": true,
         "fit_to_casters": true,
         "fit_to_receivers": true,
@@ -625,7 +604,6 @@
         "collect_debug": false
     },
     "sky": {
-        "_version": 3,
         "enabled": true,
         "mode": 0,
         "sky_horizon_color": [0.3,0.3,0.33,1],
@@ -650,7 +628,6 @@
         "size_pixels": 256
     },
     "transform_tool": {
-        "_version": 24,
         "gizmo_scale": 1,
         "show_translate": true,
         "show_rotate": true,

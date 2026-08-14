@@ -20,7 +20,7 @@
     },
     "vulkan": {
         "_version": 2,
-        "disable_ray_tracing": true,
+        "disable_ray_tracing": false,
         "vulkan_validation_layers": false,
         "use_kosmickrisp": false,
         "use_moltenvk": false

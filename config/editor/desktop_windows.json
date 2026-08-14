@@ -46,6 +46,7 @@
         "tail_log": false,
         "texture_graph_palette": false,
         "tool_properties": false,
+        "tools_content_library": false,
         "transform": true
     }
 }
