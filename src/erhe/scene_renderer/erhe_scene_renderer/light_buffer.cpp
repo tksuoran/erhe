@@ -200,7 +200,6 @@ Light_buffer::Light_buffer(
                 .width             = 1,
                 .height            = 1,
                 .depth             = 1,
-                .array_layer_count = 1,
                 .debug_label       = "Light_buffer::m_fallback_lightmap_texture"
             }
         )
