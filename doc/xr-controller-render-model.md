@@ -35,7 +35,7 @@ vectors relative to neutral) by the stick vector. The oculus/menu button
 joint stays static (not exposed to apps). Extracted reference copies of
 the runtime GLBs live in `res/editor/assets/Quest/`.
 
-## Battery indicator quad (investigated 2026-08-13, DECISION PENDING)
+## Battery indicator quad (investigated 2026-08-13, RESOLVED 2026-08-14: hidden)
 
 `<side>_batteryIndicatorQuad` is a 4-vertex quad (~2 x 9 mm) on the top
 face next to the thumbstick, skinned 100% to the root joint, with its own
@@ -63,9 +63,12 @@ charge on the controller is acceptable UX.
 
 Display mechanics once a data source exists: remap the quad's
 `TEXCOORD_0` from full-atlas to the level bucket's cell and rebuild the
-4-vertex renderable when the bucket changes (rare, cheap). Options until
-then: hide the quad by mesh name at load, or statically clamp UVs to the
-"full" cell. Neither is implemented yet - decision pending.
+4-vertex renderable when the bucket changes (rare, cheap). Until a data
+source exists the quad is HIDDEN at load (Quest-verified 2026-08-14):
+`Controller_visualization::load_render_model` skips nodes whose name ends
+with `batteryIndicatorQuad` (visible flag cleared, no renderable mesh
+built). Revisit if the runtime ever exposes
+`XR_EXT_interaction_profile_battery_state_display`.
 
 Tooling note: `basisu.exe` (KTX2/Basis decode to PNG) is built at
 `.cpm_cache/basis_universal/<hash>/bin/basisu.exe` (built 2026-08-13 with

@@ -249,6 +249,15 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
         if (!mesh) {
             continue;
         }
+        // The battery level indicator quad expects the app to window its UVs
+        // to one cell of a four-cell battery-level atlas, but controller
+        // battery level is not queryable by third-party apps on Quest (see
+        // doc/xr-controller-render-model.md), so hide the quad entirely.
+        if (node->get_name().ends_with("batteryIndicatorQuad")) {
+            node->disable_flag_bits(erhe::Item_flags::visible);
+            mesh->disable_flag_bits(erhe::Item_flags::visible);
+            continue;
+        }
         mesh->enable_flag_bits(erhe::Item_flags::controller);
         mesh->layer_id = m_content_layer_id;
         // Renderable fill triangles only: no edges, and deliberately no
