@@ -1096,11 +1096,24 @@ auto Surface_impl::update_swapchain(Vulkan_swapchain_create_info& out_swapchain_
     // creation (VUID-vkSetSwapchainPresentTimingQueueSizeEXT-swapchain-12229).
     // Only tier W uses present timing (init_present_timing), so don't opt the
     // swapchain into the driver's timing-queue machinery on other tiers.
-    const VkSwapchainCreateFlagsKHR swapchain_create_flags =
+    VkSwapchainCreateFlagsKHR swapchain_create_flags =
         (m_device_impl.get_capabilities().m_present_timing &&
          (m_device_impl.get_frame_pacing_tier() == Frame_pacing_tier::full))
             ? VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT
             : 0u;
+
+    // Present id 2: Swapchain_impl::present_image() chains VkPresentId2KHR
+    // when the device has the present-id capability through
+    // VK_KHR_present_id2 only (no VK_KHR_present_id). That present path
+    // requires opting in at swapchain creation
+    // (VUID-VkPresentId2KHR-None-10820). Mirror present_image()'s
+    // extension selection exactly.
+    if (m_device_impl.get_capabilities().m_present_id &&
+        !m_device_impl.get_device_extensions().m_VK_KHR_present_id &&
+        m_device_impl.get_device_extensions().m_VK_KHR_present_id2
+    ) {
+        swapchain_create_flags |= VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR;
+    }
 
     // Screenshot readback (Device::capture_last_frame): TRANSFER_SRC lets the
     // swapchain render pass epilogue copy the composited image to a staging
