@@ -101,6 +101,24 @@ enum class Format : unsigned int {
 
     //format_b10g11r11_ufloat_pack32
 
+    // Block-compressed formats (BC1..BC7, 4x4 texel blocks)
+    format_bc1_rgb_unorm,       // 8 bytes per block, RGB, 1-bit alpha unused
+    format_bc1_rgb_srgb,
+    format_bc1_rgba_unorm,      // 8 bytes per block, RGB + 1-bit alpha
+    format_bc1_rgba_srgb,
+    format_bc2_unorm,           // 16 bytes per block, RGB + explicit 4-bit alpha
+    format_bc2_srgb,
+    format_bc3_unorm,           // 16 bytes per block, RGB + interpolated alpha
+    format_bc3_srgb,
+    format_bc4_unorm,           // 8 bytes per block, single channel
+    format_bc4_snorm,
+    format_bc5_unorm,           // 16 bytes per block, two channels
+    format_bc5_snorm,
+    format_bc6h_ufloat,         // 16 bytes per block, RGB half-float HDR
+    format_bc6h_sfloat,
+    format_bc7_unorm,           // 16 bytes per block, RGBA
+    format_bc7_srgb,
+
     // Depth / stencil formats
     format_d16_unorm,           // a one-component, 16-bit unsigned normalized format that has a single 16-bit depth component.
     format_x8_d24_unorm_pack32, // a two-component, 32-bit format that has 24 unsigned normalized bits in the depth component and, optionally, 8 bits that are unused.
@@ -127,7 +145,16 @@ enum class Format_kind {
 [[nodiscard]] auto get_component_count    (Format format) -> std::size_t;
 [[nodiscard]] auto get_component_byte_size(Format format) -> std::size_t;
 [[nodiscard]] auto has_color              (Format format) -> bool;
+
+// For block-compressed formats get_format_size_bytes() returns the byte size
+// of one block (8 or 16), not of one texel.
 [[nodiscard]] auto get_format_size_bytes  (Format format) -> std::size_t;
+
+[[nodiscard]] auto is_block_compressed      (Format format) -> bool;
+[[nodiscard]] auto get_block_extent         (Format format) -> std::size_t;  // block width == height in texels; 1 for uncompressed formats
+[[nodiscard]] auto get_block_size_bytes     (Format format) -> std::size_t;  // bytes per block; equals get_format_size_bytes() for compressed formats
+[[nodiscard]] auto get_image_level_size_bytes(Format format, std::size_t width, std::size_t height) -> std::size_t; // tightly packed single level, block-rounded for compressed formats
+[[nodiscard]] auto get_mip_chain_byte_count (Format format, std::size_t width, std::size_t height, std::size_t level_count) -> std::size_t;
 [[nodiscard]] auto get_red_size_bits      (Format format) -> std::size_t;
 [[nodiscard]] auto get_green_size_bits    (Format format) -> std::size_t;
 [[nodiscard]] auto get_blue_size_bits     (Format format) -> std::size_t;

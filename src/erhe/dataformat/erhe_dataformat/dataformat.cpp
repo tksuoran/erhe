@@ -260,6 +260,22 @@ auto c_str(const Format format) -> const char*
         case Format::format_packed1010102_vec4_uint:  return "format_packed1010102_vec4_uint";
         case Format::format_packed1010102_vec4_sint:  return "format_packed1010102_vec4_sint";
         case Format::format_packed111110_vec3_unorm:  return "format_packed111110_vec3_unorm";
+        case Format::format_bc1_rgb_unorm:            return "format_bc1_rgb_unorm";
+        case Format::format_bc1_rgb_srgb:             return "format_bc1_rgb_srgb";
+        case Format::format_bc1_rgba_unorm:           return "format_bc1_rgba_unorm";
+        case Format::format_bc1_rgba_srgb:            return "format_bc1_rgba_srgb";
+        case Format::format_bc2_unorm:                return "format_bc2_unorm";
+        case Format::format_bc2_srgb:                 return "format_bc2_srgb";
+        case Format::format_bc3_unorm:                return "format_bc3_unorm";
+        case Format::format_bc3_srgb:                 return "format_bc3_srgb";
+        case Format::format_bc4_unorm:                return "format_bc4_unorm";
+        case Format::format_bc4_snorm:                return "format_bc4_snorm";
+        case Format::format_bc5_unorm:                return "format_bc5_unorm";
+        case Format::format_bc5_snorm:                return "format_bc5_snorm";
+        case Format::format_bc6h_ufloat:              return "format_bc6h_ufloat";
+        case Format::format_bc6h_sfloat:              return "format_bc6h_sfloat";
+        case Format::format_bc7_unorm:                return "format_bc7_unorm";
+        case Format::format_bc7_srgb:                 return "format_bc7_srgb";
         case Format::format_d16_unorm:                return "format_d16_unorm";
         case Format::format_x8_d24_unorm_pack32:      return "format_x8_d24_unorm_pack32";
         case Format::format_d32_sfloat:               return "format_d32_sfloat";
@@ -349,6 +365,23 @@ auto get_format_kind(const Format format) -> Format_kind
         case Format::format_packed1010102_vec4_uint:  return Format_kind::format_kind_unsigned_integer;
         case Format::format_packed1010102_vec4_sint:  return Format_kind::format_kind_signed_integer;
         case Format::format_packed111110_vec3_unorm:  return Format_kind::format_kind_float;
+
+        case Format::format_bc1_rgb_unorm:            return Format_kind::format_kind_float;
+        case Format::format_bc1_rgb_srgb:             return Format_kind::format_kind_float;
+        case Format::format_bc1_rgba_unorm:           return Format_kind::format_kind_float;
+        case Format::format_bc1_rgba_srgb:            return Format_kind::format_kind_float;
+        case Format::format_bc2_unorm:                return Format_kind::format_kind_float;
+        case Format::format_bc2_srgb:                 return Format_kind::format_kind_float;
+        case Format::format_bc3_unorm:                return Format_kind::format_kind_float;
+        case Format::format_bc3_srgb:                 return Format_kind::format_kind_float;
+        case Format::format_bc4_unorm:                return Format_kind::format_kind_float;
+        case Format::format_bc4_snorm:                return Format_kind::format_kind_float;
+        case Format::format_bc5_unorm:                return Format_kind::format_kind_float;
+        case Format::format_bc5_snorm:                return Format_kind::format_kind_float;
+        case Format::format_bc6h_ufloat:              return Format_kind::format_kind_float;
+        case Format::format_bc6h_sfloat:              return Format_kind::format_kind_float;
+        case Format::format_bc7_unorm:                return Format_kind::format_kind_float;
+        case Format::format_bc7_srgb:                 return Format_kind::format_kind_float;
 
         case Format::format_d16_unorm:           return Format_kind::format_kind_depth_stencil;
         case Format::format_x8_d24_unorm_pack32: return Format_kind::format_kind_depth_stencil;
@@ -441,6 +474,23 @@ auto get_component_count(const Format format) -> std::size_t
         case Format::format_packed1010102_vec4_uint:  return 4;
         case Format::format_packed1010102_vec4_sint:  return 4;
         case Format::format_packed111110_vec3_unorm:  return 3;
+
+        case Format::format_bc1_rgb_unorm:            return 3;
+        case Format::format_bc1_rgb_srgb:             return 3;
+        case Format::format_bc1_rgba_unorm:           return 4;
+        case Format::format_bc1_rgba_srgb:            return 4;
+        case Format::format_bc2_unorm:                return 4;
+        case Format::format_bc2_srgb:                 return 4;
+        case Format::format_bc3_unorm:                return 4;
+        case Format::format_bc3_srgb:                 return 4;
+        case Format::format_bc4_unorm:                return 1;
+        case Format::format_bc4_snorm:                return 1;
+        case Format::format_bc5_unorm:                return 2;
+        case Format::format_bc5_snorm:                return 2;
+        case Format::format_bc6h_ufloat:              return 3;
+        case Format::format_bc6h_sfloat:              return 3;
+        case Format::format_bc7_unorm:                return 4;
+        case Format::format_bc7_srgb:                 return 4;
 
         case Format::format_d16_unorm:           return 1;
         case Format::format_x8_d24_unorm_pack32: return 1;
@@ -628,6 +678,23 @@ auto has_color(const Format format) -> bool
         case Format::format_packed1010102_vec4_sint:  return true;
         case Format::format_packed111110_vec3_unorm:  return true;
 
+        case Format::format_bc1_rgb_unorm:            return true;
+        case Format::format_bc1_rgb_srgb:             return true;
+        case Format::format_bc1_rgba_unorm:           return true;
+        case Format::format_bc1_rgba_srgb:            return true;
+        case Format::format_bc2_unorm:                return true;
+        case Format::format_bc2_srgb:                 return true;
+        case Format::format_bc3_unorm:                return true;
+        case Format::format_bc3_srgb:                 return true;
+        case Format::format_bc4_unorm:                return true;
+        case Format::format_bc4_snorm:                return true;
+        case Format::format_bc5_unorm:                return true;
+        case Format::format_bc5_snorm:                return true;
+        case Format::format_bc6h_ufloat:              return true;
+        case Format::format_bc6h_sfloat:              return true;
+        case Format::format_bc7_unorm:                return true;
+        case Format::format_bc7_srgb:                 return true;
+
         case Format::format_d16_unorm:           return false;
         case Format::format_x8_d24_unorm_pack32: return false;
         case Format::format_d32_sfloat:          return false;
@@ -721,6 +788,24 @@ auto get_format_size_bytes(const Format format) -> std::size_t
         case Format::format_packed1010102_vec4_sint:  return 4;
         case Format::format_packed111110_vec3_unorm:  return 4;
 
+        // Block-compressed formats: size of one 4x4 block, not of one texel
+        case Format::format_bc1_rgb_unorm:            return 8;
+        case Format::format_bc1_rgb_srgb:             return 8;
+        case Format::format_bc1_rgba_unorm:           return 8;
+        case Format::format_bc1_rgba_srgb:            return 8;
+        case Format::format_bc2_unorm:                return 16;
+        case Format::format_bc2_srgb:                 return 16;
+        case Format::format_bc3_unorm:                return 16;
+        case Format::format_bc3_srgb:                 return 16;
+        case Format::format_bc4_unorm:                return 8;
+        case Format::format_bc4_snorm:                return 8;
+        case Format::format_bc5_unorm:                return 16;
+        case Format::format_bc5_snorm:                return 16;
+        case Format::format_bc6h_ufloat:              return 16;
+        case Format::format_bc6h_sfloat:              return 16;
+        case Format::format_bc7_unorm:                return 16;
+        case Format::format_bc7_srgb:                 return 16;
+
         case Format::format_d16_unorm:           return 2;
         case Format::format_x8_d24_unorm_pack32: return 4;
         case Format::format_d32_sfloat:          return 4;
@@ -732,6 +817,65 @@ auto get_format_size_bytes(const Format format) -> std::size_t
             ERHE_FATAL("Bad format");
         }
     }
+}
+
+auto is_block_compressed(const Format format) -> bool
+{
+    switch (format) {
+        case Format::format_bc1_rgb_unorm:
+        case Format::format_bc1_rgb_srgb:
+        case Format::format_bc1_rgba_unorm:
+        case Format::format_bc1_rgba_srgb:
+        case Format::format_bc2_unorm:
+        case Format::format_bc2_srgb:
+        case Format::format_bc3_unorm:
+        case Format::format_bc3_srgb:
+        case Format::format_bc4_unorm:
+        case Format::format_bc4_snorm:
+        case Format::format_bc5_unorm:
+        case Format::format_bc5_snorm:
+        case Format::format_bc6h_ufloat:
+        case Format::format_bc6h_sfloat:
+        case Format::format_bc7_unorm:
+        case Format::format_bc7_srgb: {
+            return true;
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
+auto get_block_extent(const Format format) -> std::size_t
+{
+    return is_block_compressed(format) ? std::size_t{4} : std::size_t{1};
+}
+
+auto get_block_size_bytes(const Format format) -> std::size_t
+{
+    return get_format_size_bytes(format);
+}
+
+auto get_image_level_size_bytes(const Format format, const std::size_t width, const std::size_t height) -> std::size_t
+{
+    if (is_block_compressed(format)) {
+        const std::size_t block_extent = get_block_extent(format);
+        const std::size_t block_count_x = (width  + block_extent - 1) / block_extent;
+        const std::size_t block_count_y = (height + block_extent - 1) / block_extent;
+        return block_count_x * block_count_y * get_block_size_bytes(format);
+    }
+    return width * height * get_format_size_bytes(format);
+}
+
+auto get_mip_chain_byte_count(const Format format, const std::size_t width, const std::size_t height, const std::size_t level_count) -> std::size_t
+{
+    std::size_t byte_count = 0;
+    for (std::size_t level = 0; level < level_count; ++level) {
+        const std::size_t level_width  = std::max(std::size_t{1}, width  >> level);
+        const std::size_t level_height = std::max(std::size_t{1}, height >> level);
+        byte_count += get_image_level_size_bytes(format, level_width, level_height);
+    }
+    return byte_count;
 }
 
 auto get_rgba_size_bytes(const Format format) -> std::size_t
