@@ -282,9 +282,15 @@ endif()
 
 CPMAddPackage(
     NAME              geogram
-    GIT_TAG           daf9e1925c668a047dc8b50edb7d3591566f5071 # Exact commit for pull_requests (which gets force pushed); includes thread-local ProgressTask fix and the create_sub_elements quadratic growth fix (https://github.com/BrunoLevy/geogram/issues/371)
+    # Back on upstream (was the tksuoran fork at daf9e1925): both fork fixes
+    # (thread-local ProgressTask, create_sub_elements quadratic growth #371)
+    # are upstreamed, and the stb_image symbol clash that forced the fork's
+    # image_serializer_stb removal no longer exists - geogram is the only
+    # stb_image implementation left in the dependency set (erhe image I/O
+    # moved to wuffs/fpng). Exact commit of main, verified 2026-08-14.
+    GIT_TAG           29a34b40040dbd789cbb39a1c5e323b921177573
     GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY tksuoran/geogram
+    GITHUB_REPOSITORY BrunoLevy/geogram
     # Currently erhe still requires some pull-requests and we must use fork above instead
     #VERSION            1.9.8
     #GITHUB_REPOSITORY  BrunoLevy/geogram
