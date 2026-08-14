@@ -1909,6 +1909,9 @@ auto Xr_session::render_frame(erhe::graphics::Command_buffer& command_buffer, st
             const auto result = render_view_callback(render_view, view_cb);
             if (result == false) {
                 log_xr->warn("render callback returned false for view {}", i);
+                // Do not abandon a cb in the recording state: end it (nothing
+                // is submitted; the pool reset recycles it).
+                view_cb.end();
                 return false;
             }
         }
@@ -2121,6 +2124,9 @@ auto Xr_session::render_frame_multiview(
         const bool result = render_views_callback(frame, views_cb);
         if (result == false) {
             log_xr->warn("multiview render callback returned false");
+            // Do not abandon a cb in the recording state: end it (nothing
+            // is submitted; the pool reset recycles it).
+            views_cb.end();
             return false;
         }
     }
