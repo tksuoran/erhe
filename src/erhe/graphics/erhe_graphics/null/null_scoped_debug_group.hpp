@@ -18,4 +18,16 @@ private:
     erhe::utility::Debug_label m_debug_label;
 };
 
+class Device;
+
+class Scoped_queue_debug_group_impl final
+{
+public:
+    Scoped_queue_debug_group_impl(Device& device, erhe::utility::Debug_label debug_label);
+    ~Scoped_queue_debug_group_impl() noexcept;
+
+private:
+    erhe::utility::Debug_label m_debug_label;
+};
+
 } // namespace erhe::graphics

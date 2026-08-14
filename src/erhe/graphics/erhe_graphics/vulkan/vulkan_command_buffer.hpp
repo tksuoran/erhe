@@ -98,6 +98,18 @@ public:
     // backends do not expose anything analogous.
     [[nodiscard]] auto get_vulkan_command_buffer() const noexcept -> VkCommandBuffer;
 
+    // Debug-utils label region bookkeeping for Scoped_debug_group. The
+    // begin/end vkCmd* calls are routed through the impl so it can keep
+    // an open-region count, which end() verifies is zero: a cb-level
+    // label region must be contained in the cb's recording lifetime
+    // (VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-recording). A
+    // region spanning an end() + submit must be a queue-level label
+    // (Scoped_queue_debug_group) instead. begin_debug_label returns
+    // false (recording nothing) when the cb is not in the recording
+    // state.
+    [[nodiscard]] auto begin_debug_label(const VkDebugUtilsLabelEXT& label_info) -> bool;
+    void               end_debug_label  ();
+
     // Vulkan-specific: bind a freshly-allocated VkCommandBuffer to this
     // Command_buffer_impl. Called by Device_impl::get_command_buffer
     // after vkAllocateCommandBuffers succeeds. The cb's lifetime is
@@ -144,6 +156,8 @@ private:
     Device_impl*               m_device_impl{nullptr};
     erhe::utility::Debug_label m_debug_label;
     VkCommandBuffer            m_vk_command_buffer{VK_NULL_HANDLE};
+    bool                       m_recording{false};
+    int                        m_open_debug_label_count{0};
 
     VkSemaphore                m_implicit_semaphore{VK_NULL_HANDLE};
     VkFence                    m_implicit_fence    {VK_NULL_HANDLE};

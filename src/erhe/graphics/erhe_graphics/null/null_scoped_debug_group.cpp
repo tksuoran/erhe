@@ -11,4 +11,11 @@ Scoped_debug_group_impl::Scoped_debug_group_impl(Command_buffer&, erhe::utility:
 
 Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept = default;
 
+Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device&, erhe::utility::Debug_label debug_label)
+    : m_debug_label{std::move(debug_label)}
+{
+}
+
+Scoped_queue_debug_group_impl::~Scoped_queue_debug_group_impl() noexcept = default;
+
 } // namespace erhe::graphics

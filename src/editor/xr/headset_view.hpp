@@ -76,6 +76,12 @@ public:
     // Implements Rendergraph_node
     void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) override;
 
+    // The XR fan-out ends + submits the frame cb mid-execution and
+    // continues in fresh cbs (Xr_session::render_frame /
+    // render_view_multiview), so this node's debug-label region must be
+    // queue-level, not cb-level.
+    auto submits_command_buffer() const -> bool override { return true; }
+
 private:
     Headset_view& m_headset_view;
 };

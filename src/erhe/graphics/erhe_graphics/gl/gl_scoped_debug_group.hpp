@@ -20,4 +20,18 @@ private:
     erhe::utility::Debug_label m_debug_label;
 };
 
+class Device;
+
+// GL has no queue concept either; the queue-level scope targets the
+// active context exactly like the cb-level scope.
+class Scoped_queue_debug_group_impl final
+{
+public:
+    Scoped_queue_debug_group_impl(Device& device, erhe::utility::Debug_label debug_label);
+    ~Scoped_queue_debug_group_impl() noexcept;
+
+private:
+    erhe::utility::Debug_label m_debug_label;
+};
+
 } // namespace erhe::graphics

@@ -47,4 +47,35 @@ Scoped_debug_group_impl::~Scoped_debug_group_impl() noexcept
     gl::pop_debug_group();
 }
 
+Scoped_queue_debug_group_impl::Scoped_queue_debug_group_impl(Device&, erhe::utility::Debug_label debug_label)
+    : m_debug_label{std::move(debug_label)}
+{
+    ERHE_VERIFY(!m_debug_label.empty());
+    if (!Scoped_debug_group_impl::s_enabled) {
+        return;
+    }
+    log_debug->trace("---- begin: {}", m_debug_label.string_view());
+
+    GLsizei length = static_cast<GLsizei>(m_debug_label.size() + 1);
+    // Same NVIDIA length clamp as the cb-level scope above.
+    if (Scoped_debug_group_impl::s_clamp_to_max_length && (length >= Scoped_debug_group_impl::s_max_message_length)) {
+        length = Scoped_debug_group_impl::s_max_message_length - 1;
+    }
+    gl::push_debug_group(
+        gl::Debug_source::debug_source_application,
+        0,
+        length,
+        m_debug_label.data()
+    );
+}
+
+Scoped_queue_debug_group_impl::~Scoped_queue_debug_group_impl() noexcept
+{
+    if (!Scoped_debug_group_impl::s_enabled) {
+        return;
+    }
+    log_debug->trace("---- end: {}", m_debug_label.string_view());
+    gl::pop_debug_group();
+}
+
 } // namespace erhe::graphics

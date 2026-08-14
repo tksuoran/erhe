@@ -56,6 +56,8 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     : m_device_impl              {other.m_device_impl}
     , m_debug_label              {std::move(other.m_debug_label)}
     , m_vk_command_buffer        {other.m_vk_command_buffer}
+    , m_recording                {other.m_recording}
+    , m_open_debug_label_count   {other.m_open_debug_label_count}
     , m_implicit_semaphore       {other.m_implicit_semaphore}
     , m_implicit_fence           {other.m_implicit_fence}
     , m_wait_for_cpu_list      {std::move(other.m_wait_for_cpu_list)}
@@ -64,11 +66,13 @@ Command_buffer_impl::Command_buffer_impl(Command_buffer_impl&& other) noexcept
     , m_signal_cpu_list        {std::move(other.m_signal_cpu_list)}
     , m_swapchain_used           {other.m_swapchain_used}
 {
-    other.m_device_impl         = nullptr;
-    other.m_vk_command_buffer   = VK_NULL_HANDLE;
-    other.m_implicit_semaphore  = VK_NULL_HANDLE;
-    other.m_implicit_fence      = VK_NULL_HANDLE;
-    other.m_swapchain_used      = nullptr;
+    other.m_device_impl            = nullptr;
+    other.m_vk_command_buffer      = VK_NULL_HANDLE;
+    other.m_recording              = false;
+    other.m_open_debug_label_count = 0;
+    other.m_implicit_semaphore     = VK_NULL_HANDLE;
+    other.m_implicit_fence         = VK_NULL_HANDLE;
+    other.m_swapchain_used         = nullptr;
 }
 
 auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Command_buffer_impl&
@@ -91,6 +95,8 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_device_impl             = other.m_device_impl;
     m_debug_label             = std::move(other.m_debug_label);
     m_vk_command_buffer       = other.m_vk_command_buffer;
+    m_recording               = other.m_recording;
+    m_open_debug_label_count  = other.m_open_debug_label_count;
     m_implicit_semaphore      = other.m_implicit_semaphore;
     m_implicit_fence          = other.m_implicit_fence;
     m_wait_for_cpu_list     = std::move(other.m_wait_for_cpu_list);
@@ -99,11 +105,13 @@ auto Command_buffer_impl::operator=(Command_buffer_impl&& other) noexcept -> Com
     m_signal_cpu_list       = std::move(other.m_signal_cpu_list);
     m_swapchain_used          = other.m_swapchain_used;
 
-    other.m_device_impl         = nullptr;
-    other.m_vk_command_buffer   = VK_NULL_HANDLE;
-    other.m_implicit_semaphore  = VK_NULL_HANDLE;
-    other.m_implicit_fence      = VK_NULL_HANDLE;
-    other.m_swapchain_used      = nullptr;
+    other.m_device_impl            = nullptr;
+    other.m_vk_command_buffer      = VK_NULL_HANDLE;
+    other.m_recording              = false;
+    other.m_open_debug_label_count = 0;
+    other.m_implicit_semaphore     = VK_NULL_HANDLE;
+    other.m_implicit_fence         = VK_NULL_HANDLE;
+    other.m_swapchain_used         = nullptr;
     return *this;
 }
 
@@ -141,6 +149,7 @@ void Command_buffer_impl::begin()
     // and skip the reset. See Device_impl::maybe_reset_gpu_timer_slice.
     m_device_impl->maybe_reset_gpu_timer_slice(m_vk_command_buffer);
     m_device_impl->record_frame_bracket_begin(m_vk_command_buffer);
+    m_recording = true;
     ERHE_VULKAN_TRACE(
         "Command_buffer_impl::begin() vk_cb=0x{:x} label='{}'",
         reinterpret_cast<std::uintptr_t>(m_vk_command_buffer),
@@ -152,6 +161,16 @@ void Command_buffer_impl::end()
 {
     ERHE_VERIFY(m_vk_command_buffer != VK_NULL_HANDLE);
 
+    // Cb-level debug label regions must close before the cb ends: the
+    // end label records into the same cb as the begin label, and
+    // recording into an ended cb violates
+    // VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-recording. A region
+    // that needs to span this end() (e.g. a rendergraph node that ends
+    // + submits the frame cb mid-execution) cannot be a cb label at
+    // all -- it must use Scoped_queue_debug_group, selected by
+    // Rendergraph::execute() via Rendergraph_node::submits_command_buffer().
+    ERHE_VERIFY(m_open_debug_label_count == 0);
+
     m_device_impl->record_frame_bracket_end(m_vk_command_buffer);
     const VkResult result = vkEndCommandBuffer(m_vk_command_buffer);
     if (result != VK_SUCCESS) {
@@ -161,11 +180,33 @@ void Command_buffer_impl::end()
         );
         std::abort();
     }
+    m_recording = false;
     ERHE_VULKAN_TRACE(
         "Command_buffer_impl::end() vk_cb=0x{:x} label='{}'",
         reinterpret_cast<std::uintptr_t>(m_vk_command_buffer),
         m_debug_label.string_view()
     );
+}
+
+auto Command_buffer_impl::begin_debug_label(const VkDebugUtilsLabelEXT& label_info) -> bool
+{
+    if (!m_recording || (m_vk_command_buffer == VK_NULL_HANDLE)) {
+        return false;
+    }
+    vkCmdBeginDebugUtilsLabelEXT(m_vk_command_buffer, &label_info);
+    ++m_open_debug_label_count;
+    return true;
+}
+
+void Command_buffer_impl::end_debug_label()
+{
+    // end() verifies no regions are open, so a scope whose cb was ended
+    // mid-lifetime aborts there, at the cause -- by the time this
+    // destructor-driven call runs, the cb is still recording.
+    ERHE_VERIFY(m_recording);
+    ERHE_VERIFY(m_open_debug_label_count > 0);
+    vkCmdEndDebugUtilsLabelEXT(m_vk_command_buffer);
+    --m_open_debug_label_count;
 }
 
 auto Command_buffer_impl::get_vulkan_command_buffer() const noexcept -> VkCommandBuffer

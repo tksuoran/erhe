@@ -14,6 +14,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <optional>
+
 namespace erhe::rendergraph {
 
 Rendergraph::Rendergraph(erhe::graphics::Device& graphics_device)
@@ -87,14 +89,32 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
 
     sort();
 
-    // Cb-targeted scopes so RenderDoc nests each node's draws under the
-    // node's name. The single-arg ctor would fall back to a queue-level
-    // label on Vulkan, which captures place at submit time -- visually
-    // detached from the cb commands inside.
-    erhe::graphics::Scoped_debug_group render_graph_scope{
-        command_buffer,
-        erhe::utility::Debug_label{"Rendergraph::execute()"}
-    };
+    // Debug-label scope selection: cb-targeted scopes nest each node's
+    // draws under the node's name in RenderDoc, but a cb label region
+    // must be contained in the cb's recording lifetime. A node that
+    // declares submits_command_buffer() ends + submits the frame cb
+    // mid-execution (XR headset fan-out), so its region -- and the
+    // whole-graph region enclosing it -- span cbs and must be
+    // queue-level labels instead. On the desktop path (no submitting
+    // node) everything stays cb-level; queue-level would be useless
+    // there anyway because the frame's submit happens only after
+    // execute() returns, outside the region.
+    bool any_enabled_node_submits = false;
+    for (const auto& node : m_nodes) {
+        if (node->is_enabled() && node->submits_command_buffer()) {
+            any_enabled_node_submits = true;
+            break;
+        }
+    }
+
+    std::optional<erhe::graphics::Scoped_debug_group>       render_graph_cb_scope{};
+    std::optional<erhe::graphics::Scoped_queue_debug_group> render_graph_queue_scope{};
+    const erhe::utility::Debug_label execute_label{"Rendergraph::execute()"};
+    if (any_enabled_node_submits) {
+        render_graph_queue_scope.emplace(m_graphics_device, execute_label);
+    } else {
+        render_graph_cb_scope.emplace(command_buffer, execute_label);
+    }
 
     for (const auto& node : m_nodes) {
         if (node->is_enabled()) {
@@ -103,7 +123,13 @@ void Rendergraph::execute(erhe::graphics::Command_buffer& command_buffer)
             // tick is stuck in. get_name() returns a stored string, so passing
             // it as string_view does not allocate.
             erhe::log::set_breadcrumb(node->get_name());
-            erhe::graphics::Scoped_debug_group node_scope{command_buffer, node->get_debug_label()};
+            std::optional<erhe::graphics::Scoped_debug_group>       node_cb_scope{};
+            std::optional<erhe::graphics::Scoped_queue_debug_group> node_queue_scope{};
+            if (node->submits_command_buffer()) {
+                node_queue_scope.emplace(m_graphics_device, node->get_debug_label());
+            } else {
+                node_cb_scope.emplace(command_buffer, node->get_debug_label());
+            }
             node->execute_rendergraph_node(command_buffer);
         }
     }

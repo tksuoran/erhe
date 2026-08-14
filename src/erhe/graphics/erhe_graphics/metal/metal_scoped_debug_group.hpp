@@ -27,4 +27,18 @@ private:
     MTL::RenderCommandEncoder*  m_pushed_encoder{nullptr};
 };
 
+class Device;
+
+// Metal has no queue-level debug label API (labels target encoders /
+// command buffers only), so the queue-level scope is a no-op here.
+class Scoped_queue_debug_group_impl final
+{
+public:
+    Scoped_queue_debug_group_impl(Device& device, erhe::utility::Debug_label debug_label);
+    ~Scoped_queue_debug_group_impl() noexcept;
+
+private:
+    erhe::utility::Debug_label m_debug_label;
+};
+
 } // namespace erhe::graphics

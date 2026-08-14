@@ -195,6 +195,11 @@ auto Rendergraph_node::register_output(const erhe::utility::Debug_label debug_la
     return true;
 }
 
+auto Rendergraph_node::submits_command_buffer() const -> bool
+{
+    return false;
+}
+
 auto Rendergraph_node::inputs_allowed() const -> bool
 {
     return true;

@@ -65,6 +65,15 @@ public:
 
     virtual void execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer) = 0;
 
+    // A node returning true declares that execute_rendergraph_node()
+    // ends and submits the frame command buffer (and continues in fresh
+    // cbs), e.g. the XR headset node's mid-frame fan-out. Rendergraph::
+    // execute() then labels such a node (and the whole graph) with
+    // queue-level debug groups instead of cb-level ones: a label region
+    // spanning a cb end + submit cannot live in any single cb, and
+    // Command_buffer end() verifies no cb-level group is open.
+    [[nodiscard]] virtual auto submits_command_buffer() const -> bool;
+
     [[nodiscard]] virtual auto get_consumer_input_node    (int key, int depth = 0) const -> Rendergraph_node*;
     [[nodiscard]] virtual auto get_producer_output_node   (int key, int depth = 0) const -> Rendergraph_node*;
 
