@@ -1326,6 +1326,9 @@ void Swapchain_impl::setup_frame()
 
 void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swapchain_create_info)
 {
+#if !defined(VK_USE_PLATFORM_WIN32_KHR)
+    static_cast<void>(swapchain_create_info); // only consumed by the Win32 fullscreen-exclusive surface caps query
+#endif
     m_present_timing_active              = false;
     m_present_at_absolute_time           = false;
     m_present_at_relative_time           = false;
