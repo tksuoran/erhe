@@ -756,7 +756,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # verbatim re-export + uniqueness validation; KhronosGroup/glTF#2597).
         # Drop the fork when upstream fastgltf ships the current physics spec,
         # glTF 2.1 and an extension passthrough.
-        GIT_TAG           erhe-2026-08-14
+        GIT_TAG           erhe-2026-08-14-1
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS
