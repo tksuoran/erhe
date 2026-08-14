@@ -33,7 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 ANDROID_PREFIX = "android-project/"
 STAMP_REL = "android-project/SDL_SYNC_COMMIT"
 CMAKELISTS = REPO_ROOT / "CMakeLists.txt"
-PIN_PATTERN = re.compile(rb'(set\(ERHE_SDL_GIT_TAG ")[0-9a-fA-F]+("\))')
+PIN_PATTERN = re.compile(rb'(set\(ERHE_SDL_GIT_TAG ")[^"]+("\))')
 
 # Upstream sync of these files can change the required gradle / AGP / JDK
 # combination; flag them for manual review (e.g. Gradle 8.12 + AGP do not
@@ -92,6 +92,13 @@ def main() -> int:
         default="HEAD",
         help="fork ref to sync from (default: HEAD of the fork checkout)",
     )
+    parser.add_argument(
+        "--tag",
+        help="pin ERHE_SDL_GIT_TAG to this tag name instead of the commit hash; "
+        "the tag must resolve to the same commit as --ref and exist on the "
+        "fork's GitHub remote (tags survive rebase force-pushes, so a tag pin "
+        "stays fetchable by CPM)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="report actions without writing anything")
     parser.add_argument("--no-fetch", action="store_true", help="skip 'git fetch origin' and the remote reachability check")
     args = parser.parse_args()
@@ -106,12 +113,32 @@ def main() -> int:
         print(f"error: cannot resolve ref '{args.ref}' in {sdl}", file=sys.stderr)
         return 1
 
+    # The pin is what CPM's GIT_TAG receives and what the drift guard in
+    # CMakeLists.txt compares against SDL_SYNC_COMMIT's first line: a tag
+    # name when --tag is given, the commit hash otherwise.
+    pin_value = new_hash
+    if args.tag:
+        tag_hash = try_git(sdl, "rev-parse", f"refs/tags/{args.tag}^{{commit}}")
+        if tag_hash is None:
+            print(f"error: tag '{args.tag}' not found in {sdl}", file=sys.stderr)
+            return 1
+        if tag_hash != new_hash:
+            print(
+                f"error: tag '{args.tag}' points at {tag_hash}, not the requested ref {new_hash}",
+                file=sys.stderr,
+            )
+            return 1
+        pin_value = args.tag
+
     # Refuse to clobber uncommitted erhe work under android-project/. The
     # stamp file is script-owned and exempt; --dry-run writes nothing and
     # may inspect any state.
     if not args.dry_run:
         dirty = run_git(REPO_ROOT, "status", "--porcelain", "--", "android-project/")
-        dirty_lines = [line for line in dirty.splitlines() if line[3:] != STAMP_REL]
+        # Compare the path via split rather than line[3:]: run_git strips the
+        # output, which removes the leading status-column space from the first
+        # line and would shift the fixed-offset slice off by one.
+        dirty_lines = [line for line in dirty.splitlines() if line.split(maxsplit=1)[-1] != STAMP_REL]
         if dirty_lines:
             print("error: android-project/ has uncommitted changes; commit or stash first:", file=sys.stderr)
             print("\n".join(dirty_lines), file=sys.stderr)
@@ -150,6 +177,17 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+        if args.tag:
+            # A tag pin additionally needs the tag itself on GitHub - CPM
+            # fetches by the tag name, not by the commit it points at.
+            remote_tag = run_git(sdl, "ls-remote", "origin", f"refs/tags/{args.tag}")
+            if not remote_tag.strip():
+                print(
+                    f"error: tag '{args.tag}' is not on the fork's GitHub remote.\n"
+                    f"    git -C {sdl} push origin {args.tag}",
+                    file=sys.stderr,
+                )
+                return 1
 
     describe = try_git(sdl, "describe", "--tags", new_hash) or new_hash
 
@@ -192,13 +230,16 @@ def main() -> int:
     if len(pin_matches) != 1:
         print(f"error: expected exactly one set(ERHE_SDL_GIT_TAG ...) in CMakeLists.txt, found {len(pin_matches)}", file=sys.stderr)
         return 1
-    new_cmake = PIN_PATTERN.sub(rb"\g<1>" + new_hash.encode() + rb"\g<2>", cmake_bytes)
+    new_cmake = PIN_PATTERN.sub(rb"\g<1>" + pin_value.encode() + rb"\g<2>", cmake_bytes)
     pin_changed = new_cmake != cmake_bytes
     if pin_changed and not args.dry_run:
         CMAKELISTS.write_bytes(new_cmake)
 
     # ---- Rewrite the stamp -------------------------------------------------
-    stamp_lines = [new_hash, describe]
+    # Line 1 is the pin value verbatim - the drift guard in CMakeLists.txt
+    # string-compares it against ERHE_SDL_GIT_TAG, so tag pins and hash pins
+    # both round-trip. The commit hash stays recorded on its own line.
+    stamp_lines = [pin_value, f"commit: {new_hash}", describe]
     merge_base = try_git(sdl, "merge-base", new_hash, "upstream/main")
     if merge_base:
         base_describe = try_git(sdl, "describe", "--tags", merge_base) or merge_base
@@ -217,7 +258,7 @@ def main() -> int:
         print(f"{prefix}update {path}")
     for path in deleted:
         print(f"{prefix}delete {path}")
-    print(f"{prefix}pin    ERHE_SDL_GIT_TAG = {new_hash} ({describe})" + ("" if pin_changed else " [unchanged]"))
+    print(f"{prefix}pin    ERHE_SDL_GIT_TAG = {pin_value} ({new_hash}, {describe})" + ("" if pin_changed else " [unchanged]"))
     if stamp_changed:
         print(f"{prefix}stamp  {STAMP_REL}")
     if review:

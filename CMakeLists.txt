@@ -538,16 +538,16 @@ include(vscode)
 vscode_support()
 
 if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
-    # SDL is pinned to a commit on the "erhe" branch of the tksuoran/SDL
-    # fork. That branch carries erhe's android-project/ changes as commits
-    # on top of upstream SDL; erhe's android-project/ directory is a mirror
-    # of the branch's android-project/ at exactly this commit, kept in sync
-    # by scripts/update_sdl.py (which is also the only supported way to
-    # change this pin). To update SDL: rebase the erhe branch in the fork
-    # onto the desired upstream ref, push the branch plus a snapshot tag,
-    # then run "py -3 scripts/update_sdl.py". See doc/android.md, section
-    # "Updating SDL".
-    set(ERHE_SDL_GIT_TAG "25f9daced52394e5f5eea8d4fd19e9a1d0835e07")
+    # SDL is pinned to a snapshot tag (or commit) on the "erhe" branch of
+    # the tksuoran/SDL fork. That branch carries erhe's android-project/
+    # changes as commits on top of upstream SDL; erhe's android-project/
+    # directory is a mirror of the branch's android-project/ at exactly the
+    # pinned ref, kept in sync by scripts/update_sdl.py (which is also the
+    # only supported way to change this pin). To update SDL: rebase the erhe
+    # branch in the fork onto the desired upstream ref, push the branch plus
+    # a snapshot tag, then run "py -3 scripts/update_sdl.py --tag <tag>".
+    # See doc/android.md, section "Updating SDL".
+    set(ERHE_SDL_GIT_TAG "erhe-snapshot-2026-08-14-1")
     CPMAddPackage(
         NAME              sdl
         GIT_TAG           ${ERHE_SDL_GIT_TAG}
@@ -566,13 +566,17 @@ if (${ERHE_WINDOW_LIBRARY} STREQUAL "sdl")
     # CPM just fetched; if they disagree the Java shim and the SDL3 C
     # library can diverge, which surfaces as a "SDL C/Java version
     # mismatch" dialog at app launch on Android. SDL_SYNC_COMMIT is
-    # written by scripts/update_sdl.py together with ERHE_SDL_GIT_TAG.
+    # written by scripts/update_sdl.py together with ERHE_SDL_GIT_TAG:
+    # line 1 is the pin value verbatim (tag name or commit hash), line 2
+    # is "commit: <hash>" naming the commit the pin resolves to.
     file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/android-project/SDL_SYNC_COMMIT" ERHE_SDL_SYNC_LINES)
-    list(GET ERHE_SDL_SYNC_LINES 0 ERHE_SDL_SYNC_HASH)
-    if (NOT ERHE_SDL_SYNC_HASH STREQUAL ERHE_SDL_GIT_TAG)
+    list(GET ERHE_SDL_SYNC_LINES 0 ERHE_SDL_SYNC_PIN)
+    list(GET ERHE_SDL_SYNC_LINES 1 ERHE_SDL_SYNC_COMMIT_LINE)
+    string(REPLACE "commit: " "" ERHE_SDL_SYNC_HASH "${ERHE_SDL_SYNC_COMMIT_LINE}")
+    if (NOT ERHE_SDL_SYNC_PIN STREQUAL ERHE_SDL_GIT_TAG)
         message(FATAL_ERROR
             "SDL pin mismatch: ERHE_SDL_GIT_TAG (${ERHE_SDL_GIT_TAG}) does not match "
-            "android-project/SDL_SYNC_COMMIT (${ERHE_SDL_SYNC_HASH}). The android-project/ "
+            "android-project/SDL_SYNC_COMMIT (${ERHE_SDL_SYNC_PIN}). The android-project/ "
             "mirror and the SDL C library would diverge. Do not edit the pin by hand; "
             "run: py -3 scripts/update_sdl.py")
     endif ()
