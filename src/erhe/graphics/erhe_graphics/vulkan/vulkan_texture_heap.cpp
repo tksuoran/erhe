@@ -80,7 +80,10 @@ Texture_heap_impl::Texture_heap_impl(
         .binding            = 0,
         .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount    = static_cast<uint32_t>(m_max_textures),
-        .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+        // COMPUTE included because the ray_trace compute shader samples the
+        // heap (VUID-VkComputePipelineCreateInfo-layout-07988). Must stay in
+        // sync with the set-1 layout in Device_impl (vulkan_device_init.cpp).
+        .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
         .pImmutableSamplers = nullptr
     };
 

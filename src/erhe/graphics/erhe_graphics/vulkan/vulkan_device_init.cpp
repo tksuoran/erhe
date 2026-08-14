@@ -2101,7 +2101,10 @@ Device_impl::Device_impl(
                 .binding            = 0,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount    = max_texture_heap_size,
-                .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+                // COMPUTE included because the ray_trace compute shader
+                // samples the heap. Must stay in sync with the layout in
+                // Texture_heap_impl (vulkan_texture_heap.cpp).
+                .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
                 .pImmutableSamplers = nullptr
             };
 
