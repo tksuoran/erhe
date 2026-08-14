@@ -11,7 +11,7 @@ from erhe_codegen import *
 # the Content_wide_line_renderer member defaults.
 struct("Content_edge_lines_config",
     reflect=True,
-    version=2,
+    version=1,
     short_desc="Content Edge Lines",
     long_desc="Editor-global content edge-line (wide-line) method and bias tuning",
     developer=False,
@@ -23,6 +23,6 @@ struct("Content_edge_lines_config",
         # face-ID buffer pre-pass, then paint the edge line from the polygon-fill
         # fragment where the stored face id matches its own -> no depth bias, no
         # Z-fight. Replaces the depth-biased wide-line passes when enabled.
-        field("use_id_buffer",    Bool,  added_in=2, default="false",   short_desc="ID Buffer Edge Lines",  long_desc="Render content edge lines via a face-ID buffer pre-pass (no depth bias, no Z-fight) instead of depth-biased wide-line ribbons."),
+        field("use_id_buffer",    Bool,  added_in=1, default="false",   short_desc="ID Buffer Edge Lines",  long_desc="Render content edge lines via a face-ID buffer pre-pass (no depth bias, no Z-fight) instead of depth-biased wide-line ribbons."),
     ],
 )

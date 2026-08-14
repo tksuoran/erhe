@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Headset_config",
     reflect=True,
-    version=2,
+    version=1,
     short_desc="Virtual Reality Headset",
     long_desc="",
     developer=False,
@@ -210,7 +210,7 @@ struct("Headset_config",
         field(
             "foveation",
             Bool,
-            added_in=2,
+            added_in=1,
             default="false",
             short_desc="Enable Fixed Foveated Rendering",
             long_desc=("Enable OpenXR fixed foveated rendering (FFR) via "
@@ -225,7 +225,7 @@ struct("Headset_config",
         field(
             "foveation_level",
             EnumRef("Foveation_level"),
-            added_in=2,
+            added_in=1,
             default="Foveation_level::e_high",
             short_desc="Fixed Foveation Level",
             long_desc=("Foveation level (none/low/medium/high). With dynamic "
@@ -237,7 +237,7 @@ struct("Headset_config",
         field(
             "foveation_dynamic",
             Bool,
-            added_in=2,
+            added_in=1,
             default="true",
             short_desc="Dynamic Foveation",
             long_desc=("Let the runtime dynamically scale the applied foveation "

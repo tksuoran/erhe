@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Viewport_config",
-    version=2,
+    version=1,
     short_desc="Default Viewport Configuration",
     long_desc="Default viewport configuration saved to default_viewport_config.json",
     developer=False,
@@ -19,7 +19,7 @@ struct("Viewport_config",
         field(
             "shadow_mode",
             EnumRef("Shadow_mode"),
-            added_in=2,
+            added_in=1,
             default="Shadow_mode::shadow_maps",
             short_desc="Shadows",
             long_desc="Live per-view shadow mode: No Shadows, Shadow Maps, or Baked Lightmaps. Anything but Shadow Maps skips the view's shadow render passes and shades every light unshadowed; Baked Lightmaps additionally renders the lightmap piece meshes (mirrors the Lightmap window's 'Render with lightmaps'). The shadow map budget (resolution, light count) stays with the graphics preset.",

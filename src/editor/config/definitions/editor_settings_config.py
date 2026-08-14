@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=19,
+    version=1,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -13,53 +13,52 @@ struct("Editor_settings_config",
         # live ONLY per scene view, in Scene_view_settings below - there is no
         # editor-global slot for them. New views fall back to the
         # Debug_visualizations_settings struct defaults.
-        field("debug_visualizations_style", StructRef("Debug_visualizations_style"), added_in=8),
+        field("debug_visualizations_style", StructRef("Debug_visualizations_style"), added_in=1),
         # Editor-global render-style appearance (colors, line / point widths,
         # point size, per-primitive color sources), shared by all scene views.
         # Two sets: render_style_appearance for the Default style (non-selected
         # meshes) and selected_render_style_appearance for the Selection style.
         # The per-view render styles (Viewport_config.render_style_*) keep only
         # the visibility toggles (Render_style_data).
-        field("render_style_appearance",          StructRef("Render_style_appearance"), added_in=9),
-        field("selected_render_style_appearance", StructRef("Render_style_appearance"), added_in=9),
+        field("render_style_appearance",          StructRef("Render_style_appearance"), added_in=1),
+        field("selected_render_style_appearance", StructRef("Render_style_appearance"), added_in=1),
         # Editor-global selection outline appearance, shared by all scene views.
-        field("selection_outline",                StructRef("Selection_outline_style"), added_in=9),
+        field("selection_outline",                StructRef("Selection_outline_style"), added_in=1),
         # Editor-global mesh-component (vertex / edge / face) selection style,
         # shared by all scene views.
-        field("mesh_component_style",             StructRef("Mesh_component_style"),    added_in=10),
+        field("mesh_component_style",             StructRef("Mesh_component_style"),    added_in=1),
         # Editor-global viewport clear color, shared by all scene views (moved
         # out of the per-view Visual Style popup). gizmo_scale moved on to
         # Transform_tool_config in v17.
-        field("gizmo_scale",                      Float, added_in=11, removed_in=17, default="4.5f", short_desc="Gizmo Scale", long_desc="Scale factor for the transform gizmo handles."),
-        field("clear_color",                      Vec4,  added_in=11, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
+        field("clear_color",                      Vec4,  added_in=1, default="0.0f, 0.0f, 0.0f, 0.4f", short_desc="Clear Color", long_desc="Viewport background clear color."),
         # Editor-global content edge-line (wide-line) method and bias tuning.
-        field("content_edge_lines",               StructRef("Content_edge_lines_config"), added_in=11),
+        field("content_edge_lines",               StructRef("Content_edge_lines_config"), added_in=1),
         # Edge-line overlay for the preview thumbnails: geometry graph node
         # previews (on by default) and brush previews (off by default; the
         # designated-initializer default overrides only 'enabled', the other
         # members keep the struct's own defaults).
-        field("graph_node_preview_edge_lines",    StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Graph Node Preview Edge Lines"),
-        field("brush_preview_edge_lines",         StructRef("Preview_edge_lines_config"), added_in=14, short_desc="Brush Preview Edge Lines", default=".enabled = false"),
+        field("graph_node_preview_edge_lines",    StructRef("Preview_edge_lines_config"), added_in=1, short_desc="Graph Node Preview Edge Lines"),
+        field("brush_preview_edge_lines",         StructRef("Preview_edge_lines_config"), added_in=1, short_desc="Brush Preview Edge Lines", default=".enabled = false"),
         # Editor-global geometry graph node preview thumbnails: visibility
         # (on by default) and hover auto-rotation.
-        field("graph_node_previews",              StructRef("Graph_node_previews_config"), added_in=15),
-        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=5),
+        field("graph_node_previews",              StructRef("Graph_node_previews_config"), added_in=1),
+        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=1),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
         field("headset",              StructRef("Headset_config"),         added_in=1),
         field("hotbar",               StructRef("Hotbar_config"),          added_in=1),
         field("hud",                  StructRef("Hud_config"),             added_in=1),
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
-        field("ray_trace",            StructRef("Ray_trace_config"),       added_in=16),
-        field("lightmap",             StructRef("Lightmap_config"),        added_in=18),
+        field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
+        field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         field("inventory",            StructRef("Inventory_config"),       added_in=1),
         # glTF import/open performance options (doc/gltf-load-speedup-plan.md).
-        field("load",                 StructRef("Load_config"),            added_in=19),
+        field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),
         field("physics",              StructRef("Physics_config"),         added_in=1),
         field("scene",                StructRef("Scene_config"),           added_in=1),
-        field("shadow_frustum_fit",   StructRef("Shadow_frustum_fit_config"), added_in=4),
-        field("sky",                  StructRef("Sky_config"),             added_in=3),
+        field("shadow_frustum_fit",   StructRef("Shadow_frustum_fit_config"), added_in=1),
+        field("sky",                  StructRef("Sky_config"),             added_in=1),
         field("thumbnails",           StructRef("Thumbnails_config"),      added_in=1),
         field("transform_tool",       StructRef("Transform_tool_config"), added_in=1),
         field("viewport",             StructRef("Viewport_config_data"),  added_in=1),
@@ -80,7 +79,7 @@ struct("Editor_settings_config",
         field(
             "geometry_edit_mode",
             EnumRef("Geometry_edit_mode"),
-            added_in=6,
+            added_in=1,
             default="Geometry_edit_mode::shared",
             short_desc="Geometry Edit Mode",
             long_desc="When editing components of a mesh whose geometry is shared by other meshes (e.g. a duplicate), whether to edit the shared geometry (all instances change) or fork a copy on edit (only this instance changes).",
@@ -90,7 +89,7 @@ struct("Editor_settings_config",
         field(
             "transform_mode",
             EnumRef("Mesh_transform_mode"),
-            added_in=7,
+            added_in=1,
             default="Mesh_transform_mode::move",
             short_desc="Mesh Transform Mode",
             long_desc="When transforming a mesh component selection with the gizmo, whether to move the selected components or extrude them (duplicate the selection boundary and bridge it with new faces) before moving.",
