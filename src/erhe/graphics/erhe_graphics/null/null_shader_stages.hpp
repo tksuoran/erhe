@@ -2,7 +2,9 @@
 
 #include "erhe_graphics/shader_stages.hpp"
 
+#include <filesystem>
 #include <string>
+#include <vector>
 
 namespace erhe::graphics {
 
@@ -28,14 +30,16 @@ public:
     void dump_reflection() const;
 
     [[nodiscard]] auto get_final_source(const Shader_stage& shader, std::optional<unsigned int> gl_name) -> std::string;
+    auto get_dependency_paths() -> std::vector<std::filesystem::path>&;
 
 private:
     friend class Shader_stages_impl;
     friend class Reloadable_shader_stages;
 
-    Device&                   m_device;
-    Shader_stages_create_info m_create_info;
-    bool                      m_is_valid{true};
+    Device&                            m_device;
+    Shader_stages_create_info          m_create_info;
+    std::vector<std::filesystem::path> m_paths;
+    bool                               m_is_valid{true};
 };
 
 class Shader_stages_impl

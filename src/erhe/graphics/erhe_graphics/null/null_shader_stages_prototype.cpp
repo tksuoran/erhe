@@ -58,4 +58,9 @@ auto Shader_stages_prototype_impl::get_final_source(
     return {};
 }
 
+auto Shader_stages_prototype_impl::get_dependency_paths() -> std::vector<std::filesystem::path>&
+{
+    return m_paths;
+}
+
 } // namespace erhe::graphics

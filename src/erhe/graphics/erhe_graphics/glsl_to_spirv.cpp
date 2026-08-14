@@ -15,6 +15,9 @@
 #if defined(ERHE_GRAPHICS_API_METAL)
 # include "erhe_graphics/metal/metal_shader_stages.hpp"
 #endif
+#if defined(ERHE_GRAPHICS_API_NONE)
+# include "erhe_graphics/null/null_shader_stages.hpp"
+#endif
 
 #include "erhe_verify/verify.hpp"
 
