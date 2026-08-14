@@ -215,7 +215,16 @@ android {
     // first run. Opt out with `-Pvulkan_validation_skip` to drop the
     // ~10 MB layer .so from the APK (e.g. when iterating on a
     // bandwidth-constrained connection or sizing the release APK).
-    if (!project.hasProperty('vulkan_validation_skip')) {
+    if (project.hasProperty('vulkan_validation_skip')) {
+        // Skip path: remove any previously-staged validation layer .so
+        // so the next build does not silently ship a stale one. The
+        // jniLibs packaging picks up everything under libs/arm64-v8a,
+        // so leaving the file in place would re-bundle the layer.
+        def skipLayerSo = new File(file("libs/arm64-v8a"), "libVkLayer_khronos_validation.so")
+        if (skipLayerSo.exists()) {
+            skipLayerSo.delete()
+        }
+    } else {
         // Pin to the same Vulkan SDK version the headers reference (see
         // vulkan_device_init.cpp comment on khronos_validation_layer.html).
         // Bump in lock-step with the SDK upgrade.
@@ -225,16 +234,6 @@ android {
         def cacheZip = new File(cacheDir, "android-binaries-${validationLayerVersion}.zip")
         def jniLibsDir = file("libs/arm64-v8a")
         def layerSo = new File(jniLibsDir, "libVkLayer_khronos_validation.so")
-    } else {
-        // Skip path: remove any previously-staged validation layer .so
-        // so the next build does not silently ship a stale one. The
-        // jniLibs packaging picks up everything under libs/arm64-v8a,
-        // so leaving the file in place would re-bundle the layer.
-        def jniLibsDir = file("libs/arm64-v8a")
-        def layerSo = new File(jniLibsDir, "libVkLayer_khronos_validation.so")
-        if (layerSo.exists()) {
-            layerSo.delete()
-        }
 
         def fetchValidationLayer = tasks.register("fetchVulkanValidationLayer") {
             // Declare validationLayerVersion as an input so Gradle treats
