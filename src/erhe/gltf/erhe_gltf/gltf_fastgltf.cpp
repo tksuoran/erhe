@@ -377,13 +377,16 @@ using erhe::geometry::get_mesh_info;
 // MSFT_texture_dds carry the image index on the texture's extension object
 // instead of the core `source` field (e.g. OpenXR XR_FB_render_model
 // controller GLBs reference their KTX2 image only through
-// KHR_texture_basisu). The core index wins when present.
+// KHR_texture_basisu). An extension index wins over the core `source`: per
+// glTF extension semantics the core index is the fallback for loaders
+// without extension support, and assets like niagara_bistro pair each DDS
+// image with a core .png source that does not even exist on disk.
 [[nodiscard]] auto texture_image_index(const fastgltf::Texture& texture) -> std::optional<std::size_t>
 {
-    if (texture.imageIndex      .has_value()) return texture.imageIndex      .value();
     if (texture.basisuImageIndex.has_value()) return texture.basisuImageIndex.value();
     if (texture.webpImageIndex  .has_value()) return texture.webpImageIndex  .value();
     if (texture.ddsImageIndex   .has_value()) return texture.ddsImageIndex   .value();
+    if (texture.imageIndex      .has_value()) return texture.imageIndex      .value();
     return std::nullopt;
 }
 
@@ -1324,9 +1327,21 @@ private:
                         log_gltf->error("Failed to parse image from buffer view '{}'", decoded.name);
                         return;
                     }
-                    // TODO Handle depth > 1 and mipmaps
-                    ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
-                    decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    // TODO Handle depth > 1
+                    if (erhe::dataformat::is_block_compressed(decoded.info.format) || (decoded.info.level_count > 1)) {
+                        // Container formats (DDS) carry a tightly packed mip chain
+                        decoded.pixels.resize(
+                            erhe::dataformat::get_mip_chain_byte_count(
+                                decoded.info.format,
+                                static_cast<std::size_t>(decoded.info.width),
+                                static_cast<std::size_t>(decoded.info.height),
+                                static_cast<std::size_t>(decoded.info.level_count)
+                            )
+                        );
+                    } else {
+                        ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
+                        decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    }
                     decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
                     loader.close();
                     decoded.source_path = m_arguments.path;
@@ -1353,9 +1368,21 @@ private:
                     if (!loader.open(image_path, decoded.info, linear)) {
                         return;
                     }
-                    // TODO Handle depth > 1 and mipmaps
-                    ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
-                    decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    // TODO Handle depth > 1
+                    if (erhe::dataformat::is_block_compressed(decoded.info.format) || (decoded.info.level_count > 1)) {
+                        // Container formats (DDS) carry a tightly packed mip chain
+                        decoded.pixels.resize(
+                            erhe::dataformat::get_mip_chain_byte_count(
+                                decoded.info.format,
+                                static_cast<std::size_t>(decoded.info.width),
+                                static_cast<std::size_t>(decoded.info.height),
+                                static_cast<std::size_t>(decoded.info.level_count)
+                            )
+                        );
+                    } else {
+                        ERHE_VERIFY(decoded.info.width * erhe::dataformat::get_format_size_bytes(decoded.info.format) == decoded.info.row_stride);
+                        decoded.pixels.resize(static_cast<std::size_t>(decoded.info.row_stride) * static_cast<std::size_t>(decoded.info.height));
+                    }
                     decoded.ok = loader.load(std::span<std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()});
                     loader.close();
                     decoded.source_path = image_path;
@@ -1405,7 +1432,13 @@ private:
             .debug_label = erhe::utility::Debug_label{decoded.name}
         };
         const int  mipmap_count    = texture_create_info.get_texture_level_count();
-        const bool generate_mipmap = mipmap_count != image_info.level_count;
+        // Mipmap generation blits level to level, which cannot write
+        // block-compressed levels; a compressed image samples only the levels
+        // its container provides (explicit level_count wins over use_mipmaps
+        // in Texture_impl).
+        const bool generate_mipmap =
+            (mipmap_count != image_info.level_count) &&
+            !erhe::dataformat::is_block_compressed(image_info.format);
         if (generate_mipmap) {
             texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
             texture_create_info.level_count = mipmap_count;
