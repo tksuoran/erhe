@@ -67,6 +67,9 @@ Flip `vulkan_validation_layers` back to `false` in `config/editor/erhe_graphics.
 | `VUID-VkShaderModuleCreateInfo-pCode-08737` (`DebugGlobalVariable: expected operand Variable must be ...`) | glslang emits `DebugGlobalVariable` with `Variable` operand referencing `OpConstantComposite` for global const composite arrays + the synthesised `gl_WorkGroupSize` | Fixed in the `tksuoran/glslang` fork pinned by the root `CMakeLists.txt` `CPMAddPackage` (CPM PATCHES is banned repo-wide). See `doc/glslang_bug_report_debugglobalvariable.md` and the `erhe-quest-shader-failure` skill |
 | `SYNC-HAZARD-READ-AFTER-WRITE` (vertex stage reads SSBO after compute dispatch) | `Memory_barrier_mask::vertex_attrib_array_barrier_bit` alone is insufficient when the consuming vertex shader reads via SSBO instead of the input assembler | Use `vertex_attrib_array_barrier_bit \| shader_storage_barrier_bit` between the compute encoder and the render encoder |
 | `VUID-vkFreeCommandBuffers-pCommandBuffers-00047` (cb in pending state when freed) | Editor frees a command buffer the GPU has not finished with -- a frame-fence/lifecycle bug surfaced now that validation is on | Open as of 2026-05-02 |
+| `VUID-vkCmdEndDebugUtilsLabelEXT-commandBuffer-recording` (end-label on cb not in recording state) | `Scoped_debug_group_impl` destructor records `vkCmdEndDebugUtilsLabelEXT` into the captured cb after it left the recording state; label stack at abort was `Headset, Rendergraph::execute()`, so the headset path ends/submits the cb while those scopes are still open. Aborts ~5 s after launch via the `ERHE_FATAL` device-error hook. | Open as of 2026-08-14 |
+
+Note: the "bundled by default" claim above was broken from `d88bb1198` until `e796dc53` (2026-08-14): the `vulkan_validation_skip` branches in `build.gradle` were swapped, so no APK in that window contained the layer .so. Verify with the `jar tf` check when in doubt.
 
 ## When NOT to enable
 
