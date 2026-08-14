@@ -91,6 +91,16 @@ constexpr erhe::renderer::Debug_renderer_config handle_line_config{
     .xray              = true
 };
 
+// Off-screen gizmo indicator (render_offscreen_indicator): filled triangle,
+// x-ray so scene geometry near the view edge cannot occlude it.
+constexpr erhe::renderer::Debug_renderer_config offscreen_indicator_fill_config{
+    .primitive_type    = erhe::graphics::Primitive_type::triangle,
+    .stencil_reference = 2,
+    .draw_visible      = true,
+    .draw_hidden       = true,
+    .xray              = true
+};
+
 }
 
 #pragma region Commands
@@ -1404,8 +1414,193 @@ void Transform_tool::tool_render(const Render_context& context)
     }
     render_translate_drag_guides(context);
     render_drag_readout(context);
+    render_offscreen_indicator(context);
 
     m_context.rotate_tool->render(context);
+}
+
+void Transform_tool::render_offscreen_indicator(const Render_context& context)
+{
+    // Same presence condition as Handle_visualizations::has_target(): the
+    // gizmo exists only when a node selection or a component anchor drives it.
+    if (shared.entries.empty() && !shared.component_mode) {
+        return;
+    }
+    if (context.views.empty()) {
+        return;
+    }
+
+    const vec3 target = shared.world_from_anchor.get_translation();
+
+    // Per-view frustum classification of the gizmo anchor, in that view's
+    // camera space (X right, Y up, camera looking down -Z).
+    class View_classification
+    {
+    public:
+        bool usable{false}; // supported projection type with a camera node
+        bool inside{false};
+    };
+
+    const auto is_perspective = [](const erhe::scene::Projection::Type type) -> bool {
+        return
+            (type == erhe::scene::Projection::Type::perspective) ||
+            (type == erhe::scene::Projection::Type::perspective_xr) ||
+            (type == erhe::scene::Projection::Type::perspective_horizontal) ||
+            (type == erhe::scene::Projection::Type::perspective_vertical);
+    };
+    const auto is_orthogonal = [](const erhe::scene::Projection::Type type) -> bool {
+        return
+            (type == erhe::scene::Projection::Type::orthogonal) ||
+            (type == erhe::scene::Projection::Type::orthogonal_horizontal) ||
+            (type == erhe::scene::Projection::Type::orthogonal_vertical) ||
+            (type == erhe::scene::Projection::Type::orthogonal_rectangle);
+    };
+
+    const auto classify = [&](const erhe::scene_renderer::Camera_view_input& view) -> View_classification {
+        View_classification result{};
+        if ((view.projection == nullptr) || (view.node == nullptr)) {
+            return result;
+        }
+        const erhe::scene::Projection::Type type = view.projection->projection_type;
+        const bool perspective = is_perspective(type);
+        const bool orthogonal  = is_orthogonal (type);
+        if (!perspective && !orthogonal) {
+            return result;
+        }
+        result.usable = true;
+
+        const vec3  p     = vec3{view.node->node_from_world() * vec4{target, 1.0f}};
+        const float depth = -p.z;
+        if ((depth < view.projection->z_near) || (depth > view.projection->z_far)) {
+            return result; // behind the near plane (or beyond far) -> outside
+        }
+        const erhe::scene::Projection::Fov_sides fov = view.projection->get_fov_sides(view.viewport);
+        // Lateral frustum extents at the anchor's depth: angular sides for
+        // perspective projections, fixed world-unit sides for orthogonal.
+        const float x_min = perspective ? (depth * std::tan(fov.left )) : fov.left;
+        const float x_max = perspective ? (depth * std::tan(fov.right)) : fov.right;
+        const float y_min = perspective ? (depth * std::tan(fov.down )) : fov.down;
+        const float y_max = perspective ? (depth * std::tan(fov.up   )) : fov.up;
+        result.inside =
+            (p.x >= x_min) && (p.x <= x_max) &&
+            (p.y >= y_min) && (p.y <= y_max);
+        return result;
+    };
+
+    // The indicator shows only when the anchor is outside EVERY rendered
+    // view's frustum (in XR: outside both eyes), so a gizmo visible in one
+    // eye never gets a distracting edge marker in the other.
+    bool any_usable = false;
+    for (const erhe::scene_renderer::Camera_view_input& view : context.views) {
+        const View_classification classification = classify(view);
+        if (!classification.usable) {
+            continue;
+        }
+        any_usable = true;
+        if (classification.inside) {
+            return;
+        }
+    }
+    if (!any_usable) {
+        return;
+    }
+
+    // Build the triangle from the first usable view. World-space debug
+    // primitives are submitted once and fanned out to all views, so in XR a
+    // single triangle placed at the left eye's frustum edge is seen by both
+    // eyes; the per-eye frusta differ by only the small IPD offset.
+    const erhe::scene_renderer::Camera_view_input* placement_view = nullptr;
+    for (const erhe::scene_renderer::Camera_view_input& view : context.views) {
+        if ((view.projection != nullptr) && (view.node != nullptr) &&
+            (is_perspective(view.projection->projection_type) || is_orthogonal(view.projection->projection_type)))
+        {
+            placement_view = &view;
+            break;
+        }
+    }
+    if (placement_view == nullptr) {
+        return;
+    }
+
+    const erhe::scene::Projection&           projection = *placement_view->projection;
+    const erhe::scene::Node&                 node       = *placement_view->node;
+    const bool                               perspective = is_perspective(projection.projection_type);
+    const erhe::scene::Projection::Fov_sides fov         = projection.get_fov_sides(placement_view->viewport);
+
+    // Depth of the plane (in front of the camera) the indicator is drawn on.
+    // Perspective: ~1 m, kept inside the clip range; orthogonal: mid range
+    // (lateral extents are depth-independent there).
+    const float d_ref = perspective
+        ? std::clamp(1.0f, 2.0f * projection.z_near, 0.5f * projection.z_far)
+        : (0.5f * (projection.z_near + projection.z_far));
+
+    const float x_min = perspective ? (d_ref * std::tan(fov.left )) : fov.left;
+    const float x_max = perspective ? (d_ref * std::tan(fov.right)) : fov.right;
+    const float y_min = perspective ? (d_ref * std::tan(fov.down )) : fov.down;
+    const float y_max = perspective ? (d_ref * std::tan(fov.up   )) : fov.up;
+    const float width  = x_max - x_min;
+    const float height = y_max - y_min;
+    if (!(width > 0.0f) || !(height > 0.0f)) {
+        return;
+    }
+    const vec2  rect_center{0.5f * (x_min + x_max), 0.5f * (y_min + y_max)};
+    const float indicator_size = 0.05f * std::min(width, height);
+
+    // Direction from the view center toward the anchor, on the d_ref plane.
+    const vec3  p_view = vec3{node.node_from_world() * vec4{target, 1.0f}};
+    const float depth  = -p_view.z;
+    vec2 direction;
+    if (perspective && (depth <= projection.z_near)) {
+        // At or behind the camera plane: no stable plane projection; the
+        // view-space lateral offset still tells which side the anchor is on.
+        direction = vec2{p_view.x, p_view.y} - rect_center;
+    } else {
+        const vec2 q = perspective
+            ? (vec2{p_view.x, p_view.y} * (d_ref / depth))
+            : vec2{p_view.x, p_view.y};
+        direction = q - rect_center;
+    }
+    const float direction_length = glm::length(direction);
+    if (!(direction_length > 1e-6f) || !std::isfinite(direction_length)) {
+        direction = vec2{0.0f, -1.0f}; // exactly behind/ahead of center: point down
+    } else {
+        direction = direction / direction_length;
+    }
+
+    // Clamp a ray from the rect center along `direction` to the border of
+    // the rect inset by the triangle's own extent, so the triangle stays
+    // fully inside the view.
+    const float margin       = 2.0f * indicator_size;
+    const float half_extent_x = std::max(0.5f * width  - margin, 0.0f);
+    const float half_extent_y = std::max(0.5f * height - margin, 0.0f);
+    float t = std::numeric_limits<float>::max();
+    if (std::abs(direction.x) > 1e-6f) {
+        t = std::min(t, half_extent_x / std::abs(direction.x));
+    }
+    if (std::abs(direction.y) > 1e-6f) {
+        t = std::min(t, half_extent_y / std::abs(direction.y));
+    }
+    if (!std::isfinite(t)) {
+        return;
+    }
+    const vec2 edge_point = rect_center + (direction * t);
+
+    // Arrow triangle on the d_ref plane: tip at the clamped edge point
+    // pointing along `direction`, base inward.
+    const vec2 u = direction;
+    const vec2 v{-u.y, u.x};
+    const vec2 tip    = edge_point + (u * indicator_size);
+    const vec2 base_a = edge_point - (u * (0.8f * indicator_size)) + (v * (0.6f * indicator_size));
+    const vec2 base_b = edge_point - (u * (0.8f * indicator_size)) - (v * (0.6f * indicator_size));
+
+    const mat4 world_from_view = node.world_from_node();
+    const auto to_world = [&world_from_view, d_ref](const vec2 point) -> vec3 {
+        return vec3{world_from_view * vec4{point.x, point.y, -d_ref, 1.0f}};
+    };
+
+    constexpr vec4 indicator_yellow{1.0f, 1.0f, 0.0f, 0.85f};
+    erhe::renderer::Primitive_renderer triangle_renderer = context.get(offscreen_indicator_fill_config);
+    triangle_renderer.add_triangle(mat4{1.0f}, indicator_yellow, to_world(tip), to_world(base_a), to_world(base_b));
 }
 
 void Transform_tool::render_translate_drag_guides(const Render_context& context)
