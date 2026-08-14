@@ -1094,9 +1094,15 @@ Device_impl::Device_impl(
         (query_present_timing_features.presentAtAbsoluteTime == VK_TRUE);
     m_capabilities.m_present_at_absolute_time = query_present_timing_features.presentAtAbsoluteTime == VK_TRUE;
     m_capabilities.m_present_at_relative_time = query_present_timing_features.presentAtRelativeTime == VK_TRUE;
+    // Calibrated timestamps need more than the extension: a host time domain
+    // the driver advertises AND this platform can read, paired with the
+    // device domain. Passing an unadvertised domain is a spec violation
+    // (VUID-VkCalibratedTimestampInfoKHR-timeDomain-02354) - MoltenVK and
+    // KosmicKrisp offer CLOCK_MONOTONIC_RAW but not CLOCK_MONOTONIC.
+    select_calibrated_host_time_domain();
     m_capabilities.m_calibrated_timestamps =
-        m_device_extensions.m_VK_KHR_calibrated_timestamps ||
-        m_device_extensions.m_VK_EXT_calibrated_timestamps;
+        (m_device_extensions.m_VK_KHR_calibrated_timestamps || m_device_extensions.m_VK_EXT_calibrated_timestamps) &&
+        (get_calibrated_host_time_domain() != VK_TIME_DOMAIN_DEVICE_KHR);
     m_host_query_reset = query_host_query_reset_features.hostQueryReset == VK_TRUE;
     m_capabilities.m_frame_pacing_tier_w =
         m_capabilities.m_present_id            &&

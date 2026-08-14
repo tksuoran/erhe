@@ -54,6 +54,8 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -2402,44 +2404,235 @@ void Device_impl::record_gpu_timer_end_query(VkCommandBuffer cb, int slot)
 
 namespace {
 
-// Converts a calibrated host-domain timestamp (QPC ticks on Windows,
-// CLOCK_MONOTONIC nanoseconds elsewhere) to the reference clock of
-// Frame_time_recorder::now() (std::chrono::steady_clock seconds, which is
-// QPC-backed on MSVC and CLOCK_MONOTONIC-backed on libstdc++).
-[[nodiscard]] auto host_calibrated_ticks_to_seconds(const uint64_t ticks) -> double
+// Ticks per second of a host time domain's own units: QPC ticks for
+// VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR, nanoseconds for the
+// monotonic clock domains.
+[[nodiscard]] auto host_time_domain_ticks_per_second(const VkTimeDomainKHR domain) -> double
 {
 #if defined(_WIN32)
-    static const double s_frequency = []() {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        return static_cast<double>(frequency.QuadPart);
-    }();
-    return static_cast<double>(ticks) / s_frequency;
+    if (domain == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR) {
+        static const double s_frequency = []() {
+            LARGE_INTEGER frequency{};
+            QueryPerformanceFrequency(&frequency);
+            return static_cast<double>(frequency.QuadPart);
+        }();
+        return s_frequency;
+    }
 #else
-    return static_cast<double>(ticks) * 1e-9;
+    static_cast<void>(domain);
+#endif
+    return 1e9;
+}
+
+// Reads the host clock backing a Vulkan host time domain, in that domain's
+// own units. False for VK_TIME_DOMAIN_DEVICE_KHR (the GPU clock, readable
+// only through vkGetCalibratedTimestamps) and for any host domain this
+// platform cannot read directly - such a domain is unusable for us even
+// when the driver advertises it, since the calibration exists to tie GPU
+// time to the reference clock.
+[[nodiscard]] auto read_host_time_domain(const VkTimeDomainKHR domain, uint64_t& out_value) -> bool
+{
+#if defined(_WIN32)
+    if (domain == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR) {
+        LARGE_INTEGER counter{};
+        QueryPerformanceCounter(&counter);
+        out_value = static_cast<uint64_t>(counter.QuadPart);
+        return true;
+    }
+    return false;
+#else
+    clockid_t clock_id{};
+    switch (domain) {
+        case VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR:     clock_id = CLOCK_MONOTONIC;     break;
+        case VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR: clock_id = CLOCK_MONOTONIC_RAW; break;
+        default: return false;
+    }
+    timespec time_spec{};
+    if (clock_gettime(clock_id, &time_spec) != 0) {
+        return false;
+    }
+    out_value = (static_cast<uint64_t>(time_spec.tv_sec) * 1000000000ull) + static_cast<uint64_t>(time_spec.tv_nsec);
+    return true;
 #endif
 }
 
-// Inverse of host_calibrated_ticks_to_seconds (frame pacing FR3, step
-// P2.3): reference-clock seconds to a host-domain calibrated value.
-[[nodiscard]] auto seconds_to_host_calibrated_ticks(const double seconds) -> uint64_t
+// Offset that maps a host time domain onto the reference clock of
+// Frame_time_recorder::now(): reference_seconds - domain_seconds. Sampled a
+// few times as (reference, domain, reference); the sample with the tightest
+// reference bracket wins and the domain read is placed at its midpoint.
+[[nodiscard]] auto measure_host_time_domain_offset(
+    const VkTimeDomainKHR domain,
+    const double          ticks_per_second,
+    double&               out_offset_seconds
+) -> bool
 {
-#if defined(_WIN32)
-    static const double s_frequency = []() {
-        LARGE_INTEGER frequency{};
-        QueryPerformanceFrequency(&frequency);
-        return static_cast<double>(frequency.QuadPart);
-    }();
-    return static_cast<uint64_t>(seconds * s_frequency);
-#else
-    return static_cast<uint64_t>(seconds * 1e9);
-#endif
+    bool   measured           = false;
+    double best_bracket       = std::numeric_limits<double>::max();
+    for (int i = 0; i < 4; ++i) {
+        const double reference_before = erhe::frame_pacing::Frame_time_recorder::now();
+        uint64_t     domain_value     = 0;
+        if (!read_host_time_domain(domain, domain_value)) {
+            return false;
+        }
+        const double reference_after = erhe::frame_pacing::Frame_time_recorder::now();
+        const double bracket         = reference_after - reference_before;
+        if (bracket < best_bracket) {
+            best_bracket       = bracket;
+            out_offset_seconds = (0.5 * (reference_before + reference_after)) - (static_cast<double>(domain_value) / ticks_per_second);
+            measured           = true;
+        }
+    }
+    return measured;
+}
+
+[[nodiscard]] auto c_str(const VkTimeDomainKHR domain) -> const char*
+{
+    switch (domain) {
+        case VK_TIME_DOMAIN_DEVICE_KHR:                    return "DEVICE";
+        case VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR:           return "CLOCK_MONOTONIC";
+        case VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR:       return "CLOCK_MONOTONIC_RAW";
+        case VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR: return "QUERY_PERFORMANCE_COUNTER";
+        case VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT:       return "PRESENT_STAGE_LOCAL";
+        case VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT:           return "SWAPCHAIN_LOCAL";
+        default:                                           return "?";
+    }
 }
 
 } // anonymous namespace
 
+void Device_impl::select_calibrated_host_time_domain()
+{
+    m_host_time_domains.clear();
+    m_calibrated_host_time_domain    = VK_TIME_DOMAIN_DEVICE_KHR;
+    m_host_time_domain_offsets_valid = false;
+    if (!m_device_extensions.m_VK_KHR_calibrated_timestamps && !m_device_extensions.m_VK_EXT_calibrated_timestamps) {
+        return;
+    }
+    const PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsKHR get_time_domains =
+        (vkGetPhysicalDeviceCalibrateableTimeDomainsKHR != nullptr)
+            ? vkGetPhysicalDeviceCalibrateableTimeDomainsKHR
+            : vkGetPhysicalDeviceCalibrateableTimeDomainsEXT;
+    if (get_time_domains == nullptr) {
+        log_context->warn("vkGetPhysicalDeviceCalibrateableTimeDomains() is not available; calibrated timestamps disabled");
+        return;
+    }
+    uint32_t domain_count = 0;
+    VkResult result = get_time_domains(m_vulkan_physical_device, &domain_count, nullptr);
+    if ((result != VK_SUCCESS) || (domain_count == 0)) {
+        log_context->warn(
+            "vkGetPhysicalDeviceCalibrateableTimeDomains() gave {} domains ({} {}); calibrated timestamps disabled",
+            domain_count, static_cast<int32_t>(result), c_str(result)
+        );
+        return;
+    }
+    std::vector<VkTimeDomainKHR> domains(domain_count);
+    result = get_time_domains(m_vulkan_physical_device, &domain_count, domains.data());
+    if (result != VK_SUCCESS) {
+        log_context->warn(
+            "vkGetPhysicalDeviceCalibrateableTimeDomains() failed with {} {}; calibrated timestamps disabled",
+            static_cast<int32_t>(result), c_str(result)
+        );
+        return;
+    }
+    domains.resize(domain_count);
+
+    bool has_device_domain = false;
+    for (const VkTimeDomainKHR domain : domains) {
+        if (domain == VK_TIME_DOMAIN_DEVICE_KHR) {
+            has_device_domain = true;
+            continue;
+        }
+        const double ticks_per_second = host_time_domain_ticks_per_second(domain);
+        double       offset_seconds   = 0.0;
+        if (!measure_host_time_domain_offset(domain, ticks_per_second, offset_seconds)) {
+            log_context->info("Calibrated time domain {} ({}) is not readable on this platform", c_str(domain), static_cast<int32_t>(domain));
+            continue;
+        }
+        m_host_time_domains.push_back(Host_time_domain{
+            .domain           = domain,
+            .ticks_per_second = ticks_per_second,
+            .offset_seconds   = offset_seconds
+        });
+    }
+    m_host_time_domain_offsets_valid = true;
+
+    // Preference order: the clock the reference clock (steady_clock) is
+    // actually built on comes first, so the offset is zero and calibrated
+    // values need no correction; the other readable domains follow.
+#if defined(_WIN32)
+    static constexpr VkTimeDomainKHR preferred_domains[] = {
+        VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR
+    };
+#elif defined(__APPLE__)
+    static constexpr VkTimeDomainKHR preferred_domains[] = {
+        VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR,
+        VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR
+    };
+#else
+    static constexpr VkTimeDomainKHR preferred_domains[] = {
+        VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR,
+        VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_KHR
+    };
+#endif
+    for (const VkTimeDomainKHR preferred : preferred_domains) {
+        if (is_host_time_domain(preferred)) {
+            m_calibrated_host_time_domain = preferred;
+            break;
+        }
+    }
+    if ((m_calibrated_host_time_domain == VK_TIME_DOMAIN_DEVICE_KHR) && !m_host_time_domains.empty()) {
+        m_calibrated_host_time_domain = m_host_time_domains.front().domain;
+    }
+    if (!has_device_domain) {
+        // Without the device domain there is no GPU/host pair to calibrate.
+        log_context->warn("Calibrated timestamps: no VK_TIME_DOMAIN_DEVICE_KHR; calibrated timestamps disabled");
+        m_calibrated_host_time_domain = VK_TIME_DOMAIN_DEVICE_KHR;
+    }
+    log_context->info("Calibrated time domains: {} advertised, host domain = {}", domain_count, c_str(m_calibrated_host_time_domain));
+    for (const Host_time_domain& entry : m_host_time_domains) {
+        log_context->info(
+            "  host time domain {} ({}): offset to reference clock = {} s",
+            c_str(entry.domain), static_cast<int32_t>(entry.domain), entry.offset_seconds
+        );
+    }
+}
+
+auto Device_impl::get_calibrated_host_time_domain() const -> VkTimeDomainKHR
+{
+    return m_calibrated_host_time_domain;
+}
+
+auto Device_impl::is_host_time_domain(const VkTimeDomainKHR domain) const -> bool
+{
+    for (const Host_time_domain& entry : m_host_time_domains) {
+        if (entry.domain == domain) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Device_impl::refresh_host_time_domain_offsets()
+{
+    if (m_host_time_domains.empty()) {
+        return;
+    }
+    if (m_host_time_domain_offsets_valid && ((m_frame_index - m_host_time_domain_offset_frame) < 120)) {
+        return;
+    }
+    for (Host_time_domain& entry : m_host_time_domains) {
+        double offset_seconds = 0.0;
+        if (measure_host_time_domain_offset(entry.domain, entry.ticks_per_second, offset_seconds)) {
+            entry.offset_seconds = offset_seconds;
+        }
+    }
+    m_host_time_domain_offset_frame  = m_frame_index;
+    m_host_time_domain_offsets_valid = true;
+}
+
 void Device_impl::update_gpu_calibration()
 {
+    refresh_host_time_domain_offsets();
     if (!m_capabilities.m_calibrated_timestamps || !m_gpu_timers_supported) {
         return;
     }
@@ -2451,11 +2644,10 @@ void Device_impl::update_gpu_calibration()
     if (get_calibrated_timestamps == nullptr) {
         return;
     }
-#if defined(_WIN32)
-    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
-#else
-    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
-#endif
+    const VkTimeDomainKHR host_domain = m_calibrated_host_time_domain;
+    if (host_domain == VK_TIME_DOMAIN_DEVICE_KHR) {
+        return;
+    }
     const VkCalibratedTimestampInfoKHR infos[2] = {
         {
             .sType      = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR,
@@ -2476,7 +2668,7 @@ void Device_impl::update_gpu_calibration()
         return;
     }
     m_gpu_calibration_device_ticks = timestamps[0];
-    m_gpu_calibration_host_seconds = host_calibrated_ticks_to_seconds(timestamps[1]);
+    m_gpu_calibration_host_seconds = host_calibrated_value_to_seconds(timestamps[1]);
     m_gpu_calibration_frame        = m_frame_index;
     m_gpu_calibration_valid        = true;
 }
@@ -2489,14 +2681,38 @@ auto Device_impl::gpu_ticks_to_reference_seconds(const uint64_t ticks) const -> 
     return m_gpu_calibration_host_seconds + (delta_ticks * m_gpu_timer_timestamp_period * 1e-9);
 }
 
+auto Device_impl::host_domain_value_to_seconds(const VkTimeDomainKHR domain, const uint64_t value) const -> double
+{
+    for (const Host_time_domain& entry : m_host_time_domains) {
+        if (entry.domain == domain) {
+            return (static_cast<double>(value) / entry.ticks_per_second) + entry.offset_seconds;
+        }
+    }
+    return 0.0;
+}
+
+auto Device_impl::reference_seconds_to_host_domain_value(const VkTimeDomainKHR domain, const double seconds) const -> uint64_t
+{
+    for (const Host_time_domain& entry : m_host_time_domains) {
+        if (entry.domain == domain) {
+            const double domain_seconds = seconds - entry.offset_seconds;
+            if (domain_seconds <= 0.0) {
+                return 0;
+            }
+            return static_cast<uint64_t>(domain_seconds * entry.ticks_per_second);
+        }
+    }
+    return 0;
+}
+
 auto Device_impl::host_calibrated_value_to_seconds(const uint64_t value) const -> double
 {
-    return host_calibrated_ticks_to_seconds(value);
+    return host_domain_value_to_seconds(m_calibrated_host_time_domain, value);
 }
 
 auto Device_impl::reference_seconds_to_host_calibrated_value(const double seconds) const -> uint64_t
 {
-    return seconds_to_host_calibrated_ticks(seconds);
+    return reference_seconds_to_host_domain_value(m_calibrated_host_time_domain, seconds);
 }
 
 void Device_impl::record_frame_bracket_begin(VkCommandBuffer cb)

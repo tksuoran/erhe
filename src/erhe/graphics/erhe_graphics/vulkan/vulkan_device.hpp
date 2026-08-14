@@ -298,12 +298,32 @@ public:
     void               poll_frame_bracket_results   ();
     void               update_gpu_calibration       ();
     [[nodiscard]] auto gpu_ticks_to_reference_seconds(uint64_t ticks) const -> double;
-    // Converts a value from the calibrated host time domain (QPC ticks on
-    // Windows, CLOCK_MONOTONIC nanoseconds elsewhere) to reference-clock
-    // seconds. Used for present-timing feedback (step P0.4).
+
+    // Calibrated host time domains (VK_KHR_calibrated_timestamps). Which host
+    // domains a driver offers is driver-specific - MoltenVK and KosmicKrisp
+    // offer CLOCK_MONOTONIC_RAW but NOT CLOCK_MONOTONIC - so the domain is
+    // picked from what the device advertises, never assumed by platform.
+    // select_calibrated_host_time_domain() runs during device init, before
+    // the calibrated timestamps capability is resolved.
+    void               select_calibrated_host_time_domain();
+    // The host domain paired with VK_TIME_DOMAIN_DEVICE_KHR in every
+    // calibration call; VK_TIME_DOMAIN_DEVICE_KHR itself means "no usable
+    // host domain", which turns the calibrated timestamps capability off.
+    [[nodiscard]] auto get_calibrated_host_time_domain() const -> VkTimeDomainKHR;
+    // True for a host domain this device advertises and this platform can
+    // read, i.e. one host_domain_value_to_seconds() can convert.
+    [[nodiscard]] auto is_host_time_domain(VkTimeDomainKHR domain) const -> bool;
+    // Converts a value in the given host time domain (QPC ticks for
+    // QUERY_PERFORMANCE_COUNTER, nanoseconds for the monotonic domains) to
+    // reference-clock seconds; 0.0 for a domain that is not a usable host
+    // domain. Used for present-timing feedback (step P0.4).
+    [[nodiscard]] auto host_domain_value_to_seconds(VkTimeDomainKHR domain, uint64_t value) const -> double;
+    // Inverse: reference-clock seconds to a value in the given host domain;
+    // 0 for a domain that is not a usable host domain. Used for the FR3
+    // absolute target present time (step P2.3).
+    [[nodiscard]] auto reference_seconds_to_host_domain_value(VkTimeDomainKHR domain, double seconds) const -> uint64_t;
+    // Same conversions for the selected calibrated host domain.
     [[nodiscard]] auto host_calibrated_value_to_seconds(uint64_t value) const -> double;
-    // Inverse: reference-clock seconds to a host-domain calibrated value.
-    // Used for the FR3 absolute target present time (step P2.3).
     [[nodiscard]] auto reference_seconds_to_host_calibrated_value(double seconds) const -> uint64_t;
 
     [[nodiscard]] auto get_device                       () -> Device&;
@@ -581,6 +601,26 @@ private:
     double       m_gpu_calibration_host_seconds{0.0};
     uint64_t     m_gpu_calibration_device_ticks{0};
     uint64_t     m_gpu_calibration_frame       {0};
+
+    // Host time domains this device advertises and this platform can read
+    // (select_calibrated_host_time_domain). offset_seconds maps the domain
+    // onto the reference clock (Frame_time_recorder::now()) and is NOT zero
+    // in general: on macOS libc++ steady_clock is CLOCK_MONOTONIC_RAW while
+    // CLOCK_MONOTONIC also counts time spent asleep; on Linux steady_clock
+    // is CLOCK_MONOTONIC and the raw clock is the odd one out. Offsets are
+    // re-measured with the GPU calibration, since the gap between two
+    // monotonic clocks moves whenever the system sleeps.
+    struct Host_time_domain
+    {
+        VkTimeDomainKHR domain          {VK_TIME_DOMAIN_DEVICE_KHR};
+        double          ticks_per_second{1.0};
+        double          offset_seconds  {0.0};
+    };
+    void refresh_host_time_domain_offsets();
+    std::vector<Host_time_domain> m_host_time_domains;
+    VkTimeDomainKHR m_calibrated_host_time_domain{VK_TIME_DOMAIN_DEVICE_KHR};
+    uint64_t        m_host_time_domain_offset_frame{0};
+    bool            m_host_time_domain_offsets_valid{false};
     double      m_gpu_timer_timestamp_period{0.0};
     uint64_t    m_gpu_timer_valid_mask      {0};
     bool        m_gpu_timers_supported      {false};

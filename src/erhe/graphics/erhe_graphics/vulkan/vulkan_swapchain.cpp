@@ -1424,11 +1424,11 @@ void Swapchain_impl::init_present_timing(const Vulkan_swapchain_create_info& swa
         );
         return;
     }
-#if defined(_WIN32)
-    constexpr VkTimeDomainKHR preferred_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
-#else
-    constexpr VkTimeDomainKHR preferred_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
-#endif
+    // Prefer the host domain the device calibrates against - feedback in
+    // that domain converts straight to the reference clock. Which host
+    // domain that is, is driver-specific (Device_impl::
+    // select_calibrated_host_time_domain).
+    const VkTimeDomainKHR preferred_domain = m_device_impl.get_calibrated_host_time_domain();
     std::size_t chosen = 0;
     for (std::size_t i = 0; i < domains.size(); ++i) {
         log_swapchain->info(
@@ -1549,11 +1549,12 @@ void Swapchain_impl::update_present_timing_calibration()
     if (get_calibrated_timestamps == nullptr) {
         return;
     }
-#if defined(_WIN32)
-    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
-#else
-    constexpr VkTimeDomainKHR host_domain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
-#endif
+    // The host side of every calibration pair; the device picked it from the
+    // domains this driver actually advertises.
+    const VkTimeDomainKHR host_domain = m_device_impl.get_calibrated_host_time_domain();
+    if (host_domain == VK_TIME_DOMAIN_DEVICE_KHR) {
+        return; // no usable host time domain - see select_calibrated_host_time_domain
+    }
     const bool with_queue_ops =
         ((m_present_stage_queries_mask & VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT) != 0) &&
         (m_present_stage_queries != VK_PRESENT_STAGE_QUEUE_OPERATIONS_END_BIT_EXT);
@@ -1711,14 +1712,9 @@ void Swapchain_impl::poll_present_timing()
             const bool     calibration_valid,
             const uint64_t calibration_domain_value
         ) -> double {
-            if (timing.timeDomain == VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR) {
-                return static_cast<double>(stage_time) * 1e-9;
+            if (m_device_impl.is_host_time_domain(timing.timeDomain)) {
+                return m_device_impl.host_domain_value_to_seconds(timing.timeDomain, stage_time);
             }
-#if defined(_WIN32)
-            if (timing.timeDomain == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR) {
-                return m_device_impl.host_calibrated_value_to_seconds(stage_time);
-            }
-#endif
             if (
                 (timing.timeDomain == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT) ||
                 (timing.timeDomain == VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT)
@@ -1943,12 +1939,15 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
             if (domain_is_calibrated) {
                 const double delta_ns = (target_seconds - m_timing_calibration_host_seconds) * 1e9;
                 timing_info.targetTime = m_timing_calibration_domain_value + static_cast<uint64_t>(static_cast<int64_t>(delta_ns));
-            } else if (m_timing_time_domain == VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR) {
-                timing_info.targetTime = static_cast<uint64_t>(target_seconds * 1e9);
             } else {
-                timing_info.targetTime = m_device_impl.reference_seconds_to_host_calibrated_value(target_seconds);
+                // Host domain: 0 means the domain is not one we can convert
+                // (see Device_impl::reference_seconds_to_host_domain_value),
+                // so no target is requested rather than a bogus one.
+                timing_info.targetTime = m_device_impl.reference_seconds_to_host_domain_value(m_timing_time_domain, target_seconds);
             }
-            timing_info.flags = VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT;
+            if (timing_info.targetTime != 0) {
+                timing_info.flags = VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT;
+            }
         } else if (m_present_at_relative_time) {
             // Relative target: duration from the present call itself, which
             // sidesteps the domain calibration entirely. The pacer's target
