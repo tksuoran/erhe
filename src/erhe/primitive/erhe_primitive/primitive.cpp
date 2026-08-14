@@ -224,7 +224,14 @@ auto Primitive_raytrace::has_raytrace_triangles() const -> bool
 
 void Primitive_raytrace::make_raytrace_geometry()
 {
-    m_rt_geometry = erhe::raytrace::IGeometry::create_unique("rt_geometry", erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE);
+    // Distinct label for AABB proxies: the "BVH build <label> in <n> ms" log
+    // line is the only visible difference between a 12-triangle proxy and a
+    // real triangle BVH build, and identical labels made load-time proxy
+    // builds read as real BVH work.
+    m_rt_geometry = erhe::raytrace::IGeometry::create_unique(
+        m_is_proxy ? "rt_geometry_proxy" : "rt_geometry",
+        erhe::raytrace::Geometry_type::GEOMETRY_TYPE_TRIANGLE
+    );
 
     ERHE_VERIFY(m_rt_mesh.vertex_buffer_ranges.size() == 1);
     const auto& vertex_buffer_range   = m_rt_mesh.vertex_buffer_ranges.front();
