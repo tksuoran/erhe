@@ -1021,6 +1021,15 @@ auto has_stencil(const gl::Internal_format format) -> bool
         case erhe::dataformat::Format::format_packed1010102_vec4_unorm: return gl::Internal_format::rgb10_a2;
         case erhe::dataformat::Format::format_packed1010102_vec4_uint:  return gl::Internal_format::rgb10_a2ui;
         case erhe::dataformat::Format::format_packed111110_vec3_unorm:  return gl::Internal_format::r11f_g11f_b10f;
+        // BC1..BC3 (S3TC) are extension-only enums not present in the generated core wrappers
+        case erhe::dataformat::Format::format_bc4_unorm:                return gl::Internal_format::compressed_red_rgtc1;
+        case erhe::dataformat::Format::format_bc4_snorm:                return gl::Internal_format::compressed_signed_red_rgtc1;
+        case erhe::dataformat::Format::format_bc5_unorm:                return gl::Internal_format::compressed_rg_rgtc2;
+        case erhe::dataformat::Format::format_bc5_snorm:                return gl::Internal_format::compressed_signed_rg_rgtc2;
+        case erhe::dataformat::Format::format_bc6h_ufloat:              return gl::Internal_format::compressed_rgb_bptc_unsigned_float;
+        case erhe::dataformat::Format::format_bc6h_sfloat:              return gl::Internal_format::compressed_rgb_bptc_signed_float;
+        case erhe::dataformat::Format::format_bc7_unorm:                return gl::Internal_format::compressed_rgba_bptc_unorm;
+        case erhe::dataformat::Format::format_bc7_srgb:                 return gl::Internal_format::compressed_srgb_alpha_bptc_unorm;
         case erhe::dataformat::Format::format_d16_unorm:                return gl::Internal_format::depth_component16;
         case erhe::dataformat::Format::format_x8_d24_unorm_pack32:      return gl::Internal_format::depth24_stencil8;
         case erhe::dataformat::Format::format_d32_sfloat:               return gl::Internal_format::depth_component32f;
@@ -1086,6 +1095,14 @@ auto has_stencil(const gl::Internal_format format) -> bool
         case gl::Internal_format::rgb10_a2          : return erhe::dataformat::Format::format_packed1010102_vec4_unorm;
         case gl::Internal_format::rgb10_a2ui        : return erhe::dataformat::Format::format_packed1010102_vec4_uint;
         case gl::Internal_format::r11f_g11f_b10f    : return erhe::dataformat::Format::format_packed111110_vec3_unorm;
+        case gl::Internal_format::compressed_red_rgtc1               : return erhe::dataformat::Format::format_bc4_unorm;
+        case gl::Internal_format::compressed_signed_red_rgtc1        : return erhe::dataformat::Format::format_bc4_snorm;
+        case gl::Internal_format::compressed_rg_rgtc2                : return erhe::dataformat::Format::format_bc5_unorm;
+        case gl::Internal_format::compressed_signed_rg_rgtc2         : return erhe::dataformat::Format::format_bc5_snorm;
+        case gl::Internal_format::compressed_rgb_bptc_unsigned_float : return erhe::dataformat::Format::format_bc6h_ufloat;
+        case gl::Internal_format::compressed_rgb_bptc_signed_float   : return erhe::dataformat::Format::format_bc6h_sfloat;
+        case gl::Internal_format::compressed_rgba_bptc_unorm         : return erhe::dataformat::Format::format_bc7_unorm;
+        case gl::Internal_format::compressed_srgb_alpha_bptc_unorm   : return erhe::dataformat::Format::format_bc7_srgb;
         case gl::Internal_format::depth_component16 : return erhe::dataformat::Format::format_d16_unorm;
         //case gl::Internal_format::depth32f_stencil8 : return erhe::dataformat::Format::format_x8_d24_unorm_pack32;
         case gl::Internal_format::depth_component32f: return erhe::dataformat::Format::format_d32_sfloat;

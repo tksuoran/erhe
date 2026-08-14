@@ -811,6 +811,23 @@ auto to_vulkan(const erhe::dataformat::Format format) -> VkFormat
         case erhe::dataformat::Format::format_packed1010102_vec4_sint : return VK_FORMAT_A2R10G10B10_SINT_PACK32;
         case erhe::dataformat::Format::format_packed111110_vec3_unorm : return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 
+        case erhe::dataformat::Format::format_bc1_rgb_unorm           : return VK_FORMAT_BC1_RGB_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc1_rgb_srgb            : return VK_FORMAT_BC1_RGB_SRGB_BLOCK;
+        case erhe::dataformat::Format::format_bc1_rgba_unorm          : return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc1_rgba_srgb           : return VK_FORMAT_BC1_RGBA_SRGB_BLOCK;
+        case erhe::dataformat::Format::format_bc2_unorm               : return VK_FORMAT_BC2_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc2_srgb                : return VK_FORMAT_BC2_SRGB_BLOCK;
+        case erhe::dataformat::Format::format_bc3_unorm               : return VK_FORMAT_BC3_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc3_srgb                : return VK_FORMAT_BC3_SRGB_BLOCK;
+        case erhe::dataformat::Format::format_bc4_unorm               : return VK_FORMAT_BC4_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc4_snorm               : return VK_FORMAT_BC4_SNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc5_unorm               : return VK_FORMAT_BC5_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc5_snorm               : return VK_FORMAT_BC5_SNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc6h_ufloat             : return VK_FORMAT_BC6H_UFLOAT_BLOCK;
+        case erhe::dataformat::Format::format_bc6h_sfloat             : return VK_FORMAT_BC6H_SFLOAT_BLOCK;
+        case erhe::dataformat::Format::format_bc7_unorm               : return VK_FORMAT_BC7_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_bc7_srgb                : return VK_FORMAT_BC7_SRGB_BLOCK;
+
         case erhe::dataformat::Format::format_d16_unorm               : return VK_FORMAT_D16_UNORM;           // a one-component, 16-bit unsigned normalized format that has a single 16-bit depth component.
         case erhe::dataformat::Format::format_x8_d24_unorm_pack32     : return VK_FORMAT_X8_D24_UNORM_PACK32; // a two-component, 32-bit format that has 24 unsigned normalized bits in the depth component and, optionally, 8 bits that are unused.
         case erhe::dataformat::Format::format_d32_sfloat              : return VK_FORMAT_D32_SFLOAT;          // a one-component, 32-bit signed floating-point format that has 32 bits in the depth component
@@ -901,6 +918,22 @@ auto to_erhe(const VkFormat format) -> erhe::dataformat::Format
         case VK_FORMAT_A2R10G10B10_UINT_PACK32 : return erhe::dataformat::Format::format_packed1010102_vec4_uint ;
         case VK_FORMAT_A2R10G10B10_SINT_PACK32 : return erhe::dataformat::Format::format_packed1010102_vec4_sint ;
         case VK_FORMAT_B10G11R11_UFLOAT_PACK32 : return erhe::dataformat::Format::format_packed111110_vec3_unorm ;
+        case VK_FORMAT_BC1_RGB_UNORM_BLOCK     : return erhe::dataformat::Format::format_bc1_rgb_unorm           ;
+        case VK_FORMAT_BC1_RGB_SRGB_BLOCK      : return erhe::dataformat::Format::format_bc1_rgb_srgb            ;
+        case VK_FORMAT_BC1_RGBA_UNORM_BLOCK    : return erhe::dataformat::Format::format_bc1_rgba_unorm          ;
+        case VK_FORMAT_BC1_RGBA_SRGB_BLOCK     : return erhe::dataformat::Format::format_bc1_rgba_srgb           ;
+        case VK_FORMAT_BC2_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc2_unorm               ;
+        case VK_FORMAT_BC2_SRGB_BLOCK          : return erhe::dataformat::Format::format_bc2_srgb                ;
+        case VK_FORMAT_BC3_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc3_unorm               ;
+        case VK_FORMAT_BC3_SRGB_BLOCK          : return erhe::dataformat::Format::format_bc3_srgb                ;
+        case VK_FORMAT_BC4_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc4_unorm               ;
+        case VK_FORMAT_BC4_SNORM_BLOCK         : return erhe::dataformat::Format::format_bc4_snorm               ;
+        case VK_FORMAT_BC5_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc5_unorm               ;
+        case VK_FORMAT_BC5_SNORM_BLOCK         : return erhe::dataformat::Format::format_bc5_snorm               ;
+        case VK_FORMAT_BC6H_UFLOAT_BLOCK       : return erhe::dataformat::Format::format_bc6h_ufloat             ;
+        case VK_FORMAT_BC6H_SFLOAT_BLOCK       : return erhe::dataformat::Format::format_bc6h_sfloat             ;
+        case VK_FORMAT_BC7_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc7_unorm               ;
+        case VK_FORMAT_BC7_SRGB_BLOCK          : return erhe::dataformat::Format::format_bc7_srgb                ;
         case VK_FORMAT_D16_UNORM               : return erhe::dataformat::Format::format_d16_unorm               ;
         case VK_FORMAT_X8_D24_UNORM_PACK32     : return erhe::dataformat::Format::format_x8_d24_unorm_pack32     ;
         case VK_FORMAT_D32_SFLOAT              : return erhe::dataformat::Format::format_d32_sfloat              ;
