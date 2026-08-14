@@ -659,6 +659,18 @@ CPMAddPackage(
     DOWNLOAD_ONLY     YES
 )
 
+# dds_image (https://github.com/spnda/dds_image) is a small header-only DDS
+# reader used by the erhe::graphics DDS image loader (glTF MSFT_texture_dds
+# images, e.g. the niagara_bistro BC7 textures). Fetched download-only; the
+# header is included by src/erhe/graphics/erhe_graphics/image_loader_dds.cpp.
+CPMAddPackage(
+    NAME              dds_image
+    GIT_TAG           0afae978314b2b536b74635bab74f3f9432526a5 # main 2026-08-14 (no tagged releases)
+    GIT_SHALLOW       TRUE
+    GITHUB_REPOSITORY spnda/dds_image
+    DOWNLOAD_ONLY     YES
+)
+
 if (${ERHE_NAVIGATION_LIBRARY} STREQUAL "recastnavigation")
     CPMAddPackage(
         NAME              recastnavigation

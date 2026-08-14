@@ -38,6 +38,8 @@ erhe_target_sources_grouped(
     erhe_graphics/graphics_log.cpp
     erhe_graphics/graphics_log.hpp
     erhe_graphics/image_loader.hpp
+    erhe_graphics/image_loader_dds.cpp
+    erhe_graphics/image_loader_dds.hpp
     erhe_graphics/image_loader_ktx2.cpp
     erhe_graphics/image_loader_ktx2.hpp
     erhe_graphics/image_loader_wuffs.cpp
@@ -490,6 +492,10 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     )
 endif ()
 target_include_directories(${_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
+
+# DDS reader (image_loader_dds): header-only dds_image package fetched
+# download-only at the top level (dds_image_SOURCE_DIR).
+target_include_directories(${_target} SYSTEM PRIVATE "${dds_image_SOURCE_DIR}/include")
 
 # Image writer backend selection. The fpng (fast PNG) backend is used whenever
 # ERHE_USE_FPNG is set; this is independent of ERHE_WINDOW_LIBRARY so a headless
