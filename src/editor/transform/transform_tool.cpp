@@ -1426,106 +1426,60 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
     if (shared.entries.empty() && !shared.component_mode) {
         return;
     }
-    if (context.views.empty()) {
+
+    // The whole-view frustum comes from Scene_view::get_camera() - the one
+    // union-view implementation (see its declaration): the viewport camera on
+    // desktop; in XR the Headset_view root camera at the head pose, whose
+    // perspective_xr projection is maintained as the union of both eye
+    // frusta. So one test and one triangle placement cover both eyes; the
+    // world-space triangle is fanned out to all views by the debug renderer.
+    const std::shared_ptr<erhe::scene::Camera> camera = context.scene_view.get_camera();
+    if (!camera) {
+        return;
+    }
+    const erhe::scene::Projection* projection_ptr = camera->projection();
+    const erhe::scene::Node*       node_ptr       = camera->get_node();
+    if ((projection_ptr == nullptr) || (node_ptr == nullptr)) {
+        return;
+    }
+    const erhe::scene::Projection& projection = *projection_ptr;
+    const erhe::scene::Node&       node       = *node_ptr;
+
+    const erhe::scene::Projection::Type type = projection.projection_type;
+    const bool perspective =
+        (type == erhe::scene::Projection::Type::perspective) ||
+        (type == erhe::scene::Projection::Type::perspective_xr) ||
+        (type == erhe::scene::Projection::Type::perspective_horizontal) ||
+        (type == erhe::scene::Projection::Type::perspective_vertical);
+    const bool orthogonal =
+        (type == erhe::scene::Projection::Type::orthogonal) ||
+        (type == erhe::scene::Projection::Type::orthogonal_horizontal) ||
+        (type == erhe::scene::Projection::Type::orthogonal_vertical) ||
+        (type == erhe::scene::Projection::Type::orthogonal_rectangle);
+    if (!perspective && !orthogonal) {
         return;
     }
 
-    const vec3 target = shared.world_from_anchor.get_translation();
-
-    // Per-view frustum classification of the gizmo anchor, in that view's
-    // camera space (X right, Y up, camera looking down -Z).
-    class View_classification
-    {
-    public:
-        bool usable{false}; // supported projection type with a camera node
-        bool inside{false};
-    };
-
-    const auto is_perspective = [](const erhe::scene::Projection::Type type) -> bool {
-        return
-            (type == erhe::scene::Projection::Type::perspective) ||
-            (type == erhe::scene::Projection::Type::perspective_xr) ||
-            (type == erhe::scene::Projection::Type::perspective_horizontal) ||
-            (type == erhe::scene::Projection::Type::perspective_vertical);
-    };
-    const auto is_orthogonal = [](const erhe::scene::Projection::Type type) -> bool {
-        return
-            (type == erhe::scene::Projection::Type::orthogonal) ||
-            (type == erhe::scene::Projection::Type::orthogonal_horizontal) ||
-            (type == erhe::scene::Projection::Type::orthogonal_vertical) ||
-            (type == erhe::scene::Projection::Type::orthogonal_rectangle);
-    };
-
-    const auto classify = [&](const erhe::scene_renderer::Camera_view_input& view) -> View_classification {
-        View_classification result{};
-        if ((view.projection == nullptr) || (view.node == nullptr)) {
-            return result;
-        }
-        const erhe::scene::Projection::Type type = view.projection->projection_type;
-        const bool perspective = is_perspective(type);
-        const bool orthogonal  = is_orthogonal (type);
-        if (!perspective && !orthogonal) {
-            return result;
-        }
-        result.usable = true;
-
-        const vec3  p     = vec3{view.node->node_from_world() * vec4{target, 1.0f}};
-        const float depth = -p.z;
-        if ((depth < view.projection->z_near) || (depth > view.projection->z_far)) {
-            return result; // behind the near plane (or beyond far) -> outside
-        }
-        const erhe::scene::Projection::Fov_sides fov = view.projection->get_fov_sides(view.viewport);
+    // Frustum containment test for the gizmo anchor, in camera space
+    // (X right, Y up, camera looking down -Z).
+    const vec3  target        = shared.world_from_anchor.get_translation();
+    const vec3  p_view        = vec3{node.node_from_world() * vec4{target, 1.0f}};
+    const float anchor_depth  = -p_view.z;
+    const erhe::scene::Projection::Fov_sides fov = projection.get_fov_sides(context.viewport);
+    if ((anchor_depth >= projection.z_near) && (anchor_depth <= projection.z_far)) {
         // Lateral frustum extents at the anchor's depth: angular sides for
         // perspective projections, fixed world-unit sides for orthogonal.
-        const float x_min = perspective ? (depth * std::tan(fov.left )) : fov.left;
-        const float x_max = perspective ? (depth * std::tan(fov.right)) : fov.right;
-        const float y_min = perspective ? (depth * std::tan(fov.down )) : fov.down;
-        const float y_max = perspective ? (depth * std::tan(fov.up   )) : fov.up;
-        result.inside =
-            (p.x >= x_min) && (p.x <= x_max) &&
-            (p.y >= y_min) && (p.y <= y_max);
-        return result;
-    };
-
-    // The indicator shows only when the anchor is outside EVERY rendered
-    // view's frustum (in XR: outside both eyes), so a gizmo visible in one
-    // eye never gets a distracting edge marker in the other.
-    bool any_usable = false;
-    for (const erhe::scene_renderer::Camera_view_input& view : context.views) {
-        const View_classification classification = classify(view);
-        if (!classification.usable) {
-            continue;
-        }
-        any_usable = true;
-        if (classification.inside) {
+        const float x_min = perspective ? (anchor_depth * std::tan(fov.left )) : fov.left;
+        const float x_max = perspective ? (anchor_depth * std::tan(fov.right)) : fov.right;
+        const float y_min = perspective ? (anchor_depth * std::tan(fov.down )) : fov.down;
+        const float y_max = perspective ? (anchor_depth * std::tan(fov.up   )) : fov.up;
+        const bool inside =
+            (p_view.x >= x_min) && (p_view.x <= x_max) &&
+            (p_view.y >= y_min) && (p_view.y <= y_max);
+        if (inside) {
             return;
         }
     }
-    if (!any_usable) {
-        return;
-    }
-
-    // Build the triangle from the first usable view. World-space debug
-    // primitives are submitted once and fanned out to all views, so in XR a
-    // single triangle placed at the left eye's frustum edge is seen by both
-    // eyes; the per-eye frusta differ by only the small IPD offset.
-    const erhe::scene_renderer::Camera_view_input* placement_view = nullptr;
-    for (const erhe::scene_renderer::Camera_view_input& view : context.views) {
-        if ((view.projection != nullptr) && (view.node != nullptr) &&
-            (is_perspective(view.projection->projection_type) || is_orthogonal(view.projection->projection_type)))
-        {
-            placement_view = &view;
-            break;
-        }
-    }
-    if (placement_view == nullptr) {
-        return;
-    }
-
-    const erhe::scene::Projection&           projection = *placement_view->projection;
-    const erhe::scene::Node&                 node       = *placement_view->node;
-    const bool                               perspective = is_perspective(projection.projection_type);
-    const erhe::scene::Projection::Fov_sides fov         = projection.get_fov_sides(placement_view->viewport);
 
     // Depth of the plane (in front of the camera) the indicator is drawn on.
     // Perspective: ~1 m, kept inside the clip range; orthogonal: mid range
@@ -1547,16 +1501,14 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
     const float indicator_size = 0.05f * std::min(width, height);
 
     // Direction from the view center toward the anchor, on the d_ref plane.
-    const vec3  p_view = vec3{node.node_from_world() * vec4{target, 1.0f}};
-    const float depth  = -p_view.z;
     vec2 direction;
-    if (perspective && (depth <= projection.z_near)) {
+    if (perspective && (anchor_depth <= projection.z_near)) {
         // At or behind the camera plane: no stable plane projection; the
         // view-space lateral offset still tells which side the anchor is on.
         direction = vec2{p_view.x, p_view.y} - rect_center;
     } else {
         const vec2 q = perspective
-            ? (vec2{p_view.x, p_view.y} * (d_ref / depth))
+            ? (vec2{p_view.x, p_view.y} * (d_ref / anchor_depth))
             : vec2{p_view.x, p_view.y};
         direction = q - rect_center;
     }

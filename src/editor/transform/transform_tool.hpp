@@ -317,9 +317,10 @@ private:
     // initial/current anchor scale under the gizmo. Rotation feedback is drawn
     // by Rotate_tool::render() (angle readout at the protractor ring).
     void render_drag_readout(const Render_context& context);
-    // When the gizmo anchor is outside every rendered view's frustum
-    // (desktop viewport, or both eyes in XR), draws a yellow x-ray triangle
-    // at the edge of the view pointing toward the gizmo.
+    // When the gizmo anchor is outside the view frustum of the scene view's
+    // whole-view camera (Scene_view::get_camera(): the viewport camera on
+    // desktop, in XR the union of both eye frusta), draws a yellow x-ray
+    // triangle at the edge of the view pointing toward the gizmo.
     void render_offscreen_indicator(const Render_context& context);
 
     // Apply a gizmo-produced world-from-anchor transform to the selected mesh

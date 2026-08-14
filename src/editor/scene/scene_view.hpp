@@ -117,6 +117,17 @@ public:
     virtual ~Scene_view() noexcept;
 
     // Virtual interface
+    //
+    // get_camera() returns THE camera representing this whole view - the one
+    // implementation of the view's frustum that every whole-view consumer must
+    // use. For a Viewport_scene_view it is the viewport camera; for
+    // Headset_view it is the root camera at the head pose, whose projection
+    // Headset_view maintains each frame as the UNION of the per-eye frusta
+    // (perspective_xr; see Headset_view::cache_combined_eye_frustum). Existing
+    // whole-view consumers: the shadow fit (Shadow_render_node), the hotbar
+    // placement, the transform tool's off-screen indicator. Per-eye rendering
+    // uses Render_context::views instead - do not derive a combined frustum
+    // from those; use this camera.
     [[nodiscard]] virtual auto get_camera            () const -> std::shared_ptr<erhe::scene::Camera> = 0;
     [[nodiscard]] virtual auto get_perspective_scale () const -> float = 0;
     [[nodiscard]] virtual auto get_shadow_render_node() const -> Shadow_render_node* { return nullptr; }

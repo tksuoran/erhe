@@ -245,15 +245,21 @@ private:
     // the raytrace / grid hover passes.
     void update_quad_layer_hover();
 
-    // Combined stereo culling frustum for the shadow fit. OpenXR has no API
-    // for a single frustum bounding both eyes, so the headset builds one from
-    // the per-eye views: update_camera_node() locates the current frame's views
-    // early (Headset::locate_views, valid after begin_frame() and before the
-    // rendergraph runs), cache_combined_eye_frustum() reduces them to the union
-    // of the eye fov sides, and update_root_camera_projection() applies that to
-    // m_root_camera as a perspective_xr projection. This is the same frame the
-    // shadow node fits, with no latency. If a locate fails, the last good
-    // frustum is kept (m_combined_eye_fov_valid stays set).
+    // Combined stereo frustum - the single union-of-eye-views implementation.
+    // OpenXR has no API for a single frustum bounding both eyes, so the
+    // headset builds one from the per-eye views: update_camera_node() locates
+    // the current frame's views early (Headset::locate_views, valid after
+    // begin_frame() and before the rendergraph runs),
+    // cache_combined_eye_frustum() reduces them to the union of the eye fov
+    // sides, and update_root_camera_projection() applies that to
+    // m_root_camera as a perspective_xr projection. This is the same frame
+    // the shadow node fits, with no latency. If a locate fails, the last
+    // good frustum is kept (m_combined_eye_fov_valid stays set).
+    //
+    // The union is published to clients ONLY through Scene_view::get_camera()
+    // (m_root_camera): the shadow fit, the hotbar placement and the transform
+    // tool's off-screen indicator all consume it there. Do not add another
+    // per-eye reduction; extend this one if a client needs more.
     void cache_combined_eye_frustum(std::span<const erhe::xr::Render_view> views);
     void update_root_camera_projection();
 
