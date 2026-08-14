@@ -296,16 +296,15 @@ auto get_net_hints(const int flags, const int family, const int socktype, const 
     static_cast<void>(family);
     static_cast<void>(socktype);
     static_cast<void>(protocol);
-    return addrinfo{
-        .ai_flags     = 0,
-        .ai_family    = AF_INET,
-        .ai_socktype  = SOCK_STREAM,
-        .ai_protocol  = IPPROTO_TCP,
-        .ai_addrlen   = 0,
-        .ai_addr      = nullptr,
-        .ai_canonname = nullptr,
-        .ai_next      = nullptr
-    };
+    // No designated initializer: POSIX leaves the addrinfo member order
+    // unspecified and glibc (ai_addr before ai_canonname) disagrees with
+    // bionic (ai_canonname before ai_addr), so any fixed designator order
+    // draws -Wreorder-init-list on one of the two platforms.
+    addrinfo info{};
+    info.ai_family   = AF_INET;
+    info.ai_socktype = SOCK_STREAM;
+    info.ai_protocol = IPPROTO_TCP;
+    return info;
 }
 
 }

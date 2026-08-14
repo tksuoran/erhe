@@ -481,6 +481,13 @@ if (MSVC)
         erhe_graphics/image_loader_ktx2.cpp
         PROPERTIES COMPILE_OPTIONS "/wd4828"
     )
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Same third-party exemption for clang (NDK/Quest builds): anon-enum
+    # arithmetic inside basisu_transcoder_internal.h is upstream's code.
+    set_source_files_properties(
+        "${basis_universal_SOURCE_DIR}/transcoder/basisu_transcoder.cpp"
+        PROPERTIES COMPILE_OPTIONS "-Wno-deprecated-anon-enum-enum-conversion"
+    )
 endif ()
 target_include_directories(${_target} SYSTEM PRIVATE "${basis_universal_SOURCE_DIR}")
 
@@ -496,6 +503,14 @@ if (ERHE_USE_FPNG)
     )
     target_sources(${_target} PRIVATE "${fpng_SOURCE_DIR}/src/fpng.cpp")
     target_include_directories(${_target} PRIVATE "${fpng_SOURCE_DIR}/src")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # Third-party source: uint8_t-vs-4096 tautological compare is
+        # upstream fpng code (harmless dead branch on this platform).
+        set_source_files_properties(
+            "${fpng_SOURCE_DIR}/src/fpng.cpp"
+            PROPERTIES COMPILE_OPTIONS "-Wno-tautological-constant-out-of-range-compare"
+        )
+    endif ()
 else ()
     erhe_target_sources_grouped(
         ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES

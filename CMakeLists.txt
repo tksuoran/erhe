@@ -447,7 +447,11 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     message(STATUS "Erhe configured to use vulkan as graphics API.")
     set(ERHE_GRAPHICS_API_VULKAN TRUE)
     add_definitions(-DERHE_GRAPHICS_API_VULKAN)
-    add_definitions(-DVK_NO_PROTOTYPES)
+    # Empty-valued (-D...=) rather than plain -D (which defines it to 1):
+    # SDL's vulkan sources do their own valueless "#define VK_NO_PROTOTYPES"
+    # and clang warns -Wmacro-redefined when the two definitions differ.
+    # Every consumer tests it with #ifdef/defined(), never its value.
+    add_definitions(-DVK_NO_PROTOTYPES=)
     CPMAddPackage(
         NAME              Vulkan-Headers
         GIT_TAG           vulkan-sdk-1.4.357.0
@@ -462,9 +466,12 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
     )
     # Treat VMA's interface include dir as SYSTEM so vk_mem_alloc.h (included
     # by erhe_graphics TUs) does not spill clang -Wnullability-completeness
-    # noise into erhe builds. The SYSTEM target property needs CMake >= 3.25;
-    # older CMake ignores it (warnings return, nothing breaks).
-    set_target_properties(VulkanMemoryAllocator PROPERTIES SYSTEM ON)
+    # noise into erhe builds. INTERFACE_SYSTEM_INCLUDE_DIRECTORIES instead of
+    # the SYSTEM target property because the latter needs CMake >= 3.25 and the
+    # Android (Quest) build runs the NDK's CMake 3.22, where it is silently
+    # ignored and the warnings come back.
+    get_target_property(_vma_interface_includes VulkanMemoryAllocator INTERFACE_INCLUDE_DIRECTORIES)
+    set_target_properties(VulkanMemoryAllocator PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_vma_interface_includes}")
     set(VOLK_STATIC_DEFINES VK_NO_PROTOTYPES CACHE STRING "" FORCE)
     # Force volk to use the CPM-fetched Vulkan-Headers instead of an installed
     # Vulkan SDK ($ENV{VULKAN_SDK}) or whatever find_package(Vulkan) locates.
@@ -739,7 +746,7 @@ if (${ERHE_GLTF_LIBRARY} STREQUAL "fastgltf")
         # verbatim re-export + uniqueness validation; KhronosGroup/glTF#2597).
         # Drop the fork when upstream fastgltf ships the current physics spec,
         # glTF 2.1 and an extension passthrough.
-        GIT_TAG           e42e44f250ab980cea369b2bf5edcc91662bb75a
+        GIT_TAG           erhe-2026-08-14
         #GIT_TAG           v0.9.0
         GITHUB_REPOSITORY tksuoran/fastgltf
         OPTIONS

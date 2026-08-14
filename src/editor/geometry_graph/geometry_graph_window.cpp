@@ -574,7 +574,7 @@ void Geometry_graph_window::build_palette()
 
     // "Conway" group right after "Operations", one entry per operator, built
     // from the operator table so the palette cannot drift from the factory.
-    Palette_category conway_category{.name = "Conway"};
+    Palette_category conway_category{.name = "Conway", .entries = {}};
     for (const Conway_node::Operation_info& info : Conway_node::c_operation_infos) {
         conway_category.entries.push_back(Palette_entry{.type_name = info.type_name, .label = info.label});
     }

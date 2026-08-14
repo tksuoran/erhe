@@ -620,7 +620,9 @@ void Ray_trace_renderer::render(
                     .vertex_stride_uints   = static_cast<uint32_t>(attribute_range.element_size / 4),
                     .position_stride_uints = static_cast<uint32_t>(position_range.element_size / 4),
                     .material_index        = material_index,
-                    .flags                 = transmissive ? 1u : 0u
+                    .flags                 = transmissive ? 1u : 0u,
+                    .reserved0             = 0u,
+                    .reserved1             = 0u
                 }
             );
             m_instances.push_back(
