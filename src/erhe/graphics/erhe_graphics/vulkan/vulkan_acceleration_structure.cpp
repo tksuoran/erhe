@@ -180,7 +180,11 @@ Acceleration_structure_impl::Acceleration_structure_impl(Device& device, const A
         device,
         Buffer_create_info{
             .capacity_byte_count               = size_info.accelerationStructureSize,
-            .usage                             = Buffer_usage::acceleration_structure_storage,
+            // shader_device_address: vkGetAccelerationStructureDeviceAddressKHR
+            // requires the backing buffer to have
+            // VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+            // (VUID-vkGetAccelerationStructureDeviceAddressKHR-pInfo-09542).
+            .usage                             = Buffer_usage::acceleration_structure_storage | Buffer_usage::shader_device_address,
             .required_memory_property_bit_mask = Memory_property_flag_bit_mask::device_local,
             .debug_label                       = create_info.debug_label
         }
