@@ -1059,6 +1059,19 @@ auto buffer_usage_to_vk_stage_access(const Buffer_usage usage) -> Vk_stage_acces
         stage  |= VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
         access |= VK_ACCESS_2_TRANSFER_WRITE_BIT;
     }
+    if (test_bit_set(usage, Buffer_usage::acceleration_structure_build_input)) {
+        // vkCmdBuildAccelerationStructuresKHR reads vertex/index/instance
+        // input buffers at the AS-build stage with SHADER_READ access
+        // (ACCELERATION_STRUCTURE_READ is only for reading a source AS);
+        // without this the post-upload barrier scope misses the build and
+        // validation reports SYNC-HAZARD-READ-AFTER-WRITE on the mesh pools.
+        stage  |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        access |= VK_ACCESS_2_SHADER_READ_BIT;
+    }
+    if (test_bit_set(usage, Buffer_usage::acceleration_structure_storage)) {
+        stage  |= VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        access |= VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    }
     return {stage, access};
 }
 
