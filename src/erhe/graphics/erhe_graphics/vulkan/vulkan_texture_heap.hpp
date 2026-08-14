@@ -66,7 +66,9 @@ protected:
     VkImageView                        m_fallback_view{VK_NULL_HANDLE};
     VkSampler                          m_fallback_vk_sampler{VK_NULL_HANDLE};
     std::vector<VkDescriptorImageInfo> m_scratch_image_infos; // batched fallback writes; capacity kept
-    std::size_t                        m_max_textures{256};
+    // Must stay in sync with max_texture_heap_size in the set-1 pipeline
+    // layout (vulkan_device_init.cpp).
+    std::size_t                        m_max_textures{4096};
 };
 
 } // namespace erhe::graphics

@@ -2085,7 +2085,11 @@ Device_impl::Device_impl(
         // Create a second descriptor set layout for texture heap (set 1)
         // This uses descriptor indexing for a large array of combined image samplers
         {
-            static constexpr uint32_t max_texture_heap_size = 256;
+            // Must stay in sync with Texture_heap_impl::m_max_textures
+            // (vulkan_texture_heap.hpp). Sized for texture-heavy scenes
+            // (niagara_bistro references 343 material textures); well below
+            // the update-after-bind minimum limits (500k desktop).
+            static constexpr uint32_t max_texture_heap_size = 4096;
             const VkDescriptorBindingFlags texture_binding_flags =
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
                 VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
