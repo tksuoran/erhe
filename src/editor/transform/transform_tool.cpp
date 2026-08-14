@@ -1465,7 +1465,72 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
     const vec3  target        = shared.world_from_anchor.get_translation();
     const vec3  p_view        = vec3{node.node_from_world() * vec4{target, 1.0f}};
     const float anchor_depth  = -p_view.z;
-    const erhe::scene::Projection::Fov_sides fov = projection.get_fov_sides(context.viewport);
+    const bool  desktop       = context.scene_view.as_viewport_scene_view() != nullptr;
+    erhe::scene::Projection::Fov_sides fov = projection.get_fov_sides(context.viewport);
+    if (!desktop && perspective) {
+        // In XR the rendered frustum extends past the lens-visible area, so
+        // an indicator at the frustum edge can be invisible. Inset the
+        // frustum the indicator uses (both the outside test below and the
+        // edge placement) by the user-tunable per-side margins.
+        const Transform_tool_config& tt_config = m_context.editor_settings->transform_tool;
+        fov.left  += glm::radians(tt_config.indicator_fov_margin_left );
+        fov.right -= glm::radians(tt_config.indicator_fov_margin_right);
+        fov.up    -= glm::radians(tt_config.indicator_fov_margin_up   );
+        fov.down  += glm::radians(tt_config.indicator_fov_margin_down );
+        if ((fov.left >= fov.right) || (fov.down >= fov.up)) {
+            return; // margins collapse the frustum
+        }
+    }
+
+    // In XR the lens-visible area is not the full frustum rectangle - its
+    // corners are cut off. Model it as the rectangle's inscribed stadium
+    // (central segment along the longer axis, capped by circles of the
+    // shorter half extent) and use that shape for both the outside test and
+    // the edge placement. Desktop viewports keep the exact rectangle.
+    //
+    // Is point p (relative to the rectangle center, half extents hx / hy)
+    // inside the inscribed stadium?
+    const auto stadium_contains = [](const vec2 p, float hx, float hy) -> bool {
+        float px = std::abs(p.x);
+        float py = std::abs(p.y);
+        if (hy > hx) {
+            std::swap(px, py);
+            std::swap(hx, hy);
+        }
+        const float a  = hx - hy;                    // central segment half length
+        const float dx = std::max(px - a, 0.0f);
+        return ((dx * dx) + (py * py)) <= (hy * hy);
+    };
+    // Distance from the rectangle center to the inscribed stadium's boundary
+    // along the unit direction u.
+    const auto stadium_ray_t = [](const vec2 u, float hx, float hy) -> float {
+        float ux = std::abs(u.x);
+        float uy = std::abs(u.y);
+        if (hy > hx) {
+            std::swap(ux, uy);
+            std::swap(hx, hy);
+        }
+        const float a = hx - hy; // central segment half length
+        const float r = hy;      // cap radius
+        // Flat side: |y| = r while |x| <= a.
+        if (uy > 1e-6f) {
+            const float t = r / uy;
+            if ((t * ux) <= a) {
+                return t;
+            }
+        }
+        // Cap circle centered at (a, 0) with radius r (in folded first-
+        // quadrant coordinates): (t*ux - a)^2 + (t*uy)^2 = r^2, u is unit
+        // length so the quadratic coefficient is 1; take the positive root.
+        const float b            = -2.0f * a * ux;
+        const float c            = (a * a) - (r * r);
+        const float discriminant = (b * b) - (4.0f * c);
+        if (discriminant < 0.0f) {
+            return r; // never with a unit direction; guard against fp noise
+        }
+        return 0.5f * (-b + std::sqrt(discriminant));
+    };
+
     if ((anchor_depth >= projection.z_near) && (anchor_depth <= projection.z_far)) {
         // Lateral frustum extents at the anchor's depth: angular sides for
         // perspective projections, fixed world-unit sides for orthogonal.
@@ -1473,9 +1538,16 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         const float x_max = perspective ? (anchor_depth * std::tan(fov.right)) : fov.right;
         const float y_min = perspective ? (anchor_depth * std::tan(fov.down )) : fov.down;
         const float y_max = perspective ? (anchor_depth * std::tan(fov.up   )) : fov.up;
-        const bool inside =
+        const bool in_rect =
             (p_view.x >= x_min) && (p_view.x <= x_max) &&
             (p_view.y >= y_min) && (p_view.y <= y_max);
+        const bool inside = desktop
+            ? in_rect
+            : (in_rect && stadium_contains(
+                vec2{p_view.x - (0.5f * (x_min + x_max)), p_view.y - (0.5f * (y_min + y_max))},
+                0.5f * (x_max - x_min),
+                0.5f * (y_max - y_min)
+            ));
         if (inside) {
             return;
         }
@@ -1498,7 +1570,8 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         return;
     }
     const vec2  rect_center{0.5f * (x_min + x_max), 0.5f * (y_min + y_max)};
-    const float indicator_size = 0.05f * std::min(width, height);
+    // Fraction of the view's smaller extent, shared by desktop and XR.
+    const float indicator_size = (0.05f / 3.0f) * std::min(width, height);
 
     // Direction from the view center toward the anchor, on the d_ref plane.
     vec2 direction;
@@ -1519,21 +1592,27 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         direction = direction / direction_length;
     }
 
-    // Clamp a ray from the rect center along `direction` to the border of
-    // the rect inset by the triangle's own extent, so the triangle stays
-    // fully inside the view.
-    const float margin       = 2.0f * indicator_size;
+    // Clamp a ray from the rect center along `direction` to the placement
+    // area's border - the rect (desktop) or its inscribed stadium (XR),
+    // inset by the triangle's own extent so the triangle stays fully inside
+    // the visible area.
+    const float margin        = 2.0f * indicator_size;
     const float half_extent_x = std::max(0.5f * width  - margin, 0.0f);
     const float half_extent_y = std::max(0.5f * height - margin, 0.0f);
-    float t = std::numeric_limits<float>::max();
-    if (std::abs(direction.x) > 1e-6f) {
-        t = std::min(t, half_extent_x / std::abs(direction.x));
-    }
-    if (std::abs(direction.y) > 1e-6f) {
-        t = std::min(t, half_extent_y / std::abs(direction.y));
-    }
-    if (!std::isfinite(t)) {
-        return;
+    float t;
+    if (desktop) {
+        t = std::numeric_limits<float>::max();
+        if (std::abs(direction.x) > 1e-6f) {
+            t = std::min(t, half_extent_x / std::abs(direction.x));
+        }
+        if (std::abs(direction.y) > 1e-6f) {
+            t = std::min(t, half_extent_y / std::abs(direction.y));
+        }
+        if (!std::isfinite(t)) {
+            return;
+        }
+    } else {
+        t = stadium_ray_t(direction, half_extent_x, half_extent_y);
     }
     const vec2 edge_point = rect_center + (direction * t);
 

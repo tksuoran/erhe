@@ -2,7 +2,7 @@ from erhe_codegen import *
 
 struct("Transform_tool_config",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Transform Tool",
     long_desc="",
     developer=False,
@@ -584,6 +584,58 @@ struct("Transform_tool_config",
             default="false",
             short_desc="Translate Drag Cast Rays",
             long_desc="During an active translate drag, cast rays from each dragged node along the world x/y/z axes and visualize the nearest hits with purple lines, like the physics tool's drag debug visualization.",
+            visible=True,
+            developer=False
+        ),
+        # Off-screen indicator FOV margins (XR only). The headset's rendered
+        # frustum extends past the lens-visible area, so an indicator placed at
+        # the frustum edge can be invisible; these inset the frustum the
+        # indicator uses (both the outside test and the edge placement).
+        field(
+            "indicator_fov_margin_left",
+            Float,
+            added_in=2,
+            default="15.0f",
+            ui_min="0.0f",
+            ui_max="45.0f",
+            short_desc="Indicator FOV Margin Left",
+            long_desc="XR only: degrees the off-screen gizmo indicator's frustum is inset from the rendered frustum's left side, pulling the indicator inward to keep it inside the lens-visible area.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "indicator_fov_margin_right",
+            Float,
+            added_in=2,
+            default="15.0f",
+            ui_min="0.0f",
+            ui_max="45.0f",
+            short_desc="Indicator FOV Margin Right",
+            long_desc="XR only: degrees the off-screen gizmo indicator's frustum is inset from the rendered frustum's right side.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "indicator_fov_margin_up",
+            Float,
+            added_in=2,
+            default="9.0f",
+            ui_min="0.0f",
+            ui_max="45.0f",
+            short_desc="Indicator FOV Margin Up",
+            long_desc="XR only: degrees the off-screen gizmo indicator's frustum is inset from the rendered frustum's top side.",
+            visible=True,
+            developer=False
+        ),
+        field(
+            "indicator_fov_margin_down",
+            Float,
+            added_in=2,
+            default="17.0f",
+            ui_min="0.0f",
+            ui_max="45.0f",
+            short_desc="Indicator FOV Margin Down",
+            long_desc="XR only: degrees the off-screen gizmo indicator's frustum is inset from the rendered frustum's bottom side.",
             visible=True,
             developer=False
         ),
