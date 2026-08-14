@@ -314,6 +314,14 @@ void do_wide_line(uint view_index, uint in_line_index, uint out_triangle_index)
 void main(void)
 {
     uint in_line_index = gl_GlobalInvocationID.x;
+    // The dispatch rounds the thread count up to whole 32-thread workgroups,
+    // so the tail invocations of the last group have no line. They must return
+    // before writing: the triangle SSBO is bound with room for exactly
+    // view.line_count lines, and anything past that lands in the next
+    // allocation from the shared triangle ring buffer.
+    if (in_line_index >= view.line_count) {
+        return;
+    }
     // Per-thread: write 12 triangle vertices for this line in EACH view.
     // Each view occupies a contiguous slab of view.stride_per_view
     // vertices in the triangle SSBO so the multiview vertex shader can

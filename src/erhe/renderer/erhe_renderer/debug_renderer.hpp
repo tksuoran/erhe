@@ -147,6 +147,10 @@ public:
     // zero_to_one, 2.0 for minus_one_to_one. Lets the line shaders map an
     // NDC-space bias to/from the window-depth space the ULP is measured in.
     std::size_t                                      window_to_ndc_scale_offset {0};
+    // Lines in the dispatched draw. dispatch_compute() rounds the thread count
+    // up to whole workgroups, so the tail invocations of the last group have no
+    // line; compute_before_line.comp uses this to drop them before writing.
+    std::size_t                                      line_count_offset          {0};
 };
 
 class Primitive_renderer;

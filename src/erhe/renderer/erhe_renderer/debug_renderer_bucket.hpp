@@ -140,9 +140,12 @@ public:
 
 private:
     [[nodiscard]] auto make_pipeline     (bool visible) -> erhe::graphics::Base_render_pipeline;
+    // primitive_count is the dispatched draw's line count: it feeds the
+    // compute shader's tail guard, and (multiview only) the per-view SSBO
+    // slab stride. The direct path has no compute and passes 0.
     [[nodiscard]] auto update_view_buffer(
         std::span<const View> views,
-        std::size_t           primitive_count_for_stride
+        std::size_t           primitive_count
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Tier helpers derived from m_shader_key. uses_compute() == false means

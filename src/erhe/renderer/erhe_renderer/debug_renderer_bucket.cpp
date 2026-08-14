@@ -190,7 +190,7 @@ Debug_renderer_bucket::Debug_renderer_bucket(
 
 auto Debug_renderer_bucket::update_view_buffer(
     std::span<const View> views,
-    std::size_t           primitive_count_for_stride
+    std::size_t           primitive_count
 ) -> erhe::graphics::Ring_buffer_range
 {
     const Debug_renderer_program_interface& program_interface = m_debug_renderer.get_program_interface();
@@ -231,10 +231,16 @@ auto Debug_renderer_bucket::update_view_buffer(
     // Single-view: stride_per_view is unused (view_count = 1, only the
     // v=0 iteration runs); zero is fine and the caller passes 0.
     const uint32_t stride_per_view_uint = (views.size() >= 2)
-        ? static_cast<uint32_t>(12u * primitive_count_for_stride)
+        ? static_cast<uint32_t>(12u * primitive_count)
         : 0u;
+    // Thread-count guard for compute_before_line.comp: the dispatch rounds up
+    // to whole 32-thread workgroups, so the tail invocations of the last group
+    // have no line to expand and must not write to the triangle SSBO (which is
+    // sized for exactly primitive_count lines). Unused on the direct path.
+    const uint32_t line_count_uint = static_cast<uint32_t>(primitive_count);
     write(view_gpu_data, program_interface.view_count_offset,      as_span(view_count_uint     ));
     write(view_gpu_data, program_interface.stride_per_view_offset, as_span(stride_per_view_uint));
+    write(view_gpu_data, program_interface.line_count_offset,      as_span(line_count_uint     ));
 
     const bool  top_left  = (m_graphics_device.get_info().coordinate_conventions.framebuffer_origin == erhe::math::Framebuffer_origin::top_left);
     const float vp_y_sign = top_left ? -1.0f : 1.0f;
@@ -414,7 +420,19 @@ void Debug_renderer_bucket::dispatch_compute(erhe::graphics::Compute_command_enc
 
             m_triangle_vertex_buffer->bind(encoder, draw.draw_buffer_range);
 
-            encoder.dispatch_compute(draw.primitive_count, 1, 1);
+            // dispatch_compute() takes workgroup COUNTS, and
+            // compute_before_line.comp declares local_size_x = 32: one thread
+            // per line means ceil(primitive_count / 32) groups. Passing the
+            // line count directly launched 32x the threads, and with no tail
+            // guard in the shader every extra invocation wrote 12 vertices
+            // past the acquired triangle range, into whatever the triangle
+            // ring buffer handed out next. Metal's compute encoder is serial,
+            // so the following dispatch overwrote the garbage before anything
+            // read it; Vulkan dispatches within an encoder have no implicit
+            // ordering, so the overrun raced live draw data (visible as
+            // shredded triangles wherever a bucket submitted many lines).
+            const std::size_t workgroup_count = (draw.primitive_count + 31) / 32;
+            encoder.dispatch_compute(workgroup_count, 1, 1);
 
             draw.input_buffer_range.release();
             draw.compute_dispatched = true;
@@ -593,7 +611,7 @@ void Debug_renderer_bucket::render(
                 // via c_view_index. stride_per_view is a compute-path
                 // concept (SSBO slab offset); the direct path fetches
                 // vertices through the input assembler, so 0 is passed.
-                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.views, /*primitive_count_for_stride*/ 0);
+                erhe::graphics::Ring_buffer_range view_buffer_range = update_view_buffer(view_span.views, /*primitive_count*/ 0);
                 m_view_buffer.bind(render_encoder, view_buffer_range);
 
                 for (size_t i = view_span.begin; i < view_span.end; ++i) {
