@@ -662,6 +662,8 @@ auto Shader_resource::get_block_layout() const -> Layout
 
 auto Shader_resource::get_size_bytes(const Layout layout) const -> std::size_t
 {
+    ERHE_PROFILE_FUNCTION();
+
     if (m_type == Type::struct_type) {
         // GLSL std140/std430 rule 9: struct size is the offset past the
         // last member, rounded up to the struct's base alignment.

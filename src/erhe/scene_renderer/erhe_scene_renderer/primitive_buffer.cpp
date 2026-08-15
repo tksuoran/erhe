@@ -284,15 +284,17 @@ auto Primitive_buffer::update(
 }
 
 void Primitive_buffer::write_primitive(
-    erhe::scene::Mesh&                  mesh_ref,
-    const uint16_t                      mesh_primitive_index,
+    erhe::scene::Mesh&                    mesh_ref,
+    const uint16_t                        mesh_primitive_index,
     const erhe::primitive::Primitive_mode primitive_mode,
-    const Primitive_interface_settings& settings,
-    const bool                          use_id_ranges,
-    const std::span<std::byte>          primitive_gpu_data,
-    std::size_t&                        write_offset
+    const Primitive_interface_settings&   settings,
+    const bool                            use_id_ranges,
+    const std::span<std::byte>            primitive_gpu_data,
+    std::size_t&                          write_offset
 )
 {
+    ERHE_PROFILE_FUNCTION();
+
     erhe::scene::Mesh* mesh       = &mesh_ref;
     const std::size_t  entry_size = m_primitive_interface.primitive_struct.get_size_bytes();
     const auto&        offsets    = m_primitive_interface.offsets;
@@ -352,7 +354,7 @@ void Primitive_buffer::write_primitive(
 
     using erhe::graphics::as_span;
     const auto color_span =
-        (settings.face_id_base_provider != nullptr)                            ? as_span(face_id_base_vec4) :
+        (settings.face_id_base_provider != nullptr)                             ? as_span(face_id_base_vec4) :
         (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4 ) :
         (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color) :
         use_primary_color                                                       ? as_span(settings.constant_color0) :
@@ -363,15 +365,15 @@ void Primitive_buffer::write_primitive(
                                                                            as_span(settings.constant_size);
 
     using erhe::graphics::write;
-    write(primitive_gpu_data, write_offset + offsets.world_from_node,  as_span(world_from_node ));
-    write(primitive_gpu_data, write_offset + offsets.normal_transform, as_span(normal_transform));
-    write(primitive_gpu_data, write_offset + offsets.color,            color_span               );
+    write(primitive_gpu_data, write_offset + offsets.world_from_node,       as_span(world_from_node ));
+    write(primitive_gpu_data, write_offset + offsets.normal_transform,      as_span(normal_transform));
+    write(primitive_gpu_data, write_offset + offsets.color,                 color_span               );
     write(primitive_gpu_data, write_offset + offsets.lightmap_scale_offset, as_span(mesh_primitive.lightmap_uv_scale_offset));
-    write(primitive_gpu_data, write_offset + offsets.material_index,   as_span(material_index  ));
-    write(primitive_gpu_data, write_offset + offsets.size,             size_span                );
-    write(primitive_gpu_data, write_offset + offsets.skinning_factor,  as_span(skinning_factor ));
-    write(primitive_gpu_data, write_offset + offsets.base_joint_index, as_span(base_joint_index));
-    write(primitive_gpu_data, write_offset + offsets.base_vertex,      as_span(base_vertex     ));
+    write(primitive_gpu_data, write_offset + offsets.material_index,        as_span(material_index  ));
+    write(primitive_gpu_data, write_offset + offsets.size,                  size_span                );
+    write(primitive_gpu_data, write_offset + offsets.skinning_factor,       as_span(skinning_factor ));
+    write(primitive_gpu_data, write_offset + offsets.base_joint_index,      as_span(base_joint_index));
+    write(primitive_gpu_data, write_offset + offsets.base_vertex,           as_span(base_vertex     ));
     write_offset += entry_size;
 
     if (use_id_ranges) {

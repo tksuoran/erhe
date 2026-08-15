@@ -69,7 +69,7 @@ public:
     // for the solid-wireframe fill draw. Empty when the expanded fill was not built.
     Index_range               expanded_triangle_fill_indices{};
 
-    std::vector<Buffer_range> vertex_buffer_ranges{};
+    std::vector<Buffer_range> vertex_buffer_ranges{}; // per stream
     Buffer_range              index_buffer_range  {};
 
     // Expanded solid-wireframe fill vertex stream(s): un-shared, 3 sequential

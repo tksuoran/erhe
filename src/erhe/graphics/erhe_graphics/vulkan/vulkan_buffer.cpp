@@ -239,6 +239,7 @@ void Buffer_impl::end_write(const std::size_t byte_offset, const std::size_t byt
 
 auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
 {
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
@@ -261,6 +262,8 @@ auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
 
 auto Buffer_impl::map_bytes(const std::size_t byte_offset, std::size_t byte_count) noexcept -> std::span<std::byte>
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
@@ -328,6 +331,7 @@ void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t by
 
 void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t byte_count) noexcept
 {
+    ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
     ERHE_VERIFY(m_map.data() != nullptr);
@@ -359,6 +363,8 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
 
 void Buffer_impl::upload_sub_data(const std::size_t byte_offset, const std::size_t byte_count, const void* data) noexcept
 {
+    ERHE_PROFILE_FUNCTION();
+
     if ((data == nullptr) || (byte_count == 0)) {
         return;
     }

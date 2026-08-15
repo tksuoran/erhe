@@ -1889,6 +1889,8 @@ auto Device_impl::allocate_ring_buffer_entry(
     std::size_t       byte_count
 ) -> Ring_buffer_range
 {
+    ERHE_PROFILE_FUNCTION();
+
     m_need_sync = true;
     const std::size_t required_alignment = erhe::utility::next_power_of_two_16bit(get_buffer_alignment(buffer_target));
     std::size_t alignment_byte_count_without_wrap{0};
