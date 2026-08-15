@@ -1,11 +1,13 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "app_context.hpp"
+#include "app_rendering.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/shadow_frustum_fit_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -530,6 +532,15 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         distance_bias_coeff    = cdd * (1.0f + pcf_radius);
     }
 
+    // Draw-list path (plan phase 4): route casters through the scene's
+    // persistent shadow draw lists when the gate is on; content layer only,
+    // matching mesh_spans below.
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene =
+        ((m_context.app_rendering != nullptr) && m_context.app_rendering->use_draw_lists)
+            ? scene_root->get_draw_list_scene()
+            : nullptr;
+    const erhe::scene::Layer_id draw_list_layers[] = { layers.content()->id };
+
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
@@ -555,7 +566,9 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .distance_bias_coeff   = distance_bias_coeff,
             .point_cube_texture       = m_point_cube_texture,
             .point_cube_render_passes = &m_point_render_passes,
-            .point_shadow_viewport    = m_point_viewport
+            .point_shadow_viewport    = m_point_viewport,
+            .draw_list_scene          = draw_list_scene,
+            .draw_list_layers         = draw_list_layers
         }
     );
 }

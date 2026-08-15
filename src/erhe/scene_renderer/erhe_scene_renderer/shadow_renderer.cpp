@@ -1,4 +1,5 @@
 #include "erhe_scene_renderer/shadow_renderer.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
@@ -445,16 +446,35 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
             ? &erhe::graphics::Color_blend_state::color_blend_disabled   // write biased distance to the color attachment
             : &erhe::graphics::Color_blend_state::color_writes_disabled; // depth-only
 
-        draw_shadow_casters(
-            parameters.command_buffer,
-            encoder,
-            base_pipeline,
-            *parameters.render_passes[shadow_index].get(),
-            color_blend,
-            mesh_spans,
-            shadow_filter,
-            boolean_mask_force_enable
-        );
+        if (parameters.draw_list_scene != nullptr) {
+            static_cast<void>(
+                parameters.draw_list_scene->draw_shadow(
+                    Draw_shadow_parameters{
+                        .render_encoder       = encoder,
+                        .render_pass          = parameters.render_passes[shadow_index].get(),
+                        .base_render_pipeline = base_pipeline,
+                        .color_blend          = color_blend,
+                        .primitive_buffer     = m_primitive_buffer,
+                        .draw_indirect_buffer = m_draw_indirect_buffer,
+                        .filter               = shadow_filter,
+                        .layers               = parameters.draw_list_layers,
+                        .sub_variant          = parameters.use_distance ? Shadow_sub_variant::depth_only_distance : Shadow_sub_variant::depth_only,
+                        .debug_label          = "shadow draw lists"
+                    }
+                )
+            );
+        } else {
+            draw_shadow_casters(
+                parameters.command_buffer,
+                encoder,
+                base_pipeline,
+                *parameters.render_passes[shadow_index].get(),
+                color_blend,
+                mesh_spans,
+                shadow_filter,
+                boolean_mask_force_enable
+            );
+        }
 
         control_range.release();
         camera_range.release();
@@ -600,16 +620,35 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
                 m_texture_heap->bind(encoder);
 
-                draw_shadow_casters(
-                    parameters.command_buffer,
-                    encoder,
-                    cube_base_pipeline,
-                    *cube_passes[pass_index].get(),
-                    &erhe::graphics::Color_blend_state::color_blend_disabled,
-                    mesh_spans,
-                    shadow_filter,
-                    cube_force_enable
-                );
+                if (parameters.draw_list_scene != nullptr) {
+                    static_cast<void>(
+                        parameters.draw_list_scene->draw_shadow(
+                            Draw_shadow_parameters{
+                                .render_encoder       = encoder,
+                                .render_pass          = cube_passes[pass_index].get(),
+                                .base_render_pipeline = cube_base_pipeline,
+                                .color_blend          = &erhe::graphics::Color_blend_state::color_blend_disabled,
+                                .primitive_buffer     = m_primitive_buffer,
+                                .draw_indirect_buffer = m_draw_indirect_buffer,
+                                .filter               = shadow_filter,
+                                .layers               = parameters.draw_list_layers,
+                                .sub_variant          = Shadow_sub_variant::cube,
+                                .debug_label          = "shadow cube draw lists"
+                            }
+                        )
+                    );
+                } else {
+                    draw_shadow_casters(
+                        parameters.command_buffer,
+                        encoder,
+                        cube_base_pipeline,
+                        *cube_passes[pass_index].get(),
+                        &erhe::graphics::Color_blend_state::color_blend_disabled,
+                        mesh_spans,
+                        shadow_filter,
+                        cube_force_enable
+                    );
+                }
 
                 control_range.release();
                 camera_range.release();
@@ -663,6 +702,34 @@ void Shadow_renderer::prewarm_pipelines(
             erhe::primitive::Primitive_mode::polygon_fill,
             Blending_mode_policy::opaque_primitives_only // TODO
         );
+    }
+
+    // Draw-list shadow keys (doc/draw_list_renderer_requirements.md R4/R22):
+    // the persistent shadow draw lists resolve the coarsened key
+    // {USE_SKINNING?} + VARIANT_DEPTH_ONLY with an empty environment and no
+    // material bits, one variant per skinning state regardless of vertex
+    // format. Warm those too, so enabling the draw-list path does not
+    // compile on the first shadow frame. Shader_variant_cache is keyed on the
+    // Shader_key alone: the vertex format only matters at first compile, and
+    // the position (and joints / weights) attributes sit at the same
+    // locations in every mesh format, which is what makes one variant per
+    // skinning state valid.
+    {
+        // All three sub-variants (depth-only, depth-only + distance, cube) x
+        // {not skinned, skinned}: six variants, so neither the distance
+        // technique nor the first point light compiles on the draw-list path.
+        const uint32_t sub_variant_masks[] = {
+            make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY),
+            make_shader_bool_mask(Shader_bool::VARIANT_DEPTH_ONLY) | make_shader_bool_mask(Shader_bool::VARIANT_SHADOW_DISTANCE),
+            make_shader_bool_mask(Shader_bool::VARIANT_SHADOW_CUBE)
+        };
+        for (const uint32_t mask : sub_variant_masks) {
+            Shader_key key{};
+            key.bool_mask = mask;
+            static_cast<void>(m_shader_variant_cache.get(key, &m_mesh_memory.vertex_format_not_skinned));
+            key.set(Shader_bool::USE_SKINNING, true);
+            static_cast<void>(m_shader_variant_cache.get(key, &m_mesh_memory.vertex_format_skinned));
+        }
     }
 
     for (const Render_bucket& bucket : buckets) {

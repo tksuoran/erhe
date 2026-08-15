@@ -30,6 +30,7 @@ namespace erhe::graphics {
     class Vertex_input_state;
 }
 namespace erhe::scene {
+    using Layer_id = uint64_t;
     class Camera;
     class Light;
     class Mesh;
@@ -42,6 +43,7 @@ namespace erhe::primitive {
 namespace erhe::scene_renderer {
 
 class Draw_indirect_buffer;
+class Draw_list_scene;
 class Mesh_memory;
 class Program_interface;
 class Render_bucket;
@@ -144,6 +146,16 @@ public:
         std::shared_ptr<erhe::graphics::Texture>                           point_cube_texture{};
         const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>*   point_cube_render_passes{nullptr};
         erhe::math::Viewport                                               point_shadow_viewport{};
+
+        // Draw-list path (doc/draw_list_renderer_requirements.md R4/R4a):
+        // when non-null, casters are drawn from the scene's persistent shadow
+        // draw lists (restricted to draw_list_layers; an EMPTY span selects
+        // every layer) instead of re-bucketing
+        // mesh_spans. mesh_spans is still used for the frustum-fit bounds
+        // gathering. Depth-only / distance / cube sub-variants are selected
+        // per pass exactly as for the bucket path.
+        Draw_list_scene*                                                   draw_list_scene{nullptr};
+        std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
