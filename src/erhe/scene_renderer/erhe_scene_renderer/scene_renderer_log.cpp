@@ -4,6 +4,7 @@
 namespace erhe::scene_renderer {
 
 std::shared_ptr<spdlog::logger> log_draw;
+std::shared_ptr<spdlog::logger> log_draw_list;
 std::shared_ptr<spdlog::logger> log_render;
 std::shared_ptr<spdlog::logger> log_program_interface;
 std::shared_ptr<spdlog::logger> log_forward_renderer;
@@ -17,6 +18,7 @@ void initialize_logging()
 {
     using namespace erhe::log;
     log_draw              = make_logger      ("erhe.scene_renderer.draw"                 );
+    log_draw_list         = make_logger      ("erhe.scene_renderer.draw_list"            );
     log_render            = make_frame_logger("erhe.scene_renderer.render"               );
     log_program_interface = make_logger      ("erhe.scene_renderer.log_program_interface");
     log_forward_renderer  = make_frame_logger("erhe.scene_renderer.forward_renderer"     );

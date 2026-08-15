@@ -7,6 +7,7 @@
 namespace erhe::scene_renderer {
 
 extern std::shared_ptr<spdlog::logger> log_draw;
+extern std::shared_ptr<spdlog::logger> log_draw_list;
 extern std::shared_ptr<spdlog::logger> log_render;
 extern std::shared_ptr<spdlog::logger> log_program_interface;
 extern std::shared_ptr<spdlog::logger> log_forward_renderer;

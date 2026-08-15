@@ -156,6 +156,12 @@ private:
     erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue;
 };
 
+// Vertex input key / vertex buffer ranges of a Buffer_mesh for a primitive
+// mode: solid_wireframe draws from the expanded vertex stream(s), everything
+// else from the normal stream(s). Shared by Render_bucket and Draw_list_scene.
+[[nodiscard]] auto bucket_vertex_input_key(const erhe::primitive::Buffer_mesh& buffer_mesh, erhe::primitive::Primitive_mode primitive_mode) -> std::size_t;
+[[nodiscard]] auto bucket_vertex_ranges   (const erhe::primitive::Buffer_mesh& buffer_mesh, erhe::primitive::Primitive_mode primitive_mode) -> const std::vector<erhe::primitive::Buffer_range>&;
+
 class Mesh_primitive_entry
 {
 public:

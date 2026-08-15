@@ -529,9 +529,8 @@ void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
 // which use a distinct vertex input key (the format carries the extra wireframe
 // attribute). All other modes use the normal vertex stream(s). The index buffer
 // is shared between the two (the expanded indices live in the same index buffer).
-namespace {
-
-[[nodiscard]] auto bucket_vertex_input_key(
+// Also used by Draw_list_scene classification (draw_list_scene.cpp).
+auto bucket_vertex_input_key(
     const erhe::primitive::Buffer_mesh&   buffer_mesh,
     const erhe::primitive::Primitive_mode primitive_mode
 ) -> std::size_t
@@ -541,7 +540,7 @@ namespace {
         : buffer_mesh.vertex_input_key;
 }
 
-[[nodiscard]] auto bucket_vertex_ranges(
+auto bucket_vertex_ranges(
     const erhe::primitive::Buffer_mesh&   buffer_mesh,
     const erhe::primitive::Primitive_mode primitive_mode
 ) -> const std::vector<erhe::primitive::Buffer_range>&
@@ -550,8 +549,6 @@ namespace {
         ? buffer_mesh.expanded_vertex_buffer_ranges
         : buffer_mesh.vertex_buffer_ranges;
 }
-
-} // anonymous namespace
 
 Render_bucket::Render_bucket() = default;
 
