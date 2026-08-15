@@ -1,7 +1,8 @@
 # Draw list renderer — requirements
 
-Status: DRAFT — all open questions resolved (Q1–Q11); revised after
-independent review (2026-08-15); awaiting approval for planning.
+Status: IMPLEMENTED 2026-08-15 (phases 1–6, see
+`doc/draw_list_renderer_results.md` for measurements, deviations and
+follow-ups). Requirement text below is as approved before implementation.
 
 ## 1. Problem statement
 

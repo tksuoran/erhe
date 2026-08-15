@@ -1,7 +1,8 @@
 # Draw list renderer — implementation plan
 
 Companion to `doc/draw_list_renderer_requirements.md` (the "req doc"; requirement
-IDs below refer to it). Status: PLAN — not started. Written 2026-08-15 after the
+IDs below refer to it). Status: DONE 2026-08-15 — all six phases landed
+(results: `doc/draw_list_renderer_results.md`). Written 2026-08-15 after the
 req doc passed independent review; revised after plan review pass 1 (threading
 contract, material-content trigger, P3a chunking layer, Phase 3 verification)
 and pass 2 (flush site, no transform hook, R1b null checks) — APPROVED, implementing.
