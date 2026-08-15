@@ -201,6 +201,13 @@ auto Forward_renderer::render_draw_lists(const Draw_list_render_parameters& para
     ERHE_PROFILE_FUNCTION();
 
     const Base_render_parameters& base = parameters.base;
+
+    // Early out before any upload / bind, mirroring render()'s empty
+    // mesh-span check: nothing passes the filter for these layers.
+    if (!parameters.draw_list_scene.has_drawable_entries(Draw_purpose::color, parameters.layers, parameters.blending, parameters.filter)) {
+        return Draw_statistics{};
+    }
+
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
     Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors);
 

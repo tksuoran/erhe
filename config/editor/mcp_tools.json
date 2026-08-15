@@ -58,7 +58,7 @@
     "name": "get_scene_nodes"
   },
   {
-    "description": "Inspect the Composer's composition passes and why each one drew or did not draw on its last render: name, enabled flag, whether it has a render-time is_enabled predicate, mesh layer ids, item filter bits, and last_result - one of never_rendered / disabled / is_enabled_false / no_scene_root / primitive_mode_disabled / no_mesh_layers / submitted, plus the scene view it last ran for and how many meshes its layers held. Use this when geometry is missing and a GPU frame capture shows NO draw calls and NO debug marker for the pass: a pass that returns early emits no marker at all, so the capture cannot tell a mis-gated pass from missing geometry. Note that 'submitted' only means the pass reached draw submission; its meshes may still have been rejected by the item filter.",
+    "description": "Inspect the Composer's composition passes and why each one drew or did not draw on its last render: name, enabled flag, whether it has a render-time is_enabled predicate, mesh layer ids, item filter bits, and last_result - one of never_rendered / disabled / is_enabled_false / no_scene_root / primitive_mode_disabled / no_mesh_layers / submitted, plus the scene view it last ran for and how many meshes its layers held. Use this when geometry is missing and a GPU frame capture shows NO draw calls and NO debug marker for the pass: a pass that returns early emits no marker at all, so the capture cannot tell a mis-gated pass from missing geometry. Note that 'submitted' only means the pass reached draw submission; its meshes may still have been rejected by the item filter. Also per pass: last_draw_list_entry_count, last_cpu_time_us / total_cpu_time_us / render_call_count (CPU wall time inside render(); reset with reset_composition_pass_stats), and a shadow_nodes array with the same timing for each Shadow_render_node.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -6083,7 +6083,7 @@
   },
   {
     "name": "get_draw_lists",
-    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes).",
+    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes). Also reports resolution diagnostics: color_environment_change_count (each change re-resolves every color list), lazy_resolution_count (one-off first-use resolutions), material_change_count (material identity changes that re-registered objects).",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -6103,7 +6103,7 @@
   },
   {
     "name": "set_draw_lists_enabled",
-    "description": "Toggle the draw-list rendering path (doc/draw_list_renderer_plan.md): when enabled, eligible composition passes render through the scene's persistent Draw_list_scene instead of Forward_renderer::render() re-bucketing. Temporary A/B gate for parity verification; get_composition_passes reports last_result=submitted_draw_lists and last_draw_list_entry_count for routed passes.",
+    "description": "Set the 'Draw Lists' editor setting (Editor_settings_config::use_draw_lists, doc/draw_list_renderer_requirements.md): when enabled, eligible composition passes and shadow maps render through the scene's persistent Draw_list_scene instead of Forward_renderer::render() / Shadow_renderer bucketing. get_composition_passes reports last_result=submitted_draw_lists and last_draw_list_entry_count for routed passes.",
     "inputSchema": {
       "properties": {
         "enabled": {
@@ -6114,6 +6114,14 @@
       "required": [
         "enabled"
       ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "reset_composition_pass_stats",
+    "description": "Reset the per-composition-pass CPU timing accumulators (total_cpu_time_us / render_call_count reported by get_composition_passes). Use before an A/B timing window (e.g. set_draw_lists_enabled off vs on) and read the totals after N frames.",
+    "inputSchema": {
+      "properties": {},
       "type": "object"
     }
   }

@@ -147,6 +147,13 @@ public:
     // Entries drawn by the draw-list path in the most recent render() (0 when
     // the pass went through Forward_renderer::render()).
     [[nodiscard]] auto get_last_draw_list_entry_count() const -> std::size_t        { return m_last_draw_list_entry_count; }
+    // CPU wall time spent inside render() for the most recent call, and the
+    // running total / call count since the last reset (P4 measurement:
+    // doc/draw_list_renderer_requirements.md).
+    [[nodiscard]] auto get_last_cpu_time_us  () const -> double      { return m_last_cpu_time_us; }
+    [[nodiscard]] auto get_total_cpu_time_us () const -> double      { return m_total_cpu_time_us; }
+    [[nodiscard]] auto get_render_call_count () const -> std::size_t { return m_render_call_count; }
+    void reset_cpu_time_stats() { m_total_cpu_time_us = 0.0; m_render_call_count = 0; }
 
 private:
     std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_mesh_spans;
@@ -154,6 +161,9 @@ private:
     std::string                                                     m_last_scene_view_name{};
     std::size_t                                                     m_last_mesh_count{0};
     std::size_t                                                     m_last_draw_list_entry_count{0};
+    double                                                          m_last_cpu_time_us{0.0};
+    double                                                          m_total_cpu_time_us{0.0};
+    std::size_t                                                     m_render_call_count{0};
 };
 
 }

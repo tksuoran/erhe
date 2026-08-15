@@ -132,14 +132,52 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             {"last_result",          c_str(pass->get_last_result())},
             {"last_scene_view",      pass->get_last_scene_view_name()},
             {"last_mesh_count",      pass->get_last_mesh_count()},
-            {"last_draw_list_entry_count", pass->get_last_draw_list_entry_count()}
+            {"last_draw_list_entry_count", pass->get_last_draw_list_entry_count()},
+            {"last_cpu_time_us",     pass->get_last_cpu_time_us()},
+            {"total_cpu_time_us",    pass->get_total_cpu_time_us()},
+            {"render_call_count",    pass->get_render_call_count()}
+        });
+    }
+
+    json shadow_nodes = json::array();
+    for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
+        if (!node) {
+            continue;
+        }
+        shadow_nodes.push_back({
+            {"scene_view",        node->get_scene_view().get_settings_key()},
+            {"last_cpu_time_us",  node->get_last_cpu_time_us()},
+            {"total_cpu_time_us", node->get_total_cpu_time_us()},
+            {"execute_count",     node->get_execute_count()}
         });
     }
 
     json result;
-    result["count"]  = passes.size();
-    result["passes"] = passes;
+    result["count"]        = passes.size();
+    result["passes"]       = passes;
+    result["shadow_nodes"] = shadow_nodes;
     return make_text_content(result.dump(2)).dump();
+}
+
+auto Mcp_server::action_reset_composition_pass_stats(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.app_rendering == nullptr) {
+        return make_error_content("App_rendering not available");
+    }
+    std::size_t count = 0;
+    for (const auto& pass : m_context.app_rendering->composition_passes()) {
+        if (pass) {
+            pass->reset_cpu_time_stats();
+            ++count;
+        }
+    }
+    for (const std::shared_ptr<Shadow_render_node>& node : m_context.app_rendering->get_all_shadow_nodes()) {
+        if (node) {
+            node->reset_cpu_time_stats();
+        }
+    }
+    return make_json_content({{"reset_count", count}}).dump();
 }
 
 auto Mcp_server::query_draw_lists(const json& args) -> std::string
@@ -188,7 +226,13 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         {"non_empty_draw_list_count", non_empty_count},
         {"entry_count",            entry_count},
         {"pending_count",          draw_list_scene->get_pending_count()},
-        {"determinant_flip_count", draw_list_scene->get_determinant_flip_count()}
+        {"determinant_flip_count", draw_list_scene->get_determinant_flip_count()},
+        // Resolution diagnostics (R17-R22, C5): color environment changes
+        // re-resolve every color list; lazy resolutions are the one-off
+        // first-use paths; material identity changes re-register users.
+        {"color_environment_change_count", draw_list_scene->get_color_environment_change_count()},
+        {"lazy_resolution_count",          draw_list_scene->get_lazy_resolution_count()},
+        {"material_change_count",          draw_list_scene->get_material_change_count()}
     };
     if (verbose) {
         result["draw_lists"] = lists;
@@ -198,16 +242,16 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
 
 auto Mcp_server::action_set_draw_lists_enabled(const json& args) -> std::string
 {
-    if (m_context.app_rendering == nullptr) {
-        return make_error_content("App_rendering not available");
+    if (m_context.editor_settings == nullptr) {
+        return make_error_content("Editor settings not available");
     }
     if (!args.contains("enabled") || !args["enabled"].is_boolean()) {
         return make_error_content("enabled (boolean) is required");
     }
     const bool enabled = args["enabled"].get<bool>();
-    m_context.app_rendering->use_draw_lists = enabled;
+    m_context.editor_settings->use_draw_lists = enabled;
     return make_json_content({
-        {"use_draw_lists", m_context.app_rendering->use_draw_lists}
+        {"use_draw_lists", m_context.editor_settings->use_draw_lists}
     }).dump();
 }
 

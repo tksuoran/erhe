@@ -188,13 +188,6 @@ public:
 
     glm::uvec4                        debug_joint_indices{0, 0, 0, 0};
     std::vector<glm::vec4>            debug_joint_colors;
-    // Draw-list rendering gate (doc/draw_list_renderer_plan.md phase 3):
-    // when true, eligible composition passes render their scene through
-    // Scene_root's Draw_list_scene (Forward_renderer::render_draw_lists)
-    // instead of re-bucketing mesh spans. Temporary non-codegen toggle for
-    // A/B parity verification (MCP set_draw_lists_enabled); becomes an editor
-    // setting in phase 5.
-    bool                              use_draw_lists{false};
     std::shared_ptr<Composition_pass> selection_outline;
     std::shared_ptr<Composition_pass> hover_outline;
     std::shared_ptr<Composition_pass> edge_lines_not_selected;

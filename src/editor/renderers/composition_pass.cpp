@@ -29,6 +29,8 @@
 
 #include <imgui/imgui.h>
 
+#include <chrono>
+
 namespace editor {
 
 Composition_pass::Composition_pass(const Composition_pass&)            = default;
@@ -68,6 +70,30 @@ auto c_str(const Composition_pass_result result) -> const char*
 void Composition_pass::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
+
+    // CPU timing of the whole render() (P4 measurement); the scope guard
+    // records on every return path.
+    class Cpu_timer_scope
+    {
+    public:
+        explicit Cpu_timer_scope(Composition_pass& pass)
+            : m_pass {pass}
+            , m_start{std::chrono::steady_clock::now()}
+        {
+        }
+        ~Cpu_timer_scope() noexcept
+        {
+            const std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+            const double us = std::chrono::duration<double, std::micro>(end - m_start).count();
+            m_pass.m_last_cpu_time_us   = us;
+            m_pass.m_total_cpu_time_us += us;
+            ++m_pass.m_render_call_count;
+        }
+    private:
+        Composition_pass&                     m_pass;
+        std::chrono::steady_clock::time_point m_start;
+    };
+    const Cpu_timer_scope cpu_timer_scope{*this};
 
     m_last_scene_view_name       = context.scene_view.get_settings_key();
     m_last_mesh_count            = 0;
@@ -291,7 +317,8 @@ void Composition_pass::render(const Render_context& context)
                 ? data.shader_debug_override.value()
                 : context.shader_debug;
             const bool draw_lists_eligible =
-                context.app_context.app_rendering->use_draw_lists &&
+                (context.app_context.editor_settings != nullptr) &&
+                context.app_context.editor_settings->use_draw_lists &&
                 (draw_list_scene != nullptr) &&
                 (data.primitive_mode == erhe::primitive::Primitive_mode::polygon_fill) &&
                 (effective_shader_debug == erhe::scene_renderer::Shader_debug::none) &&

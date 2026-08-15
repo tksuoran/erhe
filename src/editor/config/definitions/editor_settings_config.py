@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=1,
+    version=2,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -73,6 +73,20 @@ struct("Editor_settings_config",
             default="true",
             short_desc="Post Processing",
             long_desc="Enable Post Processing",
+            visible=True,
+            developer=False
+        ),
+        # doc/draw_list_renderer_requirements.md: render eligible composition
+        # passes and shadow maps from the scene's persistent draw lists
+        # (Draw_list_scene) instead of re-bucketing mesh spans every pass.
+        # Runtime toggle; ineligible passes always use the classic path.
+        field(
+            "use_draw_lists",
+            Bool,
+            added_in=2,
+            default="false",
+            short_desc="Draw Lists",
+            long_desc="Render content fill and shadow maps through persistent per-scene draw lists (faster with many primitives). Off = classic per-pass bucketing.",
             visible=True,
             developer=False
         ),

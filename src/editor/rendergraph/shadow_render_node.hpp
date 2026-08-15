@@ -61,7 +61,17 @@ public:
     [[nodiscard]] auto get_render_passes    () const -> std::span<const std::unique_ptr<erhe::graphics::Render_pass>>;
     [[nodiscard]] auto get_reverse_depth    () const -> bool;
 
+    // CPU wall time of execute_rendergraph_node() (P4 measurement,
+    // doc/draw_list_renderer_requirements.md): last call and running total.
+    [[nodiscard]] auto get_last_cpu_time_us () const -> double      { return m_last_cpu_time_us; }
+    [[nodiscard]] auto get_total_cpu_time_us() const -> double      { return m_total_cpu_time_us; }
+    [[nodiscard]] auto get_execute_count    () const -> std::size_t { return m_execute_count; }
+    void reset_cpu_time_stats() { m_total_cpu_time_us = 0.0; m_execute_count = 0; }
+
 private:
+    double      m_last_cpu_time_us {0.0};
+    double      m_total_cpu_time_us{0.0};
+    std::size_t m_execute_count    {0};
     App_context&                                              m_context;
     Scene_view&                                               m_scene_view;
     std::shared_ptr<erhe::graphics::Texture>                  m_texture;

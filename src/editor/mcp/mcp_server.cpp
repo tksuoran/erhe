@@ -544,6 +544,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "get_physics_items",              &Mcp_server::query_physics_items                  },
         { "get_draw_lists",                 &Mcp_server::query_draw_lists                     },
         { "set_draw_lists_enabled",         &Mcp_server::action_set_draw_lists_enabled        },
+        { "reset_composition_pass_stats",   &Mcp_server::action_reset_composition_pass_stats  },
         { "get_physics_state",              &Mcp_server::query_get_physics_state              },
         { "create_physics_body",            &Mcp_server::action_create_physics_body           },
         { "edit_physics_body",              &Mcp_server::action_edit_physics_body             },

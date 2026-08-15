@@ -558,6 +558,9 @@ void Settings_window::imgui()
                 ImGui::TextColored(ImVec4{1.0f, 0.8f, 0.2f, 1.0f}, "forced off (--no-post-processing)");
             }
         }, "Enable Post Processing. Takes effect on next viewport creation.");
+        add_entry("Draw Lists", [&settings](){
+            ImGui::Checkbox("##", &settings.use_draw_lists);
+        }, "Render content fill and shadow maps through persistent per-scene draw lists (doc/draw_list_renderer_requirements.md). Off = classic per-pass bucketing.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it
         // is one of the more commonly edited sections.

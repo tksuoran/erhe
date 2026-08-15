@@ -1,7 +1,6 @@
 #include "rendergraph/shadow_render_node.hpp"
 
 #include "app_context.hpp"
-#include "app_rendering.hpp"
 #include "app_settings.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/shadow_frustum_fit_config.hpp"
@@ -32,6 +31,7 @@
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
+#include <chrono>
 
 namespace editor {
 
@@ -351,6 +351,28 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
 {
     ERHE_PROFILE_FUNCTION();
 
+    class Cpu_timer_scope
+    {
+    public:
+        explicit Cpu_timer_scope(Shadow_render_node& node)
+            : m_node {node}
+            , m_start{std::chrono::steady_clock::now()}
+        {
+        }
+        ~Cpu_timer_scope() noexcept
+        {
+            const std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+            const double us = std::chrono::duration<double, std::micro>(end - m_start).count();
+            m_node.m_last_cpu_time_us   = us;
+            m_node.m_total_cpu_time_us += us;
+            ++m_node.m_execute_count;
+        }
+    private:
+        Shadow_render_node&                   m_node;
+        std::chrono::steady_clock::time_point m_start;
+    };
+    const Cpu_timer_scope cpu_timer_scope{*this};
+
     // Render shadow maps
     const auto& scene_root = m_scene_view.get_scene_root();
     std::shared_ptr<erhe::scene::Camera> camera = m_scene_view.get_camera();
@@ -536,7 +558,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // persistent shadow draw lists when the gate is on; content layer only,
     // matching mesh_spans below.
     erhe::scene_renderer::Draw_list_scene* draw_list_scene =
-        ((m_context.app_rendering != nullptr) && m_context.app_rendering->use_draw_lists)
+        ((m_context.editor_settings != nullptr) && m_context.editor_settings->use_draw_lists)
             ? scene_root->get_draw_list_scene()
             : nullptr;
     const erhe::scene::Layer_id draw_list_layers[] = { layers.content()->id };

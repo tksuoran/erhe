@@ -953,6 +953,32 @@ void Draw_list_scene::draw_list_chunks(
     }
 }
 
+auto Draw_list_scene::has_drawable_entries(
+    const Draw_purpose                           purpose,
+    const std::span<const erhe::scene::Layer_id> layers,
+    const Draw_blending_selection                blending,
+    const erhe::Item_filter&                     filter
+) const -> bool
+{
+    for (const Draw_list& draw_list : m_draw_lists) {
+        const Draw_list_key& key = draw_list.key;
+        if ((key.purpose != purpose) || draw_list.entries.empty()) {
+            continue;
+        }
+        if ((blending == Draw_blending_selection::opaque_only     ) && (key.blending != Draw_blending::opaque     )) { continue; }
+        if ((blending == Draw_blending_selection::translucent_only) && (key.blending != Draw_blending::translucent)) { continue; }
+        if (!layer_selected(layers, key.layer_id)) {
+            continue;
+        }
+        for (const Draw_list_entry& entry : draw_list.entries) {
+            if (filter(entry.flag_bits)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Draw_statistics
 {
     ERHE_PROFILE_FUNCTION();
@@ -1005,10 +1031,12 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 log_draw_list->warn("No render pipeline for draw list {}: {}", list_index, key.describe());
                 continue;
             }
+            // Keep the label cheap: Shader_key::describe() is a multi-line
+            // define dump and would dominate the per-list CPU cost.
             erhe::graphics::Scoped_debug_group list_scope{
                 parameters.render_encoder.get_command_buffer(),
                 erhe::utility::Debug_label{
-                    fmt::format("draw list {} entries={} {}", list_index, draw_list.entries.size(), key.describe())
+                    fmt::format("draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(key.blending), key.layer_id, draw_list.entries.size())
                 }
             };
             draw_list_chunks(
@@ -1064,7 +1092,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
         erhe::graphics::Scoped_debug_group list_scope{
             parameters.render_encoder.get_command_buffer(),
             erhe::utility::Debug_label{
-                fmt::format("shadow draw list {} entries={} {}", list_index, draw_list.entries.size(), key.describe())
+                fmt::format("shadow draw list {} {} {} layer={} entries={}", list_index, c_str(key.mobility), c_str(parameters.sub_variant), key.layer_id, draw_list.entries.size())
             }
         };
         draw_list_chunks(

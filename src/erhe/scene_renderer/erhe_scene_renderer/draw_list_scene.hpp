@@ -163,6 +163,15 @@ public:
     // sub-variant) resolves once, lazily. Returns what was drawn.
     auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
     auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+    // True when at least one entry would be drawn for the selection: lets a
+    // caller skip its per-pass prologue (buffer uploads / binds) entirely,
+    // the way Forward_renderer::render() early-outs on empty mesh spans.
+    [[nodiscard]] auto has_drawable_entries(
+        Draw_purpose                           purpose,
+        std::span<const erhe::scene::Layer_id> layers,
+        Draw_blending_selection                blending,
+        const erhe::Item_filter&               filter
+    ) const -> bool;
 
     // Object mesh lookup for per-entry upload (Primitive_buffer).
     [[nodiscard]] auto get_object_mesh(uint32_t object_index) const -> erhe::scene::Mesh*;
