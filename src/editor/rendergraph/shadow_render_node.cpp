@@ -117,6 +117,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
         (m_texture->get_width()             == resolution) &&
         (m_texture->get_height()            == resolution) &&
         (m_texture->get_array_layer_count() == std::max(1, light_count)) &&
+        (m_light_count                      == light_count) &&
         (m_texture->get_pixelformat()       == depth_format) &&
         (m_distance_technique               == distance_technique) &&
         (m_point_resolution                 == point_resolution) &&
@@ -424,6 +425,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             {},     // no shadow map -> "no shadow map" sentinel in the light UBO
             m_scene_view.get_reverse_depth(),
             m_scene_view.get_depth_range(),
+            {},     // no shadow map -> no light is shadow-mapped
             m_scene_view.get_conventions(),
             {},     // no caster bounds
             {},     // no receiver bounds

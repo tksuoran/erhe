@@ -303,6 +303,24 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
     }
 
+    // Shadow caps: how many lights of each shadow map kind can be shadow-mapped
+    // this frame. These are the render pass allocations (one 2D array layer /
+    // pass per directional or spot light, six passes per point light cube),
+    // which Shadow_render_node::reconfigure sizes from the active graphics
+    // preset (shadow_light_count / point_shadow_light_count). Light_projections
+    // ::apply() gives a shadow layer only to the first cap lights of each kind
+    // (type-major, input order); the rest are slotted as non-shadow lights,
+    // so the loops below skip them and the receiver shades them unshadowed.
+    const bool have_point_cubes =
+        (parameters.point_cube_texture != nullptr) &&
+        (parameters.point_cube_render_passes != nullptr) &&
+        (parameters.point_shadow_viewport.width > 0) &&
+        (parameters.point_shadow_viewport.height > 0);
+    const Shadow_light_limits shadow_light_limits{
+        .max_shadow_map_light_count   = parameters.render_passes.size(),
+        .max_point_shadow_light_count = have_point_cubes ? (parameters.point_cube_render_passes->size() / 6) : std::size_t{0}
+    };
+
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections.apply(
         parameters.lights,
@@ -312,6 +330,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         parameters.reverse_depth,
         parameters.depth_range,
+        shadow_light_limits,
         parameters.conventions,
         caster_world_aabbs,
         receiver_world_aabbs,
@@ -484,13 +503,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     // light renders the scene into the six faces of its R32F cube (radial
     // distance from the light), one render pass per face. cull_none (per the
     // forge SKILL.md: safe for non-watertight glTF) with color writes enabled.
-    if (
-        (parameters.point_cube_texture != nullptr) &&
-        (parameters.point_cube_render_passes != nullptr) &&
-        !parameters.point_cube_render_passes->empty() &&
-        (parameters.point_shadow_viewport.width > 0) &&
-        (parameters.point_shadow_viewport.height > 0)
-    ) {
+    if (have_point_cubes && !parameters.point_cube_render_passes->empty()) {
         const std::vector<std::unique_ptr<erhe::graphics::Render_pass>>& cube_passes = *parameters.point_cube_render_passes;
         const std::size_t cube_count = cube_passes.size() / 6;
 

@@ -223,6 +223,18 @@ Light_buffer::Light_buffer(
     init_command_buffer.clear_texture(*m_fallback_lightmap_texture.get(), {0.0, 0.0, 0.0, 0.0});
 }
 
+// Light type -> Light_layer_partition bucket index (directional, spot, point,
+// other). Must match compute_light_layer_partition (shader_key.cpp).
+[[nodiscard]] static auto type_index_of(const erhe::scene::Light_type type) -> std::size_t
+{
+    switch (type) {
+        case erhe::scene::Light_type::directional: return 0;
+        case erhe::scene::Light_type::spot:        return 1;
+        case erhe::scene::Light_type::point:       return 2;
+        default:                                   return 3;
+    }
+}
+
 void Light_projections::apply(
     const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
     const erhe::scene::Camera*                                  view_camera,
@@ -231,6 +243,7 @@ void Light_projections::apply(
     const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
     const bool                                                  reverse_depth,
     const erhe::math::Depth_range                               depth_range,
+    const Shadow_light_limits&                                  shadow_light_limits,
     const erhe::math::Coordinate_conventions&                   conventions,
     const std::span<const erhe::math::Aabb>                     in_caster_world_aabbs,
     const std::span<const erhe::math::Aabb>                     in_receiver_world_aabbs,
@@ -285,19 +298,13 @@ void Light_projections::apply(
     parameters.caster_world_aabbs   = {};
     parameters.receiver_world_aabbs = {};
 
-    auto type_index_of = [](erhe::scene::Light_type type) -> std::size_t {
-        switch (type) {
-            case erhe::scene::Light_type::directional: return 0;
-            case erhe::scene::Light_type::spot:        return 1;
-            case erhe::scene::Light_type::point:       return 2;
-            default:                                   return 3;
-        }
-    };
-
     // Pass 1: count, by (type_bucket, shadow_bucket). The tally lives in
     // compute_light_layer_partition (shader_key.hpp) so the variant-cache
-    // counts and the UBO slot assignment below share one source.
-    const Light_layer_partition partition = compute_light_layer_partition(lights);
+    // counts and the UBO slot assignment below share one source. The
+    // shadow-mapped counts are capped by shadow_light_limits (the caps the
+    // shadow map allocations were sized from); the slot assignment below
+    // turns shadow casters beyond a cap into non-shadow lights.
+    const Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights, shadow_light_limits);
     const std::size_t (&per_type_shadow)   [4] = partition.per_type_shadow;
     const std::size_t (&per_type_nonshadow)[4] = partition.per_type_nonshadow;
 
@@ -339,6 +346,12 @@ void Light_projections::apply(
     // point is the last shadow-bearing type bucket (after directional and
     // spot), excluding point lights from the 2D dense space does not shift the
     // directional / spot layer indices.
+    //
+    // Shadow caps: per_type_shadow[t] is already capped by shadow_light_limits.
+    // Once cursor_shadow[t] reaches it, the remaining shadow casters of that
+    // type (in input order) are slotted into the non-shadow bucket with no
+    // shadow layer, so the shadow passes skip them and the receiver shades
+    // them unshadowed - exactly like a light with cast_shadow == false.
     std::size_t cursor_shadow   [4] = {0, 0, 0, 0};
     std::size_t cursor_nonshadow[4] = {0, 0, 0, 0};
     std::size_t point_shadow_cursor = 0;
@@ -357,7 +370,7 @@ void Light_projections::apply(
             // shadow loops skip it, so it contributes neither light nor shadow.
             // This matches compute_light_layer_partition, which counts inactive
             // lights in neither the shadow nor the non-shadow bucket.
-        } else if (light->cast_shadow) {
+        } else if (light->cast_shadow && (cursor_shadow[t] < per_type_shadow[t])) {
             slot = base_shadow[t] + cursor_shadow[t];
             if (is_point) {
                 // Cube array gets its own dense index; shadow_slot stays max()
@@ -369,11 +382,12 @@ void Light_projections::apply(
             }
             ++cursor_shadow[t];
         } else {
+            // Non-shadow light, or a shadow caster beyond the shadow cap of
+            // its type: no shadow layer (shadow_index / point_shadow_index
+            // stay max()), so Shadow_renderer's render_passes.size() /
+            // cube_count gates skip it and the receiver treats it as
+            // non-shadow (it sits in the non-shadow suffix of its type).
             slot = base_nonshadow[t] + cursor_nonshadow[t];
-            // Non-shadow lights still get a deterministic shadow_index
-            // (any value works since Shadow_renderer skips them via
-            // !light->casts_shadow()), but using max() makes any stray
-            // out-of-bound use loudly fail the render_passes.size() gate.
             ++cursor_nonshadow[t];
         }
         light_projection_transforms[i].index              = slot;
@@ -406,6 +420,26 @@ auto Light_projections::get_light_projection_transforms_for_light(const erhe::sc
         }
     }
     return nullptr;
+}
+
+auto Light_projections::compute_light_layer_partition(const std::span<const std::shared_ptr<erhe::scene::Light>>& lights) const -> Light_layer_partition
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Light_layer_partition partition{};
+    for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
+        if (!light || !light->is_active()) {
+            continue;
+        }
+        const std::size_t t = type_index_of(light->type);
+        const erhe::scene::Light_projection_transforms* transforms = get_light_projection_transforms_for_light(light.get());
+        if ((transforms != nullptr) && transforms->is_shadow_mapped()) {
+            ++partition.per_type_shadow[t];
+        } else {
+            ++partition.per_type_nonshadow[t];
+        }
+    }
+    return partition;
 }
 
 auto Light_buffer::update(
@@ -493,22 +527,30 @@ auto Light_buffer::update(
             continue;
         }
 
+        auto* light_projection_transforms = (light_projections != nullptr)
+            ? light_projections->get_light_projection_transforms_for_light(light.get())
+            : nullptr;
+        // Shadow-mapped means "was given a shadow layer by Light_projections::
+        // apply()" - which respects the Shadow_light_limits caps - not merely
+        // cast_shadow; this keeps the counts consistent with the slot layout.
+        const bool shadow_mapped = (light_projection_transforms != nullptr) && light_projection_transforms->is_shadow_mapped();
+
         switch (light->type) {
             case erhe::scene::Light_type::directional:
                 ++directional_light_count;
-                if (light->cast_shadow) {
+                if (shadow_mapped) {
                     ++directional_shadow_count;
                 }
                 break;
             case erhe::scene::Light_type::point:
                 ++point_light_count;
-                if (light->cast_shadow) {
+                if (shadow_mapped) {
                     ++point_shadow_count;
                 }
                 break;
             case erhe::scene::Light_type::spot:
                 ++spot_light_count;
-                if (light->cast_shadow) {
+                if (shadow_mapped) {
                     ++spot_shadow_count;
                 }
                 break;
@@ -519,9 +561,6 @@ auto Light_buffer::update(
         using vec3 = glm::vec3;
         using vec4 = glm::vec4;
         using mat4 = glm::mat4;
-        auto* light_projection_transforms = (light_projections != nullptr)
-            ? light_projections->get_light_projection_transforms_for_light(light.get())
-            : nullptr;
         if (light_projection_transforms == nullptr) {
             continue;
         }

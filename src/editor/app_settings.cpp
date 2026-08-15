@@ -12,6 +12,8 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+
 namespace editor {
 
 App_settings::App_settings()
@@ -64,6 +66,17 @@ auto App_settings::config() const -> const Editor_settings_config&
 auto App_settings::get_ui_scale() const -> float
 {
     return imgui.font_size / 16.0f;
+}
+
+auto get_shadow_light_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Shadow_light_limits
+{
+    if (!graphics_preset.shadow_enable) {
+        return erhe::scene_renderer::Shadow_light_limits{};
+    }
+    return erhe::scene_renderer::Shadow_light_limits{
+        .max_shadow_map_light_count   = static_cast<std::size_t>(std::max(0, graphics_preset.shadow_light_count)),
+        .max_point_shadow_light_count = static_cast<std::size_t>(std::max(0, graphics_preset.point_shadow_light_count))
+    };
 }
 
 void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe::dataformat::Format format)

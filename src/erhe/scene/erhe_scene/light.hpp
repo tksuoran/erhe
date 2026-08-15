@@ -5,6 +5,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_math/aabb.hpp"
 
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -99,6 +100,18 @@ public:
     // max for non-point or non-shadow lights. The cube occupies array layers
     // [6*point_shadow_index, 6*point_shadow_index + 6).
     std::size_t   point_shadow_index{0};
+
+    // True when Light_projections::apply() gave this light a shadow layer
+    // (a 2D array layer or a point cube). Shadow-casting lights beyond the
+    // shadow caps (Shadow_light_limits) are not shadow-mapped: they get no
+    // shadow pass and are shaded unshadowed like non-shadow lights.
+    [[nodiscard]] auto is_shadow_mapped() const -> bool
+    {
+        return
+            (shadow_index       != std::numeric_limits<std::size_t>::max()) ||
+            (point_shadow_index != std::numeric_limits<std::size_t>::max());
+    }
+
     Projection    projection{};    // resolved projection; the shadow pass must rasterize with this so it matches clip_from_world / texture_from_world
     Trs_transform world_from_light_camera{};
     Transform     clip_from_light_camera{};

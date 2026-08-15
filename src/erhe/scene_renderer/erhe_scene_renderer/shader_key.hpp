@@ -237,6 +237,23 @@ public:
     [[nodiscard]] auto operator()(const Shader_key& key) const noexcept -> std::size_t;
 };
 
+// Caps on how many lights may be shadow-mapped, from the active graphics
+// preset (Graphics_preset_entry::shadow_light_count / point_shadow_light_count)
+// via the shadow map allocations sized from it. Directional and spot lights
+// share the 2D shadow map array; the cap is consumed type-major (directional
+// first, then spot). Point lights render into the separate cube array and
+// have their own cap. Shadow-casting lights beyond a cap are treated as
+// non-shadow lights everywhere: light layer partition (shader variant light
+// loops), UBO slot / shadow layer assignment (Light_projections::apply) and
+// the shadow caster passes (Shadow_renderer::render). Default = nothing can
+// be shadow-mapped, which is the right answer when there is no shadow map.
+class Shadow_light_limits
+{
+public:
+    std::size_t max_shadow_map_light_count  {0}; // directional + spot (2D array layers)
+    std::size_t max_point_shadow_light_count{0}; // point (cube array cubes)
+};
+
 class Light_layer_partition
 {
 public:
@@ -244,6 +261,13 @@ public:
     std::size_t per_type_nonshadow[4] {0, 0, 0, 0};
 };
 
-[[nodiscard]] auto compute_light_layer_partition(std::span<const std::shared_ptr<erhe::scene::Light>> lights) -> Light_layer_partition;
+// Counts active lights per type into shadow-mapped / non-shadow buckets,
+// with the shadow-mapped counts capped by shadow_light_limits (the overflow
+// counts as non-shadow). This is the canonical partition:
+// Light_projections::apply() assigns UBO slots and shadow layers from it.
+[[nodiscard]] auto compute_light_layer_partition(
+    std::span<const std::shared_ptr<erhe::scene::Light>> lights,
+    const Shadow_light_limits&                           shadow_light_limits
+) -> Light_layer_partition;
 
 } // namespace erhe::scene_renderer

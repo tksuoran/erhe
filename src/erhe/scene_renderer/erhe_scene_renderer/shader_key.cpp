@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <memory>
 #include <sstream>
 
@@ -262,7 +263,10 @@ auto Shader_key::derive(
     return key;
 }
 
-auto compute_light_layer_partition(std::span<const std::shared_ptr<erhe::scene::Light>> lights) -> Light_layer_partition
+auto compute_light_layer_partition(
+    std::span<const std::shared_ptr<erhe::scene::Light>> lights,
+    const Shadow_light_limits&                           shadow_light_limits
+) -> Light_layer_partition
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -294,6 +298,25 @@ auto compute_light_layer_partition(std::span<const std::shared_ptr<erhe::scene::
             ++partition.per_type_nonshadow[t];
         }
     }
+
+    // Apply the shadow-mapped caps: shadow-casting lights beyond a cap fall
+    // into the non-shadow bucket of their type. Directional and spot share
+    // the 2D shadow map, consumed type-major (directional first).
+    std::size_t remaining_2d = shadow_light_limits.max_shadow_map_light_count;
+    for (std::size_t t = 0; t < 2; ++t) {
+        const std::size_t shadowed = std::min(partition.per_type_shadow[t], remaining_2d);
+        partition.per_type_nonshadow[t] += partition.per_type_shadow[t] - shadowed;
+        partition.per_type_shadow   [t]  = shadowed;
+        remaining_2d                    -= shadowed;
+    }
+    {
+        const std::size_t shadowed = std::min(partition.per_type_shadow[2], shadow_light_limits.max_point_shadow_light_count);
+        partition.per_type_nonshadow[2] += partition.per_type_shadow[2] - shadowed;
+        partition.per_type_shadow   [2]  = shadowed;
+    }
+    // Type index 3 ("other") is never shadow-mapped.
+    partition.per_type_nonshadow[3] += partition.per_type_shadow[3];
+    partition.per_type_shadow   [3]  = 0;
     return partition;
 }
 

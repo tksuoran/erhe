@@ -87,6 +87,20 @@ const char* safe_str(const char* str)
     return str != nullptr ? str : "";
 }
 
+// The light layer partition the shading variant is selected with. Derived from
+// the Light_projections (which lights actually received a shadow layer, after
+// the Shadow_light_limits caps in Light_projections::apply()), so the shader's
+// shadow-mapped / non-shadow loop bounds match the UBO slot layout
+// Light_buffer::update() writes. Without light projections nothing is
+// shadow-mapped (Light_buffer::update() writes no light data then either).
+[[nodiscard]] auto get_light_layer_partition(const Forward_renderer::Base_render_parameters& base) -> Light_layer_partition
+{
+    if (base.light_projections != nullptr) {
+        return base.light_projections->compute_light_layer_partition(base.lights);
+    }
+    return compute_light_layer_partition(base.lights, Shadow_light_limits{});
+}
+
 }
 
 auto Forward_renderer::begin_pass(
@@ -213,7 +227,7 @@ auto Forward_renderer::render_draw_lists(const Draw_list_render_parameters& para
 
     // Environment (R18): recomputed per pass, compared inside draw_color.
     Color_environment environment{};
-    environment.light_partition   = compute_light_layer_partition(base.lights);
+    environment.light_partition   = get_light_layer_partition(base);
     environment.shadow_filter     = parameters.shadow_filter;
     environment.shadow_bias       = parameters.shadow_bias;
     environment.shadow_technique  = parameters.shadow_technique;
@@ -282,7 +296,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
 
-    const Light_layer_partition partition = compute_light_layer_partition(base.lights);
+    const Light_layer_partition partition = get_light_layer_partition(base);
 
     Shader_key environment_key{};
     environment_key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(partition.per_type_nonshadow[0]));

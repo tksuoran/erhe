@@ -762,10 +762,11 @@ auto App_rendering::create_shadow_node_for_scene_view(
 ) -> std::shared_ptr<Shadow_render_node>
 {
     const auto& preset            = app_settings.graphics.current_graphics_preset;
+    const erhe::scene_renderer::Shadow_light_limits limits = get_shadow_light_limits(preset);
     const int   resolution        = preset.shadow_enable ? preset.shadow_resolution  : 1;
-    const int   light_count       = preset.shadow_enable ? preset.shadow_light_count : 1;
+    const int   light_count       = static_cast<int>(limits.max_shadow_map_light_count);
     const int   point_resolution  = preset.shadow_enable ? preset.point_shadow_resolution  : 1;
-    const int   point_light_count = preset.shadow_enable ? preset.point_shadow_light_count : 0;
+    const int   point_light_count = static_cast<int>(limits.max_point_shadow_light_count);
     log_startup->info(
         "Creating shadow render node from preset '{}': shadow_enable={} -> light_count={} resolution={} depth_bits={} point_light_count={} point_resolution={}",
         preset.name, preset.shadow_enable, light_count, resolution, preset.shadow_depth_bits, point_light_count, point_resolution
@@ -789,10 +790,13 @@ auto App_rendering::create_shadow_node_for_scene_view(
 
 void App_rendering::handle_graphics_settings_changed(Graphics_preset_entry* graphics_preset)
 {
+    const erhe::scene_renderer::Shadow_light_limits limits = (graphics_preset != nullptr)
+        ? get_shadow_light_limits(*graphics_preset)
+        : erhe::scene_renderer::Shadow_light_limits{};
     const int resolution        = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_resolution  : 1;
-    const int light_count       = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->shadow_light_count : 1;
+    const int light_count       = static_cast<int>(limits.max_shadow_map_light_count);
     const int point_resolution  = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->point_shadow_resolution  : 1;
-    const int point_light_count = (graphics_preset != nullptr) && graphics_preset->shadow_enable ? graphics_preset->point_shadow_light_count : 0;
+    const int point_light_count = static_cast<int>(limits.max_point_shadow_light_count);
 
     if (graphics_preset != nullptr) {
         log_startup->info(

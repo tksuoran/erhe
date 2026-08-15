@@ -128,6 +128,12 @@ public:
         const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
         bool                                                        reverse_depth,
         erhe::math::Depth_range                                     depth_range,
+        // How many shadow-casting lights may actually be shadow-mapped, per
+        // shadow map kind (2D array for directional + spot, cube array for
+        // point). Shadow casters beyond a cap are slotted as non-shadow
+        // lights and get no shadow layer (shadow_index / point_shadow_index
+        // stay max()). Callers with no shadow map pass {} (0 / 0).
+        const Shadow_light_limits&                                  shadow_light_limits,
         const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{},
         std::span<const erhe::math::Aabb>                           in_caster_world_aabbs = {},
         std::span<const erhe::math::Aabb>                           in_receiver_world_aabbs = {},
@@ -139,6 +145,13 @@ public:
     //          alive.
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*;
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*;
+
+    // The light layer partition the forward pass must shade with: a light is
+    // shadow-mapped iff apply() gave it a shadow layer (2D or cube), which
+    // already accounts for the Shadow_light_limits apply() ran with. Lights
+    // without projection transforms (not seen by apply()) count as non-shadow
+    // - Light_buffer::update() writes no data for them either.
+    [[nodiscard]] auto compute_light_layer_partition(const std::span<const std::shared_ptr<erhe::scene::Light>>& lights) const -> Light_layer_partition;
 
     erhe::scene::Light_projection_parameters              parameters;
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;

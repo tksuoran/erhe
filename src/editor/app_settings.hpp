@@ -6,6 +6,7 @@
 #include "config/generated/icon_settings_config.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
 
 #include <string>
 
@@ -17,6 +18,15 @@ static const char* const c_graphics_presets_file_path        = "config/editor/gr
 static const char* const c_graphics_presets_openxr_file_path = "config/editor/graphics_presets_openxr.json";
 
 class App_message_bus;
+
+// How many lights a graphics preset lets be shadow-mapped: shadow_light_count
+// directional + spot lights (2D shadow map array layers) and
+// point_shadow_light_count point lights (shadow cube array cubes); nothing
+// when shadow_enable is off. This is the single source for both the shadow
+// map allocation (Shadow_render_node::reconfigure, one render pass per light /
+// cube face) and the shadow caps the renderers partition lights with
+// (Light_projections::apply / compute_light_layer_partition).
+[[nodiscard]] auto get_shadow_light_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Shadow_light_limits;
 
 class Graphics_settings
 {

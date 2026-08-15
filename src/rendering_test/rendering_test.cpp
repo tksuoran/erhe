@@ -720,6 +720,7 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
         std::shared_ptr<erhe::graphics::Texture>{},
         true,
         conventions.native_depth_range,
+        erhe::scene_renderer::Shadow_light_limits{}, // no shadow map -> no light is shadow-mapped
         conventions
     );
 
