@@ -785,6 +785,25 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         return r.dump();
     }
 
+    // Shadow map assignment as of the last shadow pass of a view showing this
+    // scene: a light is shadow-mapped only if it got a shadow layer, which the
+    // active graphics preset caps (shadow_light_count directional + spot,
+    // point_shadow_light_count point). Shadow casters beyond the caps report
+    // cast_shadow true / shadow_mapped false.
+    const erhe::scene_renderer::Light_projections* light_projections = nullptr;
+    if (m_context.app_rendering != nullptr) {
+        for (const std::shared_ptr<Shadow_render_node>& shadow_node : m_context.app_rendering->get_all_shadow_nodes()) {
+            if (!shadow_node) {
+                continue;
+            }
+            const std::shared_ptr<Scene_root> node_scene_root = shadow_node->get_scene_view().get_scene_root();
+            if (node_scene_root.get() == sr) {
+                light_projections = &shadow_node->get_light_projections();
+                break;
+            }
+        }
+    }
+
     json lights = json::array();
     for (const auto& ll : sr->get_scene().get_light_layers()) {
         for (const auto& light : ll->lights) {
@@ -793,15 +812,30 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                                  : (light->type == erhe::scene::Light_type::point)       ? "point"
                                  : (light->type == erhe::scene::Light_type::spot)         ? "spot"
                                  : "unknown";
-            lights.push_back({
-                {"name",      light->get_name()},
-                {"id",        light->get_id()},
-                {"node",      node ? node->get_name() : ""},
-                {"type",      type_str},
-                {"color",     {light->color.x, light->color.y, light->color.z}},
-                {"intensity", light->intensity},
-                {"range",     light->range}
-            });
+            json light_json{
+                {"name",        light->get_name()},
+                {"id",          light->get_id()},
+                {"node",        node ? node->get_name() : ""},
+                {"type",        type_str},
+                {"color",       {light->color.x, light->color.y, light->color.z}},
+                {"intensity",   light->intensity},
+                {"range",       light->range},
+                {"cast_shadow", light->cast_shadow}
+            };
+            const erhe::scene::Light_projection_transforms* transforms = (light_projections != nullptr)
+                ? light_projections->get_light_projection_transforms_for_light(light.get())
+                : nullptr;
+            if (transforms != nullptr) {
+                constexpr std::size_t no_index = std::numeric_limits<std::size_t>::max();
+                light_json["shadow_mapped"] = transforms->is_shadow_mapped();
+                if (transforms->shadow_index != no_index) {
+                    light_json["shadow_index"] = transforms->shadow_index;
+                }
+                if (transforms->point_shadow_index != no_index) {
+                    light_json["point_shadow_index"] = transforms->point_shadow_index;
+                }
+            }
+            lights.push_back(light_json);
         }
     }
 
