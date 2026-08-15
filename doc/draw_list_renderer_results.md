@@ -65,7 +65,9 @@ frames via MCP `reset_composition_pass_stats` + `get_composition_passes`
 (200 frames per configuration, off / on / off; the two "off" runs agree
 within 1%.)
 
-Reading: the remaining draw-list cost is the per-frame per-primitive upload
+Reading (superseded 2026-08-15 by `doc/draw_list_performance_improvements.md`:
+the per-primitive upload is now a memcpy from draw-list-owned records): the
+remaining draw-list cost was the per-frame per-primitive upload
 (`Primitive_buffer::write_primitive` for every visible entry — transform,
 normal matrix, material / joint slots) and the GPU submit; the bucketing +
 `Shader_key::derive` + bucket scan that the classic path repeats per pass
@@ -95,7 +97,8 @@ is gone (P1). Passes whose filter rejects everything now cost ~nothing
    (R10b): route `Mesh::handle_node_transform_update`'s flag change to a
    reregister when the registered value differs.
 3. Static mobility source (item flag / asset metadata) and cached static
-   uploads (R9 / G4).
+   uploads (R9 / G4) - the per-list `primitive_records` block
+   (`doc/draw_list_performance_improvements.md`) is the upload source.
 4. Depth-sort translucent entries (C1 note).
 5. Retire `bucket_primitives` for the covered passes once the setting has
    defaulted to ON for a while; keep it for the fallback passes.
