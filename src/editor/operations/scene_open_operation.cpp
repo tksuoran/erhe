@@ -36,11 +36,13 @@ void Scene_open_operation::execute(App_context& context)
         m_content_library = std::make_shared<Content_library>();
 
         const bool enable_physics = context.editor_settings->physics.static_enable;
+        const Draw_list_scene_dependencies draw_list_dependencies = make_draw_list_scene_dependencies(context);
         m_scene_root = std::make_shared<Scene_root>(
             context.app_message_bus,
             m_content_library,
             erhe::file::to_string(m_path.filename()),
-            enable_physics
+            enable_physics,
+            &draw_list_dependencies
         );
         // Remember which glTF file the scene came from (canonical, matching
         // Prefab_library keys): Save Scene writes back here and propagates

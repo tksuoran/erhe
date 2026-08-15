@@ -6,6 +6,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "scene/draw_list_scene_dependencies.hpp"
 
 #include <deque>
 #include <filesystem>
@@ -44,6 +45,9 @@ namespace erhe::primitive {
 }
 namespace erhe::raytrace {
     class IScene;
+}
+namespace erhe::scene_renderer {
+    class Draw_list_scene;
 }
 namespace erhe::scene {
     using Layer_id = uint64_t;
@@ -120,11 +124,16 @@ class Scene_root
     , public erhe::scene::Scene_host
 {
 public:
+    // draw_list_dependencies: non-null and valid -> this scene root owns a
+    // Draw_list_scene and its content renders through persistent draw lists
+    // (doc/draw_list_renderer_requirements.md); null -> no Draw_list_scene,
+    // Forward_renderer / Shadow_renderer fallback for every pass (R1b).
     Scene_root(
         App_message_bus*                        app_message_bus,
         const std::shared_ptr<Content_library>& content_library,
         std::string_view                        name,
-        bool                                    enable_physics
+        bool                                    enable_physics,
+        const Draw_list_scene_dependencies*     draw_list_dependencies
     );
     ~Scene_root() noexcept override;
 
@@ -158,6 +167,17 @@ public:
     void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
     void register_light   (const std::shared_ptr<erhe::scene::Light>&  light)  override;
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    void on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_material_changed  (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_flags_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) override;
+
+    // Draw lists (doc/draw_list_renderer_plan.md). get_draw_list_scene()
+    // is null for scene roots constructed without dependencies.
+    [[nodiscard]] auto get_draw_list_scene() -> erhe::scene_renderer::Draw_list_scene*;
+    // Main thread, once per frame before any rendering of this scene:
+    // applies queued register / unregister / flag changes under
+    // item_host_mutex. No-op without a Draw_list_scene.
+    void flush_draw_lists();
     auto get_hosted_scene () -> erhe::scene::Scene* override;
 
     void begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
@@ -294,6 +314,10 @@ private:
 
     std::unique_ptr<erhe::physics::IWorld>          m_physics_world;
     std::unique_ptr<erhe::raytrace::IScene>         m_raytrace_scene;
+    // Declared after m_raytrace_scene: the draw list scene keeps registered
+    // meshes alive, and ~Mesh may detach from m_raytrace_scene, so it must be
+    // destroyed first (also reset explicitly at the top of ~Scene_root).
+    std::unique_ptr<erhe::scene_renderer::Draw_list_scene> m_draw_list_scene;
 
     static constexpr std::size_t s_max_trigger_event_log_entries = 100;
     std::deque<std::string>                         m_trigger_event_log;

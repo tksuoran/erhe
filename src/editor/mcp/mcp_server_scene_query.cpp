@@ -19,6 +19,7 @@
 #include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "rendergraph/shadow_render_node.hpp"
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
@@ -130,7 +131,8 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
             // been rejected by the item filter, which is not visible here.
             {"last_result",          c_str(pass->get_last_result())},
             {"last_scene_view",      pass->get_last_scene_view_name()},
-            {"last_mesh_count",      pass->get_last_mesh_count()}
+            {"last_mesh_count",      pass->get_last_mesh_count()},
+            {"last_draw_list_entry_count", pass->get_last_draw_list_entry_count()}
         });
     }
 
@@ -138,6 +140,75 @@ auto Mcp_server::query_composition_passes(const json& args) -> std::string
     result["count"]  = passes.size();
     result["passes"] = passes;
     return make_text_content(result.dump(2)).dump();
+}
+
+auto Mcp_server::query_draw_lists(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    erhe::scene_renderer::Draw_list_scene* draw_list_scene = sr->get_draw_list_scene();
+    if (draw_list_scene == nullptr) {
+        return make_json_content({
+            {"scene",          sr->get_name()},
+            {"has_draw_lists", false}
+        }).dump();
+    }
+    const bool verbose = args.value("verbose", false);
+
+    json lists = json::array();
+    std::size_t non_empty_count = 0;
+    std::size_t entry_count     = 0;
+    for (const erhe::scene_renderer::Draw_list& draw_list : draw_list_scene->get_draw_lists()) {
+        entry_count += draw_list.entries.size();
+        if (draw_list.entries.empty()) {
+            continue;
+        }
+        ++non_empty_count;
+        if (verbose) {
+            const erhe::scene_renderer::Draw_list_key& key = draw_list.key;
+            lists.push_back({
+                {"purpose",              erhe::scene_renderer::c_str(key.purpose)},
+                {"mobility",             erhe::scene_renderer::c_str(key.mobility)},
+                {"blending",             erhe::scene_renderer::c_str(key.blending)},
+                {"layer_id",             static_cast<uint64_t>(key.layer_id)},
+                {"negative_determinant", key.negative_determinant},
+                {"entry_count",          draw_list.entries.size()},
+                {"key",                  key.describe()}
+            });
+        }
+    }
+    json result = {
+        {"scene",                  sr->get_name()},
+        {"has_draw_lists",         true},
+        {"object_count",           draw_list_scene->get_object_count()},
+        {"draw_list_count",        draw_list_scene->get_draw_lists().size()},
+        {"non_empty_draw_list_count", non_empty_count},
+        {"entry_count",            entry_count},
+        {"pending_count",          draw_list_scene->get_pending_count()},
+        {"determinant_flip_count", draw_list_scene->get_determinant_flip_count()}
+    };
+    if (verbose) {
+        result["draw_lists"] = lists;
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_draw_lists_enabled(const json& args) -> std::string
+{
+    if (m_context.app_rendering == nullptr) {
+        return make_error_content("App_rendering not available");
+    }
+    if (!args.contains("enabled") || !args["enabled"].is_boolean()) {
+        return make_error_content("enabled (boolean) is required");
+    }
+    const bool enabled = args["enabled"].get<bool>();
+    m_context.app_rendering->use_draw_lists = enabled;
+    return make_json_content({
+        {"use_draw_lists", m_context.app_rendering->use_draw_lists}
+    }).dump();
 }
 
 auto Mcp_server::query_list_scenes(const json& args) -> std::string

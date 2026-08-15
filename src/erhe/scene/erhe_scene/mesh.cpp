@@ -15,6 +15,29 @@
 
 namespace erhe::scene {
 
+auto Mesh::get_scene_host() const -> Scene_host*
+{
+    // Every Item_host a Mesh can be attached to is a Scene_host (see
+    // handle_item_host_update).
+    return static_cast<Scene_host*>(get_item_host());
+}
+
+void Mesh::notify_primitives_changed()
+{
+    // Constructors reach here through add_primitive() before shared_from_this
+    // is usable (lock() yields null); a mesh under construction is not
+    // attached to any host anyway.
+    const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+    if (!shared_this) {
+        return;
+    }
+    Scene_host* scene_host = get_scene_host();
+    if (scene_host == nullptr) {
+        return;
+    }
+    scene_host->on_mesh_primitives_changed(shared_this);
+}
+
 void Mesh::clear_primitives()
 {
     if (m_primitives.empty()) {
@@ -22,6 +45,7 @@ void Mesh::clear_primitives()
     }
     m_primitives.clear();
     m_rt_primitives.clear();
+    notify_primitives_changed();
 }
 
 void Mesh::update_rt_primitives()
@@ -49,6 +73,7 @@ void Mesh::update_rt_primitives()
     // leaves the raytrace instances at the origin - hover / picking misses
     // the mesh until the node next moves.
     handle_node_transform_update();
+    notify_primitives_changed();
 }
 
 void Mesh::add_primitive(
@@ -64,6 +89,26 @@ void Mesh::set_primitives(const std::vector<Mesh_primitive>& primitives)
 {
     m_primitives = primitives;
     update_rt_primitives();
+}
+
+void Mesh::set_primitive_material(const std::size_t primitive_index, const std::shared_ptr<erhe::primitive::Material>& material)
+{
+    if (primitive_index >= m_primitives.size()) {
+        return;
+    }
+    if (m_primitives[primitive_index].material == material) {
+        return;
+    }
+    m_primitives[primitive_index].material = material;
+    const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+    if (!shared_this) {
+        return;
+    }
+    Scene_host* scene_host = get_scene_host();
+    if (scene_host == nullptr) {
+        return;
+    }
+    scene_host->on_mesh_material_changed(shared_this);
 }
 
 auto Mesh::get_mutable_primitives() -> std::vector<Mesh_primitive>&
@@ -169,6 +214,19 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)
 {
     const uint64_t changed_bits = old_flag_bits ^ new_flag_bits;
+
+    // Mirror every flag change to the scene host (draw list entry flags,
+    // doc/draw_list_renderer_requirements.md R12a) before the raytrace-only
+    // visibility gate below.
+    {
+        const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+        if (shared_this) {
+            Scene_host* scene_host = get_scene_host();
+            if (scene_host != nullptr) {
+                scene_host->on_mesh_flags_changed(shared_this, old_flag_bits, new_flag_bits);
+            }
+        }
+    }
 
     const bool visibility_changed = erhe::utility::test_bit_set(changed_bits, erhe::Item_flags::visible);
     if (!visibility_changed) {

@@ -35,6 +35,10 @@ public:
     void after_physics_simulation_steps      ();
     void update_layout_nodes                 ();
     void update_node_transforms              ();
+    // Main thread, once per frame before any scene renders: applies queued
+    // draw list changes of every registered scene root
+    // (doc/draw_list_renderer_plan.md, threading contract).
+    void flush_draw_lists                    ();
 
     [[nodiscard]] auto get_scene_roots() -> const std::vector<std::shared_ptr<Scene_root>>&;
 

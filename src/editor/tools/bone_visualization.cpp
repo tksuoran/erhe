@@ -374,9 +374,11 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
     if ((selected == proxy.selected) && (hovered == proxy.hovered)) {
         return;
     }
-    proxy.mesh->get_mutable_primitives().front().material =
+    proxy.mesh->set_primitive_material(
+        0,
         hovered  ? m_hover_material    :
-        selected ? m_selected_material : m_material;
+        selected ? m_selected_material : m_material
+    );
     if (selected) {
         proxy.mesh->enable_flag_bits(erhe::Item_flags::selected);
     } else {

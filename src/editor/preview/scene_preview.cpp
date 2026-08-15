@@ -54,11 +54,14 @@ Scene_preview::Scene_preview(
 
     m_content_library = std::make_shared<Content_library>();
 
+    // No Draw_list_scene: previews are tiny scenes constructed before the
+    // renderer dependencies exist; they render through the fallback path.
     m_scene_root_shared = std::make_shared<Scene_root>(
         nullptr, // Don't process editor messages
         m_content_library,
         "Material preview scene",
-        false
+        false,
+        nullptr
     );
 
     // I know, this is a bit dirty:

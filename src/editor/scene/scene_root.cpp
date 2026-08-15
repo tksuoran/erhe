@@ -43,6 +43,7 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -144,12 +145,21 @@ Scene_root::Scene_root(
     App_message_bus*                        app_message_bus,
     const std::shared_ptr<Content_library>& content_library,
     const std::string_view                  name,
-    bool                                    enable_physics
+    bool                                    enable_physics,
+    const Draw_list_scene_dependencies*     draw_list_dependencies
 )
     : m_app_message_bus{app_message_bus}
     , m_content_library{content_library}
 {
     ERHE_PROFILE_FUNCTION();
+
+    if ((draw_list_dependencies != nullptr) && draw_list_dependencies->is_valid()) {
+        m_draw_list_scene = std::make_unique<erhe::scene_renderer::Draw_list_scene>(
+            *draw_list_dependencies->mesh_memory,
+            *draw_list_dependencies->shader_variant_cache,
+            std::span<const uint32_t>{draw_list_dependencies->multiview_view_counts}
+        );
+    }
 
     // The scene owns its content library: every library item reports this
     // Scene_root as its Item_host. Items added before this point (e.g. the
@@ -295,6 +305,11 @@ Scene_root::~Scene_root() noexcept
     if (m_is_registered) {
         unregister_from_editor_scenes(*m_app_scenes);
     }
+
+    // Draw lists keep registered meshes alive; drop them (and any queued,
+    // never-flushed changes) while m_raytrace_scene is still alive so a Mesh
+    // released here can still detach its raytrace instances.
+    m_draw_list_scene.reset();
 
     // The Scene and its content (nodes, meshes, node_physics) hold non-owning
     // back-pointers into this Scene_root and the resources it owns (the raytrace
@@ -1113,6 +1128,17 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_scene->register_mesh(mesh);
     }
 
+    // May run on a worker thread (item attach during async load): enqueue
+    // only; flush_draw_lists() applies on the main thread.
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_register(
+            erhe::scene_renderer::Draw_list_object_create_info{
+                .mesh     = mesh,
+                .mobility = erhe::scene_renderer::Draw_mobility::dynamic // no static source yet (R10a)
+            }
+        );
+    }
+
     if (mesh->skin) {
         register_skin(mesh->skin);
     }
@@ -1191,6 +1217,10 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     ERHE_VERIFY(mesh);
 
     log_scene->debug("Unregistering Mesh '{}' from scene", mesh->get_name());
+
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_unregister(mesh);
+    }
 
     mesh->detach_rt_from_scene();
 
@@ -1276,6 +1306,47 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     if (m_scene) {
         m_scene->unregister_light(light);
     }
+}
+
+// Draw list hooks: any thread, enqueue only (Scene_host contract).
+void Scene_root::on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_reregister(mesh);
+    }
+}
+
+void Scene_root::on_mesh_material_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_reregister(mesh);
+    }
+}
+
+void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh, const uint64_t, const uint64_t new_flag_bits)
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_set_flags(mesh, new_flag_bits);
+    }
+}
+
+auto Scene_root::get_draw_list_scene() -> erhe::scene_renderer::Draw_list_scene*
+{
+    return m_draw_list_scene.get();
+}
+
+void Scene_root::flush_draw_lists()
+{
+    if (!m_draw_list_scene) {
+        return;
+    }
+    // Always flush (even with an empty queue): flush_pending() also runs the
+    // per-frame material identity check (R12 material-content edits).
+    // item_host_mutex keeps worker-side Buffer_mesh replacement
+    // (commit_geometry_buffer_mesh under this mutex) from racing the
+    // registration reads. Lock order: item_host_mutex -> pending mutex.
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
+    m_draw_list_scene->flush_pending();
 }
 
 void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node_physics)

@@ -709,8 +709,8 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                     if (payload != nullptr) {
                         // TODO payload->Preview
                         if (payload->Delivery) {
-                            for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
-                                mesh_primitive.material = material;
+                            for (std::size_t i = 0, end = mesh_primitives.size(); i < end; ++i) {
+                                mesh->set_primitive_material(i, material);
                             }
                         }
                     }
@@ -1788,7 +1788,8 @@ void Item_tree::imgui_tree(float ui_scale)
             nullptr,
             content_library,
             "new scene",
-            enable_physics
+            enable_physics,
+            nullptr
         );
 
         using Item_flags = erhe::Item_flags;

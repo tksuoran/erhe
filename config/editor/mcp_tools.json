@@ -6080,5 +6080,41 @@
       "type": "object"
     },
     "name": "animation_edit_keyframe"
+  },
+  {
+    "name": "get_draw_lists",
+    "description": "Inspect the scene's persistent draw lists (Draw_list_scene, doc/draw_list_renderer_requirements.md): registered object count, draw list / entry counts, pending (unflushed) change count and runtime negative-determinant flip count. verbose=true also lists every non-empty draw list with its identity key. has_draw_lists=false when the scene root has no Draw_list_scene (preview / tool scenes).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "verbose": {
+          "description": "Include per-draw-list details (default false)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "set_draw_lists_enabled",
+    "description": "Toggle the draw-list rendering path (doc/draw_list_renderer_plan.md): when enabled, eligible composition passes render through the scene's persistent Draw_list_scene instead of Forward_renderer::render() re-bucketing. Temporary A/B gate for parity verification; get_composition_passes reports last_result=submitted_draw_lists and last_draw_list_entry_count for routed passes.",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "true = draw lists, false = classic Forward_renderer path",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    }
   }
 ]

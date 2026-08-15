@@ -195,9 +195,10 @@ auto make_material_internal(
         if (!mesh) {
             return true;
         }
-        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
-            if (mesh_primitive.material == material) {
-                mesh_primitive.material = copy;
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        for (std::size_t i = 0, end = mesh_primitives.size(); i < end; ++i) {
+            if (mesh_primitives[i].material == material) {
+                mesh->set_primitive_material(i, copy);
                 ++swapped_count;
             }
         }

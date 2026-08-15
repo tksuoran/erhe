@@ -145,6 +145,23 @@ void App_scenes::before_physics_simulation_steps()
     }
 }
 
+void App_scenes::flush_draw_lists()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Copy under m_mutex, flush outside it: flush_draw_lists() takes the
+    // scene root's item_host_mutex, and m_mutex must never be held while
+    // waiting on that (is_host_registered() is called from item-host code).
+    std::vector<std::shared_ptr<Scene_root>> scene_roots;
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        scene_roots = m_scene_roots;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
+        scene_root->flush_draw_lists();
+    }
+}
+
 void App_scenes::update_node_transforms()
 {
     ERHE_PROFILE_FUNCTION();

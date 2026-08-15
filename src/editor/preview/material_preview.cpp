@@ -185,8 +185,8 @@ void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
     if (m_content_library && m_content_library->materials) {
         m_content_library->materials->remove_all_children_recursively();
     }
-    if (m_mesh && !m_mesh->get_mutable_primitives().empty()) {
-        m_mesh->get_mutable_primitives().front().material.reset();
+    if (m_mesh && !m_mesh->get_primitives().empty()) {
+        m_mesh->set_primitive_material(0, {});
     }
     m_last_material.reset();
 }
@@ -206,7 +206,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     m_content_library->materials->add_reference(material);
     m_last_material = material;
 
-    m_mesh->get_mutable_primitives().front().material = material;
+    m_mesh->set_primitive_material(0, material);
 
     const erhe::math::Viewport viewport{0, 0, m_width, m_height};
 

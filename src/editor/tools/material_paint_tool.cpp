@@ -176,8 +176,7 @@ void Material_paint_tool::from_drag_and_drop(const std::shared_ptr<erhe::primiti
     if (!mesh) {
         return;
     }
-    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
-    hover_primitive.material = material;
+    mesh->set_primitive_material(hover_entry->scene_mesh_primitive_index, material);
 }
 
 void Material_paint_tool::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
@@ -211,8 +210,7 @@ auto Material_paint_tool::on_paint() -> bool
     if (!mesh) {
         return false;
     }
-    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
-    hover_primitive.material = material;
+    mesh->set_primitive_material(hover_entry->scene_mesh_primitive_index, material);
 
     return true;
 }
@@ -227,7 +225,7 @@ auto Material_paint_tool::on_pick() -> bool
     if (!mesh) {
         return false;
     }
-    auto& hover_primitive = mesh->get_mutable_primitives().at(hover_entry->scene_mesh_primitive_index);
+    const erhe::scene::Mesh_primitive& hover_primitive = mesh->get_primitives().at(hover_entry->scene_mesh_primitive_index);
     set_material(hover_primitive.material);
 
     return true;

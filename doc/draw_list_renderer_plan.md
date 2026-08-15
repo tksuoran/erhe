@@ -147,12 +147,13 @@ draw-list state or resolves variants directly.** Every hook only enqueues
 mutex-protected pending queue on `Draw_list_scene`;
 `Draw_list_scene::flush_pending()` runs on the main thread once per frame
 and performs unregister/register/resolve there. Rules:
-- Flush site: `Editor` tick, after `Operation_stack` update and BEFORE
-  `Thumbnails::update()` (material/brush previews render through
-  `Composition_pass` there, before the rendergraph); one flush per scene
-  root per frame covers thumbnails, viewports, shadow nodes and the headset
-  node (all rendergraph). `App_rendering` has no per-tick entry — do not
-  invent one; put the call in `Editor::tick` next to `Thumbnails::update`.
+- Flush site: `Editor` tick, after transform propagation
+  (`update_transforms`, so registration samples current world transforms,
+  R10b) and BEFORE the rendergraph; one flush per registered scene root per
+  frame covers viewports, shadow nodes and the headset node. Thumbnails
+  (material / brush previews) render earlier in the tick but their roots
+  have no `Draw_list_scene` (see below). `App_rendering` has no per-tick
+  entry — the call lives in `Editor::tick`.
 - `flush_pending()` takes the scene root's `item_host_mutex` (lock order:
   item_host_mutex → pending mutex; swap the queue out under the pending
   mutex, then process under item_host_mutex only) so registration never
@@ -211,7 +212,7 @@ no `Draw_list_scene`, R1b).
 - New `Mesh::set_primitive_material(index, material)`; convert every `get_mutable_primitives()` writer of `.material` (grep list in req doc R12) → `on_mesh_material_changed` → reregister.
 - No transform hook (§0.3). R10b assert in `flush_pending()` on `flags` items.
 - All hooks enqueue only (§0.3 threading contract); `Editor::tick` calls `flush_pending()` for every scene root after `Operation_stack` update and before `Thumbnails::update()`.
-- Decide per construction site which scene roots get deps (R1b): editor scene roots, scene previews, material/brush preview roots (they render through `Composition_pass`) → yes; asset-container roots (`gltf.cpp` container, `item_tree_window`) that are never rendered → no `Draw_list_scene` (avoids compiling un-prewarmed variants at load).
+- Decide per construction site which scene roots get deps (R1b): editor scene roots (default scene, scene open / create, `open_scene_gltf`) → yes, from `App_context` (filled before any of them runs). Material / brush preview roots (`Scene_preview`) and the tools root → NO `Draw_list_scene`: they are constructed inside parallel init tasks on tf worker threads (a `Draw_list_scene` binds its owner thread) and are tiny scenes; their passes stay on the fallback (routing rule checks for a null `Draw_list_scene`). `item_tree_window`'s `#if 0` site → nullptr.
 - R12 material *content* edits (bind texture, BXDF model, blending mode change list identity): decision — **per-frame material identity hash check** in `flush_pending()`: for each registered material compute a small hash of the identity-affecting fields (the same inputs `Shader_key::derive` reads: texture-use bits, BXDF model, texcoord selectors, unlit, blending mode) and compare with the value stored at registration; on mismatch `reregister` every object using that material (objects keep a material->objects index). Cheap (O(materials) per frame) and needs no new edit-path plumbing; a message-bus material-changed event can replace it later.
 - `Scene_root::register_mesh/unregister_mesh` register/unregister; `~Scene_root` / `sever_host` order: destroy `Draw_list_scene` after meshes are unregistered (mirror the rt-scene ordering comment at `scene_root.cpp:299-310`).
 - Verify with editor: load bistro + NegativeScaleTest, `describe()` list counts in log; mesh ops (undo/redo, material paint) keep counts consistent; no asserts on load.
@@ -280,11 +281,9 @@ Commit(s): `editor: route composition passes through Draw_list_scene`, `editor: 
   `Scene_root` teardown must unregister before dropping `Mesh_memory` refs.
 - Codegen: editor setting addition needs the double build (memory
   `project_codegen_double_build`).
-- Preview scene roots (material / brush previews) DO route through the
-  general Phase 5 rule (polygon_fill, allow_all, no overrides), so they get
-  a `Draw_list_scene`; the tools scene root registers tool meshes whose
-  passes stay on fallback (override_with_base_render_pipeline) — harmless
-  extra registration. Roots that are never rendered get no deps (Phase 2).
+- Preview scene roots (material / brush previews) and the tools root have
+  no `Draw_list_scene` (constructed on init worker threads; tiny scenes) —
+  their passes take the fallback via the null check in the routing rule.
 - Q6 note: the entry AABB baked at registration goes stale for dynamic
   objects; unused in v1, but future culling needs an update path (per-draw
   recompute from the node, or a transform hook — the latter must respect the

@@ -250,11 +250,15 @@ Tools::Tools(
 
     const auto tools_content_library = std::make_shared<Content_library>();
 
+    // No Draw_list_scene: tool passes use override_with_base_render_pipeline
+    // and stay on the Forward_renderer fallback (constructed before the
+    // renderer dependencies exist anyway).
     m_scene_root = std::make_shared<Scene_root>(
         nullptr, // Do not process editor messages
         tools_content_library,
         "Tool scene",
-        false
+        false,
+        nullptr
     );
 
     m_scene_root->get_scene().disable_flag_bits(erhe::Item_flags::show_in_ui);

@@ -512,11 +512,13 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     add_default_materials(*content_library);
     add_default_physics_materials(*content_library);
     const bool enable_physics = m_context.editor_settings->physics.static_enable;
+    const Draw_list_scene_dependencies draw_list_dependencies = make_draw_list_scene_dependencies(m_context);
     std::shared_ptr<Scene_root> scene_root = std::make_shared<Scene_root>(
         m_context.app_message_bus,
         content_library,
         scene_name,
-        enable_physics
+        enable_physics,
+        &draw_list_dependencies
     );
 
     // The only scene content: a default camera matching the default scene's

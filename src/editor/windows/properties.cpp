@@ -648,7 +648,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
         push_group("Primitives", ImGuiTreeNodeFlags_DefaultOpen, m_indent);
     }
     int primitive_index = 0;
-    for (erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_mutable_primitives()) { // may edit material
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) { // may edit material via set_primitive_material
         while (m_primitive_labels.size() <= primitive_index) {
             m_primitive_labels.push_back(fmt::format("Primitive {}", m_primitive_labels.size()));
         }
@@ -667,7 +667,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
             options.accept_content_library_node = true;
             options.show_clear_button           = false; // match the previous combo: a primitive keeps its material
             if (item_reference_imgui(m_context, "##material", value, erhe::primitive::Material::get_static_type(), options)) {
-                mesh_primitive.material = std::dynamic_pointer_cast<erhe::primitive::Material>(value);
+                mesh.set_primitive_material(static_cast<std::size_t>(primitive_index), std::dynamic_pointer_cast<erhe::primitive::Material>(value));
             }
             // Release the scratch contents (capacity kept): the strong
             // references would otherwise persist past the last draw and pin

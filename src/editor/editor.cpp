@@ -776,6 +776,15 @@ public:
             m_transform_update_stats_tracker->sample_frame(*m_app_scenes.get(), *m_tools.get());
         }
 
+        // Apply queued draw list changes (register / unregister / flags from
+        // this frame's edits and async loads) after transform propagation
+        // (registration samples node world transforms, R10b) and before the
+        // rendergraph renders any Draw_list_scene-owning root (viewports,
+        // shadow nodes, headset). Thumbnails above render preview roots,
+        // which have no Draw_list_scene. Main thread only.
+        erhe::log::set_breadcrumb("tick: flush_draw_lists");
+        m_app_scenes->flush_draw_lists();
+
         // Interactive lightmap bake (doc/lightmap_baking_plan.md section
         // 3a): record this frame's budgeted gather slice + publish into the
         // frame command buffer before the rendergraph samples the published
@@ -3047,11 +3056,13 @@ public:
         }
         add_default_materials(*content_library.get());
         add_default_physics_materials(*content_library.get());
+        const Draw_list_scene_dependencies draw_list_dependencies = make_draw_list_scene_dependencies(m_app_context);
         m_default_scene = std::make_shared<Scene_root>(
             m_app_message_bus.get(),
             content_library,
             name,
-            enable_physics
+            enable_physics,
+            &draw_list_dependencies
         );
         // A from-scratch scene has no source path, so its tile-set
         // directory is the shared untitled.lightmap/ - whatever a previous

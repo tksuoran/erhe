@@ -260,6 +260,8 @@ private:
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
     auto action_apply_physics_force(const nlohmann::json& args) -> std::string;
     auto query_physics_items    (const nlohmann::json& args) -> std::string;
+    auto query_draw_lists       (const nlohmann::json& args) -> std::string;
+    auto action_set_draw_lists_enabled(const nlohmann::json& args) -> std::string;
     auto query_get_physics_state(const nlohmann::json& args) -> std::string;
     auto action_create_physics_body(const nlohmann::json& args) -> std::string;
     auto action_edit_physics_body  (const nlohmann::json& args) -> std::string;

@@ -22,6 +22,7 @@ namespace erhe::scene {
 using Layer_id = uint64_t;
 
 class Raytrace_primitive;
+class Scene_host;
 class Skin;
 
 class Mesh_primitive
@@ -72,6 +73,10 @@ public:
     void update_rt_primitives();
     void add_primitive       (const std::shared_ptr<erhe::primitive::Primitive>& primitive, const std::shared_ptr<erhe::primitive::Material>& material = {});
     void set_primitives      (const std::vector<Mesh_primitive>& primitives);
+    // Reassign the material of one primitive. Use this instead of writing
+    // through get_mutable_primitives() so the scene host (draw lists) sees
+    // the change (Scene_host::on_mesh_material_changed).
+    void set_primitive_material(std::size_t primitive_index, const std::shared_ptr<erhe::primitive::Material>& material);
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_rt_from_scene();
@@ -100,6 +105,10 @@ public:
     float                 line_width{1.0f};
 
 private:
+    // Scene_host of the node this mesh is attached to, or nullptr.
+    [[nodiscard]] auto get_scene_host() const -> Scene_host*;
+    void notify_primitives_changed();
+
     std::vector<Mesh_primitive>                      m_primitives;
     erhe::raytrace::IScene*                          m_rt_scene{nullptr};
     std::vector<std::unique_ptr<Raytrace_primitive>> m_rt_primitives;

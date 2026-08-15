@@ -119,9 +119,10 @@ void substitute_material_in_parse(
         if (!mesh) {
             continue;
         }
-        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
-            if (mesh_primitive.material == parsed) {
-                mesh_primitive.material = resolved;
+        const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+        for (std::size_t i = 0, end = mesh_primitives.size(); i < end; ++i) {
+            if (mesh_primitives[i].material == parsed) {
+                mesh->set_primitive_material(i, resolved);
             }
         }
     }
@@ -1124,11 +1125,13 @@ auto open_scene_gltf(
     // materials / textures (a create_scene-style library pre-populated with
     // the standard brushes would duplicate the saved ones).
     std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+    const Draw_list_scene_dependencies draw_list_dependencies = make_draw_list_scene_dependencies(context);
     std::shared_ptr<Scene_root> scene_root = std::make_shared<Scene_root>(
         context.app_message_bus,
         content_library,
         erhe::file::to_string(path.stem()),
-        scene_state->enable_physics
+        scene_state->enable_physics,
+        &draw_list_dependencies
     );
     // Remember where the scene came from (same as Scene_open_operation does
     // for foreign glTF): Save Scene writes back here, without confirmation.
