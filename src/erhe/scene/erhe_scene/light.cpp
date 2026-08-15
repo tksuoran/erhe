@@ -157,6 +157,18 @@ void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::
     }
 }
 
+void Light::notify_changed()
+{
+    Scene_host* const scene_host = static_cast<Scene_host*>(get_item_host());
+    if (scene_host == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Light> shared_this = std::static_pointer_cast<Light>(weak_from_this().lock());
+    if (shared_this) {
+        scene_host->on_light_changed(shared_this);
+    }
+}
+
 auto Light::projection(const Light_projection_parameters& parameters) const -> Projection
 {
     switch (type) {

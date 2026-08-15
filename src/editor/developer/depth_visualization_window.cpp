@@ -138,7 +138,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
     erhe::graphics::Scoped_render_pass scoped_render_pass{*render_pass, command_buffer};
 
     const auto& light_projection_transforms = light_projections.light_projection_transforms.at(m_light_index);
-    const auto& layers = scene_root->layers();
 
     m_forward_renderer.draw_primitives(
         erhe::scene_renderer::Forward_renderer::Primitive_render_parameters{
@@ -147,7 +146,6 @@ void Depth_to_color_rendergraph_node::execute_rendergraph_node(erhe::graphics::C
                 .render_pass       = m_render_target.get_render_pass(),
                 .viewport          = viewport,
                 .light_projections = &light_projections,
-                .lights            = layers.light()->lights,
                 .materials         = {},
                 .debug_label       = "Depth_to_color_rendergraph_node::execute_rendergraph_node()"
             },

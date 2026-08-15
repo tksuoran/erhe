@@ -152,7 +152,6 @@ void Composition_pass::render(const Render_context& context)
         ? &data.get_render_style(context)
         : nullptr;
 
-    const auto& layers           = scene_root->layers();
     const auto& material_library = scene_root->get_content_library()->materials;
 
     // TODO: Keep this vector in content library and update when needed.
@@ -197,7 +196,6 @@ void Composition_pass::render(const Render_context& context)
                     .views             = context.views,
                     .exposure          = exposure,
                     .light_projections = nullptr,
-                    .lights            = {},
                     .skins             = {},
                     .materials         = {},
                     .shader_key_boolean_mask_force_enable  = data.shader_key_force_enable_mask,
@@ -347,7 +345,6 @@ void Composition_pass::render(const Render_context& context)
                             .exposure          = exposure,
                             .ambient_light     = scene->ambient_light,
                             .light_projections = context.scene_view.get_light_projections(),
-                            .lights            = layers.light()->lights,
                             .skins             = scene->get_skins(),
                             .materials         = materials,
                             .shader_key_boolean_mask_force_enable  = 0u,
@@ -391,7 +388,6 @@ void Composition_pass::render(const Render_context& context)
                         .exposure          = exposure,
                         .ambient_light     = scene->ambient_light,
                         .light_projections = context.scene_view.get_light_projections(),
-                        .lights            = layers.light()->lights,
                         .skins             = scene->get_skins(),
                         .materials         = materials,
                         .shader_key_boolean_mask_force_enable  = force_enable_mask,

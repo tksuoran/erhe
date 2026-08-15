@@ -402,40 +402,43 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         return;
     }
 
-    // Per light type light count limits from the active graphics preset: how
-    // many lights are shadow-mapped (also what the shadow maps were sized from
-    // in reconfigure()) and how many more are shaded without a shadow map.
+    // The scene's resolved light set: which lights are shaded / shadow-mapped,
+    // in light UBO slot order, under the active graphics preset's per light
+    // type limits (the shadow limits are also what reconfigure() sized the
+    // shadow maps from; with shadow_enable off they are zero). Scene_root
+    // invalidates the set from its light hooks; resolve() recomputes only
+    // then, or when the limits changed - not per frame / per view.
     const erhe::scene_renderer::Light_count_limits light_count_limits = (m_context.app_settings != nullptr)
         ? get_light_count_limits(m_context.app_settings->graphics.current_graphics_preset)
         : erhe::scene_renderer::Light_count_limits{};
+    erhe::scene_renderer::Light_set& light_set = scene_root->get_light_set();
+    light_set.resolve(layers.light()->lights, light_count_limits);
 
     // Shadows off for this view: the preset has shadow_enable off (no shadow
     // maps allocated), or the live per-view Visual Style shadow mode does not
     // ask for live shadow maps (No Shadows and Baked Lightmaps both disable
-    // shadow map updates). The lights still need their UBO slots assigned
-    // (Light_buffer::update skips any light without projection transforms,
-    // which would leave the scene ambient-only), so run just the slot /
-    // projection pass, with no shadow map texture and zero shadow limits (the
-    // unshadowed limits still apply): Light_buffer then writes the "no shadow
-    // map" handle sentinel and the forward shader lights every fragment
-    // unshadowed. No caster / receiver AABB gathering, no frustum fit, and no
-    // shadow render passes are issued.
+    // shadow map updates). The lights still need their UBO slots / projection
+    // transforms (Light_buffer::update writes only the resolved slots, which
+    // would otherwise leave the scene ambient-only), so run just the
+    // projection pass with no shadow map texture: Light_buffer then writes
+    // the "no shadow map" handle sentinel and the forward shader lights every
+    // fragment unshadowed (the shadow-mapped slots of the shared resolution
+    // simply sample nothing). No caster / receiver AABB gathering, no frustum
+    // fit, and no shadow render passes are issued.
     const bool preset_shadows_enabled = (m_context.app_settings == nullptr) || m_context.app_settings->graphics.current_graphics_preset.shadow_enable;
     if (!preset_shadows_enabled || (m_scene_view.get_config().shadow_mode != Shadow_mode::shadow_maps)) {
-        scene_root->sort_lights();
         const Viewport_scene_view* viewport_scene_view_for_lights = m_scene_view.as_viewport_scene_view();
         const erhe::math::Viewport light_view_camera_viewport = (viewport_scene_view_for_lights != nullptr)
             ? viewport_scene_view_for_lights->get_projection_viewport()
             : erhe::math::Viewport{};
         m_light_projections.apply(
-            layers.light()->lights,
+            light_set,
             camera.get(),
             light_view_camera_viewport,
             m_viewport,
             {},     // no shadow map -> "no shadow map" sentinel in the light UBO
             m_scene_view.get_reverse_depth(),
             m_scene_view.get_depth_range(),
-            light_count_limits.without_shadows(), // no shadow map -> no light is shadow-mapped
             m_scene_view.get_conventions(),
             {},     // no caster bounds
             {},     // no receiver bounds
@@ -465,8 +468,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     //       Make content library item host for content library nodes.
     const auto& material_library = scene_root->get_content_library()->materials;
     const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = material_library->get_all<erhe::primitive::Material>();
-
-    scene_root->sort_lights();
 
     // Refresh the shadow frustum fit settings from the live editor settings
     // (edited in the Settings window). m_fit_settings must outlive the render
@@ -584,7 +585,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .texture               = m_texture,
             .render_passes         = m_render_passes,
             .mesh_spans            = { layers.content()->meshes },
-            .lights                = layers.light()->lights,
+            .light_set             = light_set,
             .skins                 = scene_root->get_scene().get_skins(),
             .materials             = materials,
             .light_projections     = m_light_projections,
@@ -592,7 +593,6 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .depth_range           = m_scene_view.get_depth_range(),
             .conventions           = m_scene_view.get_conventions(),
             .fit_settings          = &m_fit_settings,
-            .light_count_limits    = light_count_limits,
             .depth_bias_constant   = depth_bias_constant,
             .depth_bias_slope      = depth_bias_slope,
             .cull_mode             = cull_mode,

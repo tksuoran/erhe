@@ -68,7 +68,6 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     const auto& viewport = parameters.viewport;
     const auto* camera   = parameters.camera;
-    const auto& lights   = parameters.lights;
 
     erhe::graphics::Scoped_debug_group pass_scope{
         parameters.render_encoder.get_command_buffer(),
@@ -102,7 +101,7 @@ void Texel_renderer::render(const Render_parameters& parameters)
 
     m_texture_heap->reset_heap(parameters.render_encoder.get_command_buffer());
 
-    Ring_buffer_range light_range = m_light_buffer.update(lights, parameters.light_projections, glm::vec3{0.0f});
+    Ring_buffer_range light_range = m_light_buffer.update(parameters.light_projections, glm::vec3{0.0f});
     m_light_buffer.bind_light_buffer(parameters.render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(parameters.render_encoder, parameters.light_projections);
 

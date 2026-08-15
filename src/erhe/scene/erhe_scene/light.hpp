@@ -144,6 +144,13 @@ public:
     // Implements Node_attachment
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
+    // Call after editing type / cast_shadow / range (or anything else that
+    // decides whether and how the light is shaded): notifies the Scene_host
+    // (Scene_host::on_light_changed) so the scene's resolved light set
+    // (erhe::scene_renderer::Light_set) is re-resolved. Registration /
+    // unregistration (attach / detach) notifies on its own.
+    void notify_changed();
+
     // Public API
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;
@@ -153,12 +160,22 @@ public:
     // reaches nowhere: it emits no light and is excluded from the rendered light
     // set entirely (no illumination, no shadow). Such a range also cannot define
     // a valid shadow cube far plane (z_far = range must exceed z_near).
-    // Directional and spot lights do not gate on range here. This is the single
+    // All lights are gated by non-black color and non-zero intensity. This is the single
     // source of truth consulted by the light-layer partition, the light buffer,
     // and the shadow renderer, so they always agree on which lights participate.
     [[nodiscard]] auto is_active() const -> bool
     {
-        return (type != Type::point) || (range > 0.0f);
+        return 
+            (
+                (color.r > 0) || (color.g > 0) || (color.b > 0)
+            ) &&
+            (intensity > 0.0f) &&
+            (
+                (type != Type::point) || (range > 0.0f)
+            ) &&
+            (
+                (type != Type::spot) || (outer_spot_angle > 0.0f)
+            );
     }
 
     // Whether this light should cast a (rendered) shadow this frame: it must be

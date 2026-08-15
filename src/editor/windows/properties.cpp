@@ -319,20 +319,37 @@ void Properties::light_properties(erhe::scene::Light& light)
 {
     ERHE_PROFILE_FUNCTION();
 
-    add_entry("Light Type", [&light]() {
-        erhe::imgui::make_combo(
-            "##",
-            light.type,
-            erhe::scene::Light::c_type_strings,
-            IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
-        );
+    // Edits to what decides whether / how the light is shaded (type, cast
+    // shadow, range -> active) must re-resolve the scene's light set
+    // (Light::notify_changed -> Scene_host::on_light_changed).
+    bool resolution_changed = false;
+    add_entry("Light Type", [&light, &resolution_changed]() {
+        if (
+            erhe::imgui::make_combo(
+                "##",
+                light.type,
+                erhe::scene::Light::c_type_strings,
+                IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
+            )
+        ) {
+            resolution_changed = true;
+        }
+    });
+    add_entry("Cast Shadow", [&light, &resolution_changed]() {
+        if (ImGui::Checkbox("##", &light.cast_shadow)) {
+            resolution_changed = true;
+        }
     });
 
     if (light.type == erhe::scene::Light::Type::spot) {
         add_entry("Inner Spot", [&](){ ImGui::SliderFloat("##", &light.inner_spot_angle, 0.0f, glm::pi<float>()); });
         add_entry("Outer Spot", [&](){ ImGui::SliderFloat("##", &light.outer_spot_angle, 0.0f, glm::pi<float>()); });
     }
-    add_entry("Range",     [&](){ ImGui::SliderFloat("##", &light.range,     1.00f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic); });
+    add_entry("Range", [&light, &resolution_changed](){
+        if (ImGui::SliderFloat("##", &light.range, 1.00f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+            resolution_changed = true;
+        }
+    });
     if ((light.type == erhe::scene::Light::Type::point) && (light.range <= 0.0f)) {
         add_entry("Warning", [&](){
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 160, 32, 255));
@@ -372,6 +389,10 @@ void Properties::light_properties(erhe::scene::Light& light)
 
     // Ambient light color is a scene property now (issues #237 / #240); it is
     // shown in Scene properties (Properties::scene_properties), not per light.
+
+    if (resolution_changed) {
+        light.notify_changed();
+    }
 }
 
 void Properties::layout_properties(erhe::scene::Layout& layout)

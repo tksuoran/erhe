@@ -6,6 +6,7 @@
 #include "erhe_message_bus/message_bus.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene_renderer/light_set.hpp"
 #include "scene/draw_list_scene_dependencies.hpp"
 
 #include <deque>
@@ -170,6 +171,14 @@ public:
     void on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_material_changed  (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_flags_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) override;
+    void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
+
+    // The scene's resolved light set (which lights are shaded / shadow-mapped,
+    // in light UBO slot order). Invalidated by the light hooks (register /
+    // unregister / on_light_changed); renderers call
+    // get_light_set().resolve(layers().light()->lights, limits) before use,
+    // which recomputes only when invalidated or the limits changed.
+    [[nodiscard]] auto get_light_set() -> erhe::scene_renderer::Light_set&;
 
     // Draw lists (doc/draw_list_renderer_plan.md). get_draw_list_scene()
     // is null for scene roots constructed without dependencies.
@@ -265,7 +274,6 @@ public:
     auto camera_combo(const char* label, erhe::scene::Camera*& camera, bool nullptr_option = false) const -> bool;
     auto camera_combo(const char* label, std::shared_ptr<erhe::scene::Camera>& selected_camera, bool nullptr_option = false) const -> bool;
     auto camera_combo(const char* label, std::weak_ptr<erhe::scene::Camera>& selected_camera, bool nullptr_option = false) const -> bool;
-    void sort_lights();
 
     [[nodiscard]] auto get_content_library() const -> std::shared_ptr<Content_library>;
 
@@ -318,6 +326,7 @@ private:
     // meshes alive, and ~Mesh may detach from m_raytrace_scene, so it must be
     // destroyed first (also reset explicitly at the top of ~Scene_root).
     std::unique_ptr<erhe::scene_renderer::Draw_list_scene> m_draw_list_scene;
+    erhe::scene_renderer::Light_set                        m_light_set;
 
     static constexpr std::size_t s_max_trigger_event_log_entries = 100;
     std::deque<std::string>                         m_trigger_event_log;

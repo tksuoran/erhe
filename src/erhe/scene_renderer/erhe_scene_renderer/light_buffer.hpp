@@ -10,6 +10,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
+#include "erhe_scene_renderer/light_set.hpp"
 
 #include <memory>
 
@@ -120,43 +121,45 @@ public:
 class Light_projections
 {
 public:
+    // Computes the per-slot light projection transforms for the resolved
+    // light set (Light_set: which lights are shaded, in light UBO slot order,
+    // and which of them are shadow-mapped). light_projection_transforms[i]
+    // is slot i; shadow_index / point_shadow_index are the 2D shadow map
+    // layer / point shadow cube of the slot (max() when not shadow-mapped).
+    // in_shadow_map_texture may be null (no shadow map: Light_buffer writes
+    // the "no shadow map" sentinel and every light shades unshadowed).
     void apply(
-        const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-        const erhe::scene::Camera*                                  main_camera,
-        const erhe::math::Viewport&                                 main_camera_viewport,
-        const erhe::math::Viewport&                                 light_texture_viewport,
-        const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
-        bool                                                        reverse_depth,
-        erhe::math::Depth_range                                     depth_range,
-        // Per light type limits on how many lights get a UBO slot: shadow-
-        // mapped ones (a shadow layer: shadow_index / point_shadow_index) and
-        // ones shaded without a shadow map (see Light_count_limits for the
-        // hand-out rule). Callers with no shadow map pass zero shadow limits
-        // (e.g. limits.without_shadows()); lights beyond the limits get no
-        // slot (index max()) and are not shaded.
-        const Light_count_limits&                                   light_count_limits,
-        const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{},
-        std::span<const erhe::math::Aabb>                           in_caster_world_aabbs = {},
-        std::span<const erhe::math::Aabb>                           in_receiver_world_aabbs = {},
-        const erhe::scene::Shadow_frustum_fit_settings*             fit_settings = nullptr
+        const Light_set&                                light_set,
+        const erhe::scene::Camera*                      main_camera,
+        const erhe::math::Viewport&                     main_camera_viewport,
+        const erhe::math::Viewport&                     light_texture_viewport,
+        const std::shared_ptr<erhe::graphics::Texture>& in_shadow_map_texture,
+        bool                                            reverse_depth,
+        erhe::math::Depth_range                         depth_range,
+        const erhe::math::Coordinate_conventions&       conventions = erhe::math::Coordinate_conventions{},
+        std::span<const erhe::math::Aabb>               in_caster_world_aabbs = {},
+        std::span<const erhe::math::Aabb>               in_receiver_world_aabbs = {},
+        const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr
     );
 
+    // Debug / tooling lookup by light (linear). Hot paths index
+    // light_projection_transforms by slot instead.
     // Warning: Returns pointer to element of member vector. That pointer
     //          should remain stable as long as Light_projections stays
     //          alive.
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*;
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*;
 
-    // The light layer partition the forward pass must shade with, replayed
-    // from the slots apply() handed out under its Light_count_limits: a light
-    // is shadow-mapped iff it got a shadow layer (2D or cube), non-shadow iff
-    // it got a UBO slot without one, and not counted at all when it got no
-    // slot (beyond the limits, inactive, or not seen by apply() - Light_buffer
-    // ::update() writes no data for those either).
-    [[nodiscard]] auto compute_light_layer_partition(const std::span<const std::shared_ptr<erhe::scene::Light>>& lights) const -> Light_layer_partition;
-
     erhe::scene::Light_projection_parameters              parameters;
+    // Slot-ordered (== light UBO slot); copied layout from the Light_set the
+    // last apply() ran with. light_partition is what the forward pass shades
+    // with (shader variant light loop bounds); shadow_map_2d_slots /
+    // point_shadow_slots are the shadow-mapped slots in shadow layer / cube
+    // order (Shadow_renderer iterates these).
     std::vector<erhe::scene::Light_projection_transforms> light_projection_transforms;
+    Light_layer_partition                                 light_partition{};
+    std::vector<std::size_t>                              shadow_map_2d_slots;
+    std::vector<std::size_t>                              point_shadow_slots;
     std::shared_ptr<erhe::graphics::Texture>              shadow_map_texture;
     // Shadow_technique_mode::distance R32F distance map (the fwidth-biased
     // distances the caster wrote). Null for the depth technique; the receiver
@@ -207,11 +210,12 @@ public:
         Light_interface&                light_interface
     );
 
+    // Writes the light UBO from the resolved slots in light_projections
+    // (Light_projections::apply); null light_projections writes no lights.
     auto update(
-        const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-        const Light_projections*                                    light_projections,
-        const glm::vec3&                                            ambient_light,
-        uint32_t                                                    lightmap_flags = 0u // bit 0: bicubic lightmap sampling
+        const Light_projections* light_projections,
+        const glm::vec3&         ambient_light,
+        uint32_t                 lightmap_flags = 0u // bit 0: bicubic lightmap sampling
     ) -> erhe::graphics::Ring_buffer_range;
 
     // Bind the shadow map textures to the s_shadow_compare and

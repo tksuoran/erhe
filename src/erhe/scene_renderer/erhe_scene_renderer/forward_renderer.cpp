@@ -87,16 +87,16 @@ const char* safe_str(const char* str)
     return str != nullptr ? str : "";
 }
 
-// The light layer partition the shading variant is selected with. Replayed
-// from the Light_projections (which lights actually received a UBO slot and a
-// shadow layer under the Light_count_limits in Light_projections::apply()),
-// so the shader's shadow-mapped / non-shadow loop bounds match the UBO slot
-// layout Light_buffer::update() writes. Without light projections no light is
-// shaded (Light_buffer::update() writes no light data then either).
+// The light layer partition the shading variant is selected with: the
+// resolved light set's partition carried by the Light_projections (which
+// lights got a UBO slot and a shadow layer, see Light_set), so the shader's
+// shadow-mapped / non-shadow loop bounds match the UBO slot layout
+// Light_buffer::update() writes. Without light projections no light is shaded
+// (Light_buffer::update() writes no light data then either).
 [[nodiscard]] auto get_light_layer_partition(const Forward_renderer::Base_render_parameters& base) -> Light_layer_partition
 {
     if (base.light_projections != nullptr) {
-        return base.light_projections->compute_light_layer_partition(base.lights);
+        return base.light_projections->light_partition;
     }
     return Light_layer_partition{};
 }
@@ -184,7 +184,7 @@ auto Forward_renderer::begin_pass(
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    state.light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
+    state.light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
     m_light_buffer.bind_light_buffer(render_encoder, state.light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
@@ -517,7 +517,7 @@ void Forward_renderer::draw_primitives(
         }
     }
 
-    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
+    Ring_buffer_range light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());

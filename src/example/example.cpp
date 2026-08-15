@@ -392,15 +392,17 @@ public:
         lights.push_back(m_light);
 
         const auto& conventions = m_graphics_device.get_info().coordinate_conventions;
+        // No scene host hooks here: re-resolve the light set every frame.
+        m_light_set.invalidate();
+        m_light_set.resolve(lights, erhe::scene_renderer::Light_count_limits::uniform(0, 8)); // no shadow map -> no light is shadow-mapped
         m_light_projections.apply(
-            lights,
+            m_light_set,
             m_camera.get(),
             viewport,
             erhe::math::Viewport{},
             std::shared_ptr<erhe::graphics::Texture>{},
             (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one), // reverse_depth
-            conventions.native_depth_range,
-            erhe::scene_renderer::Light_count_limits::uniform(0, 8) // no shadow map -> no light is shadow-mapped
+            conventions.native_depth_range
         );
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;
@@ -432,7 +434,6 @@ public:
                     .exposure          = m_camera->get_exposure(),
                     .ambient_light     = glm::vec3{0.1f, 0.1f, 0.1f},
                     .light_projections = &m_light_projections,
-                    .lights            = lights,
                     .skins             = m_gltf_data.skins,
                     .materials         = m_gltf_data.materials,
                     .debug_label       = "example main render"
@@ -594,6 +595,7 @@ private:
     std::unique_ptr<erhe::graphics::Base_render_pipeline> m_render_pipeline;
 
     erhe::scene_renderer::Light_projections m_light_projections;
+    erhe::scene_renderer::Light_set         m_light_set;
 
     erhe::gltf::Gltf_data                   m_gltf_data;
 

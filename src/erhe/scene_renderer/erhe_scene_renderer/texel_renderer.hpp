@@ -43,7 +43,6 @@ public:
         const erhe::graphics::Render_pass&                          render_pass;
         const erhe::scene::Camera*                                  camera           {nullptr};
         const Light_projections*                                    light_projections{nullptr};
-        const std::span<const std::shared_ptr<erhe::scene::Light>>& lights           {};
         erhe::math::Viewport                                        viewport;
     };
 

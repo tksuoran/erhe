@@ -4,6 +4,7 @@
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
+#include "erhe_scene_renderer/light_set.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
 #include "erhe_graphics/command_buffer.hpp"
@@ -224,18 +225,17 @@ Light_buffer::Light_buffer(
 }
 
 void Light_projections::apply(
-    const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-    const erhe::scene::Camera*                                  view_camera,
-    const erhe::math::Viewport&                                 view_camera_viewport,
-    const erhe::math::Viewport&                                 light_texture_viewport,
-    const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
-    const bool                                                  reverse_depth,
-    const erhe::math::Depth_range                               depth_range,
-    const Light_count_limits&                                   light_count_limits,
-    const erhe::math::Coordinate_conventions&                   conventions,
-    const std::span<const erhe::math::Aabb>                     in_caster_world_aabbs,
-    const std::span<const erhe::math::Aabb>                     in_receiver_world_aabbs,
-    const erhe::scene::Shadow_frustum_fit_settings*             fit_settings
+    const Light_set&                                light_set,
+    const erhe::scene::Camera*                      view_camera,
+    const erhe::math::Viewport&                     view_camera_viewport,
+    const erhe::math::Viewport&                     light_texture_viewport,
+    const std::shared_ptr<erhe::graphics::Texture>& in_shadow_map_texture,
+    const bool                                      reverse_depth,
+    const erhe::math::Depth_range                   depth_range,
+    const erhe::math::Coordinate_conventions&       conventions,
+    const std::span<const erhe::math::Aabb>         in_caster_world_aabbs,
+    const std::span<const erhe::math::Aabb>         in_receiver_world_aabbs,
+    const erhe::scene::Shadow_frustum_fit_settings* fit_settings
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -261,6 +261,17 @@ void Light_projections::apply(
     };
     shadow_map_texture = in_shadow_map_texture;
 
+    // The resolved light set already holds the slot layout (type major,
+    // shadow-mapped prefix per type) and the light layer partition; only the
+    // shaded lights are in it, in slot order. Copy the layout so this
+    // Light_projections stays self-contained for the frame (Light_buffer::
+    // update and the forward pass partition read it), then compute the
+    // projection transforms per slot.
+    const std::vector<std::shared_ptr<erhe::scene::Light>>& lights = light_set.get_lights();
+    light_partition     = light_set.get_partition();
+    shadow_map_2d_slots = light_set.get_shadow_map_2d_slots();
+    point_shadow_slots  = light_set.get_point_shadow_slots();
+
     light_projection_transforms.clear();
     light_projection_transforms.reserve(lights.size());
 
@@ -270,124 +281,33 @@ void Light_projections::apply(
         fit_debug_data.resize(lights.size());
     }
 
-    // Build the projection transforms in the input order first; the actual
-    // UBO slot index is assigned in a second pass below so the lights can
-    // be partitioned per-type with shadow-mapped lights occupying the prefix
-    // of each per-type sub-array. The fragment shader uses this invariant
-    // to split each per-type lighting loop into a shadow-sampling prefix
-    // and a direct-lighting suffix, with the bounds becoming compile-time
-    // constants under the variant cache.
-    for (std::size_t i = 0, end = lights.size(); i < end; ++i) {
-        const std::shared_ptr<erhe::scene::Light>& light = lights[i];
-        parameters.fit_debug_out = collect_fit_debug ? &fit_debug_data[i] : nullptr;
+    // Slot i of the light UBO = lights[i]; the fragment shader's per-type
+    // light loops cover [type base, type base + partition counts) with the
+    // shadow-mapped lights first (see Light_set).
+    for (std::size_t slot = 0, end = lights.size(); slot < end; ++slot) {
+        const std::shared_ptr<erhe::scene::Light>& light = lights[slot];
+        parameters.fit_debug_out = collect_fit_debug ? &fit_debug_data[slot] : nullptr;
         light_projection_transforms.push_back(light->projection_transforms(parameters));
+        erhe::scene::Light_projection_transforms& transforms = light_projection_transforms.back();
+        transforms.index              = slot;
+        transforms.shadow_index       = std::numeric_limits<std::size_t>::max();
+        transforms.point_shadow_index = std::numeric_limits<std::size_t>::max();
     }
     parameters.fit_debug_out        = nullptr;
     parameters.caster_world_aabbs   = {};
     parameters.receiver_world_aabbs = {};
 
-    // Pass 1: count, by (type_bucket, shadow_bucket). The tally lives in
-    // compute_light_layer_partition (shader_key.hpp) so the variant-cache
-    // counts and the UBO slot assignment below share one source. It walks the
-    // lights in input order against light_count_limits (the limits the shadow
-    // maps were sized from), so the counts are exactly the slots pass 2 hands
-    // out below with the same walk: shadow casters beyond the shadow limit of
-    // their type become non-shadow lights, lights beyond the unshadowed limit
-    // get no slot.
-    const Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights, light_count_limits);
-    const std::size_t (&per_type_shadow)   [4] = partition.per_type_shadow;
-    const std::size_t (&per_type_nonshadow)[4] = partition.per_type_nonshadow;
-
-    // Compute base slots: type major (directional, spot, point, other),
-    // shadow minor (shadow-casters, then non-shadow-casters within each type).
-    std::size_t base_shadow   [4] = {0, 0, 0, 0};
-    std::size_t base_nonshadow[4] = {0, 0, 0, 0};
-    // base_shadow_dense[t] = number of shadow-casting lights of types
-    // 0..t-1, which is the type-major start of the dense shadow-only
-    // array consumed by Shadow_renderer. Unlike base_shadow[t], it
-    // excludes the non-shadow lights of each preceding type and so
-    // never over-counts past parameters.render_passes.size().
-    std::size_t base_shadow_dense[4] = {0, 0, 0, 0};
-    {
-        std::size_t cursor       = 0;
-        std::size_t dense_cursor = 0;
-        for (std::size_t t = 0; t < 4; ++t) {
-            base_shadow      [t] = cursor;
-            cursor              += per_type_shadow[t];
-            base_nonshadow   [t] = cursor;
-            cursor              += per_type_nonshadow[t];
-
-            base_shadow_dense[t] = dense_cursor;
-            dense_cursor        += per_type_shadow[t];
-        }
+    // Shadow layers: 2D shadow map array layer i (= Shadow_renderer render
+    // pass i) belongs to slot shadow_map_2d_slots[i] (directional, then spot);
+    // point shadow cube i to slot point_shadow_slots[i]. Point lights never
+    // get a 2D layer (their shadow_index stays max(), which makes the 2D
+    // shadow loop skip them via the render_passes.size() gate); the receiver
+    // reads shadow_index / point_shadow_index from the light UBO.
+    for (std::size_t i = 0, end = shadow_map_2d_slots.size(); i < end; ++i) {
+        light_projection_transforms[shadow_map_2d_slots[i]].shadow_index = i;
     }
-
-    // Pass 2: walk the input order again and assign each light a UBO slot
-    // inside its (type, shadow) bucket. shadow_index is computed in a
-    // separate dense space that counts only shadow-casting lights, so
-    // it can index the Shadow_renderer's render_passes array (sized to
-    // the total shadow-light cap) without including non-shadow lights.
-    //
-    // Point lights are the exception: they cast omnidirectional shadows into a
-    // separate R32F cube-map array, NOT the 2D shadow array, so their
-    // shadow_index is left at max() (which makes the 2D shadow loop skip them
-    // via the render_passes.size() gate) and they instead receive a dense
-    // point_shadow_index counting only shadow-casting point lights. Because
-    // point is the last shadow-bearing type bucket (after directional and
-    // spot), excluding point lights from the 2D dense space does not shift the
-    // directional / spot layer indices.
-    //
-    // Light count limits: per_type_shadow[t] / per_type_nonshadow[t] are the
-    // slot counts the limits allow. Once cursor_shadow[t] reaches the former,
-    // the remaining shadow casters of that type (in input order) are slotted
-    // into the non-shadow bucket with no shadow layer, so the shadow passes
-    // skip them and the receiver shades them unshadowed - exactly like a light
-    // with cast_shadow == false. Once cursor_nonshadow[t] reaches the latter,
-    // remaining lights of that type get no slot at all (index max(): the light
-    // buffer write skips them) and are not shaded.
-    std::size_t cursor_shadow   [4] = {0, 0, 0, 0};
-    std::size_t cursor_nonshadow[4] = {0, 0, 0, 0};
-    std::size_t point_shadow_cursor = 0;
-    for (std::size_t i = 0; i < lights.size(); ++i) {
-        const std::shared_ptr<erhe::scene::Light>& light = lights[i];
-        const std::size_t t        = light_type_index(light->type);
-        const bool        is_point = (light->type == erhe::scene::Light_type::point);
-        std::size_t slot              = std::numeric_limits<std::size_t>::max();
-        std::size_t shadow_slot       = std::numeric_limits<std::size_t>::max();
-        std::size_t point_shadow_slot = std::numeric_limits<std::size_t>::max();
-        if (!light->is_active()) {
-            // Inactive light (e.g. a zero-range point light, which reaches
-            // nowhere): assign no slot and advance no cursor, so the dense
-            // per-type arrays skip it entirely. All three indices stay max():
-            // the light buffer write skips it (index >= max_light_count) and the
-            // shadow loops skip it, so it contributes neither light nor shadow.
-            // This matches compute_light_layer_partition, which counts inactive
-            // lights in neither the shadow nor the non-shadow bucket.
-        } else if (light->cast_shadow && (cursor_shadow[t] < per_type_shadow[t])) {
-            slot = base_shadow[t] + cursor_shadow[t];
-            if (is_point) {
-                // Cube array gets its own dense index; shadow_slot stays max()
-                // so the 2D shadow pass / receiver 2D sampling skip this light.
-                point_shadow_slot = point_shadow_cursor;
-                ++point_shadow_cursor;
-            } else {
-                shadow_slot = base_shadow_dense[t] + cursor_shadow[t];
-            }
-            ++cursor_shadow[t];
-        } else if (cursor_nonshadow[t] < per_type_nonshadow[t]) {
-            // Non-shadow light, or a shadow caster beyond the shadow limit of
-            // its type: no shadow layer (shadow_index / point_shadow_index
-            // stay max()), so Shadow_renderer's render_passes.size() /
-            // cube_count gates skip it and the receiver treats it as
-            // non-shadow (it sits in the non-shadow suffix of its type).
-            slot = base_nonshadow[t] + cursor_nonshadow[t];
-            ++cursor_nonshadow[t];
-        } else {
-            // Beyond the unshadowed limit of its type: no slot, not shaded.
-        }
-        light_projection_transforms[i].index              = slot;
-        light_projection_transforms[i].shadow_index       = shadow_slot;
-        light_projection_transforms[i].point_shadow_index = point_shadow_slot;
+    for (std::size_t i = 0, end = point_shadow_slots.size(); i < end; ++i) {
+        light_projection_transforms[point_shadow_slots[i]].point_shadow_index = i;
     }
 
     SPDLOG_LOGGER_TRACE(
@@ -417,39 +337,13 @@ auto Light_projections::get_light_projection_transforms_for_light(const erhe::sc
     return nullptr;
 }
 
-auto Light_projections::compute_light_layer_partition(const std::span<const std::shared_ptr<erhe::scene::Light>>& lights) const -> Light_layer_partition
-{
-    ERHE_PROFILE_FUNCTION();
-
-    Light_layer_partition partition{};
-    for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
-        if (!light || !light->is_active()) {
-            continue;
-        }
-        const std::size_t t = light_type_index(light->type);
-        const erhe::scene::Light_projection_transforms* transforms = get_light_projection_transforms_for_light(light.get());
-        if (transforms == nullptr) {
-            continue;
-        }
-        if (transforms->is_shadow_mapped()) {
-            ++partition.per_type_shadow[t];
-        } else if (transforms->index != std::numeric_limits<std::size_t>::max()) {
-            ++partition.per_type_nonshadow[t];
-        }
-    }
-    return partition;
-}
-
 auto Light_buffer::update(
-    const std::span<const std::shared_ptr<erhe::scene::Light>>& lights,
-    const Light_projections*                                    light_projections,
-    const glm::vec3&                                            ambient_light,
-    const uint32_t                                              lightmap_flags
+    const Light_projections* light_projections,
+    const glm::vec3&         ambient_light,
+    const uint32_t           lightmap_flags
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
-
-    SPDLOG_LOGGER_TRACE(log_render, "lights.size() = {}, m_light_buffer.writer().write_offset = {}", lights.size(), m_light_buffer.writer().write_offset);
 
     const auto                   light_struct_size = m_light_interface.light_struct.get_size_bytes();
     const auto&                  offsets           = m_light_interface.offsets;
@@ -511,32 +405,25 @@ auto Light_buffer::update(
 
     write_offset += offsets.light_struct;
     const std::size_t light_array_offset = write_offset;
-    std::size_t max_light_index{0};
 
-    for (const auto& light : lights) {
-        ERHE_VERIFY(light);
-        erhe::scene::Node* node = light->get_node();
+    // The light UBO slots are the resolved light set's slots (Light_set /
+    // Light_projections::apply): transforms[i] shades slot i. Only lights
+    // that resolved into the set are written; the per-type shadow-mapped /
+    // total counts follow the resolution too (a light is shadow-mapped iff
+    // it got a shadow layer, not merely cast_shadow). Without light
+    // projections nothing is written and the counts stay 0.
+    const std::size_t light_count = (light_projections != nullptr)
+        ? std::min(light_projections->light_projection_transforms.size(), m_light_interface.max_light_count)
+        : std::size_t{0};
+    for (std::size_t light_index = 0; light_index < light_count; ++light_index) {
+        const erhe::scene::Light_projection_transforms& light_projection_transforms = light_projections->light_projection_transforms[light_index];
+        const erhe::scene::Light* const light = light_projection_transforms.light;
+        ERHE_VERIFY(light != nullptr);
+        ERHE_VERIFY(light_projection_transforms.index == light_index);
+        const erhe::scene::Node* const node = light->get_node();
         ERHE_VERIFY(node != nullptr);
 
-        // Inactive lights (e.g. a zero-range point light, which reaches nowhere)
-        // contribute nothing: they were assigned no slot in Light_projections::
-        // apply(), so they must not be counted here nor written to the buffer.
-        if (!light->is_active()) {
-            continue;
-        }
-
-        auto* light_projection_transforms = (light_projections != nullptr)
-            ? light_projections->get_light_projection_transforms_for_light(light.get())
-            : nullptr;
-        // Only lights that Light_projections::apply() gave a UBO slot are
-        // shaded (the Light_count_limits it ran with); shadow-mapped means it
-        // also got a shadow layer - not merely cast_shadow. This keeps the
-        // counts consistent with the slot layout.
-        if ((light_projection_transforms == nullptr) || (light_projection_transforms->index == std::numeric_limits<std::size_t>::max())) {
-            continue;
-        }
-        const bool shadow_mapped = light_projection_transforms->is_shadow_mapped();
-
+        const bool shadow_mapped = light_projection_transforms.is_shadow_mapped();
         switch (light->type) {
             case erhe::scene::Light_type::directional:
                 ++directional_light_count;
@@ -564,25 +451,19 @@ auto Light_buffer::update(
         using vec4 = glm::vec4;
         using mat4 = glm::mat4;
 
-        const mat4 texture_from_world   = light_projection_transforms->texture_from_world.get_matrix();
-        const mat4 world_from_texture   = light_projection_transforms->texture_from_world.get_inverse_matrix();
+        const mat4 texture_from_world   = light_projection_transforms.texture_from_world.get_matrix();
+        const mat4 world_from_texture   = light_projection_transforms.texture_from_world.get_inverse_matrix();
         const vec3 direction            = vec3{node->world_from_node() * vec4{0.0f, 0.0f, 1.0f, 0.0f}};
-        const vec3 position             = vec3{light_projection_transforms->world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+        const vec3 position             = vec3{light_projection_transforms.world_from_light_camera.get_matrix() * vec4{0.0f, 0.0f, 0.0f, 1.0f}};
         const vec4 radiance             = vec4{light->intensity * light->get_effective_color(), light->range};
         const auto inner_spot_cos       = std::cos(light->inner_spot_angle * 0.5f);
         const auto outer_spot_cos       = std::cos(light->outer_spot_angle * 0.5f);
         const vec4 position_inner_spot  = vec4{position, inner_spot_cos};
         const vec4 direction_outer_spot = vec4{glm::normalize(vec3{direction}), outer_spot_cos};
-        const auto light_index          = light_projection_transforms->index;
         const auto light_offset         = light_array_offset + light_index * light_struct_size;
 
-        if (light_index >= m_light_interface.max_light_count) {
-            continue;
-        }
-
         ERHE_VERIFY(light_offset < exact_byte_count);
-        max_light_index = std::max(max_light_index, light_index);
-        write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms->clip_from_world.get_matrix()));
+        write(light_gpu_data, light_offset + offsets.light.clip_from_world,              as_span(light_projection_transforms.clip_from_world.get_matrix()));
         write(light_gpu_data, light_offset + offsets.light.texture_from_world,           as_span(texture_from_world));
         write(light_gpu_data, light_offset + offsets.light.world_from_texture,           as_span(world_from_texture));
         write(light_gpu_data, light_offset + offsets.light.position_and_inner_spot_cos,  as_span(position_inner_spot));
@@ -593,20 +474,20 @@ auto Light_buffer::update(
         // the fragment shader reads the same value as the shadow texture
         // array_layer. Non-shadow lights get max() which the shader can
         // detect or which falls out of any reasonable layer range.
-        const uint32_t shadow_index_u32 = (light_projection_transforms->shadow_index <= std::numeric_limits<uint32_t>::max())
-            ? static_cast<uint32_t>(light_projection_transforms->shadow_index)
+        const uint32_t shadow_index_u32 = (light_projection_transforms.shadow_index <= std::numeric_limits<uint32_t>::max())
+            ? static_cast<uint32_t>(light_projection_transforms.shadow_index)
             : std::numeric_limits<uint32_t>::max();
         // packed.y = dense cube-array index for omnidirectional point-light
         // shadows (max() for non-point / non-shadow lights). The forward shader
         // reads it as the samplerCubeArray layer base for this light.
-        const uint32_t point_shadow_index_u32 = (light_projection_transforms->point_shadow_index <= std::numeric_limits<uint32_t>::max())
-            ? static_cast<uint32_t>(light_projection_transforms->point_shadow_index)
+        const uint32_t point_shadow_index_u32 = (light_projection_transforms.point_shadow_index <= std::numeric_limits<uint32_t>::max())
+            ? static_cast<uint32_t>(light_projection_transforms.point_shadow_index)
             : std::numeric_limits<uint32_t>::max();
         const uint32_t shadow_index_packed[4] = { shadow_index_u32, point_shadow_index_u32, 0u, 0u };
         write(light_gpu_data, light_offset + offsets.light.shadow_index_packed, as_span(shadow_index_packed));
     }
     // Fill in unused part of the array
-    size_t padding_light_offset = (max_light_index + 1);
+    size_t padding_light_offset = light_count;
     size_t padding_light_count = m_light_interface.max_light_count - padding_light_offset;
     memset(
         light_gpu_data.data() + light_array_offset + padding_light_offset * light_struct_size,

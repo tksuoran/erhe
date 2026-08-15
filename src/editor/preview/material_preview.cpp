@@ -212,15 +212,16 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
 
     const auto& layers = m_scene_root_shared->layers();
 
+    erhe::scene_renderer::Light_set& light_set = m_scene_root_shared->get_light_set();
+    light_set.resolve(layers.light()->lights, get_light_count_limits());
     m_light_projections.apply(
-        layers.light()->lights,
+        light_set,
         m_camera.get(),
         viewport,
         erhe::math::Viewport{},
         m_shadow_texture,
         get_reverse_depth(),
-        get_depth_range(),
-        get_light_count_limits()
+        get_depth_range()
     );
     erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};

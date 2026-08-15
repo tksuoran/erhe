@@ -245,7 +245,6 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     ERHE_VERIFY(parameters.texture);
 
     const auto& mesh_spans = parameters.mesh_spans;
-    const auto& lights     = parameters.lights;
 
     erhe::Item_filter shadow_filter{
         .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
@@ -319,7 +318,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         (parameters.point_cube_render_passes != nullptr) &&
         (parameters.point_shadow_viewport.width > 0) &&
         (parameters.point_shadow_viewport.height > 0);
-    Light_count_limits light_count_limits = parameters.light_count_limits;
+    Light_count_limits light_count_limits = parameters.light_set.get_light_count_limits();
     light_count_limits.per_type_shadow[0] = std::min(light_count_limits.per_type_shadow[0], parameters.render_passes.size());
     light_count_limits.per_type_shadow[1] = std::min(light_count_limits.per_type_shadow[1], parameters.render_passes.size() - light_count_limits.per_type_shadow[0]);
     light_count_limits.per_type_shadow[2] = have_point_cubes
@@ -328,14 +327,13 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections.apply(
-        parameters.lights,
+        parameters.light_set,
         parameters.view_camera,
         parameters.view_camera_viewport,
         parameters.light_camera_viewport,
         parameters.texture,
         parameters.reverse_depth,
         parameters.depth_range,
-        light_count_limits,
         parameters.conventions,
         caster_world_aabbs,
         receiver_world_aabbs,
@@ -364,7 +362,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     m_texture_heap->reset_heap(parameters.command_buffer);
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
     Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
-    Ring_buffer_range light_range    = m_light_buffer.update(lights, &parameters.light_projections, glm::vec3{0.0f});
+    Ring_buffer_range light_range    = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
 
     // log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());
 
@@ -379,10 +377,18 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         : m_pipelines[cull_index];
 
     erhe::graphics::Render_pass* previous_render_pass = nullptr;
-    for (const auto& light : lights) {
-        if (!light->casts_shadow()) {
+    for (const std::size_t light_slot : parameters.light_set.get_shadow_map_2d_slots()) {
+        const auto& light = parameters.light_set.get_lights()[light_slot];
+        if (
+            !light->casts_shadow() ||
+            (
+                (light->type != erhe::scene::Light_type::directional) &&
+                (light->type != erhe::scene::Light_type::spot)
+            )
+        ) {
             continue;
         }
+        
 
         auto* light_projection_transform = parameters.light_projections.get_light_projection_transforms_for_light(light.get());
         if (light_projection_transform == nullptr) {
@@ -559,7 +565,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         };
 
         erhe::graphics::Render_pass* previous_cube_render_pass = nullptr;
-        for (const auto& light : lights) {
+        for (const std::size_t light_slot : parameters.light_set.get_point_shadow_slots()) {
+            const auto& light = parameters.light_set.get_lights()[light_slot];
             if (!light->casts_shadow() || (light->type != erhe::scene::Light_type::point)) {
                 continue;
             }
@@ -608,9 +615,9 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 m_light_buffer.bind_light_buffer(encoder, light_range);
 
                 const glm::mat4 world_from_face = erhe::math::create_look_at(
-                    light_pos,                 // eye
+                    light_pos,                   // eye
                     light_pos + cube_look[face], // center
-                    cube_up[face]              // up
+                    cube_up[face]                // up
                 );
                 const erhe::scene::Trs_transform face_transform{world_from_face, glm::inverse(world_from_face)};
                 Ring_buffer_range camera_range = m_camera_buffer.update(

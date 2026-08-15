@@ -386,7 +386,6 @@ void Rendering_test::dispatch_subtest(
                         .camera            = m_camera.get(),
                         .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                         .light_projections = &m_light_projections,
-                        .lights            = lights,
                         .skins             = {},
                         .materials         = m_materials,
                         .reverse_depth     = true,
@@ -432,7 +431,6 @@ void Rendering_test::dispatch_subtest(
                         .camera            = m_camera.get(),
                         .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                         .light_projections = &m_light_projections,
-                        .lights            = lights,
                         .skins             = {},
                         .materials         = m_materials,
                         .reverse_depth     = true,
@@ -535,7 +533,6 @@ void Rendering_test::dispatch_subtest(
                     .camera            = m_camera.get(),
                     .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                     .light_projections = &m_light_projections,
-                    .lights            = lights,
                     .skins             = {},
                     .materials         = m_materials,
                     .reverse_depth     = true,
@@ -591,7 +588,6 @@ void Rendering_test::dispatch_subtest(
                     .camera            = m_camera.get(),
                     .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                     .light_projections = &m_light_projections,
-                    .lights            = lights,
                     .skins             = {},
                     .materials         = m_materials,
                     .reverse_depth     = true,
@@ -654,7 +650,6 @@ void Rendering_test::dispatch_subtest(
                     .camera            = m_camera.get(),
                     .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                     .light_projections = &m_light_projections,
-                    .lights            = lights,
                     .skins             = {},
                     .materials         = m_materials,
                     .reverse_depth     = true,
@@ -712,15 +707,17 @@ void Rendering_test::tick(erhe::graphics::Command_buffer& command_buffer)
     // the compute wide-line dispatch.
     const erhe::math::Viewport ref_tile = get_grid_tile_viewport(0, 0);
 
+    // No scene host hooks here: re-resolve the light set every frame.
+    m_light_set.invalidate();
+    m_light_set.resolve(lights, erhe::scene_renderer::Light_count_limits::uniform(0, 8)); // no shadow map -> no light is shadow-mapped
     m_light_projections.apply(
-        lights,
+        m_light_set,
         m_camera.get(),
         ref_tile,
         erhe::math::Viewport{},
         std::shared_ptr<erhe::graphics::Texture>{},
         true,
         conventions.native_depth_range,
-        erhe::scene_renderer::Light_count_limits::uniform(0, 8), // no shadow map -> no light is shadow-mapped
         conventions
     );
 

@@ -675,13 +675,8 @@ void Ray_trace_renderer::render(
     // for lights present in light_projections (their world/texture
     // transforms come from there), so with no projections available pass no
     // lights - ambient still applies.
-    erhe::scene::Light_layer* light_layer = scene_root.layers().light();
-    const std::span<const std::shared_ptr<erhe::scene::Light>> lights =
-        ((light_projections != nullptr) && (light_layer != nullptr))
-            ? std::span<const std::shared_ptr<erhe::scene::Light>>{light_layer->lights}
-            : std::span<const std::shared_ptr<erhe::scene::Light>>{};
     const glm::vec3 ambient_light = glm::vec3{scene_root.get_scene().ambient_light};
-    Ring_buffer_range light_range = m_light_buffer->update(lights, light_projections, ambient_light);
+    Ring_buffer_range light_range = m_light_buffer->update(light_projections, ambient_light);
 
     // Runtime knobs from Ray_trace_config, clamped to sane / compile-time
     // bounds (max_bounces must not exceed the shader's stack bound).

@@ -134,6 +134,7 @@
     "erhe.scene_renderer.material_buffer": "info",
     "erhe.scene_renderer.primitive_buffer": "info",
     "erhe.scene_renderer.render": "info",
+    "erhe.scene_renderer.light_set": "debug",
     "erhe.scene_renderer.shadow_renderer": "info",
     "erhe.scene_renderer.startup": "info",
     "erhe.ui.font": "info",

@@ -2055,8 +2055,6 @@ void Debug_visualizations::label(
 
 void Debug_visualizations::shadow_debug(const Render_context& render_context)
 {
-    const std::shared_ptr<Scene_root>& scene_root = render_context.scene_view.get_scene_root();
-    const Scene_layers&                layers     = scene_root->layers();
     ERHE_VERIFY(render_context.render_pass != nullptr);
     // The Texel_renderer is a single shared instance owned by Editor; the
     // shadow_debug shader program is owned by Programs. Both are reached via
@@ -2068,7 +2066,6 @@ void Debug_visualizations::shadow_debug(const Render_context& render_context)
         .render_pass       = *render_context.render_pass,
         .camera            = render_context.camera,
         .light_projections = render_context.scene_view.get_light_projections(),
-        .lights            = layers.light()->lights,
         .viewport          = render_context.viewport
     };
     render_context.app_context.texel_renderer->render(parameters);

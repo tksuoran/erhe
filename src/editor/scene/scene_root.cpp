@@ -1299,6 +1299,7 @@ void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light
     if (m_scene) {
         m_scene->register_light(light);
     }
+    m_light_set.invalidate();
 }
 
 void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& light)
@@ -1306,6 +1307,19 @@ void Scene_root::unregister_light(const std::shared_ptr<erhe::scene::Light>& lig
     if (m_scene) {
         m_scene->unregister_light(light);
     }
+    m_light_set.invalidate();
+}
+
+// Light hook: any thread, mark stale only (Scene_host contract).
+void Scene_root::on_light_changed(const std::shared_ptr<erhe::scene::Light>& light)
+{
+    static_cast<void>(light);
+    m_light_set.invalidate();
+}
+
+auto Scene_root::get_light_set() -> erhe::scene_renderer::Light_set&
+{
+    return m_light_set;
 }
 
 // Draw list hooks: any thread, enqueue only (Scene_host contract).
@@ -1934,35 +1948,6 @@ auto Scene_root::camera_combo(
         selected_camera = cameras[selected_camera_index];
     }
     return camera_changed;
-}
-
-namespace {
-
-[[nodiscard]] auto sort_value(const Light::Type light_type) -> int
-{
-    switch (light_type) {
-        //using enum erhe::scene::Light_type;
-        case erhe::scene::Light_type::directional: return 0;
-        case erhe::scene::Light_type::point:       return 1;
-        case erhe::scene::Light_type::spot:        return 2;
-        default: return 3;
-    }
-}
-
-class Light_comparator
-{
-public:
-    [[nodiscard]] inline auto operator()(const std::shared_ptr<Light>& lhs, const std::shared_ptr<Light>& rhs) -> bool
-    {
-        return sort_value(lhs->type) < sort_value(rhs->type);
-    }
-};
-
-}
-
-void Scene_root::sort_lights()
-{
-    std::sort(m_layers.light()->lights.begin(), m_layers.light()->lights.end(), Light_comparator());
 }
 
 void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)

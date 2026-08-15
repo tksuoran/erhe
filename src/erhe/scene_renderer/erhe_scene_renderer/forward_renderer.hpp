@@ -104,7 +104,6 @@ public:
         float                                                              exposure         {1.0f};
         const glm::vec3                                                    ambient_light    {0.0f};
         const Light_projections*                                           light_projections{nullptr};
-        const std::span<const std::shared_ptr<erhe::scene::Light>>&        lights           {};
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins            {};
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials        {};
         uint32_t                                                           shader_key_boolean_mask_force_enable {0};

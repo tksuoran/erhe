@@ -1,4 +1,5 @@
 {
+    "_version": 2,
     "camera_controls": {
         "invert_x": false,
         "invert_y": false,
@@ -303,6 +304,87 @@
             "scene_and_camera": {
                 "scene_name": "Floor Only Scene",
                 "camera_name": "Camera A",
+                "shadow_fit_override_camera_name": "",
+                "shader_debug": 0,
+                "renderer_choice": 0
+            }
+        },
+        {
+            "name": "Viewport_scene_view 0",
+            "debug_visualizations": {
+                "lights": "off",
+                "cameras": "off",
+                "layouts": "off",
+                "skins": "off",
+                "node_axises": "off",
+                "physics": "off",
+                "raytrace": "off",
+                "vertex_labels": "off",
+                "facet_labels": "off",
+                "edge_labels": "off",
+                "corner_labels": "off",
+                "world_axes": false,
+                "shadow_debug": false,
+                "shadow_fit_debug": false,
+                "shadow_fit_casters": false,
+                "shadow_fit_caster_hull": false,
+                "shadow_fit_view_frustum": false,
+                "shadow_fit_receivers": false,
+                "shadow_fit_receiver_hull": false,
+                "shadow_fit_receiver_hull_unclipped": false,
+                "shadow_fit_volume_planes": false,
+                "shadow_fit_far_plane_hull": false,
+                "shadow_fit_points": false,
+                "shadow_fit_light_plane_hull": false,
+                "shadow_fit_box_fit": false,
+                "shadow_fit_box_frustum": false,
+                "shadow_fit_box_cap": false,
+                "shadow_fit_box_final": false,
+                "selection": true,
+                "selection_bounding_points": false,
+                "selection_box": false,
+                "selection_sphere": false,
+                "selection_parts": false,
+                "selection_convex_hull": false,
+                "selection_convex_hull_projected": false,
+                "debug_convex_hull": false,
+                "convex_hull_edge": 0,
+                "gap": 0.003,
+                "tool_hide": false,
+                "frustum_box": false,
+                "frustum_planes": false,
+                "camera_cull_test": false,
+                "mesh_primitive_boxes": false,
+                "bone_boxes": false,
+                "max_labels": 400,
+                "vertex_positions": false
+            },
+            "viewport_config": {
+                "render_style_not_selected": {
+                    "polygon_fill": true,
+                    "edge_lines": false,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "render_style_selected": {
+                    "polygon_fill": true,
+                    "edge_lines": false,
+                    "solid_wireframe": false,
+                    "polygon_centroids": false,
+                    "corner_points": false
+                },
+                "debug_visualizations": {
+                    "light": "selected",
+                    "camera": "selected"
+                },
+                "selection_bounding_box": false,
+                "selection_bounding_sphere": false,
+                "shadow_mode": "shadow_maps"
+            },
+            "scene_and_camera": {
+                "scene_name": "bistro.gltf",
+                "camera_name": "Camera",
                 "shadow_fit_override_camera_name": "",
                 "shader_debug": 0,
                 "renderer_choice": 0
@@ -639,6 +721,7 @@
     },
     "threading": { "thread_count": 0 },
     "post_processing": true,
+    "use_draw_lists": true,
     "geometry_edit_mode": "fork",
     "transform_mode": "extrude_group_normal",
     "quit_after_frames": 0

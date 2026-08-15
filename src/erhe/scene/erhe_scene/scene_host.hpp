@@ -46,6 +46,12 @@ public:
     virtual void on_mesh_primitives_changed(const std::shared_ptr<Mesh>& mesh) = 0;
     virtual void on_mesh_material_changed  (const std::shared_ptr<Mesh>& mesh) = 0;
     virtual void on_mesh_flags_changed     (const std::shared_ptr<Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) = 0;
+
+    // Light change notification (Light::notify_changed()): a property that
+    // decides how the light is shaded / shadow-mapped changed (type,
+    // cast_shadow, range - anything Light_set::resolve() reads). Any thread;
+    // implementations only mark state stale (Light_set::invalidate()).
+    virtual void on_light_changed          (const std::shared_ptr<Light>& light) = 0;
 };
 
 } // namespace erhe::scene

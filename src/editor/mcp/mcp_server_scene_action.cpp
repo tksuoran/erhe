@@ -2344,6 +2344,12 @@ auto Mcp_server::action_edit_light(const json& args) -> std::string
         }
     }
 
+    // type / cast_shadow / range decide how the light is shaded and shadow-
+    // mapped: re-resolve the scene's light set.
+    if (changed.contains("type") || changed.contains("cast_shadow") || changed.contains("range")) {
+        light->notify_changed();
+    }
+
     return make_json_content({
         {"light_id",   light->get_id()},
         {"light_name", light->get_name()},

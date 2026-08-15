@@ -44,6 +44,7 @@ namespace erhe::scene_renderer {
 
 class Draw_indirect_buffer;
 class Draw_list_scene;
+class Light_set;
 class Mesh_memory;
 class Program_interface;
 class Render_bucket;
@@ -103,7 +104,12 @@ public:
                 const std::shared_ptr<erhe::scene::Mesh>
             >
         >&                                                                 mesh_spans;
-        const std::span<const std::shared_ptr<erhe::scene::Light>>         lights;
+        // The scene's resolved light set (Light_set::resolve() with the
+        // active Light_count_limits): the shadow-mapped slots are rendered,
+        // one 2D layer / render pass per shadow_map_2d_slots entry (must not
+        // exceed render_passes.size()) and one cube per point_shadow_slots
+        // entry (6 passes each in point_cube_render_passes).
+        const Light_set&                                                   light_set;
         const std::span<const std::shared_ptr<erhe::scene::Skin>>&         skins{};
         const std::span<const std::shared_ptr<erhe::primitive::Material>>& materials{};
         Light_projections&                                                 light_projections;
@@ -114,16 +120,6 @@ public:
         // Optional tight directional shadow frustum fit settings;
         // nullptr gives the legacy stable fit. Must outlive the render call.
         const erhe::scene::Shadow_frustum_fit_settings*                    fit_settings{nullptr};
-
-        // Per light type limits on how many lights are shadow-mapped / shaded
-        // without a shadow map (Light_count_limits), from the active graphics
-        // preset. The shadow limits must match the shadow map allocations:
-        // render_passes.size() >= shadow_map_2d_layer_count() and
-        // point_cube_render_passes->size() >= 6 * point_shadow_cube_count()
-        // (the loops below also gate on the pass counts). Light_projections::
-        // apply() hands out slots / shadow layers with these; lights beyond
-        // the limits are not shaded.
-        Light_count_limits                                                 light_count_limits{};
 
         // Rasterizer (hardware) depth bias applied while rendering the shadow
         // map -- a caster-side acne / peter-panning control, orthogonal to the

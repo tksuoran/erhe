@@ -195,6 +195,7 @@ public:
     std::shared_ptr<erhe::scene::Mesh>                          m_stencil_sphere;
     std::vector<std::shared_ptr<erhe::primitive::Material>>     m_materials;
     erhe::scene_renderer::Light_projections                     m_light_projections;
+    erhe::scene_renderer::Light_set                             m_light_set;
 
     // 3D scene pipeline
     std::unique_ptr<erhe::graphics::Base_render_pipeline>       m_standard_render_pipeline;

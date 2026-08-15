@@ -299,7 +299,6 @@ void Rendering_test::render_stencil_cell(
                     .camera            = m_camera.get(),
                     .ambient_light     = glm::vec3{0.3f, 0.3f, 0.3f},
                     .light_projections = &m_light_projections,
-                    .lights            = lights,
                     .skins             = {},
                     .materials         = m_materials,
                     .reverse_depth     = true,
