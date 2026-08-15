@@ -8,10 +8,11 @@ namespace erhe::scene_renderer {
 
 // One primitive inside one draw list (doc/draw_list_renderer_requirements.md
 // R15/R16). Fixed-size value type; the hot path iterates a contiguous vector
-// of these. Everything shared by the list lives in Draw_list_key; everything
-// that varies per frame (node transform, material GPU slot, joint slot,
-// lightmap scale/offset) is read live from the Mesh / Mesh_primitive at
-// upload time through object_index (R8a, R12b) and is NOT stored here.
+// of these. Everything shared by the list lives in Draw_list_key; the
+// per-primitive GPU record (node transform, material GPU slot, joint slot,
+// lightmap scale/offset, ...) lives in the parallel
+// Draw_list::primitive_records (doc/draw_list_performance_improvements.md),
+// not here.
 class Draw_list_entry
 {
 public:

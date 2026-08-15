@@ -21,6 +21,8 @@
 
 #include <glm/gtx/matrix_operation.hpp>
 
+#include <cstring>
+
 namespace erhe::scene_renderer {
 
 Primitive_interface::Primitive_interface(erhe::graphics::Device& graphics_device, const int max_primitive_count)
@@ -444,16 +446,55 @@ auto Primitive_buffer::update(
     std::size_t                       write_offset       = 0;
     std::size_t                       primitive_count    = 0;
 
-    const erhe::primitive::Primitive_mode primitive_mode = draw_list.key.primitive_mode;
-    for (std::size_t i = begin; i < end; ++i) {
-        const Draw_list_entry& entry = draw_list.entries[i];
-        if (!filter(entry.flag_bits)) {
-            continue;
+    // Fast path (doc/draw_list_performance_improvements.md): the draw list
+    // owns a complete GPU-layout record per entry; copy it and patch only the
+    // pass-dependent color / size. Settings that need per-mesh evaluation
+    // (id offsets, face-id bases, mesh point size / line width) take the
+    // generic per-entry writer below; no draw-list-routed pass uses them.
+    const bool fast_path =
+        (settings.face_id_base_provider == nullptr) &&
+        (settings.color_source != Primitive_color_source::id_offset) &&
+        (settings.size_source == Primitive_size_source::constant_size);
+    if (fast_path) {
+        ERHE_VERIFY(draw_list.primitive_records.size() == draw_list.entries.size() * entry_size);
+        const std::byte* records = draw_list.primitive_records.data();
+        std::byte*       dst     = primitive_gpu_data.data();
+        const auto&      offsets = m_primitive_interface.offsets;
+        constexpr glm::vec4 wireframe_color{1.0f, 1.0f, 1.0f, 1.0f};
+        const bool  wireframe = (settings.color_source == Primitive_color_source::mesh_wireframe_color);
+        const float size      = settings.constant_size;
+        for (std::size_t i = begin; i < end; ++i) {
+            const Draw_list_entry& entry = draw_list.entries[i];
+            if (!filter(entry.flag_bits)) {
+                continue;
+            }
+            std::memcpy(dst + write_offset, records + i * entry_size, entry_size);
+            // Same selection as write_primitive(): Item_base::is_selected() /
+            // is_hovered() on the mirrored flag word.
+            const bool selected = (entry.flag_bits & erhe::Item_flags::selected) != 0u;
+            const bool hovered  = (entry.flag_bits & (erhe::Item_flags::hovered_in_viewport | erhe::Item_flags::hovered_in_item_tree)) != 0u;
+            const glm::vec4& color = wireframe
+                ? wireframe_color
+                : (selected || !hovered)
+                    ? settings.constant_color0
+                    : settings.constant_color1;
+            std::memcpy(dst + write_offset + offsets.color, &color, sizeof(glm::vec4));
+            std::memcpy(dst + write_offset + offsets.size,  &size,  sizeof(float));
+            write_offset += entry_size;
+            ++primitive_count;
         }
-        erhe::scene::Mesh* mesh = draw_list_scene.get_object_mesh(entry.object_index);
-        ERHE_VERIFY(mesh != nullptr);
-        write_primitive(*mesh, entry.mesh_primitive_index, primitive_mode, settings, false, primitive_gpu_data, write_offset);
-        ++primitive_count;
+    } else {
+        const erhe::primitive::Primitive_mode primitive_mode = draw_list.key.primitive_mode;
+        for (std::size_t i = begin; i < end; ++i) {
+            const Draw_list_entry& entry = draw_list.entries[i];
+            if (!filter(entry.flag_bits)) {
+                continue;
+            }
+            erhe::scene::Mesh* mesh = draw_list_scene.get_object_mesh(entry.object_index);
+            ERHE_VERIFY(mesh != nullptr);
+            write_primitive(*mesh, entry.mesh_primitive_index, primitive_mode, settings, false, primitive_gpu_data, write_offset);
+            ++primitive_count;
+        }
     }
 
     buffer_range.bytes_written(write_offset);

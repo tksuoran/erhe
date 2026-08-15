@@ -2891,6 +2891,7 @@ public:
         m_app_context.shadow_renderer          = m_shadow_renderer       .get();
         m_app_context.texel_renderer           = m_texel_renderer        .get();
         m_app_context.shader_variant_cache     = m_shader_variant_cache  .get();
+        m_app_context.program_interface        = m_program_interface     .get();
         m_app_context.context_window           = m_window                .get();
         m_app_context.brdf_slice               = m_brdf_slice            .get();
         m_app_context.brush_tool               = m_brush_tool            .get();

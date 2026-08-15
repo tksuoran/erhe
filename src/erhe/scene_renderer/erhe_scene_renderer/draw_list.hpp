@@ -4,6 +4,7 @@
 #include "erhe_scene_renderer/draw_list_key.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -65,6 +66,15 @@ class Draw_list
 public:
     Draw_list_key                                     key;
     std::vector<Draw_list_entry>                      entries;
+    // Normative CPU copy of the per-primitive GPU record of every entry
+    // (doc/draw_list_performance_improvements.md): entries.size() records of
+    // Draw_list_scene::get_primitive_record_stride() bytes each, in the exact
+    // Primitive_interface::primitive_struct layout, parallel to entries
+    // (swap-removed together). Written at registration and kept current by
+    // the transform / refresh hooks and the draw-time GPU-slot sync;
+    // Primitive_buffer::update(Draw_list, ...) memcpys them per pass and only
+    // patches the pass-dependent color / size fields.
+    std::vector<std::byte>                            primitive_records;
 
     std::vector<Draw_list_color_resolution>           color_resolutions;
     std::array<

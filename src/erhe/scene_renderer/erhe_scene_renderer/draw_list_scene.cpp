@@ -20,12 +20,15 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/matrix_operation.hpp>
 
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 
 namespace erhe::scene_renderer {
@@ -199,13 +202,17 @@ auto Color_environment::make_environment_key() const -> Shader_key
 Draw_list_scene::Draw_list_scene(
     Mesh_memory&                    mesh_memory,
     Shader_variant_cache&           shader_variant_cache,
+    const Primitive_interface&      primitive_interface,
     const std::span<const uint32_t> multiview_view_counts
 )
-    : m_mesh_memory          {mesh_memory}
-    , m_shader_variant_cache {shader_variant_cache}
-    , m_multiview_view_counts{multiview_view_counts.begin(), multiview_view_counts.end()}
-    , m_owner_thread_id      {std::this_thread::get_id()}
+    : m_mesh_memory            {mesh_memory}
+    , m_shader_variant_cache   {shader_variant_cache}
+    , m_primitive_interface    {primitive_interface}
+    , m_primitive_record_stride{primitive_interface.primitive_struct.get_size_bytes()}
+    , m_multiview_view_counts  {multiview_view_counts.begin(), multiview_view_counts.end()}
+    , m_owner_thread_id        {std::this_thread::get_id()}
 {
+    ERHE_VERIFY(m_primitive_record_stride > 0);
 }
 
 Draw_list_scene::~Draw_list_scene() noexcept = default;
@@ -238,8 +245,10 @@ void Draw_list_scene::release_object(const uint32_t object_index)
     Draw_list_object& object = m_objects[object_index];
     ERHE_VERIFY(object.alive);
     ERHE_VERIFY(object.locations.empty());
-    object.info  = Draw_list_object_create_info{};
-    object.alive = false;
+    object.info             = Draw_list_object_create_info{};
+    object.transform_serial = 0u;
+    object.joint_slot       = 0u;
+    object.alive            = false;
     ++object.generation;
     m_free_object_indices.push_back(object_index);
 }
@@ -316,6 +325,9 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             );
             const bool first_entry = draw_list.entries.empty();
             draw_list.entries.push_back(entry);
+            ERHE_VERIFY(draw_list.primitive_records.size() == (draw_list.entries.size() - 1) * m_primitive_record_stride);
+            draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
+            write_entry_record(object, entry, get_record(object.locations.back()));
 
             // R17: resolve at registration (color: every enumerated view
             // config, once the environment is known; shadow sub-variants
@@ -348,8 +360,197 @@ void Draw_list_scene::remove_entry(const Draw_list_entry_location& location)
         }
         ERHE_VERIFY(patched);
         draw_list.entries[location.entry_index] = moved;
+        std::memcpy(
+            draw_list.primitive_records.data() + static_cast<std::size_t>(location.entry_index) * m_primitive_record_stride,
+            draw_list.primitive_records.data() + static_cast<std::size_t>(last_index)           * m_primitive_record_stride,
+            m_primitive_record_stride
+        );
     }
     draw_list.entries.pop_back();
+    draw_list.primitive_records.resize(draw_list.entries.size() * m_primitive_record_stride);
+}
+
+// --- Primitive records ---------------------------------------------------------
+
+auto Draw_list_scene::get_record(const Draw_list_entry_location& location) -> std::byte*
+{
+    Draw_list& draw_list = m_draw_lists[location.draw_list_index];
+    ERHE_VERIFY(location.entry_index < draw_list.entries.size());
+    ERHE_VERIFY(draw_list.primitive_records.size() == draw_list.entries.size() * m_primitive_record_stride);
+    return draw_list.primitive_records.data() + static_cast<std::size_t>(location.entry_index) * m_primitive_record_stride;
+}
+
+namespace {
+
+// Same math as Primitive_buffer::write_primitive(): the normal matrix is the
+// transposed adjugate, mirrored for negative-determinant nodes (the node
+// flag is maintained by Node::update_transform()).
+void write_transform_fields(std::byte* record, const Primitive_struct& offsets, const erhe::scene::Node& node)
+{
+    const glm::mat4 world_from_node      = node.world_from_node();
+    const bool      negative_determinant = (node.get_flag_bits() & erhe::Item_flags::negative_determinant) == erhe::Item_flags::negative_determinant;
+    constexpr glm::mat4 invert_normal{
+        -1.0f,  0.0f,  0.0f, 0.0f,
+         0.0f, -1.0f,  0.0f, 0.0f,
+         0.0f,  0.0f, -1.0f, 0.0f,
+         0.0f,  0.0f,  0.0f, 1.0f
+    };
+    const glm::mat4 normal_transform_ = glm::transpose(glm::adjugate(world_from_node));
+    const glm::mat4 normal_transform  = negative_determinant
+        ? invert_normal * normal_transform_
+        : normal_transform_;
+    std::memcpy(record + offsets.world_from_node,  &world_from_node,  sizeof(glm::mat4));
+    std::memcpy(record + offsets.normal_transform, &normal_transform, sizeof(glm::mat4));
+}
+
+void write_slot_fields(std::byte* record, const Primitive_struct& offsets, const erhe::scene::Mesh& mesh, const erhe::scene::Mesh_primitive& mesh_primitive)
+{
+    const erhe::primitive::Material* material         = mesh_primitive.material.get();
+    const uint32_t                   material_index   = (material != nullptr) ? material->material_buffer_index : 0u;
+    const std::shared_ptr<erhe::scene::Skin>& skin    = mesh.skin;
+    const float                      skinning_factor  = skin ? 1.0f : 0.0f;
+    const uint32_t                   base_joint_index = skin ? skin->skin_data.joint_buffer_index : 0u;
+    std::memcpy(record + offsets.material_index,   &material_index,   sizeof(uint32_t));
+    std::memcpy(record + offsets.skinning_factor,  &skinning_factor,  sizeof(float));
+    std::memcpy(record + offsets.base_joint_index, &base_joint_index, sizeof(uint32_t));
+}
+
+} // anonymous namespace
+
+void Draw_list_scene::write_entry_record(const Draw_list_object& object, const Draw_list_entry& entry, std::byte* record) const
+{
+    const Primitive_struct&  offsets = m_primitive_interface.offsets;
+    const erhe::scene::Mesh* mesh    = object.info.mesh.get();
+    ERHE_VERIFY(mesh != nullptr);
+    const erhe::scene::Node* node = mesh->get_node();
+    ERHE_VERIFY(node != nullptr);
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+    ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
+    const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
+
+    std::memset(record, 0, m_primitive_record_stride);
+    write_transform_fields(record, offsets, *node);
+    // color / size: pass-dependent, patched by Primitive_buffer::update() per
+    // draw; zero here.
+    std::memcpy(record + offsets.lightmap_scale_offset, &mesh_primitive.lightmap_uv_scale_offset, sizeof(glm::vec4));
+    write_slot_fields(record, offsets, *mesh, mesh_primitive);
+    std::memcpy(record + offsets.base_vertex, &entry.base_vertex, sizeof(uint32_t));
+}
+
+void Draw_list_scene::write_object_transform(const uint32_t object_index)
+{
+    Draw_list_object&        object = m_objects[object_index];
+    const erhe::scene::Mesh* mesh   = object.info.mesh.get();
+    ERHE_VERIFY(mesh != nullptr);
+    const erhe::scene::Node* node = mesh->get_node();
+    ERHE_VERIFY(node != nullptr);
+    const Primitive_struct& offsets = m_primitive_interface.offsets;
+    for (const Draw_list_entry_location& location : object.locations) {
+        write_transform_fields(get_record(location), offsets, *node);
+    }
+    object.transform_serial = node->node_data.transforms.world_from_node_serial;
+}
+
+void Draw_list_scene::write_object_gpu_slots(const uint32_t object_index)
+{
+    Draw_list_object&        object = m_objects[object_index];
+    const erhe::scene::Mesh* mesh   = object.info.mesh.get();
+    ERHE_VERIFY(mesh != nullptr);
+    const Primitive_struct& offsets = m_primitive_interface.offsets;
+    const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
+    for (const Draw_list_entry_location& location : object.locations) {
+        const Draw_list_entry& entry = m_draw_lists[location.draw_list_index].entries[location.entry_index];
+        ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
+        write_slot_fields(get_record(location), offsets, *mesh, mesh_primitives[entry.mesh_primitive_index]);
+    }
+    object.joint_slot = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
+}
+
+void Draw_list_scene::refresh_object_records(const uint32_t object_index)
+{
+    Draw_list_object& object = m_objects[object_index];
+    for (const Draw_list_entry_location& location : object.locations) {
+        const Draw_list_entry& entry = m_draw_lists[location.draw_list_index].entries[location.entry_index];
+        write_entry_record(object, entry, get_record(location));
+    }
+    const erhe::scene::Mesh* mesh = object.info.mesh.get();
+    const erhe::scene::Node* node = (mesh != nullptr) ? mesh->get_node() : nullptr;
+    object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
+    object.joint_slot       = ((mesh != nullptr) && mesh->skin) ? mesh->skin->skin_data.joint_buffer_index : 0u;
+    ++m_refresh_count;
+}
+
+void Draw_list_scene::update_object_transform(const uint32_t object_index)
+{
+    Draw_list_object&        object = m_objects[object_index];
+    const erhe::scene::Mesh* mesh   = object.info.mesh.get();
+    const erhe::scene::Node* node   = (mesh != nullptr) ? mesh->get_node() : nullptr;
+    if (node == nullptr) {
+        return;
+    }
+    // Several transform updates of one node within a frame (tools, physics
+    // writeback, subtree propagation) enqueue several ops; the serial makes
+    // the rewrite happen once. Serial 0 means "update needed": never skip.
+    const uint64_t serial = node->node_data.transforms.world_from_node_serial;
+    if ((serial != 0u) && (serial == object.transform_serial)) {
+        return;
+    }
+    write_object_transform(object_index);
+    ++m_transform_update_count;
+}
+
+void Draw_list_scene::sync_gpu_slots()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Material / joint GPU slots are assigned by the drawing renderer's
+    // Material_buffer::update() / Joint_buffer::update() (R8a) right before
+    // this is called from draw_color() / draw_shadow(). Compare the few
+    // distinct watched materials and the skinned objects against the values
+    // the records were written from; only a scene material-list / skin-list
+    // change makes them differ.
+    std::vector<const erhe::primitive::Material*> changed_materials;
+    for (std::unordered_map<const erhe::primitive::Material*, Material_watch>::value_type& entry : m_material_watches) {
+        const uint32_t slot = entry.first->material_buffer_index;
+        if (slot != entry.second.slot) {
+            entry.second.slot = slot;
+            changed_materials.push_back(entry.first);
+        }
+    }
+    if (!changed_materials.empty()) {
+        for (std::size_t i = 0, end = m_objects.size(); i < end; ++i) {
+            const Draw_list_object& object = m_objects[i];
+            if (!object.alive) {
+                continue;
+            }
+            bool uses_changed = false;
+            for (const erhe::primitive::Material* material : object.materials) {
+                for (const erhe::primitive::Material* changed : changed_materials) {
+                    if (material == changed) {
+                        uses_changed = true;
+                        break;
+                    }
+                }
+                if (uses_changed) {
+                    break;
+                }
+            }
+            if (uses_changed) {
+                write_object_gpu_slots(static_cast<uint32_t>(i));
+                ++m_slot_sync_count;
+            }
+        }
+    }
+    for (const uint32_t object_index : m_skinned_object_indices) {
+        const Draw_list_object& object = m_objects[object_index];
+        ERHE_VERIFY(object.alive);
+        const erhe::scene::Mesh* mesh = object.info.mesh.get();
+        const uint32_t joint_slot = ((mesh != nullptr) && mesh->skin) ? mesh->skin->skin_data.joint_buffer_index : 0u;
+        if (joint_slot != object.joint_slot) {
+            write_object_gpu_slots(object_index);
+            ++m_slot_sync_count;
+        }
+    }
 }
 
 void Draw_list_scene::remove_entries(const uint32_t object_index)
@@ -396,6 +597,16 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
 
     add_entries(object_index);
     watch_object_materials(object_index);
+    // add_entries() wrote the records from the live node / slots; remember
+    // what they were written from for the transform dedup / slot sync.
+    {
+        const erhe::scene::Node* node = mesh->get_node();
+        object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
+        object.joint_slot       = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
+        if (object.mobility == Draw_mobility::skinned) {
+            m_skinned_object_indices.push_back(object_index);
+        }
+    }
 
     return Draw_list_object_id{object_index, object.generation};
 }
@@ -423,6 +634,7 @@ void Draw_list_scene::watch_object_materials(const uint32_t object_index)
         Material_watch& watch = m_material_watches[material];
         if (watch.use_count == 0) {
             watch.identity_hash = material_identity_hash(material);
+            watch.slot          = material->material_buffer_index;
         }
         ++watch.use_count;
     }
@@ -508,6 +720,11 @@ void Draw_list_scene::unregister_object(const Draw_list_object_id id)
     unwatch_object_materials(id.index);
     m_object_index_by_mesh.erase(object.info.mesh.get());
     --m_alive_object_count;
+    if (object.mobility == Draw_mobility::skinned) {
+        const std::vector<uint32_t>::iterator it = std::find(m_skinned_object_indices.begin(), m_skinned_object_indices.end(), id.index);
+        ERHE_VERIFY(it != m_skinned_object_indices.end());
+        m_skinned_object_indices.erase(it);
+    }
     release_object(id.index);
     // Empty draw lists are intentionally kept (see header).
 }
@@ -565,6 +782,7 @@ void Draw_list_scene::rebuild_all()
     // lists left empty by unregistration).
     m_draw_lists.clear();
     m_draw_list_index_by_key.clear();
+    m_skinned_object_indices.clear();
     for (std::size_t i = 0, end = m_objects.size(); i < end; ++i) {
         Draw_list_object& object = m_objects[i];
         if (!object.alive) {
@@ -578,6 +796,12 @@ void Draw_list_scene::rebuild_all()
         add_entries(static_cast<uint32_t>(i));
         unwatch_object_materials(static_cast<uint32_t>(i));
         watch_object_materials(static_cast<uint32_t>(i));
+        const erhe::scene::Node* node = mesh->get_node();
+        object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
+        object.joint_slot       = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
+        if (object.mobility == Draw_mobility::skinned) {
+            m_skinned_object_indices.push_back(static_cast<uint32_t>(i));
+        }
     }
 }
 
@@ -675,6 +899,18 @@ void Draw_list_scene::enqueue_set_flags(const std::shared_ptr<erhe::scene::Mesh>
     m_pending.push_back(Pending_op{.kind = Pending_op::Kind::set_flags, .mesh = mesh, .flag_bits = item_flag_bits});
 }
 
+void Draw_list_scene::enqueue_transform_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    const std::lock_guard<std::mutex> lock{m_pending_mutex};
+    m_pending.push_back(Pending_op{.kind = Pending_op::Kind::transform, .mesh = mesh});
+}
+
+void Draw_list_scene::enqueue_refresh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    const std::lock_guard<std::mutex> lock{m_pending_mutex};
+    m_pending.push_back(Pending_op{.kind = Pending_op::Kind::refresh, .mesh = mesh});
+}
+
 auto Draw_list_scene::get_pending_count() const -> std::size_t
 {
     const std::lock_guard<std::mutex> lock{m_pending_mutex};
@@ -733,6 +969,20 @@ void Draw_list_scene::flush_pending()
 #endif
                 }
                 set_object_flags(id, op.flag_bits);
+                break;
+            }
+            case Pending_op::Kind::transform: {
+                const Draw_list_object_id id = find_object(op.mesh.get());
+                if (id.is_valid()) {
+                    update_object_transform(id.index);
+                }
+                break;
+            }
+            case Pending_op::Kind::refresh: {
+                const Draw_list_object_id id = find_object(op.mesh.get());
+                if (id.is_valid()) {
+                    refresh_object_records(id.index);
+                }
                 break;
             }
             default: {
@@ -988,6 +1238,7 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
     ERHE_VERIFY(parameters.render_pass != nullptr);
 
     set_color_environment(parameters.environment);
+    sync_gpu_slots();
 
     const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
     const std::span<const Draw_blending> classes =
@@ -1062,6 +1313,7 @@ auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> D
     Draw_statistics statistics{};
     ERHE_VERIFY(parameters.render_pass != nullptr);
     ERHE_VERIFY(parameters.color_blend != nullptr);
+    sync_gpu_slots();
 
     for (std::size_t list_index = 0, list_end = m_draw_lists.size(); list_index < list_end; ++list_index) {
         Draw_list& draw_list = m_draw_lists[list_index];

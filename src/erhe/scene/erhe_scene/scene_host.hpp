@@ -43,9 +43,17 @@ public:
     // on_mesh_material_changed: a primitive's material was reassigned
     // (Mesh::set_primitive_material).
     // on_mesh_flags_changed: the mesh Item_flags word changed.
-    virtual void on_mesh_primitives_changed(const std::shared_ptr<Mesh>& mesh) = 0;
-    virtual void on_mesh_material_changed  (const std::shared_ptr<Mesh>& mesh) = 0;
-    virtual void on_mesh_flags_changed     (const std::shared_ptr<Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) = 0;
+    // on_mesh_transform_changed: the node the mesh is attached to got a new
+    // world transform (Mesh::handle_node_transform_update; fires for every
+    // mesh under a moving subtree, possibly several times per frame).
+    // on_mesh_primitive_data_changed: a per-primitive upload value that does
+    // not affect draw list identity changed
+    // (Mesh::set_primitive_lightmap_uv_scale_offset).
+    virtual void on_mesh_primitives_changed     (const std::shared_ptr<Mesh>& mesh) = 0;
+    virtual void on_mesh_material_changed       (const std::shared_ptr<Mesh>& mesh) = 0;
+    virtual void on_mesh_flags_changed          (const std::shared_ptr<Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) = 0;
+    virtual void on_mesh_transform_changed      (const std::shared_ptr<Mesh>& mesh) = 0;
+    virtual void on_mesh_primitive_data_changed (const std::shared_ptr<Mesh>& mesh) = 0;
 
     // Light change notification (Light::notify_changed()): a property that
     // decides how the light is shaded / shadow-mapped changed (type,

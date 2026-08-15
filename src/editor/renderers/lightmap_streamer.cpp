@@ -250,11 +250,10 @@ void Lightmap_streamer::apply_tile_regions(Scene_root& scene_root, const int til
                 mesh = name_it->second.get();
             }
         }
-        std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_mutable_primitives();
-        if (primitive_index >= primitives.size()) {
+        if (primitive_index >= mesh->get_primitives().size()) {
             continue;
         }
-        primitives[primitive_index].lightmap_uv_scale_offset = (slot >= 0)
+        const glm::vec4 lightmap_uv_scale_offset = (slot >= 0)
             ? glm::vec4{
                 region.uv_scale_offset.x * tile_size / atlas_size,
                 region.uv_scale_offset.y * tile_size / atlas_size,
@@ -264,6 +263,8 @@ void Lightmap_streamer::apply_tile_regions(Scene_root& scene_root, const int til
             // Evicted: pieces fall back to flat white (scale.x < 0 sentinel,
             // standard.frag); ordinary regions gate the lightmap off.
             : (is_piece ? glm::vec4{-1.0f, 0.0f, 0.0f, 0.0f} : glm::vec4{0.0f});
+        // Through the Mesh setter so the draw list primitive records follow.
+        mesh->set_primitive_lightmap_uv_scale_offset(primitive_index, lightmap_uv_scale_offset);
     }
     if ((unresolved_pieces > 0) && !m_piece_hint_logged) {
         m_piece_hint_logged = true;

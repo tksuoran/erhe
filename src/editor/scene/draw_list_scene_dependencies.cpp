@@ -2,6 +2,8 @@
 
 #include "app_context.hpp"
 
+#include "erhe_scene_renderer/program_interface.hpp"
+
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #   include "erhe_xr/headset.hpp"
@@ -15,6 +17,7 @@ auto make_draw_list_scene_dependencies(App_context& context) -> Draw_list_scene_
     Draw_list_scene_dependencies dependencies{};
     dependencies.mesh_memory          = context.mesh_memory;
     dependencies.shader_variant_cache = context.shader_variant_cache;
+    dependencies.primitive_interface  = (context.program_interface != nullptr) ? &context.program_interface->primitive_interface : nullptr;
 
     // Same view-count enumeration as prewarm.cpp: single view (key value 0)
     // always; the XR view count when the headset session renders multiview.

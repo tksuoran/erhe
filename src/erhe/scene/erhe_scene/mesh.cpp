@@ -111,6 +111,26 @@ void Mesh::set_primitive_material(const std::size_t primitive_index, const std::
     scene_host->on_mesh_material_changed(shared_this);
 }
 
+void Mesh::set_primitive_lightmap_uv_scale_offset(const std::size_t primitive_index, const glm::vec4& lightmap_uv_scale_offset)
+{
+    if (primitive_index >= m_primitives.size()) {
+        return;
+    }
+    if (m_primitives[primitive_index].lightmap_uv_scale_offset == lightmap_uv_scale_offset) {
+        return;
+    }
+    m_primitives[primitive_index].lightmap_uv_scale_offset = lightmap_uv_scale_offset;
+    const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+    if (!shared_this) {
+        return;
+    }
+    Scene_host* scene_host = get_scene_host();
+    if (scene_host == nullptr) {
+        return;
+    }
+    scene_host->on_mesh_primitive_data_changed(shared_this);
+}
+
 auto Mesh::get_mutable_primitives() -> std::vector<Mesh_primitive>&
 {
     return m_primitives;
@@ -257,6 +277,17 @@ void Mesh::handle_node_transform_update()
     for (const auto& rt_primitive : m_rt_primitives) {
         rt_primitive->rt_instance->set_transform(world_from_node);
         rt_primitive->rt_instance->commit();
+    }
+    // Draw list primitive records (doc/draw_list_performance_improvements.md):
+    // the host only enqueues; the records are rewritten once per frame.
+    {
+        const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+        if (shared_this) {
+            Scene_host* scene_host = get_scene_host();
+            if (scene_host != nullptr) {
+                scene_host->on_mesh_transform_changed(shared_this);
+            }
+        }
     }
 }
 

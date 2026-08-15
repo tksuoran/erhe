@@ -232,7 +232,13 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         // first-use paths; material identity changes re-register users.
         {"color_environment_change_count", draw_list_scene->get_color_environment_change_count()},
         {"lazy_resolution_count",          draw_list_scene->get_lazy_resolution_count()},
-        {"material_change_count",          draw_list_scene->get_material_change_count()}
+        {"material_change_count",          draw_list_scene->get_material_change_count()},
+        // Primitive record maintenance (doc/draw_list_performance_improvements.md):
+        // objects whose records were rewritten by the transform hook, the
+        // refresh hook and the draw-time GPU-slot sync.
+        {"transform_update_count",         draw_list_scene->get_transform_update_count()},
+        {"refresh_count",                  draw_list_scene->get_refresh_count()},
+        {"slot_sync_count",                draw_list_scene->get_slot_sync_count()}
     };
     if (verbose) {
         result["draw_lists"] = lists;

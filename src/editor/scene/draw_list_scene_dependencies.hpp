@@ -5,6 +5,7 @@
 
 namespace erhe::scene_renderer {
     class Mesh_memory;
+    class Primitive_interface;
     class Shader_variant_cache;
 }
 
@@ -21,13 +22,16 @@ class Draw_list_scene_dependencies
 public:
     erhe::scene_renderer::Mesh_memory*          mesh_memory         {nullptr};
     erhe::scene_renderer::Shader_variant_cache* shader_variant_cache{nullptr};
+    // Layout of the per-entry primitive records
+    // (Program_interface::primitive_interface, shared by every renderer).
+    erhe::scene_renderer::Primitive_interface*  primitive_interface {nullptr};
     // Multiview view counts to resolve up front (R19): 0 = single view,
     // plus the XR view count when a multiview headset session is active.
     std::vector<uint32_t>                       multiview_view_counts{};
 
     [[nodiscard]] auto is_valid() const -> bool
     {
-        return (mesh_memory != nullptr) && (shader_variant_cache != nullptr);
+        return (mesh_memory != nullptr) && (shader_variant_cache != nullptr) && (primitive_interface != nullptr);
     }
 };
 

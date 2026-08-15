@@ -140,9 +140,11 @@ public:
     // writes one primitive record per entry in [begin, end) of draw_list that
     // passes filter (evaluated on the entry's mirrored flag bits), in entry
     // order. Draw_indirect_buffer::update(Draw_list, ...) with the same
-    // arguments emits exactly the matching draw commands. Per-frame inputs
-    // (node transform, material / joint GPU slots, lightmap scale/offset)
-    // are read live from the Mesh via draw_list_scene (R12b). No id ranges.
+    // arguments emits exactly the matching draw commands. Records are copied
+    // from draw_list.primitive_records (doc/draw_list_performance_improvements.md)
+    // with only the pass-dependent color / size patched; settings that need
+    // per-mesh evaluation fall back to write_primitive() via draw_list_scene.
+    // No id ranges.
     auto update(
         const Draw_list&                    draw_list,
         std::size_t                         begin,

@@ -3786,10 +3786,8 @@ void Lightmap_baker::publish_regions()
         if (!region.mesh) {
             continue;
         }
-        std::vector<erhe::scene::Mesh_primitive>& primitives = region.mesh->get_mutable_primitives();
-        if (region.primitive_index < primitives.size()) {
-            primitives[region.primitive_index].lightmap_uv_scale_offset = m_layout.display_uv_scale_offset(region);
-        }
+        // Through the Mesh setter so the draw list primitive records follow.
+        region.mesh->set_primitive_lightmap_uv_scale_offset(region.primitive_index, m_layout.display_uv_scale_offset(region));
     }
     m_regions_published = true;
 }

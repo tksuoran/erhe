@@ -65,6 +65,13 @@ public:
     // material identity watch (R12 material-content edits) and to find the
     // objects to re-register when a watched material changes.
     std::vector<const erhe::primitive::Material*> materials;
+    // Node_transforms::world_from_node_serial the records were last written
+    // from (transform hook dedup: several updates of one node in a frame
+    // rewrite the object's records once).
+    uint64_t                              transform_serial    {0};
+    // Skin::skin_data.joint_buffer_index the records were last written from
+    // (draw-time GPU-slot sync; skinned objects only).
+    uint32_t                              joint_slot          {0};
     // Free-list bookkeeping.
     uint32_t                              generation          {0};
     bool                                  alive               {false};

@@ -77,6 +77,10 @@ public:
     // through get_mutable_primitives() so the scene host (draw lists) sees
     // the change (Scene_host::on_mesh_material_changed).
     void set_primitive_material(std::size_t primitive_index, const std::shared_ptr<erhe::primitive::Material>& material);
+    // Set the baked-lightmap atlas region of one primitive. Use this instead
+    // of writing through get_mutable_primitives() so the scene host (draw list
+    // primitive records) sees the change (Scene_host::on_mesh_primitive_data_changed).
+    void set_primitive_lightmap_uv_scale_offset(std::size_t primitive_index, const glm::vec4& lightmap_uv_scale_offset);
     void set_rt_mask         (uint32_t rt_mask);
     void attach_rt_to_scene  (erhe::raytrace::IScene* rt_scene);
     void detach_rt_from_scene();

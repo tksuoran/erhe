@@ -157,6 +157,7 @@ Scene_root::Scene_root(
         m_draw_list_scene = std::make_unique<erhe::scene_renderer::Draw_list_scene>(
             *draw_list_dependencies->mesh_memory,
             *draw_list_dependencies->shader_variant_cache,
+            *draw_list_dependencies->primitive_interface,
             std::span<const uint32_t>{draw_list_dependencies->multiview_view_counts}
         );
     }
@@ -1341,6 +1342,20 @@ void Scene_root::on_mesh_flags_changed(const std::shared_ptr<erhe::scene::Mesh>&
 {
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_set_flags(mesh, new_flag_bits);
+    }
+}
+
+void Scene_root::on_mesh_transform_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_transform_update(mesh);
+    }
+}
+
+void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_draw_list_scene) {
+        m_draw_list_scene->enqueue_refresh(mesh);
     }
 }
 

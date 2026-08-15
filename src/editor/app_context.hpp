@@ -25,6 +25,7 @@ namespace erhe::scene_renderer {
     class Content_wide_line_renderer;
     class Forward_renderer;
     class Mesh_memory;
+    class Program_interface;
     class Shadow_renderer;
     class Shader_variant_cache;
     class Texel_renderer;
@@ -189,6 +190,7 @@ public:
     erhe::scene_renderer::Shadow_renderer*            shadow_renderer           {nullptr};
     erhe::scene_renderer::Texel_renderer*             texel_renderer            {nullptr};
     erhe::scene_renderer::Shader_variant_cache*       shader_variant_cache      {nullptr};
+    erhe::scene_renderer::Program_interface*          program_interface         {nullptr};
 
     erhe::window::Context_window*      context_window       {nullptr};
     Animation_player*                  animation_player     {nullptr};

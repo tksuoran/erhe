@@ -171,6 +171,8 @@ public:
     void on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_material_changed  (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_flags_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) override;
+    void on_mesh_transform_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
 
     // The scene's resolved light set (which lights are shaded / shadow-mapped,

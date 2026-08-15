@@ -108,9 +108,13 @@ public:
 class Draw_list_scene
 {
 public:
+    // primitive_interface defines the layout (stride + field offsets) of the
+    // per-entry primitive records (Draw_list::primitive_records); it must be
+    // the same interface the drawing Primitive_buffers were built with.
     Draw_list_scene(
         Mesh_memory&               mesh_memory,
         Shader_variant_cache&      shader_variant_cache,
+        const Primitive_interface& primitive_interface,
         std::span<const uint32_t>  multiview_view_counts
     );
     ~Draw_list_scene() noexcept;
@@ -146,6 +150,15 @@ public:
     void enqueue_unregister(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_reregister(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void enqueue_set_flags (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t item_flag_bits);
+    // The mesh node's world transform changed (Mesh::handle_node_transform_update
+    // hook). Applied in flush_pending(): the object's records get the new
+    // world_from_node / normal_transform once per frame, however many
+    // updates the node saw (dedup by Node_transforms::world_from_node_serial).
+    void enqueue_transform_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    // A per-primitive upload value that does not affect draw list identity
+    // changed (Mesh_primitive::lightmap_uv_scale_offset): rewrite the object's
+    // records in flush_pending() without re-classification.
+    void enqueue_refresh   (const std::shared_ptr<erhe::scene::Mesh>& mesh);
     // Main thread, once per frame before any draw. The caller (Scene_root)
     // holds its item_host_mutex around this call so registration never reads
     // a Buffer_mesh that a worker is replacing.
@@ -173,20 +186,28 @@ public:
         const erhe::Item_filter&               filter
     ) const -> bool;
 
-    // Object mesh lookup for per-entry upload (Primitive_buffer).
+    // Object mesh lookup for per-entry upload (Primitive_buffer slow path).
     [[nodiscard]] auto get_object_mesh(uint32_t object_index) const -> erhe::scene::Mesh*;
+    // Byte stride of one record in Draw_list::primitive_records
+    // (Primitive_interface::primitive_struct size).
+    [[nodiscard]] auto get_primitive_record_stride() const -> std::size_t { return m_primitive_record_stride; }
 
     // Diagnostics: how many times the color environment changed (each change
     // re-resolves every color list) and how many lazy resolutions happened.
     [[nodiscard]] auto get_color_environment_change_count() const -> std::size_t { return m_color_environment_change_count; }
     [[nodiscard]] auto get_lazy_resolution_count         () const -> std::size_t { return m_lazy_resolution_count; }
     [[nodiscard]] auto get_material_change_count         () const -> std::size_t { return m_material_change_count; }
+    // Record maintenance counters: objects whose records were rewritten by
+    // the transform hook / refresh hook / GPU-slot sync.
+    [[nodiscard]] auto get_transform_update_count        () const -> std::size_t { return m_transform_update_count; }
+    [[nodiscard]] auto get_refresh_count                 () const -> std::size_t { return m_refresh_count; }
+    [[nodiscard]] auto get_slot_sync_count               () const -> std::size_t { return m_slot_sync_count; }
 
 private:
     class Pending_op
     {
     public:
-        enum class Kind : uint8_t { register_, unregister, reregister, set_flags };
+        enum class Kind : uint8_t { register_, unregister, reregister, set_flags, transform, refresh };
         Kind                               kind      {Kind::register_};
         std::shared_ptr<erhe::scene::Mesh> mesh      {};
         Draw_mobility                      mobility  {Draw_mobility::dynamic};
@@ -202,6 +223,23 @@ private:
     void remove_entries    (uint32_t object_index);
     auto get_or_create_draw_list(const Draw_list_key& key) -> uint32_t;
     void remove_entry      (const Draw_list_entry_location& location);
+    // --- Primitive records (doc/draw_list_performance_improvements.md) ---
+    [[nodiscard]] auto get_record(const Draw_list_entry_location& location) -> std::byte*;
+    // Full record from the live mesh / node / primitive for one entry.
+    void write_entry_record      (const Draw_list_object& object, const Draw_list_entry& entry, std::byte* record) const;
+    // world_from_node / normal_transform of every record of the object from
+    // its node; records object.transform_serial.
+    void write_object_transform  (uint32_t object_index);
+    // material_index / skinning_factor / base_joint_index of every record of
+    // the object from the live GPU slots; records object.joint_slot.
+    void write_object_gpu_slots  (uint32_t object_index);
+    // Rewrite every record of the object (refresh hook).
+    void refresh_object_records  (uint32_t object_index);
+    // Transform hook application (dedup by node transform serial).
+    void update_object_transform (uint32_t object_index);
+    // Draw-time: material / joint GPU slots changed since the records were
+    // written -> rewrite the affected objects' slot fields.
+    void sync_gpu_slots          ();
     // Resolution (R17): compile / look up the shader stages for a list.
     // R12 material-content edits: identity hash = Shader_key{}.derive(material,
     // nullptr, false).get_hash(), i.e. exactly the material-derived key
@@ -229,6 +267,8 @@ private:
 
     Mesh_memory&                                                     m_mesh_memory;
     Shader_variant_cache&                                            m_shader_variant_cache;
+    const Primitive_interface&                                       m_primitive_interface;
+    std::size_t                                                      m_primitive_record_stride{0};
     std::vector<uint32_t>                                            m_multiview_view_counts;
     std::thread::id                                                  m_owner_thread_id;
 
@@ -238,16 +278,23 @@ private:
     std::vector<uint32_t>                                            m_free_object_indices;
     std::unordered_map<const erhe::scene::Mesh*, uint32_t>           m_object_index_by_mesh;
     std::size_t                                                      m_alive_object_count{0};
+    // Alive objects with mobility skinned (joint GPU-slot sync scans only these).
+    std::vector<uint32_t>                                            m_skinned_object_indices;
 
     mutable std::mutex                                               m_pending_mutex;
     std::vector<Pending_op>                                          m_pending;
     std::size_t                                                      m_determinant_flip_count{0};
+    std::size_t                                                      m_transform_update_count{0};
+    std::size_t                                                      m_refresh_count{0};
+    std::size_t                                                      m_slot_sync_count{0};
 
     class Material_watch
     {
     public:
         std::size_t use_count    {0};
         uint64_t    identity_hash{0};
+        // Material::material_buffer_index the records were last written from.
+        uint32_t    slot         {0};
     };
     std::unordered_map<const erhe::primitive::Material*, Material_watch> m_material_watches;
     std::size_t                                                      m_material_change_count{0};
