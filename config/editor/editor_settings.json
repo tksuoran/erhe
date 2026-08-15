@@ -199,14 +199,14 @@
             "viewport_config": {
                 "render_style_not_selected": {
                     "polygon_fill": true,
-                    "edge_lines": true,
+                    "edge_lines": false,
                     "solid_wireframe": false,
                     "polygon_centroids": false,
                     "corner_points": false
                 },
                 "render_style_selected": {
                     "polygon_fill": true,
-                    "edge_lines": true,
+                    "edge_lines": false,
                     "solid_wireframe": false,
                     "polygon_centroids": false,
                     "corner_points": false
@@ -303,87 +303,6 @@
             "scene_and_camera": {
                 "scene_name": "Floor Only Scene",
                 "camera_name": "Camera A",
-                "shadow_fit_override_camera_name": "",
-                "shader_debug": 0,
-                "renderer_choice": 0
-            }
-        },
-        {
-            "name": "Scene 1",
-            "debug_visualizations": {
-                "lights": "off",
-                "cameras": "off",
-                "layouts": "off",
-                "skins": "off",
-                "node_axises": "off",
-                "physics": "off",
-                "raytrace": "off",
-                "vertex_labels": "off",
-                "facet_labels": "off",
-                "edge_labels": "off",
-                "corner_labels": "off",
-                "world_axes": false,
-                "shadow_debug": false,
-                "shadow_fit_debug": false,
-                "shadow_fit_casters": false,
-                "shadow_fit_caster_hull": false,
-                "shadow_fit_view_frustum": false,
-                "shadow_fit_receivers": false,
-                "shadow_fit_receiver_hull": false,
-                "shadow_fit_receiver_hull_unclipped": false,
-                "shadow_fit_volume_planes": false,
-                "shadow_fit_far_plane_hull": false,
-                "shadow_fit_points": false,
-                "shadow_fit_light_plane_hull": false,
-                "shadow_fit_box_fit": false,
-                "shadow_fit_box_frustum": false,
-                "shadow_fit_box_cap": false,
-                "shadow_fit_box_final": false,
-                "selection": true,
-                "selection_bounding_points": false,
-                "selection_box": false,
-                "selection_sphere": false,
-                "selection_parts": false,
-                "selection_convex_hull": false,
-                "selection_convex_hull_projected": false,
-                "debug_convex_hull": false,
-                "convex_hull_edge": 0,
-                "gap": 0.003,
-                "tool_hide": false,
-                "frustum_box": false,
-                "frustum_planes": false,
-                "camera_cull_test": false,
-                "mesh_primitive_boxes": false,
-                "bone_boxes": false,
-                "max_labels": 400,
-                "vertex_positions": false
-            },
-            "viewport_config": {
-                "render_style_not_selected": {
-                    "polygon_fill": true,
-                    "edge_lines": true,
-                    "solid_wireframe": false,
-                    "polygon_centroids": false,
-                    "corner_points": false
-                },
-                "render_style_selected": {
-                    "polygon_fill": true,
-                    "edge_lines": true,
-                    "solid_wireframe": false,
-                    "polygon_centroids": false,
-                    "corner_points": false
-                },
-                "debug_visualizations": {
-                    "light": "selected",
-                    "camera": "selected"
-                },
-                "selection_bounding_box": false,
-                "selection_bounding_sphere": false,
-                "shadow_mode": "shadow_maps"
-            },
-            "scene_and_camera": {
-                "scene_name": "Scene 1",
-                "camera_name": "Camera",
                 "shadow_fit_override_camera_name": "",
                 "shader_debug": 0,
                 "renderer_choice": 0
@@ -628,6 +547,7 @@
         "size_pixels": 256
     },
     "transform_tool": {
+        "_version": 2,
         "gizmo_scale": 1,
         "show_translate": true,
         "show_rotate": true,
@@ -685,13 +605,17 @@
         "hover_color_z": [1,1,0,1],
         "hover_uniform_scale_color": [1,1,0,1],
         "hover_view_ring_color": [1,1,0,1],
-        "translate_cast_rays": true
+        "translate_cast_rays": true,
+        "indicator_fov_margin_left": 15,
+        "indicator_fov_margin_right": 15,
+        "indicator_fov_margin_up": 9,
+        "indicator_fov_margin_down": 17
     },
     "viewport": {
         "polygon_fill": true,
-        "edge_lines": true,
+        "edge_lines": false,
         "selection_polygon_fill": true,
-        "selection_edge_lines": true,
+        "selection_edge_lines": false,
         "corner_points": false,
         "polygon_centroids": false,
         "selection_bounding_box": false,
