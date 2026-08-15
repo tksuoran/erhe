@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <span>
 #include <vector>
 
 namespace erhe {
@@ -23,6 +24,8 @@ namespace erhe::scene {
 
 namespace erhe::scene_renderer {
 
+class Draw_list;
+class Draw_list_scene;
 class Face_id_base_provider;
 class Render_bucket;
 
@@ -133,6 +136,23 @@ public:
         bool                                use_id_ranges = false
     ) -> erhe::graphics::Ring_buffer_range;
 
+    // Draw-list overload (doc/draw_list_renderer_requirements.md R8/R8a):
+    // writes one primitive record per entry in [begin, end) of draw_list that
+    // passes filter (evaluated on the entry's mirrored flag bits), in entry
+    // order. Draw_indirect_buffer::update(Draw_list, ...) with the same
+    // arguments emits exactly the matching draw commands. Per-frame inputs
+    // (node transform, material / joint GPU slots, lightmap scale/offset)
+    // are read live from the Mesh via draw_list_scene (R12b). No id ranges.
+    auto update(
+        const Draw_list&                    draw_list,
+        std::size_t                         begin,
+        std::size_t                         end,
+        const Draw_list_scene&              draw_list_scene,
+        const erhe::Item_filter&            filter,
+        const Primitive_interface_settings& settings,
+        std::size_t&                        out_primitive_count
+    ) -> erhe::graphics::Ring_buffer_range;
+
     auto update(
         const std::span<const std::shared_ptr<erhe::scene::Node>>& nodes,
         const Primitive_interface_settings&                        primitive_settings
@@ -148,11 +168,26 @@ public:
     };
 
     void reset_id_ranges();
+    // Capacity of one primitive block (P3a chunking bound for draw lists).
+    [[nodiscard]] auto get_max_primitive_count() const -> std::size_t { return m_primitive_interface.max_primitive_count; }
     [[nodiscard]] auto id_offset() const -> uint32_t;
     [[nodiscard]] auto id_ranges() const -> const std::vector<Id_range>&;
 
 private:
     Primitive_interface&  m_primitive_interface;
+    // Shared per-primitive record writer for both the Render_bucket and the
+    // Draw_list overloads (single implementation, no drift). Advances
+    // write_offset by one record and maintains m_id_offset / m_id_ranges.
+    void write_primitive(
+        erhe::scene::Mesh&                  mesh,
+        uint16_t                            mesh_primitive_index,
+        erhe::primitive::Primitive_mode     primitive_mode,
+        const Primitive_interface_settings& settings,
+        bool                                use_id_ranges,
+        std::span<std::byte>                primitive_gpu_data,
+        std::size_t&                        write_offset
+    );
+
     uint32_t              m_id_offset{0};
     std::vector<Id_range> m_id_ranges;
 };

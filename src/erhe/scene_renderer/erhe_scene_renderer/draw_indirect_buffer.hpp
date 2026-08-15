@@ -16,6 +16,7 @@ namespace erhe::scene {
 
 namespace erhe::scene_renderer {
 
+class Draw_list;
 class Render_bucket;
 
 class Draw_indirect_buffer_range
@@ -43,6 +44,18 @@ public:
     auto update(
         const Render_bucket&            bucket,
         erhe::primitive::Primitive_mode primitive_mode
+    ) -> Draw_indirect_buffer_range;
+
+    // Draw-list overload: one draw command per entry in [begin, end) of
+    // draw_list that passes filter, in entry order - the exact counterpart of
+    // Primitive_buffer::update(Draw_list, ...) so ERHE_DRAW_ID indexes line
+    // up. Uses the index_count / first_index / base_vertex baked into the
+    // entries at registration; touches no Mesh.
+    auto update(
+        const Draw_list&         draw_list,
+        std::size_t              begin,
+        std::size_t              end,
+        const erhe::Item_filter& filter
     ) -> Draw_indirect_buffer_range;
 
     //// void debug_properties_window();

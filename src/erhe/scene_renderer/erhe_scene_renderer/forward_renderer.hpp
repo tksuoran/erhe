@@ -3,6 +3,7 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/camera_buffer.hpp"
 #include "erhe_scene_renderer/glyph_buffer.hpp"
 #include "erhe_scene_renderer/joint_buffer.hpp"
@@ -50,6 +51,7 @@ namespace erhe::ui {
 
 namespace erhe::scene_renderer {
 
+class Draw_list_scene;
 class Mesh_memory;
 class Program_interface;
 class Shader_variant_cache;
@@ -193,6 +195,31 @@ public:
     void render(const Render_parameters& parameters);
     void draw_primitives(const Primitive_render_parameters& parameters, const erhe::scene::Light* light);
 
+    // Draw-list path (doc/draw_list_renderer_requirements.md R8/R8a): same
+    // per-pass prologue / epilogue as render() (camera, materials, joints,
+    // lights, texture heap), but the draws come from the scene's persistent
+    // Draw_list_scene instead of re-bucketing mesh spans. Color purpose only;
+    // shadow maps go through Shadow_renderer.
+    class Draw_list_render_parameters
+    {
+    public:
+        Base_render_parameters                                 base;
+        Draw_list_scene&                                       draw_list_scene;
+        const std::span<erhe::graphics::Base_render_pipeline*> base_render_pipelines;
+        std::span<const erhe::scene::Layer_id>                 layers{};
+        Draw_blending_selection                                blending;
+        Primitive_interface_settings                           primitive_settings{};
+        const erhe::Item_filter                                filter{};
+        uint32_t                                               shadow_filter{0};
+        uint32_t                                               shadow_bias{1};
+        uint32_t                                               shadow_technique{0};
+        uint32_t                                               shadow_depth_bits{0};
+        const glm::uvec4&                                      debug_joint_indices{0, 0, 0, 0};
+        const std::span<glm::vec4>&                            debug_joint_colors{};
+        const erhe::graphics::Color_blend_state*               color_blend_override{nullptr};
+    };
+    auto render_draw_lists(const Draw_list_render_parameters& parameters) -> Draw_statistics;
+
     class Warmup_target
     {
     public:
@@ -256,6 +283,20 @@ public:
     static const std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> empty_mesh_spans;
 
 private:
+    // Per-pass shared bindings (camera / material / joint / light ring
+    // ranges); begin_pass() updates + binds them, end_pass() releases them
+    // after the draws. Shared by render() and render_draw_lists().
+    class Pass_state
+    {
+    public:
+        std::optional<erhe::graphics::Ring_buffer_range> camera_range{};
+        erhe::graphics::Ring_buffer_range                material_range{};
+        erhe::graphics::Ring_buffer_range                joint_range{};
+        erhe::graphics::Ring_buffer_range                light_range{};
+    };
+    auto begin_pass(const Base_render_parameters& base, const glm::uvec4& debug_joint_indices, const std::span<glm::vec4>& debug_joint_colors) -> Pass_state;
+    void end_pass  (Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder);
+
     erhe::graphics::Device&                       m_graphics_device;
     Mesh_memory&                                  m_mesh_memory;
     Program_interface&                            m_program_interface;

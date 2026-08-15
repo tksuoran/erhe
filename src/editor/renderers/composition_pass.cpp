@@ -24,6 +24,7 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <imgui/imgui.h>
@@ -59,6 +60,7 @@ auto c_str(const Composition_pass_result result) -> const char*
         case Composition_pass_result::primitive_mode_disabled: return "primitive_mode_disabled";
         case Composition_pass_result::no_mesh_layers:          return "no_mesh_layers";
         case Composition_pass_result::submitted:               return "submitted";
+        case Composition_pass_result::submitted_draw_lists:    return "submitted_draw_lists";
         default:                                               return "?";
     }
 }
@@ -67,8 +69,9 @@ void Composition_pass::render(const Render_context& context)
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_last_scene_view_name = context.scene_view.get_settings_key();
-    m_last_mesh_count      = 0;
+    m_last_scene_view_name       = context.scene_view.get_settings_key();
+    m_last_mesh_count            = 0;
+    m_last_draw_list_entry_count = 0;
 
     if (!data.enabled) {
         m_last_result = Composition_pass_result::disabled;
@@ -273,6 +276,81 @@ void Composition_pass::render(const Render_context& context)
                     get_primitive_settings(data.get_appearance(context), erhe::primitive::Primitive_mode::edge_lines);
                 edge_line_color = edge_settings.constant_color0;
                 edge_line_width = edge_settings.constant_size;
+            }
+
+            // Draw-list path (doc/draw_list_renderer_requirements.md, plan
+            // phase 3/5): route to the scene's persistent draw lists when the
+            // gate is on and this pass is fully expressible with them -
+            // polygon fill, no shader debug, no shader / blend overrides, no
+            // forced shader bits (the ID-buffer edge method forces
+            // EDGE_LINES_FROM_ID -> fallback while active, Q9), and a plain
+            // opaque / translucent / allow_all blending policy. Everything
+            // else stays on Forward_renderer::render().
+            erhe::scene_renderer::Draw_list_scene* draw_list_scene = scene_root->get_draw_list_scene();
+            const erhe::scene_renderer::Shader_debug effective_shader_debug = data.shader_debug_override.has_value()
+                ? data.shader_debug_override.value()
+                : context.shader_debug;
+            const bool draw_lists_eligible =
+                context.app_context.app_rendering->use_draw_lists &&
+                (draw_list_scene != nullptr) &&
+                (data.primitive_mode == erhe::primitive::Primitive_mode::polygon_fill) &&
+                (effective_shader_debug == erhe::scene_renderer::Shader_debug::none) &&
+                (data.shader_stages == nullptr) &&
+                (data.color_blend_override == nullptr) &&
+                (force_enable_mask == 0u) &&
+                (data.shader_key_force_disable_mask == 0u) &&
+                !apply_edge_id &&
+                (
+                    (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only) ||
+                    (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ||
+                    (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::allow_all)
+                );
+            if (draw_lists_eligible) {
+                const erhe::scene_renderer::Draw_blending_selection blending =
+                    (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::opaque_primitives_only     ) ? erhe::scene_renderer::Draw_blending_selection::opaque_only :
+                    (data.blending_mode_policy == erhe::scene_renderer::Blending_mode_policy::translucent_primitives_only) ? erhe::scene_renderer::Draw_blending_selection::translucent_only :
+                                                                                                                             erhe::scene_renderer::Draw_blending_selection::both;
+                const erhe::scene_renderer::Draw_statistics statistics = context.app_context.forward_renderer->render_draw_lists(
+                    erhe::scene_renderer::Forward_renderer::Draw_list_render_parameters{
+                        .base = erhe::scene_renderer::Forward_renderer::Base_render_parameters{
+                            .render_encoder    = *context.encoder,
+                            .render_pass       = context.render_pass,
+                            .viewport          = context.viewport,
+                            .views             = context.views,
+                            .exposure          = exposure,
+                            .ambient_light     = scene->ambient_light,
+                            .light_projections = context.scene_view.get_light_projections(),
+                            .lights            = layers.light()->lights,
+                            .skins             = scene->get_skins(),
+                            .materials         = materials,
+                            .shader_key_boolean_mask_force_enable  = 0u,
+                            .shader_key_boolean_mask_force_disable = 0u,
+                            .reverse_depth     = context.scene_view.get_reverse_depth(),
+                            .depth_range       = context.scene_view.get_depth_range(),
+                            .conventions       = context.scene_view.get_conventions(),
+                            .edge_id_texture   = nullptr,
+                            .edge_line_color   = edge_line_color,
+                            .edge_line_width   = edge_line_width,
+                            .debug_label       = get_name(),
+                        },
+                        .draw_list_scene       = *draw_list_scene,
+                        .base_render_pipelines = data.base_render_pipelines,
+                        .layers                = data.mesh_layers,
+                        .blending              = blending,
+                        .primitive_settings    = primitive_settings,
+                        .filter                = data.filter,
+                        .shadow_filter         = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_filter),
+                        .shadow_bias           = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_bias),
+                        .shadow_technique      = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_technique),
+                        .shadow_depth_bits     = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
+                        .debug_joint_indices   = context.app_context.app_rendering->debug_joint_indices,
+                        .debug_joint_colors    = context.app_context.app_rendering->debug_joint_colors,
+                        .color_blend_override  = nullptr,
+                    }
+                );
+                m_last_draw_list_entry_count = statistics.entry_count;
+                m_last_result = Composition_pass_result::submitted_draw_lists;
+                return;
             }
 
             // log_draw->trace("Render pass {} filter = {}", get_name(), filter.describe());

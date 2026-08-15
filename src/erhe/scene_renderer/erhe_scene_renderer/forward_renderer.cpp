@@ -1,4 +1,5 @@
 ﻿#include "erhe_scene_renderer/forward_renderer.hpp"
+#include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/shader_variant_cache.hpp"
 
@@ -88,35 +89,16 @@ const char* safe_str(const char* str)
 
 }
 
-void Forward_renderer::render(const Render_parameters& parameters)
+auto Forward_renderer::begin_pass(
+    const Base_render_parameters& base,
+    const glm::uvec4&             debug_joint_indices,
+    const std::span<glm::vec4>&   debug_joint_colors
+) -> Pass_state
 {
-    ERHE_PROFILE_FUNCTION();
-
-    const Base_render_parameters& base = parameters.base;
-
-    // Check for early out
-    bool all_empty = true;
-    for (const auto& meshes : parameters.mesh_spans) {
-        if (!meshes.empty()) {
-            all_empty = false;
-            break;
-        }
-    }
-    if (all_empty) {
-        // log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
-        return; // TODO is this ok?
-    }
-
-    // log_render->debug("Forward_renderer::render({})", base.debug_label);
-
-    const auto& mesh_spans = parameters.mesh_spans;
-    const auto& filter     = parameters.filter;
-
+    Pass_state state{};
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
     render_encoder.set_bind_group_layout(m_program_interface.bind_group_layout.get());
 
-    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
-    std::optional<Ring_buffer_range> camera_buffer_range{};
 
     // Reset the texture heap BEFORE the camera update so the ID-buffer edge-line
     // method can allocate the face-ID buffer into the heap and write its
@@ -145,7 +127,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     // every entry; its internal verify guards size against the
     // compile-time view_count.
     if (base.views.size() >= 2) {
-        camera_buffer_range = m_camera_buffer.update_views(
+        state.camera_range = m_camera_buffer.update_views(
             base.views,
             base.exposure,
             base.grid_parameters,
@@ -160,7 +142,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         const Camera_view_input& view = base.views[0];
         ERHE_VERIFY(view.projection != nullptr);
         ERHE_VERIFY(view.node       != nullptr);
-        camera_buffer_range = m_camera_buffer.update(
+        state.camera_range = m_camera_buffer.update(
             *view.projection,
             *view.node,
             view.viewport,
@@ -174,22 +156,22 @@ void Forward_renderer::render(const Render_parameters& parameters)
             edge_lines_parameters
         );
     }
-    m_camera_buffer.bind(render_encoder, camera_buffer_range.value());
+    m_camera_buffer.bind(render_encoder, state.camera_range.value());
 
     // Static glyph curve data (grid axis labels); bound unconditionally
     // so the shared bind group is always complete.
     m_glyph_buffer.bind(render_encoder);
 
-    Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
-    m_material_buffer.bind(render_encoder, material_range);
+    state.material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
+    m_material_buffer.bind(render_encoder, state.material_range);
 
-    Ring_buffer_range joint_range = m_joint_buffer.update(parameters.debug_joint_indices, parameters.debug_joint_colors, base.skins);
-    m_joint_buffer.bind(render_encoder, joint_range);
+    state.joint_range = m_joint_buffer.update(debug_joint_indices, debug_joint_colors, base.skins);
+    m_joint_buffer.bind(render_encoder, state.joint_range);
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    Ring_buffer_range light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
-    m_light_buffer.bind_light_buffer(render_encoder, light_range);
+    state.light_range = m_light_buffer.update(base.lights, base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
+    m_light_buffer.bind_light_buffer(render_encoder, state.light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
 
@@ -197,6 +179,101 @@ void Forward_renderer::render(const Render_parameters& parameters)
 
     render_encoder.set_viewport_rect(base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
     render_encoder.set_scissor_rect (base.viewport.x, base.viewport.y, base.viewport.width, base.viewport.height);
+
+    return state;
+}
+
+void Forward_renderer::end_pass(Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder)
+{
+    // These must come after the draw calls have been done
+    if (state.camera_range.has_value()) {
+        state.camera_range.value().release();
+    }
+    state.material_range.release();
+    state.joint_range.release();
+    state.light_range.release();
+
+    m_texture_heap->unbind(render_encoder.get_command_buffer());
+}
+
+auto Forward_renderer::render_draw_lists(const Draw_list_render_parameters& parameters) -> Draw_statistics
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Base_render_parameters& base = parameters.base;
+    erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
+    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors);
+
+    // Environment (R18): recomputed per pass, compared inside draw_color.
+    Color_environment environment{};
+    environment.light_partition   = compute_light_layer_partition(base.lights);
+    environment.shadow_filter     = parameters.shadow_filter;
+    environment.shadow_bias       = parameters.shadow_bias;
+    environment.shadow_technique  = parameters.shadow_technique;
+    environment.shadow_depth_bits = parameters.shadow_depth_bits;
+    // Same convention as render(): 0 for single view, N for multiview.
+    const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
+
+    Draw_statistics statistics{};
+    for (erhe::graphics::Base_render_pipeline* base_render_pipeline : parameters.base_render_pipelines) {
+        erhe::graphics::Scoped_debug_group pipeline_scope{
+            render_encoder.get_command_buffer(),
+            base_render_pipeline->data.debug_label
+        };
+        const Draw_statistics pass_statistics = parameters.draw_list_scene.draw_color(
+            Draw_color_parameters{
+                .render_encoder       = render_encoder,
+                .render_pass          = base.render_pass,
+                .base_render_pipeline = *base_render_pipeline,
+                .primitive_buffer     = m_primitive_buffer,
+                .draw_indirect_buffer = m_draw_indirect_buffer,
+                .primitive_settings   = parameters.primitive_settings,
+                .filter               = parameters.filter,
+                .layers               = parameters.layers,
+                .blending             = parameters.blending,
+                .multiview_count      = multiview_count,
+                .environment          = environment,
+                .color_blend_override = parameters.color_blend_override,
+                .debug_label          = base.debug_label
+            }
+        );
+        statistics.draw_list_count += pass_statistics.draw_list_count;
+        statistics.entry_count     += pass_statistics.entry_count;
+        statistics.draw_call_count += pass_statistics.draw_call_count;
+    }
+
+    end_pass(pass_state, render_encoder);
+    return statistics;
+}
+
+void Forward_renderer::render(const Render_parameters& parameters)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const Base_render_parameters& base = parameters.base;
+
+    // Check for early out
+    bool all_empty = true;
+    for (const auto& meshes : parameters.mesh_spans) {
+        if (!meshes.empty()) {
+            all_empty = false;
+            break;
+        }
+    }
+    if (all_empty) {
+        // log_render->debug("Forward_renderer::render({}) - empty", base.debug_label);
+        return; // TODO is this ok?
+    }
+
+    // log_render->debug("Forward_renderer::render({})", base.debug_label);
+
+    const auto& mesh_spans = parameters.mesh_spans;
+    const auto& filter     = parameters.filter;
+
+    erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
+    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors);
+
+    using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
 
     const Light_layer_partition partition = compute_light_layer_partition(base.lights);
 
@@ -343,15 +420,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
         }
     }
 
-    // These must come after the draw calls have been done
-    if (camera_buffer_range.has_value()) {
-        camera_buffer_range.value().release();
-    }
-    material_range.release();
-    joint_range.release();
-    light_range.release();
-
-    m_texture_heap->unbind(render_encoder.get_command_buffer());
+    end_pass(pass_state, render_encoder);
 }
 
 void Forward_renderer::draw_primitives(

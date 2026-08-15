@@ -115,7 +115,8 @@ enum class Composition_pass_result : unsigned int {
     no_scene_root,           // no scene root to render
     primitive_mode_disabled, // the render style has this primitive_mode off
     no_mesh_layers,          // none of data.mesh_layers resolved in the scene
-    submitted                // reached the draw submission
+    submitted,               // reached the draw submission (Forward_renderer::render)
+    submitted_draw_lists     // reached the draw submission through the scene's Draw_list_scene
 };
 
 [[nodiscard]] auto c_str(Composition_pass_result result) -> const char*;
@@ -143,12 +144,16 @@ public:
     [[nodiscard]] auto get_last_result          () const -> Composition_pass_result { return m_last_result; }
     [[nodiscard]] auto get_last_scene_view_name () const -> const std::string&      { return m_last_scene_view_name; }
     [[nodiscard]] auto get_last_mesh_count      () const -> std::size_t             { return m_last_mesh_count; }
+    // Entries drawn by the draw-list path in the most recent render() (0 when
+    // the pass went through Forward_renderer::render()).
+    [[nodiscard]] auto get_last_draw_list_entry_count() const -> std::size_t        { return m_last_draw_list_entry_count; }
 
 private:
     std::vector<std::span<const std::shared_ptr<erhe::scene::Mesh>>> m_mesh_spans;
     Composition_pass_result                                         m_last_result{Composition_pass_result::never_rendered};
     std::string                                                     m_last_scene_view_name{};
     std::size_t                                                     m_last_mesh_count{0};
+    std::size_t                                                     m_last_draw_list_entry_count{0};
 };
 
 }

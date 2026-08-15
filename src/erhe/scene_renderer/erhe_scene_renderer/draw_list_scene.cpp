@@ -1,7 +1,18 @@
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/draw_indirect_buffer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
+#include "erhe_scene_renderer/shader_variant_cache.hpp"
 
+#include "erhe_graphics/draw_indirect.hpp"
+#include "erhe_graphics/render_command_encoder.hpp"
+#include "erhe_graphics/render_pass.hpp"
+#include "erhe_graphics/render_pipeline.hpp"
+#include "erhe_graphics/render_pipeline_state.hpp"
+#include "erhe_graphics/scoped_debug_group.hpp"
+#include "erhe_graphics/shader_stages.hpp"
+#include "erhe_graphics/state/color_blend_state.hpp"
+#include "erhe_graphics/state/vertex_input_state.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
 #include "erhe_primitive/material.hpp"
@@ -14,6 +25,7 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
+#include <algorithm>
 #include <sstream>
 
 namespace erhe::scene_renderer {
@@ -113,6 +125,20 @@ public:
     return result;
 }
 
+[[nodiscard]] auto material_identity_hash(const erhe::primitive::Material* material) -> uint64_t
+{
+    // Material-derived Shader_key components only (no vertex format, no
+    // skinning): the exact inputs whose change alters draw list identity.
+    // derive() with a null vertex format drops every has_<attribute> gate,
+    // which hides use_aniso_control (only visible together with the aniso
+    // vertex attribute) - fold it in explicitly.
+    uint64_t hash = Shader_key{}.derive(material, nullptr, false).get_hash();
+    if ((material != nullptr) && material->data.use_aniso_control) {
+        hash = erhe::hash::hash(static_cast<uint8_t>(1u), hash);
+    }
+    return hash;
+}
+
 [[nodiscard]] auto sample_negative_determinant(const erhe::scene::Mesh& mesh) -> bool
 {
     // R10b: sample from the node's current world transform, not from
@@ -126,6 +152,49 @@ public:
 }
 
 } // anonymous namespace
+
+auto c_str(const Shadow_sub_variant sub_variant) -> const char*
+{
+    switch (sub_variant) {
+        case Shadow_sub_variant::depth_only:          return "depth_only";
+        case Shadow_sub_variant::depth_only_distance: return "depth_only_distance";
+        case Shadow_sub_variant::cube:                return "cube";
+        default:                                      return "?";
+    }
+}
+
+auto Color_environment::operator==(const Color_environment& other) const -> bool
+{
+    for (std::size_t i = 0; i < 4; ++i) {
+        if (light_partition.per_type_shadow   [i] != other.light_partition.per_type_shadow   [i]) { return false; }
+        if (light_partition.per_type_nonshadow[i] != other.light_partition.per_type_nonshadow[i]) { return false; }
+    }
+    return
+        (shadow_filter     == other.shadow_filter    ) &&
+        (shadow_bias       == other.shadow_bias      ) &&
+        (shadow_technique  == other.shadow_technique ) &&
+        (shadow_depth_bits == other.shadow_depth_bits);
+}
+
+auto Color_environment::make_environment_key() const -> Shader_key
+{
+    // Mirrors the environment key built in Forward_renderer::render():
+    // light counts per type, shadow axes, SHADER_DEBUG = 0 (draw lists never
+    // carry the debug axis; those passes use the fallback).
+    Shader_key key{};
+    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_NOT_SHADOWMAPPED, static_cast<uint32_t>(light_partition.per_type_nonshadow[0]));
+    key.set(Shader_int::LIGHT_COUNT_DIRECTIONAL_SHADOWMAPPED,     static_cast<uint32_t>(light_partition.per_type_shadow   [0]));
+    key.set(Shader_int::LIGHT_COUNT_SPOT_NOT_SHADOWMAPPED,        static_cast<uint32_t>(light_partition.per_type_nonshadow[1]));
+    key.set(Shader_int::LIGHT_COUNT_SPOT_SHADOWMAPPED,            static_cast<uint32_t>(light_partition.per_type_shadow   [1]));
+    key.set(Shader_int::LIGHT_COUNT_POINT_NOT_SHADOWMAPPED,       static_cast<uint32_t>(light_partition.per_type_nonshadow[2]));
+    key.set(Shader_int::LIGHT_COUNT_POINT_SHADOWMAPPED,           static_cast<uint32_t>(light_partition.per_type_shadow   [2]));
+    key.set(Shader_int::SHADER_DEBUG,                             0u);
+    key.set(Shader_int::SHADOW_FILTER,                            shadow_filter);
+    key.set(Shader_int::SHADOW_BIAS,                              shadow_bias);
+    key.set(Shader_int::SHADOW_TECHNIQUE,                         shadow_technique);
+    key.set(Shader_int::SHADOW_DEPTH_BITS,                        shadow_depth_bits);
+    return key;
+}
 
 Draw_list_scene::Draw_list_scene(
     Mesh_memory&                    mesh_memory,
@@ -245,7 +314,17 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
                     .entry_index     = static_cast<uint32_t>(draw_list.entries.size())
                 }
             );
+            const bool first_entry = draw_list.entries.empty();
             draw_list.entries.push_back(entry);
+
+            // R17: resolve at registration (color: every enumerated view
+            // config, once the environment is known; shadow sub-variants
+            // resolve lazily on first use, R4a). A list that was empty has
+            // no valid cached resolution to reuse only if it is brand new;
+            // reused empty lists keep theirs.
+            if (first_entry && (purpose == Draw_purpose::color) && draw_list.color_resolutions.empty()) {
+                resolve_color_list(draw_list);
+            }
         }
     }
 }
@@ -316,8 +395,101 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
     ++m_alive_object_count;
 
     add_entries(object_index);
+    watch_object_materials(object_index);
 
     return Draw_list_object_id{object_index, object.generation};
+}
+
+void Draw_list_scene::watch_object_materials(const uint32_t object_index)
+{
+    Draw_list_object& object = m_objects[object_index];
+    object.materials.clear();
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : object.info.mesh->get_primitives()) {
+        const erhe::primitive::Material* material = mesh_primitive.material.get();
+        if (material == nullptr) {
+            continue;
+        }
+        bool seen = false;
+        for (const erhe::primitive::Material* known : object.materials) {
+            if (known == material) {
+                seen = true;
+                break;
+            }
+        }
+        if (seen) {
+            continue;
+        }
+        object.materials.push_back(material);
+        Material_watch& watch = m_material_watches[material];
+        if (watch.use_count == 0) {
+            watch.identity_hash = material_identity_hash(material);
+        }
+        ++watch.use_count;
+    }
+}
+
+void Draw_list_scene::unwatch_object_materials(const uint32_t object_index)
+{
+    Draw_list_object& object = m_objects[object_index];
+    for (const erhe::primitive::Material* material : object.materials) {
+        const std::unordered_map<const erhe::primitive::Material*, Material_watch>::iterator it = m_material_watches.find(material);
+        if (it == m_material_watches.end()) {
+            continue;
+        }
+        if (it->second.use_count > 0) {
+            --it->second.use_count;
+        }
+        if (it->second.use_count == 0) {
+            m_material_watches.erase(it);
+        }
+    }
+    object.materials.clear();
+}
+
+void Draw_list_scene::check_material_changes()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::vector<const erhe::primitive::Material*> changed;
+    for (std::unordered_map<const erhe::primitive::Material*, Material_watch>::value_type& entry : m_material_watches) {
+        const uint64_t hash = material_identity_hash(entry.first);
+        if (hash != entry.second.identity_hash) {
+            entry.second.identity_hash = hash;
+            changed.push_back(entry.first);
+        }
+    }
+    if (changed.empty()) {
+        return;
+    }
+    ++m_material_change_count;
+    // Rare event: scan objects for users of the changed materials and
+    // re-register them (their list identity may have changed).
+    std::vector<Draw_list_object_id> to_reregister;
+    for (std::size_t i = 0, end = m_objects.size(); i < end; ++i) {
+        const Draw_list_object& object = m_objects[i];
+        if (!object.alive) {
+            continue;
+        }
+        bool uses_changed = false;
+        for (const erhe::primitive::Material* material : object.materials) {
+            for (const erhe::primitive::Material* changed_material : changed) {
+                if (material == changed_material) {
+                    uses_changed = true;
+                    break;
+                }
+            }
+            if (uses_changed) {
+                break;
+            }
+        }
+        if (uses_changed) {
+            to_reregister.push_back(Draw_list_object_id{static_cast<uint32_t>(i), object.generation});
+        }
+    }
+    log_draw_list->info("{} material(s) changed identity; re-registering {} object(s)", changed.size(), to_reregister.size());
+    for (const Draw_list_object_id id : to_reregister) {
+        static_cast<void>(reregister_object(id));
+    }
 }
 
 void Draw_list_scene::unregister_object(const Draw_list_object_id id)
@@ -333,6 +505,7 @@ void Draw_list_scene::unregister_object(const Draw_list_object_id id)
         return;
     }
     remove_entries(id.index);
+    unwatch_object_materials(id.index);
     m_object_index_by_mesh.erase(object.info.mesh.get());
     --m_alive_object_count;
     release_object(id.index);
@@ -403,6 +576,8 @@ void Draw_list_scene::rebuild_all()
         object.layer_id             = mesh->layer_id;
         object.flag_bits            = mesh->get_flag_bits();
         add_entries(static_cast<uint32_t>(i));
+        unwatch_object_materials(static_cast<uint32_t>(i));
+        watch_object_materials(static_cast<uint32_t>(i));
     }
 }
 
@@ -565,6 +740,345 @@ void Draw_list_scene::flush_pending()
             }
         }
     }
+
+    check_material_changes();
+}
+
+// --- Resolution ----------------------------------------------------------------
+
+auto Draw_list_scene::get_object_mesh(const uint32_t object_index) const -> erhe::scene::Mesh*
+{
+    ERHE_VERIFY(object_index < m_objects.size());
+    const Draw_list_object& object = m_objects[object_index];
+    ERHE_VERIFY(object.alive);
+    return object.info.mesh.get();
+}
+
+void Draw_list_scene::set_color_environment(const Color_environment& environment)
+{
+    if (m_color_environment_set && (m_color_environment == environment)) {
+        return;
+    }
+    m_color_environment     = environment;
+    m_color_environment_set = true;
+    ++m_color_environment_change_count;
+    // R18/R21: only cached resolutions change - never list contents.
+    for (Draw_list& draw_list : m_draw_lists) {
+        draw_list.color_resolutions.clear();
+        draw_list.color_resolution_failed = false;
+    }
+}
+
+auto Draw_list_scene::resolve_color_stages(Draw_list& draw_list, const uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*
+{
+    for (const Draw_list_color_resolution& resolution : draw_list.color_resolutions) {
+        if (resolution.multiview_count == multiview_count) {
+            return resolution.stages;
+        }
+    }
+    if (!m_color_environment_set) {
+        return nullptr; // nothing to resolve against yet (before the first color draw)
+    }
+
+    // Combine (plan section 0.2): primitive-derived key from registration OR
+    // environment bool bits (none today), environment int axes overwrite (the
+    // primitive key never sets those axes when SHADER_DEBUG == 0), multiview
+    // axis per view configuration, blending mode from the primitive key.
+    Shader_key       key = draw_list.key.primitive_key;
+    const Shader_key env = m_color_environment.make_environment_key();
+    key.bool_mask |= env.bool_mask;
+    for (std::size_t i = 0, end = key.int_values.size(); i < end; ++i) {
+        if (env.int_values[i] != 0u) {
+            key.int_values[i] = env.int_values[i];
+        }
+    }
+    key.set(Shader_int::SHADER_MULTIVIEW_COUNT, static_cast<uint32_t>(multiview_count));
+
+    const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
+    const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
+    if (stages == nullptr) {
+        if (!draw_list.color_resolution_failed) {
+            log_draw_list->warn("No color shader variant for draw list: {}", draw_list.key.describe());
+            draw_list.color_resolution_failed = true;
+        }
+    }
+    draw_list.color_resolutions.push_back(Draw_list_color_resolution{.multiview_count = multiview_count, .stages = stages});
+    return stages;
+}
+
+void Draw_list_scene::resolve_color_list(Draw_list& draw_list)
+{
+    for (const uint32_t view_count : m_multiview_view_counts) {
+        static_cast<void>(resolve_color_stages(draw_list, static_cast<uint16_t>(view_count)));
+    }
+}
+
+auto Draw_list_scene::resolve_shadow_stages(Draw_list& draw_list, const Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*
+{
+    const std::size_t slot = static_cast<std::size_t>(sub_variant);
+    ERHE_VERIFY(slot < draw_list.shadow_resolutions.size());
+    if (draw_list.shadow_resolutions[slot] != nullptr) {
+        return draw_list.shadow_resolutions[slot];
+    }
+    // Shadow key: USE_SKINNING (from registration) plus the sub-variant's forced
+    // bits, empty environment - as Shadow_renderer::draw_shadow_casters builds it.
+    Shader_key key = draw_list.key.primitive_key;
+    switch (sub_variant) {
+        case Shadow_sub_variant::depth_only: {
+            key.set(Shader_bool::VARIANT_DEPTH_ONLY, true);
+            break;
+        }
+        case Shadow_sub_variant::depth_only_distance: {
+            key.set(Shader_bool::VARIANT_DEPTH_ONLY,      true);
+            key.set(Shader_bool::VARIANT_SHADOW_DISTANCE, true);
+            break;
+        }
+        case Shadow_sub_variant::cube: {
+            key.set(Shader_bool::VARIANT_SHADOW_CUBE, true);
+            break;
+        }
+        default: {
+            ERHE_FATAL("bad Shadow_sub_variant");
+        }
+    }
+    const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(draw_list.key.buffer_set.vertex_input_key);
+    const erhe::graphics::Reloadable_shader_stages* stages = m_shader_variant_cache.get(key, &vertex_input.vertex_format);
+    if (stages == nullptr) {
+        if (!draw_list.shadow_resolution_failed) {
+            log_draw_list->warn("No shadow shader variant ({}) for draw list: {}", c_str(sub_variant), draw_list.key.describe());
+            draw_list.shadow_resolution_failed = true;
+        }
+        return nullptr;
+    }
+    ++m_lazy_resolution_count;
+    draw_list.shadow_resolutions[slot] = stages;
+    return stages;
+}
+
+// --- Drawing -------------------------------------------------------------------
+
+namespace {
+
+[[nodiscard]] auto layer_selected(const std::span<const erhe::scene::Layer_id> layers, const erhe::scene::Layer_id layer_id) -> bool
+{
+    if (layers.empty()) {
+        return true;
+    }
+    for (const erhe::scene::Layer_id selected : layers) {
+        if (selected == layer_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+void Draw_list_scene::draw_list_chunks(
+    Draw_list&                               draw_list,
+    erhe::graphics::Render_command_encoder&  render_encoder,
+    erhe::graphics::Render_pipeline&         render_pipeline,
+    Primitive_buffer&                        primitive_buffer,
+    Draw_indirect_buffer&                    draw_indirect_buffer,
+    const Primitive_interface_settings&      primitive_settings,
+    const erhe::Item_filter&                 filter,
+    Draw_statistics&                         statistics
+)
+{
+    // P3a: chunk entries so no multi-draw exceeds the primitive block capacity
+    // (ERHE_DRAW_ID indexes the primitives[] array).
+    const std::size_t max_per_chunk = std::max<std::size_t>(std::size_t{1}, primitive_buffer.get_max_primitive_count());
+    const std::size_t entry_count   = draw_list.entries.size();
+    bool list_drew = false;
+
+    erhe::graphics::Buffer* index_buffer = m_mesh_memory.get_index_buffer(draw_list.key.buffer_set.index_buffer);
+    const erhe::dataformat::Format index_format = m_mesh_memory.get_index_format(draw_list.key.buffer_set.index_buffer);
+    bool buffers_bound = false;
+
+    for (std::size_t begin = 0; begin < entry_count; begin += max_per_chunk) {
+        const std::size_t end = std::min(entry_count, begin + max_per_chunk);
+
+        // Skip chunks with no passing entries without acquiring ring buffer
+        // space (e.g. the "selected" passes when nothing is selected).
+        bool any_passing = false;
+        for (std::size_t i = begin; i < end; ++i) {
+            if (filter(draw_list.entries[i].flag_bits)) {
+                any_passing = true;
+                break;
+            }
+        }
+        if (!any_passing) {
+            continue;
+        }
+
+        std::size_t primitive_count = 0;
+        erhe::graphics::Ring_buffer_range primitive_range = primitive_buffer.update(draw_list, begin, end, *this, filter, primitive_settings, primitive_count);
+        if (primitive_count == 0) {
+            primitive_range.release();
+            continue;
+        }
+        Draw_indirect_buffer_range draw_indirect_range = draw_indirect_buffer.update(draw_list, begin, end, filter);
+        ERHE_VERIFY(draw_indirect_range.draw_indirect_count == primitive_count);
+
+        if (!buffers_bound) {
+            render_encoder.set_render_pipeline(render_pipeline);
+            render_encoder.set_index_buffer(index_buffer);
+            for (std::size_t stream_index = 0, stream_end = draw_list.key.buffer_set.vertex_buffers.size(); stream_index < stream_end; ++stream_index) {
+                erhe::graphics::Buffer* vertex_buffer = m_mesh_memory.get_vertex_buffer(draw_list.key.buffer_set.vertex_buffers[stream_index]);
+                render_encoder.set_vertex_buffer(vertex_buffer, 0, static_cast<uint32_t>(stream_index));
+            }
+            buffers_bound = true;
+        }
+
+        primitive_buffer.bind(render_encoder, primitive_range);
+        draw_indirect_buffer.bind(render_encoder, draw_indirect_range.range);
+
+        render_encoder.multi_draw_indexed_primitives_indirect(
+            render_pipeline.get_create_info().base.input_assembly.primitive_topology,
+            index_format,
+            draw_indirect_range.range.get_byte_start_offset_in_buffer(),
+            draw_indirect_range.draw_indirect_count,
+            sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command)
+        );
+
+        primitive_range.release();
+        draw_indirect_range.range.release();
+
+        statistics.entry_count     += primitive_count;
+        statistics.draw_call_count += 1;
+        list_drew = true;
+    }
+    if (list_drew) {
+        statistics.draw_list_count += 1;
+    }
+}
+
+auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Draw_statistics
+{
+    ERHE_PROFILE_FUNCTION();
+    assert_main_thread();
+
+    Draw_statistics statistics{};
+    ERHE_VERIFY(parameters.render_pass != nullptr);
+
+    set_color_environment(parameters.environment);
+
+    const Draw_blending classes_both[] = { Draw_blending::opaque, Draw_blending::translucent };
+    const std::span<const Draw_blending> classes =
+        (parameters.blending == Draw_blending_selection::opaque_only     ) ? std::span<const Draw_blending>{classes_both, 1} :
+        (parameters.blending == Draw_blending_selection::translucent_only) ? std::span<const Draw_blending>{classes_both + 1, 1} :
+                                                                             std::span<const Draw_blending>{classes_both, 2};
+
+    for (const Draw_blending blending : classes) {
+        for (std::size_t list_index = 0, list_end = m_draw_lists.size(); list_index < list_end; ++list_index) {
+            Draw_list& draw_list = m_draw_lists[list_index];
+            const Draw_list_key& key = draw_list.key;
+            if ((key.purpose != Draw_purpose::color) || (key.blending != blending) || draw_list.entries.empty()) {
+                continue;
+            }
+            if (!layer_selected(parameters.layers, key.layer_id)) {
+                continue;
+            }
+            const std::size_t resolution_count_before = draw_list.color_resolutions.size();
+            const erhe::graphics::Reloadable_shader_stages* stages = resolve_color_stages(draw_list, parameters.multiview_count);
+            if (draw_list.color_resolutions.size() != resolution_count_before) {
+                ++m_lazy_resolution_count;
+            }
+            if (stages == nullptr) {
+                continue;
+            }
+            const erhe::graphics::Color_blend_state* color_blend = (parameters.color_blend_override != nullptr)
+                ? parameters.color_blend_override
+                : (blending == Draw_blending::opaque)
+                    ? &erhe::graphics::Color_blend_state::color_blend_disabled
+                    : &erhe::graphics::Color_blend_state::color_blend_premultiplied;
+            const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(key.buffer_set.vertex_input_key);
+            erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
+                parameters.render_pass->get_descriptor(),
+                color_blend,
+                &stages->shader_stages,
+                vertex_input.vertex_input.get(),
+                &vertex_input.vertex_format,
+                key.negative_determinant
+            );
+            if (render_pipeline == nullptr) {
+                log_draw_list->warn("No render pipeline for draw list {}: {}", list_index, key.describe());
+                continue;
+            }
+            erhe::graphics::Scoped_debug_group list_scope{
+                parameters.render_encoder.get_command_buffer(),
+                erhe::utility::Debug_label{
+                    fmt::format("draw list {} entries={} {}", list_index, draw_list.entries.size(), key.describe())
+                }
+            };
+            draw_list_chunks(
+                draw_list,
+                parameters.render_encoder,
+                *render_pipeline,
+                parameters.primitive_buffer,
+                parameters.draw_indirect_buffer,
+                parameters.primitive_settings,
+                parameters.filter,
+                statistics
+            );
+        }
+    }
+    return statistics;
+}
+
+auto Draw_list_scene::draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics
+{
+    ERHE_PROFILE_FUNCTION();
+    assert_main_thread();
+
+    Draw_statistics statistics{};
+    ERHE_VERIFY(parameters.render_pass != nullptr);
+    ERHE_VERIFY(parameters.color_blend != nullptr);
+
+    for (std::size_t list_index = 0, list_end = m_draw_lists.size(); list_index < list_end; ++list_index) {
+        Draw_list& draw_list = m_draw_lists[list_index];
+        const Draw_list_key& key = draw_list.key;
+        if ((key.purpose != Draw_purpose::shadow) || draw_list.entries.empty()) {
+            continue;
+        }
+        if (!layer_selected(parameters.layers, key.layer_id)) {
+            continue;
+        }
+        const erhe::graphics::Reloadable_shader_stages* stages = resolve_shadow_stages(draw_list, parameters.sub_variant);
+        if (stages == nullptr) {
+            continue;
+        }
+        const Vertex_input_entry& vertex_input = m_mesh_memory.get_vertex_input(key.buffer_set.vertex_input_key);
+        erhe::graphics::Render_pipeline* render_pipeline = parameters.base_render_pipeline.get_pipeline_for(
+            parameters.render_pass->get_descriptor(),
+            parameters.color_blend,
+            &stages->shader_stages,
+            vertex_input.vertex_input.get(),
+            &vertex_input.vertex_format,
+            key.negative_determinant
+        );
+        if (render_pipeline == nullptr) {
+            log_draw_list->warn("No shadow render pipeline for draw list {}: {}", list_index, key.describe());
+            continue;
+        }
+        erhe::graphics::Scoped_debug_group list_scope{
+            parameters.render_encoder.get_command_buffer(),
+            erhe::utility::Debug_label{
+                fmt::format("shadow draw list {} entries={} {}", list_index, draw_list.entries.size(), key.describe())
+            }
+        };
+        draw_list_chunks(
+            draw_list,
+            parameters.render_encoder,
+            *render_pipeline,
+            parameters.primitive_buffer,
+            parameters.draw_indirect_buffer,
+            Primitive_interface_settings{},
+            parameters.filter,
+            statistics
+        );
+    }
+    return statistics;
 }
 
 } // namespace erhe::scene_renderer

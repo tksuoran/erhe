@@ -1,9 +1,11 @@
 #include "erhe_scene_renderer/draw_indirect_buffer.hpp"
+#include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
@@ -162,6 +164,57 @@ auto Draw_indirect_buffer::update(
             instance_count,
             first_index,
             base_vertex,
+            base_instance
+        };
+        erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));
+        write_offset += entry_size;
+        ++draw_indirect_count;
+    }
+
+    buffer_range.bytes_written(write_offset);
+    buffer_range.close();
+
+    return Draw_indirect_buffer_range{
+        std::move(buffer_range),
+        draw_indirect_count
+    };
+}
+
+auto Draw_indirect_buffer::update(
+    const Draw_list&         draw_list,
+    const std::size_t        begin,
+    const std::size_t        end,
+    const erhe::Item_filter& filter
+) -> Draw_indirect_buffer_range
+{
+    ERHE_PROFILE_FUNCTION();
+
+    ERHE_VERIFY(begin <= end);
+    ERHE_VERIFY(end <= draw_list.entries.size());
+    const std::size_t                 max_draw_count = end - begin;
+    const std::size_t                 entry_size     = sizeof(erhe::graphics::Draw_indexed_primitives_indirect_command);
+    const std::size_t                 max_byte_count = max_draw_count * entry_size;
+    erhe::graphics::Ring_buffer_range buffer_range   = acquire(erhe::graphics::Ring_buffer_usage::CPU_write, max_byte_count);
+    const std::span<std::byte>        gpu_data       = buffer_range.get_span();
+    std::size_t        write_offset       {0};
+    constexpr uint32_t instance_count     {1};
+    constexpr uint32_t base_instance      {0};
+    std::size_t        draw_indirect_count{0};
+
+    for (std::size_t i = begin; i < end; ++i) {
+        const Draw_list_entry& entry = draw_list.entries[i];
+        if (!filter(entry.flag_bits)) {
+            continue;
+        }
+        uint32_t index_count = entry.index_count;
+        if (m_max_index_count_enable) {
+            index_count = std::min(index_count, static_cast<uint32_t>(m_max_index_count));
+        }
+        const erhe::graphics::Draw_indexed_primitives_indirect_command draw_command{
+            index_count,
+            instance_count,
+            entry.first_index,
+            entry.base_vertex,
             base_instance
         };
         erhe::graphics::write(gpu_data, write_offset, erhe::graphics::as_span(draw_command));

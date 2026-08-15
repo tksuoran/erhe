@@ -60,6 +60,11 @@ public:
     // Every entry belonging to this object, for O(entries of this object)
     // unregister / flag update / rebuild.
     std::vector<Draw_list_entry_location> locations;
+    // Distinct materials the object's primitives referenced at registration
+    // (raw pointers; kept alive through info.mesh). Used to maintain the
+    // material identity watch (R12 material-content edits) and to find the
+    // objects to re-register when a watched material changes.
+    std::vector<const erhe::primitive::Material*> materials;
     // Free-list bookkeeping.
     uint32_t                              generation          {0};
     bool                                  alive               {false};

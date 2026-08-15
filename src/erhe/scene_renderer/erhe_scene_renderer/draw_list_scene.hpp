@@ -2,6 +2,10 @@
 
 #include "erhe_scene_renderer/draw_list.hpp"
 #include "erhe_scene_renderer/draw_list_object.hpp"
+#include "erhe_scene_renderer/primitive_buffer.hpp"
+#include "erhe_scene_renderer/shader_key.hpp"
+
+#include "erhe_item/item.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -12,10 +16,81 @@
 #include <unordered_map>
 #include <vector>
 
+namespace erhe::graphics {
+    class Base_render_pipeline;
+    class Color_blend_state;
+    class Render_command_encoder;
+    class Render_pass;
+    class Render_pipeline;
+}
+
 namespace erhe::scene_renderer {
 
+class Draw_indirect_buffer;
 class Mesh_memory;
+class Primitive_buffer;
 class Shader_variant_cache;
+
+// Environment configuration of the color purpose (R18): the pass-derived
+// Shader_key components that are identical for every color pass of a scene in
+// a frame. Recomputed cheaply by the caller per pass and compared; a change
+// invalidates the cached color resolutions of every list.
+class Color_environment
+{
+public:
+    Light_layer_partition light_partition{};
+    uint32_t              shadow_filter    {0};
+    uint32_t              shadow_bias      {1};
+    uint32_t              shadow_technique {0};
+    uint32_t              shadow_depth_bits{0};
+
+    [[nodiscard]] auto operator==(const Color_environment& other) const -> bool;
+    // The environment Shader_key exactly as Forward_renderer::render() builds
+    // it (light counts, shadow axes; SHADER_DEBUG 0), before the multiview
+    // axis is added per view configuration.
+    [[nodiscard]] auto make_environment_key() const -> Shader_key;
+};
+
+// Everything draw_color() needs beyond what the lists carry (R6/R7/R8/R8a).
+// GPU buffers are the caller's (Forward_renderer); the caller has already
+// done its per-pass camera / light / material / joint / texture-heap
+// update + bind sequence.
+class Draw_color_parameters
+{
+public:
+    erhe::graphics::Render_command_encoder& render_encoder;
+    const erhe::graphics::Render_pass*      render_pass         {nullptr};
+    erhe::graphics::Base_render_pipeline&   base_render_pipeline;
+    Primitive_buffer&                       primitive_buffer;
+    Draw_indirect_buffer&                   draw_indirect_buffer;
+    Primitive_interface_settings            primitive_settings  {};
+    erhe::Item_filter                       filter              {};
+    std::span<const erhe::scene::Layer_id>  layers              {};
+    Draw_blending_selection                 blending            {Draw_blending_selection::opaque_only};
+    // 0 for single view passes, N >= 2 for multiview (R19).
+    uint16_t                                multiview_count     {0};
+    Color_environment                       environment         {};
+    // nullptr: pick color_blend_disabled / color_blend_premultiplied by the
+    // list's blending class, as Forward_renderer::render() does.
+    const erhe::graphics::Color_blend_state* color_blend_override{nullptr};
+    std::string_view                        debug_label         {};
+};
+
+class Draw_shadow_parameters
+{
+public:
+    erhe::graphics::Render_command_encoder& render_encoder;
+    const erhe::graphics::Render_pass*      render_pass         {nullptr};
+    erhe::graphics::Base_render_pipeline&   base_render_pipeline;
+    const erhe::graphics::Color_blend_state* color_blend        {nullptr};
+    Primitive_buffer&                       primitive_buffer;
+    Draw_indirect_buffer&                   draw_indirect_buffer;
+    erhe::Item_filter                       filter              {};
+    std::span<const erhe::scene::Layer_id>  layers              {};
+    Shadow_sub_variant                      sub_variant         {Shadow_sub_variant::depth_only};
+    std::string_view                        debug_label         {};
+};
+
 
 // Persistent, incrementally maintained rendering-side representation of a
 // scene: registered objects classified into draw lists once, reused every
@@ -81,6 +156,23 @@ public:
     // in flush_pending() (R10b diagnostics).
     [[nodiscard]] auto get_determinant_flip_count() const -> std::size_t { return m_determinant_flip_count; }
 
+    // --- Drawing (main thread, inside the owning renderer's pass) ------------
+    // Draws every list matching layers / blending, filtering entries by
+    // parameters.filter against their mirrored flag bits (R7a). Cached
+    // resolutions are used (R20); a not-yet-resolved (view config,
+    // sub-variant) resolves once, lazily. Returns what was drawn.
+    auto draw_color (const Draw_color_parameters&  parameters) -> Draw_statistics;
+    auto draw_shadow(const Draw_shadow_parameters& parameters) -> Draw_statistics;
+
+    // Object mesh lookup for per-entry upload (Primitive_buffer).
+    [[nodiscard]] auto get_object_mesh(uint32_t object_index) const -> erhe::scene::Mesh*;
+
+    // Diagnostics: how many times the color environment changed (each change
+    // re-resolves every color list) and how many lazy resolutions happened.
+    [[nodiscard]] auto get_color_environment_change_count() const -> std::size_t { return m_color_environment_change_count; }
+    [[nodiscard]] auto get_lazy_resolution_count         () const -> std::size_t { return m_lazy_resolution_count; }
+    [[nodiscard]] auto get_material_change_count         () const -> std::size_t { return m_material_change_count; }
+
 private:
     class Pending_op
     {
@@ -101,6 +193,30 @@ private:
     void remove_entries    (uint32_t object_index);
     auto get_or_create_draw_list(const Draw_list_key& key) -> uint32_t;
     void remove_entry      (const Draw_list_entry_location& location);
+    // Resolution (R17): compile / look up the shader stages for a list.
+    // R12 material-content edits: identity hash = Shader_key{}.derive(material,
+    // nullptr, false).get_hash(), i.e. exactly the material-derived key
+    // components. Watched per distinct registered material (use-counted);
+    // check_material_changes() runs in flush_pending() and re-registers every
+    // object using a material whose hash changed.
+    void watch_object_materials  (uint32_t object_index);
+    void unwatch_object_materials(uint32_t object_index);
+    void check_material_changes  ();
+    void resolve_color_list  (Draw_list& draw_list);                    // all enumerated view configs
+    auto resolve_color_stages(Draw_list& draw_list, uint16_t multiview_count) -> const erhe::graphics::Reloadable_shader_stages*;
+    auto resolve_shadow_stages(Draw_list& draw_list, Shadow_sub_variant sub_variant) -> const erhe::graphics::Reloadable_shader_stages*;
+    void set_color_environment(const Color_environment& environment);
+    // Draw one list in chunks of <= max primitives per multi-draw (P3a).
+    void draw_list_chunks(
+        Draw_list&                               draw_list,
+        erhe::graphics::Render_command_encoder&  render_encoder,
+        erhe::graphics::Render_pipeline&         render_pipeline,
+        Primitive_buffer&                        primitive_buffer,
+        Draw_indirect_buffer&                    draw_indirect_buffer,
+        const Primitive_interface_settings&      primitive_settings,
+        const erhe::Item_filter&                 filter,
+        Draw_statistics&                         statistics
+    );
 
     Mesh_memory&                                                     m_mesh_memory;
     Shader_variant_cache&                                            m_shader_variant_cache;
@@ -117,6 +233,20 @@ private:
     mutable std::mutex                                               m_pending_mutex;
     std::vector<Pending_op>                                          m_pending;
     std::size_t                                                      m_determinant_flip_count{0};
+
+    class Material_watch
+    {
+    public:
+        std::size_t use_count    {0};
+        uint64_t    identity_hash{0};
+    };
+    std::unordered_map<const erhe::primitive::Material*, Material_watch> m_material_watches;
+    std::size_t                                                      m_material_change_count{0};
+
+    Color_environment                                                m_color_environment{};
+    bool                                                             m_color_environment_set{false};
+    std::size_t                                                      m_color_environment_change_count{0};
+    std::size_t                                                      m_lazy_resolution_count{0};
 };
 
 } // namespace erhe::scene_renderer
