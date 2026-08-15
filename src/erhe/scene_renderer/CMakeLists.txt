@@ -46,6 +46,15 @@ erhe_target_sources_grouped(
     erhe_scene_renderer/shadow_renderer.hpp
     erhe_scene_renderer/texel_renderer.cpp
     erhe_scene_renderer/texel_renderer.hpp
+
+    erhe_scene_renderer/draw_list_entry.cpp
+    erhe_scene_renderer/draw_list_entry.hpp
+    erhe_scene_renderer/draw_list_object.cpp
+    erhe_scene_renderer/draw_list_object.hpp
+    erhe_scene_renderer/draw_list_scene.cpp
+    erhe_scene_renderer/draw_list_scene.hpp
+    erhe_scene_renderer/draw_list.cpp
+    erhe_scene_renderer/draw_list.hpp
 )
 target_link_libraries(
     ${_target}
