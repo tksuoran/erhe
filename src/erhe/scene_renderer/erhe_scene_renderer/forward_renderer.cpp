@@ -87,18 +87,18 @@ const char* safe_str(const char* str)
     return str != nullptr ? str : "";
 }
 
-// The light layer partition the shading variant is selected with. Derived from
-// the Light_projections (which lights actually received a shadow layer, after
-// the Shadow_light_limits caps in Light_projections::apply()), so the shader's
-// shadow-mapped / non-shadow loop bounds match the UBO slot layout
-// Light_buffer::update() writes. Without light projections nothing is
-// shadow-mapped (Light_buffer::update() writes no light data then either).
+// The light layer partition the shading variant is selected with. Replayed
+// from the Light_projections (which lights actually received a UBO slot and a
+// shadow layer under the Light_count_limits in Light_projections::apply()),
+// so the shader's shadow-mapped / non-shadow loop bounds match the UBO slot
+// layout Light_buffer::update() writes. Without light projections no light is
+// shaded (Light_buffer::update() writes no light data then either).
 [[nodiscard]] auto get_light_layer_partition(const Forward_renderer::Base_render_parameters& base) -> Light_layer_partition
 {
     if (base.light_projections != nullptr) {
         return base.light_projections->compute_light_layer_partition(base.lights);
     }
-    return compute_light_layer_partition(base.lights, Shadow_light_limits{});
+    return Light_layer_partition{};
 }
 
 }

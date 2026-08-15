@@ -16,6 +16,7 @@ namespace erhe::primitive  { class Material; }
 namespace erhe::scene {
     class Light;
     class Light_layer;
+    enum class Light_type : unsigned int;
 }
 
 namespace erhe::scene_renderer {
@@ -237,37 +238,79 @@ public:
     [[nodiscard]] auto operator()(const Shader_key& key) const noexcept -> std::size_t;
 };
 
-// Caps on how many lights may be shadow-mapped, from the active graphics
-// preset (Graphics_preset_entry::shadow_light_count / point_shadow_light_count)
-// via the shadow map allocations sized from it. Directional and spot lights
-// share the 2D shadow map array; the cap is consumed type-major (directional
-// first, then spot). Point lights render into the separate cube array and
-// have their own cap. Shadow-casting lights beyond a cap are treated as
-// non-shadow lights everywhere: light layer partition (shader variant light
-// loops), UBO slot / shadow layer assignment (Light_projections::apply) and
-// the shadow caster passes (Shadow_renderer::render). Default = nothing can
-// be shadow-mapped, which is the right answer when there is no shadow map.
-class Shadow_light_limits
+// Light type bucket index used by Light_count_limits / Light_layer_partition:
+// directional, spot, point, other. "other" is never shaded by the standard
+// shader (its light loops cover the first three).
+[[nodiscard]] auto light_type_index(erhe::scene::Light_type type) -> std::size_t;
+inline constexpr std::size_t light_type_count = 4;
+
+// Per light type limits on how many lights are shaded, from the active
+// graphics preset (Graphics_preset_entry::*_shadow_light_count /
+// *_unshadowed_light_count): per_type_shadow[t] lights of type t are
+// shadow-mapped, and per_type_unshadowed[t] more are shaded without a shadow
+// map. Lights are handed out in input order: an active light takes a shadow
+// slot of its type while it casts shadows and the shadow limit has room,
+// otherwise an unshadowed slot while the unshadowed limit has room, otherwise
+// it is not shaded at all (no UBO slot). This is applied identically by
+// compute_light_layer_partition (shader variant light loop bounds) and
+// Light_projections::apply (UBO slot / shadow layer assignment), so the
+// forward pass, Light_buffer and Shadow_renderer always agree.
+//
+// The shadow limits also size the shadow maps: directional + spot shadow
+// lights share the 2D shadow map array (layer count = their sum), each point
+// shadow light gets a cube of the cube-map array. Callers with no shadow map
+// pass zero shadow limits: every light within the unshadowed limits is then
+// shaded unshadowed. Default = no lights shaded.
+class Light_count_limits
 {
 public:
-    std::size_t max_shadow_map_light_count  {0}; // directional + spot (2D array layers)
-    std::size_t max_point_shadow_light_count{0}; // point (cube array cubes)
+    std::size_t per_type_shadow    [light_type_count] {0, 0, 0, 0}; // directional, spot, point, other
+    std::size_t per_type_unshadowed[light_type_count] {0, 0, 0, 0};
+
+    // Number of 2D shadow map array layers (directional + spot shadow lights).
+    [[nodiscard]] auto shadow_map_2d_layer_count() const -> std::size_t
+    {
+        return per_type_shadow[0] + per_type_shadow[1];
+    }
+    // Number of point light shadow cubes.
+    [[nodiscard]] auto point_shadow_cube_count() const -> std::size_t
+    {
+        return per_type_shadow[2];
+    }
+    // Same unshadowed limits, no shadow-mapped lights: what a renderer with
+    // no shadow map (or shadows disabled) shades with.
+    [[nodiscard]] auto without_shadows() const -> Light_count_limits
+    {
+        Light_count_limits result{};
+        for (std::size_t t = 0; t < light_type_count; ++t) {
+            result.per_type_unshadowed[t] = per_type_unshadowed[t];
+        }
+        return result;
+    }
+    // Same shadow / unshadowed limits for directional, spot and point.
+    [[nodiscard]] static auto uniform(const std::size_t shadow_count, const std::size_t unshadowed_count) -> Light_count_limits
+    {
+        return Light_count_limits{
+            .per_type_shadow     = {shadow_count,     shadow_count,     shadow_count,     0},
+            .per_type_unshadowed = {unshadowed_count, unshadowed_count, unshadowed_count, 0}
+        };
+    }
 };
 
 class Light_layer_partition
 {
 public:
-    std::size_t per_type_shadow   [4] {0, 0, 0, 0};
-    std::size_t per_type_nonshadow[4] {0, 0, 0, 0};
+    std::size_t per_type_shadow   [light_type_count] {0, 0, 0, 0};
+    std::size_t per_type_nonshadow[light_type_count] {0, 0, 0, 0};
 };
 
-// Counts active lights per type into shadow-mapped / non-shadow buckets,
-// with the shadow-mapped counts capped by shadow_light_limits (the overflow
-// counts as non-shadow). This is the canonical partition:
+// Counts the active lights that get shaded, per type, into shadow-mapped /
+// non-shadow buckets, walking lights in input order against light_count_limits
+// (see Light_count_limits for the rule). This is the canonical partition:
 // Light_projections::apply() assigns UBO slots and shadow layers from it.
 [[nodiscard]] auto compute_light_layer_partition(
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
-    const Shadow_light_limits&                           shadow_light_limits
+    const Light_count_limits&                            light_count_limits
 ) -> Light_layer_partition;
 
 } // namespace erhe::scene_renderer

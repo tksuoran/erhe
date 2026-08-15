@@ -57,7 +57,7 @@ public:
     auto get_rendergraph_node ()       -> erhe::rendergraph::Rendergraph_node*           override;
     auto get_light_projections() const -> const erhe::scene_renderer::Light_projections* override;
     auto get_shadow_texture   () const -> erhe::graphics::Texture*                       override;
-    [[nodiscard]] auto get_shadow_light_limits() const -> erhe::scene_renderer::Shadow_light_limits;
+    [[nodiscard]] auto get_light_count_limits () const -> erhe::scene_renderer::Light_count_limits;
 
     // Public API
     [[nodiscard]] auto get_content_library() -> std::shared_ptr<Content_library>;

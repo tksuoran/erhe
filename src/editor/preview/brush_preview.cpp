@@ -366,7 +366,7 @@ void Brush_preview::render_preview(
         m_shadow_texture,
         get_reverse_depth(),
         get_depth_range(),
-        get_shadow_light_limits()
+        get_light_count_limits()
     );
 
     {

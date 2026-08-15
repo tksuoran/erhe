@@ -19,19 +19,21 @@ static const char* const c_graphics_presets_openxr_file_path = "config/editor/gr
 
 class App_message_bus;
 
-// How many lights a graphics preset lets be shadow-mapped: shadow_light_count
-// directional + spot lights (2D shadow map array layers) and
-// point_shadow_light_count point lights (shadow cube array cubes); nothing
-// when shadow_enable is off. This is the single source for both the shadow
-// map allocation (Shadow_render_node::reconfigure, one render pass per light /
-// cube face) and the shadow caps the renderers partition lights with
-// (Light_projections::apply / compute_light_layer_partition).
-[[nodiscard]] auto get_shadow_light_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Shadow_light_limits;
+// The graphics preset's per light type light count limits: how many
+// directional / spot / point lights are shadow-mapped
+// (*_shadow_light_count; all zero when shadow_enable is off) and how many
+// more are shaded without a shadow map (*_unshadowed_light_count). This is
+// the single source for both the shadow map allocation
+// (Shadow_render_node::reconfigure: shadow_map_2d_layer_count() 2D layers /
+// render passes, point_shadow_cube_count() cubes) and the limits the
+// renderers hand out light slots with (Light_projections::apply /
+// compute_light_layer_partition).
+[[nodiscard]] auto get_light_count_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Light_count_limits;
 
 class Graphics_settings
 {
 public:
-    void get_limits                   (const erhe::graphics::Device& instance, erhe::dataformat::Format format);
+    void get_limits                   (const erhe::graphics::Device& instance, erhe::dataformat::Format format, int max_light_count);
     void read_presets                 (bool openxr);
     void write_presets                (bool openxr);
     void apply_limits                 (Graphics_preset_entry& graphics_preset);
@@ -59,6 +61,9 @@ public:
     std::vector<int>                   msaa_sample_count_entry_values;
     int                                max_shadow_resolution{4};
     int                                max_depth_layers{1};
+    // Light UBO capacity (Renderer_config::max_light_count): bounds the sum of
+    // a preset's per light type light counts.
+    int                                max_light_count{32};
 
 private:
     // Set by Settings window preset edits; cleared when the preset file is
@@ -81,7 +86,7 @@ class App_settings
 public:
     App_settings();
 
-    void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor);
+    void apply_limits(erhe::graphics::Device& instance, App_message_bus& message_bus, float window_scale_factor, int max_light_count);
 
     // Per-frame settings tick: autosaves editor_settings.json and the graphics
     // preset file when their dirty flags are set (touch() /

@@ -785,11 +785,13 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
         return r.dump();
     }
 
-    // Shadow map assignment as of the last shadow pass of a view showing this
-    // scene: a light is shadow-mapped only if it got a shadow layer, which the
-    // active graphics preset caps (shadow_light_count directional + spot,
-    // point_shadow_light_count point). Shadow casters beyond the caps report
-    // cast_shadow true / shadow_mapped false.
+    // Light slot / shadow map assignment as of the last shadow pass of a view
+    // showing this scene, under the active graphics preset's per light type
+    // limits: shaded = got a light UBO slot (within *_shadow_light_count +
+    // *_unshadowed_light_count of its type), shadow_mapped = also got a shadow
+    // layer (within *_shadow_light_count). Shadow casters beyond the shadow
+    // limit report cast_shadow true / shadow_mapped false; lights beyond the
+    // unshadowed limit report shaded false.
     const erhe::scene_renderer::Light_projections* light_projections = nullptr;
     if (m_context.app_rendering != nullptr) {
         for (const std::shared_ptr<Shadow_render_node>& shadow_node : m_context.app_rendering->get_all_shadow_nodes()) {
@@ -827,6 +829,7 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
                 : nullptr;
             if (transforms != nullptr) {
                 constexpr std::size_t no_index = std::numeric_limits<std::size_t>::max();
+                light_json["shaded"]        = (transforms->index != no_index);
                 light_json["shadow_mapped"] = transforms->is_shadow_mapped();
                 if (transforms->shadow_index != no_index) {
                     light_json["shadow_index"] = transforms->shadow_index;

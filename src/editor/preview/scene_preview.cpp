@@ -245,15 +245,16 @@ auto Scene_preview::get_light_projections() const -> const erhe::scene_renderer:
     return &m_light_projections;
 }
 
-auto Scene_preview::get_shadow_light_limits() const -> erhe::scene_renderer::Shadow_light_limits
+auto Scene_preview::get_light_count_limits() const -> erhe::scene_renderer::Light_count_limits
 {
     // The preview never renders shadow maps: the 2D map is a 1x1 single-layer
     // dummy cleared to "lit" and there is no point cube array. Its layer count
-    // is the 2D cap (so the preview's shadowed directional light keeps its
-    // shadow-mapped slot / variant), point shadows are never mapped.
-    return erhe::scene_renderer::Shadow_light_limits{
-        .max_shadow_map_light_count   = m_shadow_texture ? static_cast<std::size_t>(m_shadow_texture->get_array_layer_count()) : std::size_t{0},
-        .max_point_shadow_light_count = 0
+    // is the directional shadow limit (so the preview's shadowed key light
+    // keeps its shadow-mapped slot / variant), spot / point shadows are never
+    // mapped, and a few unshadowed lights of each type are shaded.
+    return erhe::scene_renderer::Light_count_limits{
+        .per_type_shadow     = {m_shadow_texture ? static_cast<std::size_t>(m_shadow_texture->get_array_layer_count()) : std::size_t{0}, 0, 0, 0},
+        .per_type_unshadowed = {4, 4, 4, 0}
     };
 }
 
@@ -318,7 +319,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
     // variants with all light counts = 0 and the first preview render
     // would compile-on-miss for every standard-shader variant the preview
     // actually uses.
-    const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights, get_shadow_light_limits());
+    const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(light_layer->lights, get_light_count_limits());
 
     // Preview is single-view -- offscreen render target, never multiview.
     static constexpr uint32_t single_view = 0u;

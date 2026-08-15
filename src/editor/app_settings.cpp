@@ -41,10 +41,10 @@ App_settings::App_settings()
     );
 }
 
-void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus, const float window_scale_factor)
+void App_settings::apply_limits(erhe::graphics::Device& instance, App_message_bus& app_message_bus, const float window_scale_factor, const int max_light_count)
 {
     imgui.scale_factor = window_scale_factor;
-    graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat); // TODO Do not hard code depth format
+    graphics.get_limits(instance, erhe::dataformat::Format::format_d32_sfloat, max_light_count); // TODO Do not hard code depth format
     graphics.select_active_graphics_preset(app_message_bus);
 }
 
@@ -68,19 +68,34 @@ auto App_settings::get_ui_scale() const -> float
     return imgui.font_size / 16.0f;
 }
 
-auto get_shadow_light_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Shadow_light_limits
+auto get_light_count_limits(const Graphics_preset_entry& graphics_preset) -> erhe::scene_renderer::Light_count_limits
 {
-    if (!graphics_preset.shadow_enable) {
-        return erhe::scene_renderer::Shadow_light_limits{};
-    }
-    return erhe::scene_renderer::Shadow_light_limits{
-        .max_shadow_map_light_count   = static_cast<std::size_t>(std::max(0, graphics_preset.shadow_light_count)),
-        .max_point_shadow_light_count = static_cast<std::size_t>(std::max(0, graphics_preset.point_shadow_light_count))
+    auto count = [](const int value) -> std::size_t { return static_cast<std::size_t>(std::max(0, value)); };
+    erhe::scene_renderer::Light_count_limits limits{
+        .per_type_shadow = {
+            count(graphics_preset.directional_shadow_light_count),
+            count(graphics_preset.spot_shadow_light_count),
+            count(graphics_preset.point_shadow_light_count),
+            0
+        },
+        .per_type_unshadowed = {
+            count(graphics_preset.directional_unshadowed_light_count),
+            count(graphics_preset.spot_unshadowed_light_count),
+            count(graphics_preset.point_unshadowed_light_count),
+            0
+        }
     };
+    if (!graphics_preset.shadow_enable) {
+        // Shadows off: no light is shadow-mapped, the unshadowed limits still
+        // decide how many lights of each type are shaded.
+        limits = limits.without_shadows();
+    }
+    return limits;
 }
 
-void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe::dataformat::Format format)
+void Graphics_settings::get_limits(const erhe::graphics::Device& instance, erhe::dataformat::Format format, const int in_max_light_count)
 {
+    max_light_count = std::max(0, in_max_light_count);
     msaa_sample_count_entry_s_strings.clear();
     msaa_sample_count_entry_strings.clear();
     msaa_sample_count_entry_values.clear();
@@ -121,8 +136,11 @@ void Graphics_settings::read_presets(const bool openxr)
         log_startup->info("Loaded {} graphics preset(s):", graphics_presets.size());
         for (const Graphics_preset_entry& entry : graphics_presets) {
             log_startup->info(
-                "  '{}': shadow_enable={} shadow_light_count={} shadow_resolution={}",
-                entry.name, entry.shadow_enable, entry.shadow_light_count, entry.shadow_resolution
+                "  '{}': shadow_enable={} shadow lights dir/spot/point={}/{}/{} unshadowed lights dir/spot/point={}/{}/{} shadow_resolution={}",
+                entry.name, entry.shadow_enable,
+                entry.directional_shadow_light_count,     entry.spot_shadow_light_count,     entry.point_shadow_light_count,
+                entry.directional_unshadowed_light_count, entry.spot_unshadowed_light_count, entry.point_unshadowed_light_count,
+                entry.shadow_resolution
             );
         }
     }
@@ -141,11 +159,31 @@ void Graphics_settings::write_presets(const bool openxr)
 
 void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
 {
-    graphics_preset.shadow_resolution  = std::min(graphics_preset.shadow_resolution,  max_shadow_resolution);
-    graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, max_depth_layers);
+    graphics_preset.shadow_resolution = std::min(graphics_preset.shadow_resolution, max_shadow_resolution);
+    graphics_preset.shadow_resolution = std::min(graphics_preset.shadow_resolution, 8192);
 
-    graphics_preset.shadow_resolution  = std::min(graphics_preset.shadow_resolution,  8192);
-    graphics_preset.shadow_light_count = std::min(graphics_preset.shadow_light_count, 32);
+    // Per light type light counts: their sum is bounded by the light UBO
+    // capacity (max_light_count; shadow lights keep priority, then unshadowed,
+    // directional / spot / point within each), and the directional + spot
+    // shadow lights share the 2D shadow map array, so their sum is bounded by
+    // the array layer limit (spot yields first).
+    {
+        int* const counts[] = {
+            &graphics_preset.directional_shadow_light_count,
+            &graphics_preset.spot_shadow_light_count,
+            &graphics_preset.point_shadow_light_count,
+            &graphics_preset.directional_unshadowed_light_count,
+            &graphics_preset.spot_unshadowed_light_count,
+            &graphics_preset.point_unshadowed_light_count
+        };
+        int remaining = max_light_count;
+        for (int* const count : counts) {
+            *count     = std::clamp(*count, 0, remaining);
+            remaining -= *count;
+        }
+    }
+    graphics_preset.directional_shadow_light_count = std::min(graphics_preset.directional_shadow_light_count, max_depth_layers);
+    graphics_preset.spot_shadow_light_count        = std::min(graphics_preset.spot_shadow_light_count, max_depth_layers - graphics_preset.directional_shadow_light_count);
 
     // Point shadow cube array (R32F) is allocated separately and is memory-heavy
     // (a 512^2 cube is ~6 MB, x 6 faces x count). Clamp resolution to the array
@@ -154,7 +192,6 @@ void Graphics_settings::apply_limits(Graphics_preset_entry& graphics_preset)
     graphics_preset.point_shadow_resolution  = std::min(graphics_preset.point_shadow_resolution, 4096);
     graphics_preset.point_shadow_light_count = std::min(graphics_preset.point_shadow_light_count, 8);
     graphics_preset.point_shadow_resolution  = std::max(graphics_preset.point_shadow_resolution, 1);
-    graphics_preset.point_shadow_light_count = std::max(graphics_preset.point_shadow_light_count, 0);
 }
 
 void Graphics_settings::select_active_graphics_preset(App_message_bus& app_message_bus)
@@ -172,10 +209,11 @@ void Graphics_settings::select_active_graphics_preset(App_message_bus& app_messa
         if (graphics_preset.name == current_graphics_preset.name) {
             current_graphics_preset = graphics_preset;
             log_startup->info(
-                "Using graphics preset '{}': shadow_enable={} shadow_light_count={} shadow_resolution={} msaa_sample_count={}",
+                "Using graphics preset '{}': shadow_enable={} shadow lights dir/spot={}/{} shadow_resolution={} msaa_sample_count={}",
                 current_graphics_preset.name,
                 current_graphics_preset.shadow_enable,
-                current_graphics_preset.shadow_light_count,
+                current_graphics_preset.directional_shadow_light_count,
+                current_graphics_preset.spot_shadow_light_count,
                 current_graphics_preset.shadow_resolution,
                 current_graphics_preset.msaa_sample_count
             );

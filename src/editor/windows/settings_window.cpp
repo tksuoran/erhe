@@ -434,10 +434,42 @@ void Settings_window::imgui()
         }
 
         //ImGui::SliderInt  ("Shadow Resolution",  &graphics_preset.shadow_resolution,  1, graphics.max_shadow_resolution);
-        add_entry("Shadow Light Count", [this](){
-            Graphics_preset_entry&   graphics_preset = get_graphics_preset();
-            Graphics_settings& graphics        = m_context.app_settings->graphics;
-            if (ImGui::SliderInt("##", &graphics_preset.shadow_light_count, 1, std::min(graphics.max_depth_layers, 32))) {
+        // Per light type light counts: shadow-mapped lights (directional + spot
+        // share the 2D shadow map array, so their sum is bounded by its layer
+        // limit) and lights shaded without a shadow map. The sum of all six is
+        // bounded by the light UBO capacity (Graphics_settings::apply_limits).
+        add_entry("Directional Shadow Lights", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            if (ImGui::SliderInt("##", &graphics_preset.directional_shadow_light_count, 0, std::min(graphics.max_depth_layers, graphics.max_light_count))) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Directional Lights (no shadow)", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            if (ImGui::SliderInt("##", &graphics_preset.directional_unshadowed_light_count, 0, graphics.max_light_count)) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Spot Shadow Lights", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            if (ImGui::SliderInt("##", &graphics_preset.spot_shadow_light_count, 0, std::min(graphics.max_depth_layers, graphics.max_light_count))) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Spot Lights (no shadow)", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            if (ImGui::SliderInt("##", &graphics_preset.spot_unshadowed_light_count, 0, graphics.max_light_count)) {
+                on_graphics_preset_edited();
+            }
+        });
+        add_entry("Point Lights (no shadow)", [this](){
+            Graphics_preset_entry& graphics_preset = get_graphics_preset();
+            Graphics_settings&     graphics        = m_context.app_settings->graphics;
+            if (ImGui::SliderInt("##", &graphics_preset.point_unshadowed_light_count, 0, graphics.max_light_count)) {
                 on_graphics_preset_edited();
             }
         });
@@ -450,7 +482,7 @@ void Settings_window::imgui()
                 on_graphics_preset_edited();
             }
         });
-        add_entry("Point Shadow Count", [this](){
+        add_entry("Point Shadow Lights", [this](){
             Graphics_preset_entry& graphics_preset = get_graphics_preset();
             if (ImGui::SliderInt("##", &graphics_preset.point_shadow_light_count, 0, 8)) {
                 on_graphics_preset_edited();

@@ -400,7 +400,7 @@ public:
             std::shared_ptr<erhe::graphics::Texture>{},
             (conventions.native_depth_range == erhe::math::Depth_range::zero_to_one), // reverse_depth
             conventions.native_depth_range,
-            erhe::scene_renderer::Shadow_light_limits{} // no shadow map -> no light is shadow-mapped
+            erhe::scene_renderer::Light_count_limits::uniform(0, 8) // no shadow map -> no light is shadow-mapped
         );
 
         std::vector<std::shared_ptr<erhe::scene::Mesh>> meshes;

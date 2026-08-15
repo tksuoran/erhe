@@ -263,22 +263,27 @@ auto Shader_key::derive(
     return key;
 }
 
+auto light_type_index(const erhe::scene::Light_type type) -> std::size_t
+{
+    switch (type) {
+        case erhe::scene::Light_type::directional: return 0;
+        case erhe::scene::Light_type::spot:        return 1;
+        case erhe::scene::Light_type::point:       return 2;
+        default:                                   return 3;
+    }
+}
+
 auto compute_light_layer_partition(
     std::span<const std::shared_ptr<erhe::scene::Light>> lights,
-    const Shadow_light_limits&                           shadow_light_limits
+    const Light_count_limits&                            light_count_limits
 ) -> Light_layer_partition
 {
     ERHE_PROFILE_FUNCTION();
 
-    auto type_index = [](const erhe::scene::Light_type t) -> std::size_t {
-        switch (t) {
-            case erhe::scene::Light_type::directional: return 0;
-            case erhe::scene::Light_type::spot:        return 1;
-            case erhe::scene::Light_type::point:       return 2;
-            default:                                   return 3;
-        }
-    };
-
+    // Same walk as Light_projections::apply() pass 2 (which uses the counts
+    // produced here as its caps): input order, shadow slot first while the
+    // light casts shadows and there is room, else an unshadowed slot while
+    // there is room, else the light is not shaded.
     Light_layer_partition partition{};
     for (const std::shared_ptr<erhe::scene::Light>& light : lights) {
         if (!light) {
@@ -291,32 +296,13 @@ auto compute_light_layer_partition(
             // loops skip it entirely.
             continue;
         }
-        const std::size_t t = type_index(light->type);
-        if (light->cast_shadow) {
+        const std::size_t t = light_type_index(light->type);
+        if (light->cast_shadow && (partition.per_type_shadow[t] < light_count_limits.per_type_shadow[t])) {
             ++partition.per_type_shadow[t];
-        } else {
+        } else if (partition.per_type_nonshadow[t] < light_count_limits.per_type_unshadowed[t]) {
             ++partition.per_type_nonshadow[t];
         }
     }
-
-    // Apply the shadow-mapped caps: shadow-casting lights beyond a cap fall
-    // into the non-shadow bucket of their type. Directional and spot share
-    // the 2D shadow map, consumed type-major (directional first).
-    std::size_t remaining_2d = shadow_light_limits.max_shadow_map_light_count;
-    for (std::size_t t = 0; t < 2; ++t) {
-        const std::size_t shadowed = std::min(partition.per_type_shadow[t], remaining_2d);
-        partition.per_type_nonshadow[t] += partition.per_type_shadow[t] - shadowed;
-        partition.per_type_shadow   [t]  = shadowed;
-        remaining_2d                    -= shadowed;
-    }
-    {
-        const std::size_t shadowed = std::min(partition.per_type_shadow[2], shadow_light_limits.max_point_shadow_light_count);
-        partition.per_type_nonshadow[2] += partition.per_type_shadow[2] - shadowed;
-        partition.per_type_shadow   [2]  = shadowed;
-    }
-    // Type index 3 ("other") is never shadow-mapped.
-    partition.per_type_nonshadow[3] += partition.per_type_shadow[3];
-    partition.per_type_shadow   [3]  = 0;
     return partition;
 }
 

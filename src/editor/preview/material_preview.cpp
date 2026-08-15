@@ -220,7 +220,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
         m_shadow_texture,
         get_reverse_depth(),
         get_depth_range(),
-        get_shadow_light_limits()
+        get_light_count_limits()
     );
     erhe::graphics::Render_command_encoder render_encoder = m_context.graphics_device->make_render_command_encoder(command_buffer);
     erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};

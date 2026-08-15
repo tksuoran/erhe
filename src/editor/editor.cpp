@@ -1473,7 +1473,8 @@ public:
             m_app_settings.apply_limits(
                 *m_graphics_device.get(),
                 app_message_bus,
-                m_window->get_scale_factor()
+                m_window->get_scale_factor(),
+                m_renderer_config.max_light_count
             );
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)

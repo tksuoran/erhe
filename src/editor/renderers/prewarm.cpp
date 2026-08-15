@@ -75,13 +75,13 @@ void prewarm_all(
     const uint32_t shadow_depth_bits = (context.app_settings != nullptr)
         ? static_cast<uint32_t>(context.app_settings->graphics.current_graphics_preset.shadow_depth_bits)
         : 0u;
-    // Shadow caps: the runtime partitions lights with the shadow layers the
-    // preset lets Shadow_render_node allocate; use the same caps here so the
-    // prewarmed light-count variants match when a scene has more shadow
-    // casters than the preset shadow-maps.
-    const erhe::scene_renderer::Shadow_light_limits shadow_light_limits = (context.app_settings != nullptr)
-        ? get_shadow_light_limits(context.app_settings->graphics.current_graphics_preset)
-        : erhe::scene_renderer::Shadow_light_limits{};
+    // Light count limits: the runtime partitions lights with the preset's per
+    // light type limits (Shadow_render_node); use the same limits here so the
+    // prewarmed light-count variants match when a scene has more lights than
+    // the preset shades / shadow-maps.
+    const erhe::scene_renderer::Light_count_limits light_count_limits = (context.app_settings != nullptr)
+        ? get_light_count_limits(context.app_settings->graphics.current_graphics_preset)
+        : erhe::scene_renderer::Light_count_limits{};
 
     // Collect the view counts the runtime forward path will encounter.
     // Single-view (view_count = 0, matches base.views.size() == 1 at runtime) is
@@ -136,7 +136,7 @@ void prewarm_all(
         if (light_layer != nullptr) {
             lights_span = light_layer->lights;
         }
-        const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights_span, shadow_light_limits);
+        const erhe::scene_renderer::Light_layer_partition partition = erhe::scene_renderer::compute_light_layer_partition(lights_span, light_count_limits);
 
         std::span<const std::shared_ptr<erhe::primitive::Material>> extra_materials{};
         const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();

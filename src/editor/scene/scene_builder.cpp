@@ -1398,27 +1398,27 @@ auto Scene_builder::add_lights(const Add_lights_args& args) -> bool
     // clamp here so callers via try_call() / key bindings / MCP / UI bypass
     // the duplicate clamp that used to live in Add_lights_command::apply_args.
     //
-    // Directional and spot lights both render into the shared 2D shadow-map
-    // texture array (capacity shadow_light_count). Directional lights take
-    // priority; spot lights get whatever budget remains. Point lights render
-    // into a separate cube-map shadow array (capacity point_shadow_light_count).
+    // Each light type has its own shadow light limit in the preset
+    // (directional_shadow_light_count / spot_shadow_light_count /
+    // point_shadow_light_count): directional and spot render into the shared 2D
+    // shadow-map texture array (one layer each), point lights into the separate
+    // cube-map shadow array.
     if (m_context.app_settings != nullptr) {
         const Graphics_preset_entry& preset = m_context.app_settings->graphics.current_graphics_preset;
         if (preset.shadow_enable) {
-            if (directional_light_shadow_count > preset.shadow_light_count) {
+            if (directional_light_shadow_count > preset.directional_shadow_light_count) {
                 log_startup->info(
-                    "Clamping Scene_builder::add_lights directional_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count)",
-                    directional_light_shadow_count, preset.shadow_light_count, preset.name
+                    "Clamping Scene_builder::add_lights directional_light_shadow_count from {} to {} (graphics preset '{}' directional_shadow_light_count)",
+                    directional_light_shadow_count, preset.directional_shadow_light_count, preset.name
                 );
-                directional_light_shadow_count = preset.shadow_light_count;
+                directional_light_shadow_count = preset.directional_shadow_light_count;
             }
-            const int remaining_2d_shadow = preset.shadow_light_count - directional_light_shadow_count;
-            if (spot_light_shadow_count > remaining_2d_shadow) {
+            if (spot_light_shadow_count > preset.spot_shadow_light_count) {
                 log_startup->info(
-                    "Clamping Scene_builder::add_lights spot_light_shadow_count from {} to {} (graphics preset '{}' shadow_light_count {} shared with {} directional shadow light(s))",
-                    spot_light_shadow_count, remaining_2d_shadow, preset.name, preset.shadow_light_count, directional_light_shadow_count
+                    "Clamping Scene_builder::add_lights spot_light_shadow_count from {} to {} (graphics preset '{}' spot_shadow_light_count)",
+                    spot_light_shadow_count, preset.spot_shadow_light_count, preset.name
                 );
-                spot_light_shadow_count = remaining_2d_shadow;
+                spot_light_shadow_count = preset.spot_shadow_light_count;
             }
             if (point_light_shadow_count > preset.point_shadow_light_count) {
                 log_startup->info(

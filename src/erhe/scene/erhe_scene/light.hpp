@@ -103,7 +103,7 @@ public:
 
     // True when Light_projections::apply() gave this light a shadow layer
     // (a 2D array layer or a point cube). Shadow-casting lights beyond the
-    // shadow caps (Shadow_light_limits) are not shadow-mapped: they get no
+    // shadow limits (Light_count_limits) are not shadow-mapped: they get no
     // shadow pass and are shaded unshadowed like non-shadow lights.
     [[nodiscard]] auto is_shadow_mapped() const -> bool
     {

@@ -103,7 +103,7 @@
     "name": "get_scene_cameras"
   },
   {
-    "description": "List all lights in a scene, with cast_shadow and (when a view has rendered the scene) the shadow map assignment from the last shadow pass: shadow_mapped, and shadow_index (2D shadow array layer, directional/spot) or point_shadow_index (shadow cube). Shadow casters beyond the active graphics preset caps (shadow_light_count directional + spot, point_shadow_light_count point) report shadow_mapped false and are shaded unshadowed.",
+    "description": "List all lights in a scene, with cast_shadow and (when a view has rendered the scene) the light slot assignment from the last shadow pass under the active graphics preset per-light-type limits: shaded (got a light UBO slot), shadow_mapped, and shadow_index (2D shadow array layer, directional/spot) or point_shadow_index (shadow cube). Shadow casters beyond the type's *_shadow_light_count report shadow_mapped false and are shaded unshadowed; lights beyond *_shadow_light_count + *_unshadowed_light_count report shaded false.",
     "inputSchema": {
       "properties": {
         "scene_name": {

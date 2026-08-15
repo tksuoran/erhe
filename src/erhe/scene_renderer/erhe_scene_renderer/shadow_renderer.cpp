@@ -303,23 +303,28 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         }
     }
 
-    // Shadow caps: how many lights of each shadow map kind can be shadow-mapped
-    // this frame. These are the render pass allocations (one 2D array layer /
-    // pass per directional or spot light, six passes per point light cube),
-    // which Shadow_render_node::reconfigure sizes from the active graphics
-    // preset (shadow_light_count / point_shadow_light_count). Light_projections
-    // ::apply() gives a shadow layer only to the first cap lights of each kind
-    // (type-major, input order); the rest are slotted as non-shadow lights,
-    // so the loops below skip them and the receiver shades them unshadowed.
+    // Light count limits: how many lights of each type are shadow-mapped this
+    // frame (and how many more shaded unshadowed), from the active graphics
+    // preset. The shadow limits are what Shadow_render_node::reconfigure sized
+    // the render pass allocations from (one 2D array layer / pass per
+    // directional or spot shadow light, six passes per point light cube); the
+    // shadow layer assignment below never exceeds them, and the pass loops
+    // gate on the pass counts as well. Light_projections::apply() gives a
+    // shadow layer only to the first shadow-limit casters of each type (input
+    // order); further casters are slotted as non-shadow lights while the
+    // unshadowed limit has room, so the loops below skip them and the
+    // receiver shades them unshadowed.
     const bool have_point_cubes =
         (parameters.point_cube_texture != nullptr) &&
         (parameters.point_cube_render_passes != nullptr) &&
         (parameters.point_shadow_viewport.width > 0) &&
         (parameters.point_shadow_viewport.height > 0);
-    const Shadow_light_limits shadow_light_limits{
-        .max_shadow_map_light_count   = parameters.render_passes.size(),
-        .max_point_shadow_light_count = have_point_cubes ? (parameters.point_cube_render_passes->size() / 6) : std::size_t{0}
-    };
+    Light_count_limits light_count_limits = parameters.light_count_limits;
+    light_count_limits.per_type_shadow[0] = std::min(light_count_limits.per_type_shadow[0], parameters.render_passes.size());
+    light_count_limits.per_type_shadow[1] = std::min(light_count_limits.per_type_shadow[1], parameters.render_passes.size() - light_count_limits.per_type_shadow[0]);
+    light_count_limits.per_type_shadow[2] = have_point_cubes
+        ? std::min(light_count_limits.per_type_shadow[2], parameters.point_cube_render_passes->size() / 6)
+        : std::size_t{0};
 
     // Also assigns lights slot in uniform block shader resource
     parameters.light_projections.apply(
@@ -330,7 +335,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
         parameters.texture,
         parameters.reverse_depth,
         parameters.depth_range,
-        shadow_light_limits,
+        light_count_limits,
         parameters.conventions,
         caster_world_aabbs,
         receiver_world_aabbs,

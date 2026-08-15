@@ -290,7 +290,11 @@ auto Scene_views::create_viewport_scene_view(
         m_viewport_scene_views.push_back(new_viewport);
     }
 
-    if (app_settings.graphics.current_graphics_preset.shadow_enable) {
+    // The shadow render node also owns the view's Light_projections (the light
+    // UBO slot assignment the forward pass shades with), so it is created even
+    // when the preset has shadows disabled: it then allocates no shadow render
+    // passes and only runs the slot / projection pass.
+    {
         const auto shadow_render_node = app_rendering.create_shadow_node_for_scene_view(
             graphics_device,
             rendergraph,

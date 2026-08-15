@@ -128,12 +128,13 @@ public:
         const std::shared_ptr<erhe::graphics::Texture>&             in_shadow_map_texture,
         bool                                                        reverse_depth,
         erhe::math::Depth_range                                     depth_range,
-        // How many shadow-casting lights may actually be shadow-mapped, per
-        // shadow map kind (2D array for directional + spot, cube array for
-        // point). Shadow casters beyond a cap are slotted as non-shadow
-        // lights and get no shadow layer (shadow_index / point_shadow_index
-        // stay max()). Callers with no shadow map pass {} (0 / 0).
-        const Shadow_light_limits&                                  shadow_light_limits,
+        // Per light type limits on how many lights get a UBO slot: shadow-
+        // mapped ones (a shadow layer: shadow_index / point_shadow_index) and
+        // ones shaded without a shadow map (see Light_count_limits for the
+        // hand-out rule). Callers with no shadow map pass zero shadow limits
+        // (e.g. limits.without_shadows()); lights beyond the limits get no
+        // slot (index max()) and are not shaded.
+        const Light_count_limits&                                   light_count_limits,
         const erhe::math::Coordinate_conventions&                   conventions = erhe::math::Coordinate_conventions{},
         std::span<const erhe::math::Aabb>                           in_caster_world_aabbs = {},
         std::span<const erhe::math::Aabb>                           in_receiver_world_aabbs = {},
@@ -146,11 +147,12 @@ public:
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) -> erhe::scene::Light_projection_transforms*;
     [[nodiscard]] auto get_light_projection_transforms_for_light(const erhe::scene::Light* light) const -> const erhe::scene::Light_projection_transforms*;
 
-    // The light layer partition the forward pass must shade with: a light is
-    // shadow-mapped iff apply() gave it a shadow layer (2D or cube), which
-    // already accounts for the Shadow_light_limits apply() ran with. Lights
-    // without projection transforms (not seen by apply()) count as non-shadow
-    // - Light_buffer::update() writes no data for them either.
+    // The light layer partition the forward pass must shade with, replayed
+    // from the slots apply() handed out under its Light_count_limits: a light
+    // is shadow-mapped iff it got a shadow layer (2D or cube), non-shadow iff
+    // it got a UBO slot without one, and not counted at all when it got no
+    // slot (beyond the limits, inactive, or not seen by apply() - Light_buffer
+    // ::update() writes no data for those either).
     [[nodiscard]] auto compute_light_layer_partition(const std::span<const std::shared_ptr<erhe::scene::Light>>& lights) const -> Light_layer_partition;
 
     erhe::scene::Light_projection_parameters              parameters;
