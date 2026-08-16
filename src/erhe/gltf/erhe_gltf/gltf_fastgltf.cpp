@@ -888,9 +888,10 @@ namespace {
 class Gltf_parser
 {
 private:
-    Gltf_data&                          m_data_out;
-    Gltf_parse_arguments                m_arguments;
-    fastgltf::Expected<fastgltf::Asset> m_asset;
+    Gltf_data&                                     m_data_out;
+    Gltf_parse_arguments                           m_arguments;
+    fastgltf::Expected<fastgltf::Asset>            m_asset;
+    erhe::graphics::Transcode_format_preference   m_transcode_format_preference{erhe::graphics::Transcode_format_preference::rgba8};
 
 public:
     Gltf_parser(
@@ -902,6 +903,16 @@ public:
         , m_arguments{arguments}
         , m_asset    {std::move(asset)}
     {
+        // Pick the GPU target for transcoded (KTX2 / Basis Universal) images
+        // from device format support: block-compressed stays 4x smaller in
+        // VRAM than the old always-RGBA8 expansion. Computed once here
+        // because decode_image() runs concurrently on executor workers.
+        erhe::graphics::Device& device = m_arguments.graphics_device;
+        if (device.get_format_properties(erhe::dataformat::Format::format_bc7_srgb).supported) {
+            m_transcode_format_preference = erhe::graphics::Transcode_format_preference::bc7;
+        } else if (device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_srgb).supported) {
+            m_transcode_format_preference = erhe::graphics::Transcode_format_preference::astc_4x4;
+        }
         trace_info();
     }
 
@@ -1324,7 +1335,7 @@ private:
                         buffer_view.byteLength
                     };
                     erhe::graphics::Image_loader loader;
-                    if (!loader.open(image_encoded_buffer_view, decoded.info, linear)) {
+                    if (!loader.open(image_encoded_buffer_view, decoded.info, linear, m_transcode_format_preference)) {
                         log_gltf->error("Failed to parse image from buffer view '{}'", decoded.name);
                         return;
                     }
@@ -1366,7 +1377,7 @@ private:
                         return;
                     }
                     erhe::graphics::Image_loader loader;
-                    if (!loader.open(image_path, decoded.info, linear)) {
+                    if (!loader.open(image_path, decoded.info, linear, m_transcode_format_preference)) {
                         return;
                     }
                     // TODO Handle depth > 1

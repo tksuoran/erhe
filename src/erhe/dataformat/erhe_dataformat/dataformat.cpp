@@ -276,6 +276,8 @@ auto c_str(const Format format) -> const char*
         case Format::format_bc6h_sfloat:              return "format_bc6h_sfloat";
         case Format::format_bc7_unorm:                return "format_bc7_unorm";
         case Format::format_bc7_srgb:                 return "format_bc7_srgb";
+        case Format::format_astc_4x4_unorm:           return "format_astc_4x4_unorm";
+        case Format::format_astc_4x4_srgb:            return "format_astc_4x4_srgb";
         case Format::format_d16_unorm:                return "format_d16_unorm";
         case Format::format_x8_d24_unorm_pack32:      return "format_x8_d24_unorm_pack32";
         case Format::format_d32_sfloat:               return "format_d32_sfloat";
@@ -382,6 +384,8 @@ auto get_format_kind(const Format format) -> Format_kind
         case Format::format_bc6h_sfloat:              return Format_kind::format_kind_float;
         case Format::format_bc7_unorm:                return Format_kind::format_kind_float;
         case Format::format_bc7_srgb:                 return Format_kind::format_kind_float;
+        case Format::format_astc_4x4_unorm:           return Format_kind::format_kind_float;
+        case Format::format_astc_4x4_srgb:            return Format_kind::format_kind_float;
 
         case Format::format_d16_unorm:           return Format_kind::format_kind_depth_stencil;
         case Format::format_x8_d24_unorm_pack32: return Format_kind::format_kind_depth_stencil;
@@ -491,6 +495,8 @@ auto get_component_count(const Format format) -> std::size_t
         case Format::format_bc6h_sfloat:              return 3;
         case Format::format_bc7_unorm:                return 4;
         case Format::format_bc7_srgb:                 return 4;
+        case Format::format_astc_4x4_unorm:           return 4;
+        case Format::format_astc_4x4_srgb:            return 4;
 
         case Format::format_d16_unorm:           return 1;
         case Format::format_x8_d24_unorm_pack32: return 1;
@@ -694,6 +700,8 @@ auto has_color(const Format format) -> bool
         case Format::format_bc6h_sfloat:              return true;
         case Format::format_bc7_unorm:                return true;
         case Format::format_bc7_srgb:                 return true;
+        case Format::format_astc_4x4_unorm:           return true;
+        case Format::format_astc_4x4_srgb:            return true;
 
         case Format::format_d16_unorm:           return false;
         case Format::format_x8_d24_unorm_pack32: return false;
@@ -805,6 +813,8 @@ auto get_format_size_bytes(const Format format) -> std::size_t
         case Format::format_bc6h_sfloat:              return 16;
         case Format::format_bc7_unorm:                return 16;
         case Format::format_bc7_srgb:                 return 16;
+        case Format::format_astc_4x4_unorm:           return 16;
+        case Format::format_astc_4x4_srgb:            return 16;
 
         case Format::format_d16_unorm:           return 2;
         case Format::format_x8_d24_unorm_pack32: return 4;
@@ -837,7 +847,9 @@ auto is_block_compressed(const Format format) -> bool
         case Format::format_bc6h_ufloat:
         case Format::format_bc6h_sfloat:
         case Format::format_bc7_unorm:
-        case Format::format_bc7_srgb: {
+        case Format::format_bc7_srgb:
+        case Format::format_astc_4x4_unorm:
+        case Format::format_astc_4x4_srgb: {
             return true;
         }
         default: {

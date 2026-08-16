@@ -65,6 +65,8 @@ auto to_mtl_pixel_format(const erhe::dataformat::Format format) -> MTL::PixelFor
         case F::format_bc6h_sfloat:     return MTL::PixelFormatBC6H_RGBFloat;
         case F::format_bc7_unorm:       return MTL::PixelFormatBC7_RGBAUnorm;
         case F::format_bc7_srgb:        return MTL::PixelFormatBC7_RGBAUnorm_sRGB;
+        case F::format_astc_4x4_unorm:  return MTL::PixelFormatASTC_4x4_LDR;
+        case F::format_astc_4x4_srgb:   return MTL::PixelFormatASTC_4x4_sRGB;
         case F::format_d16_unorm:           return MTL::PixelFormatDepth16Unorm;
         case F::format_d32_sfloat:          return MTL::PixelFormatDepth32Float;
         case F::format_s8_uint:             return MTL::PixelFormatStencil8;

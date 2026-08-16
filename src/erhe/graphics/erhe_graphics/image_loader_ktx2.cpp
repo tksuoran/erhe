@@ -4,6 +4,7 @@
 
 #include <transcoder/basisu_transcoder.h>
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <mutex>
@@ -35,10 +36,11 @@ constexpr std::uint8_t ktx2_identifier[12] = {
 class Image_loader_ktx2_impl_state
 {
 public:
-    basist::ktx2_transcoder   transcoder;
-    std::vector<std::uint8_t> owned_data;   // backing storage for the path-based open()
-    Image_info                info;
-    bool                      is_open{false};
+    basist::ktx2_transcoder              transcoder;
+    std::vector<std::uint8_t>            owned_data;   // backing storage for the path-based open()
+    Image_info                           info;
+    basist::transcoder_texture_format    transcoder_format{basist::transcoder_texture_format::cTFRGBA32};
+    bool                                 is_open{false};
 };
 
 Image_loader_ktx2::Image_loader_ktx2()
@@ -56,7 +58,7 @@ auto Image_loader_ktx2::is_ktx2(const std::span<const std::uint8_t>& buffer_view
     return std::memcmp(buffer_view.data(), ktx2_identifier, sizeof(ktx2_identifier)) == 0;
 }
 
-auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& image_info, const bool linear) -> bool
+auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -80,10 +82,10 @@ auto Image_loader_ktx2::open(const std::filesystem::path& path, Image_info& imag
         return false;
     }
     const std::span<const std::uint8_t> buffer_view{m_state->owned_data.data(), m_state->owned_data.size()};
-    return open(buffer_view, image_info, linear);
+    return open(buffer_view, image_info, linear, transcode_format_preference);
 }
 
-auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear) -> bool
+auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, const bool linear, const Transcode_format_preference transcode_format_preference) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -104,16 +106,49 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
         return false;
     }
 
-    // Only mip level 0 of the first layer / face is exposed; the GPU
-    // mipmap generation path rebuilds the chain from it.
-    m_state->info = Image_info{
-        .width       = static_cast<int>(transcoder.get_width()),
-        .height      = static_cast<int>(transcoder.get_height()),
-        .depth       = 1,
-        .level_count = 1,
-        .row_stride  = static_cast<int>(transcoder.get_width()) * 4,
-        .format      = linear ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_vec4_srgb
-    };
+    switch (transcode_format_preference) {
+        case Transcode_format_preference::bc7: {
+            // Block-compressed target: keep the file's full mip chain (mipmap
+            // generation cannot write block-compressed levels).
+            m_state->transcoder_format = basist::transcoder_texture_format::cTFBC7_RGBA;
+            m_state->info = Image_info{
+                .width       = static_cast<int>(transcoder.get_width()),
+                .height      = static_cast<int>(transcoder.get_height()),
+                .depth       = 1,
+                .level_count = static_cast<int>(transcoder.get_levels()),
+                .row_stride  = 0, // block-compressed data is tightly packed
+                .format      = linear ? erhe::dataformat::Format::format_bc7_unorm : erhe::dataformat::Format::format_bc7_srgb
+            };
+            break;
+        }
+        case Transcode_format_preference::astc_4x4: {
+            m_state->transcoder_format = basist::transcoder_texture_format::cTFASTC_4x4_RGBA;
+            m_state->info = Image_info{
+                .width       = static_cast<int>(transcoder.get_width()),
+                .height      = static_cast<int>(transcoder.get_height()),
+                .depth       = 1,
+                .level_count = static_cast<int>(transcoder.get_levels()),
+                .row_stride  = 0, // block-compressed data is tightly packed
+                .format      = linear ? erhe::dataformat::Format::format_astc_4x4_unorm : erhe::dataformat::Format::format_astc_4x4_srgb
+            };
+            break;
+        }
+        case Transcode_format_preference::rgba8:
+        default: {
+            // Only mip level 0 of the first layer / face is exposed; the GPU
+            // mipmap generation path rebuilds the chain from it.
+            m_state->transcoder_format = basist::transcoder_texture_format::cTFRGBA32;
+            m_state->info = Image_info{
+                .width       = static_cast<int>(transcoder.get_width()),
+                .height      = static_cast<int>(transcoder.get_height()),
+                .depth       = 1,
+                .level_count = 1,
+                .row_stride  = static_cast<int>(transcoder.get_width()) * 4,
+                .format      = linear ? erhe::dataformat::Format::format_8_vec4_unorm : erhe::dataformat::Format::format_8_vec4_srgb
+            };
+            break;
+        }
+    }
     image_info       = m_state->info;
     m_state->is_open = true;
     return true;
@@ -126,23 +161,49 @@ auto Image_loader_ktx2::load(std::span<std::uint8_t> transfer_buffer) -> bool
     if (!m_state->is_open) {
         return false;
     }
-    const std::size_t pixel_count = static_cast<std::size_t>(m_state->info.width) * static_cast<std::size_t>(m_state->info.height);
-    const std::size_t byte_count  = pixel_count * 4;
-    if (transfer_buffer.size() < byte_count) {
-        log_texture->warn("KTX2: transfer buffer too small: {} < {}", transfer_buffer.size(), byte_count);
+    const Image_info& info = m_state->info;
+    const erhe::dataformat::Format format = info.format;
+    const std::size_t total_byte_count = erhe::dataformat::get_mip_chain_byte_count(
+        format,
+        static_cast<std::size_t>(info.width),
+        static_cast<std::size_t>(info.height),
+        static_cast<std::size_t>(info.level_count)
+    );
+    if (transfer_buffer.size() < total_byte_count) {
+        log_texture->warn("KTX2: transfer buffer too small: {} < {}", transfer_buffer.size(), total_byte_count);
         return false;
     }
-    const bool transcode_ok = m_state->transcoder.transcode_image_level(
-        0, // level_index
-        0, // layer_index
-        0, // face_index
-        transfer_buffer.data(),
-        static_cast<std::uint32_t>(pixel_count),
-        basist::transcoder_texture_format::cTFRGBA32
-    );
-    if (!transcode_ok) {
-        log_texture->warn("KTX2: transcode_image_level() failed");
-        return false;
+    const bool is_compressed = erhe::dataformat::is_block_compressed(format);
+
+    // All levels are written contiguously, largest-first, tightly packed -
+    // the same layout Image_loader_dds produces and upload_to_texture expects.
+    std::size_t write_offset = 0;
+    for (int level = 0; level < info.level_count; ++level) {
+        const std::size_t level_width  = std::max(std::size_t{1}, static_cast<std::size_t>(info.width)  >> level);
+        const std::size_t level_height = std::max(std::size_t{1}, static_cast<std::size_t>(info.height) >> level);
+        const std::size_t level_byte_count = erhe::dataformat::get_image_level_size_bytes(format, level_width, level_height);
+        std::size_t block_or_pixel_count;
+        if (is_compressed) {
+            const std::size_t block_extent = erhe::dataformat::get_block_extent(format);
+            const std::size_t block_count_x = (level_width  + block_extent - 1) / block_extent;
+            const std::size_t block_count_y = (level_height + block_extent - 1) / block_extent;
+            block_or_pixel_count = block_count_x * block_count_y;
+        } else {
+            block_or_pixel_count = level_width * level_height;
+        }
+        const bool transcode_ok = m_state->transcoder.transcode_image_level(
+            static_cast<std::uint32_t>(level),
+            0, // layer_index
+            0, // face_index
+            transfer_buffer.data() + write_offset,
+            static_cast<std::uint32_t>(block_or_pixel_count),
+            m_state->transcoder_format
+        );
+        if (!transcode_ok) {
+            log_texture->warn("KTX2: transcode_image_level() failed for level {}", level);
+            return false;
+        }
+        write_offset += level_byte_count;
     }
     return true;
 }

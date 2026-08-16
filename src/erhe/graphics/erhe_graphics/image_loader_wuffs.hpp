@@ -28,6 +28,15 @@ public:
     erhe::dataformat::Format format     {erhe::dataformat::Format::format_8_vec4_srgb};
 };
 
+// Preferred GPU target for sources that are transcoded at load time (KTX2 /
+// Basis Universal). The caller picks the preference from device format
+// support; loaders that decode to a fixed format (PNG/JPEG, DDS) ignore it.
+enum class Transcode_format_preference : unsigned int {
+    rgba8 = 0, // uncompressed 8-bit RGBA (always supported)
+    bc7,       // BC7 4x4 blocks (desktop GPUs)
+    astc_4x4   // ASTC 4x4 blocks (mobile GPUs)
+};
+
 class Image_loader_impl;
 class Image_loader_ktx2;
 class Image_loader_dds;
@@ -42,8 +51,8 @@ public:
     Image_loader  (Image_loader&&)      = delete;
     auto operator=(Image_loader&&)      = delete;
 
-    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear) -> bool;
-    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear) -> bool;
+    [[nodiscard]] auto open(const std::filesystem::path& path, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8) -> bool;
+    [[nodiscard]] auto open(const std::span<const std::uint8_t>& buffer_view, Image_info& image_info, bool linear, Transcode_format_preference transcode_format_preference = Transcode_format_preference::rgba8) -> bool;
     [[nodiscard]] auto load(std::span<std::uint8_t> transfer_buffer) -> bool;
     void close();
 

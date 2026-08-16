@@ -119,6 +119,10 @@ enum class Format : unsigned int {
     format_bc7_unorm,           // 16 bytes per block, RGBA
     format_bc7_srgb,
 
+    // ASTC LDR (4x4 texel blocks only), 16 bytes per block, RGBA
+    format_astc_4x4_unorm,
+    format_astc_4x4_srgb,
+
     // Depth / stencil formats
     format_d16_unorm,           // a one-component, 16-bit unsigned normalized format that has a single 16-bit depth component.
     format_x8_d24_unorm_pack32, // a two-component, 32-bit format that has 24 unsigned normalized bits in the depth component and, optionally, 8 bits that are unused.

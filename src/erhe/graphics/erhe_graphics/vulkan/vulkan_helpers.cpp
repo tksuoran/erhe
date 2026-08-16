@@ -828,6 +828,9 @@ auto to_vulkan(const erhe::dataformat::Format format) -> VkFormat
         case erhe::dataformat::Format::format_bc7_unorm               : return VK_FORMAT_BC7_UNORM_BLOCK;
         case erhe::dataformat::Format::format_bc7_srgb                : return VK_FORMAT_BC7_SRGB_BLOCK;
 
+        case erhe::dataformat::Format::format_astc_4x4_unorm          : return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+        case erhe::dataformat::Format::format_astc_4x4_srgb           : return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
+
         case erhe::dataformat::Format::format_d16_unorm               : return VK_FORMAT_D16_UNORM;           // a one-component, 16-bit unsigned normalized format that has a single 16-bit depth component.
         case erhe::dataformat::Format::format_x8_d24_unorm_pack32     : return VK_FORMAT_X8_D24_UNORM_PACK32; // a two-component, 32-bit format that has 24 unsigned normalized bits in the depth component and, optionally, 8 bits that are unused.
         case erhe::dataformat::Format::format_d32_sfloat              : return VK_FORMAT_D32_SFLOAT;          // a one-component, 32-bit signed floating-point format that has 32 bits in the depth component
@@ -934,6 +937,8 @@ auto to_erhe(const VkFormat format) -> erhe::dataformat::Format
         case VK_FORMAT_BC6H_SFLOAT_BLOCK       : return erhe::dataformat::Format::format_bc6h_sfloat             ;
         case VK_FORMAT_BC7_UNORM_BLOCK         : return erhe::dataformat::Format::format_bc7_unorm               ;
         case VK_FORMAT_BC7_SRGB_BLOCK          : return erhe::dataformat::Format::format_bc7_srgb                ;
+        case VK_FORMAT_ASTC_4x4_UNORM_BLOCK    : return erhe::dataformat::Format::format_astc_4x4_unorm          ;
+        case VK_FORMAT_ASTC_4x4_SRGB_BLOCK     : return erhe::dataformat::Format::format_astc_4x4_srgb           ;
         case VK_FORMAT_D16_UNORM               : return erhe::dataformat::Format::format_d16_unorm               ;
         case VK_FORMAT_X8_D24_UNORM_PACK32     : return erhe::dataformat::Format::format_x8_d24_unorm_pack32     ;
         case VK_FORMAT_D32_SFLOAT              : return erhe::dataformat::Format::format_d32_sfloat              ;
