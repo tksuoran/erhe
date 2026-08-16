@@ -1,12 +1,14 @@
 {
     "initial_clear": true,
-    "renderdoc_capture_support": false,
+    "renderdoc_capture_support": true,
     "renderdoc_library_path_override_enable": false,
     "renderdoc_library_path_override": "",
     "shader_monitor_enabled": false,
     "force_disable_vsync": false,
     "force_disable_reverse_depth": false,
     "use_draw_list_renderer": false,
+    "frame_pacing_enforce": true,
+    "frame_pacing_present_holdback": true,
     "frame_pacing_tier": "off",
     "opengl": {
         "force_bindless_textures_off": false,
@@ -19,13 +21,10 @@
         "force_glsl_version": 0
     },
     "vulkan": {
-        "_version": 2,
         "disable_ray_tracing": false,
         "vulkan_validation_layers": false,
         "use_kosmickrisp": false,
         "use_moltenvk": false
     },
-    "metal": {
-        "disable_gpu_frame_capture": true
-    }
+    "metal": { "disable_gpu_frame_capture": true }
 }

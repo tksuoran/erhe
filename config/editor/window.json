@@ -1,9 +1,8 @@
-﻿{
-    "_version": 3,
+{
     "show": true,
     "fullscreen": false,
     "exclusive_fullscreen": false,
-    "refreshrate": 120.0,
+    "refreshrate": 120,
     "use_transparency": false,
     "gl_major": 4,
     "gl_minor": 6,
