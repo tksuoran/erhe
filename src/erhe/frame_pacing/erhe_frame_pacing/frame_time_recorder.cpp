@@ -1,4 +1,5 @@
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
+#include "erhe_profile/profile.hpp"
 
 #include <algorithm>
 
@@ -54,6 +55,8 @@ auto Frame_time_recorder::now() -> double
 
 auto Frame_time_recorder::begin_frame(const std::int64_t frame_id) -> Frame_time_record&
 {
+    ERHE_PROFILE_FUNCTION();
+
     Frame_time_record& record = m_records[static_cast<std::size_t>(frame_id) % m_records.size()];
     record = Frame_time_record{};
     record.frame_id = frame_id;

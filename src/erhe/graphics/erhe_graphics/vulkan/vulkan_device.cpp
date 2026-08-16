@@ -396,6 +396,8 @@ auto Device_impl::allocate_descriptor_set() -> VkDescriptorSet
 
 void Device_impl::reset_descriptor_pool()
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VULKAN_DESC_TRACE(
         "[FRAME_SUMMARY] frame={} push_buf={} push_img={} alloc_set={} heap_binds={} draws={}",
         m_frame_index,
@@ -1495,6 +1497,8 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 
 auto Device_impl::wait_frame() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_state == Device_frame_state::idle);
 
     // CPU slot begin (frame pacing data requirements): wait_frame is the
@@ -1507,6 +1511,7 @@ auto Device_impl::wait_frame() -> bool
     update_gpu_calibration();
     poll_frame_bracket_results();
     if (m_frame_bracket_query_pool != VK_NULL_HANDLE) {
+        ERHE_PROFILE_SCOPE("vkResetQueryPool");
         const std::size_t bracket_slot = static_cast<std::size_t>(m_frame_index % s_frame_bracket_ring);
         vkResetQueryPool(
             m_vulkan_device,
@@ -1535,6 +1540,7 @@ auto Device_impl::wait_frame() -> bool
     const size_t   slot = static_cast<size_t>(get_frame_in_flight_index());
     const uint64_t N    = get_number_of_frames_in_flight();
     if (m_frame_index > N) {
+        ERHE_PROFILE_SCOPE("wait_frame: vkWaitSemaphores");
         const uint64_t wait_value = m_frame_index - N;
         const VkSemaphoreWaitInfo wait_info{
             .sType          = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1562,6 +1568,7 @@ auto Device_impl::wait_frame() -> bool
     for (Per_thread_command_pool& thread_pool : thread_pools) {
         thread_pool.allocated_command_buffers.clear();
         if (thread_pool.command_pool != VK_NULL_HANDLE) {
+            ERHE_PROFILE_SCOPE("wait_frame: vkResetCommandPool");
             const VkResult reset_result = vkResetCommandPool(m_vulkan_device, thread_pool.command_pool, 0);
             if (reset_result != VK_SUCCESS) {
                 log_context->critical(
@@ -1603,6 +1610,7 @@ auto Device_impl::wait_frame() -> bool
         }
 
         if (any_fired) {
+            ERHE_PROFILE_SCOPE("vkGetQueryPoolResults");
             const std::size_t slice_size = s_max_gpu_timers * 2;
             const std::size_t slice_base = slot * slice_size;
 
@@ -1659,6 +1667,8 @@ auto Device_impl::wait_frame() -> bool
 
 auto Device_impl::begin_frame() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     ERHE_VERIFY(m_state == Device_frame_state::waited);
     ERHE_VULKAN_SYNC_TRACE("[FRAME_BEGIN] frame_index={}", m_frame_index);
 
@@ -1695,13 +1705,18 @@ auto Device_impl::begin_frame() -> bool
         .flags            = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo = nullptr
     };
-    const VkResult result = vkBeginCommandBuffer(df.command_buffer, &begin_info);
-    if (result != VK_SUCCESS) {
-        log_context->critical(
-            "vkBeginCommandBuffer() failed with {} {}",
-            static_cast<int32_t>(result), c_str(result)
-        );
-        abort();
+
+    {
+        ERHE_PROFILE_SCOPE("vkBeginCommandBuffer");
+
+        const VkResult result = vkBeginCommandBuffer(df.command_buffer, &begin_info);
+        if (result != VK_SUCCESS) {
+            log_context->critical(
+                "vkBeginCommandBuffer() failed with {} {}",
+                static_cast<int32_t>(result), c_str(result)
+            );
+            abort();
+        }
     }
 
     set_state(Device_frame_state::recording, "begin_frame");
@@ -1722,6 +1737,8 @@ auto Device_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bool
 
 auto Device_impl::end_frame() -> bool
 {
+    ERHE_PROFILE_FUNCTION();
+
     // CONTRACT: end_frame advances the frame index. That is its ONLY job.
     //
     // It does not submit any command buffer, it does not present any
@@ -1836,6 +1853,8 @@ auto Device_impl::is_in_swapchain_frame() const -> bool
 
 void Device_impl::update_frame_completion()
 {
+    ERHE_PROFILE_FUNCTION();
+
     VkResult result = VK_SUCCESS;
 
     const VkSemaphoreSubmitInfo signal_semaphore_info{
@@ -1858,10 +1877,13 @@ void Device_impl::update_frame_completion()
         .pSignalSemaphoreInfos    = &signal_semaphore_info,
     };
     ERHE_VULKAN_TRACE("vkQueueSubmit2() end of frame timeline semaphore @ frame index = {}", m_frame_index);
-    result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-    if (result != VK_SUCCESS) {
-        log_context->critical("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result));
-        abort();
+    {
+        ERHE_PROFILE_SCOPE("vkQueueSubmit2");
+        result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+        if (result != VK_SUCCESS) {
+            log_context->critical("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            abort();
+        }
     }
 
     ++m_frame_index;
@@ -1872,7 +1894,10 @@ void Device_impl::update_frame_completion()
     );
 
     uint64_t latest_completed_frame{0};
-    result = vkGetSemaphoreCounterValue(m_vulkan_device, m_vulkan_frame_end_semaphore, &latest_completed_frame);
+    {
+        ERHE_PROFILE_SCOPE("vkGetSemaphoreCounterValue");
+        result = vkGetSemaphoreCounterValue(m_vulkan_device, m_vulkan_frame_end_semaphore, &latest_completed_frame);
+    }
     if (result != VK_SUCCESS) {
         log_context->error("vkGetSemaphoreCounterValue() failed with {} {}", static_cast<int32_t>(result), c_str(result));
     } else {
@@ -2634,6 +2659,8 @@ void Device_impl::refresh_host_time_domain_offsets()
 
 void Device_impl::update_gpu_calibration()
 {
+    ERHE_PROFILE_FUNCTION();
+
     refresh_host_time_domain_offsets();
     if (!m_capabilities.m_calibrated_timestamps || !m_gpu_timers_supported) {
         return;
@@ -2742,6 +2769,8 @@ void Device_impl::record_frame_bracket_end(VkCommandBuffer cb)
 
 void Device_impl::poll_frame_bracket_results()
 {
+    ERHE_PROFILE_FUNCTION();
+
     if ((m_frame_bracket_query_pool == VK_NULL_HANDLE) || !m_gpu_calibration_valid) {
         return;
     }
