@@ -27,6 +27,7 @@
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_commands.hpp"
+#include "scene/scene_commit_queue.hpp"
 #include "scene/scene_root.hpp"
 
 #include <algorithm>
@@ -2101,26 +2102,58 @@ void Operations::make_geometry()
 
 void Operations::make_raytrace()
 {
+    // Ensure every selected mesh has a real (triangle) raytrace. Same two
+    // phases as the deferred glTF finalize: build on the worker without
+    // touching the live scene, then swap in + rebuild the raytrace instances
+    // on the main thread through the scene commit queue.
     async_for_selected_nodes_with_mesh(
         [](Mesh_operation_parameters&& mesh_operation_parameters)
         {
+            App_context& context = mesh_operation_parameters.context;
+            ERHE_VERIFY(context.scene_commit_queue != nullptr);
             for (const std::shared_ptr<erhe::Item_base>& item : mesh_operation_parameters.items) {
                 std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
                 ERHE_VERIFY(scene_mesh);
                 erhe::Item_host* item_host = item->get_item_host();
                 ERHE_VERIFY(item_host != nullptr);
                 Scene_root* scene_root = static_cast<Scene_root*>(item_host);
-                std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
 
-                scene_root->begin_mesh_rt_update(scene_mesh);
-                std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = scene_mesh->get_mutable_primitives();
-                for (erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
-                    erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
-                    // Ensure raytrace exists
-                    ERHE_VERIFY(primitive.make_raytrace());
+                std::vector<erhe::scene::Mesh_primitive> mesh_primitives;
+                {
+                    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+                    mesh_primitives = scene_mesh->get_primitives();
                 }
-                scene_mesh->update_rt_primitives();
-                scene_root->end_mesh_rt_update(scene_mesh);
+                for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                    erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+                    const std::shared_ptr<erhe::primitive::Primitive_shape> raytrace_shape = primitive.get_shape_for_raytrace();
+                    if (raytrace_shape && !raytrace_shape->has_real_raytrace()) {
+                        if (!raytrace_shape->prepare_real_raytrace()) {
+                            log_operations->warn("Make raytrace: could not build raytrace for mesh '{}'", scene_mesh->get_name());
+                        }
+                    }
+                }
+
+                context.scene_commit_queue->enqueue(
+                    [scene_mesh, mesh_primitives = std::move(mesh_primitives)]()
+                    {
+                        Scene_root* const scene_root = static_cast<Scene_root*>(scene_mesh->get_item_host());
+                        std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock;
+                        if (scene_root != nullptr) {
+                            scene_lock = std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)>{scene_root->item_host_mutex};
+                            scene_root->begin_mesh_rt_update(scene_mesh);
+                        }
+                        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+                            const std::shared_ptr<erhe::primitive::Primitive_shape> raytrace_shape = mesh_primitive.primitive->get_shape_for_raytrace();
+                            if (raytrace_shape) {
+                                static_cast<void>(raytrace_shape->commit_real_raytrace());
+                            }
+                        }
+                        scene_mesh->update_rt_primitives();
+                        if (scene_root != nullptr) {
+                            scene_root->end_mesh_rt_update(scene_mesh);
+                        }
+                    }
+                );
             }
         }
     );

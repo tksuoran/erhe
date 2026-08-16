@@ -593,9 +593,7 @@ auto Mcp_server::action_lightmap_prepare_tiles(const json& args) -> std::string
     // the main thread executes them; a swap landing mid-prepare would clip
     // stale geometry.
     const std::size_t async_ops =
-        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-        static_cast<std::size_t>(m_context.running_async_ops.load()) +
-        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+        m_context.get_async_in_flight_count();
     if (async_ops > 0) {
         return make_error_content(
             "Operations still in flight (" + std::to_string(async_ops) +
@@ -887,9 +885,7 @@ auto Mcp_server::action_lightmap_reorder_charts(const json& args) -> std::string
         return make_error_content("Requires uv_parameterizer = per_facet (4); set it in Lightmap settings");
     }
     const std::size_t reorder_async_ops =
-        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-        static_cast<std::size_t>(m_context.running_async_ops.load()) +
-        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+        m_context.get_async_in_flight_count();
     if (reorder_async_ops > 0) {
         return make_error_content("Operations still in flight - poll get_async_status until idle, then retry");
     }

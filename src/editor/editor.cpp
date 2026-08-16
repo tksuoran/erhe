@@ -95,6 +95,7 @@
 #include "scene/debug_draw.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_builder.hpp"
+#include "scene/scene_commit_queue.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
@@ -590,6 +591,15 @@ public:
         // log_input_frame->trace("----------------------- Editor::tick() -----------------------");
 
         std::vector<erhe::window::Input_event>& input_events = m_window->get_input_events();
+
+        // Land worker-produced scene mutations (deferred glTF finalize:
+        // raytrace / Buffer_mesh swaps and raytrace instance rebuilds) in one
+        // place, before anything else in this tick reads or edits scenes.
+        // Everything below - pointer / hover raytrace, physics, commands,
+        // MCP, operations, transforms, draw list flush, rendering - then
+        // sees scenes that only the main thread changes.
+        erhe::log::set_breadcrumb("tick: scene_commit_queue flush");
+        m_scene_commit_queue.flush();
 
         m_time->prepare_update(m_frame_activity != Frame_activity::hidden, display_advance_ns);
         m_time->update_transform_animations(*m_app_message_bus.get());
@@ -2853,6 +2863,9 @@ public:
             m_executor->wait_for_all();
         }
         m_item_task_guard.clear();
+        // Commits the drained workers left behind own scene roots / shapes;
+        // drop them now, while mesh memory and scenes are still alive.
+        m_scene_commit_queue.clear();
         m_executor.reset();
 
         if (m_mcp_server) {
@@ -2876,6 +2889,7 @@ public:
         ERHE_PROFILE_FUNCTION();
 
         m_app_context.executor                 = m_executor.get();
+        m_app_context.scene_commit_queue       = &m_scene_commit_queue;
 
         m_app_context.commands                 = m_commands              .get();
         m_app_context.graphics_device          = m_graphics_device       .get();
@@ -3842,6 +3856,7 @@ public:
 
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor
+    Scene_commit_queue                  m_scene_commit_queue; // cleared in shutdown after m_executor->wait_for_all()
 
     App_context                         m_app_context;
 

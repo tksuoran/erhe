@@ -283,3 +283,24 @@ the callback. Once that lands and the pin in the top-level CMakeLists.txt
 moves forward, the erhe-side mutex can be removed. Note the pre-existing
 concurrent `Geometry::process` calls in async mesh operations share the same
 exposure and would also be fixed by the fork change.
+
+## Post-implementation change: commit phase moved to the main thread
+
+The Phase B swap originally ran on the worker under `item_host_mutex`, which
+made every main-thread reader of the raytrace scene (hover picking, tools'
+`project_ray`, MCP raycasts) a data race unless it also took the lock
+(ASAN: container-overflow in `Bvh_scene::intersect` while loading bistro).
+Workers now only prepare; the swap is enqueued on
+`App_context::scene_commit_queue` (`Scene_commit_queue`,
+src/editor/scene/scene_commit_queue.hpp) and `Editor::tick()` flushes the
+queue as its first step, so all scene mutation happens on the main thread in
+one place, isolated from the rest of the tick. `get_async_status` reports the
+not-yet-flushed commits as `pending_scene_commits`.
+
+The commit rebuilds EVERY mesh in the scene that shares a committed
+primitive (glTF instances share the `Primitive`; `collect_meshes_sharing_primitives`),
+not only the task's own mesh: the swap is shape-level, and a sharer's draw
+list records / raytrace instances would otherwise keep referencing the
+proxy buffer mesh (freed and reused) / proxy raytrace until its own task
+committed - visible as displaced / garbage instanced objects during a large
+load with `use_draw_lists` on. See doc/mesh-memory-deferred-free-plan.md.

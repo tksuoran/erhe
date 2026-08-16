@@ -249,14 +249,16 @@ class Creation:
         return result
 
     def settle(self, deadline_s=600.0, extra_sleep=0.0):
-        """Wait until pending + running + queued_operations == 0. Polls at
-        0.1 s - typical geometry ops finish inside one or two cycles, and
-        settle sleeps (not MCP latency) dominate a build's wall time."""
+        """Wait until pending + running + queued_operations +
+        pending_scene_commits == 0. Polls at 0.1 s - typical geometry ops
+        finish inside one or two cycles, and settle sleeps (not MCP latency)
+        dominate a build's wall time."""
         deadline = time.time() + deadline_s
         while time.time() < deadline:
             status = self.call("get_async_status")
             total = (status.get("pending", 0) + status.get("running", 0)
-                     + status.get("queued_operations", 0))
+                     + status.get("queued_operations", 0)
+                     + status.get("pending_scene_commits", 0))
             if total == 0:
                 if extra_sleep > 0.0:
                     time.sleep(extra_sleep)

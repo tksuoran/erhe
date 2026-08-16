@@ -107,6 +107,7 @@ class Rotate_tool;
 class Scale_tool;
 class Scene_builder;
 class Scene_commands;
+class Scene_commit_queue;
 class Bone_visualization;
 class Selection;
 class Selection_tool;
@@ -154,6 +155,15 @@ public:
     tf::Executor*                           executor              {nullptr};
     std::atomic_int                         pending_async_ops     {};
     std::atomic_int                         running_async_ops     {};
+    // Worker-produced scene mutations waiting for the main thread; applied
+    // once per tick by Editor::tick() (see scene/scene_commit_queue.hpp).
+    Scene_commit_queue*                     scene_commit_queue    {nullptr};
+
+    // Async work that has not yet landed in a scene: worker tasks pending
+    // or running, operations queued for the main thread and scene commits
+    // waiting for the next flush. Stale-data guards (lightmap prepare, MCP
+    // get_async_status) must treat any of these as "scene still changing".
+    [[nodiscard]] auto get_async_in_flight_count() const -> std::size_t;
 
     // Set at the top of Editor construction, before parts construction.
     // Main-thread-only parts (e.g. Operation_stack) verify their callers

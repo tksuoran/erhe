@@ -351,9 +351,7 @@ auto Lightmap_partitioner::request_prepare(
     // catch it, but refusing up front gives a better error.
     {
         const std::size_t async_ops =
-            static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-            static_cast<std::size_t>(m_context.running_async_ops.load()) +
-            ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+            m_context.get_async_in_flight_count();
         if (async_ops > 0) {
             if (report != nullptr) {
                 report->add_error(Lightmap_report::Stage::partition, "prepare", "mesh operations in flight - wait until they settle");

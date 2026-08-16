@@ -474,6 +474,8 @@ erhe_target_sources_grouped(
     scene/physics_edits.cpp
     scene/physics_edits.hpp
     scene/scene_builder.cpp
+    scene/scene_commit_queue.cpp
+    scene/scene_commit_queue.hpp
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp

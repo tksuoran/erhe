@@ -356,7 +356,7 @@
     "name": "clear_undo_history"
   },
   {
-    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread). The scene is settled only when all three are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
+    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread) and pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush). The scene is settled only when all four are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
     "inputSchema": {
       "properties": {},
       "type": "object"

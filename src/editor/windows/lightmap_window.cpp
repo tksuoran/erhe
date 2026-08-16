@@ -737,9 +737,7 @@ void Lightmap_window::update()
                 m_source_stable_frames  = 0;
             }
             const std::size_t async_ops =
-                static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-                static_cast<std::size_t>(m_context.running_async_ops.load()) +
-                ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+                m_context.get_async_in_flight_count();
             if ((m_source_stable_frames >= c_stable_frames_to_reprepare) && (async_ops == 0)) {
                 m_source_stable_frames = 0;
                 save_all_tiles();
@@ -758,9 +756,7 @@ void Lightmap_window::update()
     // Wait for in-flight operations first (matching the button's disabled
     // state; the request may have been set the frame before ops appeared).
     const std::size_t in_flight =
-        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-        static_cast<std::size_t>(m_context.running_async_ops.load()) +
-        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+        m_context.get_async_in_flight_count();
     if (in_flight > 0) {
         return; // retry next frame
     }
@@ -932,9 +928,7 @@ void Lightmap_window::imgui()
     // between a layout and its bake would act on stale geometry. Hold
     // prepare / bake until the workers AND the operation stack drain.
     const std::size_t async_ops =
-        static_cast<std::size_t>(m_context.pending_async_ops.load()) +
-        static_cast<std::size_t>(m_context.running_async_ops.load()) +
-        ((m_context.operation_stack != nullptr) ? m_context.operation_stack->get_queued_count() : 0u);
+        m_context.get_async_in_flight_count();
     const bool async_busy = async_ops > 0;
     const bool prepare_in_flight =
         (m_context.lightmap_partitioner != nullptr) &&

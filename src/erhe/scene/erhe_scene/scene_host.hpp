@@ -32,10 +32,9 @@ public:
     virtual void unregister_light (const std::shared_ptr<Light>&  light)  = 0;
 
     // Mesh change notifications (doc/draw_list_renderer_requirements.md R0a,
-    // R12, R12a). May be called from worker threads (deferred mesh finalize
-    // runs Mesh::update_rt_primitives() on a tf::Executor worker), so
-    // implementations must only enqueue and apply the change later on the
-    // main thread.
+    // R12, R12a). May be called from worker threads (mesh building is
+    // parallelised on tf::Executor workers), so implementations must only
+    // enqueue and apply the change later on the main thread.
     //
     // on_mesh_primitives_changed: the primitive list changed, or a live
     // primitive's renderable Buffer_mesh was replaced in place
