@@ -282,18 +282,26 @@ endif()
 
 CPMAddPackage(
     NAME              geogram
-    # Back on upstream (was the tksuoran fork at daf9e1925): both fork fixes
-    # (thread-local ProgressTask, create_sub_elements quadratic growth #371)
-    # are upstreamed, and the stb_image symbol clash that forced the fork's
-    # image_serializer_stb removal no longer exists - geogram is the only
-    # stb_image implementation left in the dependency set (erhe image I/O
-    # moved to wuffs/fpng). Exact commit of main, verified 2026-08-14.
-    GIT_TAG           29a34b40040dbd789cbb39a1c5e323b921177573
+    # No local patches: both former fork fixes (thread-local ProgressTask,
+    # create_sub_elements quadratic growth #371) are upstreamed, and the
+    # stb_image symbol clash that forced the fork's image_serializer_stb
+    # removal no longer exists - geogram is the only stb_image implementation
+    # left in the dependency set (erhe image I/O moved to wuffs/fpng). The
+    # tksuoran fork exists only to carry a stable tag: erhe-2026-08-16 points
+    # at upstream main 8f62ffe0 (2026-08-16).
+    #
+    # Pin a TAG, not a raw commit SHA. GIT_SHALLOW clones with
+    # "--depth 1 --no-single-branch", which fetches branch tips and tag refs
+    # only - a pinned SHA is reachable just while it happens to still be a tip.
+    # It stopped being the tip on 2026-08-16 and every cold-cache CI job failed
+    # with "fatal: unable to read tree". Upstream cannot be tagged by us, hence
+    # the fork.
+    GIT_TAG           erhe-2026-08-16
     GIT_SHALLOW       TRUE
-    GITHUB_REPOSITORY BrunoLevy/geogram
-    # Currently erhe still requires some pull-requests and we must use fork above instead
-    #VERSION            1.9.8
-    #GITHUB_REPOSITORY  BrunoLevy/geogram
+    GITHUB_REPOSITORY tksuoran/geogram
+    # An upstream release tag would work here too (VERSION 1.9.8 +
+    # GITHUB_REPOSITORY BrunoLevy/geogram); erhe tracks main because the fixes
+    # it needs are not in a release yet.
     OPTIONS
                   "VORPALINE_PLATFORM ${VORPALINE_PLATFORM}"
                    "GEOGRAM_SUB_BUILD ON"
