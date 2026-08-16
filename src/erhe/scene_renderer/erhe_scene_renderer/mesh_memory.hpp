@@ -95,6 +95,14 @@ public:
     // the GPU vertex buffer. Required for the standard.vert skinning path
     // (Shader_key::derive checks the vertex_format for joint attributes).
     [[nodiscard]] auto make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info;
+
+    // Main thread, once per frame, before the frame's draws are recorded:
+    // records the queued vertex / index uploads into command_buffer and
+    // collects the pool ranges retired since the last call (Buffer_meshes
+    // destroyed on any thread) into one device frame-completion handler,
+    // which frees them once the GPU has finished the current frame. Until
+    // then the ranges stay allocated, so no new mesh can be written into
+    // memory a frame in flight may still read.
     void flush(erhe::graphics::Command_buffer& command_buffer);
 
     [[nodiscard]] auto get_vertex_buffer(const erhe::primitive::Buffer_range& buffer_range) -> erhe::graphics::Buffer*;
@@ -154,6 +162,10 @@ private:
     std::vector<Buffer_pool>              m_vertex_pools;
     std::vector<Buffer_pool>              m_index_pools;
     erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue;
+    // Frame-completion handlers registered by flush() capture a weak_ptr to
+    // this token; a handler that outlives the Mesh_memory (pools already
+    // destroyed) then does nothing.
+    std::shared_ptr<int>                  m_alive_token;
 };
 
 // Vertex input key / vertex buffer ranges of a Buffer_mesh for a primitive

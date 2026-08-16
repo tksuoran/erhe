@@ -3,7 +3,9 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
+#include <functional>
 #include <memory>
+#include <vector>
 
 typedef int GLint;
 
@@ -38,6 +40,7 @@ public:
     [[nodiscard]] auto end_frame  (const Frame_end_info& frame_end_info) -> bool;
 
     void               wait_idle            ();
+    void               run_completion_handlers();
     void               clear_render_pipeline_cache();
     [[nodiscard]] auto recreate_surface_for_new_window() -> bool;
     [[nodiscard]] auto is_in_swapchain_frame() const -> bool;
@@ -120,6 +123,9 @@ private:
     Shader_monitor           m_shader_monitor;
     Device_info              m_info;
     uint64_t                 m_frame_index{1};
+    // Frame-completion handlers: nothing executes on a GPU, so a frame is
+    // complete as soon as it is recorded - handlers fire in end_frame().
+    std::vector<std::function<void(Device_impl&)>> m_completion_handlers;
 };
 
 } // namespace erhe::graphics

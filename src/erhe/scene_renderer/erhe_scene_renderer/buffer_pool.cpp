@@ -12,6 +12,44 @@
 
 namespace erhe::scene_renderer {
 
+Pool_block::Pool_block(
+    const uint64_t                            buffer_id,
+    std::unique_ptr<erhe::graphics::Buffer>&& buffer,
+    erhe::buffer::Free_list_allocator&&       allocator
+)
+    : buffer_id{buffer_id}
+    , buffer   {std::move(buffer)}
+    , allocator{std::move(allocator)}
+{
+}
+
+void Pool_block::release_allocation(const std::size_t byte_offset, const std::size_t byte_count) noexcept
+{
+    const std::lock_guard<std::mutex> lock{m_retired_mutex};
+    m_retired.push_back(
+        Retired_range{
+            .allocator   = &allocator,
+            .byte_offset = byte_offset,
+            .byte_count  = byte_count
+        }
+    );
+    m_retired_byte_count += byte_count;
+}
+
+void Pool_block::collect_retired(std::vector<Retired_range>& out_retired)
+{
+    const std::lock_guard<std::mutex> lock{m_retired_mutex};
+    out_retired.insert(out_retired.end(), m_retired.begin(), m_retired.end());
+    m_retired.clear();
+    m_retired_byte_count = 0;
+}
+
+auto Pool_block::get_pending_retired_byte_count() const -> std::size_t
+{
+    const std::lock_guard<std::mutex> lock{m_retired_mutex};
+    return m_retired_byte_count;
+}
+
 Buffer_pool::Buffer_pool(
     erhe::graphics::Device&                graphics_device,
     uint64_t                               pool_id,
@@ -106,17 +144,39 @@ auto Buffer_pool::allocate_internal(
     return {};
 }
 
+void Buffer_pool::collect_retired(std::vector<Retired_range>& out_retired)
+{
+    for (const std::unique_ptr<Pool_block>& block : m_blocks) {
+        block->collect_retired(out_retired);
+    }
+}
+
+void Buffer_pool::apply_retired(const std::vector<Retired_range>& retired)
+{
+    for (const Retired_range& range : retired) {
+        range.allocator->free(range.byte_offset, range.byte_count);
+    }
+}
+
 auto Buffer_pool::describe() const -> std::string
 {
+    std::size_t pending_retired_byte_count = 0;
+    for (const std::unique_ptr<Pool_block>& block : m_blocks) {
+        pending_retired_byte_count += block->get_pending_retired_byte_count();
+    }
     if (m_index_format == erhe::dataformat::Format::format_undefined) {
-        return fmt::format("pool_id = {}, stream = {}",
+        return fmt::format("pool_id = {}, stream = {}, blocks = {}, pending retired bytes = {}",
             m_pool_id,
-            m_vertex_stream.to_string()
+            m_vertex_stream.to_string(),
+            m_blocks.size(),
+            pending_retired_byte_count
         );
     } else {
-        return fmt::format("pool_id = {}, index format = {}",
+        return fmt::format("pool_id = {}, index format = {}, blocks = {}, pending retired bytes = {}",
             m_pool_id,
-            erhe::dataformat::c_str(m_index_format)
+            erhe::dataformat::c_str(m_index_format),
+            m_blocks.size(),
+            pending_retired_byte_count
         );
     }
 }
@@ -211,7 +271,9 @@ auto Buffer_pool::allocate(const std::size_t element_count) -> erhe::primitive::
             .pool_id      = m_pool_id,
             .buffer_id    = block->buffer_id
         },
-        .allocation = erhe::buffer::Buffer_allocation{block->allocator, byte_offset, allocation_byte_count}
+        // The allocation handle points at the block (deferred, frame-safe
+        // release), never at the block's Free_list_allocator directly.
+        .allocation = erhe::buffer::Buffer_allocation{*block, byte_offset, allocation_byte_count}
     };
 }
 

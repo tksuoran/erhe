@@ -8,7 +8,8 @@ Provides buffer allocation primitives used by both GPU and CPU buffer systems. C
 
 - **`Free_list_allocator`** -- Sorted free list allocator with merge-on-free. Supports `allocate(byte_count, alignment)` and `free(byte_offset, byte_count)`. Thread-safe via mutex. Used by `Cpu_buffer`, `Graphics_buffer_sink`, and any system that needs reclaimable sub-allocation within a fixed-capacity buffer.
 
-- **`Buffer_allocation`** -- Move-only RAII handle. Stores a pointer to a `Free_list_allocator` plus byte offset and count. Destructor calls `allocator->free()` to return the allocation. Moved-from state is safe (destructor is no-op).
+- **`Buffer_allocation_owner`** -- Interface receiving `Buffer_allocation` releases (`release_allocation(byte_offset, byte_count)`, any thread). The owner decides WHEN the range becomes reusable: `Free_list_allocator` frees immediately (CPU buffers); GPU pools (`erhe::scene_renderer::Pool_block`) retire the range until the frame in flight completes.
+- **`Buffer_allocation`** -- Move-only RAII handle. Stores a pointer to a `Buffer_allocation_owner` plus byte offset and count. Destructor calls `owner->release_allocation()`; it never frees memory itself. Moved-from state is safe (destructor is no-op).
 
 - **`IBuffer`** -- Abstract interface for a byte buffer supporting capacity queries, allocation, deallocation, and span access.
 
@@ -19,7 +20,7 @@ Provides buffer allocation primitives used by both GPU and CPU buffer systems. C
 - `Free_list_allocator::allocate(byte_count, alignment)` -- Returns byte offset or nullopt.
 - `Free_list_allocator::free(byte_offset, byte_count)` -- Returns allocation to free list.
 - `Free_list_allocator::get_capacity/get_used/get_free/get_allocation_count()` -- Query allocator state.
-- `Buffer_allocation(allocator, byte_offset, byte_count)` -- RAII handle construction.
+- `Buffer_allocation(owner, byte_offset, byte_count)` -- RAII handle construction (`Free_list_allocator` is an owner).
 - `Cpu_buffer::allocate_bytes/free_bytes/get_span/get_allocator()` -- Buffer operations.
 
 ## Architecture
@@ -31,7 +32,7 @@ Free_list_allocator (reusable, lives in erhe::buffer)
   ├── Used by Cpu_buffer (CPU-side, raytrace data)
   └── Used by Graphics_buffer_sink (GPU vertex/index buffers)
 
-Buffer_allocation (RAII handle, references a Free_list_allocator)
+Buffer_allocation (RAII handle, references a Buffer_allocation_owner)
   └── Held by Buffer_mesh (freed when mesh is destroyed)
 ```
 

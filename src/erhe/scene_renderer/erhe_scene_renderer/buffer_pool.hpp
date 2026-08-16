@@ -22,12 +22,52 @@ namespace erhe::graphics {
 
 namespace erhe::scene_renderer {
 
-class Pool_block
+// One range of one pool block whose owning Buffer_mesh has been destroyed
+// but which may still be read by frames in flight. Applied to the block's
+// free list (Buffer_pool::apply_retired) only after the GPU has completed
+// the frame that was current when the range was collected.
+class Retired_range
 {
 public:
+    erhe::buffer::Free_list_allocator* allocator  {nullptr};
+    std::size_t                        byte_offset{0};
+    std::size_t                        byte_count {0};
+};
+
+// A GPU buffer plus its sub-allocator. Implements
+// erhe::buffer::Buffer_allocation_owner by RETIRING released ranges into a
+// pending list instead of freeing them: a Buffer_mesh being destroyed
+// (async finalize swapping in the full mesh over the fill-only proxy, mesh
+// delete, undo, scene close) must not make its vertex / index ranges
+// reusable while a submitted frame may still draw from them - a reuse
+// would let another mesh's upload land in memory the GPU is reading.
+// Mesh_memory::flush() collects the pending ranges once per frame and
+// frees them from a device frame-completion handler.
+class Pool_block : public erhe::buffer::Buffer_allocation_owner
+{
+public:
+    Pool_block(
+        uint64_t                                  buffer_id,
+        std::unique_ptr<erhe::graphics::Buffer>&& buffer,
+        erhe::buffer::Free_list_allocator&&       allocator
+    );
+
+    // Any thread.
+    void release_allocation(std::size_t byte_offset, std::size_t byte_count) noexcept override;
+
+    // Moves the pending retired ranges to out_retired (appends).
+    void collect_retired(std::vector<Retired_range>& out_retired);
+
+    [[nodiscard]] auto get_pending_retired_byte_count() const -> std::size_t;
+
     uint64_t                                buffer_id;
     std::unique_ptr<erhe::graphics::Buffer> buffer;
     erhe::buffer::Free_list_allocator       allocator;
+
+private:
+    mutable std::mutex                      m_retired_mutex;
+    std::vector<Retired_range>              m_retired;
+    std::size_t                             m_retired_byte_count{0};
 };
 
 class Buffer_pool_block_create_info
@@ -113,6 +153,16 @@ public:
     [[nodiscard]] auto get_buffer       (uint64_t buffer_id) const -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_vertex_stream() const -> const erhe::dataformat::Vertex_stream&;
     [[nodiscard]] auto get_index_format () const -> erhe::dataformat::Format;
+
+    // Moves every block's pending retired ranges to out_retired (appends).
+    // Main thread (Mesh_memory::flush()).
+    void collect_retired(std::vector<Retired_range>& out_retired);
+
+    // Frees collected ranges. Caller guarantees the GPU has completed every
+    // frame that may read them and holds
+    // erhe::primitive::buffer_mesh_allocation_mutex() (lockstep invariant:
+    // no allocation transaction may interleave with the frees).
+    static void apply_retired(const std::vector<Retired_range>& retired);
 
 private:
     [[nodiscard]] auto allocate_internal(std::size_t allocation_byte_count, std::size_t allocation_alignment) -> std::optional<std::pair<Pool_block*, std::size_t>>;

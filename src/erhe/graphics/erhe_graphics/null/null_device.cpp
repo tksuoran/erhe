@@ -100,6 +100,8 @@ auto Device_impl::end_frame() -> bool
     // erhe_graphics/notes.md ("Frame lifecycle") and the matching
     // Vulkan implementation for the rationale.
     ++m_frame_index;
+    // Nothing executes on a GPU: the frame just recorded is complete.
+    run_completion_handlers();
     return true;
 }
 
@@ -118,7 +120,7 @@ auto Device_impl::recreate_surface_for_new_window() -> bool
 
 void Device_impl::wait_idle()
 {
-    // No-op for null backend
+    run_completion_handlers();
 }
 
 void Device_impl::clear_render_pipeline_cache()
@@ -245,8 +247,19 @@ void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, co
 
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
-    static_cast<void>(callback);
-    // No-op for null backend
+    // Not dropped: the handler releases resources (staging buffers, ring
+    // buffer ranges, Mesh_memory retired pool ranges) that would otherwise
+    // leak. Fired by end_frame() / wait_idle().
+    m_completion_handlers.push_back(std::move(callback));
+}
+
+void Device_impl::run_completion_handlers()
+{
+    std::vector<std::function<void(Device_impl&)>> handlers;
+    handlers.swap(m_completion_handlers);
+    for (const std::function<void(Device_impl&)>& handler : handlers) {
+        handler(*this);
+    }
 }
 
 void Device_impl::on_thread_enter()

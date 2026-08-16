@@ -4,6 +4,7 @@
 #include "erhe_scene_renderer/program_interface.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 
+#include "erhe_graphics/device.hpp"
 #include "erhe_graphics/state/vertex_input_state.hpp"
 
 #include "erhe_scene/mesh.hpp"
@@ -192,6 +193,7 @@ Mesh_memory::Mesh_memory(
     , m_mesh_memory_config   {mesh_memory_config}
     , m_graphics_device      {graphics_device}
     , m_buffer_transfer_queue{graphics_device}
+    , m_alive_token          {std::make_shared<int>(0)}
 {
     get_vertex_input_from_vertex_format(vertex_format_empty);
     get_vertex_input_from_vertex_format(vertex_format_skinned);
@@ -521,6 +523,46 @@ void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
 {
     log_mesh_memory->trace("Mesh_memory::flush()");
     m_buffer_transfer_queue.flush(command_buffer);
+
+    // Frame-safe frees (see Pool_block): every range retired so far had its
+    // last GPU use recorded no later than the current frame (draws are only
+    // recorded on this thread, and a Buffer_mesh is destroyed only after
+    // its last draw was recorded), so freeing when the current frame has
+    // completed cannot pull memory out from under an in-flight frame.
+    std::vector<Retired_range> retired;
+    for (Buffer_pool& pool : m_vertex_pools) {
+        pool.collect_retired(retired);
+    }
+    for (Buffer_pool& pool : m_index_pools) {
+        pool.collect_retired(retired);
+    }
+    if (retired.empty()) {
+        return;
+    }
+    std::size_t retired_byte_count = 0;
+    for (const Retired_range& range : retired) {
+        retired_byte_count += range.byte_count;
+    }
+    log_mesh_memory->trace(
+        "Mesh_memory::flush(): {} retired ranges ({} bytes) queued for free after frame {}",
+        retired.size(),
+        retired_byte_count,
+        m_graphics_device.get_frame_index()
+    );
+    m_graphics_device.add_completion_handler(
+        [alive = std::weak_ptr<int>{m_alive_token}, retired = std::move(retired)]()
+        {
+            if (alive.expired()) {
+                return; // Mesh_memory (and its pools) already destroyed
+            }
+            // All pools of a vertex format must see identical alloc / free
+            // histories (buffer_mesh.hpp lockstep invariant): apply the
+            // whole batch under the allocation mutex so no builder's
+            // multi-stream allocation transaction interleaves with it.
+            const std::lock_guard<std::mutex> lock{erhe::primitive::buffer_mesh_allocation_mutex()};
+            Buffer_pool::apply_retired(retired);
+        }
+    );
 }
 
 ///////////////////////////////////////////////////////////////////////////////

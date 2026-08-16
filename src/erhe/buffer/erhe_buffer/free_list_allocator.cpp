@@ -35,6 +35,11 @@ Free_list_allocator& Free_list_allocator::operator=(Free_list_allocator&& other)
     return *this;
 }
 
+void Free_list_allocator::release_allocation(const std::size_t byte_offset, const std::size_t byte_count) noexcept
+{
+    free(byte_offset, byte_count);
+}
+
 auto Free_list_allocator::allocate(
     const std::size_t byte_count,
     const std::size_t alignment

@@ -4,13 +4,26 @@
 
 namespace erhe::buffer {
 
-class Free_list_allocator;
+// Receives Buffer_allocation releases. Buffer_allocation never frees memory
+// itself: it hands the range back to the owner it was allocated from, and
+// the owner decides WHEN the range becomes reusable. Free_list_allocator
+// implements this with an immediate free (CPU-side buffers). GPU pools
+// (erhe::scene_renderer::Pool_block) implement it by retiring the range
+// until every frame in flight that may still read it has completed on the
+// GPU. Called from any thread; implementations must be thread-safe.
+class Buffer_allocation_owner
+{
+public:
+    virtual ~Buffer_allocation_owner() noexcept = default;
+
+    virtual void release_allocation(std::size_t byte_offset, std::size_t byte_count) noexcept = 0;
+};
 
 class Buffer_allocation
 {
 public:
     Buffer_allocation();
-    Buffer_allocation(Free_list_allocator& allocator, std::size_t byte_offset, std::size_t byte_count);
+    Buffer_allocation(Buffer_allocation_owner& owner, std::size_t byte_offset, std::size_t byte_count);
     ~Buffer_allocation();
 
     Buffer_allocation(Buffer_allocation&& other) noexcept;
@@ -25,9 +38,9 @@ public:
 private:
     void release();
 
-    Free_list_allocator* m_allocator  {nullptr};
-    std::size_t          m_byte_offset{0};
-    std::size_t          m_byte_count {0};
+    Buffer_allocation_owner* m_owner      {nullptr};
+    std::size_t              m_byte_offset{0};
+    std::size_t              m_byte_count {0};
 };
 
 } // namespace erhe::buffer

@@ -1512,6 +1512,12 @@ void Device_impl::upload_to_texture(
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
     m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
+    // The handler is released by frame_completed() for this frame, which
+    // only runs when the frame got a fence sync in end_frame(). Ring buffer
+    // acquires request one as a side effect; a frame whose only pending
+    // work is a completion handler (e.g. Mesh_memory retired-range frees)
+    // must request it explicitly or the handler waits until wait_idle().
+    m_need_sync = true;
 }
 
 void Device_impl::on_thread_enter()

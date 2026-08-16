@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_buffer/buffer_allocation.hpp"
+
 #include <cstddef>
 #include <mutex>
 #include <optional>
@@ -7,7 +9,13 @@
 
 namespace erhe::buffer {
 
-class Free_list_allocator
+// Sorted free list sub-allocator with merge-on-free. As a
+// Buffer_allocation_owner it frees IMMEDIATELY on release - correct for
+// CPU-side buffers only. GPU pools must not hand out Buffer_allocations
+// that point at a Free_list_allocator directly (see
+// erhe::scene_renderer::Pool_block, which defers the free until the GPU
+// has finished every frame that may still read the range).
+class Free_list_allocator : public Buffer_allocation_owner
 {
 public:
     explicit Free_list_allocator(std::size_t capacity);
@@ -18,6 +26,9 @@ public:
 
     auto allocate(std::size_t byte_count, std::size_t alignment) -> std::optional<std::size_t>;
     void free   (std::size_t byte_offset, std::size_t byte_count);
+
+    // Implements Buffer_allocation_owner: immediate free.
+    void release_allocation(std::size_t byte_offset, std::size_t byte_count) noexcept override;
 
     [[nodiscard]] auto get_capacity()         const -> std::size_t;
     [[nodiscard]] auto get_used()             const -> std::size_t;
