@@ -68,6 +68,17 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
 
 	result = vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &m_vk_buffer, &m_vma_allocation, nullptr);
     if (result != VK_SUCCESS) {
+        log_buffer->error(
+            "vmaCreateBuffer() failed with {} {} (capacity_byte_count = {}, debug_label = {})",
+            static_cast<int32_t>(result), c_str(result), m_capacity_byte_count, m_debug_label.data()
+        );
+        // Dump all current VMA allocations to help diagnose out-of-memory conditions
+        char* stats_string = nullptr;
+        vmaBuildStatsString(allocator, &stats_string, VK_TRUE);
+        if (stats_string != nullptr) {
+            log_buffer->error("VMA stats at vmaCreateBuffer() failure:\n{}", stats_string);
+            vmaFreeStatsString(allocator, stats_string);
+        }
         log_swapchain->critical("vmaCreateBuffer() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
     }
