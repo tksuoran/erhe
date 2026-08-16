@@ -6,6 +6,8 @@
 #include "erhe_verify/verify.hpp"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 #if defined(ERHE_OS_WINDOWS)
@@ -65,17 +67,54 @@ void set_env_or_warn(const char* key, const char* value)
 //  2. The per-version DISABLE_VULKAN_RENDERDOC_CAPTURE_1_NN keys, as a fallback
 //     for a loader too old for VK_IMPLICIT_LAYER_PATH (< 1.3.234). Each
 //     renderdoc.json names its own key via "disable_environment"; these are the
-//     stock-install versions seen so far. The fork's OWN version must never be
-//     listed here - as of this writing the fork is 1.46 and the stock install
-//     1.45. Re-check both after upgrading either side; mechanism 1 covers the
-//     case where this list has gone stale.
+//     stock-install versions seen so far. The fork's OWN key must never be
+//     set: the fork's version moves with every rebase (1.46 -> 1.45 -> ...)
+//     and stock installs are upgraded independently, so the key the fork
+//     declares in the renderdoc.json next to the override library is read
+//     and skipped instead of relying on a hardcoded version pairing.
+//     Mechanism 1 covers the case where the stock list has gone stale.
+auto read_own_disable_key(const std::filesystem::path& layer_directory) -> std::string
+{
+    std::ifstream manifest{layer_directory / "renderdoc.json"};
+    if (!manifest) {
+        return {};
+    }
+    const std::string text{std::istreambuf_iterator<char>{manifest}, std::istreambuf_iterator<char>{}};
+    const std::string_view prefix{"DISABLE_VULKAN_RENDERDOC_CAPTURE_"};
+    const std::size_t start = text.find(prefix);
+    if (start == std::string::npos) {
+        return {};
+    }
+    const std::size_t end = text.find('"', start);
+    if (end == std::string::npos) {
+        return {};
+    }
+    return text.substr(start, end - start);
+}
+
 void apply_renderdoc_override_env(std::string_view library_path_override)
 {
     const std::filesystem::path library_path{library_path_override};
     const std::string layer_directory = library_path.parent_path().string();
-    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_45", "1");
-    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44", "1");
-    set_env_or_warn("DISABLE_VULKAN_RENDERDOC_CAPTURE_1_41", "1");
+    const std::string own_disable_key = read_own_disable_key(library_path.parent_path());
+    if (own_disable_key.empty()) {
+        log_renderdoc->warn(
+            "RenderDoc: could not read disable_environment key from '{}' - the stock-version disable "
+            "list below may disable the override layer itself",
+            (library_path.parent_path() / "renderdoc.json").string()
+        );
+    }
+    for (const char* stock_disable_key : {
+        "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_45",
+        "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_44",
+        "DISABLE_VULKAN_RENDERDOC_CAPTURE_1_41"
+    }) {
+        if (own_disable_key == stock_disable_key) {
+            log_renderdoc->info("RenderDoc: not setting {} - it is the override layer's own disable key", stock_disable_key);
+            continue;
+        }
+        set_env_or_warn(stock_disable_key, "1");
+    }
     set_env_or_warn("VK_IMPLICIT_LAYER_PATH", layer_directory.c_str());
     set_env_or_warn("VK_ADD_IMPLICIT_LAYER_PATH", layer_directory.c_str());
     set_env_or_warn("ENABLE_VULKAN_RENDERDOC_CAPTURE", "1");
