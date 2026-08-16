@@ -2,6 +2,7 @@
 #include "erhe_scene/layout_item.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_primitive/primitive.hpp"
 
@@ -290,6 +291,21 @@ Layout::Layout(const Layout& src, erhe::for_clone)
     , grid_track_count {src.grid_track_count }
     , grid_track_extent{src.grid_track_extent}
 {
+}
+
+void Layout::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
+{
+    const std::shared_ptr<Layout> shared_this = std::static_pointer_cast<Layout>(shared_from_this()); // keep alive
+
+    Scene_host* const old_scene_host = static_cast<Scene_host*>(old_item_host);
+    Scene_host* const new_scene_host = static_cast<Scene_host*>(new_item_host);
+
+    if (old_scene_host != nullptr) {
+        old_scene_host->unregister_layout(shared_this);
+    }
+    if (new_scene_host != nullptr) {
+        new_scene_host->register_layout(shared_this);
+    }
 }
 
 void Layout::update()

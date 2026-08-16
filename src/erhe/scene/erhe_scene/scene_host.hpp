@@ -7,6 +7,7 @@
 namespace erhe::scene {
 
 class Camera;
+class Layout;
 class Light;
 class Mesh;
 class Mesh_raytrace;
@@ -30,6 +31,11 @@ public:
     virtual void unregister_skin  (const std::shared_ptr<Skin>&   skin)   = 0;
     virtual void register_light   (const std::shared_ptr<Light>&  light)  = 0;
     virtual void unregister_light (const std::shared_ptr<Light>&  light)  = 0;
+    // Layout attachments (Layout::handle_item_host_update). The hosted Scene
+    // keeps the registered set so Scene::update_layouts() runs only the
+    // layout nodes, never a whole-hierarchy scan.
+    virtual void register_layout  (const std::shared_ptr<Layout>& layout) = 0;
+    virtual void unregister_layout(const std::shared_ptr<Layout>& layout) = 0;
 
     // Mesh change notifications (doc/draw_list_renderer_requirements.md R0a,
     // R12, R12a). May be called from worker threads (mesh building is

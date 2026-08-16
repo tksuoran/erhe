@@ -181,38 +181,11 @@ void App_scenes::update_layout_nodes()
 {
     ERHE_PROFILE_FUNCTION();
 
+    // Each Scene keeps its registered Layout attachments (Scene_host
+    // register_layout / unregister_layout hooks), so this touches only the
+    // layout nodes - no per-frame hierarchy scan.
     for (const std::shared_ptr<Scene_root>& scene_root : m_scene_roots) {
-        const std::shared_ptr<erhe::scene::Node> root = scene_root->get_scene().get_root_node();
-        if (!root) {
-            continue;
-        }
-
-        // Collect layout nodes together with their hierarchy depth.
-        std::vector<std::pair<std::size_t, erhe::scene::Node*>> layout_nodes;
-        root->for_each<erhe::scene::Node>(
-            [&layout_nodes](erhe::scene::Node& node) -> bool {
-                const std::shared_ptr<erhe::scene::Layout> layout = erhe::scene::get_attachment<erhe::scene::Layout>(&node);
-                if (layout) {
-                    layout_nodes.emplace_back(node.get_depth(), &node);
-                }
-                return true;
-            }
-        );
-
-        // Shallow-to-deep so a parent layout runs before any nested child layout;
-        // a nested layout then re-runs later in this same pass.
-        std::stable_sort(
-            layout_nodes.begin(),
-            layout_nodes.end(),
-            [](const std::pair<std::size_t, erhe::scene::Node*>& lhs, const std::pair<std::size_t, erhe::scene::Node*>& rhs) -> bool {
-                return lhs.first < rhs.first;
-            }
-        );
-
-        for (const std::pair<std::size_t, erhe::scene::Node*>& entry : layout_nodes) {
-            const std::shared_ptr<erhe::scene::Layout> layout = erhe::scene::get_attachment<erhe::scene::Layout>(entry.second);
-            layout->update();
-        }
+        scene_root->get_scene().update_layouts();
     }
 }
 

@@ -53,6 +53,7 @@ namespace erhe::scene_renderer {
 namespace erhe::scene {
     using Layer_id = uint64_t;
     class Camera;
+    class Layout;
     class Light;
     class Light_layer;
     class Mesh;
@@ -168,6 +169,8 @@ public:
     void unregister_skin  (const std::shared_ptr<erhe::scene::Skin>&   skin)   override;
     void register_light   (const std::shared_ptr<erhe::scene::Light>&  light)  override;
     void unregister_light (const std::shared_ptr<erhe::scene::Light>&  light)  override;
+    void register_layout  (const std::shared_ptr<erhe::scene::Layout>& layout) override;
+    void unregister_layout(const std::shared_ptr<erhe::scene::Layout>& layout) override;
     void on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_material_changed  (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_flags_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) override;

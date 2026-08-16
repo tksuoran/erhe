@@ -1,5 +1,6 @@
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -600,6 +601,67 @@ void Scene::unregister_skin(const std::shared_ptr<Skin>& skin)
         log->error("skin {} not in scene cameras", skin->get_name());
     } else {
         m_skins.erase(i, m_skins.end());
+    }
+}
+
+void Scene::register_layout(const std::shared_ptr<Layout>& layout)
+{
+    ERHE_VERIFY(layout);
+#ifndef NDEBUG
+    const auto i = std::find(m_layouts.begin(), m_layouts.end(), layout);
+    if (i != m_layouts.end()) {
+        log->error("layout {} already in scene layouts", layout->get_name());
+    } else
+#endif
+    {
+        m_layouts.push_back(layout);
+    }
+}
+
+void Scene::unregister_layout(const std::shared_ptr<Layout>& layout)
+{
+    ERHE_VERIFY(layout);
+    const auto i = std::remove(m_layouts.begin(), m_layouts.end(), layout);
+    if (i == m_layouts.end()) {
+        log->error("layout {} not in scene layouts", layout->get_name());
+    } else {
+        m_layouts.erase(i, m_layouts.end());
+    }
+}
+
+auto Scene::get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&
+{
+    return m_layouts;
+}
+
+void Scene::update_layouts()
+{
+    if (m_layouts.empty()) {
+        return;
+    }
+    ERHE_PROFILE_FUNCTION();
+
+    // Sort by hierarchy depth so a parent layout runs before any nested
+    // child layout. Depth changes with reparenting, so the (small) list is
+    // sorted every pass rather than cached.
+    std::vector<std::pair<std::size_t, Layout*>> layouts;
+    layouts.reserve(m_layouts.size());
+    for (const std::shared_ptr<Layout>& layout : m_layouts) {
+        Node* const node = layout->get_node();
+        if (node == nullptr) {
+            continue;
+        }
+        layouts.emplace_back(node->get_depth(), layout.get());
+    }
+    std::stable_sort(
+        layouts.begin(),
+        layouts.end(),
+        [](const std::pair<std::size_t, Layout*>& lhs, const std::pair<std::size_t, Layout*>& rhs) -> bool {
+            return lhs.first < rhs.first;
+        }
+    );
+    for (const std::pair<std::size_t, Layout*>& entry : layouts) {
+        entry.second->update();
     }
 }
 

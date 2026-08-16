@@ -1295,6 +1295,20 @@ void Scene_root::unregister_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
     }
 }
 
+void Scene_root::register_layout(const std::shared_ptr<erhe::scene::Layout>& layout)
+{
+    if (m_scene) {
+        m_scene->register_layout(layout);
+    }
+}
+
+void Scene_root::unregister_layout(const std::shared_ptr<erhe::scene::Layout>& layout)
+{
+    if (m_scene) {
+        m_scene->unregister_layout(layout);
+    }
+}
+
 void Scene_root::register_light(const std::shared_ptr<erhe::scene::Light>& light)
 {
     if (m_scene) {

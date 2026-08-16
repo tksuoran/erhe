@@ -15,6 +15,7 @@
 namespace erhe::scene {
 
 class Camera;
+class Layout;
 class Light;
 class Mesh;
 class Node;
@@ -220,6 +221,15 @@ public:
     void unregister_skin  (const std::shared_ptr<Skin>& skin);
     void register_light   (const std::shared_ptr<Light>& light);
     void unregister_light (const std::shared_ptr<Light>& light);
+    void register_layout  (const std::shared_ptr<Layout>& layout);
+    void unregister_layout(const std::shared_ptr<Layout>& layout);
+    [[nodiscard]] auto get_layouts() const -> const std::vector<std::shared_ptr<Layout>>&;
+
+    // Arrange the children of every registered layout node, shallow-to-deep
+    // so a parent layout runs before any nested child layout (a nested
+    // layout then re-runs later in the same pass). Call once per frame
+    // before update_node_transforms(). No-op when no layouts are hosted.
+    void update_layouts();
 
     // Scene-wide ambient light color (issues #237 / #240). Fed to the forward
     // renderer as the ambient term and serialized with the scene (scene file
@@ -237,6 +247,9 @@ private:
     std::vector<std::shared_ptr<Skin>>        m_skins;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
+    // Registered Layout attachments (register_layout / unregister_layout,
+    // fed by Layout::handle_item_host_update through the Scene_host).
+    std::vector<std::shared_ptr<Layout>>      m_layouts;
 
     // Pending transform propagation (see mark_node_transform_dirty). Raw
     // pointers are safe: unregister_node() removes the node from the list,

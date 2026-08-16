@@ -67,10 +67,16 @@ public:
         return erhe::Item_type::node_attachment | erhe::Item_type::layout;
     }
 
+    // Implements Node_attachment: registers with / unregisters from the
+    // Scene_host so Scene::update_layouts() finds this layout without a
+    // hierarchy scan.
+    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+
     // Public API
     // Recompute and apply the local transform of every direct child. The editor
-    // calls this once per frame for every layout node (App_scenes::update_layout_nodes)
-    // before the world-transform passes. A dirty/serial-gated optimization is
+    // calls this once per frame for every registered layout
+    // (Scene::update_layouts(), from App_scenes::update_layout_nodes) before
+    // the world-transform passes. A dirty/serial-gated optimization is
     // deliberately left for later; recomputing each frame is simple and correct.
     void update();
 
