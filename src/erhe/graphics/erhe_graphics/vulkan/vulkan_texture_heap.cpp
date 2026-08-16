@@ -189,12 +189,21 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
         .pSetLayouts        = &m_descriptor_set_layout
     };
 
+    // Sets are never freed individually, so the newest pool is full exactly
+    // when it has handed out s_sets_per_pool sets. Track that instead of
+    // probing the pool with vkAllocateDescriptorSets(): a probe of a full pool
+    // returns VK_ERROR_OUT_OF_POOL_MEMORY, which is spec-legal but trips the
+    // BestPractices validation layer on every pool rollover.
     VkDescriptorSet set = VK_NULL_HANDLE;
-    if (!m_descriptor_pools.empty()) {
+    if (!m_descriptor_pools.empty() && (m_sets_in_last_pool < s_sets_per_pool)) {
         allocate_info.descriptorPool = m_descriptor_pools.back();
         const VkResult result = vkAllocateDescriptorSets(vulkan_device, &allocate_info, &set);
         if (result != VK_SUCCESS) {
-            set = VK_NULL_HANDLE; // pool exhausted (or fragmented) - fall through to create a new pool
+            log_texture_heap->warn("vkAllocateDescriptorSets() failed with {} - creating a new pool", static_cast<int32_t>(result));
+            m_sets_in_last_pool = s_sets_per_pool; // treat the pool as full (fragmented or otherwise unusable)
+            set = VK_NULL_HANDLE;
+        } else {
+            ++m_sets_in_last_pool;
         }
     }
 
@@ -218,6 +227,7 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
             return VK_NULL_HANDLE;
         }
         m_descriptor_pools.push_back(descriptor_pool);
+        m_sets_in_last_pool = 0;
 
         allocate_info.descriptorPool = descriptor_pool;
         result = vkAllocateDescriptorSets(vulkan_device, &allocate_info, &set);
@@ -225,6 +235,7 @@ auto Texture_heap_impl::allocate_new_set() -> VkDescriptorSet
             log_texture_heap->error("vkAllocateDescriptorSets() failed with {}", static_cast<int32_t>(result));
             return VK_NULL_HANDLE;
         }
+        ++m_sets_in_last_pool;
     }
 
     // Initialize all slots with the fallback texture so unallocated slots

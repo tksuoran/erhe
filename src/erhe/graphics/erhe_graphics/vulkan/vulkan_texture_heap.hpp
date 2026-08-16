@@ -60,6 +60,7 @@ protected:
     std::vector<const Sampler*>        m_samplers;
     std::size_t                        m_used_slot_count{0};
     std::vector<VkDescriptorPool>      m_descriptor_pools;
+    uint32_t                           m_sets_in_last_pool{0}; // sets allocated from m_descriptor_pools.back()
     VkDescriptorSetLayout              m_descriptor_set_layout{VK_NULL_HANDLE};
     std::vector<Set_entry>             m_set_entries;
     std::size_t                        m_current_set_index{s_invalid_set_index};
