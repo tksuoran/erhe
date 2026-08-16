@@ -956,10 +956,11 @@ public:
         const long long image_ms = elapsed_ms(image_start_time);
 
         log_gltf->trace("parsing samplers");
-        m_data_out.samplers.resize(m_asset->samplers.size());
+        m_data_out.samplers.resize(m_asset->samplers.size() + 1);
         for (std::size_t i = 0, end = m_asset->samplers.size(); i < end; ++i) {
             parse_sampler(i);
         }
+        make_default_sampler();
 
         const std::size_t material_count = m_asset->materials.size();
         log_gltf->trace("parsing {} materials", material_count);
@@ -1624,6 +1625,20 @@ private:
         // TODO erhe_sampler->set_source_path(m_path);
         m_data_out.samplers[sampler_index] = erhe_sampler;
     }
+    void make_default_sampler()
+    {
+        erhe::graphics::Sampler_create_info create_info;
+        create_info.min_filter      = erhe::graphics::Filter::nearest;
+        create_info.mag_filter      = erhe::graphics::Filter::nearest;
+        create_info.mipmap_mode     = erhe::graphics::Sampler_mipmap_mode::linear;
+        create_info.address_mode[0] = erhe::graphics::Sampler_address_mode::repeat;
+        create_info.address_mode[1] = erhe::graphics::Sampler_address_mode::repeat;
+        create_info.address_mode[2] = erhe::graphics::Sampler_address_mode::repeat;
+        create_info.max_anisotropy  = 1.0f;
+        create_info.debug_label     = erhe::utility::Debug_label{"glTF default samppler"};
+        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
+        m_data_out.samplers[m_asset->samplers.size()] = erhe_sampler;
+    }
     [[nodiscard]] auto is_tangent_frame_needed(const std::size_t material_index) -> bool {
         const fastgltf::Material& material = m_asset->materials[material_index];
         if (material.normalTexture.has_value()) {
@@ -1659,6 +1674,8 @@ private:
             }
             if (texture.samplerIndex.has_value()) {
                 erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
+            } else {
+                erhe_texture_sampler.sampler = m_data_out.samplers[m_asset->samplers.size()]; // default sampler
             }
             erhe_texture_sampler.tex_coord = static_cast<uint8_t>(gltf_texture_info.texCoordIndex);
             if (gltf_texture_info.transform) {
