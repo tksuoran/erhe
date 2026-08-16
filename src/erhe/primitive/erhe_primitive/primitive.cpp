@@ -80,7 +80,7 @@ auto c_str(const Material_blending_mode blending_mode) -> const char*
 #pragma region Primitive_raytrace
 Primitive_raytrace::Primitive_raytrace() = default;
 
-Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* element_mappings)
+Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -113,7 +113,7 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
         }
     };
 
-    Element_mappings dummy_mappings;
+    Element_mappings element_mappings;
 
     // Breadcrumb with mesh counts: the raytrace buffer-mesh build walks the
     // whole mesh and a watchdog dump should attribute a stall here (and
@@ -128,9 +128,10 @@ Primitive_raytrace::Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* 
         m_rt_mesh,
         mesh,
         build_info,
-        (element_mappings != nullptr) ? *element_mappings : dummy_mappings,
+        element_mappings,
         Normal_style::none
     );
+    m_triangle_to_mesh_facet = std::move(element_mappings.triangle_to_mesh_facet);
 
     make_raytrace_geometry();
     m_rt_geometry->set_user_data(nullptr);
@@ -211,6 +212,15 @@ auto Primitive_raytrace::get_raytrace_mesh() const -> const Buffer_mesh&
 auto Primitive_raytrace::get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&
 {
     return m_rt_geometry;
+}
+
+auto Primitive_raytrace::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
+{
+    if (m_triangle_to_mesh_facet.empty()) {
+        return GEO::NO_INDEX;
+    }
+    ERHE_VERIFY(triangle < m_triangle_to_mesh_facet.size());
+    return m_triangle_to_mesh_facet[triangle];
 }
 
 auto Primitive_raytrace::has_raytrace_triangles() const -> bool
@@ -480,7 +490,7 @@ auto Primitive_shape::has_real_raytrace() const -> bool
 
 auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
 {
-    m_raytrace = Primitive_raytrace{mesh, nullptr};
+    m_raytrace = Primitive_raytrace{mesh};
     return m_raytrace.has_raytrace_triangles();
 }
 
@@ -536,7 +546,7 @@ auto Primitive_shape::prepare_real_raytrace() -> bool
     if (!make_geometry_locked()) {
         return false;
     }
-    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(m_geometry->get_mesh(), nullptr);
+    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(m_geometry->get_mesh());
     if (!pending->has_raytrace_triangles()) {
         return false;
     }
@@ -796,13 +806,19 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
     return buffer_mesh;
 }
 
-auto Primitive_shape::get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t
+auto Primitive_shape::get_mesh_facet_from_triangle(const erhe::raytrace::IGeometry* geometry, const uint32_t triangle) const -> GEO::index_t
 {
-    if (m_element_mappings.triangle_to_mesh_facet.empty()) {
+    if (geometry == nullptr) {
         return GEO::NO_INDEX;
     }
-    ERHE_VERIFY(triangle < m_element_mappings.triangle_to_mesh_facet.size());
-    return m_element_mappings.triangle_to_mesh_facet[triangle];
+    const std::lock_guard<std::mutex> lock{m_mutex};
+    if (m_raytrace.get_raytrace_geometry().get() == geometry) {
+        return m_raytrace.get_mesh_facet_from_triangle(triangle);
+    }
+    if (m_retired_proxy_raytrace && (m_retired_proxy_raytrace->get_raytrace_geometry().get() == geometry)) {
+        return m_retired_proxy_raytrace->get_mesh_facet_from_triangle(triangle);
+    }
+    return GEO::NO_INDEX;
 }
 
 auto Primitive_shape::get_element_mappings() const -> const Element_mappings&

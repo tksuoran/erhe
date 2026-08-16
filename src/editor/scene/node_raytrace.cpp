@@ -97,7 +97,7 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     using namespace erhe::primitive;
     const std::shared_ptr<Primitive_shape> shape = primitive.get_shape_for_raytrace();
     ERHE_VERIFY(shape);
-    const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.triangle_id);
+    const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.geometry, hit.triangle_id);
     const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
     if (!geometry) {
         return hit.normal;

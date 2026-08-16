@@ -570,7 +570,7 @@ void Scene_view::update_hover_with_raytrace()
                 GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->get_name());
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit triangle: {}", Hover_entry::slot_names[slot], hit.triangle_id);
-                const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.triangle_id);
+                const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.geometry, hit.triangle_id);
                 if (facet != GEO::NO_INDEX) {
                     ERHE_VERIFY(facet < geo_mesh.facets.nb());
                     SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit facet: {}", Hover_entry::slot_names[slot], facet);

@@ -26,7 +26,7 @@ class Primitive_raytrace
 {
 public:
     Primitive_raytrace();
-    explicit Primitive_raytrace(const GEO::Mesh& mesh, Element_mappings* element_mappings = nullptr);
+    explicit Primitive_raytrace(const GEO::Mesh& mesh);
     explicit Primitive_raytrace(erhe::primitive::Triangle_soup& triangle_soup);
     // AABB proxy: a 12-triangle box over the given bounds. Cheap enough for
     // load time, so picking works immediately after a deferred-raytrace
@@ -46,6 +46,12 @@ public:
 
     [[nodiscard]] auto get_raytrace_mesh    () const -> const Buffer_mesh&;
     [[nodiscard]] auto get_raytrace_geometry() const -> const std::shared_ptr<erhe::raytrace::IGeometry>&;
+    // Maps a hit triangle index of *this* raytrace geometry to the GEO::Mesh
+    // facet it was built from. The mapping is owned here, next to the
+    // triangles it indexes, so it can never disagree with the geometry that
+    // reported the hit. Proxy and triangle-soup raytraces have no facets and
+    // return GEO::NO_INDEX.
+    [[nodiscard]] auto get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t;
 
 private:
     // Order matters: m_rt_mesh must be destroyed before the buffers
@@ -55,6 +61,7 @@ private:
     std::shared_ptr<erhe::buffer::Cpu_buffer>  m_rt_index_buffer {};
     std::shared_ptr<erhe::raytrace::IGeometry> m_rt_geometry     {};
     Buffer_mesh                                m_rt_mesh;
+    std::vector<uint32_t>                      m_triangle_to_mesh_facet{};
     bool                                       m_is_proxy{false};
 };
 
@@ -101,7 +108,13 @@ public:
     [[nodiscard]] auto get_raytrace                () const -> const Primitive_raytrace&;
     [[nodiscard]] auto get_triangle_soup           () const -> const std::shared_ptr<Triangle_soup>&;
     [[nodiscard]] auto get_element_mappings        () const -> const erhe::primitive::Element_mappings&;
-    [[nodiscard]] auto get_mesh_facet_from_triangle(const uint32_t triangle) const -> GEO::index_t;
+    // Resolves a raytrace hit (the IGeometry that reported it + triangle
+    // index) to a GEO::Mesh facet. The geometry may be the current raytrace
+    // or the retired proxy a not-yet-refreshed sharer still references; the
+    // mapping is looked up on the raytrace that owns that geometry, so the
+    // triangle index is always interpreted against the triangles it came
+    // from. Unknown geometry / proxy hits yield GEO::NO_INDEX.
+    [[nodiscard]] auto get_mesh_facet_from_triangle(const erhe::raytrace::IGeometry* geometry, const uint32_t triangle) const -> GEO::index_t;
 
 protected:
     auto make_geometry_locked() -> bool; // caller holds m_mutex
