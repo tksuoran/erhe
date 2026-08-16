@@ -1768,9 +1768,18 @@ auto Device_impl::allocate_ring_buffer_entry(
         }
     }
 
-    // No existing usable buffer found, create new buffer
+    // No existing usable buffer found, create new buffer. First buffer of a
+    // usage class gets 4x headroom; spill buffers are sized to the request
+    // (see the Vulkan backend for rationale).
+    bool has_existing = false;
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+        if (ring_buffer->match(ring_buffer_usage)) {
+            has_existing = true;
+            break;
+        }
+    }
     const Ring_buffer_create_info create_info{
-        .size              = std::max(m_min_buffer_size, 4 * byte_count),
+        .size              = std::max(m_min_buffer_size, has_existing ? byte_count : 4 * byte_count),
         .ring_buffer_usage = ring_buffer_usage,
         .debug_label       = "Ring_buffer"
     };
@@ -1995,6 +2004,14 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
             static_cast<void>(present_ok);
         }
     }
+}
+
+void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
+{
+    // GL has no fence-per-cb machinery here; submit then drain the driver.
+    Command_buffer* command_buffers[] = { &command_buffer };
+    submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    gl::finish();
 }
 
 auto Device_impl::make_blit_command_encoder(Command_buffer& command_buffer) -> Blit_command_encoder

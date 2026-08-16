@@ -956,7 +956,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     // container node trees serve asset acquisition and are never rendered.
     record->root_node = std::make_shared<erhe::scene::Node>(fmt::format("asset container: {}", record->display_path));
 
-    erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device, *m_context.current_command_buffer};
+    erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_device = *m_context.graphics_device,
         .executor        = *m_context.executor,

@@ -515,6 +515,17 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     }
 }
 
+void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
+{
+    // Metal: commit the cb, then block until this cb (only) has completed.
+    MTL::CommandBuffer* mtl_cb = command_buffer.get_impl().get_mtl_command_buffer();
+    Command_buffer* command_buffers[] = { &command_buffer };
+    submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+    if (mtl_cb != nullptr) {
+        mtl_cb->waitUntilCompleted();
+    }
+}
+
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
     m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
@@ -693,9 +704,18 @@ auto Device_impl::allocate_ring_buffer_entry(
         }
     }
 
-    // No existing buffer found, create new one
+    // No existing buffer found, create new one. First buffer of a usage
+    // class gets 4x headroom; spill buffers are sized to the request (see
+    // the Vulkan backend for rationale).
+    bool has_existing = false;
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+        if (ring_buffer->match(usage)) {
+            has_existing = true;
+            break;
+        }
+    }
     const Ring_buffer_create_info create_info{
-        .size              = std::max(m_min_buffer_size, 4 * byte_count),
+        .size              = std::max(m_min_buffer_size, has_existing ? byte_count : 4 * byte_count),
         .ring_buffer_usage = usage,
         .debug_label       = "Ring_buffer"
     };

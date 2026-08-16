@@ -111,6 +111,8 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
 
     ERHE_VERIFY(ring_buffer_usage == m_ring_buffer_usage); // TODO Cleanup this API
 
+    m_last_used_frame = m_device.get_frame_index();
+
     const std::optional<erhe::circular_ring_buffer::Circular_ring_buffer_algorithm::Allocation> opt_allocation =
         m_algorithm.acquire(required_alignment, byte_count);
     if (!opt_allocation.has_value()) {
@@ -157,6 +159,35 @@ auto Ring_buffer::acquire(std::size_t required_alignment, Ring_buffer_usage ring
 auto Ring_buffer::match(const Ring_buffer_usage ring_buffer_usage) const -> bool
 {
     return m_ring_buffer_usage == ring_buffer_usage; // TODO some usages might be compatible with each other?
+}
+
+auto Ring_buffer::get_ring_buffer_usage() const -> Ring_buffer_usage
+{
+    return m_ring_buffer_usage;
+}
+
+auto Ring_buffer::get_capacity_byte_count() const -> std::size_t
+{
+    return m_algorithm.get_capacity_byte_count();
+}
+
+void Ring_buffer::complete_all_syncs()
+{
+    // Pending CPU_read downloads would reference frames that will never be
+    // walked through frame_completed() here; the only current caller is the
+    // CPU_write staging flush, which has no pending reads.
+    ERHE_VERIFY(m_pending_reads.empty());
+    m_algorithm.complete_all();
+}
+
+auto Ring_buffer::is_idle() const -> bool
+{
+    return m_pending_reads.empty() && m_algorithm.is_empty();
+}
+
+auto Ring_buffer::get_last_used_frame() const -> uint64_t
+{
+    return m_last_used_frame;
 }
 
 void Ring_buffer::flush(const std::size_t byte_offset, const std::size_t byte_count)

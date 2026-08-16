@@ -32,6 +32,22 @@ public:
     [[nodiscard]] auto acquire(std::size_t required_alignment, Ring_buffer_usage usage, std::size_t byte_count) -> Ring_buffer_range;
     [[nodiscard]] auto match  (Ring_buffer_usage ring_buffer_usage) const -> bool;
 
+    [[nodiscard]] auto get_ring_buffer_usage() const -> Ring_buffer_usage;
+    [[nodiscard]] auto get_capacity_byte_count() const -> std::size_t;
+
+    // Mark every released range complete and reclaim its space. Only valid
+    // when the caller guarantees the GPU has consumed every released range
+    // (e.g. after a fence wait on the submit that recorded all consumers)
+    // and no acquired range is still open.
+    void complete_all_syncs();
+
+    // True when all space is free and no sync entry is outstanding, i.e.
+    // no in-flight GPU work references this buffer.
+    [[nodiscard]] auto is_idle() const -> bool;
+
+    // Device frame index of the most recent acquire(); 0 if never acquired.
+    [[nodiscard]] auto get_last_used_frame() const -> uint64_t;
+
     // For Ring_buffer_range
     void flush(std::size_t byte_offset, std::size_t byte_count);
     void close(std::size_t byte_offset, std::size_t byte_write_count);
@@ -57,6 +73,7 @@ private:
 
     Device&                                                  m_device;
     Ring_buffer_usage                                        m_ring_buffer_usage;
+    uint64_t                                                 m_last_used_frame{0};
 
     std::unique_ptr<Buffer>                                  m_buffer;
     std::vector<std::byte>                                   m_cpu_buffer; // Shadow buffer for non-persistent mode

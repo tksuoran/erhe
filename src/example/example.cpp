@@ -123,7 +123,7 @@ public:
             return cb;
         }()}
         , m_y_flip{m_graphics_device.get_info().coordinate_conventions.clip_space_y_flip == erhe::math::Clip_space_y_flip::enabled}
-        , m_image_transfer   {m_graphics_device, m_init_command_buffer}
+        , m_image_transfer   {m_graphics_device}
         , m_mesh_memory{
             erhe::codegen::load_config<Mesh_memory_config>("config/example/mesh_memory.json"),
             m_graphics_device

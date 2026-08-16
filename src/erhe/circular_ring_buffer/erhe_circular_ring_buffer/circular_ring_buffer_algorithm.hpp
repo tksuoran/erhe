@@ -42,6 +42,16 @@ public:
 
     void frame_completed(std::uint64_t completed_frame);
 
+    // Mark every outstanding sync entry complete: the read pointer catches
+    // up with the write pointer and all entries are dropped. Only valid when
+    // the caller guarantees the GPU has consumed every released range (e.g.
+    // after a fence wait on the submit that contains all consumers) and no
+    // acquired range is still open.
+    void complete_all();
+
+    // True when all space is free and no sync entry is outstanding.
+    [[nodiscard]] auto is_empty() const -> bool;
+
     [[nodiscard]] auto get_capacity_byte_count() const -> std::size_t;
     [[nodiscard]] auto get_write_position     () const -> std::size_t;
     [[nodiscard]] auto get_write_wrap_count   () const -> std::size_t;

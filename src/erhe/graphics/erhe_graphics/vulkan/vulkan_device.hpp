@@ -225,6 +225,7 @@ public:
                   void set_active_render_pass_impl       (Render_pass_impl* render_pass_impl);
 
     void submit_command_buffers   (std::span<Command_buffer* const> command_buffers);
+    void submit_command_buffer_and_wait(Command_buffer& command_buffer);
     void add_completion_handler   (std::function<void(Device_impl&)> callback);
     void on_thread_enter          ();
 

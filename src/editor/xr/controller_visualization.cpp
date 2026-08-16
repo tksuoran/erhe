@@ -211,7 +211,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     );
     model_root->enable_flag_bits(erhe::Item_flags::visible);
 
-    erhe::gltf::Image_transfer image_transfer{*context.graphics_device, *context.current_command_buffer};
+    erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
     const erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_device = *context.graphics_device,
         .executor        = *context.executor,

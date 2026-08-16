@@ -236,6 +236,12 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     // No-op for null backend; iteration target.
 }
 
+void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
+{
+    static_cast<void>(command_buffer);
+    // No-op for null backend; there is no GPU work to wait for.
+}
+
 void Device_impl::upload_to_buffer(const Buffer& buffer, const size_t offset, const void* data, const size_t length)
 {
     static_cast<void>(buffer);

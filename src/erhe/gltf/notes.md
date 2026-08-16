@@ -12,14 +12,15 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - `Gltf_physics_data` (`gltf_physics.hpp`) -- Plain-data 1:1 carrier for the physics extensions: implicit shapes, physics materials, collision filters, joints, per-node body descriptions (motion / collider / trigger / joint), and export-only `synthesized_colliders` (colliders the exporter places on synthesized glTF child nodes: compound shape children, non-Y shape axes, non-node wrapper scales). Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
 - `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: graphics device, executor, image transfer, root node, mesh layer, file path.
-- `Image_transfer` -- Manages GPU texture upload via a ring buffer for streaming image data.
+- `Image_transfer` -- GPU texture uploads through a private fixed-size (64 MiB) staging ring and its own transfer command buffer. When the ring fills, `flush()` submits + fence-waits + reclaims, so scene loads make progress with bounded staging memory even when no frames are rendered while loading. Destructor flushes.
 
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
 - `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `Gltf_physics_data` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children/attachments, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0.
 - `Image_transfer(device)` -- Create image upload manager.
-- `Image_transfer::upload_to_texture(image_info, range, texture, gen_mipmap)` -- Upload image to GPU texture.
+- `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies.
+- `Image_transfer::flush()` -- Submit pending copies, wait for the GPU, reclaim staging.
 
 ## Dependencies
 - **erhe libraries:** `erhe::graphics` (private), `erhe::scene` (private), `erhe::primitive` (private), `erhe::geometry` (private), `erhe::file` (private), `erhe::log` (private), `erhe::profile` (private)
@@ -28,7 +29,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 ## Notes
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
-- Uses `Image_transfer` with a ring buffer for asynchronous texture uploads.
+- `Image_transfer` no longer records into the caller's frame command buffer: uploads go through its own transfer command buffer, submitted (and fence-waited) whenever the staging ring fills and at destruction. Images larger than the staging ring use a dedicated one-shot staging buffer.
 - fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which
   carries the KHR_physics_rigid_bodies spec-compliance fixes (mesh-keyed collider
   geometry, spec inertia key names, exporter JSON fixes) plus a subset of the glTF 2.1

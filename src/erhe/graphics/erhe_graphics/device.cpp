@@ -108,6 +108,10 @@ void Device::submit_command_buffers(std::span<Command_buffer* const> command_buf
 {
     m_impl->submit_command_buffers(command_buffers);
 }
+void Device::submit_command_buffer_and_wait(Command_buffer& command_buffer)
+{
+    m_impl->submit_command_buffer_and_wait(command_buffer);
+}
 void Device::add_completion_handler(std::function<void()> callback)
 {
     m_impl->add_completion_handler(

@@ -163,7 +163,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
 
     m_active_load_stack.push_back(prefab.source_path);
 
-    erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device, *m_context.current_command_buffer};
+    erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
         .graphics_device = *m_context.graphics_device,
         .executor        = *m_context.executor,

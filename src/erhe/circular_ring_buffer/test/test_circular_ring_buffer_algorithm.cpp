@@ -59,6 +59,46 @@ TEST(CircularRingBufferAlgorithm, initial_state)
     EXPECT_EQ(available_with_wrap,  0u);
 }
 
+TEST(CircularRingBufferAlgorithm, is_empty_and_complete_all)
+{
+    Circular_ring_buffer_algorithm algorithm{64};
+    EXPECT_TRUE(algorithm.is_empty());
+
+    // Acquired but not yet released: not empty (write moved, no sync entry).
+    const std::optional<Allocation> a = algorithm.acquire(1, 40);
+    ASSERT_TRUE(a.has_value());
+    EXPECT_FALSE(algorithm.is_empty());
+
+    // Released (sync entry outstanding): still not empty.
+    algorithm.make_sync_entry(7, a->wrap_count, a->byte_offset, a->byte_count);
+    EXPECT_FALSE(algorithm.is_empty());
+
+    // Natural completion of the only entry: empty again.
+    algorithm.frame_completed(7);
+    EXPECT_TRUE(algorithm.is_empty());
+
+    // With the write pointer mid-buffer (40/64), a 50-byte acquire cannot be
+    // served contiguously in either segment...
+    EXPECT_FALSE(algorithm.acquire(1, 50).has_value());
+
+    // ...but complete_all() resets to the pristine state, so the full
+    // capacity is available as one contiguous segment.
+    algorithm.complete_all();
+    EXPECT_TRUE(algorithm.is_empty());
+    EXPECT_EQ(algorithm.get_write_position(), 0u);
+    const std::optional<Allocation> b = algorithm.acquire(1, 64);
+    ASSERT_TRUE(b.has_value());
+    EXPECT_EQ(b->byte_offset, 0u);
+    EXPECT_EQ(b->byte_count, 64u);
+    EXPECT_FALSE(algorithm.is_empty());
+
+    // complete_all after releasing everything (fence-wait contract met).
+    algorithm.make_sync_entry(8, b->wrap_count, b->byte_offset, b->byte_count);
+    algorithm.complete_all();
+    EXPECT_TRUE(algorithm.is_empty());
+    algorithm.assert_invariants();
+}
+
 TEST(CircularRingBufferAlgorithm, acquire_unaligned_advance)
 {
     Circular_ring_buffer_algorithm algorithm{64};

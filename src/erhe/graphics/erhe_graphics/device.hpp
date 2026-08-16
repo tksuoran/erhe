@@ -488,6 +488,15 @@ public:
     // need a separate present step.
     void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
 
+    // Submit one recorded Command_buffer and block until its GPU work
+    // completes. Narrow synchronous helper for load-time upload flushing:
+    // unlike wait_idle() it fires no completion handlers and touches no
+    // frame state, so it is safe to call in the middle of a frame while
+    // the frame's own command buffer is still recording. Vulkan waits on
+    // the cb's implicit fence; other backends fall back to a full device
+    // wait after the submit.
+    void submit_command_buffer_and_wait(Command_buffer& command_buffer);
+
     void add_completion_handler    (std::function<void()> callback);
     void on_thread_enter           ();
 

@@ -1456,19 +1456,17 @@ private:
             texture_create_info.level_count = mipmap_count;
         }
 
-        const std::size_t byte_count = decoded.pixels.size();
-        ERHE_VERIFY(byte_count >= 1);
+        ERHE_VERIFY(decoded.pixels.size() >= 1);
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(decoded.source_path);
 
-        erhe::graphics::Ring_buffer_range buffer_range = m_arguments.image_transfer.acquire_range(byte_count);
-        std::span<std::byte> byte_span = buffer_range.get_span();
-        memcpy(byte_span.data(), decoded.pixels.data(), byte_count);
-        buffer_range.bytes_written(byte_count);
-        buffer_range.close();
-        m_arguments.image_transfer.upload_to_texture(image_info, buffer_range, *texture.get(), generate_mipmap);
-        buffer_range.release();
+        m_arguments.image_transfer.upload(
+            image_info,
+            std::span<const std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()},
+            *texture.get(),
+            generate_mipmap
+        );
 
         log_gltf->info(
             "Loaded image '{}': width = {}, height = {}",
@@ -3150,6 +3148,12 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     }
 
     erhe_parser.parse_and_build();
+
+    // Flush pending texture uploads before returning: the Image_transfer's
+    // transfer command buffer comes from the device's per-frame pool, so a
+    // long-lived Image_transfer (e.g. the example app's member) must not
+    // carry a recording cb across frames.
+    arguments.image_transfer.flush();
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
     // parallel to the glTF nodes array).

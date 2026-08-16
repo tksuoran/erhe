@@ -86,6 +86,7 @@ public:
     void cmd_texture_barrier       (uint64_t usage_before, uint64_t usage_after);
     [[nodiscard]] auto get_command_buffer(unsigned int thread_slot) -> Command_buffer&;
     void submit_command_buffers    (std::span<Command_buffer* const> command_buffers);
+    void submit_command_buffer_and_wait(Command_buffer& command_buffer);
     void upload_to_buffer          (const Buffer& buffer, size_t offset, const void* data, size_t length);
     void upload_to_texture         (const Texture& texture, int level, int x, int y, int width, int height, erhe::dataformat::Format pixelformat, const void* data, int row_stride);
     void add_completion_handler    (std::function<void(Device_impl&)> callback);

@@ -1466,6 +1466,40 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
     }
 }
 
+void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Attach the cb's own implicit fence to its submit (signal_cpu(other)
+    // routes other's fence into VkSubmitInfo2; self works the same way),
+    // submit, then block on that fence only. Unlike wait_idle() this fires
+    // no completion handlers and touches no frame state, so it is safe
+    // mid-frame while the frame's own command buffer is still recording.
+    command_buffer.signal_cpu(command_buffer);
+    Command_buffer* command_buffers[] = { &command_buffer };
+    submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
+
+    const VkFence fence = command_buffer.get_impl().get_implicit_fence();
+    ERHE_VERIFY(fence != VK_NULL_HANDLE);
+    const VkResult wait_result = vkWaitForFences(m_vulkan_device, 1, &fence, VK_TRUE, UINT64_MAX);
+    if (wait_result != VK_SUCCESS) {
+        log_context->critical(
+            "vkWaitForFences() in submit_command_buffer_and_wait failed with {} {}",
+            static_cast<int32_t>(wait_result), c_str(wait_result)
+        );
+        abort();
+    }
+    // Leave the fence unsignaled for the rest of its pool cycle (the sync
+    // pool also resets on recycle; this just keeps the state unambiguous).
+    const VkResult reset_result = vkResetFences(m_vulkan_device, 1, &fence);
+    if (reset_result != VK_SUCCESS) {
+        log_context->error(
+            "vkResetFences() in submit_command_buffer_and_wait failed with {} {}",
+            static_cast<int32_t>(reset_result), c_str(reset_result)
+        );
+    }
+}
+
 void Device_impl::add_completion_handler(std::function<void(Device_impl&)> callback)
 {
     m_completion_handlers.emplace_back(m_frame_index, std::move(callback));
@@ -1479,6 +1513,47 @@ void Device_impl::frame_completed(const uint64_t completed_frame)
 {
     for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
         ring_buffer->frame_completed(completed_frame);
+    }
+
+    // Reclaim ring buffers that have sat idle (no in-flight GPU work, all
+    // space free) for a while, keeping one warm buffer per usage class so
+    // steady state does not thrash. Without this the pool only ever grows:
+    // a load spike that momentarily filled every buffer leaves its spill
+    // buffers alive for the process lifetime. Destruction is deferred-safe
+    // (~Buffer_impl frees the VMA allocation via a completion handler).
+    {
+        constexpr uint64_t idle_frame_threshold = 16;
+        bool warm_kept[4] = { false, false, false, false };
+        std::size_t reclaimed_byte_count = 0;
+        std::size_t reclaimed_count      = 0;
+        auto keep = [&](const std::unique_ptr<Ring_buffer>& ring_buffer) -> bool {
+            if (!ring_buffer->is_idle()) {
+                return true;
+            }
+            const std::size_t usage_index = static_cast<std::size_t>(ring_buffer->get_ring_buffer_usage());
+            if ((usage_index < 4) && !warm_kept[usage_index]) {
+                warm_kept[usage_index] = true;
+                return true;
+            }
+            if (completed_frame < ring_buffer->get_last_used_frame() + idle_frame_threshold) {
+                return true;
+            }
+            reclaimed_byte_count += ring_buffer->get_capacity_byte_count();
+            ++reclaimed_count;
+            return false;
+        };
+        auto i = std::remove_if(
+            m_ring_buffers.begin(),
+            m_ring_buffers.end(),
+            [&keep](const std::unique_ptr<Ring_buffer>& ring_buffer) { return !keep(ring_buffer); }
+        );
+        if (i != m_ring_buffers.end()) {
+            m_ring_buffers.erase(i, m_ring_buffers.end());
+            log_buffer->info(
+                "Ring buffer pool: reclaimed {} idle buffer(s), {} bytes; {} buffer(s) remain",
+                reclaimed_count, reclaimed_byte_count, m_ring_buffers.size()
+            );
+        }
     }
     for (const Completion_handler& entry : m_completion_handlers) {
         if (entry.frame_number == completed_frame) {
@@ -1954,13 +2029,45 @@ auto Device_impl::allocate_ring_buffer_entry(
         }
     }
 
-    // No existing usable buffer found, create new buffer
+    // No existing usable buffer found, create new buffer. The first buffer
+    // of a usage class gets 4x headroom; SPILL buffers (created because
+    // every existing buffer was momentarily full of in-flight ranges) are
+    // sized to the request only - the 4x multiplier on spills is what
+    // turned a load's 16 MiB staging acquisitions into a pile of 64 MiB
+    // buffers. Spills are reclaimed once idle (see frame_completed).
+    std::size_t existing_count      = 0;
+    std::size_t existing_byte_count = 0;
+    std::size_t total_byte_count    = 0;
+    for (const std::unique_ptr<Ring_buffer>& ring_buffer : m_ring_buffers) {
+        total_byte_count += ring_buffer->get_capacity_byte_count();
+        if (ring_buffer->match(ring_buffer_usage)) {
+            ++existing_count;
+            existing_byte_count += ring_buffer->get_capacity_byte_count();
+        }
+    }
+    const bool is_spill = (existing_count > 0);
     Ring_buffer_create_info create_info{
-        .size              = std::max(m_min_buffer_size, 4 * byte_count),
+        .size              = std::max(m_min_buffer_size, is_spill ? byte_count : 4 * byte_count),
         .ring_buffer_usage = ring_buffer_usage,
         .debug_label       = "Ring_buffer"
     };
     m_ring_buffers.push_back(std::make_unique<Ring_buffer>(m_device, create_info));
+    log_buffer->info(
+        "Ring buffer pool: created {} byte buffer (usage {}, request {} bytes); now {} buffer(s), {} bytes total",
+        create_info.size,
+        static_cast<unsigned int>(ring_buffer_usage),
+        byte_count,
+        m_ring_buffers.size(),
+        total_byte_count + create_info.size
+    );
+    if (existing_count >= 8) {
+        log_buffer->warn(
+            "Ring buffer pool: {} buffers ({} bytes) for one usage class - "
+            "acquisitions are outpacing frame completion (missing upload flushes?)",
+            existing_count + 1,
+            existing_byte_count + create_info.size
+        );
+    }
     return m_ring_buffers.back()->acquire(required_alignment, ring_buffer_usage, byte_count);
 }
 

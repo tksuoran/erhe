@@ -529,8 +529,6 @@ auto make_import_gltf_operation(
     ERHE_VERIFY(scene_root);
     erhe::graphics::Device& graphics_device = *context.graphics_device;
     tf::Executor&           executor        = *context.executor;
-    ERHE_VERIFY(context.current_command_buffer != nullptr);
-    erhe::graphics::Command_buffer& command_buffer = *context.current_command_buffer;
 
     // R5.7 record adoption (plan resolution 3): when registering scene_root
     // adopted a loaded container record for this path (the scene-open flow:
@@ -575,7 +573,7 @@ auto make_import_gltf_operation(
         root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
         root_node->set_parent(temp_scene_root_node);
 
-        erhe::gltf::Image_transfer image_transfer{graphics_device, command_buffer};
+        erhe::gltf::Image_transfer image_transfer{graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
             .graphics_device = graphics_device,
             .executor        = executor,
@@ -1072,7 +1070,7 @@ auto open_scene_gltf(
         container_node = std::make_shared<erhe::scene::Node>("open scene container");
         container_node->set_parent(temp_scene_root_node);
 
-        erhe::gltf::Image_transfer image_transfer{*context.graphics_device, *context.current_command_buffer};
+        erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
             .graphics_device = *context.graphics_device,
             .executor        = *context.executor,

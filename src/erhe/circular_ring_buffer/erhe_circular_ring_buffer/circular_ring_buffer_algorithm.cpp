@@ -193,6 +193,35 @@ void Circular_ring_buffer_algorithm::frame_completed(std::uint64_t completed_fra
     }
 }
 
+void Circular_ring_buffer_algorithm::complete_all()
+{
+    assert_invariants();
+
+    // Nothing references any range (caller's contract), so return to the
+    // pristine state rather than merely catching the read pointer up: a
+    // caught-up-but-mid-buffer write pointer would still refuse a large
+    // contiguous acquire that the empty buffer could serve from offset 0.
+    m_sync_entries.clear();
+    m_write_position   = 0;
+    m_write_wrap_count = 1;
+    m_read_wrap_count  = 0;
+    m_read_offset      = m_capacity_byte_count;
+
+    assert_invariants();
+}
+
+auto Circular_ring_buffer_algorithm::is_empty() const -> bool
+{
+    if (!m_sync_entries.empty()) {
+        return false;
+    }
+    // Two equivalent all-free states: initial (read one lap behind at the
+    // capacity boundary) and caught-up (read == write on the same lap).
+    return
+        ((m_read_wrap_count == m_write_wrap_count) && (m_read_offset == m_write_position)) ||
+        ((m_write_wrap_count == m_read_wrap_count + 1) && (m_write_position == 0) && (m_read_offset == m_capacity_byte_count));
+}
+
 auto Circular_ring_buffer_algorithm::get_capacity_byte_count() const -> std::size_t
 {
     return m_capacity_byte_count;
