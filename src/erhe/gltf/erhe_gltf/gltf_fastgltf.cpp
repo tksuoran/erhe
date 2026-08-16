@@ -1460,6 +1460,7 @@ private:
 
         auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
         texture->set_source_path(decoded.source_path);
+        texture->set_two_component_normal(image_info.two_component_normal);
 
         m_arguments.image_transfer.upload(
             image_info,

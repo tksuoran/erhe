@@ -18,7 +18,8 @@ class Image_loader_ktx2_impl_state;
 // Decodes KTX2 containers holding Basis Universal supercompressed data
 // (ETC1S or UASTC), as referenced by glTF KHR_texture_basisu - e.g. the
 // textures inside OpenXR XR_FB_render_model controller GLBs. With a
-// block-compressed transcode preference (BC7 / ASTC 4x4) the image stays
+// block-compressed transcode preference (BC7 / ASTC 4x4; BC5 when the image
+// is detected as a two component X+Y normal map) the image stays
 // GPU-compressed and the file's full mip chain is exposed (level_count is
 // the file's mip count, load() writes all levels contiguously,
 // largest-first, tightly packed - same contract as Image_loader_dds).

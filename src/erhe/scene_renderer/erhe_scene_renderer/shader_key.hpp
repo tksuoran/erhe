@@ -146,6 +146,7 @@ inline constexpr const char* c_shader_debug_strings[] = {
     X(BASE_COLOR_TEX_COORD)                     \
     X(METALLIC_ROUGHNESS_TEX_COORD)             \
     X(NORMAL_TEX_COORD)                         \
+    X(NORMAL_TEXTURE_TWO_COMPONENT)             \
     X(OCCLUSION_TEX_COORD)                      \
     X(EMISSIVE_TEX_COORD)                       \
     X(CIRCULAR_BRUSHED_METAL_TEX_COORD)

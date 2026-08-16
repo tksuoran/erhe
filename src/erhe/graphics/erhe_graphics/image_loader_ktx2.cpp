@@ -5,9 +5,12 @@
 #include <transcoder/basisu_transcoder.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <string_view>
+#include <vector>
 
 namespace erhe::graphics {
 
@@ -30,6 +33,62 @@ void ensure_basisu_transcoder_init()
 constexpr std::uint8_t ktx2_identifier[12] = {
     0xABu, 0x4Bu, 0x54u, 0x58u, 0x20u, 0x32u, 0x30u, 0xBBu, 0x0Du, 0x0Au, 0x1Au, 0x0Au
 };
+
+// Content heuristic for X+Y normal maps without metadata: transcodes a small
+// mip level to RGBA32 and accepts when the RGB slice is (near-)grayscale for
+// nearly all pixels and the alpha slice is not all-opaque. A conventional RGB
+// normal map is bluish (B near 1) so it can never look grayscale; a grayscale
+// height / bump map has a constant all-255 padding alpha. The tolerance
+// absorbs ETC1S / UASTC compression noise on an exactly grayscale source.
+[[nodiscard]] auto sniff_two_component_normal(basist::ktx2_transcoder& transcoder) -> bool
+{
+    const std::uint32_t level_count = transcoder.get_levels();
+    const std::uint32_t width       = transcoder.get_width();
+    const std::uint32_t height      = transcoder.get_height();
+    // Prefer the first level at most 64 texels wide/high (cheap, still a few
+    // thousand samples); a file without such a mip is probed at full size.
+    std::uint32_t probe_level = 0;
+    for (std::uint32_t level = 0; level < level_count; ++level) {
+        probe_level = level;
+        const std::uint32_t max_extent = std::max(width >> level, height >> level);
+        if (max_extent <= 64u) {
+            break;
+        }
+    }
+    const std::uint32_t probe_width  = std::max(1u, width  >> probe_level);
+    const std::uint32_t probe_height = std::max(1u, height >> probe_level);
+    const std::size_t   pixel_count  = static_cast<std::size_t>(probe_width) * probe_height;
+    std::vector<std::uint8_t> pixels(pixel_count * 4);
+    const bool transcode_ok = transcoder.transcode_image_level(
+        probe_level,
+        0, // layer_index
+        0, // face_index
+        pixels.data(),
+        static_cast<std::uint32_t>(pixel_count),
+        basist::transcoder_texture_format::cTFRGBA32
+    );
+    if (!transcode_ok) {
+        return false;
+    }
+    constexpr int         gray_tolerance    = 12;
+    constexpr double      gray_min_fraction = 0.98;
+    std::size_t           gray_count        = 0;
+    std::uint64_t         alpha_sum         = 0;
+    for (std::size_t i = 0; i < pixel_count; ++i) {
+        const std::uint8_t* px = &pixels[i * 4];
+        const int r = px[0];
+        const int g = px[1];
+        const int b = px[2];
+        const int deviation = std::max({std::abs(r - g), std::abs(r - b), std::abs(g - b)});
+        if (deviation <= gray_tolerance) {
+            ++gray_count;
+        }
+        alpha_sum += px[3];
+    }
+    const bool rgb_is_grayscale = static_cast<double>(gray_count) >= gray_min_fraction * static_cast<double>(pixel_count);
+    const bool alpha_is_used    = (static_cast<double>(alpha_sum) / static_cast<double>(pixel_count)) < 250.0;
+    return rgb_is_grayscale && alpha_is_used;
+}
 
 }
 
@@ -106,22 +165,56 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
         return false;
     }
 
+    // `ktx encode --normal-mode` (toktx: --normal_mode / --normal_map) stores
+    // a normal map as a two component X+Y map (X in RGB, Y in A) and records
+    // the encode options in the KTXwriterScParams metadata key. Surface that
+    // through Image_info so the material system can select the shader path
+    // that reconstructs Z.
+    bool two_component_normal = false;
+    const basisu::uint8_vec* sc_params = transcoder.find_key("KTXwriterScParams");
+    if (sc_params != nullptr) {
+        const std::string_view params{reinterpret_cast<const char*>(sc_params->data()), sc_params->size()};
+        two_component_normal =
+            (params.find("--normal-mode") != std::string_view::npos) ||
+            (params.find("--normal_mode") != std::string_view::npos) ||
+            (params.find("--normal_map")  != std::string_view::npos);
+    }
+    // Files written by the basisu CLI (`basisu -normal_map
+    // -separate_rg_to_color_alpha`) carry no metadata recording the swizzle,
+    // so fall back to sniffing the content: an X+Y map's color slice is X
+    // replicated to RGB (exactly grayscale before compression) and its alpha
+    // slice is Y (never all-opaque, which also rejects a height map's padding
+    // alpha). Only linear images with an alpha slice qualify; the flag is
+    // only ever consumed for material normal-slot textures.
+    if (!two_component_normal && linear && (transcoder.get_has_alpha() != 0u)) {
+        two_component_normal = sniff_two_component_normal(transcoder);
+    }
+
     switch (transcode_format_preference) {
         case Transcode_format_preference::bc7: {
             // Block-compressed target: keep the file's full mip chain (mipmap
-            // generation cannot write block-compressed levels).
-            m_state->transcoder_format = basist::transcoder_texture_format::cTFBC7_RGBA;
+            // generation cannot write block-compressed levels). An X+Y normal
+            // map goes to BC5 instead of BC7: two full BC4 planes (X in R,
+            // Y in G) beat BC7's shared endpoints on decorrelated channels.
+            m_state->transcoder_format = two_component_normal
+                ? basist::transcoder_texture_format::cTFBC5
+                : basist::transcoder_texture_format::cTFBC7_RGBA;
             m_state->info = Image_info{
                 .width       = static_cast<int>(transcoder.get_width()),
                 .height      = static_cast<int>(transcoder.get_height()),
                 .depth       = 1,
                 .level_count = static_cast<int>(transcoder.get_levels()),
                 .row_stride  = 0, // block-compressed data is tightly packed
-                .format      = linear ? erhe::dataformat::Format::format_bc7_unorm : erhe::dataformat::Format::format_bc7_srgb
+                .format      = two_component_normal
+                    ? erhe::dataformat::Format::format_bc5_unorm // normal maps are always linear
+                    : linear ? erhe::dataformat::Format::format_bc7_unorm : erhe::dataformat::Format::format_bc7_srgb
             };
             break;
         }
         case Transcode_format_preference::astc_4x4: {
+            // An X+Y normal map stays ASTC RGBA: the transcoder emits L+A
+            // endpoint blocks (X replicated to RGB, Y in A), so the shader's
+            // .ga decode applies - no separate two-channel format needed.
             m_state->transcoder_format = basist::transcoder_texture_format::cTFASTC_4x4_RGBA;
             m_state->info = Image_info{
                 .width       = static_cast<int>(transcoder.get_width()),
@@ -149,6 +242,7 @@ auto Image_loader_ktx2::open(const std::span<const std::uint8_t>& buffer_view, I
             break;
         }
     }
+    m_state->info.two_component_normal = two_component_normal;
     image_info       = m_state->info;
     m_state->is_open = true;
     return true;

@@ -2,6 +2,7 @@
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include "erhe_dataformat/vertex_format.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/scene.hpp"
@@ -154,7 +155,20 @@ auto Shader_key::derive(
         // Material booleans -- set per bound sampler.
         if (sampler_is_bound(samplers.base_color))        { key.set(Shader_bool::USE_BASE_COLOR_TEXTURE,         true); }
         if (sampler_is_bound(samplers.metallic_roughness)){ key.set(Shader_bool::USE_METALLIC_ROUGHNESS_TEXTURE, true); }
-        if (sampler_is_bound(samplers.normal))            { key.set(Shader_bool::USE_NORMAL_TEXTURE,             true); }
+        if (sampler_is_bound(samplers.normal))            {
+            key.set(Shader_bool::USE_NORMAL_TEXTURE, true);
+            // A KTX2 normal-mode texture stores a two component X+Y map; the
+            // shader variant reconstructs Z. The flag travels on the texture
+            // itself, so it stays correct however the texture ends up bound
+            // to the material. Value selects the channel layout: 1 = X in
+            // RGB / Y in A (RGBA8, ASTC L+A blocks), 2 = X in R / Y in G
+            // (BC5); a two-channel GPU format implies the latter.
+            const erhe::graphics::Texture* normal_texture = samplers.normal.texture_reference->get_referenced_texture();
+            if ((normal_texture != nullptr) && normal_texture->is_two_component_normal()) {
+                const bool xy_in_rg = erhe::dataformat::get_component_count(normal_texture->get_pixelformat()) == 2;
+                key.set(Shader_int::NORMAL_TEXTURE_TWO_COMPONENT, xy_in_rg ? 2u : 1u);
+            }
+        }
         if (sampler_is_bound(samplers.occlusion))         { key.set(Shader_bool::USE_OCCLUSION_TEXTURE,          true); }
         if (sampler_is_bound(samplers.emissive))          { key.set(Shader_bool::USE_EMISSION_TEXTURE,           true); }
 

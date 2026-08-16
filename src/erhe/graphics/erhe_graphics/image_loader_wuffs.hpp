@@ -26,6 +26,10 @@ public:
     int                      level_count{0};
     int                      row_stride {0};
     erhe::dataformat::Format format     {erhe::dataformat::Format::format_8_vec4_srgb};
+    // True for a normal map stored as a two component X+Y map (X in RGB,
+    // Y in A; Z reconstructed in shader). Set by Image_loader_ktx2 when the
+    // KTX2 metadata says the file was encoded with `ktx encode --normal-mode`.
+    bool                     two_component_normal{false};
 };
 
 // Preferred GPU target for sources that are transcoded at load time (KTX2 /

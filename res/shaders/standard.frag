@@ -455,12 +455,34 @@ void main()
 
 #  ifdef ERHE_USE_NORMAL_TEXTURE
     {
+#    if ERHE_NORMAL_TEXTURE_TWO_COMPONENT != 0
+        // Two component X+Y normal map (KTX2 normal-mode encoding); Z is
+        // reconstructed from unit length. 1 = X in RGB / Y in A (RGBA8,
+        // ASTC L+A blocks), 2 = X in R / Y in G (BC5).
+#      if ERHE_NORMAL_TEXTURE_TWO_COMPONENT == 2
+        vec2 nxy = sample_texture(
+            material.normal_texture,
+            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD),
+            material.normal_rotation_scale,
+            material.normal_offset
+        ).rg * 2.0 - vec2(1.0);
+#      else
+        vec2 nxy = sample_texture(
+            material.normal_texture,
+            ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD),
+            material.normal_rotation_scale,
+            material.normal_offset
+        ).ga * 2.0 - vec2(1.0);
+#      endif
+        vec3 ntex = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
+#    else
         vec3 ntex = sample_texture(
             material.normal_texture,
             ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD),
             material.normal_rotation_scale,
             material.normal_offset
         ).xyz * 2.0 - vec3(1.0);
+#    endif
         ntex.xy = ntex.xy * material.normal_texture_scale;
         ntex    = normalize(ntex);
 #    if defined(ERHE_USE_VERTEX_VARYING_NORMAL) && defined(ERHE_USE_VERTEX_VARYING_BITANGENT)
@@ -758,7 +780,17 @@ void main()
         out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * N);
 #  elif ERHE_SHADER_DEBUG == 3 // normal_texture
 #    ifdef ERHE_USE_NORMAL_TEXTURE
+#      if ERHE_NORMAL_TEXTURE_TWO_COMPONENT != 0
+        // Reconstruct the conventional RGB visualization from the X+Y map.
+#        if ERHE_NORMAL_TEXTURE_TWO_COMPONENT == 2
+        vec2 dbg_nxy = sample_texture(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD)).rg * 2.0 - vec2(1.0);
+#        else
+        vec2 dbg_nxy = sample_texture(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD)).ga * 2.0 - vec2(1.0);
+#        endif
+        out_color.rgb = srgb_to_linear(vec3(0.5) + 0.5 * vec3(dbg_nxy, sqrt(max(1.0 - dot(dbg_nxy, dbg_nxy), 0.0))));
+#      else
         out_color.rgb = srgb_to_linear(sample_texture(material.normal_texture, ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEX_COORD)).rgb);
+#      endif
 #    else
         out_color.rgb = vec3(0.5);
 #    endif

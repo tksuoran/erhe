@@ -97,8 +97,19 @@ public:
     // Can be called multiple times to change the associated buffer.
     void set_buffer(Buffer& buffer);
 
+    // Content semantics, not a GPU property: true when the texture stores a
+    // normal map as a two component X+Y map (Z reconstructed in shader) -
+    // e.g. a KTX2 file encoded with `ktx encode --normal-mode`. The channel
+    // layout follows the pixel format: X in RGB / Y in A for RGBA and ASTC,
+    // X in R / Y in G for BC5. Set by the loader that decoded the image;
+    // consumed by the shader variant selection when the texture is bound to
+    // a material normal slot.
+    void               set_two_component_normal(bool value) { m_two_component_normal = value; }
+    [[nodiscard]] auto is_two_component_normal () const -> bool { return m_two_component_normal; }
+
 private:
     std::unique_ptr<Texture_impl> m_impl;
+    bool                          m_two_component_normal{false};
 };
 
 [[nodiscard]] auto operator==(const Texture& lhs, const Texture& rhs) noexcept -> bool;
