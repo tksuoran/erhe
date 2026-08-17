@@ -2341,8 +2341,12 @@ auto Mcp_server::action_edit_light(const json& args) -> std::string
     }
 
     // type / cast_shadow / range decide how the light is shaded and shadow-
-    // mapped: re-resolve the scene's light set.
-    if (changed.contains("type") || changed.contains("cast_shadow") || changed.contains("range")) {
+    // mapped, and color / intensity decide whether it is active at all
+    // (Light::is_active): re-resolve the scene's light set.
+    if (
+        changed.contains("type")  || changed.contains("cast_shadow") || changed.contains("range") ||
+        changed.contains("color") || changed.contains("intensity")
+    ) {
         light->notify_changed();
     }
 
