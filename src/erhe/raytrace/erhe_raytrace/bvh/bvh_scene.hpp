@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::raytrace {
@@ -179,14 +180,23 @@ private:
     void evict_from_tlas   (Bvh_scene_child& child);
     void invalidate_tlas   ();
 
-    [[nodiscard]] auto find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator;
-    [[nodiscard]] auto find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator;
+    static constexpr std::size_t npos = ~std::size_t{0};
+
+    [[nodiscard]] auto find_child_index(const void* child) const -> std::size_t;
+    [[nodiscard]] static auto get_child_key(const Bvh_scene_child& child) -> const void*;
+
+    void erase_child(std::size_t index);
 
     // Marks the bounds of this scene as changed and propagates that to the
     // instances which instantiate this scene.
     void mark_modified();
 
     std::vector<Bvh_scene_child> m_children;
+
+    // Child pointer to index in m_children, so that a modification of one
+    // child does not cost a scan over all of them.
+    std::unordered_map<const void*, std::size_t> m_child_index;
+
     std::vector<Bvh_instance*>   m_referencing_instances;
     std::string                  m_debug_label;
     uint64_t                     m_tick{0};

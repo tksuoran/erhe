@@ -84,13 +84,12 @@ void Bvh_scene::attach(IGeometry* geometry)
 
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
-#ifndef NDEBUG
-    if (find_child(bvh_geometry) != m_children.end()) {
+    if (find_child_index(bvh_geometry) != npos) {
         log_scene->error("raytrace geometry already in scene");
         return;
     }
-#endif
 
+    m_child_index[bvh_geometry] = m_children.size();
     m_children.push_back(
         Bvh_scene_child{
             .geometry           = bvh_geometry,
@@ -110,13 +109,12 @@ void Bvh_scene::attach(IInstance* instance)
 
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
-#ifndef NDEBUG
-    if (find_child(bvh_instance) != m_children.end()) {
+    if (find_child_index(bvh_instance) != npos) {
         log_scene->error("raytrace instance already in scene");
         return;
     }
-#endif
 
+    m_child_index[bvh_instance] = m_children.size();
     m_children.push_back(
         Bvh_scene_child{
             .geometry           = nullptr,
@@ -136,18 +134,12 @@ void Bvh_scene::detach(IGeometry* geometry)
 
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
-    const auto i = find_child(bvh_geometry);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(bvh_geometry);
+    if (index == npos) {
         log_scene->error("raytrace geometry not in scene");
         return;
     }
-    if (i->in_pending_tlas) {
-        m_build_aborted = true;
-    }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
-    }
-    m_children.erase(i);
+    erase_child(index);
     bvh_geometry->remove_parent_scene(this);
     mark_modified();
 }
@@ -160,101 +152,104 @@ void Bvh_scene::detach(IInstance* instance)
 
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
-    const auto i = find_child(bvh_instance);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(bvh_instance);
+    if (index == npos) {
         log_scene->error("raytrace instance not in scene");
         return;
     }
-    if (i->in_pending_tlas) {
-        m_build_aborted = true;
-    }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
-    }
-    m_children.erase(i);
+    erase_child(index);
     bvh_instance->remove_parent_scene(this);
     mark_modified();
 }
 
-auto Bvh_scene::find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator
+auto Bvh_scene::find_child_index(const void* child) const -> std::size_t
 {
-    return std::find_if(
-        m_children.begin(),
-        m_children.end(),
-        [geometry](const Bvh_scene_child& child) { return child.geometry == geometry; }
-    );
+    // Children are looked up by pointer on every transform change of every
+    // mesh, so this has to stay independent of the number of children.
+    const auto i = m_child_index.find(child);
+    return (i != m_child_index.end()) ? i->second : npos;
 }
 
-auto Bvh_scene::find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator
+void Bvh_scene::erase_child(const std::size_t index)
 {
-    return std::find_if(
-        m_children.begin(),
-        m_children.end(),
-        [instance](const Bvh_scene_child& child) { return child.instance == instance; }
-    );
+    Bvh_scene_child& child = m_children[index];
+    if (child.in_pending_tlas) {
+        m_build_aborted = true;
+    }
+    if (child.in_tlas) {
+        evict_from_tlas(child);
+    }
+
+    m_child_index.erase(get_child_key(child));
+
+    // Swap with the last child instead of shifting, so that erasing stays O(1).
+    // Traversal order does not matter: the closest hit wins either way.
+    const std::size_t last_index = m_children.size() - 1;
+    if (index != last_index) {
+        m_children[index] = m_children[last_index];
+        m_child_index[get_child_key(m_children[index])] = index;
+    }
+    m_children.pop_back();
+}
+
+auto Bvh_scene::get_child_key(const Bvh_scene_child& child) -> const void*
+{
+    return (child.geometry != nullptr)
+        ? static_cast<const void*>(child.geometry)
+        : static_cast<const void*>(child.instance);
 }
 
 void Bvh_scene::on_child_modified(const Bvh_geometry* geometry)
 {
-    const auto i = find_child(geometry);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(geometry);
+    if (index == npos) {
         return;
     }
-    i->last_modified_tick = m_tick;
-    if (i->in_pending_tlas) {
+    Bvh_scene_child& child = m_children[index];
+    child.last_modified_tick = m_tick;
+    if (child.in_pending_tlas) {
         m_build_aborted = true;
     }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
+    if (child.in_tlas) {
+        evict_from_tlas(child);
     }
     mark_modified();
 }
 
 void Bvh_scene::on_child_modified(const Bvh_instance* instance)
 {
-    const auto i = find_child(instance);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(instance);
+    if (index == npos) {
         return;
     }
-    i->last_modified_tick = m_tick;
-    if (i->in_pending_tlas) {
+    Bvh_scene_child& child = m_children[index];
+    child.last_modified_tick = m_tick;
+    if (child.in_pending_tlas) {
         m_build_aborted = true;
     }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
+    if (child.in_tlas) {
+        evict_from_tlas(child);
     }
     mark_modified();
 }
 
 void Bvh_scene::on_child_destroyed(const Bvh_geometry* geometry)
 {
-    const auto i = find_child(geometry);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(geometry);
+    if (index == npos) {
         return;
     }
-    if (i->in_pending_tlas) {
-        m_build_aborted = true;
-    }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
-    }
-    m_children.erase(i);
+    erase_child(index);
     mark_modified();
 }
 
 void Bvh_scene::on_child_destroyed(const Bvh_instance* instance)
 {
-    const auto i = find_child(instance);
-    if (i == m_children.end()) {
+    const std::size_t index = find_child_index(instance);
+    if (index == npos) {
         return;
     }
-    if (i->in_pending_tlas) {
-        m_build_aborted = true;
-    }
-    if (i->in_tlas) {
-        evict_from_tlas(*i);
-    }
-    m_children.erase(i);
+    erase_child(index);
     mark_modified();
 }
 
@@ -430,10 +425,12 @@ void Bvh_scene::take_tlas(Tlas_build_result&& result)
 
     for (std::size_t member_index = 0, end = m_tlas_members.size(); member_index < end; ++member_index) {
         const Tlas_member& member = m_tlas_members[member_index];
-        const auto i = (member.geometry != nullptr) ? find_child(member.geometry) : find_child(member.instance);
-        if (i != m_children.end()) {
-            i->in_tlas    = true;
-            i->tlas_index = member_index;
+        const std::size_t  index  = (member.geometry != nullptr)
+            ? find_child_index(member.geometry)
+            : find_child_index(member.instance);
+        if (index != npos) {
+            m_children[index].in_tlas    = true;
+            m_children[index].tlas_index = member_index;
         } else {
             // The child went away between the snapshot and now.
             m_tlas_members[member_index] = Tlas_member{};

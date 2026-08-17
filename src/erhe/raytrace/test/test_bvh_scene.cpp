@@ -396,12 +396,34 @@ TEST(Bvh_scene, DetachedMemberIsNotHit)
         EXPECT_TRUE(scene->intersect(ray, hit));
     }
 
+    // Every other child is still found. Detaching swaps the last child into
+    // the freed slot, so this also covers the reordering.
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        if (i == 3) {
+            continue;
+        }
+        Ray ray = make_grid_ray(static_cast<int>(i));
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit)) << "miss for " << i;
+        EXPECT_EQ(hit.geometry, geometries[i].geometry.get());
+    }
+
     // And after the BVH has been rebuilt without it
     tick_until_static(scene.get());
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size - 1);
     {
         Ray ray = make_grid_ray(3);
         Hit hit{};
         EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        if (i == 3) {
+            continue;
+        }
+        Ray ray = make_grid_ray(static_cast<int>(i));
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit)) << "miss for " << i;
+        EXPECT_EQ(hit.geometry, geometries[i].geometry.get());
     }
 }
 
