@@ -12,6 +12,7 @@ set(_target "erhe_raytrace_tests")
 add_executable(${_target}
     main.cpp
     test_helpers.hpp
+    test_bvh_scene.cpp
     test_geometry.cpp
     test_hierarchy.cpp
     test_masking.cpp

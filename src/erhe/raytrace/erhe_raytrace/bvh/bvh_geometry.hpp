@@ -62,6 +62,10 @@ public:
     // Bounding box of the committed triangles. Invalid until commit() has succeeded.
     [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
 
+    // Called by Bvh_scene when this geometry is attached to / detached from it.
+    void add_parent_scene   (Bvh_scene* scene);
+    void remove_parent_scene(Bvh_scene* scene);
+
 private:
     class Buffer_info
     {
@@ -75,6 +79,9 @@ private:
         std::size_t               item_count {0};
     };
 
+    void notify_parents_modified();
+
+    std::vector<Bvh_scene*> m_parent_scenes;
     erhe::math::Aabb m_bbox{};
     glm::mat4    m_transform  {1.0f};
     uint32_t     m_mask       {0xfffffffu};

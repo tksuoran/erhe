@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <string>
+#include <vector>
 
 namespace erhe::raytrace {
 
@@ -39,7 +40,16 @@ public:
     // this instance is attached to.
     [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
 
+    // Called by Bvh_scene when this instance is attached to / detached from it.
+    void add_parent_scene   (Bvh_scene* scene);
+    void remove_parent_scene(Bvh_scene* scene);
+
+    // Called by the instanced scene when its bounds change or when it is destroyed.
+    void notify_parents_modified    ();
+    void on_instanced_scene_destroyed();
+
 private:
+    std::vector<Bvh_scene*> m_parent_scenes;
     glm::mat4   m_transform{1.0f};
     bool        m_enabled  {true};
     IScene*     m_scene    {nullptr};

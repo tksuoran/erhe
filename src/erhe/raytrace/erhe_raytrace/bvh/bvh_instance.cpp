@@ -7,6 +7,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::raytrace
 {
 
@@ -34,10 +36,51 @@ Bvh_instance::Bvh_instance(const std::string_view debug_label)
 Bvh_instance::~Bvh_instance() noexcept
 {
     log_instance->trace("Destroyed Bvh_instance {}", m_debug_label);
+
+    // Scenes hold raw pointers to their children, so an instance which is
+    // destroyed while still attached has to remove itself.
+    const std::vector<Bvh_scene*> parent_scenes = m_parent_scenes;
+    m_parent_scenes.clear();
+    for (Bvh_scene* scene : parent_scenes) {
+        scene->on_child_destroyed(this);
+    }
+    if (m_scene != nullptr) {
+        reinterpret_cast<Bvh_scene*>(m_scene)->remove_referencing_instance(this);
+    }
+}
+
+void Bvh_instance::add_parent_scene(Bvh_scene* scene)
+{
+    const auto i = std::find(m_parent_scenes.begin(), m_parent_scenes.end(), scene);
+    if (i == m_parent_scenes.end()) {
+        m_parent_scenes.push_back(scene);
+    }
+}
+
+void Bvh_instance::remove_parent_scene(Bvh_scene* scene)
+{
+    const auto i = std::find(m_parent_scenes.begin(), m_parent_scenes.end(), scene);
+    if (i != m_parent_scenes.end()) {
+        m_parent_scenes.erase(i);
+    }
+}
+
+void Bvh_instance::notify_parents_modified()
+{
+    for (Bvh_scene* scene : m_parent_scenes) {
+        scene->on_child_modified(this);
+    }
+}
+
+void Bvh_instance::on_instanced_scene_destroyed()
+{
+    m_scene = nullptr;
+    notify_parents_modified();
 }
 
 void Bvh_instance::commit()
 {
+    notify_parents_modified();
 }
 
 void Bvh_instance::enable()
@@ -61,11 +104,22 @@ void Bvh_instance::set_transform(const glm::mat4 transform)
 {
     // log_frame->trace("Bvh_instance::set_transform {}", m_debug_label);
     m_transform = transform;
+    notify_parents_modified();
 }
 
 void Bvh_instance::set_scene(IScene* scene)
 {
+    if (m_scene == scene) {
+        return;
+    }
+    if (m_scene != nullptr) {
+        reinterpret_cast<Bvh_scene*>(m_scene)->remove_referencing_instance(this);
+    }
     m_scene = scene;
+    if (m_scene != nullptr) {
+        reinterpret_cast<Bvh_scene*>(m_scene)->add_referencing_instance(this);
+    }
+    notify_parents_modified();
 }
 
 void Bvh_instance::set_mask(const uint32_t mask)
@@ -89,6 +143,10 @@ auto Bvh_instance::intersect(Ray& ray, Hit& hit) -> bool
     }
     if ((ray.mask & m_mask) == 0) {
         // log_frame->trace("Bvh_instance::intersect() {}. No hit because instance mask test failed.", m_debug_label);
+        return false;
+    }
+
+    if (m_scene == nullptr) {
         return false;
     }
 

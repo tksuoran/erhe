@@ -10,6 +10,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_raytrace/bvh/bvh_geometry.hpp"
 #include "erhe_raytrace/bvh/bvh_instance.hpp"
+#include "erhe_raytrace/bvh/bvh_scene.hpp"
 #include "erhe_raytrace/bvh/glm_conversions.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_raytrace/ray.hpp"
@@ -28,6 +29,7 @@
 #include <bvh/v2/stack.h>
 #include <bvh/v2/thread_pool.h>
 
+#include <algorithm>
 #include <fstream>
 
 namespace erhe::raytrace {
@@ -110,7 +112,39 @@ Bvh_geometry::Bvh_geometry(const std::string_view debug_label, const Geometry_ty
     static_cast<void>(geometry_type);
 }
 
-Bvh_geometry::~Bvh_geometry() noexcept = default;
+Bvh_geometry::~Bvh_geometry() noexcept
+{
+    // Scenes hold raw pointers to their children, so a geometry which is
+    // destroyed while still attached has to remove itself.
+    const std::vector<Bvh_scene*> parent_scenes = m_parent_scenes;
+    m_parent_scenes.clear();
+    for (Bvh_scene* scene : parent_scenes) {
+        scene->on_child_destroyed(this);
+    }
+}
+
+void Bvh_geometry::add_parent_scene(Bvh_scene* scene)
+{
+    const auto i = std::find(m_parent_scenes.begin(), m_parent_scenes.end(), scene);
+    if (i == m_parent_scenes.end()) {
+        m_parent_scenes.push_back(scene);
+    }
+}
+
+void Bvh_geometry::remove_parent_scene(Bvh_scene* scene)
+{
+    const auto i = std::find(m_parent_scenes.begin(), m_parent_scenes.end(), scene);
+    if (i != m_parent_scenes.end()) {
+        m_parent_scenes.erase(i);
+    }
+}
+
+void Bvh_geometry::notify_parents_modified()
+{
+    for (Bvh_scene* scene : m_parent_scenes) {
+        scene->on_child_modified(this);
+    }
+}
 
 using Scalar         = float;
 using Vec3           = bvh::v2::Vec<Scalar, 3>;
@@ -273,6 +307,8 @@ void Bvh_geometry::commit()
             );
         }
     }
+
+    notify_parents_modified();
 }
 
 void Bvh_geometry::enable()

@@ -53,6 +53,19 @@ Bvh_scene::Bvh_scene(const std::string_view debug_label)
 Bvh_scene::~Bvh_scene() noexcept
 {
     log_scene->trace("Destroyed Bvh_scene '{}'", m_debug_label);
+
+    // Drop the back links, so that children outliving this scene do not
+    // reference it, and instances instantiating this scene do not reference it.
+    for (const Bvh_scene_child& child : m_children) {
+        if (child.geometry != nullptr) {
+            child.geometry->remove_parent_scene(this);
+        } else if (child.instance != nullptr) {
+            child.instance->remove_parent_scene(this);
+        }
+    }
+    for (Bvh_instance* instance : m_referencing_instances) {
+        instance->on_instanced_scene_destroyed();
+    }
 }
 
 void Bvh_scene::attach(IGeometry* geometry)
@@ -64,18 +77,21 @@ void Bvh_scene::attach(IGeometry* geometry)
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
 #ifndef NDEBUG
-    const auto i = std::find_if(
-        m_children.begin(),
-        m_children.end(),
-        [bvh_geometry](const Bvh_scene_child& child) { return child.geometry == bvh_geometry; }
-    );
-    if (i != m_children.end()) {
+    if (find_child(bvh_geometry) != m_children.end()) {
         log_scene->error("raytrace geometry already in scene");
         return;
     }
 #endif
 
-    m_children.push_back(Bvh_scene_child{.geometry = bvh_geometry, .instance = nullptr});
+    m_children.push_back(
+        Bvh_scene_child{
+            .geometry           = bvh_geometry,
+            .instance           = nullptr,
+            .last_modified_tick = m_tick
+        }
+    );
+    bvh_geometry->add_parent_scene(this);
+    mark_modified();
 }
 
 void Bvh_scene::attach(IInstance* instance)
@@ -87,18 +103,21 @@ void Bvh_scene::attach(IInstance* instance)
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
 #ifndef NDEBUG
-    const auto i = std::find_if(
-        m_children.begin(),
-        m_children.end(),
-        [bvh_instance](const Bvh_scene_child& child) { return child.instance == bvh_instance; }
-    );
-    if (i != m_children.end()) {
+    if (find_child(bvh_instance) != m_children.end()) {
         log_scene->error("raytrace instance already in scene");
         return;
     }
 #endif
 
-    m_children.push_back(Bvh_scene_child{.geometry = nullptr, .instance = bvh_instance});
+    m_children.push_back(
+        Bvh_scene_child{
+            .geometry           = nullptr,
+            .instance           = bvh_instance,
+            .last_modified_tick = m_tick
+        }
+    );
+    bvh_instance->add_parent_scene(this);
+    mark_modified();
 }
 
 void Bvh_scene::detach(IGeometry* geometry)
@@ -109,16 +128,14 @@ void Bvh_scene::detach(IGeometry* geometry)
 
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
-    const auto i = std::remove_if(
-        m_children.begin(),
-        m_children.end(),
-        [bvh_geometry](const Bvh_scene_child& child) { return child.geometry == bvh_geometry; }
-    );
+    const auto i = find_child(bvh_geometry);
     if (i == m_children.end()) {
         log_scene->error("raytrace geometry not in scene");
-    } else {
-        m_children.erase(i, m_children.end());
+        return;
     }
+    m_children.erase(i);
+    bvh_geometry->remove_parent_scene(this);
+    mark_modified();
 }
 
 void Bvh_scene::detach(IInstance* instance)
@@ -129,20 +146,125 @@ void Bvh_scene::detach(IInstance* instance)
 
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
-    const auto i = std::remove_if(
-        m_children.begin(),
-        m_children.end(),
-        [bvh_instance](const Bvh_scene_child& child) { return child.instance == bvh_instance; }
-    );
+    const auto i = find_child(bvh_instance);
     if (i == m_children.end()) {
         log_scene->error("raytrace instance not in scene");
-    } else {
-        m_children.erase(i, m_children.end());
+        return;
     }
+    m_children.erase(i);
+    bvh_instance->remove_parent_scene(this);
+    mark_modified();
+}
+
+auto Bvh_scene::find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator
+{
+    return std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [geometry](const Bvh_scene_child& child) { return child.geometry == geometry; }
+    );
+}
+
+auto Bvh_scene::find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator
+{
+    return std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [instance](const Bvh_scene_child& child) { return child.instance == instance; }
+    );
+}
+
+void Bvh_scene::on_child_modified(const Bvh_geometry* geometry)
+{
+    const auto i = find_child(geometry);
+    if (i == m_children.end()) {
+        return;
+    }
+    i->last_modified_tick = m_tick;
+    mark_modified();
+}
+
+void Bvh_scene::on_child_modified(const Bvh_instance* instance)
+{
+    const auto i = find_child(instance);
+    if (i == m_children.end()) {
+        return;
+    }
+    i->last_modified_tick = m_tick;
+    mark_modified();
+}
+
+void Bvh_scene::on_child_destroyed(const Bvh_geometry* geometry)
+{
+    const auto i = find_child(geometry);
+    if (i == m_children.end()) {
+        return;
+    }
+    m_children.erase(i);
+    mark_modified();
+}
+
+void Bvh_scene::on_child_destroyed(const Bvh_instance* instance)
+{
+    const auto i = find_child(instance);
+    if (i == m_children.end()) {
+        return;
+    }
+    m_children.erase(i);
+    mark_modified();
+}
+
+void Bvh_scene::add_referencing_instance(Bvh_instance* instance)
+{
+    ERHE_VERIFY(instance != nullptr);
+    const auto i = std::find(m_referencing_instances.begin(), m_referencing_instances.end(), instance);
+    if (i == m_referencing_instances.end()) {
+        m_referencing_instances.push_back(instance);
+    }
+}
+
+void Bvh_scene::remove_referencing_instance(Bvh_instance* instance)
+{
+    const auto i = std::find(m_referencing_instances.begin(), m_referencing_instances.end(), instance);
+    if (i != m_referencing_instances.end()) {
+        m_referencing_instances.erase(i);
+    }
+}
+
+void Bvh_scene::mark_modified()
+{
+    // The bounds of this scene changed, which changes the bounds of every
+    // instance which instantiates it. The guard makes a cyclic scene graph
+    // terminate.
+    if (m_in_propagation) {
+        return;
+    }
+    m_in_propagation = true;
+    for (Bvh_instance* instance : m_referencing_instances) {
+        instance->notify_parents_modified();
+    }
+    m_in_propagation = false;
 }
 
 void Bvh_scene::commit()
 {
+    ++m_tick;
+}
+
+auto Bvh_scene::get_tick() const -> uint64_t
+{
+    return m_tick;
+}
+
+auto Bvh_scene::get_static_child_count(const uint64_t delay_ticks) const -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Bvh_scene_child& child : m_children) {
+        if ((m_tick - child.last_modified_tick) >= delay_ticks) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 auto Bvh_scene::get_bbox() const -> erhe::math::Aabb
