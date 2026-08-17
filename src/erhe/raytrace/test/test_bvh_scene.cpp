@@ -173,6 +173,323 @@ TEST(Bvh_scene, InstanceOutlivingItsSceneDoesNotHit)
     EXPECT_FALSE(root_scene->intersect(ray, hit));
 }
 
+// ----------------------------------------------------------------------------
+// Scene level BVH
+// ----------------------------------------------------------------------------
+
+constexpr std::size_t grid_size = 16;
+
+void tick_until_static(IScene* scene)
+{
+    for (uint64_t i = 0; i < Bvh_scene::k_static_delay_ticks; ++i) {
+        scene->commit();
+    }
+}
+
+// Unit triangle at x = 2 * index, in the z = -index plane, so that both the
+// lateral position and the hit distance are unique per child.
+[[nodiscard]] auto make_grid_geometry(const int index) -> Test_geometry
+{
+    const float x = 2.0f * static_cast<float>(index);
+    const float z = -static_cast<float>(index);
+    return make_triangle_geometry(
+        "grid",
+        { {x, 0.0f, z}, {x + 1.0f, 0.0f, z}, {x, 1.0f, z} },
+        { {0, 1, 2} }
+    );
+}
+
+[[nodiscard]] auto make_grid_ray(const int index) -> Ray
+{
+    const float x = 2.0f * static_cast<float>(index) + 0.25f;
+    return make_ray({x, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+}
+
+TEST(Bvh_scene, TlasMatchesLinearTraversal)
+{
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("grid");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        scene->attach(geometries.back().geometry.get());
+    }
+    scene->commit();
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), 0);
+
+    // Reference results from the linear path
+    std::vector<float>            linear_t;
+    std::vector<const IGeometry*> linear_geometry;
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        Ray ray = make_grid_ray(static_cast<int>(i));
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit)) << "linear miss for " << i;
+        linear_t.push_back(ray.t_far);
+        linear_geometry.push_back(hit.geometry);
+    }
+
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        Ray ray = make_grid_ray(static_cast<int>(i));
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit)) << "BVH miss for " << i;
+        EXPECT_NEAR(ray.t_far, linear_t[i], 0.001f);
+        EXPECT_EQ(hit.geometry, linear_geometry[i]);
+    }
+
+    // A ray which misses every child
+    {
+        Ray ray = make_ray({-100.0f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+}
+
+TEST(Bvh_scene, TlasReturnsClosestHit)
+{
+    // Several parallel triangles along the ray, attached far to near and near
+    // to far. The nearest one has to win in both cases.
+    for (int order = 0; order < 2; ++order) {
+        std::vector<Test_geometry> geometries;
+        auto  scene     = IScene::create_unique("closest");
+        auto* bvh_scene = as_bvh_scene(scene.get());
+
+        constexpr int count = 8;
+        for (int i = 0; i < count; ++i) {
+            const int   index = (order == 0) ? i : (count - 1 - i);
+            const float z     = -static_cast<float>(index);
+            geometries.push_back(
+                make_triangle_geometry(
+                    "layer",
+                    { {0.0f, 0.0f, z}, {1.0f, 0.0f, z}, {0.0f, 1.0f, z} },
+                    { {0, 1, 2} }
+                )
+            );
+            scene->attach(geometries.back().geometry.get());
+        }
+        tick_until_static(scene.get());
+        ASSERT_EQ(bvh_scene->get_tlas_member_count(), count);
+
+        Ray ray = make_ray({0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit));
+        EXPECT_NEAR(ray.t_far, 10.0f, 0.001f); // the z = 0 layer
+    }
+}
+
+TEST(Bvh_scene, TlasWithInstances)
+{
+    Test_geometry tg = make_unit_triangle();
+
+    auto child_scene = IScene::create_unique("child");
+    child_scene->attach(tg.geometry.get());
+
+    std::vector<std::unique_ptr<IInstance>> instances;
+    auto  scene     = IScene::create_unique("instances");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        auto instance = IInstance::create_unique("inst");
+        instance->set_scene(child_scene.get());
+        instance->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{2.0f * static_cast<float>(i), 0.0f, 0.0f}));
+        scene->attach(instance.get());
+        instances.push_back(std::move(instance));
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        Ray ray = make_ray({2.0f * static_cast<float>(i) + 0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit)) << "miss for instance " << i;
+        EXPECT_EQ(hit.instance, instances[i].get());
+        EXPECT_NEAR(ray.t_far, 10.0f, 0.001f);
+    }
+}
+
+TEST(Bvh_scene, ModifiedMemberLeavesTlasAndFollowsTheMove)
+{
+    Test_geometry tg = make_unit_triangle();
+
+    auto child_scene = IScene::create_unique("child");
+    child_scene->attach(tg.geometry.get());
+
+    std::vector<std::unique_ptr<IInstance>> instances;
+    auto  scene     = IScene::create_unique("moving");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        auto instance = IInstance::create_unique("inst");
+        instance->set_scene(child_scene.get());
+        instance->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{2.0f * static_cast<float>(i), 0.0f, 0.0f}));
+        scene->attach(instance.get());
+        instances.push_back(std::move(instance));
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    // Move one member sideways, clear of every other instance. It has to leave
+    // the scene level BVH, and rays have to follow it immediately, without
+    // waiting for a rebuild.
+    instances[0]->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{100.0f, 0.0f, 0.0f}));
+    instances[0]->commit();
+    EXPECT_LT(bvh_scene->get_tlas_member_count(), grid_size);
+
+    const Ray old_position_ray{make_ray({  0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f})};
+    const Ray new_position_ray{make_ray({100.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f})};
+    {
+        Ray ray = old_position_ray;
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+    {
+        Ray ray = new_position_ray;
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit));
+        EXPECT_NEAR(ray.t_far, 10.0f, 0.001f);
+        EXPECT_EQ(hit.instance, instances[0].get());
+    }
+
+    // Once it has been static long enough it is taken back into the BVH.
+    tick_until_static(scene.get());
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+    {
+        Ray ray = old_position_ray;
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+    {
+        Ray ray = new_position_ray;
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit));
+        EXPECT_EQ(hit.instance, instances[0].get());
+    }
+}
+
+TEST(Bvh_scene, DetachedMemberIsNotHit)
+{
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("detach");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        scene->attach(geometries.back().geometry.get());
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    scene->detach(geometries[3].geometry.get());
+    {
+        Ray ray = make_grid_ray(3);
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+    {
+        Ray ray = make_grid_ray(4);
+        Hit hit{};
+        EXPECT_TRUE(scene->intersect(ray, hit));
+    }
+
+    // And after the BVH has been rebuilt without it
+    tick_until_static(scene.get());
+    {
+        Ray ray = make_grid_ray(3);
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+}
+
+TEST(Bvh_scene, ChildAttachedAfterTlasIsHitImmediately)
+{
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("late_attach");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        scene->attach(geometries.back().geometry.get());
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    // The new child is not static yet, so it is traversed linearly.
+    Test_geometry late = make_grid_geometry(static_cast<int>(grid_size) + 4);
+    scene->attach(late.geometry.get());
+    {
+        Ray ray = make_grid_ray(static_cast<int>(grid_size) + 4);
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit));
+        EXPECT_EQ(hit.geometry, late.geometry.get());
+    }
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    // ... and joins the BVH once it has settled.
+    tick_until_static(scene.get());
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size + 1);
+    {
+        Ray ray = make_grid_ray(static_cast<int>(grid_size) + 4);
+        Hit hit{};
+        ASSERT_TRUE(scene->intersect(ray, hit));
+        EXPECT_EQ(hit.geometry, late.geometry.get());
+    }
+}
+
+TEST(Bvh_scene, MaskedTraversalThroughTlas)
+{
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("masked");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        geometries.back().geometry->set_mask((i == 3) ? 0x2u : 0x1u);
+        scene->attach(geometries.back().geometry.get());
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    {
+        Ray ray = make_grid_ray(3);
+        ray.mask = 0x1u;
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+    {
+        Ray ray = make_grid_ray(3);
+        ray.mask = 0x2u;
+        Hit hit{};
+        EXPECT_TRUE(scene->intersect(ray, hit));
+    }
+}
+
+TEST(Bvh_scene, DisabledMemberStaysInTlasButIsNotHit)
+{
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("disabled");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        scene->attach(geometries.back().geometry.get());
+    }
+    tick_until_static(scene.get());
+    ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+
+    // Visibility toggles are frequent and must not throw the BVH away.
+    geometries[3].geometry->disable();
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+    {
+        Ray ray = make_grid_ray(3);
+        Hit hit{};
+        EXPECT_FALSE(scene->intersect(ray, hit));
+    }
+
+    geometries[3].geometry->enable();
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+    {
+        Ray ray = make_grid_ray(3);
+        Hit hit{};
+        EXPECT_TRUE(scene->intersect(ray, hit));
+    }
+}
+
 } // anonymous namespace
 
 #endif // defined(ERHE_RAYTRACE_LIBRARY_BVH)

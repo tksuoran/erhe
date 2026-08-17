@@ -9,7 +9,10 @@
 #include "erhe_raytrace/iscene.hpp"
 #include "erhe_math/aabb.hpp"
 
+#include <bvh/v2/bbox.h>
 #include <bvh/v2/bvh.h>
+#include <bvh/v2/node.h>
+#include <bvh/v2/vec.h>
 
 #include <cstdint>
 #include <string>
@@ -33,7 +36,20 @@ public:
     // eligible for the scene level BVH.
     uint64_t      last_modified_tick{0};
 
+    // Set while this child is covered by the scene level BVH. Children covered
+    // by it are traversed through the BVH, the others are traversed linearly.
+    bool          in_tlas           {false};
+
     [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
+};
+
+// Entry in the member list of the scene level BVH. Exactly one of geometry and
+// instance is set.
+class Tlas_member
+{
+public:
+    Bvh_geometry* geometry{nullptr};
+    Bvh_instance* instance{nullptr};
 };
 
 // Scene level container for geometries and instances.
@@ -46,6 +62,20 @@ public:
 class Bvh_scene : public IScene
 {
 public:
+    using Tlas_node = bvh::v2::Node<float, 3>;
+    using Tlas      = bvh::v2::Bvh<Tlas_node>;
+    using Tlas_bbox = bvh::v2::BBox<float, 3>;
+    using Tlas_vec  = bvh::v2::Vec<float, 3>;
+
+    // Number of ticks a child has to be unmodified before it is eligible for
+    // the scene level BVH.
+    static constexpr uint64_t    k_static_delay_ticks = 30;
+
+    // Below this number of eligible children the linear traversal wins and no
+    // scene level BVH is built. This is what keeps the one geometry scenes,
+    // which the editor creates one per mesh primitive, free of any BVH.
+    static constexpr std::size_t k_min_tlas_children  = 4;
+
     explicit Bvh_scene(std::string_view debug_label);
     ~Bvh_scene() noexcept override;
 
@@ -71,6 +101,9 @@ public:
     // Number of children which have not been modified for at least delay_ticks.
     [[nodiscard]] auto get_static_child_count(uint64_t delay_ticks) const -> std::size_t;
 
+    // Number of children currently covered by the scene level BVH.
+    [[nodiscard]] auto get_tlas_member_count() const -> std::size_t;
+
     // Called by attached children when something which can move their bounding
     // box changes, and when they are destroyed while still attached.
     void on_child_modified          (const Bvh_geometry* geometry);
@@ -84,7 +117,36 @@ public:
     void remove_referencing_instance(Bvh_instance* instance);
 
 private:
+    // Immutable input of a scene level BVH build. Holds no scene state: the
+    // child pointers are carried through as an ordering key only, so a build
+    // can run without touching the scene.
+    class Tlas_build_input
+    {
+    public:
+        std::vector<Tlas_member> members;
+        std::vector<Tlas_bbox>   bboxes;
+        std::vector<Tlas_vec>    centers;
+    };
+
+    class Tlas_build_result
+    {
+    public:
+        Tlas                     tlas;
+        std::vector<Tlas_member> members;
+    };
+
     auto intersect_children(Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool;
+    auto intersect_tlas    (Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool;
+
+    // Collects the children which have been static long enough. Main thread.
+    [[nodiscard]] auto make_tlas_build_input() const -> Tlas_build_input;
+
+    // Pure function of its input; safe to run on a worker thread.
+    [[nodiscard]] static auto build_tlas(const Tlas_build_input& input) -> Tlas_build_result;
+
+    void update_tlas    ();
+    void take_tlas      (Tlas_build_result&& result);
+    void invalidate_tlas();
 
     [[nodiscard]] auto find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator;
     [[nodiscard]] auto find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator;
@@ -97,6 +159,15 @@ private:
     std::vector<Bvh_instance*>   m_referencing_instances;
     std::string                  m_debug_label;
     uint64_t                     m_tick{0};
+
+    Tlas                         m_tlas;
+    std::vector<Tlas_member>     m_tlas_members;
+    bool                         m_tlas_ready{false};
+
+    // Number of static children at the time the current scene level BVH was
+    // built. A change means children have settled or moved, and the BVH is
+    // rebuilt.
+    std::size_t                  m_tlas_static_child_count{0};
 
     // Guard against infinite recursion when the scene graph contains a cycle.
     mutable bool                 m_in_get_bbox   {false};
