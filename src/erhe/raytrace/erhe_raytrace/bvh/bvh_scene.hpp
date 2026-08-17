@@ -46,6 +46,10 @@ public:
     // running. Modifying such a child aborts that build.
     bool          in_pending_tlas   {false};
 
+    // Index of this child in the member list of the scene level BVH. Valid
+    // while in_tlas is set.
+    std::size_t   tlas_index        {0};
+
     [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
 };
 
@@ -81,6 +85,11 @@ public:
     // scene level BVH is built. This is what keeps the one geometry scenes,
     // which the editor creates one per mesh primitive, free of any BVH.
     static constexpr std::size_t k_min_tlas_children  = 4;
+
+    // Minimum number of ticks between two scene level BVH builds. Evicted
+    // members are traversed linearly until the next build, so this only trades
+    // traversal quality for build cost; it never affects results.
+    static constexpr uint64_t    k_rebuild_cooldown_ticks = 30;
 
     explicit Bvh_scene(std::string_view debug_label);
     ~Bvh_scene() noexcept override;
@@ -162,12 +171,13 @@ private:
     // Pure function of its input; safe to run on a worker thread.
     static void build_tlas(Tlas_build_task& task);
 
-    void update_tlas         ();
-    void start_tlas_build    ();
-    void collect_tlas_build  ();
-    void clear_pending_build  ();
-    void take_tlas           (Tlas_build_result&& result);
-    void invalidate_tlas     ();
+    void update_tlas       ();
+    void start_tlas_build  ();
+    void collect_tlas_build();
+    void clear_pending_build();
+    void take_tlas         (Tlas_build_result&& result);
+    void evict_from_tlas   (Bvh_scene_child& child);
+    void invalidate_tlas   ();
 
     [[nodiscard]] auto find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator;
     [[nodiscard]] auto find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator;
@@ -191,9 +201,12 @@ private:
     bool                             m_build_aborted{false};
 
     // Number of static children at the time the current scene level BVH was
-    // built. A change means children have settled or moved, and the BVH is
-    // rebuilt.
+    // built, and the number of its members which have not been evicted since.
+    // A difference means children have settled, moved or been detached, and
+    // the BVH is rebuilt once the cooldown has passed.
     std::size_t                  m_tlas_static_child_count{0};
+    std::size_t                  m_tlas_live_member_count {0};
+    uint64_t                     m_last_build_tick        {0};
 
     // Guard against infinite recursion when the scene graph contains a cycle.
     mutable bool                 m_in_get_bbox   {false};

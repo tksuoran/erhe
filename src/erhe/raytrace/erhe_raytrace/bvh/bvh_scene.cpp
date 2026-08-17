@@ -141,15 +141,14 @@ void Bvh_scene::detach(IGeometry* geometry)
         log_scene->error("raytrace geometry not in scene");
         return;
     }
-    const bool was_in_tlas = i->in_tlas;
     if (i->in_pending_tlas) {
         m_build_aborted = true;
     }
+    if (i->in_tlas) {
+        evict_from_tlas(*i);
+    }
     m_children.erase(i);
     bvh_geometry->remove_parent_scene(this);
-    if (was_in_tlas) {
-        invalidate_tlas();
-    }
     mark_modified();
 }
 
@@ -166,15 +165,14 @@ void Bvh_scene::detach(IInstance* instance)
         log_scene->error("raytrace instance not in scene");
         return;
     }
-    const bool was_in_tlas = i->in_tlas;
     if (i->in_pending_tlas) {
         m_build_aborted = true;
     }
+    if (i->in_tlas) {
+        evict_from_tlas(*i);
+    }
     m_children.erase(i);
     bvh_instance->remove_parent_scene(this);
-    if (was_in_tlas) {
-        invalidate_tlas();
-    }
     mark_modified();
 }
 
@@ -207,7 +205,7 @@ void Bvh_scene::on_child_modified(const Bvh_geometry* geometry)
         m_build_aborted = true;
     }
     if (i->in_tlas) {
-        invalidate_tlas();
+        evict_from_tlas(*i);
     }
     mark_modified();
 }
@@ -223,7 +221,7 @@ void Bvh_scene::on_child_modified(const Bvh_instance* instance)
         m_build_aborted = true;
     }
     if (i->in_tlas) {
-        invalidate_tlas();
+        evict_from_tlas(*i);
     }
     mark_modified();
 }
@@ -234,14 +232,13 @@ void Bvh_scene::on_child_destroyed(const Bvh_geometry* geometry)
     if (i == m_children.end()) {
         return;
     }
-    const bool was_in_tlas = i->in_tlas;
     if (i->in_pending_tlas) {
         m_build_aborted = true;
     }
-    m_children.erase(i);
-    if (was_in_tlas) {
-        invalidate_tlas();
+    if (i->in_tlas) {
+        evict_from_tlas(*i);
     }
+    m_children.erase(i);
     mark_modified();
 }
 
@@ -251,14 +248,13 @@ void Bvh_scene::on_child_destroyed(const Bvh_instance* instance)
     if (i == m_children.end()) {
         return;
     }
-    const bool was_in_tlas = i->in_tlas;
     if (i->in_pending_tlas) {
         m_build_aborted = true;
     }
-    m_children.erase(i);
-    if (was_in_tlas) {
-        invalidate_tlas();
+    if (i->in_tlas) {
+        evict_from_tlas(*i);
     }
+    m_children.erase(i);
     mark_modified();
 }
 
@@ -340,7 +336,15 @@ void Bvh_scene::start_tlas_build()
         invalidate_tlas();
         return;
     }
-    if (m_tlas_ready && (static_child_count == m_tlas_static_child_count)) {
+    if (m_tlas_ready &&
+        (static_child_count == m_tlas_static_child_count) &&
+        (m_tlas_live_member_count == m_tlas_members.size())
+    ) {
+        return; // nothing settled, moved or was evicted since the last build
+    }
+    if ((m_tick - m_last_build_tick) < k_rebuild_cooldown_ticks) {
+        // Rebuilding only improves traversal quality: children which are not
+        // covered are traversed linearly meanwhile.
         return;
     }
 
@@ -355,8 +359,9 @@ void Bvh_scene::start_tlas_build()
         return;
     }
 
-    m_build_task    = task;
-    m_build_aborted = false;
+    m_build_task      = task;
+    m_build_aborted   = false;
+    m_last_build_tick = m_tick;
 
     tf::Executor* executor = get_executor();
     if (executor != nullptr) {
@@ -423,14 +428,46 @@ void Bvh_scene::take_tlas(Tlas_build_result&& result)
     m_tlas_members = std::move(result.members);
     m_tlas_ready   = true;
 
-    for (const Tlas_member& member : m_tlas_members) {
+    for (std::size_t member_index = 0, end = m_tlas_members.size(); member_index < end; ++member_index) {
+        const Tlas_member& member = m_tlas_members[member_index];
         const auto i = (member.geometry != nullptr) ? find_child(member.geometry) : find_child(member.instance);
         if (i != m_children.end()) {
-            i->in_tlas = true;
+            i->in_tlas    = true;
+            i->tlas_index = member_index;
+        } else {
+            // The child went away between the snapshot and now.
+            m_tlas_members[member_index] = Tlas_member{};
         }
     }
 
-    log_scene->trace("Bvh_scene {} scene BVH built for {} children", m_debug_label, m_tlas_members.size());
+    m_tlas_live_member_count = 0;
+    for (const Tlas_member& member : m_tlas_members) {
+        if ((member.geometry != nullptr) || (member.instance != nullptr)) {
+            ++m_tlas_live_member_count;
+        }
+    }
+    m_last_build_tick = m_tick;
+
+    log_scene->trace("Bvh_scene {} scene BVH built for {} children", m_debug_label, m_tlas_live_member_count);
+}
+
+void Bvh_scene::evict_from_tlas(Bvh_scene_child& child)
+{
+    // The child is removed from the coverage of the scene level BVH and goes
+    // back to the linear path. The node bounds it left behind are stale, which
+    // only costs a few wasted node tests until the next build - never a wrong
+    // result. This is what keeps one moving object from throwing away the
+    // BVH built for all the others.
+    if (!child.in_tlas) {
+        return;
+    }
+    child.in_tlas = false;
+    m_tlas_members[child.tlas_index] = Tlas_member{};
+    ERHE_VERIFY(m_tlas_live_member_count > 0);
+    --m_tlas_live_member_count;
+    if (m_tlas_live_member_count == 0) {
+        invalidate_tlas();
+    }
 }
 
 void Bvh_scene::invalidate_tlas()
@@ -443,6 +480,7 @@ void Bvh_scene::invalidate_tlas()
     m_tlas_members.clear();
     m_tlas = Tlas{};
     m_tlas_static_child_count = 0;
+    m_tlas_live_member_count  = 0;
     for (Bvh_scene_child& child : m_children) {
         child.in_tlas = false;
     }
@@ -450,7 +488,7 @@ void Bvh_scene::invalidate_tlas()
 
 auto Bvh_scene::get_tlas_member_count() const -> std::size_t
 {
-    return m_tlas_ready ? m_tlas_members.size() : 0;
+    return m_tlas_ready ? m_tlas_live_member_count : 0;
 }
 
 auto Bvh_scene::get_tick() const -> uint64_t
@@ -546,6 +584,9 @@ auto Bvh_scene::intersect_tlas(Ray& ray, Hit& hit, Bvh_instance* in_instance) ->
         [&](const std::size_t begin, const std::size_t end) {
             for (std::size_t i = begin; i < end; ++i) {
                 const Tlas_member& member = m_tlas_members[m_tlas.prim_ids[i]];
+                if ((member.geometry == nullptr) && (member.instance == nullptr)) {
+                    continue; // evicted: traversed linearly instead
+                }
                 const bool member_is_hit = (member.instance != nullptr)
                     ? member.instance->intersect(ray, hit)
                     : member.geometry->intersect_instance(ray, hit, in_instance);

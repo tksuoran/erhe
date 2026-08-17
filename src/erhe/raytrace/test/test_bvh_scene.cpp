@@ -336,7 +336,9 @@ TEST(Bvh_scene, ModifiedMemberLeavesTlasAndFollowsTheMove)
     // waiting for a rebuild.
     instances[0]->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{100.0f, 0.0f, 0.0f}));
     instances[0]->commit();
-    EXPECT_LT(bvh_scene->get_tlas_member_count(), grid_size);
+
+    // Only the moved instance leaves; the BVH built for the others survives.
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size - 1);
 
     const Ray old_position_ray{make_ray({  0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f})};
     const Ray new_position_ray{make_ray({100.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f})};
@@ -382,6 +384,7 @@ TEST(Bvh_scene, DetachedMemberIsNotHit)
     ASSERT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
 
     scene->detach(geometries[3].geometry.get());
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size - 1);
     {
         Ray ray = make_grid_ray(3);
         Hit hit{};
