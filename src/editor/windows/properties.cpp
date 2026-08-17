@@ -320,34 +320,47 @@ void Properties::light_properties(erhe::scene::Light& light)
     ERHE_PROFILE_FUNCTION();
 
     // Edits to what decides whether / how the light is shaded (type, cast
-    // shadow, range -> active) must re-resolve the scene's light set
-    // (Light::notify_changed -> Scene_host::on_light_changed).
-    bool resolution_changed = false;
-    add_entry("Light Type", [&light, &resolution_changed]() {
-        if (
-            erhe::imgui::make_combo(
-                "##",
-                light.type,
-                erhe::scene::Light::c_type_strings,
-                IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
-            )
-        ) {
-            resolution_changed = true;
+    // shadow, range / color / intensity / outer spot angle -> is_active) must
+    // re-resolve the scene's light set (Light::notify_changed ->
+    // Scene_host::on_light_changed). The notify call has to happen inside the
+    // entry lambda: add_entry only QUEUES the lambda, which show_entries()
+    // runs long after this function has returned - a flag local to this scope
+    // would still be false when tested here, and writing to it from the lambda
+    // would write to a destroyed stack slot.
+    add_entry("Light Type", [&light]() {
+        // make_combo assigns the picked value unconditionally but reports
+        // IsItemDeactivatedAfterEdit(), which is not the same event as "the
+        // value changed"; compare the value itself instead.
+        const erhe::scene::Light::Type old_type = light.type;
+        erhe::imgui::make_combo(
+            "##",
+            light.type,
+            erhe::scene::Light::c_type_strings,
+            IM_ARRAYSIZE(erhe::scene::Light::c_type_strings)
+        );
+        if (light.type != old_type) {
+            light.notify_changed();
         }
     });
-    add_entry("Cast Shadow", [&light, &resolution_changed]() {
+    add_entry("Cast Shadow", [&light]() {
         if (ImGui::Checkbox("##", &light.cast_shadow)) {
-            resolution_changed = true;
+            light.notify_changed();
         }
     });
 
     if (light.type == erhe::scene::Light::Type::spot) {
         add_entry("Inner Spot", [&](){ ImGui::SliderFloat("##", &light.inner_spot_angle, 0.0f, glm::pi<float>()); });
-        add_entry("Outer Spot", [&](){ ImGui::SliderFloat("##", &light.outer_spot_angle, 0.0f, glm::pi<float>()); });
+        // outer_spot_angle <= 0 makes the spot inactive (Light::is_active), so
+        // it decides whether the light is in the resolved set at all.
+        add_entry("Outer Spot", [&light](){
+            if (ImGui::SliderFloat("##", &light.outer_spot_angle, 0.0f, glm::pi<float>())) {
+                light.notify_changed();
+            }
+        });
     }
-    add_entry("Range", [&light, &resolution_changed](){
+    add_entry("Range", [&light](){
         if (ImGui::SliderFloat("##", &light.range, 1.00f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
-            resolution_changed = true;
+            light.notify_changed();
         }
     });
     if ((light.type == erhe::scene::Light::Type::point) && (light.range <= 0.0f)) {
@@ -360,18 +373,25 @@ void Properties::light_properties(erhe::scene::Light& light)
     // Intensity units follow KHR_lights_punctual: lux for directional lights,
     // candela for point and spot lights (see erhe::scene::Light::intensity).
     const bool is_directional = light.type == erhe::scene::Light::Type::directional;
-    add_entry(is_directional ? "Intensity (lx)" : "Intensity (cd)", [&](){
-        ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+    add_entry(is_directional ? "Intensity (lx)" : "Intensity (cd)", [&light](){
+        if (ImGui::SliderFloat("##", &light.intensity, 0.01f, 20000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
+            light.notify_changed();
+        }
     });
     if (!is_directional) {
-        add_entry("Flux (lm)", [&](){
+        add_entry("Flux (lm)", [&light](){
             float lumens = light.get_luminous_flux();
             if (ImGui::SliderFloat("##", &lumens, 0.01f, 200000.0f, "%.3f", ImGuiSliderFlags_Logarithmic)) {
                 light.set_luminous_flux(lumens);
+                light.notify_changed();
             }
         });
     }
-    add_entry("Color",     [&](){ ImGui::ColorEdit3 ("##", &light.color.x,   ImGuiColorEditFlags_Float); });
+    add_entry("Color", [&light](){
+        if (ImGui::ColorEdit3("##", &light.color.x, ImGuiColorEditFlags_Float)) {
+            light.notify_changed();
+        }
+    });
     add_entry("Temperature", [&light]() {
         bool use_temperature = light.temperature > 0.0f;
         if (ImGui::Checkbox("##use_temperature", &use_temperature)) {
@@ -389,10 +409,6 @@ void Properties::light_properties(erhe::scene::Light& light)
 
     // Ambient light color is a scene property now (issues #237 / #240); it is
     // shown in Scene properties (Properties::scene_properties), not per light.
-
-    if (resolution_changed) {
-        light.notify_changed();
-    }
 }
 
 void Properties::layout_properties(erhe::scene::Layout& layout)
