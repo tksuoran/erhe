@@ -274,11 +274,14 @@ for font in fonts:
         font_intermediate = font.get_intermediate_representation()
         if font_intermediate:
             intermediates.append( font_intermediate )
+        else:
+            logging.error( 'No icons parsed from {!s} - is the file complete?'.format( font.font_data ))
     except Exception as e:
         logging.error( e )
-if intermediates:
-    for interm in intermediates:
-        Language.intermediate = interm
-        for lang in languages:
-            if lang:
-                lang.save_to_file()
+if not intermediates:
+    sys.exit( 'No font data to generate headers from.' )
+for interm in intermediates:
+    Language.intermediate = interm
+    for lang in languages:
+        if lang:
+            lang.save_to_file()

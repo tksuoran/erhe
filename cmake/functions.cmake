@@ -67,3 +67,59 @@ function(erhe_target_sources_grouped target)
     target_sources("${target}" PRIVATE "${_file}")
   endforeach()
 endfunction()
+
+# ---- Download a file with a pinned content hash ----
+
+#[==[
+Downloads URI to FILE, unless FILE already exists with the expected SHA256.
+
+The download goes to a temporary file that is only renamed into place once the
+content hash matches, so a failed or truncated transfer never leaves a file
+behind that would make a later configure skip the download.
+
+Note that file(DOWNLOAD) reports success for HTTP error responses - the body of
+an error page is transferred just fine - so the hash is the actual guard here.
+
+DESCRIPTION is used in the progress and error messages.
+]==]
+function(erhe_download_pinned_file)
+  cmake_parse_arguments(PARSE_ARGV 0 _arg "" "URI;FILE;SHA256;DESCRIPTION" "")
+  foreach(_required URI FILE SHA256 DESCRIPTION)
+    if(NOT _arg_${_required})
+      message(FATAL_ERROR "erhe_download_pinned_file: missing ${_required} argument")
+    endif()
+  endforeach()
+
+  if(EXISTS "${_arg_FILE}")
+    file(SHA256 "${_arg_FILE}" _existing_hash)
+    if(_existing_hash STREQUAL _arg_SHA256)
+      return()
+    endif()
+    message(STATUS "${_arg_DESCRIPTION} does not match the pinned hash, downloading it again")
+  endif()
+
+  message(STATUS "Downloading ${_arg_DESCRIPTION}...")
+  set(_temporary_file "${_arg_FILE}.download")
+  file(REMOVE "${_temporary_file}")
+  file(DOWNLOAD "${_arg_URI}" "${_temporary_file}" STATUS _status SHOW_PROGRESS)
+  list(GET _status 0 _status_code)
+  list(GET _status 1 _status_string)
+  if(NOT _status_code EQUAL 0)
+    file(REMOVE "${_temporary_file}")
+    message(FATAL_ERROR "Failed to download ${_arg_DESCRIPTION} from ${_arg_URI} : ${_status_string}")
+  endif()
+
+  file(SHA256 "${_temporary_file}" _downloaded_hash)
+  if(NOT _downloaded_hash STREQUAL _arg_SHA256)
+    file(REMOVE "${_temporary_file}")
+    message(
+      FATAL_ERROR
+      "Downloaded ${_arg_DESCRIPTION} from ${_arg_URI} does not match the pinned hash.\n"
+      "  Expected SHA256 : ${_arg_SHA256}\n"
+      "  Actual SHA256   : ${_downloaded_hash}\n"
+      "The server most likely answered with an error page instead of the file."
+    )
+  endif()
+
+  file(RENAME "${_temporary_file}" "${_arg_FILE}")
+endfunction()

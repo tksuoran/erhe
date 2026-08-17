@@ -1008,24 +1008,46 @@ find_package(Python3 COMPONENTS Interpreter)
 if (NOT ${Python3_FOUND})
     message(FATAL_ERROR "Python3 is needed to generate sources.")
 endif ()
-set(ICON_FONT_MDI_DATA_URI  "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/css/materialdesignicons.css")
+# The Material Design Icons webfont is served from a CDN with a pinned version,
+# so that configure does not depend on the raw github.com endpoint, which is
+# rate limited for anonymous requests.
+set(ICON_FONT_MDI_VERSION   "7.4.47")
+set(ICON_FONT_MDI_DATA_URI  "https://cdn.jsdelivr.net/npm/@mdi/font@${ICON_FONT_MDI_VERSION}/css/materialdesignicons.css")
+set(ICON_FONT_MDI_DATA_SHA  "cd66a937a12b4368031fb980d57346803260c6cfa5e737bbad526aed2c5cda0e")
 set(ICON_FONT_MDI_DATA_FILE "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/materialdesignicons.css")
-set(ICON_FONT_MDI_TTF_URI   "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf")
+set(ICON_FONT_MDI_TTF_URI   "https://cdn.jsdelivr.net/npm/@mdi/font@${ICON_FONT_MDI_VERSION}/fonts/materialdesignicons-webfont.ttf")
+set(ICON_FONT_MDI_TTF_SHA   "61e8aba5a4e981fe22cf7c8e8bcdbea00476e75c62c37f01bf7ee33361d68428")
 set(ICON_FONT_MDI_TTF_FILE  "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/materialdesignicons-webfont.ttf")
-if (NOT EXISTS ${ICON_FONT_MDI_DATA_FILE})
-    message(STATUS "Downloading Material Design Icons font .css...")
-    file(DOWNLOAD "${ICON_FONT_MDI_DATA_URI}" "${ICON_FONT_MDI_DATA_FILE}" SHOW_PROGRESS)
-endif()
-if (NOT EXISTS ${ICON_FONT_MDI_TTF_FILE})
-    message(STATUS "Downloading Material Design Icons font .ttf...")
-    file(DOWNLOAD "${ICON_FONT_MDI_TTF_URI}" "${ICON_FONT_MDI_TTF_FILE}" SHOW_PROGRESS)
-endif()
+erhe_download_pinned_file(
+    URI         "${ICON_FONT_MDI_DATA_URI}"
+    FILE        "${ICON_FONT_MDI_DATA_FILE}"
+    SHA256      "${ICON_FONT_MDI_DATA_SHA}"
+    DESCRIPTION "Material Design Icons font .css"
+)
+erhe_download_pinned_file(
+    URI         "${ICON_FONT_MDI_TTF_URI}"
+    FILE        "${ICON_FONT_MDI_TTF_FILE}"
+    SHA256      "${ICON_FONT_MDI_TTF_SHA}"
+    DESCRIPTION "Material Design Icons font .ttf"
+)
+set(ICON_FONT_MDI_HEADER_FILE "${CMAKE_CURRENT_SOURCE_DIR}/windows/IconsMaterialDesignIcons.h")
 message(STATUS "Running GenerateIconFontCppHeaders.py to generate MaterialDesignIcon font header file")
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/GenerateIconFontCppHeaders.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    RESULT_VARIABLE ICON_FONT_MDI_GENERATE_RESULT
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+if (NOT ICON_FONT_MDI_GENERATE_RESULT EQUAL 0)
+    message(FATAL_ERROR "GenerateIconFontCppHeaders.py failed : ${ICON_FONT_MDI_GENERATE_RESULT}")
+endif ()
+if (NOT EXISTS "${ICON_FONT_MDI_HEADER_FILE}")
+    message(
+        FATAL_ERROR
+        "GenerateIconFontCppHeaders.py did not generate ${ICON_FONT_MDI_HEADER_FILE}.\n"
+        "Check ${ICON_FONT_MDI_DATA_FILE} for the icon definitions the script parses."
+    )
+endif ()
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")
     target_link_libraries(${_target} PRIVATE imgui)
