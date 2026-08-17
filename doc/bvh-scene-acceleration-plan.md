@@ -121,8 +121,8 @@ enum class Tlas_state { none, building, ready };
 
 ```
 ++m_tick
-for each instance child: child scene->commit()          // bottom-up, no-op when clean
-refresh cached bboxes / scene bbox
+// child scenes are not committed from here: bounds are computed live in
+// get_bbox(), so a parent never depends on a child scene's commit
 
 if (state == building && the async result is ready)
     take the result;
@@ -140,9 +140,10 @@ if (state != building) {
 - at least `k_min_tlas_children` candidates (below that the linear path wins anyway —
   this is also what keeps the thousands of one-geometry per-primitive scenes from ever
   allocating a TLAS),
-- and either there is no TLAS yet, or the candidate set differs from the current member
-  set by more than `k_rebuild_fraction` (newly-settled children, evicted members),
-- and at least `k_rebuild_cooldown_ticks` since the last build finished.
+- and either there is no TLAS yet, or the static-child count changed or a member was
+  evicted since the last build,
+- and at least `k_rebuild_cooldown_ticks` since the last build *started* (counting from
+  the start, not the finish, so a build that keeps getting aborted cannot spin).
 
 ### Async build
 
@@ -320,3 +321,38 @@ stay deterministic. New cases:
 - Refit (`bvh::v2::Bvh::refit()` exists) as an alternative to rebuilding: with the
   static/dynamic split, members by definition are not moving, so there is nothing to
   refit. Left as a note in case the split's constants turn out not to hold.
+
+
+## Status: implemented
+
+All eight steps landed, one commit each, tests green at every step
+(`src/erhe/raytrace/test/`, 44 tests). What ended up differing from the plan above:
+
+- **No recursive child-scene commit.** Bounds are computed live through
+  `Bvh_scene::get_bbox()` (recursion guarded), so a parent scene never depends on a
+  child scene having been committed. The plan's bottom-up commit would also have
+  advanced the tick of child scenes shared between parents.
+- **Async handshake is a `shared_ptr` task with an atomic `done` flag**, polled in
+  `commit()`, rather than a future. The worker writes only into the task, which it
+  co-owns, so a scene destroyed mid-build needs no wait in the destructor.
+- **Children are indexed by pointer** (`std::unordered_map`), and erase swaps with the
+  last child. Modification notifications resolve the child on every mesh transform
+  change of every frame, so the linear scan the child list started with would have been
+  an O(children) regression per moved mesh.
+- **Hysteresis is the cooldown alone.** A change-fraction threshold would have left
+  newly settled children off the BVH indefinitely in small scenes, for no real gain.
+- `Bvh_instance::intersect()` now returns false for a null instanced scene instead of
+  dereferencing it, which can happen once an instance outlives its scene.
+
+Verified in the editor (Vulkan Debug) over its MCP server:
+
+- `Bvh_scene rt_root_scene scene BVH built for 7 children` — the root scene does build
+  one, and the per-primitive scenes do not.
+- 120 raycast sweeps over the default scene, well past the static delay and the
+  cooldown: identical hits, mesh names and distances throughout.
+- 40 iterations of moving a cube while raycasting: hits follow the cube and nothing
+  hits the position it vacated, with 2 builds and 0 whole-BVH invalidations over the
+  whole run — one moving object evicts itself and leaves the rest of the BVH standing.
+
+Still open: measuring the hover-path win on a large scene (Bistro) in the profiler, and
+tuning `k_static_delay_ticks` / `k_rebuild_cooldown_ticks` from those numbers.
