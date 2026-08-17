@@ -175,6 +175,12 @@ public:
     void set_slots             (const std::vector<Slot_entry>& slots);
     void rebuild_if_needed     ();
 
+    // Per-frame update from the editor tick. Must run after scene transform
+    // propagation (it reads the hovered view's camera world transform) and
+    // before App_scenes::flush_draw_lists(). See the comment on the
+    // implementation for why the placement matters.
+    void update_once_per_frame ();
+
     // Number of number-key hotbar slots (Minecraft-style: keys 1..9,0 -> slots 1..10).
     static constexpr std::size_t key_slot_count = 10;
 

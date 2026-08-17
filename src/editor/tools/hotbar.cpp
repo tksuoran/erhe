@@ -670,8 +670,12 @@ void Hotbar::on_tool_select_message(Tool_select_message&)
     update_slot_from_tool(m_context.tools->get_priority_tool());
 }
 
-// Update rendertarget node transform to match render camera.
-// This is used only for horizontal hotbar, not for radial menu.
+// Show the hotbar only in the view it is anchored to: this runs once per
+// rendered view, from inside that view's rendergraph node, so toggling the
+// mesh here scopes it to the hovered view's render.
+//
+// The node transform is NOT updated here on desktop -- see
+// update_once_per_frame().
 void Hotbar::on_render_scene_view_message(Render_scene_view_message& message)
 {
     if (!m_enabled || !m_show) {
@@ -680,9 +684,39 @@ void Hotbar::on_render_scene_view_message(Render_scene_view_message& message)
 
     bool visible = message.scene_view && (get_hover_scene_view() == message.scene_view);
     set_mesh_visibility(visible);
-    if (!m_use_radial) {
+
+    // Under OpenXR the eye poses only become known when
+    // Headset_view::render_frame() locates the views, which happens inside the
+    // rendergraph -- there is no earlier point in the tick where the camera
+    // world transform for this frame exists, so the update has to stay here.
+    if (m_context.OpenXR && !m_use_radial) {
         update_node_transform();
     }
+}
+
+// Update the rendertarget node transform to match the hovered view's camera.
+// Used only for the horizontal hotbar, not for the radial menu (which is
+// world-locked and re-placed on hover change instead).
+//
+// This runs from the editor tick, after scene transform propagation and before
+// App_scenes::flush_draw_lists(). The placement is load-bearing for the draw
+// list renderer: Draw_list_scene keeps persistent per-primitive GPU records
+// that are rewritten only in flush_pending(), from the transform updates the
+// scene hooks enqueued. Moving the quad from inside the rendergraph (where
+// Render_scene_view_message is sent) enqueues the update after that flush, so
+// the draw lists would render the quad with the previous frame's transform --
+// the hotbar visibly trails the camera by one frame. Forward_renderer does not
+// show this because it rebuilds its primitive buffer from live node transforms
+// at draw time.
+void Hotbar::update_once_per_frame()
+{
+    if (!m_enabled || !m_show || m_use_radial) {
+        return;
+    }
+    if (m_context.OpenXR) {
+        return; // Updated from on_render_scene_view_message() instead
+    }
+    update_node_transform();
 }
 
 auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>

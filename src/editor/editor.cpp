@@ -782,6 +782,14 @@ public:
         if (m_app_context.OpenXR) {
             m_headset_view->update_transforms();
         }
+        // Place the hotbar quad in front of the hovered view's camera. Needs
+        // this frame's camera world transform (above) and must land before
+        // flush_draw_lists() below, or the draw list records would carry the
+        // previous frame's transform and the hotbar would trail the camera by
+        // one frame (see Hotbar::update_once_per_frame).
+        erhe::log::set_breadcrumb("tick: hotbar update");
+        m_hotbar->update_once_per_frame();
+
         if (m_transform_update_stats_tracker) {
             m_transform_update_stats_tracker->sample_frame(*m_app_scenes.get(), *m_tools.get());
         }
