@@ -47,8 +47,9 @@ public:
     void set_position           (glm::vec3 position);
     void set_orientation        (const glm::quat& orientation);
     void set_orientation        (const glm::mat4& orientation);
-    // source names the caller for the unwanted-roll diagnostics: this readback
-    // is where transforms written by anyone else enter the controller.
+    // source names the caller for the unwanted-roll diagnostics (this readback is
+    // where transforms written by anyone else enter the controller) and is unused
+    // unless ERHE_CAMERA_ROLL_DIAGNOSTICS is on.
     void get_transform_from_node(erhe::scene::Node* node, const char* source = "Frame_controller::get_transform_from_node");
 
     void apply_rotation          (float rx, float ry, float rz);
@@ -64,12 +65,14 @@ public:
     [[nodiscard]] auto get_variable            (Variable variable) -> erhe::math::Input_axis&;
     [[nodiscard]] auto get_active_control_value(Variable variable) const -> float;
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     // Unwanted-camera-roll diagnostics: every orientation write below is wrapped
     // in a Camera_roll_scope so a roll change can be attributed to its source.
     [[nodiscard]] auto get_roll_monitor() -> Camera_roll_monitor& { return m_roll_monitor; }
     [[nodiscard]] auto get_roll_monitor() const -> const Camera_roll_monitor& { return m_roll_monitor; }
     // Rotate the orientation back to zero roll around the current view direction.
     void level_roll();
+#endif
 
     erhe::math::Input_axis rotate_x;
     erhe::math::Input_axis rotate_y;
@@ -90,21 +93,23 @@ private:
     // The orientation is a quaternion, normalized after every composition, and it
     // is the only representation the controller keeps. A matrix member used to
     // hold it, which made a non-rotation basis expressible: create_rotation() was
-    // fed the raw (unnormalized) matrix column as its axis, and the write/readback
-    // round trip through the node transform (mat4 -> quat_cast -> toMat4, neither
-    // of which normalizes) preserved the resulting scale instead of projecting it
-    // back onto a rotation. Each fixed step then multiplied the deviation by ~1.5
-    // until the camera basis had a determinant of 1.6 and tens of degrees of roll.
+    // fed the raw (unnormalized) matrix column as its axis, and neither the
+    // write nor the readback through the node transform (mat4 -> quat_cast ->
+    // toMat4) normalizes. In a captured session the deviation grew by ~1.5x per
+    // fixed step until the camera basis had a determinant of 1.68 and tens of
+    // degrees of roll.
     //
-    // glm does not default-initialize, and both members are read (by update() and
-    // by the roll diagnostics) before the first node is attached.
-    glm::vec3           m_position{0.0f, 0.0f, 0.0f};
-    glm::quat           m_orientation{1.0f, 0.0f, 0.0f, 0.0f};
-    bool                m_transform_update{false};
+    // glm does not default-initialize, and both members are read by update()
+    // before the first node is attached.
+    glm::vec3 m_position{0.0f, 0.0f, 0.0f};
+    glm::quat m_orientation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool      m_transform_update{false};
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     Camera_roll_monitor m_roll_monitor;
     // Drift watchdog. With a normalized quaternion this should never fire; it
     // stays as a regression guard for the failure mode described above.
     float               m_orthonormality_warn_threshold{1.0e-5f};
+#endif
 };
 
 }

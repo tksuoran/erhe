@@ -102,7 +102,7 @@ void Frame_controller::set_position(const vec3 position)
 
 void Frame_controller::set_orientation(const glm::quat& orientation)
 {
-    Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::set_orientation", m_orientation};
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::set_orientation", m_orientation);
     m_orientation = glm::normalize(orientation);
     update();
 }
@@ -139,27 +139,28 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node, const ch
     // someone else - a tool, a parent node, animation, undo, MCP - enters the
     // camera controller, and also where glm::decompose round-trip error enters,
     // so it is the most important site to attribute roll changes to.
-    Camera_roll_scope roll_scope{m_roll_monitor, source, m_orientation};
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, source, m_orientation);
+    static_cast<void>(source);
     const erhe::scene::Trs_transform& transform = node->world_from_node_transform();
     m_position = transform.get_translation();
     // Normalize: the node's rotation comes from glm::decompose, which does not
     // guarantee a unit quaternion, and any error here would otherwise be carried
     // straight back into the next rotation.
     m_orientation = glm::normalize(transform.get_rotation());
-    if (m_roll_monitor.enabled) {
-        const glm::vec3 scale = transform.get_scale();
-        const glm::vec3 skew  = transform.get_skew();
-        const erhe::scene::Node* parent = node->get_parent_node().get();
-        roll_scope.set_detail(
-            fmt::format(
-                "node '{}', parent '{}', node scale ({}, {}, {}), node skew ({}, {}, {})",
-                node->get_name(),
-                (parent != nullptr) ? parent->get_name() : std::string{"(none)"},
-                scale.x, scale.y, scale.z,
-                skew.x, skew.y, skew.z
-            )
-        );
-    }
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
+    const glm::vec3 scale = transform.get_scale();
+    const glm::vec3 skew  = transform.get_skew();
+    const erhe::scene::Node* parent = node->get_parent_node().get();
+    ERHE_CAMERA_ROLL_DETAIL(
+        fmt::format(
+            "node '{}', parent '{}', node scale ({}, {}, {}), node skew ({}, {}, {})",
+            node->get_name(),
+            (parent != nullptr) ? parent->get_name() : std::string{"(none)"},
+            scale.x, scale.y, scale.z,
+            skew.x, skew.y, skew.z
+        )
+    );
+#endif
 }
 
 void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::scene::Node* new_node)
@@ -169,9 +170,11 @@ void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::sce
         return;
     }
     get_transform_from_node(new_node, "Frame_controller::handle_node_update (camera switch)");
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     // The camera changed: the previous camera's orientation is not a meaningful
     // baseline for roll attribution, so adopt the new one without reporting.
     m_roll_monitor.rebase(measure_camera_orientation(m_orientation));
+#endif
 }
 
 void Frame_controller::handle_node_transform_update()
@@ -208,6 +211,7 @@ void Frame_controller::update()
         return;
     }
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     if (m_roll_monitor.enabled) {
         const Roll_measurement measurement = measure_camera_orientation(m_orientation);
         if (measurement.orthonormality_error > m_orthonormality_warn_threshold) {
@@ -222,6 +226,7 @@ void Frame_controller::update()
             m_orthonormality_warn_threshold = measurement.orthonormality_error * 2.0f;
         }
     }
+#endif
 
     m_transform_update = true;
     node->set_world_from_node(erhe::scene::Trs_transform{m_position, m_orientation});
@@ -277,7 +282,7 @@ auto Frame_controller::get_active_control_value(const Variable variable) const -
 
 void Frame_controller::update_fixed_step()
 {
-    Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::update_fixed_step", m_orientation};
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::update_fixed_step", m_orientation);
 
     // TODO Only do once until next update()
     get_transform_from_node(get_node(), "Frame_controller::update_fixed_step readback (node -> controller)");
@@ -316,21 +321,22 @@ void Frame_controller::update_fixed_step()
 void Frame_controller::apply_rotation(float rx, float ry, float rz)
 {
     // log_input_frame->info("Frame_controller::apply_rotation() rx = {}, ry = {}, rz = {}", rx, ry, rz);
-    Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::apply_rotation", m_orientation};
-    if (m_roll_monitor.enabled) {
-        const glm::vec3 axis_x = get_axis_x();
-        roll_scope.set_detail(
-            fmt::format(
-                "rx {} (around local X ({}, {}, {})), ry {} (around world Y), rz {} (around local Z)",
-                rx, axis_x.x, axis_x.y, axis_x.z, ry, rz
-            )
-        );
-    }
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::apply_rotation", m_orientation);
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
+    const glm::vec3 detail_axis_x = get_axis_x();
+    ERHE_CAMERA_ROLL_DETAIL(
+        fmt::format(
+            "rx {} (around local X ({}, {}, {})), ry {} (around world Y), rz {} (around local Z)",
+            rx, detail_axis_x.x, detail_axis_x.y, detail_axis_x.z, ry, rz
+        )
+    );
+#endif
 
     m_orientation = compose_rotation(m_orientation, rx, ry, rz);
     update();
 }
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
 void Frame_controller::level_roll()
 {
     const Roll_measurement measurement = measure_camera_orientation(m_orientation);
@@ -342,8 +348,8 @@ void Frame_controller::level_roll()
         return;
     }
 
-    Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::level_roll", m_orientation};
-    roll_scope.set_detail(fmt::format("removing {:.6f} deg of roll", glm::degrees(measurement.roll_radians)));
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::level_roll", m_orientation);
+    ERHE_CAMERA_ROLL_DETAIL(fmt::format("removing {:.6f} deg of roll", glm::degrees(measurement.roll_radians)));
 
     // Rebuild the orientation from the current view direction and world up.
     const glm::vec3 back  = get_axis_z();
@@ -353,13 +359,12 @@ void Frame_controller::level_roll()
     m_orthonormality_warn_threshold = 1.0e-5f;
     update();
 }
+#endif // ERHE_CAMERA_ROLL_DIAGNOSTICS
 
 void Frame_controller::apply_tumble(glm::vec3 pivot, float rx, float ry, float rz)
 {
-    Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::apply_tumble", m_orientation};
-    if (m_roll_monitor.enabled) {
-        roll_scope.set_detail(fmt::format("pivot ({}, {}, {}), rx {}, ry {}, rz {}", pivot.x, pivot.y, pivot.z, rx, ry, rz));
-    }
+    ERHE_CAMERA_ROLL_SCOPE(m_roll_monitor, "Frame_controller::apply_tumble", m_orientation);
+    ERHE_CAMERA_ROLL_DETAIL(fmt::format("pivot ({}, {}, {}), rx {}, ry {}, rz {}", pivot.x, pivot.y, pivot.z, rx, ry, rz));
 
     const glm::quat new_orientation = compose_rotation(m_orientation, rx, ry, rz);
     {

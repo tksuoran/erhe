@@ -1,5 +1,28 @@
 #pragma once
 
+// Unwanted-camera-roll diagnostics.
+//
+// Off by default. The instrumentation sits in the fly camera's per-fixed-step
+// path and formats a detail string for every orientation write, so it must cost
+// nothing while it is not being used. With this at 0 every hook below compiles
+// away completely: no measurement, no string formatting, no per-controller
+// event storage, and no diagnostics UI.
+//
+// To re-enable, set this to 1 (or define it as a compile definition) and
+// rebuild. See the "Camera Roll Diagnostics" section of the Fly Camera window
+// and the editor.camera_roll log channel.
+//
+// Background: the fly camera picked up unwanted roll because Frame_controller
+// held its orientation in a matrix that nothing kept orthonormal. The
+// orientation is a normalized quaternion now, which makes that state
+// unexpressible, and the issue has not recurred - but the exact term that
+// amplified the error was never identified, so the instrumentation is kept.
+#if !defined(ERHE_CAMERA_ROLL_DIAGNOSTICS)
+#   define ERHE_CAMERA_ROLL_DIAGNOSTICS 0
+#endif
+
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -139,3 +162,21 @@ private:
 };
 
 }
+
+// Declares a scope named roll_scope that attributes any roll change made while
+// it is alive to source. watched must outlive the scope.
+#define ERHE_CAMERA_ROLL_SCOPE(monitor, source, watched) \
+    ::editor::Camera_roll_scope roll_scope{monitor, source, watched}
+
+// Attaches a detail string to the enclosing ERHE_CAMERA_ROLL_SCOPE. detail_expr
+// is only evaluated when the diagnostics are enabled, so the fmt::format calls
+// at the instrumented sites cost nothing when they are not.
+#define ERHE_CAMERA_ROLL_DETAIL(detail_expr) \
+    do { roll_scope.set_detail(detail_expr); } while (false)
+
+#else // ERHE_CAMERA_ROLL_DIAGNOSTICS
+
+#define ERHE_CAMERA_ROLL_SCOPE(monitor, source, watched) do {} while (false)
+#define ERHE_CAMERA_ROLL_DETAIL(detail_expr)             do {} while (false)
+
+#endif // ERHE_CAMERA_ROLL_DIAGNOSTICS

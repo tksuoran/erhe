@@ -452,6 +452,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     float tan_fov_side = tanf(min_fov_side);
     float fit_distance = size / (2.0f * tan_fov_side);
     glm::vec3 new_position = target_position - fit_distance * direction_normalized;
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     // create_look_at() derives right = cross(up, back); when the view direction is
     // (near) parallel to world up that cross product degenerates and the resulting
     // basis picks an essentially arbitrary roll. Framing a selection from directly
@@ -464,6 +465,7 @@ auto Fly_camera_frame_command::try_call() -> bool
             direction_normalized.x, direction_normalized.y, direction_normalized.z, up_dot_direction
         );
     }
+#endif
     glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});
     m_context.fly_camera_tool->hint_next_camera_write("Fly_camera.frame (create_look_at)");
     camera_node->set_world_from_node(new_world_from_node);
@@ -1278,6 +1280,7 @@ void Fly_camera_tool::record_heading_sample(int64_t timestamp_ns)
     m_sample_count += 1;
 }
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
 void Fly_camera_tool::hint_next_camera_write(const char* source)
 {
     if (!m_camera_controller) {
@@ -1336,11 +1339,14 @@ void Fly_camera_tool::check_camera_node_roll()
         (m_context.time != nullptr) ? m_context.time->get_frame_number() : uint64_t{0}
     );
 }
+#endif // ERHE_CAMERA_ROLL_DIAGNOSTICS
 
 void Fly_camera_tool::on_frame_begin()
 {
     update_camera();
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     check_camera_node_roll();
+#endif
 }
 
 void Fly_camera_tool::on_frame_end()
@@ -1398,6 +1404,7 @@ void Fly_camera_tool::show_input_axis_ui(const char* label, erhe::math::Input_ax
     ImGui::PopID();
 }
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
 void Fly_camera_tool::camera_roll_imgui()
 {
     if (!ImGui::TreeNodeEx("Camera Roll Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -1477,6 +1484,7 @@ void Fly_camera_tool::camera_roll_imgui()
 
     ImGui::TreePop();
 }
+#endif // ERHE_CAMERA_ROLL_DIAGNOSTICS
 
 void Fly_camera_tool::window_imgui()
 {
@@ -1509,7 +1517,9 @@ void Fly_camera_tool::window_imgui()
         camera_controls->sensitivity = m_sensitivity;
     }
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
     camera_roll_imgui();
+#endif
 
 
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;

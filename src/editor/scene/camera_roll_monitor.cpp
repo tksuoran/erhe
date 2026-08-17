@@ -1,5 +1,7 @@
 #include "scene/camera_roll_monitor.hpp"
 
+#if ERHE_CAMERA_ROLL_DIAGNOSTICS
+
 #include "editor_log.hpp"
 
 #include "erhe_verify/verify.hpp"
@@ -310,3 +312,5 @@ void Camera_roll_scope::set_detail(std::string detail)
 }
 
 }
+
+#endif // ERHE_CAMERA_ROLL_DIAGNOSTICS
