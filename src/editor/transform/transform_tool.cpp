@@ -1283,7 +1283,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
 
     for (auto& d : directions) {
         erhe::raytrace::Ray ray{
-            .origin    = node.position_in_world(),
+            .origin    = glm::vec3{node.position_in_world()},
             .t_near    = 0.0f,
             .direction = d,
             .time      = 0.0f,

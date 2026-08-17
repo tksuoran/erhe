@@ -1217,7 +1217,7 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
         erhe::primitive::Material_create_info{
             .name = "cube",
             .data = {
-                .base_color = glm::vec4{1.0, 1.0f, 1.0f, 1.0f},
+                .base_color = glm::vec3{1.0, 1.0f, 1.0f},
                 .roughness  = glm::vec2{0.3f, 0.4f},
                 .metallic   = 0.0f
             }

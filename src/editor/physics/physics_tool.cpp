@@ -502,7 +502,7 @@ void Physics_tool::tool_render(const Render_context& context)
     if (m_target_mesh) {
         erhe::raytrace::IScene& rt_scene = context.scene_view.get_scene_root()->get_raytrace_scene();
         erhe::raytrace::Ray ray{
-            .origin    = m_target_mesh->get_node()->position_in_world(),
+            .origin    = glm::vec3{m_target_mesh->get_node()->position_in_world()},
             .t_near    = 0.0f,
             .direction = glm::vec3{0.0f, -1.0f, 0.0f},
             .time      = 0.0f,
