@@ -6,6 +6,9 @@
 #include "test_helpers.hpp"
 
 #include "erhe_raytrace/bvh/bvh_scene.hpp"
+#include "erhe_raytrace/raytrace_executor.hpp"
+
+#include <taskflow/taskflow.hpp>
 
 #include <gtest/gtest.h>
 
@@ -487,6 +490,107 @@ TEST(Bvh_scene, DisabledMemberStaysInTlasButIsNotHit)
         Ray ray = make_grid_ray(3);
         Hit hit{};
         EXPECT_TRUE(scene->intersect(ray, hit));
+    }
+}
+
+// Sets the raytrace executor for the duration of a test, so that a failing
+// assertion cannot leave a dangling executor behind for the tests after it.
+class Scoped_executor
+{
+public:
+    explicit Scoped_executor(tf::Executor& executor)
+    {
+        erhe::raytrace::set_executor(&executor);
+    }
+    ~Scoped_executor()
+    {
+        erhe::raytrace::set_executor(nullptr);
+    }
+};
+
+TEST(Bvh_scene, AsyncTlasBuild)
+{
+    tf::Executor    executor{2};
+    Scoped_executor scoped_executor{executor};
+
+    std::vector<Test_geometry> geometries;
+    auto  scene     = IScene::create_unique("async");
+    auto* bvh_scene = as_bvh_scene(scene.get());
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        geometries.push_back(make_grid_geometry(static_cast<int>(i)));
+        scene->attach(geometries.back().geometry.get());
+    }
+
+    // Traversal has to give the same answers at every commit, whether the
+    // build has not started, is running, or has landed.
+    const auto check_all_rays = [&]() {
+        for (std::size_t i = 0; i < grid_size; ++i) {
+            Ray ray = make_grid_ray(static_cast<int>(i));
+            Hit hit{};
+            ASSERT_TRUE(scene->intersect(ray, hit)) << "miss for " << i;
+            EXPECT_EQ(hit.geometry, geometries[i].geometry.get());
+            EXPECT_NEAR(ray.t_far, 10.0f + static_cast<float>(i), 0.001f);
+        }
+    };
+
+    constexpr int max_commits = 10000;
+    int           commits     = 0;
+    while ((bvh_scene->get_tlas_member_count() != grid_size) && (commits < max_commits)) {
+        scene->commit();
+        ++commits;
+        check_all_rays();
+    }
+    EXPECT_LT(commits, max_commits) << "scene BVH was never taken into use";
+    EXPECT_EQ(bvh_scene->get_tlas_member_count(), grid_size);
+    check_all_rays();
+}
+
+TEST(Bvh_scene, AsyncTlasBuildWithModificationsInFlight)
+{
+    tf::Executor    executor{2};
+    Scoped_executor scoped_executor{executor};
+
+    Test_geometry tg = make_unit_triangle();
+
+    auto child_scene = IScene::create_unique("child");
+    child_scene->attach(tg.geometry.get());
+
+    std::vector<std::unique_ptr<IInstance>> instances;
+    auto scene = IScene::create_unique("async_moving");
+    for (std::size_t i = 0; i < grid_size; ++i) {
+        auto instance = IInstance::create_unique("inst");
+        instance->set_scene(child_scene.get());
+        instance->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{2.0f * static_cast<float>(i), 0.0f, 0.0f}));
+        scene->attach(instance.get());
+        instances.push_back(std::move(instance));
+    }
+
+    // One instance keeps moving, so builds may be aborted mid flight. Every
+    // commit still has to give the correct answer for both the moving and the
+    // settled instances.
+    for (int commit = 0; commit < 200; ++commit) {
+        const float x = 100.0f + static_cast<float>(commit);
+        instances[0]->set_transform(glm::translate(glm::mat4{1.0f}, glm::vec3{x, 0.0f, 0.0f}));
+        instances[0]->commit();
+        scene->commit();
+
+        {
+            Ray ray = make_ray({x + 0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+            Hit hit{};
+            ASSERT_TRUE(scene->intersect(ray, hit)) << "moving instance missed at commit " << commit;
+            EXPECT_EQ(hit.instance, instances[0].get());
+        }
+        {
+            Ray ray = make_ray({4.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+            Hit hit{};
+            ASSERT_TRUE(scene->intersect(ray, hit)) << "settled instance missed at commit " << commit;
+            EXPECT_EQ(hit.instance, instances[2].get());
+        }
+        {
+            Ray ray = make_ray({0.25f, 0.25f, 10.0f}, {0.0f, 0.0f, -1.0f});
+            Hit hit{};
+            EXPECT_FALSE(scene->intersect(ray, hit)) << "hit at the vacated position at commit " << commit;
+        }
     }
 }
 

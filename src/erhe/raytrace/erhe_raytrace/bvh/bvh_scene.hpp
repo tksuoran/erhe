@@ -14,7 +14,9 @@
 #include <bvh/v2/node.h>
 #include <bvh/v2/vec.h>
 
+#include <atomic>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -39,6 +41,10 @@ public:
     // Set while this child is covered by the scene level BVH. Children covered
     // by it are traversed through the BVH, the others are traversed linearly.
     bool          in_tlas           {false};
+
+    // Set while this child is part of a scene level BVH build which is still
+    // running. Modifying such a child aborts that build.
+    bool          in_pending_tlas   {false};
 
     [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
 };
@@ -135,18 +141,33 @@ private:
         std::vector<Tlas_member> members;
     };
 
+    // A scene level BVH build. Owned by a shared_ptr so that it outlives the
+    // scene if the scene is destroyed while the build is still running: the
+    // worker writes into the task, never into the scene.
+    class Tlas_build_task
+    {
+    public:
+        Tlas_build_input  input;
+        Tlas_build_result result;
+        std::size_t       static_child_count{0};
+        std::atomic<bool> done{false};
+    };
+
     auto intersect_children(Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool;
     auto intersect_tlas    (Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool;
 
     // Collects the children which have been static long enough. Main thread.
-    [[nodiscard]] auto make_tlas_build_input() const -> Tlas_build_input;
+    [[nodiscard]] auto make_tlas_build_input() -> Tlas_build_input;
 
     // Pure function of its input; safe to run on a worker thread.
-    [[nodiscard]] static auto build_tlas(const Tlas_build_input& input) -> Tlas_build_result;
+    static void build_tlas(Tlas_build_task& task);
 
-    void update_tlas    ();
-    void take_tlas      (Tlas_build_result&& result);
-    void invalidate_tlas();
+    void update_tlas         ();
+    void start_tlas_build    ();
+    void collect_tlas_build  ();
+    void clear_pending_build  ();
+    void take_tlas           (Tlas_build_result&& result);
+    void invalidate_tlas     ();
 
     [[nodiscard]] auto find_child(const Bvh_geometry* geometry) -> std::vector<Bvh_scene_child>::iterator;
     [[nodiscard]] auto find_child(const Bvh_instance* instance) -> std::vector<Bvh_scene_child>::iterator;
@@ -160,9 +181,14 @@ private:
     std::string                  m_debug_label;
     uint64_t                     m_tick{0};
 
-    Tlas                         m_tlas;
-    std::vector<Tlas_member>     m_tlas_members;
-    bool                         m_tlas_ready{false};
+    Tlas                             m_tlas;
+    std::vector<Tlas_member>         m_tlas_members;
+    bool                             m_tlas_ready{false};
+
+    // Build in flight, if any, and whether one of its members was modified
+    // while it was running (in which case its result is thrown away).
+    std::shared_ptr<Tlas_build_task> m_build_task;
+    bool                             m_build_aborted{false};
 
     // Number of static children at the time the current scene level BVH was
     // built. A change means children have settled or moved, and the BVH is

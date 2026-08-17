@@ -177,6 +177,7 @@
 #   include "erhe_renderer/jolt_debug_renderer.hpp"
 #endif
 #include "erhe_primitive/primitive_log.hpp"
+#include "erhe_raytrace/raytrace_executor.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_renderer/debug_renderer.hpp"
 #include "erhe_scene_renderer/content_wide_line_interface.hpp"
@@ -1328,6 +1329,10 @@ public:
         // Note: m_executor is also used at runtime, so it cannot be
         //       skipped even if parallel init is not used.
         m_executor = std::make_unique<tf::Executor>(thread_count);
+
+        // Scene level raytrace BVH builds run on the executor, so that they
+        // never land on the frame.
+        erhe::raytrace::set_executor(m_executor.get());
 
         // Declared outside the try so the loading screen survives past
         // the parallel-init catch block; the post-task init phase
@@ -2886,6 +2891,7 @@ public:
         // Commits the drained workers left behind own scene roots / shapes;
         // drop them now, while mesh memory and scenes are still alive.
         m_scene_commit_queue.clear();
+        erhe::raytrace::set_executor(nullptr);
         m_executor.reset();
 
         if (m_mcp_server) {

@@ -30,6 +30,7 @@ target_link_libraries(${_target}
         erhe::verify
         GTest::gtest
         glm::glm-header-only
+        Taskflow
 )
 
 erhe_target_settings(${_target} "erhe/tests")

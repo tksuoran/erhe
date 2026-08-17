@@ -61,6 +61,8 @@ erhe_target_sources_grouped(
     erhe_raytrace/iscene.hpp
     erhe_raytrace/ray.cpp
     erhe_raytrace/ray.hpp
+    erhe_raytrace/raytrace_executor.cpp
+    erhe_raytrace/raytrace_executor.hpp
     erhe_raytrace/raytrace_log.cpp
     erhe_raytrace/raytrace_log.hpp
 )
@@ -83,6 +85,7 @@ target_link_libraries(${_target}
         erhe::time
         fmt::fmt
         glm::glm
+        Taskflow
 )
 
 if (DEFINED ERHE_RAYTRACE_TARGET)

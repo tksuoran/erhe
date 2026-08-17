@@ -10,10 +10,13 @@
 #include "erhe_raytrace/bvh/bvh_instance.hpp"
 #include "erhe_raytrace/bvh/glm_conversions.hpp"
 #include "erhe_raytrace/iinstance.hpp"
+#include "erhe_raytrace/raytrace_executor.hpp"
 #include "erhe_raytrace/raytrace_log.hpp"
 #include "erhe_raytrace/ray.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
+
+#include <taskflow/taskflow.hpp>
 
 #include <bvh/v2/default_builder.h>
 #include <bvh/v2/ray.h>
@@ -139,6 +142,9 @@ void Bvh_scene::detach(IGeometry* geometry)
         return;
     }
     const bool was_in_tlas = i->in_tlas;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     m_children.erase(i);
     bvh_geometry->remove_parent_scene(this);
     if (was_in_tlas) {
@@ -161,6 +167,9 @@ void Bvh_scene::detach(IInstance* instance)
         return;
     }
     const bool was_in_tlas = i->in_tlas;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     m_children.erase(i);
     bvh_instance->remove_parent_scene(this);
     if (was_in_tlas) {
@@ -194,6 +203,9 @@ void Bvh_scene::on_child_modified(const Bvh_geometry* geometry)
         return;
     }
     i->last_modified_tick = m_tick;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     if (i->in_tlas) {
         invalidate_tlas();
     }
@@ -207,6 +219,9 @@ void Bvh_scene::on_child_modified(const Bvh_instance* instance)
         return;
     }
     i->last_modified_tick = m_tick;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     if (i->in_tlas) {
         invalidate_tlas();
     }
@@ -220,6 +235,9 @@ void Bvh_scene::on_child_destroyed(const Bvh_geometry* geometry)
         return;
     }
     const bool was_in_tlas = i->in_tlas;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     m_children.erase(i);
     if (was_in_tlas) {
         invalidate_tlas();
@@ -234,6 +252,9 @@ void Bvh_scene::on_child_destroyed(const Bvh_instance* instance)
         return;
     }
     const bool was_in_tlas = i->in_tlas;
+    if (i->in_pending_tlas) {
+        m_build_aborted = true;
+    }
     m_children.erase(i);
     if (was_in_tlas) {
         invalidate_tlas();
@@ -283,37 +304,85 @@ void Bvh_scene::commit()
 
 void Bvh_scene::update_tlas()
 {
+    collect_tlas_build();
+    if (m_build_task) {
+        // A build is running. Until it lands, traversal keeps using whatever
+        // the scene has now: the previous BVH, or the linear path.
+        return;
+    }
+    start_tlas_build();
+}
+
+void Bvh_scene::collect_tlas_build()
+{
+    if (!m_build_task || !m_build_task->done.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    const std::shared_ptr<Tlas_build_task> task = std::move(m_build_task);
+    m_build_task.reset();
+    clear_pending_build();
+
+    if (m_build_aborted) {
+        // A member was modified or detached while the build was running.
+        log_scene->trace("Bvh_scene {} scene BVH build discarded", m_debug_label);
+        m_build_aborted = false;
+        return;
+    }
+    take_tlas(std::move(task->result));
+    m_tlas_static_child_count = task->static_child_count;
+}
+
+void Bvh_scene::start_tlas_build()
+{
     const std::size_t static_child_count = get_static_child_count(k_static_delay_ticks);
     if (static_child_count < k_min_tlas_children) {
-        if (m_tlas_ready) {
-            invalidate_tlas();
-        }
+        invalidate_tlas();
         return;
     }
     if (m_tlas_ready && (static_child_count == m_tlas_static_child_count)) {
         return;
     }
 
-    const Tlas_build_input input = make_tlas_build_input();
-    if (input.members.size() < k_min_tlas_children) {
+    auto task = std::make_shared<Tlas_build_task>();
+    task->input              = make_tlas_build_input();
+    task->static_child_count = static_child_count;
+    if (task->input.members.size() < k_min_tlas_children) {
         // Not enough children with a valid bounding box.
-        if (m_tlas_ready) {
-            invalidate_tlas();
-        }
+        clear_pending_build();
+        invalidate_tlas();
         m_tlas_static_child_count = static_child_count;
         return;
     }
 
-    take_tlas(build_tlas(input));
-    m_tlas_static_child_count = static_child_count;
+    m_build_task    = task;
+    m_build_aborted = false;
+
+    tf::Executor* executor = get_executor();
+    if (executor != nullptr) {
+        executor->silent_async([task]() { build_tlas(*task); });
+    } else {
+        // No executor injected: build synchronously, so that tests and
+        // headless tools stay deterministic.
+        build_tlas(*task);
+        collect_tlas_build();
+    }
 }
 
-auto Bvh_scene::make_tlas_build_input() const -> Tlas_build_input
+void Bvh_scene::clear_pending_build()
+{
+    for (Bvh_scene_child& child : m_children) {
+        child.in_pending_tlas = false;
+    }
+}
+
+auto Bvh_scene::make_tlas_build_input() -> Tlas_build_input
 {
     ERHE_PROFILE_FUNCTION();
 
     Tlas_build_input input;
-    for (const Bvh_scene_child& child : m_children) {
+    for (Bvh_scene_child& child : m_children) {
+        child.in_pending_tlas = false;
         if ((m_tick - child.last_modified_tick) < k_static_delay_ticks) {
             continue;
         }
@@ -321,6 +390,7 @@ auto Bvh_scene::make_tlas_build_input() const -> Tlas_build_input
         if (!bbox.is_valid()) {
             continue;
         }
+        child.in_pending_tlas = true;
         input.members.push_back(Tlas_member{.geometry = child.geometry, .instance = child.instance});
         input.bboxes .push_back(Tlas_bbox{to_bvh(bbox.min), to_bvh(bbox.max)});
         input.centers.push_back(to_bvh(bbox.center()));
@@ -328,7 +398,7 @@ auto Bvh_scene::make_tlas_build_input() const -> Tlas_build_input
     return input;
 }
 
-auto Bvh_scene::build_tlas(const Tlas_build_input& input) -> Tlas_build_result
+void Bvh_scene::build_tlas(Tlas_build_task& task)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -338,10 +408,9 @@ auto Bvh_scene::build_tlas(const Tlas_build_input& input) -> Tlas_build_result
     // time matters much more than the last bit of traversal quality.
     config.quality = bvh::v2::DefaultBuilder<Tlas_node>::Quality::Low;
 
-    Tlas_build_result result;
-    result.tlas    = bvh::v2::DefaultBuilder<Tlas_node>::build(input.bboxes, input.centers, config);
-    result.members = input.members;
-    return result;
+    task.result.tlas    = bvh::v2::DefaultBuilder<Tlas_node>::build(task.input.bboxes, task.input.centers, config);
+    task.result.members = task.input.members;
+    task.done.store(true, std::memory_order_release);
 }
 
 void Bvh_scene::take_tlas(Tlas_build_result&& result)
