@@ -110,6 +110,20 @@ Scene_views::~Scene_views() noexcept
     // Swap to locals so the member is empty before any element destructors run;
     // erase() on the empty member is a no-op. Using clear() would corrupt the
     // vector because element destructors modify it mid-iteration.
+    //
+    // A view can also outlive us entirely: it is a Rendergraph_node and thus a
+    // Texture_reference, which Imgui_renderer retains for the frames it drew
+    // (Viewport_window::imgui() passes the rendergraph output node - the view
+    // itself when post processing is disabled - as the image texture
+    // reference). Imgui_renderer is declared before Scene_views in Editor, so
+    // it is destroyed later and can drop the last reference then. Clear the
+    // back-pointer flag so such a late destructor does not erase() from this
+    // destroyed object.
+    for (const std::shared_ptr<Viewport_scene_view>& viewport_scene_view : m_viewport_scene_views) {
+        if (viewport_scene_view) {
+            viewport_scene_view->forget_scene_views();
+        }
+    }
     {
         std::vector<std::shared_ptr<Viewport_scene_view>> views;
         views.swap(m_viewport_scene_views);

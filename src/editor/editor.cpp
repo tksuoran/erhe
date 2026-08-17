@@ -2861,6 +2861,18 @@ public:
             m_graphics_device->wait_idle();
         }
 
+        // The imgui renderer retains a Texture_reference for every image drawn
+        // in the last frames, and those references can be Rendergraph_nodes
+        // owned elsewhere (Viewport_window draws a viewport by passing its
+        // rendergraph output node, which is the Viewport_scene_view itself
+        // when post processing is disabled). Imgui_renderer is declared before
+        // Rendergraph and Scene_views, so it is destroyed last and would drop
+        // the last reference - running ~Viewport_scene_view - after its owner
+        // is gone. Release them here, GPU idle and everything still alive.
+        if (m_imgui_renderer) {
+            m_imgui_renderer->release_texture_references();
+        }
+
         // Wait for all async tasks to complete, then clear task handles
         // and destroy the executor while m_mesh_memory is still alive.
         // Without this, implicit member destruction destroys m_mesh_memory

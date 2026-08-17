@@ -150,6 +150,13 @@ public:
     void at_end_of_frame(std::function<void()>&& func);
     void next_frame     ();
 
+    // Drops every texture reference held for drawing (see
+    // m_retained_texture_references). A reference can be a Rendergraph_node
+    // owned by the application, so at teardown the application calls this -
+    // with the GPU idle, before it destroys those owners - instead of letting
+    // ~Imgui_renderer drop the last reference after the owner is gone.
+    void release_texture_references();
+
     auto primary_font        () const -> ImFont*;
     auto mono_font           () const -> ImFont*;
     auto vr_primary_font     () const -> ImFont*;

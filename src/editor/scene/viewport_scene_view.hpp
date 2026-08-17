@@ -193,6 +193,13 @@ public:
     // driven (orbit/zoom/pan/snap) by Navigation_gizmo_tool via erhe::commands.
     [[nodiscard]] auto get_navigation_gizmo                () -> ImViewGuizmo::Context&;
 
+    // Called by ~Scene_views on every view it still tracks, so a view that
+    // outlives Scene_views (it is a Rendergraph_node, and therefore also a
+    // Texture_reference that the Imgui_renderer may still retain) does not
+    // call erase() on the destroyed Scene_views from its own destructor.
+    // Same shape as Rendergraph_node's m_is_registered / ~Rendergraph.
+    void forget_scene_views() { m_registered_in_scene_views = false; }
+
 private:
     void update_hover_with_id_render();
 
@@ -207,6 +214,8 @@ private:
     auto resolve_pending_scene_and_camera() -> bool override;
 
     static int s_serial;
+
+    bool                               m_registered_in_scene_views{true};
 
     std::optional<glm::vec2>           m_position_in_viewport {};
 

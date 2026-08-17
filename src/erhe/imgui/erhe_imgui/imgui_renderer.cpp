@@ -612,6 +612,14 @@ void Imgui_renderer::next_frame()
     m_expired_texture_references.clear();
 }
 
+void Imgui_renderer::release_texture_references()
+{
+    std::lock_guard<std::recursive_mutex> lock{m_mutex};
+    m_draw_texture_references.clear();
+    m_retained_texture_references.clear();
+    m_expired_texture_references.clear();
+}
+
 static constexpr std::string_view c_imgui_render{"ImGui_ImplErhe_RenderDrawData()"};
 
 

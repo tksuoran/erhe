@@ -194,7 +194,16 @@ Viewport_scene_view::Viewport_scene_view(
 
 Viewport_scene_view::~Viewport_scene_view() noexcept
 {
-    m_context.scene_views->erase(this);
+    // m_registered_in_scene_views is cleared by ~Scene_views for the views it
+    // still tracks. A view can outlive Scene_views: it is a Rendergraph_node,
+    // and thus also a Texture_reference that Imgui_renderer retains for the
+    // frames it was drawn in (Viewport_window passes the rendergraph output
+    // node - which is the view itself when post processing is disabled - as
+    // the imgui image texture reference). Calling erase() then would touch a
+    // destroyed vector.
+    if (m_registered_in_scene_views) {
+        m_context.scene_views->erase(this);
+    }
 }
 
 void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
