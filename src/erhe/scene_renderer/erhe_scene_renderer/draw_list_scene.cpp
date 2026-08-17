@@ -469,6 +469,16 @@ void Draw_list_scene::write_object_gpu_slots(const uint32_t object_index)
 void Draw_list_scene::refresh_object_records(const uint32_t object_index)
 {
     Draw_list_object& object = m_objects[object_index];
+    // Same detach race as register_object(): a queued refresh can flush after
+    // the mesh lost its node, with the matching unregister still behind it in
+    // the queue. The records cannot be rewritten without a node transform;
+    // leave them as they are, the unregister removes the entries.
+    {
+        const erhe::scene::Mesh* refresh_mesh = object.info.mesh.get();
+        if ((refresh_mesh == nullptr) || (refresh_mesh->get_node() == nullptr)) {
+            return;
+        }
+    }
     for (const Draw_list_entry_location& location : object.locations) {
         const Draw_list_entry& entry = m_draw_lists[location.draw_list_index].entries[location.entry_index];
         write_entry_record(object, entry, get_record(location));
@@ -583,6 +593,20 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
     const std::unordered_map<const erhe::scene::Mesh*, uint32_t>::const_iterator existing = m_object_index_by_mesh.find(mesh);
     if (existing != m_object_index_by_mesh.end()) {
         unregister_object(Draw_list_object_id{existing->second, m_objects[existing->second].generation});
+    }
+
+    // A draw list object exists only for a node-attached mesh: every record
+    // field is written from the node's world transform. Registration arrives
+    // through the pending queue (enqueue_register), so the mesh can have been
+    // detached again between the enqueue and this flush - the queue then also
+    // holds the matching unregister, but this register op is processed first.
+    // The controller placeholder mesh does exactly that: it is attached at
+    // Controller_visualization construction and detached in the same frame,
+    // once the real controller render model has loaded. Decline it here; the
+    // attach that gives the mesh a node enqueues a fresh registration.
+    if (mesh->get_node() == nullptr) {
+        log_draw_list->trace("Not registering mesh '{}': not attached to a node", mesh->get_name());
+        return Draw_list_object_id{};
     }
 
     const uint32_t    object_index = allocate_object();
