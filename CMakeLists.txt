@@ -472,6 +472,11 @@ elseif (${ERHE_GRAPHICS_API} STREQUAL "vulkan")
         GIT_SHALLOW       TRUE
         GITHUB_REPOSITORY KhronosGroup/Vulkan-Headers
     )
+    # Plain path to the CPM Vulkan headers, for dependencies that want an
+    # include directory rather than the Vulkan::Headers target (whose
+    # INTERFACE_INCLUDE_DIRECTORIES is a $<BUILD_INTERFACE:...> genex).
+    # Consumed by the OpenXR-SDK fetch further down.
+    set(ERHE_VULKAN_HEADERS_INCLUDE_DIR "${Vulkan-Headers_SOURCE_DIR}/include")
     CPMAddPackage(
         NAME              VulkanMemoryAllocator
         VERSION           3.3.0
@@ -1024,15 +1029,28 @@ if (${ERHE_XR_LIBRARY} STREQUAL "openxr")
     # `patch` invocation - see the "Do not use CPM's PATCHES keyword" note in
     # AGENTS.md. Move back to KhronosGroup/OpenXR-SDK-Source and bump the tag
     # once upstream carries the fix.
+    #
+    # The fork additionally adds OPENXR_VULKAN_INCLUDE_DIR, used below.
+    #
+    # Pin a TAG, not a raw commit SHA. GIT_SHALLOW clones with
+    # --depth 1 --branch <ref>, which git only accepts for a named ref.
     CPMAddPackage(
         NAME              OpenXR-SDK
         VERSION           1.1.59
-        GIT_TAG           9e4c7dc2a56e82e2de9a12cb11c13f799783e9f9
+        GIT_TAG           erhe-2026-08-17
         GITHUB_REPOSITORY tksuoran/OpenXR-SDK-Source
+        GIT_SHALLOW       TRUE
         OPTIONS
             "BUILD_API_LAYERS ON"
-                 "BUILD_TESTS OFF"
-
+            "BUILD_TESTS OFF"
+            # OpenXR only needs the Vulkan *headers* (its loader and API
+            # layers include vulkan/vulkan.h; nothing links vulkan-1). Hand it
+            # the CPM-fetched Vulkan-Headers so it does not call
+            # find_package(Vulkan) and drag in an installed Vulkan SDK, whose
+            # version would be unrelated to the headers the rest of erhe
+            # compiles against. Empty for non-Vulkan graphics backends, where
+            # the fork falls back to find_package(Vulkan) as upstream does.
+            "OPENXR_VULKAN_INCLUDE_DIR ${ERHE_VULKAN_HEADERS_INCLUDE_DIR}"
     )
     message(STATUS "Erhe configured to use OpenXR for XR.")
     add_definitions(-DERHE_XR_LIBRARY_OPENXR)
