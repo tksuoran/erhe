@@ -268,9 +268,9 @@ void Bone_visualization::apply_style_colors()
         return;
     }
     const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
-    m_material         ->data.base_color = style.skin_bone_color_a;
-    m_selected_material->data.base_color = style.bone_selected_color;
-    m_hover_material   ->data.base_color = style.bone_hover_color;
+    m_material         ->data.base_color = glm::vec3{style.skin_bone_color_a};
+    m_selected_material->data.base_color = glm::vec3{style.bone_selected_color};
+    m_hover_material   ->data.base_color = glm::vec3{style.bone_hover_color};
 }
 
 auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& joint) -> Proxy

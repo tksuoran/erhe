@@ -84,12 +84,12 @@ auto Subtool::get_axis_direction() const -> vec3
 {
     const glm::mat4& basis = get_basis();
     switch (m_axis_mask) {
-        case Axis_mask::x:  return basis[0];
-        case Axis_mask::yz: return basis[0];
-        case Axis_mask::y:  return basis[1];
-        case Axis_mask::xz: return basis[1];
-        case Axis_mask::z:  return basis[2];
-        case Axis_mask::xy: return basis[2];
+        case Axis_mask::x:  return vec3{basis[0]};
+        case Axis_mask::yz: return vec3{basis[0]};
+        case Axis_mask::y:  return vec3{basis[1]};
+        case Axis_mask::xz: return vec3{basis[1]};
+        case Axis_mask::z:  return vec3{basis[2]};
+        case Axis_mask::xy: return vec3{basis[2]};
         default: {
             ERHE_FATAL("get_axis_direction() failed for axis mask %02x", m_axis_mask);
             break;
@@ -101,12 +101,12 @@ auto Subtool::get_plane_normal(const bool world) const -> vec3
 {
     const glm::mat4& basis = get_basis(world);
     switch (m_axis_mask) {
-        case Axis_mask::x:  return basis[0];
-        case Axis_mask::yz: return basis[0];
-        case Axis_mask::y:  return basis[1];
-        case Axis_mask::xz: return basis[1];
-        case Axis_mask::z:  return basis[2];
-        case Axis_mask::xy: return basis[2];
+        case Axis_mask::x:  return vec3{basis[0]};
+        case Axis_mask::yz: return vec3{basis[0]};
+        case Axis_mask::y:  return vec3{basis[1]};
+        case Axis_mask::xz: return vec3{basis[1]};
+        case Axis_mask::z:  return vec3{basis[2]};
+        case Axis_mask::xy: return vec3{basis[2]};
         default: {
             ERHE_FATAL("get_plane_normal(): bad axis mask = %02x", m_axis_mask);
             break;
@@ -118,12 +118,12 @@ auto Subtool::get_plane_side(const bool world) const -> vec3
 {
     const glm::mat4& basis = get_basis(world);
     switch (m_axis_mask) {
-        case Axis_mask::x:  return basis[1];
-        case Axis_mask::yz: return basis[1];
-        case Axis_mask::y:  return basis[2];
-        case Axis_mask::xz: return basis[2];
-        case Axis_mask::z:  return basis[0];
-        case Axis_mask::xy: return basis[0];
+        case Axis_mask::x:  return vec3{basis[1]};
+        case Axis_mask::yz: return vec3{basis[1]};
+        case Axis_mask::y:  return vec3{basis[2]};
+        case Axis_mask::xz: return vec3{basis[2]};
+        case Axis_mask::z:  return vec3{basis[0]};
+        case Axis_mask::xy: return vec3{basis[0]};
         default: {
             ERHE_FATAL("get_plane_side(): bad axis mask = %02x", m_axis_mask);
             break;

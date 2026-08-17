@@ -116,7 +116,7 @@ void write_camera_entry(
     const double    grid_offset_x_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.x) / level0_cell_size);
     //const double    grid_offset_y_in_grid = level0_cell_size * std::floor(static_cast<double>(camera_in_grid.y) / level0_cell_size);
     const double    grid_offset_z_in_grid = level0_cell_size * std::round(static_cast<double>(camera_in_grid.z) / level0_cell_size);
-    const glm::vec3 grid_offset_in_world  = world_from_grid * glm::vec4{static_cast<float>(grid_offset_x_in_grid), 0.0f, static_cast<float>(grid_offset_z_in_grid), 0.0f};
+    const glm::vec3 grid_offset_in_world  = glm::vec3{world_from_grid * glm::vec4{static_cast<float>(grid_offset_x_in_grid), 0.0f, static_cast<float>(grid_offset_z_in_grid), 0.0f}};
     const erhe::scene::Trs_transform world_from_camera_node_transform_for_grid{
         world_from_camera.get_translation() - grid_offset_in_world,
         world_from_camera.get_rotation()

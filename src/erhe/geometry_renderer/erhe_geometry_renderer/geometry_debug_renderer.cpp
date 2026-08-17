@@ -43,8 +43,8 @@ void debug_draw(
                 }
                 const erhe::geometry::Geometry::Debug_vertex& v0 = entry.vertices[0];
                 const erhe::geometry::Geometry::Debug_vertex& v1 = entry.vertices[1];
-                const glm::vec4 p0{world_from_local * glm::vec4{glm::vec3{v0.position}, 1.0f}};
-                const glm::vec4 p1{world_from_local * glm::vec4{glm::vec3{v1.position}, 1.0f}};
+                const glm::vec3 p0{world_from_local * glm::vec4{glm::vec3{v0.position}, 1.0f}};
+                const glm::vec3 p1{world_from_local * glm::vec4{glm::vec3{v1.position}, 1.0f}};
                 line_renderer.add_line(v0.color, v0.width, p0, v1.color, v1.width, p1);
             }
             for (const erhe::geometry::Geometry::Debug_text& entry : debug_texts) {

@@ -310,7 +310,7 @@ void Brush_preview::render_preview(
     );
 
     // Frame bounding volume into camera view
-    glm::vec3   camera_position      = m_camera_node->position_in_world();
+    glm::vec3   camera_position      = glm::vec3{m_camera_node->position_in_world()};
     glm::vec3   direction            = target_position - camera_position;
     glm::vec3   direction_normalized = glm::normalize(target_position - camera_position);
     const       erhe::scene::Projection::Fov_sides fov_sides = m_camera->projection()->get_fov_sides(viewport);

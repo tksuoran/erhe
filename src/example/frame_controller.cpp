@@ -104,10 +104,10 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node)
     const vec4 position  = node->position_in_world();
     const vec4 direction = node->direction_in_world();
 
-    m_position = position;
+    m_position = vec3{position};
     float heading  {0.0f};
     float elevation{0.0f};
-    erhe::math::cartesian_to_heading_elevation(direction, elevation, heading);
+    erhe::math::cartesian_to_heading_elevation(vec3{direction}, elevation, heading);
     m_elevation = elevation;
     m_heading   = heading;
 

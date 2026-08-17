@@ -539,16 +539,16 @@ auto Node::direction_in_world() const -> glm::vec4
 
 auto Node::look_at(const glm::vec3 target_position) const -> glm::mat4
 {
-    const glm::vec3 eye_position = position_in_world();
-    const glm::vec3 up_direction = world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f};
+    const glm::vec3 eye_position = glm::vec3{position_in_world()};
+    const glm::vec3 up_direction = glm::vec3{world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     return erhe::math::create_look_at(eye_position, target_position, up_direction);
 }
 
 auto Node::look_at(const Node& target) const -> glm::mat4
 {
-    const glm::vec3 eye_position    = position_in_world();
-    const glm::vec3 target_position = target.position_in_world();
-    const glm::vec3 up_direction    = world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f};
+    const glm::vec3 eye_position    = glm::vec3{position_in_world()};
+    const glm::vec3 target_position = glm::vec3{target.position_in_world()};
+    const glm::vec3 up_direction    = glm::vec3{world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     return erhe::math::create_look_at(eye_position, target_position, up_direction);
 }
 

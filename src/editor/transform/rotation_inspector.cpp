@@ -46,7 +46,7 @@ void Rotation_inspector::set_euler_order(const Euler_angle_order euler_angle_ord
 
 void Rotation_inspector::set_matrix(const mat3& m)
 {
-    m_matrix     = m;
+    m_matrix     = mat4{m};
     m_quaternion = quat_cast(m);
     update_euler_angles_from_matrix();
     update_axis_angle_from_quaternion();
@@ -55,7 +55,7 @@ void Rotation_inspector::set_matrix(const mat3& m)
 void Rotation_inspector::set_quaternion(const quat& q)
 {
     m_quaternion = q;
-    m_matrix     = mat3_cast(q);
+    m_matrix     = mat4{mat3_cast(q)};
     update_euler_angles_from_matrix();
     update_axis_angle_from_quaternion();
 }
@@ -65,7 +65,7 @@ void Rotation_inspector::set_axis_angle(const glm::vec3 axis, const float angle)
     m_axis       = axis;
     m_angle      = angle;
     m_quaternion = glm::angleAxis(angle, axis);
-    m_matrix     = mat3_cast(m_quaternion);
+    m_matrix     = mat4{mat3_cast(m_quaternion)};
     update_euler_angles_from_matrix();
 }
 
@@ -185,7 +185,7 @@ void Rotation_inspector::update_from_axis_angle()
 
 void Rotation_inspector::update_from_quaternion()
 {
-    m_matrix= mat3_cast(normalize(m_quaternion));
+    m_matrix= mat4{mat3_cast(normalize(m_quaternion))};
     update_euler_angles_from_matrix();
 }
 
@@ -228,9 +228,9 @@ void Rotation_inspector::imgui(
     switch (m_representation) {
         case Representation::e_matrix: {
             p.add_entry("Matrix", [this]() {
-                const glm::vec3 col0 = m_matrix[0];
-                const glm::vec3 col1 = m_matrix[1];
-                const glm::vec3 col2 = m_matrix[2];
+                const glm::vec3 col0 = glm::vec3{m_matrix[0]};
+                const glm::vec3 col1 = glm::vec3{m_matrix[1]};
+                const glm::vec3 col2 = glm::vec3{m_matrix[2]};
                 ImGui::BeginTable("Matrix", 3, ImGuiTableFlags_None, ImVec2{130.0f, 0.0});
                 ImGui::TableNextColumn(); ImGui::Text("%.3f", col0[0]);
                 ImGui::TableNextColumn(); ImGui::Text("%.3f", col1[0]);

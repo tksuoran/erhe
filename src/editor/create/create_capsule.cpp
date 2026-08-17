@@ -38,7 +38,7 @@ void Create_capsule::render_preview(const Create_preview_settings& preview_setti
         m_parameters.length,
         m_parameters.bottom_radius,
         m_parameters.top_radius,
-        camera_node->position_in_world(),
+        glm::vec3{camera_node->position_in_world()},
         preview_settings.ideal_shape ? std::max(80, m_parameters.slice_count) : m_parameters.slice_count
     );
 }

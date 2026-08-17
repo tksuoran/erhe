@@ -38,7 +38,7 @@ void Create_torus::render_preview(const Create_preview_settings& preview_setting
         m_parameters.minor_radius,
         m_use_debug_camera
             ? m_debug_camera
-            : camera_node->position_in_world(),
+            : glm::vec3{camera_node->position_in_world()},
         preview_settings.ideal_shape ? std::max(20, m_parameters.major_steps) : m_parameters.major_steps,
         preview_settings.ideal_shape ? std::max(10, m_parameters.minor_steps) : m_parameters.minor_steps,
         m_epsilon

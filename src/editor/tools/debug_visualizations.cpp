@@ -339,7 +339,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
             joint->is_selected() ? style.bone_selected_color :
             (((joint->get_depth() % 2) == 0) ? style.skin_bone_color_a : style.skin_bone_color_b)
         );
-        vec3 a = joint->position_in_world();
+        vec3 a = vec3{joint->position_in_world()};
         vec3 b = a + vec3{0.2f, 0.0f, 0.0f};
 
         // Search for child to connect bone tip:
@@ -350,7 +350,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
             }
             const auto& other_joint = skin.skin_data.joints[j];
             if (other_joint->get_parent_node() == joint) {
-                b = other_joint->position_in_world();
+                b = vec3{other_joint->position_in_world()};
                 child_found = true;
                 break;
             }
@@ -359,7 +359,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
             // No child, try to guess bone tip compared to parent (if it has parent):
             const auto& parent = joint->get_parent_node();
             if (parent) {
-                const vec3 parent_position = parent->position_in_world();
+                const vec3 parent_position = vec3{parent->position_in_world()};
                 const float distance = glm::distance(parent_position, a);
                 vec3 joint_local_axis_y = joint->transform_direction_from_local_to_world(axis_y);
                 b = a + distance * joint_local_axis_y;
@@ -1072,7 +1072,7 @@ void Debug_visualizations::spot_light_visualization(const Light_visualization_co
 
     const mat4 m             = node->world_from_node();
     const vec3 view_position = node->transform_point_from_world_to_local(
-        camera_node->position_in_world()
+        vec3{camera_node->position_in_world()}
     );
 
     //auto* app_time = get<App_time>();
@@ -1602,7 +1602,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
             std::vector<glm::vec2> ndc_points;
             for (const glm::vec3& p : selection_convex_hull.points) {
                 glm::vec4 p_in_clip = clip_from_world * glm::vec4(p, 1.0f);
-                glm::vec2 p_in_ndc  = glm::vec3{p_in_clip} / p_in_clip.w;
+                glm::vec2 p_in_ndc  = glm::vec2{glm::vec3{p_in_clip} / p_in_clip.w};
                 ndc_points.push_back(p_in_ndc);
             }
 
@@ -1993,7 +1993,7 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
                     const glm::vec4   p4_in_node = glm::vec4{to_glm_vec3(p) + style.facet_label_line_length * to_glm_vec3(n), 1.0f};
                     const uint32_t    text_color = erhe::math::convert_float4_to_uint32(style.facet_label_text_color);
 
-                    label(context, clip_from_world, world_from_node, p4_in_node, text_color, label_text);
+                    label(context, clip_from_world, world_from_node, glm::vec3{p4_in_node}, text_color, label_text);
                 }
 
                 if (should_visualize(m_settings.corner_labels, is_mesh_selected, is_mesh_hovered)) {

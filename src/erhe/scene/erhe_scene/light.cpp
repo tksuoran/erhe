@@ -304,14 +304,15 @@ auto Light::stable_directional_light_projection_transforms(
             std::fmod(view_camera_position_in_light.y, texel_size.y)
         }
         : vec2{0.0f, 0.0f};
-    const vec4 snapped_view_camera_position_in_light{
+    // vec3, not vec4: world_from_light is the rotation-only mat3 above, so a w
+    // component was silently truncated here anyway.
+    const vec3 snapped_view_camera_position_in_light{
         view_camera_position_in_light.x - snap_adjustment.x,
         view_camera_position_in_light.y - snap_adjustment.y,
-        view_camera_position_in_light.z,
-        1.0f
+        view_camera_position_in_light.z
     };
 
-    const vec3 snapped_view_camera_position  = vec3{world_from_light * snapped_view_camera_position_in_light};
+    const vec3 snapped_view_camera_position  = world_from_light * snapped_view_camera_position_in_light;
     const vec3 snapped_light_camera_position = snapped_view_camera_position + r * light_direction;
 
     // Snapped transfroms

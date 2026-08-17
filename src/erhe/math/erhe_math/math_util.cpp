@@ -944,7 +944,7 @@ auto extract_frustum_planes(const glm::mat4& clip_from_world, float clip_z_near,
 {
     auto transform = [&world_from_clip](float x, float y, float z) -> glm::vec3 {
         const glm::vec4 h = world_from_clip * glm::vec4{x, y, z, 1.0f};
-        return h.w != 0.0f ? h / h.w : glm::vec3{0.0f, 0.0f, 0.0f};
+        return (h.w != 0.0f) ? glm::vec3{h / h.w} : glm::vec3{0.0f, 0.0f, 0.0f};
     };
     return {
         transform(-1.0f, -1.0f, clip_z_near), // 0    2------3

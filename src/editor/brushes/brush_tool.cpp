@@ -595,7 +595,7 @@ auto Brush_tool::get_world_from_grid_hover_point() const -> glm::mat4
         return glm::mat4{1};
     }
 
-    const glm::vec3 position_in_grid0 = hover_grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f};
+    const glm::vec3 position_in_grid0 = glm::vec3{hover_grid->grid_from_world() * glm::vec4{m_hover.position.value(), 1.0f}};
     const glm::vec3 position_in_grid  = m_snap_to_grid ? hover_grid->snap_grid_position(position_in_grid0) : position_in_grid0;
     const glm::mat4 offset            = erhe::math::create_translation<float>(position_in_grid);
     const glm::mat4 world_from_grid   = hover_grid->world_from_grid() * offset;
