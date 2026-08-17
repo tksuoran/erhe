@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -29,6 +30,9 @@ public:
 };
 
 [[nodiscard]] auto measure_camera_orientation(const glm::mat4& world_from_node) -> Roll_measurement;
+// Deliberately does not normalize: a non-unit quaternion shows up as basis scale
+// in the measurement, which is exactly the defect worth seeing.
+[[nodiscard]] auto measure_camera_orientation(const glm::quat& world_from_node) -> Roll_measurement;
 
 class Camera_roll_event
 {
@@ -61,17 +65,17 @@ public:
     void set_frame_number(uint64_t frame_number);
 
     // Scope bookkeeping - prefer Camera_roll_scope over calling these directly.
-    void push(const char* source, const glm::mat4& world_from_node);
-    void pop (const glm::mat4& world_from_node, const std::string& detail);
+    void push(const char* source, const Roll_measurement& current);
+    void pop (const Roll_measurement& current, const std::string& detail);
 
     // One-shot check for a site that is not a scope (a single write, or a
     // periodic sanity check). Compares against the last seen orientation.
-    void sample(const char* source, const glm::mat4& world_from_node, const std::string& detail);
+    void sample(const char* source, const Roll_measurement& current, const std::string& detail);
 
     // Forget the current orientation without reporting: use when the camera
     // legitimately jumps (camera switch, deserialize) and comparing to the
     // previous camera's orientation would be meaningless.
-    void rebase(const glm::mat4& world_from_node);
+    void rebase(const Roll_measurement& current);
 
     void clear();
 
@@ -120,7 +124,7 @@ class Camera_roll_scope
 public:
     // watched must outlive the scope - pass the orientation member that the
     // instrumented code mutates in place.
-    Camera_roll_scope(Camera_roll_monitor& monitor, const char* source, const glm::mat4& watched);
+    Camera_roll_scope(Camera_roll_monitor& monitor, const char* source, const glm::quat& watched);
     ~Camera_roll_scope();
 
     Camera_roll_scope (const Camera_roll_scope&) = delete;
@@ -130,7 +134,7 @@ public:
 
 private:
     Camera_roll_monitor& m_monitor;
-    const glm::mat4&     m_watched;
+    const glm::quat&     m_watched;
     std::string          m_detail;
 };
 

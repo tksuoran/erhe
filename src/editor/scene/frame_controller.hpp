@@ -45,6 +45,7 @@ public:
     void update                 ();
     void update_fixed_step      ();
     void set_position           (glm::vec3 position);
+    void set_orientation        (const glm::quat& orientation);
     void set_orientation        (const glm::mat4& orientation);
     // source names the caller for the unwanted-roll diagnostics: this readback
     // is where transforms written by anyone else enter the controller.
@@ -55,7 +56,8 @@ public:
     void set_active_control_value(Variable variable, float value);
 
     [[nodiscard]] auto get_position            () const -> glm::vec3;
-    [[nodiscard]] auto get_orientation         () const -> glm::mat4;
+    [[nodiscard]] auto get_orientation         () const -> glm::quat;
+    [[nodiscard]] auto get_orientation_matrix  () const -> glm::mat4;
     [[nodiscard]] auto get_axis_x              () const -> glm::vec3;
     [[nodiscard]] auto get_axis_y              () const -> glm::vec3;
     [[nodiscard]] auto get_axis_z              () const -> glm::vec3;
@@ -85,16 +87,23 @@ public:
     float move_speed{0.2f};
 
 private:
-    // glm does not default-initialize, and both are read (by update() and by the
-    // roll diagnostics) before the first node is attached.
+    // The orientation is a quaternion, normalized after every composition, and it
+    // is the only representation the controller keeps. A matrix member used to
+    // hold it, which made a non-rotation basis expressible: create_rotation() was
+    // fed the raw (unnormalized) matrix column as its axis, and the write/readback
+    // round trip through the node transform (mat4 -> quat_cast -> toMat4, neither
+    // of which normalizes) preserved the resulting scale instead of projecting it
+    // back onto a rotation. Each fixed step then multiplied the deviation by ~1.5
+    // until the camera basis had a determinant of 1.6 and tens of degrees of roll.
+    //
+    // glm does not default-initialize, and both members are read (by update() and
+    // by the roll diagnostics) before the first node is attached.
     glm::vec3           m_position{0.0f, 0.0f, 0.0f};
-    glm::mat4           m_orientation{1.0f};
+    glm::quat           m_orientation{1.0f, 0.0f, 0.0f, 0.0f};
     bool                m_transform_update{false};
     Camera_roll_monitor m_roll_monitor;
-    // Basis drift watchdog: m_orientation is repeatedly multiplied by rotation
-    // matrices and round-tripped through the node transform (which decomposes
-    // with glm::decompose), and it is never re-orthonormalized. Warn with
-    // geometric backoff so growing drift is visible without spamming the log.
+    // Drift watchdog. With a normalized quaternion this should never fire; it
+    // stays as a regression guard for the failure mode described above.
     float               m_orthonormality_warn_threshold{1.0e-5f};
 };
 

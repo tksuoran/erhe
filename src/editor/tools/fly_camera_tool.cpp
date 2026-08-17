@@ -438,7 +438,7 @@ auto Fly_camera_frame_command::try_call() -> bool
         return false;
     }
 
-    glm::vec3 camera_position = camera_node->position_in_world();
+    glm::vec3 camera_position = glm::vec3{camera_node->position_in_world()};
     glm::vec3 target_position = bbox.center();
     glm::vec3 direction = target_position - camera_position;
     glm::vec3 direction_normalized = glm::normalize(target_position - camera_position);
@@ -517,7 +517,7 @@ void Fly_camera_tool::synthesize_input()
     int64_t timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 
     m_before_position    = m_camera_controller->get_position();
-    m_before_orientation = glm::quat_cast(m_camera_controller->get_orientation());
+    m_before_orientation = m_camera_controller->get_orientation();
 
     float mouse_x{0.0f};
     float mouse_y{0.0f};
@@ -647,7 +647,7 @@ void Fly_camera_tool::synthesize_input()
             }
 
             m_after_position    = m_camera_controller->get_position();
-            m_after_orientation = glm::quat_cast(m_camera_controller->get_orientation());
+            m_after_orientation = m_camera_controller->get_orientation();
 
             const glm::quat orientation_delta = m_after_orientation * glm::inverse(m_before_orientation);
             const float     yaw_delta         = glm::yaw(orientation_delta);
@@ -1253,7 +1253,7 @@ void Fly_camera_tool::record_translation_sample(int64_t time_ns)
     const double time_ms_ = static_cast<double>(time_ns_) / 1'000'000.0;
     const float  time_ms  = static_cast<float>(time_ms_);
 
-    const glm::vec3 p = node->position_in_world();
+    const glm::vec3 p = glm::vec3{node->position_in_world()};
     float tx = m_camera_controller->translate_x.current_value();
     float ty = m_camera_controller->translate_y.current_value();
     float tz = m_camera_controller->translate_z.current_value();
@@ -1272,8 +1272,7 @@ void Fly_camera_tool::record_heading_sample(int64_t timestamp_ns)
     const float  time_ms  = static_cast<float>(time_ms_);
 
     // record_sample(timestamp_ns);
-    const glm::mat4 orientation_mat4 = m_camera_controller->get_orientation();
-    const glm::quat orientation_quat = glm::quat_cast(orientation_mat4);
+    const glm::quat orientation_quat = m_camera_controller->get_orientation();
     const float     heading          = glm::yaw(orientation_quat);
     m_heading_graph.samples.push_back(ImVec2{time_ms, heading});
     m_sample_count += 1;

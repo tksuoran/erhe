@@ -18,6 +18,35 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
+namespace {
+
+constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};
+
+// Pitch around the camera's own X, yaw around world Y, roll around the camera's
+// own Z - all three axes taken from the incoming orientation, matching the
+// original matrix code. The single normalize at the end is what keeps the result
+// a rotation: without it, every composition leaks a little scale into the basis
+// and the next call amplifies it.
+[[nodiscard]] auto compose_rotation(const glm::quat& orientation, const float rx, const float ry, const float rz) -> glm::quat
+{
+    const glm::vec3 axis_x = orientation * glm::vec3{1.0f, 0.0f, 0.0f};
+    const glm::vec3 axis_z = orientation * glm::vec3{0.0f, 0.0f, 1.0f};
+
+    glm::quat result = orientation;
+    if (rx != 0.0f) {
+        result = glm::angleAxis(rx, axis_x) * result;
+    }
+    if (ry != 0.0f) {
+        result = glm::angleAxis(ry, world_up) * result;
+    }
+    if (rz != 0.0f) {
+        result = glm::angleAxis(rz, axis_z) * result;
+    }
+    return glm::normalize(result);
+}
+
+} // anonymous namespace
+
 Frame_controller::Frame_controller()
     : Item{"frame controller"}
 {
@@ -71,11 +100,18 @@ void Frame_controller::set_position(const vec3 position)
     update();
 }
 
-void Frame_controller::set_orientation(const glm::mat4& orientation)
+void Frame_controller::set_orientation(const glm::quat& orientation)
 {
     Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::set_orientation", m_orientation};
-    m_orientation = orientation;
+    m_orientation = glm::normalize(orientation);
     update();
+}
+
+void Frame_controller::set_orientation(const glm::mat4& orientation)
+{
+    // quat_cast does not project a non-orthonormal matrix onto the nearest
+    // rotation, so normalize what comes back out of it.
+    set_orientation(glm::quat_cast(orientation));
 }
 
 auto Frame_controller::get_position() const -> vec3
@@ -83,9 +119,14 @@ auto Frame_controller::get_position() const -> vec3
     return m_position;
 }
 
-auto Frame_controller::get_orientation() const -> glm::mat4
+auto Frame_controller::get_orientation() const -> glm::quat
 {
     return m_orientation;
+}
+
+auto Frame_controller::get_orientation_matrix() const -> glm::mat4
+{
+    return glm::toMat4(m_orientation);
 }
 
 void Frame_controller::get_transform_from_node(erhe::scene::Node* node, const char* source)
@@ -101,7 +142,10 @@ void Frame_controller::get_transform_from_node(erhe::scene::Node* node, const ch
     Camera_roll_scope roll_scope{m_roll_monitor, source, m_orientation};
     const erhe::scene::Trs_transform& transform = node->world_from_node_transform();
     m_position = transform.get_translation();
-    m_orientation = glm::toMat4(transform.get_rotation());
+    // Normalize: the node's rotation comes from glm::decompose, which does not
+    // guarantee a unit quaternion, and any error here would otherwise be carried
+    // straight back into the next rotation.
+    m_orientation = glm::normalize(transform.get_rotation());
     if (m_roll_monitor.enabled) {
         const glm::vec3 scale = transform.get_scale();
         const glm::vec3 skew  = transform.get_skew();
@@ -127,7 +171,7 @@ void Frame_controller::handle_node_update(erhe::scene::Node* old_node, erhe::sce
     get_transform_from_node(new_node, "Frame_controller::handle_node_update (camera switch)");
     // The camera changed: the previous camera's orientation is not a meaningful
     // baseline for roll attribution, so adopt the new one without reporting.
-    m_roll_monitor.rebase(m_orientation);
+    m_roll_monitor.rebase(measure_camera_orientation(m_orientation));
 }
 
 void Frame_controller::handle_node_transform_update()
@@ -186,19 +230,23 @@ void Frame_controller::update()
     m_transform_update = false;
 }
 
+// The axes are unit vectors as long as m_orientation is a unit quaternion, which
+// it is by construction. apply_rotation() feeds them to create_rotation(), which
+// applies Rodrigues with the axis as given and only produces a rotation for a
+// unit axis - that is what made a non-unit basis self-amplifying before.
 auto Frame_controller::get_axis_x() const -> vec3
 {
-    return vec3{m_orientation[0]};
+    return m_orientation * vec3{1.0f, 0.0f, 0.0f};
 }
 
 auto Frame_controller::get_axis_y() const -> vec3
 {
-    return vec3{m_orientation[1]};
+    return m_orientation * vec3{0.0f, 1.0f, 0.0f};
 }
 
 auto Frame_controller::get_axis_z() const -> vec3
 {
-    return vec3{m_orientation[2]};
+    return m_orientation * vec3{0.0f, 0.0f, 1.0f};
 }
 
 void Frame_controller::set_active_control_value(const Variable variable, float value)
@@ -279,20 +327,7 @@ void Frame_controller::apply_rotation(float rx, float ry, float rz)
         );
     }
 
-    glm::mat4 new_orientation = m_orientation;
-    if (rx != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(rx, get_axis_x());
-        new_orientation = rotate * new_orientation;
-    }
-    if (ry != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(ry, glm::vec3{0.0f, 1.0f, 0.0f}); //get_axis_y());
-        new_orientation = rotate * new_orientation;
-    }
-    if (rz != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(rz, get_axis_z());
-        new_orientation = rotate * new_orientation;
-    }
-    m_orientation = new_orientation;
+    m_orientation = compose_rotation(m_orientation, rx, ry, rz);
     update();
 }
 
@@ -310,17 +345,11 @@ void Frame_controller::level_roll()
     Camera_roll_scope roll_scope{m_roll_monitor, "Frame_controller::level_roll", m_orientation};
     roll_scope.set_detail(fmt::format("removing {:.6f} deg of roll", glm::degrees(measurement.roll_radians)));
 
-    // Rebuild an exactly orthonormal basis from the current view direction and
-    // world up. This also clears any accumulated basis drift.
-    const glm::vec3 back  = glm::normalize(glm::vec3{m_orientation[2]});
-    const glm::vec3 right = glm::normalize(glm::cross(glm::vec3{0.0f, 1.0f, 0.0f}, back));
+    // Rebuild the orientation from the current view direction and world up.
+    const glm::vec3 back  = get_axis_z();
+    const glm::vec3 right = glm::normalize(glm::cross(world_up, back));
     const glm::vec3 up    = glm::cross(back, right);
-    m_orientation = glm::mat4{
-        glm::vec4{right, 0.0f},
-        glm::vec4{up,    0.0f},
-        glm::vec4{back,  0.0f},
-        glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}
-    };
+    m_orientation = glm::normalize(glm::quat_cast(glm::mat3{right, up, back}));
     m_orthonormality_warn_threshold = 1.0e-5f;
     update();
 }
@@ -332,26 +361,14 @@ void Frame_controller::apply_tumble(glm::vec3 pivot, float rx, float ry, float r
         roll_scope.set_detail(fmt::format("pivot ({}, {}, {}), rx {}, ry {}, rz {}", pivot.x, pivot.y, pivot.z, rx, ry, rz));
     }
 
-    glm::mat4 new_orientation = m_orientation;
-    if (rx != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(rx, get_axis_x());
-        new_orientation = rotate * new_orientation;
-    }
-    if (ry != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(ry, glm::vec3{0.0f, 1.0f, 0.0f}); //get_axis_y());
-        new_orientation = rotate * new_orientation;
-    }
-    if (rz != 0.0f) {
-        glm::mat4 rotate = erhe::math::create_rotation<float>(rz, get_axis_z());
-        new_orientation = rotate * new_orientation;
-    }
+    const glm::quat new_orientation = compose_rotation(m_orientation, rx, ry, rz);
     {
-        glm::mat4 old_world_from_view = m_orientation;
-        glm::mat4 old_view_from_world = glm::transpose(old_world_from_view);
-        glm::mat4 new_world_from_view = new_orientation;
-        glm::vec3 direction_in_world  = m_position - pivot;
-        glm::vec4 direction_in_view   = old_view_from_world * glm::vec4{direction_in_world, 0.0f};
-        m_position = pivot + glm::vec3{new_world_from_view * direction_in_view};
+        // Orbit the position around the pivot by the same rotation. The old code
+        // used transpose(orientation) as the inverse, which is only correct for
+        // an orthonormal basis; conjugate() is exact for a unit quaternion.
+        const glm::vec3 direction_in_world = m_position - pivot;
+        const glm::vec3 direction_in_view  = glm::conjugate(m_orientation) * direction_in_world;
+        m_position = pivot + (new_orientation * direction_in_view);
     }
     m_orientation = new_orientation;
     update();

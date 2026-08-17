@@ -6,6 +6,8 @@
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -87,14 +89,19 @@ auto measure_camera_orientation(const glm::mat4& world_from_node) -> Roll_measur
     return result;
 }
 
+auto measure_camera_orientation(const glm::quat& world_from_node) -> Roll_measurement
+{
+    return measure_camera_orientation(glm::toMat4(world_from_node));
+}
+
 void Camera_roll_monitor::set_frame_number(const uint64_t frame_number)
 {
     m_frame_number = frame_number;
 }
 
-void Camera_roll_monitor::rebase(const glm::mat4& world_from_node)
+void Camera_roll_monitor::rebase(const Roll_measurement& current)
 {
-    m_current     = measure_camera_orientation(world_from_node);
+    m_current     = current;
     m_has_current = true;
 }
 
@@ -131,7 +138,7 @@ auto Camera_roll_monitor::get_suppressed_log_count() const -> std::size_t
     return m_suppressed_logs;
 }
 
-void Camera_roll_monitor::push(const char* source, const glm::mat4& world_from_node)
+void Camera_roll_monitor::push(const char* source, const Roll_measurement& current)
 {
     if (!enabled) {
         return;
@@ -139,11 +146,11 @@ void Camera_roll_monitor::push(const char* source, const glm::mat4& world_from_n
     // Anything that changed since the last thing we observed happened outside
     // every instrumented scope: report it before this scope takes over, so it
     // does not get misattributed to this scope on pop().
-    sample("(uninstrumented write)", world_from_node, std::string{"detected on entry to "} + source);
+    sample("(uninstrumented write)", current, std::string{"detected on entry to "} + source);
     m_stack.push_back(Scope{.source = source});
 }
 
-void Camera_roll_monitor::pop(const glm::mat4& world_from_node, const std::string& detail)
+void Camera_roll_monitor::pop(const Roll_measurement& current, const std::string& detail)
 {
     if (!enabled) {
         return;
@@ -153,15 +160,14 @@ void Camera_roll_monitor::pop(const glm::mat4& world_from_node, const std::strin
     }
     const Scope scope = m_stack.back();
     m_stack.pop_back();
-    sample(scope.source, world_from_node, detail);
+    sample(scope.source, current, detail);
 }
 
-void Camera_roll_monitor::sample(const char* source, const glm::mat4& world_from_node, const std::string& detail)
+void Camera_roll_monitor::sample(const char* source, const Roll_measurement& after, const std::string& detail)
 {
     if (!enabled) {
         return;
     }
-    const Roll_measurement after = measure_camera_orientation(world_from_node);
     if (!m_has_current) {
         m_current     = after;
         m_has_current = true;
@@ -286,16 +292,16 @@ void Camera_roll_monitor::report(
     }
 }
 
-Camera_roll_scope::Camera_roll_scope(Camera_roll_monitor& monitor, const char* source, const glm::mat4& watched)
+Camera_roll_scope::Camera_roll_scope(Camera_roll_monitor& monitor, const char* source, const glm::quat& watched)
     : m_monitor{monitor}
     , m_watched{watched}
 {
-    m_monitor.push(source, m_watched);
+    m_monitor.push(source, measure_camera_orientation(m_watched));
 }
 
 Camera_roll_scope::~Camera_roll_scope()
 {
-    m_monitor.pop(m_watched, m_detail);
+    m_monitor.pop(measure_camera_orientation(m_watched), m_detail);
 }
 
 void Camera_roll_scope::set_detail(std::string detail)
