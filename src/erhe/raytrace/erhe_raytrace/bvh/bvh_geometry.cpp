@@ -185,6 +185,7 @@ void Bvh_geometry::commit()
         uint64_t hash_code{0xcbf29ce484222325};
         std::vector<BBox> bboxes(triangle_count);
         std::vector<Vec3> centers(triangle_count);
+        m_bbox = erhe::math::Aabb{};
         {
             ERHE_PROFILE_SCOPE("collect");
 
@@ -217,6 +218,9 @@ void Bvh_geometry::commit()
                 tris.emplace_back(triangle);
                 bboxes[i] = triangle.get_bbox();
                 centers[i] = triangle.get_center();
+                m_bbox.include(glm::vec3{p0_x, p0_y, p0_z});
+                m_bbox.include(glm::vec3{p1_x, p1_y, p1_z});
+                m_bbox.include(glm::vec3{p2_x, p2_y, p2_z});
             }
             log_geometry->trace("BVH hash for {} : {:x}", debug_label(), hash_code);
         }
@@ -384,6 +388,11 @@ auto Bvh_geometry::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance
 /// {
 ///     return m_bounding_sphere;
 /// }
+
+auto Bvh_geometry::get_bbox() const -> erhe::math::Aabb
+{
+    return m_bbox;
+}
 
 auto Bvh_geometry::get_mask() const -> uint32_t
 {

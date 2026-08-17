@@ -74,6 +74,7 @@ target_link_libraries(${_target}
         erhe::file
         erhe::hash
         erhe::geometry
+        erhe::math
         erhe::profile
         erhe::verify
     PRIVATE

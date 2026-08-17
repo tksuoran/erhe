@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_raytrace/iinstance.hpp"
+#include "erhe_math/aabb.hpp"
 
 #include <glm/glm.hpp>
 
@@ -33,6 +34,10 @@ public:
 
     // Bvh_instance public API
     auto intersect(Ray& ray, Hit& hit) -> bool;
+
+    // Bounding box of the instanced scene, transformed to the space of the scene
+    // this instance is attached to.
+    [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
 
 private:
     glm::mat4   m_transform{1.0f};

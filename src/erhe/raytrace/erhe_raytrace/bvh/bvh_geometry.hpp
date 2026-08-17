@@ -8,6 +8,7 @@
 
 #include "erhe_raytrace/igeometry.hpp"
 #include "erhe_dataformat/dataformat.hpp"
+#include "erhe_math/aabb.hpp"
 
 #include <glm/glm.hpp>
 
@@ -58,6 +59,9 @@ public:
     // Bvh_geometry public API
     auto intersect_instance(Ray& ray, Hit& hit, Bvh_instance* instance) -> bool;
 
+    // Bounding box of the committed triangles. Invalid until commit() has succeeded.
+    [[nodiscard]] auto get_bbox() const -> erhe::math::Aabb;
+
 private:
     class Buffer_info
     {
@@ -71,6 +75,7 @@ private:
         std::size_t               item_count {0};
     };
 
+    erhe::math::Aabb m_bbox{};
     glm::mat4    m_transform  {1.0f};
     uint32_t     m_mask       {0xfffffffu};
     const void*  m_user_data  {nullptr};

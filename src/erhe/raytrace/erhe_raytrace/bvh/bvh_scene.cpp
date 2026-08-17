@@ -14,6 +14,8 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::raytrace {
 
 auto IScene::create(const std::string_view debug_label) -> IScene*
@@ -29,6 +31,17 @@ auto IScene::create_shared(const std::string_view debug_label) -> std::shared_pt
 auto IScene::create_unique(const std::string_view debug_label) -> std::unique_ptr<IScene>
 {
     return std::make_unique<Bvh_scene>(debug_label);
+}
+
+auto Bvh_scene_child::get_bbox() const -> erhe::math::Aabb
+{
+    if (geometry != nullptr) {
+        return geometry->get_bbox();
+    }
+    if (instance != nullptr) {
+        return instance->get_bbox();
+    }
+    return erhe::math::Aabb{};
 }
 
 Bvh_scene::Bvh_scene(const std::string_view debug_label)
@@ -51,14 +64,18 @@ void Bvh_scene::attach(IGeometry* geometry)
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
 #ifndef NDEBUG
-    const auto i = std::find(m_geometries.begin(), m_geometries.end(), bvh_geometry);
-    if (i != m_geometries.end()) {
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [bvh_geometry](const Bvh_scene_child& child) { return child.geometry == bvh_geometry; }
+    );
+    if (i != m_children.end()) {
         log_scene->error("raytrace geometry already in scene");
-    } else
-#endif
-    {
-        m_geometries.push_back(bvh_geometry);
+        return;
     }
+#endif
+
+    m_children.push_back(Bvh_scene_child{.geometry = bvh_geometry, .instance = nullptr});
 }
 
 void Bvh_scene::attach(IInstance* instance)
@@ -70,14 +87,18 @@ void Bvh_scene::attach(IInstance* instance)
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
 #ifndef NDEBUG
-    const auto i = std::find(m_instances.begin(), m_instances.end(), bvh_instance);
-    if (i != m_instances.end()) {
+    const auto i = std::find_if(
+        m_children.begin(),
+        m_children.end(),
+        [bvh_instance](const Bvh_scene_child& child) { return child.instance == bvh_instance; }
+    );
+    if (i != m_children.end()) {
         log_scene->error("raytrace instance already in scene");
-    } else
-#endif
-    {
-        m_instances.push_back(bvh_instance);
+        return;
     }
+#endif
+
+    m_children.push_back(Bvh_scene_child{.geometry = nullptr, .instance = bvh_instance});
 }
 
 void Bvh_scene::detach(IGeometry* geometry)
@@ -88,11 +109,15 @@ void Bvh_scene::detach(IGeometry* geometry)
 
     auto* bvh_geometry = reinterpret_cast<Bvh_geometry*>(geometry);
 
-    const auto i = std::remove(m_geometries.begin(), m_geometries.end(), bvh_geometry);
-    if (i == m_geometries.end()) {
+    const auto i = std::remove_if(
+        m_children.begin(),
+        m_children.end(),
+        [bvh_geometry](const Bvh_scene_child& child) { return child.geometry == bvh_geometry; }
+    );
+    if (i == m_children.end()) {
         log_scene->error("raytrace geometry not in scene");
     } else {
-        m_geometries.erase(i, m_geometries.end());
+        m_children.erase(i, m_children.end());
     }
 }
 
@@ -104,67 +129,65 @@ void Bvh_scene::detach(IInstance* instance)
 
     auto* bvh_instance = reinterpret_cast<Bvh_instance*>(instance);
 
-    const auto i = std::remove(m_instances.begin(), m_instances.end(), bvh_instance);
-    if (i == m_instances.end()) {
+    const auto i = std::remove_if(
+        m_children.begin(),
+        m_children.end(),
+        [bvh_instance](const Bvh_scene_child& child) { return child.instance == bvh_instance; }
+    );
+    if (i == m_children.end()) {
         log_scene->error("raytrace instance not in scene");
     } else {
-        m_instances.erase(i, m_instances.end());
+        m_children.erase(i, m_children.end());
     }
 }
 
 void Bvh_scene::commit()
 {
-    // TODO
+}
+
+auto Bvh_scene::get_bbox() const -> erhe::math::Aabb
+{
+    if (m_in_get_bbox) {
+        return erhe::math::Aabb{};
+    }
+    m_in_get_bbox = true;
+    erhe::math::Aabb bbox{};
+    for (const Bvh_scene_child& child : m_children) {
+        const erhe::math::Aabb child_bbox = child.get_bbox();
+        if (child_bbox.is_valid()) {
+            bbox.include(child_bbox);
+        }
+    }
+    m_in_get_bbox = false;
+    return bbox;
 }
 
 auto Bvh_scene::intersect(Ray& ray, Hit& hit) -> bool
 {
     // log_frame->trace(
-    //     "Bvh_scene {} intersect mask = {:04x} instances = {}, geometries = {}, ray origin = {}, direction = {}",
-    //     m_debug_label, ray.mask, m_instances.size(), m_geometries.size(), ray.origin, ray.direction
+    //     "Bvh_scene {} intersect mask = {:04x} children = {}, ray origin = {}, direction = {}",
+    //     m_debug_label, ray.mask, m_children.size(), ray.origin, ray.direction
     // );
 
     ERHE_PROFILE_FUNCTION();
 
-    bool is_hit = false;
-    for (const auto& instance : m_instances) {
-        const bool instance_is_hit = instance->intersect(ray, hit);
-        if (instance_is_hit) {
-            is_hit = true;
-        }
-    }
-    for (const auto& geometry : m_geometries) {
-        const bool geometry_is_hit = geometry->intersect_instance(ray, hit, nullptr);
-        if (geometry_is_hit) {
-            is_hit = true;
-        }
-    }
-    return is_hit;
+    return intersect_children(ray, hit, nullptr);
 }
 
 auto Bvh_scene::intersect_instance(Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool
 {
+    return intersect_children(ray, hit, in_instance);
+}
+
+auto Bvh_scene::intersect_children(Ray& ray, Hit& hit, Bvh_instance* in_instance) -> bool
+{
     bool is_hit = false;
-    if (in_instance == nullptr) {
-        for (const auto& instance : m_instances) {
-            const bool instance_is_hit = instance->intersect(ray, hit);
-            if (instance_is_hit) {
-                is_hit = true;
-            }
-        }
-    } else {
-        // Traverse sub-instances (for multi-level nesting)
-        for (const auto& instance : m_instances) {
-            const bool instance_is_hit = instance->intersect(ray, hit);
-            if (instance_is_hit) {
-                is_hit = true;
-            }
-        }
-        for (const auto& geometry : m_geometries) {
-            const bool geometry_is_hit = geometry->intersect_instance(ray, hit, in_instance);
-            if (geometry_is_hit) {
-                is_hit = true;
-            }
+    for (const Bvh_scene_child& child : m_children) {
+        const bool child_is_hit = (child.instance != nullptr)
+            ? child.instance->intersect(ray, hit)
+            : child.geometry->intersect_instance(ray, hit, in_instance);
+        if (child_is_hit) {
+            is_hit = true;
         }
     }
     return is_hit;
