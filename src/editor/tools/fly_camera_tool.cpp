@@ -452,7 +452,20 @@ auto Fly_camera_frame_command::try_call() -> bool
     float tan_fov_side = tanf(min_fov_side);
     float fit_distance = size / (2.0f * tan_fov_side);
     glm::vec3 new_position = target_position - fit_distance * direction_normalized;
+    // create_look_at() derives right = cross(up, back); when the view direction is
+    // (near) parallel to world up that cross product degenerates and the resulting
+    // basis picks an essentially arbitrary roll. Framing a selection from directly
+    // above or below is therefore a candidate source of unwanted camera roll.
+    const float up_dot_direction = glm::dot(direction_normalized, glm::vec3{0.0f, 1.0f, 0.0f});
+    if (std::abs(up_dot_direction) > 0.999f) {
+        log_camera_roll->warn(
+            "Fly_camera.frame: view direction ({}, {}, {}) is (near) parallel to world up (dot {:.6f}) - "
+            "create_look_at() roll is ill conditioned here",
+            direction_normalized.x, direction_normalized.y, direction_normalized.z, up_dot_direction
+        );
+    }
     glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});
+    m_context.fly_camera_tool->hint_next_camera_write("Fly_camera.frame (create_look_at)");
     camera_node->set_world_from_node(new_world_from_node);
     return true;
 }
@@ -667,6 +680,7 @@ void Fly_camera_tool::serialize_transform(bool store)
         glm::vec3 translation = fly_camera_config.translation;
         glm::quat rotation{fly_camera_config.rotation.w, fly_camera_config.rotation.x, fly_camera_config.rotation.y, fly_camera_config.rotation.z};
         const erhe::scene::Trs_transform& world_from_node{translation, rotation};
+        hint_next_camera_write("Fly_camera deserialize_transform (config/editor/fly_camera.json)");
         m_node->set_world_from_node(world_from_node);
     }
 }
@@ -1265,9 +1279,69 @@ void Fly_camera_tool::record_heading_sample(int64_t timestamp_ns)
     m_sample_count += 1;
 }
 
+void Fly_camera_tool::hint_next_camera_write(const char* source)
+{
+    if (!m_camera_controller) {
+        return;
+    }
+    m_camera_controller->get_roll_monitor().set_next_write_hint(source);
+}
+
+void Fly_camera_tool::check_camera_node_roll()
+{
+    m_node_roll = Roll_measurement{};
+    if (!m_camera_controller) {
+        return;
+    }
+    Camera_roll_monitor& monitor = m_camera_controller->get_roll_monitor();
+    if (!monitor.enabled) {
+        return;
+    }
+    if (m_context.time != nullptr) {
+        monitor.set_frame_number(m_context.time->get_frame_number());
+    }
+
+    erhe::scene::Node* node = m_camera_controller->get_node();
+    if (node == nullptr) {
+        return;
+    }
+
+    // The controller tracks its own orientation; what actually gets rendered is
+    // the node's world transform. They can disagree - a rotated or scaled parent,
+    // or a write that has not been read back yet - and in that case the roll the
+    // user sees comes from the node, not from the controller.
+    m_node_roll = measure_camera_orientation(node->world_from_node());
+    const Roll_measurement controller_roll = measure_camera_orientation(m_camera_controller->get_orientation());
+    if (!m_node_roll.roll_valid || !controller_roll.roll_valid) {
+        return;
+    }
+
+    const float difference_degrees = glm::degrees(m_node_roll.roll_radians - controller_roll.roll_radians);
+    if (std::abs(difference_degrees) < 0.001f) {
+        return;
+    }
+    if (std::abs(difference_degrees - m_last_reported_node_roll_difference_degrees) < 0.001f) {
+        return; // Steady state already reported - only report changes.
+    }
+    m_last_reported_node_roll_difference_degrees = difference_degrees;
+
+    const erhe::scene::Node* parent = node->get_parent_node().get();
+    log_camera_roll->warn(
+        "Camera node world roll {:.6f} deg differs from Frame_controller roll {:.6f} deg by {:.6f} deg - "
+        "node '{}', parent '{}', frame {}",
+        glm::degrees(m_node_roll.roll_radians),
+        glm::degrees(controller_roll.roll_radians),
+        difference_degrees,
+        node->get_name(),
+        (parent != nullptr) ? parent->get_name() : std::string{"(none)"},
+        (m_context.time != nullptr) ? m_context.time->get_frame_number() : uint64_t{0}
+    );
+}
+
 void Fly_camera_tool::on_frame_begin()
 {
     update_camera();
+    check_camera_node_roll();
 }
 
 void Fly_camera_tool::on_frame_end()
@@ -1325,6 +1399,86 @@ void Fly_camera_tool::show_input_axis_ui(const char* label, erhe::math::Input_ax
     ImGui::PopID();
 }
 
+void Fly_camera_tool::camera_roll_imgui()
+{
+    if (!ImGui::TreeNodeEx("Camera Roll Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    Camera_roll_monitor& monitor = m_camera_controller->get_roll_monitor();
+    const Roll_measurement& controller_roll = monitor.get_current();
+
+    ImGui::Checkbox("Enable Roll Monitor", &monitor.enabled);
+    ImGui::Checkbox("Capture Callstacks",  &monitor.capture_callstack);
+    ImGui::SetItemTooltip("Capture a callstack for events that push the roll past the report threshold. Costly, but identifies the writer.");
+    ImGui::Checkbox("Break On First Roll", &monitor.break_on_roll);
+    ImGui::SetItemTooltip("DebugBreak() on the first event past the report threshold, when a debugger is attached.");
+    ImGui::DragFloat("Delta Threshold (deg)",  &monitor.delta_threshold_degrees,  0.0001f, 0.0f, 1.0f,  "%.5f");
+    ImGui::DragFloat("Report Threshold (deg)", &monitor.report_threshold_degrees, 0.001f,  0.0f, 90.0f, "%.4f");
+
+    if (controller_roll.roll_valid) {
+        ImGui::Text("Controller roll: %.6f deg", glm::degrees(controller_roll.roll_radians));
+    } else {
+        ImGui::TextUnformatted("Controller roll: not measurable (looking near straight up/down)");
+    }
+    if (m_node_roll.roll_valid) {
+        ImGui::Text("Camera node roll: %.6f deg", glm::degrees(m_node_roll.roll_radians));
+    } else {
+        ImGui::TextUnformatted("Camera node roll: not measurable (looking near straight up/down)");
+    }
+    ImGui::Text("Pitch: %.3f deg, up.y %.6f", glm::degrees(controller_roll.pitch_radians), controller_roll.up_dot_world_up);
+    ImGui::Text("Max |roll| seen: %.6f deg", monitor.get_max_abs_roll_degrees());
+    ImGui::Text("Basis orthonormality error: %.3e, determinant %.6f", controller_roll.orthonormality_error, controller_roll.determinant);
+
+    if (ImGui::Button("Level Roll")) {
+        m_camera_controller->level_roll();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Clear Events")) {
+        monitor.clear();
+        m_last_reported_node_roll_difference_degrees = 0.0f;
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Show Callstacks", &m_show_roll_callstacks);
+
+    const std::deque<Camera_roll_event>& events = monitor.get_events();
+    ImGui::Text("Events: %zu", events.size());
+    if (ImGui::BeginTable("Camera roll events", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2{0.0f, 200.0f})) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("Frame",  ImGuiTableColumnFlags_WidthStretch, 1.0f);
+        ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthStretch, 5.0f);
+        ImGui::TableSetupColumn("Roll",   ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("Delta",  ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("Pitch",  ImGuiTableColumnFlags_WidthStretch, 1.5f);
+        ImGui::TableSetupColumn("Detail", ImGuiTableColumnFlags_WidthStretch, 6.0f);
+        ImGui::TableHeadersRow();
+        // Newest first: the interesting event is the one that just happened.
+        for (auto i = events.rbegin(), end = events.rend(); i != end; ++i) {
+            const Camera_roll_event& event = *i;
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("%llu", static_cast<unsigned long long>(event.frame_number));
+            ImGui::TableSetColumnIndex(1);
+            if (event.first) {
+                ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "FIRST %s", event.source.c_str());
+            } else {
+                ImGui::TextUnformatted(event.source.c_str());
+            }
+            ImGui::TableSetColumnIndex(2); ImGui::Text("%.6f", event.roll_after_degrees);
+            ImGui::TableSetColumnIndex(3); ImGui::Text("%.6f", event.delta_degrees);
+            ImGui::TableSetColumnIndex(4); ImGui::Text("%.3f", event.pitch_after_degrees);
+            ImGui::TableSetColumnIndex(5); ImGui::TextUnformatted(event.detail.c_str());
+            if (m_show_roll_callstacks && !event.callstack.empty()) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(event.callstack.c_str());
+            }
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::TreePop();
+}
+
 void Fly_camera_tool::window_imgui()
 {
     ERHE_PROFILE_FUNCTION();
@@ -1355,6 +1509,8 @@ void Fly_camera_tool::window_imgui()
     if (ImGui::IsItemEdited() && (camera_controls != nullptr)) {
         camera_controls->sensitivity = m_sensitivity;
     }
+
+    camera_roll_imgui();
 
 
     //erhe::math::Input_axis& control = m_camera_controller->translate_x;

@@ -6,6 +6,7 @@ namespace editor {
 std::shared_ptr<spdlog::logger> log_asset;
 std::shared_ptr<spdlog::logger> log_asset_browser;
 std::shared_ptr<spdlog::logger> log_brush;
+std::shared_ptr<spdlog::logger> log_camera_roll;
 std::shared_ptr<spdlog::logger> log_composer;
 std::shared_ptr<spdlog::logger> log_controller_ray;
 std::shared_ptr<spdlog::logger> log_debug_visualization;
@@ -56,6 +57,7 @@ void initialize_logging()
     log_asset_browser              = make_logger      ("editor.asset_browser"             );
     log_startup                    = make_logger      ("editor.startup"                   );
     log_brush                      = make_logger      ("editor.brush"                     );
+    log_camera_roll                = make_logger      ("editor.camera_roll"               );
     log_composer                   = make_frame_logger("editor.composer"                  );
     log_controller_ray             = make_frame_logger("editor.controller_ray"            );
     log_debug_visualization        = make_frame_logger("editor.debug_visualization"       );

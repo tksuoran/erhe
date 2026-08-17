@@ -433,6 +433,9 @@ void Viewport_window::imgui()
         if (modified) {
             transform.set_translation(camera_position);
             transform.set_rotation(camera_rotation);
+            if (m_app_context.fly_camera_tool != nullptr) {
+                m_app_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo snap animation (ImViewGuizmo::draw_rotate)");
+            }
             node->set_world_from_node(transform);
             m_app_context.app_message_bus->node_touched.send_message(
                 Node_touched_message{

@@ -9,6 +9,7 @@ namespace editor {
 extern std::shared_ptr<spdlog::logger> log_asset;
 extern std::shared_ptr<spdlog::logger> log_asset_browser;
 extern std::shared_ptr<spdlog::logger> log_brush;
+extern std::shared_ptr<spdlog::logger> log_camera_roll;
 extern std::shared_ptr<spdlog::logger> log_composer;
 extern std::shared_ptr<spdlog::logger> log_controller_ray;
 extern std::shared_ptr<spdlog::logger> log_debug_visualization;

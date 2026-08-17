@@ -455,6 +455,8 @@ erhe_target_sources_grouped(
     robin_hood.h
     scene/attachment_types.cpp
     scene/attachment_types.hpp
+    scene/camera_roll_monitor.cpp
+    scene/camera_roll_monitor.hpp
     scene/collision_shape_from_mesh.cpp
     scene/collision_shape_from_mesh.hpp
     scene/debug_draw.cpp

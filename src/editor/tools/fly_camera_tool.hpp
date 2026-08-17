@@ -216,6 +216,11 @@ public:
 
     void set_cursor_relative_mode(bool relative_mode_enabled);
 
+    // Unwanted-camera-roll diagnostics. Call immediately before writing the
+    // camera node transform directly, so the resulting roll report names the
+    // writer. Safe to call when there is no camera controller.
+    void hint_next_camera_write(const char* source);
+
     void record_translation_sample(int64_t timestamp_ns);
     void record_heading_sample(int64_t timestamp_ns);
 
@@ -232,6 +237,10 @@ private:
     [[nodiscard]] auto get_writable_camera_controls() -> Camera_controls_config*;
     void window_imgui();
     void show_input_axis_ui(const char* label, erhe::math::Input_axis& input_axis) const;
+    // Per-frame roll watchdog: measures the camera node's world orientation and
+    // reports when it disagrees with the Frame_controller's own orientation.
+    void check_camera_node_roll();
+    void camera_roll_imgui();
 
     Tool_window                           m_window;
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
@@ -303,6 +312,10 @@ private:
     glm::vec3                             m_after_position    {0.0f, 0.0f, 0.0f};
     glm::quat                             m_before_orientation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::quat                             m_after_orientation {1.0f, 0.0f, 0.0f, 0.0f};
+
+    Roll_measurement m_node_roll{};
+    float            m_last_reported_node_roll_difference_degrees{0.0f};
+    bool             m_show_roll_callstacks{false};
 };
 
 }

@@ -139,6 +139,9 @@ auto Navigation_gizmo_tool::on_drag(glm::vec2 relative) -> bool
     if (viewport_scene_view->get_navigation_gizmo().drag(translation, rotation, relative)) {
         transform.set_translation(translation);
         transform.set_rotation   (rotation);
+        if (m_context.fly_camera_tool != nullptr) {
+            m_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo drag (ImViewGuizmo::Context::drag)");
+        }
         node->set_world_from_node(transform);
         m_context.app_message_bus->node_touched.send_message(
             Node_touched_message{
@@ -175,6 +178,9 @@ void Navigation_gizmo_tool::on_drag_end()
                 if (gizmo.snap(translation, rotation, m_drag_axis, time_ns, focus_distance)) {
                     transform.set_translation(translation);
                     transform.set_rotation   (rotation);
+                    if (m_context.fly_camera_tool != nullptr) {
+                        m_context.fly_camera_tool->hint_next_camera_write("Navigation gizmo axis snap (ImViewGuizmo::Context::snap)");
+                    }
                     node->set_world_from_node(transform);
                     m_context.app_message_bus->node_touched.send_message(
                         Node_touched_message{

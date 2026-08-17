@@ -2,6 +2,7 @@
   "loggers": {
     "editor.asset_browser": "info",
     "editor.brush": "info",
+    "editor.camera_roll": "info",
     "editor.composer": "info",
     "editor.controller_ray": "info",
     "editor.debug_visualization": "info",
