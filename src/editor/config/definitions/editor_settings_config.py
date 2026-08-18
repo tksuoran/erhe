@@ -50,6 +50,7 @@ struct("Editor_settings_config",
         field("hud",                  StructRef("Hud_config"),             added_in=1),
         field("id_renderer",          StructRef("Id_renderer_config"),     added_in=1),
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
+        field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
         field("inventory",            StructRef("Inventory_config"),       added_in=1),
         # glTF import/open performance options (doc/gltf-load-speedup-plan.md).

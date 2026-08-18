@@ -102,6 +102,7 @@ class Lightmap_streamer;
 class Lightmap_texture_window;
 class Lightmap_window;
 class Ray_trace_renderer;
+class Ddgi_renderer;
 class Rendergraph_window;
 class Rotate_tool;
 class Scale_tool;
@@ -248,6 +249,7 @@ public:
     Prefab_library*                    prefab_library       {nullptr};
     Programs*                          programs             {nullptr};
     Ray_trace_renderer*                ray_trace_renderer   {nullptr};
+    Ddgi_renderer*                     ddgi_renderer        {nullptr};
     Lightmap_baker*                    lightmap_baker       {nullptr};
     // World-space mesh partitioner: uniquifies + tile-clips lightmapped
     // meshes into per-tile piece meshes ("Lightmap Pieces" group).

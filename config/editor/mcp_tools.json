@@ -2952,6 +2952,47 @@
     "name": "set_ray_trace"
   },
   {
+    "description": "Enable/disable and tune dynamic diffuse global illumination (doc/ddgi-plan.md): a scene-wide probe volume is auto-fitted to the content bounding box, traced with ray queries and blended into octahedral irradiance / distance atlases that replace the flat ambient term for non-lightmapped draws. Returns the fitted grid (probe counts, spacing, origin), the derived ray/texel counts and the probe texture memory. Requires a device with ray query support.",
+    "inputSchema": {
+      "properties": {
+        "enabled": {
+          "description": "Enable (true) or disable (false) DDGI; omit to leave unchanged",
+          "type": "boolean"
+        },
+        "probe_spacing_m": {
+          "description": "Target world-space probe spacing in meters, [0.01, 64]; omit to leave unchanged",
+          "type": "number"
+        },
+        "volume_padding_m": {
+          "description": "Padding added around the content bounding box before fitting, in meters; omit to leave unchanged",
+          "type": "number"
+        },
+        "max_probes": {
+          "description": "Upper bound on total probe count, [8, 262144]; the spacing is grown until the grid fits; omit to leave unchanged",
+          "type": "integer"
+        },
+        "rays_per_probe": {
+          "description": "Rays traced per probe per update, [8, 1024], rounded up to the trace workgroup size; omit to leave unchanged",
+          "type": "integer"
+        },
+        "hysteresis": {
+          "description": "Temporal blend weight kept from the previous probe state, [0.0, 0.999]; omit to leave unchanged",
+          "type": "number"
+        },
+        "intensity": {
+          "description": "Multiplier applied to sampled irradiance before it replaces the ambient term; omit to leave unchanged",
+          "type": "number"
+        },
+        "show_window": {
+          "description": "Also show the DDGI window so the probe atlases are visible in screenshots (default false)",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_ddgi"
+  },
+  {
     "description": "Activate dynamic rigid bodies (bodies enter the world deactivated). Scoped since 2026-08-09: node_ids wakes exactly those nodes' bodies, node_id/node_name wakes the SUBTREE under that node (union when combined); no filter wakes the whole scene. Scope iterative re-settles (--only rebuilds) so already-settled structures elsewhere stay asleep.",
     "inputSchema": {
       "properties": {

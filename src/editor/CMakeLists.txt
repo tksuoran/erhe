@@ -157,6 +157,8 @@ erhe_target_sources_grouped(
     developer/commands_window.hpp
     developer/composer_window.cpp
     developer/composer_window.hpp
+    developer/ddgi_window.cpp
+    developer/ddgi_window.hpp
     developer/depth_visualization_window.cpp
     developer/depth_visualization_window.hpp
     developer/icon_browser.cpp
@@ -433,6 +435,8 @@ erhe_target_sources_grouped(
     renderers/lightmap_streamer.hpp
     renderers/lightmap_tile_io.cpp
     renderers/lightmap_tile_io.hpp
+    renderers/ddgi_renderer.cpp
+    renderers/ddgi_renderer.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
     renderers/scene_tlas.cpp
@@ -762,6 +766,9 @@ set(_config_sources
     ${_config_out}/ray_trace_config.hpp
     ${_config_out}/ray_trace_config_serialization.hpp
     ${_config_out}/ray_trace_config.cpp
+    ${_config_out}/ddgi_config.hpp
+    ${_config_out}/ddgi_config_serialization.hpp
+    ${_config_out}/ddgi_config.cpp
     ${_config_out}/lightmap_config.hpp
     ${_config_out}/lightmap_config_serialization.hpp
     ${_config_out}/lightmap_config.cpp

@@ -7,9 +7,11 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "config/generated/editor_settings_config.hpp"
+#include "config/generated/ddgi_config.hpp"
 #include "config/generated/ray_trace_config.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
+#include "renderers/ddgi_renderer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "scene/scene_root.hpp"
 
@@ -627,6 +629,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "animation_create_key",           &Mcp_server::action_animation_create_key          },
         { "animation_delete_key",           &Mcp_server::action_animation_delete_key          },
         { "set_ray_trace",                  &Mcp_server::action_set_ray_trace                 },
+        { "set_ddgi",                       &Mcp_server::action_set_ddgi                      },
     };
     return c_tool_dispatch;
 }
@@ -830,6 +833,68 @@ auto Mcp_server::action_set_ray_trace(const json& args) -> std::string
         result["saved_path"] = save_path;
         result["width"]      = width;
         result["height"]     = height;
+    }
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_set_ddgi(const json& args) -> std::string
+{
+    // Dynamic diffuse global illumination (doc/ddgi-plan.md): toggle and
+    // tune DDGI without the ImGui widgets, and read back what the renderer
+    // made of the settings, so the headless verify loop can exercise it.
+    Ddgi_renderer* renderer = m_context.ddgi_renderer;
+    if (renderer == nullptr) {
+        return make_error_content("DDGI renderer not available");
+    }
+    if (m_context.editor_settings != nullptr) {
+        Ddgi_config& config = m_context.editor_settings->ddgi;
+        if (args.contains("enabled")) {
+            config.enabled = args.value("enabled", false);
+        }
+        if (args.contains("probe_spacing_m")) {
+            config.probe_spacing_m = std::clamp(args.value("probe_spacing_m", 1.5f), 0.01f, 64.0f);
+        }
+        if (args.contains("volume_padding_m")) {
+            config.volume_padding_m = std::max(0.0f, args.value("volume_padding_m", 1.0f));
+        }
+        if (args.contains("max_probes")) {
+            config.max_probes = std::clamp(args.value("max_probes", 4096), 8, 262144);
+        }
+        if (args.contains("rays_per_probe")) {
+            config.rays_per_probe = std::clamp(args.value("rays_per_probe", 128), 8, 1024);
+        }
+        if (args.contains("hysteresis")) {
+            config.hysteresis = std::clamp(args.value("hysteresis", 0.97f), 0.0f, 0.999f);
+        }
+        if (args.contains("intensity")) {
+            config.intensity = std::max(0.0f, args.value("intensity", 1.0f));
+        }
+    }
+    if (args.value("show_window", false) && (m_context.imgui_windows != nullptr)) {
+        for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+            if (window->get_ini_label() == "ddgi") {
+                window->show_window();
+            }
+        }
+    }
+    const Ddgi_renderer::Grid& grid = renderer->get_grid();
+    json result{
+        {"supported",         renderer->is_supported()},
+        {"active",            renderer->is_active()},
+        {"probe_counts",      json::array({grid.counts.x, grid.counts.y, grid.counts.z})},
+        {"probe_count",       grid.get_probe_count()},
+        {"probe_spacing",     json::array({grid.spacing.x, grid.spacing.y, grid.spacing.z})},
+        {"grid_origin",       json::array({grid.origin.x, grid.origin.y, grid.origin.z})},
+        {"rays_per_probe",    renderer->get_rays_per_probe()},
+        {"irradiance_texels", renderer->get_irradiance_texels()},
+        {"distance_texels",   renderer->get_distance_texels()},
+        {"texture_bytes",     renderer->get_texture_byte_count()}
+    };
+    if (m_context.editor_settings != nullptr) {
+        const Ddgi_config& config = m_context.editor_settings->ddgi;
+        result["enabled"]    = config.enabled;
+        result["hysteresis"] = config.hysteresis;
+        result["intensity"]  = config.intensity;
     }
     return make_json_content(result).dump();
 }

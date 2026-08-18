@@ -60,6 +60,7 @@
 #include "developer/icon_browser.hpp"
 #include "developer/layers_window.hpp"
 #include "developer/post_processing_window.hpp"
+#include "developer/ddgi_window.hpp"
 #include "developer/ray_trace_window.hpp"
 #include "developer/rendergraph_window.hpp"
 #include "developer/selection_window.hpp"
@@ -88,6 +89,7 @@
 #include "renderers/lightmap_partitioner.hpp"
 #include "renderers/lightmap_streamer.hpp"
 #include "renderers/lightmap_tile_io.hpp"
+#include "renderers/ddgi_renderer.hpp"
 #include "renderers/ray_trace_renderer.hpp"
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
@@ -803,6 +805,17 @@ public:
         // which have no Draw_list_scene. Main thread only.
         erhe::log::set_breadcrumb("tick: flush_draw_lists");
         m_app_scenes->flush_draw_lists();
+
+        // Dynamic diffuse global illumination (doc/ddgi-plan.md): refit the
+        // probe volume and record this frame's probe update into the frame
+        // command buffer, before the rendergraph samples the probe atlases.
+        if (m_ddgi_renderer && (m_app_context.current_command_buffer != nullptr)) {
+            erhe::log::set_breadcrumb("tick: ddgi");
+            const std::shared_ptr<Scene_root> ddgi_scene_root = m_app_scenes->get_single_scene_root();
+            if (ddgi_scene_root) {
+                m_ddgi_renderer->tick(*m_app_context.current_command_buffer, *ddgi_scene_root.get());
+            }
+        }
 
         // Interactive lightmap bake (doc/lightmap_baking_plan.md section
         // 3a): record this frame's budgeted gather slice + publish into the
@@ -2016,6 +2029,11 @@ public:
                     *m_mesh_memory.get(),
                     m_editor_settings.ray_trace
                 );
+                m_ddgi_renderer = std::make_unique<Ddgi_renderer>(
+                    *m_graphics_device.get(),
+                    *m_mesh_memory.get(),
+                    m_editor_settings.ddgi
+                );
                 m_lightmap_baker  = std::make_unique<Lightmap_baker>(*m_graphics_device.get(), *m_mesh_memory.get());
                 m_lightmap_report = std::make_unique<Lightmap_report>();
                 m_lightmap_baker->set_report(m_lightmap_report.get());
@@ -2082,6 +2100,7 @@ public:
                 m_physics_window         = std::make_unique<Physics_window                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_post_processing_window = std::make_unique<Post_processing_window          >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_ray_trace_window       = std::make_unique<Ray_trace_window                >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
+                m_ddgi_window            = std::make_unique<Ddgi_window                     >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_properties             = std::make_unique<Properties                      >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context, *m_app_message_bus.get());
                 m_editor_windows         = std::make_unique<Editor_windows                  >(*m_imgui_renderer.get(), *m_imgui_windows.get(),  m_app_context);
                 m_frame_pacing_window    = std::make_unique<Frame_pacing_window             >(*m_imgui_renderer.get(), *m_imgui_windows.get());
@@ -2986,6 +3005,7 @@ public:
         m_app_context.prefab_library           = m_prefab_library        .get();
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
+        m_app_context.ddgi_renderer            = m_ddgi_renderer         .get();
         m_app_context.lightmap_baker           = m_lightmap_baker        .get();
         m_app_context.lightmap_partitioner     = m_lightmap_partitioner  .get();
         m_app_context.lightmap_report          = m_lightmap_report       .get();
@@ -3982,6 +4002,7 @@ public:
     std::unique_ptr<Post_processing                 >        m_post_processing;
     std::unique_ptr<Sky_renderer                    >        m_sky_renderer;
     std::unique_ptr<Ray_trace_renderer              >        m_ray_trace_renderer;
+    std::unique_ptr<Ddgi_renderer                   >        m_ddgi_renderer;
     std::unique_ptr<Lightmap_baker                  >        m_lightmap_baker;
     std::unique_ptr<Lightmap_report                 >        m_lightmap_report;
     std::unique_ptr<Lightmap_streamer               >        m_lightmap_streamer;
@@ -4019,6 +4040,7 @@ public:
     std::unique_ptr<Physics_window                  >        m_physics_window;
     std::unique_ptr<Post_processing_window          >        m_post_processing_window;
     std::unique_ptr<Ray_trace_window                >        m_ray_trace_window;
+    std::unique_ptr<Ddgi_window                     >        m_ddgi_window;
     std::unique_ptr<Properties                      >        m_properties;
     std::unique_ptr<Editor_windows                  >        m_editor_windows;
     std::unique_ptr<Frame_pacing_window             >        m_frame_pacing_window;

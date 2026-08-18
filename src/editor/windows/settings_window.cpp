@@ -33,6 +33,7 @@
 #include "config/generated/preview_edge_lines_config_serialization.hpp"
 #include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/debug_visualizations_settings_serialization.hpp"
+#include "config/generated/ddgi_config_serialization.hpp"
 #include "config/generated/developer_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
 #include "erhe_xr/generated/headset_config_serialization.hpp"
@@ -637,6 +638,7 @@ void Settings_window::imgui()
         // with the hand-grouped layout (Shadow Fit / Selection / Annotations)
         // rather than the flat reflection list.
         Debug_visualizations::style_imgui(*this, m_context, settings.debug_visualizations_style);
+        add_config_section(settings.ddgi);
         add_config_section(settings.developer);
         add_config_section(settings.grid);
         add_config_section(settings.headset);
