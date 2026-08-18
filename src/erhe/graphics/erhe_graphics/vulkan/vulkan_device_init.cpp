@@ -818,6 +818,33 @@ Device_impl::Device_impl(
         query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_shader_relaxed_extended_instruction_features);
         query_features_chain_last        = query_features_chain_last->pNext;
     }
+    // Device fault reporting (VK_KHR_device_fault / VK_EXT_device_fault). Both
+    // gate vkGetDeviceFaultReportsKHR / vkGetDeviceFaultInfoEXT behind a
+    // deviceFault feature bit that has to be enabled at device creation, so
+    // an extension probe alone is not enough - query the feature here and
+    // mirror it into the create-time chain below.
+    VkPhysicalDeviceFaultFeaturesKHR query_fault_features{
+        .sType                         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
+        .pNext                         = nullptr,
+        .deviceFault                   = VK_FALSE,
+        .deviceFaultVendorBinary       = VK_FALSE,
+        .deviceFaultReportMasked       = VK_FALSE,
+        .deviceFaultDeviceLostOnMasked = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_device_fault) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_fault_features);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
+    VkPhysicalDeviceFaultFeaturesEXT query_fault_features_ext{
+        .sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
+        .pNext                   = nullptr,
+        .deviceFault             = VK_FALSE,
+        .deviceFaultVendorBinary = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_EXT_device_fault) {
+        query_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&query_fault_features_ext);
+        query_features_chain_last        = query_features_chain_last->pNext;
+    }
     VkPhysicalDevicePresentWait2FeaturesKHR query_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
         .pNext        = nullptr,
@@ -1434,6 +1461,37 @@ Device_impl::Device_impl(
             log_debug->debug("Enabled feature shader relaxed extended instruction");
         }
     }
+    // deviceFaultVendorBinary stays off: the vendor binary crash dump is an
+    // opaque blob that only the vendor's own tooling can read, and enabling it
+    // makes the driver retain extra state per submission. The report we log
+    // (fault flags, description, fault/instruction addresses, vendor fault
+    // codes) needs deviceFault only. The two masked-fault bits are KHR-only
+    // opt-ins for non-fatal faults; we want the classic device-lost behavior.
+    VkPhysicalDeviceFaultFeaturesKHR set_fault_features{
+        .sType                         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
+        .pNext                         = nullptr,
+        .deviceFault                   = query_fault_features.deviceFault,
+        .deviceFaultVendorBinary       = VK_FALSE,
+        .deviceFaultReportMasked       = VK_FALSE,
+        .deviceFaultDeviceLostOnMasked = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_KHR_device_fault) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_fault_features);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        m_device_fault_report_khr = (query_fault_features.deviceFault == VK_TRUE);
+    }
+    VkPhysicalDeviceFaultFeaturesEXT set_fault_features_ext{
+        .sType                   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
+        .pNext                   = nullptr,
+        .deviceFault             = query_fault_features_ext.deviceFault,
+        .deviceFaultVendorBinary = VK_FALSE
+    };
+    if (m_device_extensions.m_VK_EXT_device_fault) {
+        set_features_chain_last->pNext = reinterpret_cast<VkBaseOutStructure*>(&set_fault_features_ext);
+        set_features_chain_last        = set_features_chain_last->pNext;
+        m_device_fault_report_ext = (query_fault_features_ext.deviceFault == VK_TRUE);
+    }
+    log_startup->info("  deviceFault                    = {}", has_device_fault_report());
     VkPhysicalDevicePresentWait2FeaturesKHR set_present_wait2_features{
         .sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
         .pNext        = nullptr,

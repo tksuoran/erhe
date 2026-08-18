@@ -83,6 +83,8 @@ public:
     bool m_VK_KHR_ray_tracing_position_fetch    {false};
     bool m_VK_EXT_conservative_rasterization    {false};
     bool m_VK_EXT_memory_budget                 {false};
+    bool m_VK_KHR_device_fault                  {false};
+    bool m_VK_EXT_device_fault                  {false};
 };
 class Capabilities
 {
@@ -357,6 +359,16 @@ public:
 #endif
     [[nodiscard]] auto get_capabilities                 () const -> const Capabilities&;
     [[nodiscard]] auto get_device_extensions            () const -> const Device_extensions&;
+    // VK_KHR_device_fault / VK_EXT_device_fault crash diagnostics. True only
+    // when the extension was enabled AND its deviceFault feature is on, i.e.
+    // when report_device_fault() can actually produce a report.
+    [[nodiscard]] auto has_device_fault_report          () const -> bool;
+    // Retrieve and log the driver's fault report(s) for a lost device. Safe
+    // (and a cheap no-op) to call when the extension is unavailable or when
+    // the driver has no fault to report; call it from every site that
+    // observes VK_ERROR_DEVICE_LOST, before aborting. Defined in
+    // vulkan_device_debug.cpp.
+    void report_device_fault(const char* site);
     [[nodiscard]] auto get_driver_properties            () const -> const VkPhysicalDeviceDriverProperties&;
     [[nodiscard]] auto get_portability_subset_features  () const -> const VkPhysicalDevicePortabilitySubsetFeaturesKHR&;
     [[nodiscard]] auto get_portability_subset_properties() const -> const VkPhysicalDevicePortabilitySubsetPropertiesKHR&;
@@ -544,6 +556,16 @@ public:
 
 private:
 
+
+    void report_device_fault_khr();
+    void report_device_fault_ext();
+
+    // Device fault reporting (VK_KHR_device_fault preferred,
+    // VK_EXT_device_fault fallback for the drivers that only ship the EXT).
+    // Set at device creation from the extension probe plus the queried
+    // deviceFault feature; read by report_device_fault().
+    bool                     m_device_fault_report_khr{false};
+    bool                     m_device_fault_report_ext{false};
 
     Instance_layers          m_instance_layers    {};
     Instance_extensions      m_instance_extensions{};

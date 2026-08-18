@@ -540,18 +540,42 @@ auto c_str(const VkPresentModeKHR present_mode) -> const char*
     }
 }
 
-auto c_str(const VkDeviceFaultAddressTypeEXT type) -> const char*
+auto c_str(const VkDeviceFaultAddressTypeKHR type) -> const char*
 {
     switch (type) {
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:                        return "VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:                return "VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:               return "VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:             return "VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT";
-        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:   return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR:                        return "VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_KHR:                return "VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_KHR:               return "VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_KHR:             return "VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_KHR: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_KHR: return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_KHR";
+        case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR:   return "VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR";
         default: return "?";
     }
+}
+
+auto to_string_VkDeviceFaultFlagsKHR(const VkDeviceFaultFlagsKHR flags) -> std::string
+{
+    std::stringstream ss;
+    bool empty = true;
+    const auto append = [&ss, &empty](const char* name)
+    {
+        if (!empty) {
+            ss << "|";
+        }
+        ss << name;
+        empty = false;
+    };
+    if ((flags & VK_DEVICE_FAULT_FLAG_DEVICE_LOST_KHR        ) != 0) { append("DEVICE_LOST"        ); }
+    if ((flags & VK_DEVICE_FAULT_FLAG_MEMORY_ADDRESS_KHR     ) != 0) { append("MEMORY_ADDRESS"     ); }
+    if ((flags & VK_DEVICE_FAULT_FLAG_INSTRUCTION_ADDRESS_KHR) != 0) { append("INSTRUCTION_ADDRESS"); }
+    if ((flags & VK_DEVICE_FAULT_FLAG_VENDOR_KHR             ) != 0) { append("VENDOR"             ); }
+    if ((flags & VK_DEVICE_FAULT_FLAG_WATCHDOG_TIMEOUT_KHR   ) != 0) { append("WATCHDOG_TIMEOUT"   ); }
+    if ((flags & VK_DEVICE_FAULT_FLAG_OVERFLOW_KHR           ) != 0) { append("OVERFLOW"           ); }
+    if (empty) {
+        ss << "0";
+    }
+    return ss.str();
 }
 
 auto to_string_VkDebugReportFlagsEXT(const VkDebugReportFlagsEXT flags) -> std::string

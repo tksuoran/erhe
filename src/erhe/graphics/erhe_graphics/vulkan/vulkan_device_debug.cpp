@@ -2,7 +2,178 @@
 #include "erhe_graphics/vulkan/vulkan_helpers.hpp"
 #include "erhe_graphics/graphics_log.hpp"
 
+#include <cstring>
+#include <vector>
+
 namespace erhe::graphics {
+
+namespace {
+
+// vkGetDeviceFaultReportsKHR takes a timeout to wait for a report to become
+// available. We are already on a fatal path when this runs, so a short block
+// is cheaper than losing the only explanation of the crash.
+constexpr uint64_t c_device_fault_report_timeout_ns = 1'000'000'000ull;
+
+// The driver-supplied strings are fixed-size char arrays that are only
+// guaranteed NUL-terminated when the driver filled them in.
+[[nodiscard]] auto bounded(const char* text, const std::size_t max_size) -> std::string
+{
+    const std::size_t length = ::strnlen(text, max_size);
+    return std::string{text, length};
+}
+
+void log_fault_address_info(const char* what, const VkDeviceFaultAddressInfoKHR& address_info)
+{
+    if (address_info.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR) {
+        return;
+    }
+    // addressPrecision is a power of two: the reported address is only known
+    // to lie within [reportedAddress & ~(precision - 1), + precision).
+    const VkDeviceSize    precision = address_info.addressPrecision;
+    const VkDeviceAddress lower     = (precision != 0) ? (address_info.reportedAddress & ~(precision - 1)) : address_info.reportedAddress;
+    const VkDeviceAddress upper     = (precision != 0) ? (lower + precision - 1) : address_info.reportedAddress;
+    log_context->critical(
+        "  {}: {} address 0x{:x} precision 0x{:x} (range 0x{:x} .. 0x{:x})",
+        what, c_str(address_info.addressType), address_info.reportedAddress, precision, lower, upper
+    );
+}
+
+void log_fault_vendor_info(const VkDeviceFaultVendorInfoKHR& vendor_info)
+{
+    log_context->critical(
+        "  vendor fault: code 0x{:x} data 0x{:x} '{}'",
+        vendor_info.vendorFaultCode, vendor_info.vendorFaultData,
+        bounded(vendor_info.description, VK_MAX_DESCRIPTION_SIZE)
+    );
+}
+
+} // anonymous namespace
+
+// VK_KHR_device_fault: one call can return several reports, each already
+// carrying its own fault/instruction address and vendor info.
+void Device_impl::report_device_fault_khr()
+{
+    if (vkGetDeviceFaultReportsKHR == nullptr) {
+        return;
+    }
+    uint32_t report_count = 0;
+    VkResult result = vkGetDeviceFaultReportsKHR(m_vulkan_device, c_device_fault_report_timeout_ns, &report_count, nullptr);
+    if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
+        log_context->critical("vkGetDeviceFaultReportsKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    if (report_count == 0) {
+        log_context->critical("VK_KHR_device_fault: driver reported no faults");
+        return;
+    }
+    std::vector<VkDeviceFaultInfoKHR> reports(report_count);
+    for (VkDeviceFaultInfoKHR& report : reports) {
+        report.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_KHR;
+        report.pNext = nullptr;
+    }
+    result = vkGetDeviceFaultReportsKHR(m_vulkan_device, c_device_fault_report_timeout_ns, &report_count, reports.data());
+    if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
+        log_context->critical("vkGetDeviceFaultReportsKHR() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    reports.resize(report_count);
+    for (std::size_t i = 0, end = reports.size(); i < end; ++i) {
+        const VkDeviceFaultInfoKHR& report = reports[i];
+        log_context->critical(
+            "VK_KHR_device_fault report {}/{}: flags {} group {} '{}'",
+            i + 1, end, to_string_VkDeviceFaultFlagsKHR(report.flags), report.groupId,
+            bounded(report.description, VK_MAX_DESCRIPTION_SIZE)
+        );
+        log_fault_address_info("fault",       report.faultAddressInfo);
+        log_fault_address_info("instruction", report.instructionAddressInfo);
+        if ((report.flags & VK_DEVICE_FAULT_FLAG_VENDOR_KHR) != 0) {
+            log_fault_vendor_info(report.vendorInfo);
+        }
+    }
+    if (result == VK_INCOMPLETE) {
+        log_context->critical("VK_KHR_device_fault: more reports are available than were retrieved");
+    }
+}
+
+// VK_EXT_device_fault: a single report per call, with the address and vendor
+// info in caller-allocated arrays sized by a first counts-only call.
+void Device_impl::report_device_fault_ext()
+{
+    if (vkGetDeviceFaultInfoEXT == nullptr) {
+        return;
+    }
+    VkDeviceFaultCountsEXT counts{
+        .sType            = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
+        .pNext            = nullptr,
+        .addressInfoCount = 0,
+        .vendorInfoCount  = 0,
+        .vendorBinarySize = 0
+    };
+    VkResult result = vkGetDeviceFaultInfoEXT(m_vulkan_device, &counts, nullptr);
+    if (result != VK_SUCCESS) {
+        log_context->critical("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    std::vector<VkDeviceFaultAddressInfoEXT> address_infos(counts.addressInfoCount);
+    std::vector<VkDeviceFaultVendorInfoEXT>  vendor_infos (counts.vendorInfoCount);
+    // deviceFaultVendorBinary was not enabled, so never ask for the blob.
+    counts.vendorBinarySize = 0;
+    VkDeviceFaultInfoEXT info{
+        .sType             = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
+        .pNext             = nullptr,
+        .description       = {},
+        .pAddressInfos     = address_infos.empty() ? nullptr : address_infos.data(),
+        .pVendorInfos      = vendor_infos.empty()  ? nullptr : vendor_infos.data(),
+        .pVendorBinaryData = nullptr
+    };
+    result = vkGetDeviceFaultInfoEXT(m_vulkan_device, &counts, &info);
+    if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
+        log_context->critical("vkGetDeviceFaultInfoEXT() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+        return;
+    }
+    log_context->critical(
+        "VK_EXT_device_fault report: '{}' ({} address info(s), {} vendor info(s))",
+        bounded(info.description, VK_MAX_DESCRIPTION_SIZE), counts.addressInfoCount, counts.vendorInfoCount
+    );
+    address_infos.resize(counts.addressInfoCount);
+    vendor_infos.resize(counts.vendorInfoCount);
+    for (const VkDeviceFaultAddressInfoEXT& address_info : address_infos) {
+        log_fault_address_info("fault", address_info);
+    }
+    for (const VkDeviceFaultVendorInfoEXT& vendor_info : vendor_infos) {
+        log_fault_vendor_info(vendor_info);
+    }
+    if (result == VK_INCOMPLETE) {
+        log_context->critical("VK_EXT_device_fault: report was truncated");
+    }
+}
+
+void Device_impl::report_device_fault(const char* site)
+{
+    if (m_vulkan_device == VK_NULL_HANDLE) {
+        return;
+    }
+    if (!has_device_fault_report()) {
+        // Say so rather than staying silent: a crash log that shows a bare
+        // VK_ERROR_DEVICE_LOST and nothing else is indistinguishable from one
+        // where the report was requested and came back empty. Capture layers
+        // are the common reason - RenderDoc's capture layer only forwards the
+        // device extensions it implements, so VK_EXT_device_fault disappears
+        // from the physical device's list while it is loaded.
+        log_context->critical(
+            "Device fault report requested at {} but neither VK_KHR_device_fault nor VK_EXT_device_fault is enabled "
+            "(see the 'deviceFault' line in the startup log; capture layers can filter the extension away)",
+            (site != nullptr) ? site : "?"
+        );
+        return;
+    }
+    log_context->critical("Device fault report requested at {}", (site != nullptr) ? site : "?");
+    if (m_device_fault_report_khr) {
+        report_device_fault_khr();
+    } else {
+        report_device_fault_ext();
+    }
+}
 
 auto Device_impl_debug_report_callback(
     VkDebugReportFlagsEXT      flags,

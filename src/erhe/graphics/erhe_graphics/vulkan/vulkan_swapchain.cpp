@@ -70,6 +70,9 @@ void Swapchain_impl::release_resources()
     // TODO Queue thread safety
     result = vkDeviceWaitIdle(vulkan_device);
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_DEVICE_LOST) {
+            m_device_impl.report_device_fault("swapchain teardown vkDeviceWaitIdle");
+        }
         m_device_impl.get_device().device_message(
             Message_severity::error,
             fmt::format("vkDeviceWaitIdle() failed with {} {}", static_cast<int32_t>(result), c_str(result))
@@ -336,6 +339,9 @@ auto Swapchain_impl::begin_frame(const Frame_begin_info& frame_begin_info) -> bo
     }
     if ((result != VK_SUCCESS) && (result != VK_SUBOPTIMAL_KHR)) {
         log_context->warn("Could not obtain swapchain image, skipping frame");
+        if (result == VK_ERROR_DEVICE_LOST) {
+            m_device_impl.report_device_fault("begin_frame vkAcquireNextImageKHR");
+        }
         m_acquired_image_index = 0xffu;
         m_state                = Swapchain_frame_state::idle;
         return false;
@@ -587,6 +593,7 @@ void Swapchain_impl::cleanup_present_history()
                 "vkGetFenceStatus() returned {} {}; abandoning present-history entry",
                 static_cast<int32_t>(result), c_str(result)
             );
+            m_device_impl.report_device_fault("present history vkGetFenceStatus");
             m_is_valid = false;
             cleanup_present_info(entry);
             m_present_history.pop_front();
@@ -2011,6 +2018,9 @@ auto Swapchain_impl::present_image(uint32_t index) -> VkResult
         // per-swapchain present-timing queue never drained and this request
         // was rejected. The stuck entries can never complete; recreation
         // resets the timing queue.
+        if (result == VK_ERROR_DEVICE_LOST) {
+            m_device_impl.report_device_fault("present_image vkQueuePresentKHR");
+        }
         log_swapchain->warn(
             "vkQueuePresentKHR() returned {} {}; marking swapchain invalid and skipping present",
             static_cast<int32_t>(result), c_str(result)
@@ -2115,6 +2125,9 @@ auto Swapchain_impl::wait_for_displayed_frame(const std::int64_t frame_id, const
         case VK_ERROR_DEVICE_LOST: {
             // Same handling as present(): mark invalid; the frame loop's
             // acquire path drives recreation.
+            if (result == VK_ERROR_DEVICE_LOST) {
+                m_device_impl.report_device_fault("wait_for_present vkWaitForPresentKHR");
+            }
             log_swapchain->warn(
                 "vkWaitForPresentKHR() returned {} {}; marking swapchain invalid",
                 static_cast<int32_t>(result), c_str(result)

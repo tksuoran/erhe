@@ -145,6 +145,7 @@ void Device_impl::ensure_device_frame_slot(size_t index)
         const VkResult result = vkWaitForFences(m_vulkan_device, 1, &df.submit_fence, true, UINT64_MAX);
         if (result != VK_SUCCESS) {
             log_context->critical("vkWaitForFences() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            report_device_fault("wait_for_frame vkWaitForFences");
             abort();
         }
         if (erhe::frame_pacing::Frame_time_record* record = m_device.get_frame_time_recorder().find(static_cast<std::int64_t>(m_frame_index))) {
@@ -1065,6 +1066,20 @@ auto Device_impl::query_device_extensions(
     // requires the shaderRelaxedExtendedInstruction feature
     // (VUID-RuntimeSpirv-shaderRelaxedExtendedInstruction-10773).
     check_device_extension(VK_KHR_SHADER_RELAXED_EXTENDED_INSTRUCTION_EXTENSION_NAME, device_extensions_out.m_VK_KHR_shader_relaxed_extended_instruction, 0.0f);
+
+    // Device fault reporting: on VK_ERROR_DEVICE_LOST the driver can hand
+    // back a description of what killed the device (fault type, the offending
+    // GPU virtual address, vendor fault codes) instead of leaving us with a
+    // bare result code. Diagnostics only, so score 0.0f - it must never
+    // influence which physical device we pick.
+    // VK_KHR_device_fault is the newer extension with a different entry point
+    // (vkGetDeviceFaultReportsKHR, multiple reports per call); VK_EXT_device_fault
+    // (vkGetDeviceFaultInfoEXT, one report) is what shipping drivers actually
+    // expose today, so we probe for it whenever the KHR one is absent.
+    check_device_extension(VK_KHR_DEVICE_FAULT_EXTENSION_NAME, device_extensions_out.m_VK_KHR_device_fault, 0.0f);
+    if (!device_extensions_out.m_VK_KHR_device_fault) {
+        check_device_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME, device_extensions_out.m_VK_EXT_device_fault, 0.0f);
+    }
     return total_score;
 }
 
@@ -1183,6 +1198,11 @@ auto Device_impl::get_present_queue() const -> VkQueue
 auto Device_impl::get_capabilities() const -> const Capabilities&
 {
     return m_capabilities;
+}
+
+auto Device_impl::has_device_fault_report() const -> bool
+{
+    return m_device_fault_report_khr || m_device_fault_report_ext;
 }
 
 auto Device_impl::get_device_extensions() const -> const Device_extensions&
@@ -1389,6 +1409,7 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
             "vkQueueSubmit2() in submit_command_buffers failed with {} {}",
             static_cast<int32_t>(result), c_str(result)
         );
+        report_device_fault("submit_command_buffers vkQueueSubmit2");
         abort();
     }
 
@@ -1487,6 +1508,7 @@ void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
             "vkWaitForFences() in submit_command_buffer_and_wait failed with {} {}",
             static_cast<int32_t>(wait_result), c_str(wait_result)
         );
+        report_device_fault("submit_command_buffer_and_wait vkWaitForFences");
         abort();
     }
     // Leave the fence unsignaled for the rest of its pool cycle (the sync
@@ -1894,6 +1916,7 @@ void Device_impl::wait_idle()
             "vkDeviceWaitIdle() failed with {} {}",
             static_cast<int32_t>(result), c_str(result)
         );
+        report_device_fault("wait_idle vkDeviceWaitIdle");
     }
 
     // Every frame submitted so far is guaranteed complete on the GPU.
@@ -1957,6 +1980,7 @@ void Device_impl::update_frame_completion()
         result = vkQueueSubmit2(m_vulkan_graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
         if (result != VK_SUCCESS) {
             log_context->critical("vkQueueSubmit2() failed with {} {}", static_cast<int32_t>(result), c_str(result));
+            report_device_fault("end_frame vkQueueSubmit2");
             abort();
         }
     }

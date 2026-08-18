@@ -275,6 +275,7 @@ void Command_buffer_impl::pre_submit_wait()
                 "vkWaitForFences() in pre_submit_wait failed with {} {}",
                 static_cast<int32_t>(result), c_str(result)
             );
+            m_device_impl->report_device_fault("pre_submit_wait vkWaitForFences");
             std::abort();
         }
         erhe::frame_pacing::Frame_time_recorder& recorder = m_device_impl->get_frame_time_recorder();
