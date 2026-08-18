@@ -142,6 +142,53 @@ void Light::set_luminous_flux(const float lumens)
     intensity = (solid_angle > 0.0f) ? lumens / solid_angle : lumens;
 }
 
+auto Light::get_light_frame() const -> Light_frame
+{
+    const Node* const node = get_node();
+    ERHE_VERIFY(node != nullptr);
+    const glm::mat4 world_from_node = node->world_from_node();
+
+    // Node scale participates here: it is part of how the node axes end up
+    // oriented in world space (non-uniform scale reorients them, negative scale
+    // mirrors them). It must not survive the normalization / orthogonalization
+    // below - see Light_frame.
+    const glm::vec3 node_z = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
+    const glm::vec3 node_y = glm::vec3{world_from_node * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
+
+    Light_frame frame{};
+    frame.position = glm::vec3{world_from_node * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+
+    // Degenerate axes (zero scale component) fall back to a fixed frame rather
+    // than producing NaNs downstream.
+    constexpr float epsilon = 1e-8f;
+    frame.direction = (glm::dot(node_z, node_z) > epsilon) ? glm::normalize(node_z) : glm::vec3{0.0f, 0.0f, 1.0f};
+
+    // Gram-Schmidt: keep the node up vector, minus its component along the light
+    // direction. Pick a substitute axis when the two are (near) parallel.
+    glm::vec3 up = node_y - frame.direction * glm::dot(frame.direction, node_y);
+    if (glm::dot(up, up) <= epsilon) {
+        const glm::vec3 fallback = (std::abs(frame.direction.y) < 0.9f) ? glm::vec3{0.0f, 1.0f, 0.0f} : glm::vec3{1.0f, 0.0f, 0.0f};
+        up = fallback - frame.direction * glm::dot(frame.direction, fallback);
+    }
+    frame.up    = glm::normalize(up);
+    // Right-handed by construction, so a mirrored (negative determinant) light
+    // node still yields a proper rotation - only the direction it mirrored to.
+    frame.right = glm::cross(frame.up, frame.direction);
+
+    frame.world_from_light = glm::mat4{
+        glm::vec4{frame.right,     0.0f},
+        glm::vec4{frame.up,        0.0f},
+        glm::vec4{frame.direction, 0.0f},
+        glm::vec4{frame.position,  1.0f}
+    };
+    // Rigid transform: inverse is transpose(rotation) with the rotated negative translation.
+    const glm::mat3 rotation_transpose = glm::transpose(glm::mat3{frame.world_from_light});
+    frame.light_from_world = glm::mat4{rotation_transpose};
+    frame.light_from_world[3] = glm::vec4{-(rotation_transpose * frame.position), 1.0f};
+
+    return frame;
+}
+
 void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive
@@ -282,14 +329,17 @@ auto Light::stable_directional_light_projection_transforms(
     // Directional light uses a cube surrounding the view camera bounding box as projection frustum
     const Projection light_projection = projection(parameters);
 
-    // Place light projection camera on the view camera bounding volume using light direction
-    const vec3 light_direction       = vec3{light_node->direction_in_world()};
-    const vec3 light_up_vector       = vec3{light_node->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const vec3 view_camera_position  = vec3{view_camera_node->position_in_world()};
+    // Place light projection camera on the view camera bounding volume using light
+    // direction. The light frame is orthonormal (Light_frame), so light-space
+    // extents and the texel size below stay in world units for a scaled light node.
+    const Light_frame light_frame       = get_light_frame();
+    const vec3        light_direction   = light_frame.direction;
+    const vec3        light_up_vector   = light_frame.up;
+    const vec3 view_camera_position     = vec3{view_camera_node->position_in_world()};
 
     // Rotation only transform
-    const mat3 world_from_light{light_node->world_from_node()};
-    const mat3 light_from_world{light_node->node_from_world()};
+    const mat3 world_from_light{light_frame.world_from_light};
+    const mat3 light_from_world{light_frame.light_from_world};
 
     // Snap camera position to shadow map texture texels
     const bool texel_snap = (parameters.fit_settings == nullptr) || parameters.fit_settings->texel_snap;
@@ -377,12 +427,16 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
     ERHE_PROFILE_FUNCTION();
     const Projection light_projection = projection(parameters);
     const auto clip_from_light_camera = light_projection.clip_from_node_transform(parameters.shadow_map_viewport, parameters.reverse_depth, parameters.depth_range);
-    const Node* const node = get_node();
-    ERHE_VERIFY(node != nullptr);
+
+    // The spot cone and the shadow camera come from the orthonormal light frame,
+    // not from the raw node transform: a scaled light node must not scale the
+    // spot projection or the shadow camera (see Light_frame).
+    const Light_frame   light_frame = get_light_frame();
+    const Trs_transform world_from_light_camera{light_frame.world_from_light, light_frame.light_from_world};
 
     const Transform clip_from_world{
-        clip_from_light_camera.get_matrix() * node->node_from_world(),
-        node->world_from_node() * clip_from_light_camera.get_inverse_matrix()
+        clip_from_light_camera.get_matrix() * light_frame.light_from_world,
+        light_frame.world_from_light * clip_from_light_camera.get_inverse_matrix()
     };
     const glm::mat4 tex_from_clip = get_texture_from_clip(parameters.depth_range, parameters.conventions);
     const glm::mat4 clip_from_tex = get_clip_from_texture(parameters.depth_range, parameters.conventions);
@@ -394,7 +448,7 @@ auto Light::spot_light_projection_transforms(const Light_projection_parameters& 
     return Light_projection_transforms{
         .light                   = this,
         .projection              = light_projection,
-        .world_from_light_camera = node->world_from_node_transform(),
+        .world_from_light_camera = world_from_light_camera,
         .clip_from_light_camera  = clip_from_light_camera,
         .clip_from_world         = clip_from_world,
         .texture_from_world      = texture_from_world
@@ -405,8 +459,7 @@ auto Light::point_light_projection_transforms(const Light_projection_parameters&
 {
     ERHE_PROFILE_FUNCTION();
     static_cast<void>(parameters);
-    const Node* const node = get_node();
-    ERHE_VERIFY(node != nullptr);
+    const Light_frame light_frame = get_light_frame();
 
     // The omnidirectional cube shadow is rasterized per face in Shadow_renderer
     // from six 90-degree perspectives centred on the light position. Only the
@@ -425,7 +478,7 @@ auto Light::point_light_projection_transforms(const Light_projection_parameters&
     return Light_projection_transforms{
         .light                   = this,
         .projection              = light_projection,
-        .world_from_light_camera = node->world_from_node_transform()
+        .world_from_light_camera = Trs_transform{light_frame.world_from_light, light_frame.light_from_world}
     };
 }
 

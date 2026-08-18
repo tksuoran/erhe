@@ -89,6 +89,32 @@ public:
 
 class Light;
 
+// Orthonormal world-space frame of a light, derived from the light node world
+// transform (Light::get_light_frame()).
+//
+// glTF KHR_lights_punctual: a light inherits the orientation of its node;
+// position and scale are ignored "except for their effect on the inherited node
+// orientation". So node scale must still be applied when the node axes are
+// transformed to world space (non-uniform scale reorients them, negative scale
+// mirrors them), but it must not survive into the light frame itself: the
+// direction is normalized and the frame is orthonormalized. Everything that
+// builds a light space - the light camera pose, the shadow projection frustum,
+// the light-space basis of the shadow frustum fit, the shaded light direction -
+// uses this frame instead of the raw node transform. Using the raw transform
+// makes a scaled light node skew light space: light-space extents and texel
+// sizes are no longer in world units and the near/far placement is off by the
+// scale factor, which is what breaks the directional shadow frustum fit.
+class Light_frame
+{
+public:
+    glm::vec3 position {0.0f, 0.0f, 0.0f}; // light node world position
+    glm::vec3 direction{0.0f, 0.0f, 1.0f}; // unit; node +Z in world = direction from the lit surface toward the light
+    glm::vec3 up       {0.0f, 1.0f, 0.0f}; // unit; node +Y in world, orthogonalized against direction
+    glm::vec3 right    {1.0f, 0.0f, 0.0f}; // unit; cross(up, direction) - always right-handed, even for a mirrored node
+    glm::mat4 world_from_light{1.0f};      // rigid: (right, up, direction, position)
+    glm::mat4 light_from_world{1.0f};      // inverse of world_from_light
+};
+
 class Light_projection_transforms
 {
 public:
@@ -208,6 +234,10 @@ public:
     // unconverted.
     [[nodiscard]] auto get_luminous_flux() const -> float;
     void set_luminous_flux(float lumens);
+
+    // Orthonormal world-space frame of the light; see Light_frame.
+    // Requires an attached node.
+    [[nodiscard]] auto get_light_frame() const -> Light_frame;
 
     Type        type             {Type::directional};
     glm::vec3   color            {1.0f, 1.0f, 1.0f};

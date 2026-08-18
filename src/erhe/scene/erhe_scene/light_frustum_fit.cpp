@@ -348,10 +348,14 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
 
     // Light frame - rotation only transform, same convention as the stable fit.
     // light_direction points from the scene toward the light (node +Z axis).
-    const glm::vec3 light_direction = glm::vec3{light_node->direction_in_world()};
-    const glm::vec3 light_up_vector = glm::vec3{light_node->world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
-    const glm::mat3 world_from_light{light_node->world_from_node()};
-    const glm::mat3 light_from_world{light_node->node_from_world()};
+    // The light frame is orthonormal even for a scaled light node (see Light_frame),
+    // so light-space extents, texel sizes and near/far distances below are in world
+    // units.
+    const Light_frame light_frame   = get_light_frame();
+    const glm::vec3 light_direction = light_frame.direction;
+    const glm::vec3 light_up_vector = light_frame.up;
+    const glm::mat3 world_from_light{light_frame.world_from_light};
+    const glm::mat3 light_from_world{light_frame.light_from_world};
     const glm::vec3 light_direction_in_light = light_from_world * light_direction; // == +Z for a pure rotation light node
 
     // Step 1: Main camera view frustum F_main, truncated to the maximum shadow
