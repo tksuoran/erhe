@@ -268,7 +268,11 @@ void bucket_primitives(
     const erhe::Item_filter&                                   filter,
     erhe::primitive::Primitive_mode                            primitive_mode,
     Blending_mode_policy                                       blending_mode_policy,
-    const erhe::Item_filter&                                   shader_debug_filter = {}
+    const erhe::Item_filter&                                   shader_debug_filter = {},
+    // Skip primitives whose material is unlit (KHR_materials_unlit). Used by
+    // the shadow pass: unlit geometry (sky domes, backdrops, emissive decals)
+    // is not part of the lit scene and should not occlude it.
+    bool                                                       exclude_unlit_primitives = false
 );
 
 }

@@ -576,6 +576,17 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             : nullptr;
     const erhe::scene::Layer_id draw_list_layers[] = { layers.content()->id };
 
+    // Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive
+    // decals - are backdrop geometry, not occluders. The draw-list path bakes
+    // shadow membership into its cached entries, so the flag is pushed to the
+    // scene's draw lists (a no-op unless it changed, a rebuild when it did);
+    // the bucket path applies it per pass.
+    const bool exclude_unlit_casters =
+        (m_context.editor_settings != nullptr) && m_context.editor_settings->exclude_unlit_primitives;
+    if (draw_list_scene != nullptr) {
+        draw_list_scene->set_exclude_unlit_from_shadows(exclude_unlit_casters);
+    }
+
     m_context.shadow_renderer->render(
         erhe::scene_renderer::Shadow_renderer::Render_parameters{
             .command_buffer        = command_buffer,
@@ -603,7 +614,8 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
             .point_cube_render_passes = &m_point_render_passes,
             .point_shadow_viewport    = m_point_viewport,
             .draw_list_scene          = draw_list_scene,
-            .draw_list_layers         = draw_list_layers
+            .draw_list_layers         = draw_list_layers,
+            .exclude_unlit_casters    = exclude_unlit_casters
         }
     );
 }

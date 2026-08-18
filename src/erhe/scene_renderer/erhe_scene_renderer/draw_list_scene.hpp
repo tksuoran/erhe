@@ -137,6 +137,12 @@ public:
     void set_object_flags (const erhe::scene::Mesh* mesh, uint64_t item_flag_bits);
     // Drop and recreate all draw lists from the stored object records (R1a).
     void rebuild_all      ();
+    // Whether unlit (KHR_materials_unlit) primitives are kept out of the
+    // shadow draw lists. Shadow membership is baked into the cached entries,
+    // so changing this rebuilds every list; setting the current value is a
+    // no-op. Default: unlit primitives DO cast (the historical behavior).
+    void set_exclude_unlit_from_shadows(bool value);
+    [[nodiscard]] auto get_exclude_unlit_from_shadows() const -> bool { return m_exclude_unlit_from_shadows; }
 
     [[nodiscard]] auto find_object    (const erhe::scene::Mesh* mesh) const -> Draw_list_object_id;
     [[nodiscard]] auto get_object     (Draw_list_object_id id) const -> const Draw_list_object*;
@@ -271,6 +277,7 @@ private:
     std::size_t                                                      m_primitive_record_stride{0};
     std::vector<uint32_t>                                            m_multiview_view_counts;
     std::thread::id                                                  m_owner_thread_id;
+    bool                                                             m_exclude_unlit_from_shadows{false};
 
     std::vector<Draw_list>                                           m_draw_lists;
     std::unordered_map<Draw_list_key, uint32_t, Draw_list_key_hash>  m_draw_list_index_by_key;

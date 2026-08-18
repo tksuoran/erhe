@@ -593,6 +593,9 @@ void Settings_window::imgui()
         add_entry("Draw Lists", [&settings](){
             ImGui::Checkbox("##", &settings.use_draw_lists);
         }, "Render content fill and shadow maps through persistent per-scene draw lists (doc/draw_list_renderer_requirements.md). Off = classic per-pass bucketing.");
+        add_entry("Exclude Unlit Primitives", [&settings](){
+            ImGui::Checkbox("##", &settings.exclude_unlit_primitives);
+        }, "Unlit (KHR_materials_unlit) primitives - sky domes, backdrops, emissive decals - do not cast shadows and are ignored when framing the camera on scene open. They still count toward the camera far plane.");
         add_config_section(settings.camera_controls);
         // Default Visual Style for new viewports - shown near the top since it
         // is one of the more commonly edited sections.

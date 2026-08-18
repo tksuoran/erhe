@@ -664,7 +664,8 @@ void bucket_primitives(
     const erhe::Item_filter&                                   filter,
     const erhe::primitive::Primitive_mode                      primitive_mode,
     const Blending_mode_policy                                 blending_mode_policy,
-    const erhe::Item_filter&                                   shader_debug_filter
+    const erhe::Item_filter&                                   shader_debug_filter,
+    const bool                                                 exclude_unlit_primitives
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -698,6 +699,16 @@ void bucket_primitives(
             }
 
             erhe::primitive::Material* material = mesh_primitive.material.get();
+
+            // Unlit primitives are excluded from the shadow pass (see the
+            // parameter comment): they are backdrop geometry, not occluders.
+            if (
+                exclude_unlit_primitives &&
+                (material != nullptr) &&
+                (material->data.bxdf_model == erhe::primitive::Bxdf_model::unlit)
+            ) {
+                continue;
+            }
 
             const Vertex_input_entry& vertex_input_entry = mesh_memory.get_vertex_input(buffer_mesh->vertex_input_key);
 

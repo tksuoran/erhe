@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=2,
+    version=3,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -87,6 +87,21 @@ struct("Editor_settings_config",
             default="false",
             short_desc="Draw Lists",
             long_desc="Render content fill and shadow maps through persistent per-scene draw lists (faster with many primitives). Off = classic per-pass bucketing.",
+            visible=True,
+            developer=False
+        ),
+        # Unlit (KHR_materials_unlit) primitives are typically sky domes,
+        # backdrops and emissive decals: geometry that should not occlude the
+        # lit scene and should not drag the camera framing out to the horizon.
+        # They still count toward the camera far plane, so the backdrop stays
+        # visible.
+        field(
+            "exclude_unlit_primitives",
+            Bool,
+            added_in=3,
+            default="true",
+            short_desc="Exclude Unlit Primitives",
+            long_desc="Unlit (KHR_materials_unlit) primitives do not cast shadows and are ignored when framing the camera on scene open. They still count toward the camera far plane.",
             visible=True,
             developer=False
         ),

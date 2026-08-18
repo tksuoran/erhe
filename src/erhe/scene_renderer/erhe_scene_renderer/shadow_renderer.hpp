@@ -162,6 +162,14 @@ public:
         // per pass exactly as for the bucket path.
         Draw_list_scene*                                                   draw_list_scene{nullptr};
         std::span<const erhe::scene::Layer_id>                             draw_list_layers{};
+
+        // Unlit (KHR_materials_unlit) primitives are backdrop geometry (sky
+        // domes, emissive decals), not occluders: skip them when bucketing
+        // casters, and leave meshes made entirely of them out of the frustum
+        // fit's caster bounds. The draw-list path applies the same rule from
+        // Draw_list_scene::set_exclude_unlit_from_shadows(), which is what
+        // makes its cached shadow lists match this flag.
+        bool                                                               exclude_unlit_casters{false};
     };
 
     auto render(const Render_parameters& parameters) -> bool;
@@ -203,7 +211,8 @@ private:
         const erhe::graphics::Color_blend_state*                                                  color_blend,
         const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>&  mesh_spans,
         const erhe::Item_filter&                                                                 shadow_filter,
-        uint32_t                                                                                 boolean_mask_force_enable
+        uint32_t                                                                                 boolean_mask_force_enable,
+        bool                                                                                     exclude_unlit_primitives
     );
 
     erhe::graphics::Device&                       m_graphics_device;

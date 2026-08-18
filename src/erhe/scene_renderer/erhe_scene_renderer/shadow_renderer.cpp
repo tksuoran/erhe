@@ -19,6 +19,7 @@
 #include "erhe_math/aabb.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/buffer_mesh.hpp"
+#include "erhe_primitive/material.hpp"
 //#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -39,6 +40,29 @@ using erhe::graphics::Depth_stencil_state;
 using erhe::graphics::Color_blend_state;
 
 static constexpr std::string_view c_shadow_renderer_initialize_component{"Shadow_renderer::initialize_component()"};
+
+namespace {
+
+// True when every primitive of the mesh is unlit (KHR_materials_unlit), i.e.
+// the mesh contributes no caster to the shadow pass once unlit primitives are
+// excluded. A mesh with a mix of lit and unlit primitives still casts, and
+// keeps its whole (conservative) AABB in the frustum fit.
+[[nodiscard]] auto is_fully_unlit(const erhe::scene::Mesh& mesh) -> bool
+{
+    const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh.get_primitives();
+    if (primitives.empty()) {
+        return false;
+    }
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : primitives) {
+        const erhe::primitive::Material* material = mesh_primitive.material.get();
+        if ((material == nullptr) || (material->data.bxdf_model != erhe::primitive::Bxdf_model::unlit)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+}
 
 Shadow_renderer::Shadow_renderer(
     erhe::graphics::Device&         graphics_device,
@@ -125,7 +149,8 @@ void Shadow_renderer::draw_shadow_casters(
     const erhe::graphics::Color_blend_state*                                                 color_blend,
     const std::initializer_list<const std::span<const std::shared_ptr<erhe::scene::Mesh>>>& mesh_spans,
     const erhe::Item_filter&                                                                 shadow_filter,
-    const uint32_t                                                                           boolean_mask_force_enable
+    const uint32_t                                                                           boolean_mask_force_enable,
+    const bool                                                                               exclude_unlit_primitives
 )
 {
     using Ring_buffer_range          = erhe::graphics::Ring_buffer_range;
@@ -147,7 +172,9 @@ void Shadow_renderer::draw_shadow_casters(
             meshes,
             shadow_filter,
             primitive_mode,
-            Blending_mode_policy::opaque_primitives_only // TODO Think about what would be correct
+            Blending_mode_policy::opaque_primitives_only, // TODO Think about what would be correct
+            {}, // no shader debug filter
+            exclude_unlit_primitives
         );
     }
 
@@ -284,7 +311,10 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 if ((flag_bits & erhe::Item_flags::visible) == 0) {
                     continue;
                 }
-                const bool is_caster = gather_casters && shadow_filter(flag_bits);
+                const bool is_caster =
+                    gather_casters &&
+                    shadow_filter(flag_bits) &&
+                    (!parameters.exclude_unlit_casters || !is_fully_unlit(*mesh.get()));
                 if (!gather_receivers && !is_caster) {
                     continue; // nothing to gather for this mesh; skip the AABB compute
                 }
@@ -502,7 +532,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 color_blend,
                 mesh_spans,
                 shadow_filter,
-                boolean_mask_force_enable
+                boolean_mask_force_enable,
+                parameters.exclude_unlit_casters
             );
         }
 
@@ -671,7 +702,8 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                         &erhe::graphics::Color_blend_state::color_blend_disabled,
                         mesh_spans,
                         shadow_filter,
-                        cube_force_enable
+                        cube_force_enable,
+                        parameters.exclude_unlit_casters
                     );
                 }
 

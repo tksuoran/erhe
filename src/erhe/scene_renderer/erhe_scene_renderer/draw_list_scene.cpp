@@ -53,7 +53,8 @@ public:
     const erhe::scene::Mesh&              mesh,
     const erhe::scene::Mesh_primitive&    mesh_primitive,
     const erhe::primitive::Primitive_mode primitive_mode,
-    const Draw_purpose                    purpose
+    const Draw_purpose                    purpose,
+    const bool                            exclude_unlit_from_shadows
 ) -> Primitive_classification
 {
     Primitive_classification result{};
@@ -85,6 +86,19 @@ public:
     // Shadow lists take opaque casters only (Shadow_renderer uses
     // opaque_primitives_only today).
     if ((purpose == Draw_purpose::shadow) && !is_opaque) {
+        return result;
+    }
+
+    // Unlit (KHR_materials_unlit) primitives are backdrop geometry, not
+    // occluders: keep them out of the shadow lists when the editor setting
+    // asks for it (Draw_list_scene::set_exclude_unlit_from_shadows, which
+    // rebuilds the lists when the flag changes).
+    if (
+        (purpose == Draw_purpose::shadow) &&
+        exclude_unlit_from_shadows &&
+        (material != nullptr) &&
+        (material->data.bxdf_model == erhe::primitive::Bxdf_model::unlit)
+    ) {
         return result;
     }
 
@@ -287,7 +301,9 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
     }
     for (std::size_t i = 0, count = primitives.size(); i < count; ++i) {
         for (const Draw_purpose purpose : purposes) {
-            const Primitive_classification classification = classify_primitive(m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose);
+            const Primitive_classification classification = classify_primitive(
+                m_mesh_memory, *mesh, primitives[i], primitive_mode, purpose, m_exclude_unlit_from_shadows
+            );
             if (!classification.accepted) {
                 continue;
             }
@@ -792,6 +808,20 @@ void Draw_list_scene::set_object_flags(const Draw_list_object_id id, const uint6
 void Draw_list_scene::set_object_flags(const erhe::scene::Mesh* mesh, const uint64_t item_flag_bits)
 {
     set_object_flags(find_object(mesh), item_flag_bits);
+}
+
+void Draw_list_scene::set_exclude_unlit_from_shadows(const bool value)
+{
+    assert_main_thread();
+
+    if (m_exclude_unlit_from_shadows == value) {
+        return;
+    }
+    m_exclude_unlit_from_shadows = value;
+    // Shadow list membership is baked into the cached entries; the flag only
+    // takes effect once they are re-classified.
+    log_draw_list->info("Draw_list_scene: exclude unlit from shadows = {}; rebuilding draw lists", value);
+    rebuild_all();
 }
 
 void Draw_list_scene::rebuild_all()
