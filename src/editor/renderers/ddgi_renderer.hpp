@@ -198,6 +198,12 @@ private:
 
     Blend_pass m_blend_irradiance;
     Blend_pass m_blend_distance;
+
+    // Probe relocation + classification (phase 5). Shares the blend passes'
+    // shape: control UBO + ray data + the probe data texture it writes.
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_relocate_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_relocate_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_relocate_pipeline;
     std::unique_ptr<erhe::scene_renderer::Material_buffer>    m_material_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_projections>  m_light_projections;
@@ -219,6 +225,7 @@ private:
         std::size_t random_rotation{0};
         std::size_t params         {0};
         std::size_t sky_radiance   {0};
+        std::size_t flags          {0};
     };
     Control_offsets m_control_offsets{};
 

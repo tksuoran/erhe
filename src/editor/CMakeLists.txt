@@ -32,6 +32,7 @@ erhe_target_sources_grouped(
 
     res/editor/shaders/ddgi_blend.comp
     res/editor/shaders/ddgi_trace.comp
+    res/editor/shaders/ddgi_relocate.comp
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
     res/editor/shaders/brush.frag

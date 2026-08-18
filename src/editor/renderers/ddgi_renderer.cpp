@@ -69,6 +69,11 @@ constexpr unsigned int c_blend_atlas_binding_point    = 4;
 // (which would otherwise force a shader recompile per setting change).
 constexpr int c_blend_workgroup_size = 64;
 
+// Relocation / classification: one thread per probe.
+constexpr unsigned int c_relocate_ray_data_binding_point   = 3;
+constexpr unsigned int c_relocate_probe_data_binding_point = 4;
+constexpr int          c_relocate_workgroup_size           = 64;
+
 constexpr erhe::dataformat::Format c_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
 constexpr erhe::dataformat::Format c_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
 constexpr erhe::dataformat::Format c_probe_data_format = erhe::dataformat::Format::format_16_vec4_float;
@@ -156,6 +161,8 @@ Ddgi_renderer::Ddgi_renderer(
     // x = hysteresis, y = depth sharpness, z = max ray distance, w = intensity
     m_control_offsets.params          = m_control_block.add_vec4 ("params"         )->get_offset_in_parent();
     m_control_offsets.sky_radiance    = m_control_block.add_vec4 ("sky_radiance"   )->get_offset_in_parent();
+    // x = relocation enabled, y = classification enabled
+    m_control_offsets.flags           = m_control_block.add_uvec4("flags"          )->get_offset_in_parent();
 
     // Stream-1 attribute offsets (in uints) for the shared hit path's manual
     // vertex fetch, derived from the Mesh_memory vertex format so they stay
@@ -311,6 +318,56 @@ Ddgi_renderer::Ddgi_renderer(
 
     create_blend_pass(graphics_device, m_blend_irradiance, false, "i_probe_atlas", "rgba16f", "DDGI blend irradiance");
     create_blend_pass(graphics_device, m_blend_distance,   true,  "i_probe_atlas", "rg16f",   "DDGI blend distance"  );
+
+    m_relocate_bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_relocate_ray_data_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_ray_data",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_relocate_probe_data_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_probe_data",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label = "DDGI relocate"
+        }
+    );
+    m_relocate_shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = "ddgi_relocate",
+            .defines             = { { "ERHE_DDGI_RELOCATE_GROUP_SIZE", fmt::format("{}", c_relocate_workgroup_size) } },
+            .interface_blocks    = { &m_control_block },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "ddgi_relocate.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = m_relocate_bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*m_relocate_shader_stages);
+    m_relocate_pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = "ddgi_relocate",
+            .shader_stages     = &m_relocate_shader_stages->shader_stages,
+            .bind_group_layout = m_relocate_bind_group_layout.get()
+        }
+    );
 
     m_supported = true;
     log_startup->info("Ddgi_renderer: DDGI available");
@@ -712,6 +769,12 @@ auto Ddgi_renderer::update_control_buffer() -> erhe::graphics::Ring_buffer_range
     // keeps distant geometry outside the volume from dominating the probe's
     // visibility statistics.
     const float max_ray_distance = 4.0f * glm::length(m_grid.spacing * glm::vec3{m_grid.counts - glm::ivec3{1}});
+    const glm::uvec4 flags{
+        m_config.relocation_enabled     ? 1u : 0u,
+        m_config.classification_enabled ? 1u : 0u,
+        0u,
+        0u
+    };
     const glm::vec4 params{
         std::clamp(m_config.hysteresis, 0.0f, 0.999f),
         std::max(1.0f, m_config.depth_sharpness),
@@ -726,6 +789,7 @@ auto Ddgi_renderer::update_control_buffer() -> erhe::graphics::Ring_buffer_range
     write(gpu_data, m_control_offsets.random_rotation, as_span(random_rotation));
     write(gpu_data, m_control_offsets.params,          as_span(params         ));
     write(gpu_data, m_control_offsets.sky_radiance,    as_span(m_sky_radiance ));
+    write(gpu_data, m_control_offsets.flags,           as_span(flags          ));
     range.bytes_written(byte_count);
     range.close();
     return range;
@@ -849,6 +913,20 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
         };
         blend(m_blend_irradiance, m_irradiance_texture);
         blend(m_blend_distance,   m_distance_texture  );
+
+        // Relocation / classification reads the same ray data, and writes
+        // only the probe data texture the blend passes never touch, so it
+        // needs no barrier against them.
+        encoder.set_bind_group_layout(m_relocate_bind_group_layout.get());
+        encoder.set_compute_pipeline(*m_relocate_pipeline);
+        m_control_buffer->bind(encoder, control_range);
+        encoder.set_storage_image(c_relocate_ray_data_binding_point,   *m_ray_data_texture);
+        encoder.set_storage_image(c_relocate_probe_data_binding_point, *m_probe_data_texture);
+        encoder.dispatch_compute(
+            static_cast<std::uintptr_t>((m_probes_per_update + c_relocate_workgroup_size - 1) / c_relocate_workgroup_size),
+            1,
+            1
+        );
     }
     control_range.release();
 

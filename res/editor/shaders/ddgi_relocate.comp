@@ -1,0 +1,131 @@
+// DDGI probe relocation and classification (doc/ddgi-plan.md phase 5).
+//
+// One thread per updated probe, reading that probe's ray row from this
+// tick's ray data. Two independent decisions come out of the same
+// statistics:
+//
+//  - Relocation: a probe that sits inside or right up against geometry
+//    records the inside of a wall and bleeds it into its whole
+//    interpolation neighbourhood. Such a probe is nudged toward the most
+//    open direction it saw, clamped to a fraction of the grid spacing so it
+//    never crosses into a neighbour's cell. Probes with clear surroundings
+//    relax back toward their grid position.
+//  - Classification: a probe that sees mostly backfaces is enclosed in
+//    geometry and cannot contribute anything meaningful. Its state flag
+//    goes to 0 and the sampling path drops it from the interpolation.
+//
+// Both are stored in the probe data texture: xyz = world-space relocation
+// offset, w = state (1 active, 0 inactive). The trace pass reads the offset
+// back on the next tick, so relocation converges over a few updates rather
+// than jumping.
+
+layout(local_size_x = ERHE_DDGI_RELOCATE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+// Fraction of the backface hits above which a probe counts as enclosed.
+const float c_backface_ratio_threshold = 0.25;
+// Relocation offset cap, as a fraction of the smallest grid spacing. Kept
+// below 0.5 so a relocated probe stays inside its own cell.
+const float c_max_offset_fraction = 0.45;
+// A frontface closer than this fraction of the spacing is "up against the
+// probe" and pushes it away.
+const float c_near_surface_fraction = 0.05;
+// How fast a probe with clear surroundings drifts back to its grid slot.
+const float c_relax = 0.98;
+
+vec3 spherical_fibonacci(uint index, uint count)
+{
+    const float c_golden_ratio = 1.6180339887498948482;
+    float       fi             = float(index) + 0.5;
+    float       phi            = 6.2831853071795864769 * fract(fi * (1.0 / c_golden_ratio));
+    float       cos_theta      = 1.0 - (2.0 * fi / float(count));
+    float       sin_theta      = sqrt(clamp(1.0 - cos_theta * cos_theta, 0.0, 1.0));
+    return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+vec3 rotate_by_quaternion(vec4 q, vec3 v)
+{
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+
+ivec3 probe_coords(uint probe_index)
+{
+    uvec3 counts = ddgi.grid_counts.xyz;
+    uint  x      = probe_index % counts.x;
+    uint  y      = (probe_index / counts.x) % counts.y;
+    uint  z      = probe_index / (counts.x * counts.y);
+    return ivec3(x, y, z);
+}
+
+void main()
+{
+    uint probe_slot = gl_GlobalInvocationID.x;
+    if (probe_slot >= ddgi.dispatch.y) {
+        return;
+    }
+    uint probe_count = ddgi.grid_counts.x * ddgi.grid_counts.y * ddgi.grid_counts.z;
+    uint probe_index = (ddgi.dispatch.x + probe_slot) % probe_count;
+    uint ray_count   = ddgi.grid_counts.w;
+
+    ivec3 coords = probe_coords(probe_index);
+    ivec2 texel  = ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y);
+
+    uint  backface_count = 0u;
+    float nearest_front  = 1.0e30;
+    vec3  nearest_front_direction = vec3(0.0);
+    float farthest       = 0.0;
+    vec3  farthest_direction = vec3(0.0, 1.0, 0.0);
+
+    for (uint ray = 0u; ray < ray_count; ++ray) {
+        vec4 ray_data  = imageLoad(i_ray_data, ivec2(int(ray), int(probe_slot)));
+        vec3 direction = normalize(rotate_by_quaternion(ddgi.random_rotation, spherical_fibonacci(ray, ray_count)));
+        float distance_value = ray_data.w;
+        if (distance_value < 0.0) {
+            ++backface_count;
+            continue;
+        }
+        if (distance_value < nearest_front) {
+            nearest_front           = distance_value;
+            nearest_front_direction = direction;
+        }
+        if (distance_value > farthest) {
+            farthest           = distance_value;
+            farthest_direction = direction;
+        }
+    }
+
+    float backface_ratio = float(backface_count) / float(ray_count);
+    float min_spacing    = min(ddgi.grid_spacing.x, min(ddgi.grid_spacing.y, ddgi.grid_spacing.z));
+    float max_offset     = c_max_offset_fraction * min_spacing;
+
+    vec4 probe_data = imageLoad(i_probe_data, texel);
+    vec3 offset     = probe_data.xyz;
+
+    if (ddgi.flags.x != 0u) {
+        if (backface_ratio > c_backface_ratio_threshold) {
+            // Enclosed: head for the most open direction, at most half the
+            // distance actually seen that way (so the probe never lands on
+            // the surface it was aiming past).
+            offset += farthest_direction * min(0.5 * farthest, max_offset);
+        } else {
+            float near_threshold = c_near_surface_fraction * min_spacing;
+            if (nearest_front < near_threshold) {
+                offset -= nearest_front_direction * (near_threshold - nearest_front);
+            } else {
+                offset *= c_relax;
+            }
+        }
+        float offset_length = length(offset);
+        if (offset_length > max_offset) {
+            offset *= max_offset / offset_length;
+        }
+    } else {
+        offset = vec3(0.0);
+    }
+
+    float state = 1.0;
+    if (ddgi.flags.y != 0u) {
+        state = (backface_ratio > c_backface_ratio_threshold) ? 0.0 : 1.0;
+    }
+
+    imageStore(i_probe_data, texel, vec4(offset, state));
+}
