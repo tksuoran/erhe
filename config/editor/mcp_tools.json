@@ -2986,6 +2986,10 @@
         "show_window": {
           "description": "Also show the DDGI window so the probe atlases are visible in screenshots (default false)",
           "type": "boolean"
+        },
+        "debug_draw_probes": {
+          "description": "Draw a wire sphere at every probe (green active, red classified-inactive) plus the volume box; omit to leave unchanged",
+          "type": "boolean"
         }
       },
       "type": "object"

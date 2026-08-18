@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderable.hpp"
 #include "renderers/scene_tlas.hpp"
 
 #include "erhe_graphics/sampler.hpp"
@@ -15,6 +16,7 @@
 
 namespace erhe::graphics {
     class Bind_group_layout;
+    class Buffer;
     class Command_buffer;
     class Compute_pipeline;
     class Device;
@@ -37,6 +39,7 @@ struct Ddgi_config;
 namespace editor {
 
 class App_context;
+class Render_context;
 class Scene_root;
 
 // Dynamic diffuse global illumination (doc/ddgi-plan.md).
@@ -52,7 +55,7 @@ class Scene_root;
 //
 // Milestone status: phase 3 - grid fit, texture allocation and the probe
 // trace pass. The blend / relocation passes land in phases 4-5.
-class Ddgi_renderer
+class Ddgi_renderer : public Renderable
 {
 public:
     // The fitted probe grid. spacing is per axis: the padded box extent
@@ -106,6 +109,11 @@ public:
     // called outside a render pass. No-op unless supported and enabled.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
+    // Implements Renderable: the probe overlay (volume box + one wire
+    // sphere per probe, coloured by classification state and offset by the
+    // relocation the GPU applied). Drawn only when debug_draw_probes is on.
+    void render(const Render_context& context) override;
+
 private:
     // The two blend passes share one source (ddgi_blend.comp, switched by
     // ERHE_DDGI_BLEND_DISTANCE) but need separate layouts: the irradiance
@@ -145,6 +153,12 @@ private:
         const char*             image_format,
         const char*             debug_label
     );
+
+    // Copies the probe data texture into the host-visible mirror the debug
+    // overlay reads. Recorded into the frame's command buffer, so the
+    // overlay sees the previous frame's probes - fine for a debug aid, and
+    // it costs no stall.
+    void copy_probe_data_for_debug(erhe::graphics::Command_buffer& command_buffer);
 
     // A uniformly distributed random rotation for this tick's ray set.
     [[nodiscard]] auto next_random_rotation() -> glm::vec4;
@@ -230,6 +244,11 @@ private:
     Control_offsets m_control_offsets{};
 
     std::mt19937 m_random_engine{0x0DD91u};
+
+    // Host-visible mirror of the probe data texture (xyz relocation offset,
+    // w state), refreshed while the probe overlay is enabled.
+    std::unique_ptr<erhe::graphics::Buffer> m_probe_readback_buffer;
+    bool                                    m_probe_readback_valid{false};
 };
 
 } // namespace editor

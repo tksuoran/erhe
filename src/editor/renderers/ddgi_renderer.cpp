@@ -5,10 +5,13 @@
 #include "config/generated/ddgi_config.hpp"
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
+#include "renderers/render_context.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/blit_command_encoder.hpp"
+#include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/compute_command_encoder.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
@@ -22,6 +25,8 @@
 #include "erhe_graphics/texture_heap.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_profile/profile.hpp"
+#include "erhe_renderer/primitive_renderer.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/scene.hpp"
@@ -76,7 +81,9 @@ constexpr int          c_relocate_workgroup_size           = 64;
 
 constexpr erhe::dataformat::Format c_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
 constexpr erhe::dataformat::Format c_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
-constexpr erhe::dataformat::Format c_probe_data_format = erhe::dataformat::Format::format_16_vec4_float;
+// Full float: one texel per probe is tiny, and it keeps the debug
+// overlay readback a plain memcpy instead of a half-float decode.
+constexpr erhe::dataformat::Format c_probe_data_format = erhe::dataformat::Format::format_32_vec4_float;
 constexpr erhe::dataformat::Format c_ray_data_format   = erhe::dataformat::Format::format_16_vec4_float;
 
 [[nodiscard]] auto round_up(const int value, const int multiple) -> int
@@ -232,7 +239,7 @@ Ddgi_renderer::Ddgi_renderer(
                     .type          = Binding_type::storage_image,
                     .name          = "i_probe_data",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba16f",
+                    .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
                 }
             },
@@ -341,7 +348,7 @@ Ddgi_renderer::Ddgi_renderer(
                     .type          = Binding_type::storage_image,
                     .name          = "i_probe_data",
                     .glsl_type     = Glsl_type::image_2d,
-                    .image_format  = "rgba16f",
+                    .image_format  = "rgba32f",
                     .stage_flags   = Shader_stage_flags::compute
                 }
             },
@@ -640,6 +647,25 @@ void Ddgi_renderer::allocate_textures(erhe::graphics::Command_buffer& command_bu
     // probes are traced each tick, and the blend passes read the same rows.
     m_ray_data_texture   = make_texture("DDGI ray data",   c_ray_data_format,   m_rays_per_probe,          m_probes_per_update      );
 
+    // Host-visible mirror for the probe overlay. One rgba32f texel per
+    // probe, so even a large grid is a few hundred kilobytes.
+    const std::size_t probe_data_byte_count =
+        static_cast<std::size_t>(tiles_x) *
+        static_cast<std::size_t>(tiles_y) *
+        erhe::dataformat::get_format_size_bytes(c_probe_data_format);
+    m_probe_readback_buffer = std::make_unique<Buffer>(
+        m_graphics_device,
+        Buffer_create_info{
+            .capacity_byte_count                    = probe_data_byte_count,
+            .memory_allocation_create_flag_bit_mask = Memory_allocation_create_flag_bit_mask::mapped,
+            .usage                                  = Buffer_usage::transfer_dst | Buffer_usage::storage,
+            .required_memory_property_bit_mask      = Memory_property_flag_bit_mask::host_read | Memory_property_flag_bit_mask::host_write,
+            .preferred_memory_property_bit_mask     = Memory_property_flag_bit_mask::host_coherent | Memory_property_flag_bit_mask::host_persistent,
+            .debug_label                            = erhe::utility::Debug_label{"DDGI probe readback"}
+        }
+    );
+    m_probe_readback_valid = false;
+
     // Refits happen at runtime (content moved, settings changed), so this is
     // a render-log event, not a startup one.
     log_render->info(
@@ -724,6 +750,108 @@ auto Ddgi_renderer::update_volume(erhe::graphics::Command_buffer& command_buffer
     m_probe_cursor      = 0;
     allocate_textures(command_buffer);
     return true;
+}
+
+void Ddgi_renderer::copy_probe_data_for_debug(erhe::graphics::Command_buffer& command_buffer)
+{
+    using namespace erhe::graphics;
+
+    if (!m_probe_readback_buffer || !m_probe_data_texture) {
+        return;
+    }
+    const int         width         = m_probe_data_texture->get_width();
+    const int         height        = m_probe_data_texture->get_height();
+    const std::size_t bytes_per_row = static_cast<std::size_t>(width) * erhe::dataformat::get_format_size_bytes(c_probe_data_format);
+    const std::size_t byte_count    = bytes_per_row * static_cast<std::size_t>(height);
+
+    command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::transfer_src_optimal);
+    {
+        Blit_command_encoder blit = m_graphics_device.make_blit_command_encoder(command_buffer);
+        blit.copy_from_texture(
+            m_probe_data_texture.get(),
+            0,                             // source_slice
+            0,                             // source_level
+            glm::ivec3{0, 0, 0},           // source_origin
+            glm::ivec3{width, height, 1},  // source_size
+            m_probe_readback_buffer.get(), // destination_buffer
+            0,                             // destination_offset
+            static_cast<std::uintptr_t>(bytes_per_row),
+            static_cast<std::uintptr_t>(byte_count)
+        );
+    }
+    command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::shader_read_only_optimal);
+    // The overlay reads whatever the previous frame left in the mirror; the
+    // copy recorded here lands before the next one runs.
+    m_probe_readback_valid = true;
+}
+
+void Ddgi_renderer::render(const Render_context& context)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!is_active() || !m_config.debug_draw_probes) {
+        return;
+    }
+    // render_viewport_renderables() runs twice per viewport: first the CPU
+    // phase (no encoder) where debug lines are generated, then the encoder
+    // phase for renderables that issue draw calls. Lines submitted in the
+    // second phase would miss the debug renderer's compute dispatch, whose
+    // buffer bookkeeping then trips on the unconsumed range.
+    if (context.encoder != nullptr) {
+        return;
+    }
+
+    erhe::renderer::Primitive_renderer line_renderer = context.get({erhe::graphics::Primitive_type::line, 2, true, true});
+
+    // Volume box: what the grid was fitted to.
+    const glm::vec3 volume_max = m_grid.origin + m_grid.spacing * glm::vec3{m_grid.counts - glm::ivec3{1}};
+    line_renderer.add_cube(glm::mat4{1.0f}, glm::vec4{0.3f, 0.6f, 1.0f, 1.0f}, m_grid.origin, volume_max);
+
+    // Probe spheres. The relocation offset and the classification state come
+    // from the host-visible mirror the tick copies; without a copy yet, the
+    // probes draw at their nominal grid positions in the "active" colour.
+    const float* probe_data = nullptr;
+    std::span<std::byte> mapped{};
+    if (m_probe_readback_valid && m_probe_readback_buffer) {
+        mapped = m_probe_readback_buffer->map_bytes(0, m_probe_readback_buffer->get_capacity_byte_count());
+        if (!mapped.empty()) {
+            probe_data = reinterpret_cast<const float*>(mapped.data());
+        }
+    }
+
+    const float radius = 0.06f * std::min(m_grid.spacing.x, std::min(m_grid.spacing.y, m_grid.spacing.z));
+    const int   tiles_x = m_grid.counts.x * m_grid.counts.z;
+    for (int z = 0; z < m_grid.counts.z; ++z) {
+        for (int y = 0; y < m_grid.counts.y; ++y) {
+            for (int x = 0; x < m_grid.counts.x; ++x) {
+                glm::vec3 position = m_grid.origin + glm::vec3{x, y, z} * m_grid.spacing;
+                glm::vec4 color    = glm::vec4{0.2f, 1.0f, 0.4f, 1.0f}; // active
+                if (probe_data != nullptr) {
+                    const std::size_t texel = (static_cast<std::size_t>(y) * static_cast<std::size_t>(tiles_x)) +
+                                              static_cast<std::size_t>(x + m_grid.counts.x * z);
+                    const float* rgba = probe_data + (texel * 4);
+                    position += glm::vec3{rgba[0], rgba[1], rgba[2]};
+                    if (rgba[3] < 0.5f) {
+                        color = glm::vec4{1.0f, 0.2f, 0.2f, 1.0f}; // classified inactive
+                    }
+                }
+                line_renderer.add_sphere(
+                    erhe::scene::Transform{},
+                    color,
+                    color,
+                    2.0f,
+                    1.0f,
+                    position,
+                    radius,
+                    nullptr,
+                    8
+                );
+            }
+        }
+    }
+    if (!mapped.empty()) {
+        m_probe_readback_buffer->unmap();
+    }
 }
 
 auto Ddgi_renderer::next_random_rotation() -> glm::vec4
@@ -937,6 +1065,10 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::shader_read_only_optimal);
+
+    if (m_config.debug_draw_probes) {
+        copy_probe_data_for_debug(command_buffer);
+    }
 
     // Advance the round-robin cursor for the next tick.
     const uint32_t probe_count = static_cast<uint32_t>(m_grid.get_probe_count());

@@ -3034,6 +3034,11 @@ public:
         m_app_context.sky_renderer             = m_sky_renderer          .get();
         m_app_context.ray_trace_renderer       = m_ray_trace_renderer    .get();
         m_app_context.ddgi_renderer            = m_ddgi_renderer         .get();
+        // Probe overlay (debug_draw_probes): a Renderable, drawn with the
+        // other scene-view overlays.
+        if (m_app_rendering && m_ddgi_renderer) {
+            m_app_rendering->add(m_ddgi_renderer.get());
+        }
         m_app_context.lightmap_baker           = m_lightmap_baker        .get();
         m_app_context.lightmap_partitioner     = m_lightmap_partitioner  .get();
         m_app_context.lightmap_report          = m_lightmap_report       .get();

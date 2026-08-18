@@ -821,6 +821,15 @@ void main()
         out_color.rgb = srgb_to_linear(vec3(fract(v_texcoord_1), 0.0));
 #  elif ERHE_SHADER_DEBUG == 32 // texcoord_2 (lightmap UVs)
         out_color.rgb = srgb_to_linear(vec3(fract(v_texcoord_2), 0.0));
+#  elif ERHE_SHADER_DEBUG == 33 // ddgi_irradiance
+        // The DDGI term on its own, so leaks / seams / probe artifacts are
+        // visible without the direct light on top. Falls back to the flat
+        // ambient (i.e. a constant) when no probe volume is active.
+#    if defined(ERHE_USE_DDGI)
+        out_color.rgb = ddgi_sample_irradiance(v_position.xyz, N, V);
+#    else
+        out_color.rgb = light_block.ambient_light.rgb;
+#    endif
 #  elif ERHE_SHADER_DEBUG == 9 // base_color_texture
 #    ifdef ERHE_USE_BASE_COLOR_TEXTURE
         out_color.rgb = srgb_to_linear(base_color);

@@ -869,6 +869,9 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         if (args.contains("intensity")) {
             config.intensity = std::max(0.0f, args.value("intensity", 1.0f));
         }
+        if (args.contains("debug_draw_probes")) {
+            config.debug_draw_probes = args.value("debug_draw_probes", false);
+        }
     }
     if (args.value("show_window", false) && (m_context.imgui_windows != nullptr)) {
         for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
@@ -894,7 +897,8 @@ auto Mcp_server::action_set_ddgi(const json& args) -> std::string
         const Ddgi_config& config = m_context.editor_settings->ddgi;
         result["enabled"]    = config.enabled;
         result["hysteresis"] = config.hysteresis;
-        result["intensity"]  = config.intensity;
+        result["intensity"]         = config.intensity;
+        result["debug_draw_probes"] = config.debug_draw_probes;
     }
     return make_json_content(result).dump();
 }

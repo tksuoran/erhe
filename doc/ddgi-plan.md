@@ -1,11 +1,50 @@
 # DDGI (Dynamic Diffuse Global Illumination) plan
 
-Status: IN PROGRESS on branch `ddgi` (started 2026-08-18).
-
 ## Status
 
-- Phase 0 (this document) - DONE.
-- Phases 1-7 - not started.
+COMPLETE on branch `ddgi` (2026-08-18); see the follow-ups at the end.
+Every phase is verified headless on the default scene with zero Vulkan
+validation errors:
+
+- Phase 0: this document.
+- Phase 1: `Scene_tlas` extracted from `Ray_trace_renderer`
+  (`src/editor/renderers/scene_tlas.{hpp,cpp}`) - bottom level cache,
+  per-frame-in-flight top level slots, instance record SSBO.
+- Phase 2: `Ddgi_config` (erhe_codegen, `reflect=True`, shown in the
+  Settings window), `Ddgi_renderer` grid fit + texture allocation, the
+  developer `Ddgi_window`, and the MCP `set_ddgi` tool (pulled forward
+  from phase 7 - it is how every later phase was verified).
+- Phase 3: `ddgi_trace.comp`. The hit fetch and surface shading moved out
+  of `ray_trace.comp` into `res/shaders/erhe_ray_hit.glsl`, shared by both.
+- Phase 4: `ddgi_blend.comp`, one source switched by
+  `ERHE_DDGI_BLEND_DISTANCE` into the irradiance and distance passes,
+  including hysteresis and the octahedral border copy.
+- Phase 5: `ddgi_relocate.comp` - relocation and classification.
+- Phase 6: `res/shaders/erhe_ddgi.glsl` + the `standard.frag` branch, the
+  `USE_DDGI` variant axis, `Light_block` volume fields, texture heap slots
+  5-7 and `Light_buffer::bind_ddgi`, `Forward_renderer::set_ddgi`.
+- Phase 7: the probe overlay (`Ddgi_renderer` is a `Renderable`), the
+  `DDGI Irradiance` shader debug mode (33), and this status.
+
+Interim behaviour and known limitations:
+
+- Probe rays that escape the scene take the scene ambient as sky radiance.
+  The `sky_atmosphere` LUTs (which `Lightmap_baker`'s gather already
+  samples) are the obvious next refinement.
+- Probes see only direct light plus one implicit bounce through whatever
+  the ray hits; the field is not fed back into the trace, so there are no
+  infinite bounces yet.
+- On an open scene lit mostly by ambient - like the default scene - the
+  DDGI term is close to the flat ambient it replaces, because the probe
+  rays mostly escape. The difference shows in enclosed geometry; the
+  intensity knob and the DDGI Irradiance debug mode make it visible.
+- `Lightmap_baker` still has its own copy of the acceleration structure
+  code (its instance records carry texcoord-2 addresses).
+
+Gotcha found the hard way: a `Renderable` may only submit debug lines in
+the CPU phase (`Render_context::encoder == nullptr`). Lines submitted in
+the encoder phase miss the debug renderer's compute dispatch, and its
+buffer bookkeeping then trips an assert at frame end.
 
 ## Why
 
@@ -72,7 +111,7 @@ Atlas tiling: `tiles_x = nx * nz`, `tiles_y = ny`.
 | Ray data | RGBA16F storage + sampled | `rays_per_probe` x `probe_count` | radiance rgb, hit distance a (negative = backface hit) |
 | Irradiance atlas | RGBA16F | tile = `irradiance_texels + 2` square (default 6 + 2) | octahedral irradiance + 1-texel border |
 | Distance atlas | RG16F | tile = `distance_texels + 2` square (default 14 + 2) | mean distance, mean squared distance |
-| Probe data | RGBA16F | 1 texel per probe | relocation offset xyz, state w |
+| Probe data | RGBA32F | 1 texel per probe | relocation offset xyz, state w (full float so the debug overlay readback is a plain memcpy) |
 
 Single-buffered: each texel is written by exactly one invocation per pass, so no
 ping-pong is needed; a `memory_barrier` between passes suffices.
@@ -88,14 +127,14 @@ ping-pong is needed; a `memory_barrier` between passes suffices.
    sky radiance via the `sky_atmosphere` LUTs (the `sky_sample_*` helpers in
    `lightmap_baker.cpp`), or scene ambient when the sky is off. Backface hit:
    store `-distance` and zero radiance.
-2. **`ddgi_blend_irradiance.comp`** - one workgroup per probe, one thread per
-   interior texel. Cosine-weighted accumulation of the probe's rays, hysteresis
-   blend against the existing texel, then the border-texel copy in the same
-   dispatch.
-3. **`ddgi_blend_distance.comp`** - same shape, with
-   `pow(max(0, cos), depth_sharpness)` weighting of distance and distance
-   squared, plus the border copy.
-4. **`ddgi_relocate_classify.comp`** - one thread per probe. Backface-hit ratio
+2. **`ddgi_blend.comp`, irradiance variant** - one workgroup per probe,
+   striding over the tile's texels. Cosine-weighted accumulation of the
+   probe's rays, hysteresis blend against the existing texel, then the
+   border-texel copy in the same dispatch.
+3. **`ddgi_blend.comp`, distance variant** (`ERHE_DDGI_BLEND_DISTANCE`) - same
+   shape, with `pow(max(0, cos), depth_sharpness)` weighting of distance and
+   distance squared, plus the border copy.
+4. **`ddgi_relocate.comp`** - one thread per probe. Backface-hit ratio
    over the probe's rays gives the inactive state; the offset is nudged toward
    the most open direction, clamped to `0.5 * spacing`. Writes the probe data
    texture.
@@ -163,9 +202,9 @@ the lightmap tick for lifecycle:
 - Do not read `context.editor_settings` in the constructor - it is assigned
   after part construction.
 
-## Phases
+## Phases (as executed)
 
-Each phase is edit -> build (`scripts\build_ninja_win_vulkan.bat editor`) ->
+Each phase was edit -> build (`scripts\build_ninja_win_vulkan.bat editor`) ->
 independent review -> fix -> commit.
 
 **0. This document.** DONE.

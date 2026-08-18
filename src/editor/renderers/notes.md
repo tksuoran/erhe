@@ -20,6 +20,10 @@ Low-level rendering infrastructure for the editor: shader programs, GPU memory m
 
 - **`Viewport_config`** -- Per-viewport rendering options (grid, shadows, edge lines, selection outline, etc.).
 
+- **`Scene_tlas`** -- Shared GPU acceleration structures for the ray-query consumers: a bottom level structure cache keyed by `Buffer_mesh`, one top level structure per frame-in-flight slot, and the per-instance record SSBO the shaders read through buffer device addresses. Used by `Ray_trace_renderer` and `Ddgi_renderer`; `Lightmap_baker` still carries its own copy (its records also hold texcoord-2 addresses).
+
+- **`Ddgi_renderer`** -- Dynamic diffuse global illumination (`doc/ddgi-plan.md`). Fits one scene-wide probe grid to the padded content bounding box, then each tick traces a budgeted round-robin slice of probes (`ddgi_trace.comp`), blends the rays into octahedral irradiance / distance atlases (`ddgi_blend.comp`, two variants) and runs relocation + classification (`ddgi_relocate.comp`). The atlases reach `standard.frag` through texture heap slots 5-7 and the `USE_DDGI` shader variant axis, replacing the flat ambient term for non-lightmapped draws. Requires `Device_info::use_ray_query`. Also a `Renderable`: the probe overlay (`debug_draw_probes`) draws in the CPU phase only -- lines submitted in the encoder phase miss the debug renderer's compute dispatch and trip its buffer bookkeeping.
+
 ## Stencil budget and composition-pass ordering (IMPORTANT)
 
 The viewport stencil buffer is shared by several unrelated effects, and passes run in the order they were created (`Composer::render` walks `composition_passes` in sequence; `overlay` passes are split out and run after post-processing). Two rules follow, and violating either produces "geometry mysteriously missing" bugs that look like a draw problem but are not:
