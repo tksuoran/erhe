@@ -190,7 +190,8 @@ auto Color_environment::operator==(const Color_environment& other) const -> bool
         (shadow_filter     == other.shadow_filter    ) &&
         (shadow_bias       == other.shadow_bias      ) &&
         (shadow_technique  == other.shadow_technique ) &&
-        (shadow_depth_bits == other.shadow_depth_bits);
+        (shadow_depth_bits == other.shadow_depth_bits) &&
+        (ddgi_enabled      == other.ddgi_enabled     );
 }
 
 auto Color_environment::make_environment_key() const -> Shader_key
@@ -210,6 +211,7 @@ auto Color_environment::make_environment_key() const -> Shader_key
     key.set(Shader_int::SHADOW_BIAS,                              shadow_bias);
     key.set(Shader_int::SHADOW_TECHNIQUE,                         shadow_technique);
     key.set(Shader_int::SHADOW_DEPTH_BITS,                        shadow_depth_bits);
+    key.set(Shader_bool::USE_DDGI,                                ddgi_enabled);
     return key;
 }
 

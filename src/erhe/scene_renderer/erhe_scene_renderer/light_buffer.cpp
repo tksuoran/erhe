@@ -43,6 +43,12 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
         .brdf_phi_incident_phi     = light_block.add_vec2 ("brdf_phi_incident_phi"    )->get_offset_in_parent(),
         .ambient_light             = light_block.add_vec4 ("ambient_light"            )->get_offset_in_parent(),
 
+        .ddgi_grid_origin          = light_block.add_vec4 ("ddgi_grid_origin"         )->get_offset_in_parent(),
+        .ddgi_grid_spacing         = light_block.add_vec4 ("ddgi_grid_spacing"        )->get_offset_in_parent(),
+        .ddgi_counts               = light_block.add_uvec4("ddgi_counts"              )->get_offset_in_parent(),
+        .ddgi_texels               = light_block.add_uvec4("ddgi_texels"              )->get_offset_in_parent(),
+        .ddgi_params               = light_block.add_vec4 ("ddgi_params"              )->get_offset_in_parent(),
+
         .light = {
             .clip_from_world              = light_struct.add_mat4 ("clip_from_world"             )->get_offset_in_parent(),
             .texture_from_world           = light_struct.add_mat4 ("texture_from_world"          )->get_offset_in_parent(),
@@ -113,6 +119,24 @@ Light_interface::Light_interface(erhe::graphics::Device& graphics_device, const 
             .max_lod        = 0.0f,
             .min_lod        = 0.0f,
             .debug_label    = "Light_interface::lightmap_sampler"
+        }
+    }
+    , ddgi_sampler{
+        graphics_device,
+        erhe::graphics::Sampler_create_info{
+            .min_filter     = erhe::graphics::Filter::linear,
+            .mag_filter     = erhe::graphics::Filter::linear,
+            .mipmap_mode    = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
+            .address_mode   = {
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge,
+                erhe::graphics::Sampler_address_mode::clamp_to_edge
+            },
+            .compare_enable = false,
+            .lod_bias       = 0.0f,
+            .max_lod        = 0.0f,
+            .min_lod        = 0.0f,
+            .debug_label    = "Light_interface::ddgi_sampler"
         }
     }
 {
@@ -205,6 +229,36 @@ Light_buffer::Light_buffer(
             }
         )
     }
+    , m_fallback_ddgi_rgba_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = erhe::dataformat::Format::format_16_vec4_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .debug_label       = "Light_buffer::m_fallback_ddgi_rgba_texture"
+            }
+        )
+    }
+    , m_fallback_ddgi_rg_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = erhe::dataformat::Format::format_16_vec2_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .debug_label       = "Light_buffer::m_fallback_ddgi_rg_texture"
+            }
+        )
+    }
 {
     // Initialize fallback shadow texture contents (clear to far-plane depth) and
     // leave it in DEPTH_STENCIL_READ_ONLY_OPTIMAL. A bare UNDEFINED -> READ_ONLY
@@ -222,6 +276,10 @@ Light_buffer::Light_buffer(
     // Lightmap fallback: black (no baked light). The per-primitive scale
     // gate normally short-circuits before sampling.
     init_command_buffer.clear_texture(*m_fallback_lightmap_texture.get(), {0.0, 0.0, 0.0, 0.0});
+    // DDGI fallbacks: black irradiance, zero distance, inactive probe. The
+    // ddgi_counts.w gate normally short-circuits before sampling.
+    init_command_buffer.clear_texture(*m_fallback_ddgi_rgba_texture.get(), {0.0, 0.0, 0.0, 0.0});
+    init_command_buffer.clear_texture(*m_fallback_ddgi_rg_texture.get(),   {0.0, 0.0, 0.0, 0.0});
 }
 
 void Light_projections::apply(
@@ -340,7 +398,8 @@ auto Light_projections::get_light_projection_transforms_for_light(const erhe::sc
 auto Light_buffer::update(
     const Light_projections* light_projections,
     const glm::vec3&         ambient_light,
-    const uint32_t           lightmap_flags
+    const uint32_t           lightmap_flags,
+    const Ddgi_parameters*   ddgi
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -519,6 +578,36 @@ auto Light_buffer::update(
 
     write(light_gpu_data, common_offset + offsets.ambient_light,             as_span(ambient_light)          );
 
+    // DDGI probe volume (doc/ddgi-plan.md phase 6). ddgi_counts.w is the
+    // gate the fragment shader reads: 0 = no volume, keep the flat ambient.
+    const bool       ddgi_valid = (ddgi != nullptr) && ddgi->is_valid();
+    const glm::vec4  ddgi_grid_origin  = ddgi_valid ? glm::vec4{ddgi->grid_origin,  0.0f} : glm::vec4{0.0f};
+    const glm::vec4  ddgi_grid_spacing = ddgi_valid ? glm::vec4{ddgi->grid_spacing, 0.0f} : glm::vec4{1.0f};
+    const glm::uvec4 ddgi_counts = ddgi_valid
+        ? glm::uvec4{
+            static_cast<uint32_t>(ddgi->grid_counts.x),
+            static_cast<uint32_t>(ddgi->grid_counts.y),
+            static_cast<uint32_t>(ddgi->grid_counts.z),
+            1u
+        }
+        : glm::uvec4{0u, 0u, 0u, 0u};
+    const glm::uvec4 ddgi_texels = ddgi_valid
+        ? glm::uvec4{
+            static_cast<uint32_t>(ddgi->irradiance_texels),
+            static_cast<uint32_t>(ddgi->distance_texels),
+            0u,
+            0u
+        }
+        : glm::uvec4{0u, 0u, 0u, 0u};
+    const glm::vec4 ddgi_params = ddgi_valid
+        ? glm::vec4{ddgi->normal_bias, ddgi->view_bias, ddgi->depth_sharpness, ddgi->intensity}
+        : glm::vec4{0.0f, 0.0f, 50.0f, 1.0f};
+    write(light_gpu_data, common_offset + offsets.ddgi_grid_origin,          as_span(ddgi_grid_origin)       );
+    write(light_gpu_data, common_offset + offsets.ddgi_grid_spacing,         as_span(ddgi_grid_spacing)      );
+    write(light_gpu_data, common_offset + offsets.ddgi_counts,               as_span(ddgi_counts)            );
+    write(light_gpu_data, common_offset + offsets.ddgi_texels,               as_span(ddgi_texels)            );
+    write(light_gpu_data, common_offset + offsets.ddgi_params,               as_span(ddgi_params)            );
+
     buffer_range.bytes_written(write_offset);
     buffer_range.close();
     SPDLOG_LOGGER_TRACE(log_draw, "wrote up to {} entries to light buffer", padding_light_offset);
@@ -592,6 +681,23 @@ void Light_buffer::bind_lightmap(
         ? lightmap_texture
         : m_fallback_lightmap_texture.get();
     encoder.set_sampled_image(c_texture_heap_slot_lightmap, *texture, m_light_interface.lightmap_sampler);
+}
+
+void Light_buffer::bind_ddgi(
+    erhe::graphics::Render_command_encoder& encoder,
+    const erhe::graphics::Texture*          irradiance_texture,
+    const erhe::graphics::Texture*          distance_texture,
+    const erhe::graphics::Texture*          probe_data_texture
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const erhe::graphics::Texture* irradiance = (irradiance_texture != nullptr) ? irradiance_texture : m_fallback_ddgi_rgba_texture.get();
+    const erhe::graphics::Texture* distance   = (distance_texture   != nullptr) ? distance_texture   : m_fallback_ddgi_rg_texture  .get();
+    const erhe::graphics::Texture* probe_data = (probe_data_texture != nullptr) ? probe_data_texture : m_fallback_ddgi_rgba_texture.get();
+    encoder.set_sampled_image(c_texture_heap_slot_ddgi_irradiance, *irradiance, m_light_interface.ddgi_sampler);
+    encoder.set_sampled_image(c_texture_heap_slot_ddgi_distance,   *distance,   m_light_interface.ddgi_sampler);
+    encoder.set_sampled_image(c_texture_heap_slot_ddgi_probe_data, *probe_data, m_light_interface.ddgi_sampler);
 }
 
 auto Light_buffer::update_control(const std::size_t light_index, const float shadow_distance_bias_coeff, const glm::vec4& point_light_position) -> erhe::graphics::Ring_buffer_range

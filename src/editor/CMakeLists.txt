@@ -60,6 +60,7 @@ erhe_target_sources_grouped(
     res/shaders/edge_lines.frag
     res/shaders/edge_lines.vert
     res/shaders/erhe_bxdf.glsl
+    res/shaders/erhe_ddgi.glsl
     res/shaders/erhe_camera_view.glsl
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl

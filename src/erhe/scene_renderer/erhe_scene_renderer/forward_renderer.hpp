@@ -69,6 +69,30 @@ public:
     // true (the default), plain bilinear when false.
     void set_lightmap_bicubic(const bool enabled) { m_lightmap_bicubic = enabled; }
 
+    // DDGI probe volume sampled by standard.frag (doc/ddgi-plan.md phase 6).
+    // A default-constructed Ddgi_parameters (or null textures) means no
+    // volume: the USE_DDGI variant axis stays off and the flat ambient term
+    // is used, exactly as before DDGI existed.
+    void set_ddgi(
+        const Ddgi_parameters&                          parameters,
+        const std::shared_ptr<erhe::graphics::Texture>& irradiance_texture,
+        const std::shared_ptr<erhe::graphics::Texture>& distance_texture,
+        const std::shared_ptr<erhe::graphics::Texture>& probe_data_texture
+    )
+    {
+        m_ddgi                    = parameters;
+        m_ddgi_irradiance_texture = irradiance_texture;
+        m_ddgi_distance_texture   = distance_texture;
+        m_ddgi_probe_data_texture = probe_data_texture;
+    }
+    void clear_ddgi()
+    {
+        m_ddgi = Ddgi_parameters{};
+        m_ddgi_irradiance_texture.reset();
+        m_ddgi_distance_texture  .reset();
+        m_ddgi_probe_data_texture.reset();
+    }
+
     // glyph_outline_set is optional: pass nullptr from executables that
     // never draw glyphs (the Glyph_buffer falls back to an empty but
     // bindable buffer, same as when the outline set is invalid).
@@ -311,6 +335,10 @@ private:
     std::shared_ptr<erhe::graphics::Texture>      m_dummy_texture;
     std::unique_ptr<erhe::graphics::Texture_heap> m_texture_heap;
     std::shared_ptr<erhe::graphics::Texture>      m_lightmap_texture;
+    Ddgi_parameters                               m_ddgi{};
+    std::shared_ptr<erhe::graphics::Texture>      m_ddgi_irradiance_texture;
+    std::shared_ptr<erhe::graphics::Texture>      m_ddgi_distance_texture;
+    std::shared_ptr<erhe::graphics::Texture>      m_ddgi_probe_data_texture;
     bool                                          m_lightmap_bicubic{true};
 };
 

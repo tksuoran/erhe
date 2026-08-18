@@ -65,6 +65,17 @@ public:
 
     std::size_t  ambient_light;                // vec4
 
+    // Dynamic diffuse global illumination (doc/ddgi-plan.md phase 6). The
+    // probe volume rides in this block rather than a binding point of its
+    // own: it is small, and every shader that reads the lights also wants
+    // the indirect term. Inactive (ddgi_counts.w == 0) means no volume, and
+    // the shader keeps the flat ambient term.
+    std::size_t  ddgi_grid_origin;             // vec4 (xyz origin)
+    std::size_t  ddgi_grid_spacing;            // vec4 (xyz spacing)
+    std::size_t  ddgi_counts;                  // uvec4 (xyz probe counts, w enabled)
+    std::size_t  ddgi_texels;                  // uvec4 (x irradiance texels, y distance texels)
+    std::size_t  ddgi_params;                  // vec4 (normal bias, view bias, depth sharpness, intensity)
+
     Light_struct light;
     std::size_t  light_struct;
 };
@@ -84,6 +95,15 @@ static constexpr uint32_t c_texture_heap_slot_shadow_cube      {3};
 // atlas when a bake exists, else to a 1x1 black fallback; the fragment
 // shader gates sampling on the per-primitive lightmap scale.
 static constexpr uint32_t c_texture_heap_slot_lightmap        {4};
+// Color-aspect sampler2D bindings for the DDGI probe atlases
+// (doc/ddgi-plan.md phase 6): octahedral irradiance (rgba16f), octahedral
+// mean / mean-squared distance (rg16f), and one texel per probe carrying
+// the relocation offset and the active flag. Bound to the Ddgi_renderer's
+// textures when a volume exists, else to 1x1 black fallbacks; the fragment
+// shader gates sampling on light_block.ddgi_counts.w.
+static constexpr uint32_t c_texture_heap_slot_ddgi_irradiance{5};
+static constexpr uint32_t c_texture_heap_slot_ddgi_distance  {6};
+static constexpr uint32_t c_texture_heap_slot_ddgi_probe_data{7};
 
 class Light_interface
 {
@@ -115,6 +135,10 @@ public:
     // Bilinear clamp sampler for the baked lightmap atlas (immutable in the
     // descriptor set layout, like the shadow samplers).
     erhe::graphics::Sampler         lightmap_sampler;
+    // Bilinear clamp sampler for the DDGI octahedral atlases. The probe data
+    // texture shares it; the shader reads that one with texelFetch, which
+    // ignores filtering.
+    erhe::graphics::Sampler         ddgi_sampler;
 };
 
 // Selects camera for which the shadow frustums are fitted
@@ -198,6 +222,28 @@ public:
     std::shared_ptr<erhe::primitive::Material>            brdf_material    {};
 };
 
+// The probe volume the forward pass samples. Mirrors the Ddgi_renderer's
+// fitted grid; a default-constructed instance (counts 0) means "no volume",
+// which the shader reads as DDGI off.
+class Ddgi_parameters
+{
+public:
+    glm::vec3  grid_origin    {0.0f};
+    glm::vec3  grid_spacing   {1.0f};
+    glm::ivec3 grid_counts    {0};
+    int        irradiance_texels{0};
+    int        distance_texels  {0};
+    float      normal_bias    {0.0f};
+    float      view_bias      {0.0f};
+    float      depth_sharpness{50.0f};
+    float      intensity      {1.0f};
+
+    [[nodiscard]] auto is_valid() const -> bool
+    {
+        return (grid_counts.x > 1) && (grid_counts.y > 1) && (grid_counts.z > 1);
+    }
+};
+
 class Light_buffer
 {
 public:
@@ -215,8 +261,19 @@ public:
     auto update(
         const Light_projections* light_projections,
         const glm::vec3&         ambient_light,
-        uint32_t                 lightmap_flags = 0u // bit 0: bicubic lightmap sampling
+        uint32_t                 lightmap_flags = 0u, // bit 0: bicubic lightmap sampling
+        const Ddgi_parameters*   ddgi            = nullptr
     ) -> erhe::graphics::Ring_buffer_range;
+
+    // Bind the DDGI probe atlases (or the 1x1 black fallbacks when null) to
+    // the s_ddgi_* sampler bindings. Called alongside bind_lightmap by
+    // renderers whose fragment shaders can sample the probe volume.
+    void bind_ddgi(
+        erhe::graphics::Render_command_encoder& encoder,
+        const erhe::graphics::Texture*          irradiance_texture,
+        const erhe::graphics::Texture*          distance_texture,
+        const erhe::graphics::Texture*          probe_data_texture
+    );
 
     // Bind the shadow map textures to the s_shadow_compare and
     // s_shadow_no_compare sampler bindings declared in the bind group layout.
@@ -252,6 +309,10 @@ private:
     erhe::graphics::Ring_buffer_client       m_light_buffer;
     erhe::graphics::Ring_buffer_client       m_control_buffer;
     std::shared_ptr<erhe::graphics::Texture> m_fallback_shadow_texture;
+    // 1x1 black textures bound to the three s_ddgi_* slots whenever no probe
+    // volume exists, so the bindings always have a valid texture.
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_ddgi_rgba_texture;
+    std::shared_ptr<erhe::graphics::Texture> m_fallback_ddgi_rg_texture;
     // 1x1 R32F color texture bound to s_shadow_distance whenever no distance
     // map is active (depth technique), so the color-aspect binding always has
     // a valid texture. Mirrors m_fallback_shadow_texture for the depth path.

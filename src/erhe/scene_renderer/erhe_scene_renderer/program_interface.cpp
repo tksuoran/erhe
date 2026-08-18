@@ -153,6 +153,45 @@ Program_interface::Program_interface(
                 .immutable_sampler = &light_interface.lightmap_sampler,
                 .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
             },
+            {
+                // DDGI octahedral irradiance atlas (doc/ddgi-plan.md phase
+                // 6). Bound by Light_buffer::bind_ddgi (probe atlas or 1x1
+                // black fallback); the fragment shader gates sampling on
+                // light_block.ddgi_counts.w.
+                .binding_point     = c_texture_heap_slot_ddgi_irradiance,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_ddgi_irradiance",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.ddgi_sampler,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
+            {
+                // DDGI octahedral mean / mean-squared distance atlas; the
+                // Chebyshev visibility test reads it.
+                .binding_point     = c_texture_heap_slot_ddgi_distance,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_ddgi_distance",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.ddgi_sampler,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
+            {
+                // One texel per probe: relocation offset (xyz) and active
+                // state (w). Read with texelFetch, so the sampler's filter
+                // does not matter.
+                .binding_point     = c_texture_heap_slot_ddgi_probe_data,
+                .type              = erhe::graphics::Binding_type::combined_image_sampler,
+                .sampler_aspect    = erhe::graphics::Sampler_aspect::color,
+                .name              = "s_ddgi_probe_data",
+                .glsl_type         = erhe::graphics::Glsl_type::sampler_2d,
+                .is_texture_heap   = false,
+                .immutable_sampler = &light_interface.ddgi_sampler,
+                .stage_flags       = erhe::graphics::Shader_stage_flags::fragment
+            },
         },
         .debug_label = "Scene renderer"
     };

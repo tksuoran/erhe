@@ -9,6 +9,9 @@
 #include "erhe_light.glsl"
 #include "erhe_srgb.glsl"
 #include "erhe_texture.glsl"
+#if defined(ERHE_USE_DDGI)
+#include "erhe_ddgi.glsl"
+#endif
 #endif
 
 #if defined(ERHE_VARIANT_ID_RENDER)
@@ -575,6 +578,18 @@ void main()
             lightmap_valid = true;
         }
 #endif
+#if defined(ERHE_USE_DDGI)
+        // Dynamic diffuse global illumination (doc/ddgi-plan.md phase 6).
+        // Mutually exclusive with the baked lightmap: a lightmapped
+        // primitive keeps its bake (which already holds full lighting and
+        // gates the analytic loops off), everything else replaces the flat
+        // ambient term with the probe volume's indirect irradiance. The
+        // analytic light loops still run here - DDGI is indirect only.
+        if (!lightmap_valid) {
+            ambient_term = ddgi_sample_irradiance(v_position.xyz, N, V);
+        }
+#endif
+
         color  = ambient_term * base_color * occlusion;
         color += emissive;
 

@@ -43,6 +43,10 @@ public:
     uint32_t              shadow_bias      {1};
     uint32_t              shadow_technique {0};
     uint32_t              shadow_depth_bits{0};
+    // DDGI (doc/ddgi-plan.md phase 6): whether the probe volume is active
+    // this frame. Toggling it changes the shader variant of every color
+    // draw, so it belongs in the environment the cached resolutions key on.
+    bool                  ddgi_enabled     {false};
 
     [[nodiscard]] auto operator==(const Color_environment& other) const -> bool;
     // The environment Shader_key exactly as Forward_renderer::render() builds

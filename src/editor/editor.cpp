@@ -16,6 +16,7 @@
 #include "config/generated/add_room_args_serialization.hpp"
 #include "config/generated/make_mesh_args.hpp"
 #include "config/generated/make_mesh_args_serialization.hpp"
+#include "config/generated/ddgi_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
 #include "config/generated/editor_settings_config_serialization.hpp"
 #include "crash_handler.hpp"
@@ -814,6 +815,30 @@ public:
             const std::shared_ptr<Scene_root> ddgi_scene_root = m_app_scenes->get_single_scene_root();
             if (ddgi_scene_root) {
                 m_ddgi_renderer->tick(*m_app_context.current_command_buffer, *ddgi_scene_root.get());
+            }
+            // Publish (or clear) the probe volume for this frame's forward
+            // passes. Clearing turns the USE_DDGI shader axis back off.
+            if (m_ddgi_renderer->is_active()) {
+                const Ddgi_config&              ddgi_config = m_app_context.editor_settings->ddgi;
+                const Ddgi_renderer::Grid&      grid        = m_ddgi_renderer->get_grid();
+                erhe::scene_renderer::Ddgi_parameters ddgi_parameters{};
+                ddgi_parameters.grid_origin       = grid.origin;
+                ddgi_parameters.grid_spacing      = grid.spacing;
+                ddgi_parameters.grid_counts       = grid.counts;
+                ddgi_parameters.irradiance_texels = m_ddgi_renderer->get_irradiance_texels();
+                ddgi_parameters.distance_texels   = m_ddgi_renderer->get_distance_texels();
+                ddgi_parameters.normal_bias       = ddgi_config.normal_bias;
+                ddgi_parameters.view_bias         = ddgi_config.view_bias;
+                ddgi_parameters.depth_sharpness   = ddgi_config.depth_sharpness;
+                ddgi_parameters.intensity         = ddgi_config.intensity;
+                m_forward_renderer->set_ddgi(
+                    ddgi_parameters,
+                    m_ddgi_renderer->get_irradiance_texture(),
+                    m_ddgi_renderer->get_distance_texture(),
+                    m_ddgi_renderer->get_probe_data_texture()
+                );
+            } else {
+                m_forward_renderer->clear_ddgi();
             }
         }
 

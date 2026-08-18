@@ -184,10 +184,16 @@ auto Forward_renderer::begin_pass(
 
     // This must be done even if lights is empty.
     // For example, the number of lights is read from the light buffer.
-    state.light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
+    state.light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u, &m_ddgi);
     m_light_buffer.bind_light_buffer(render_encoder, state.light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
+    m_light_buffer.bind_ddgi(
+        render_encoder,
+        m_ddgi_irradiance_texture.get(),
+        m_ddgi_distance_texture  .get(),
+        m_ddgi_probe_data_texture.get()
+    );
 
     m_texture_heap->bind(render_encoder);
 
@@ -232,6 +238,7 @@ auto Forward_renderer::render_draw_lists(const Draw_list_render_parameters& para
     environment.shadow_bias       = parameters.shadow_bias;
     environment.shadow_technique  = parameters.shadow_technique;
     environment.shadow_depth_bits = parameters.shadow_depth_bits;
+    environment.ddgi_enabled      = m_ddgi.is_valid();
     // Same convention as render(): 0 for single view, N for multiview.
     const uint16_t multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
 
@@ -316,6 +323,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     // bucket) so the runtime get() lookup hits the prewarmed entry.
     const uint16_t shader_multiview_count = (base.views.size() >= 2) ? static_cast<uint16_t>(base.views.size()) : uint16_t{0};
     environment_key.set(Shader_int::SHADER_MULTIVIEW_COUNT,                   shader_multiview_count);
+    environment_key.set(Shader_bool::USE_DDGI,                                m_ddgi.is_valid());
 
     for (auto* render_pipeline_state : parameters.base_render_pipelines) {
         erhe::graphics::Scoped_debug_group pipeline_scope{
@@ -517,10 +525,16 @@ void Forward_renderer::draw_primitives(
         }
     }
 
-    Ring_buffer_range light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u);
+    Ring_buffer_range light_range = m_light_buffer.update(base.light_projections, base.ambient_light, m_lightmap_bicubic ? 1u : 0u, &m_ddgi);
     m_light_buffer.bind_light_buffer(render_encoder, light_range);
     m_light_buffer.bind_shadow_samplers(render_encoder, base.light_projections);
     m_light_buffer.bind_lightmap(render_encoder, m_lightmap_texture.get());
+    m_light_buffer.bind_ddgi(
+        render_encoder,
+        m_ddgi_irradiance_texture.get(),
+        m_ddgi_distance_texture  .get(),
+        m_ddgi_probe_data_texture.get()
+    );
 
     m_texture_heap->bind(render_encoder);
 
