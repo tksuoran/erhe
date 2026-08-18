@@ -38,12 +38,19 @@ class Scene_root;
 // acquired from the source container through the Asset_manager and listed
 // as reference entries instead of copied definitions; the default keeps
 // import-as-copy semantics.
+// fit_view_to_content: size the view to the imported content - the injected
+// default camera is placed to frame it and gets a depth range / shadow range
+// derived from the content bounds, and cameras carried by the file get their
+// far plane and shadow range widened to cover it. Used when the file becomes
+// a scene of its own (Scene_open_operation, e.g. --scene); importing into an
+// existing scene leaves that scene's view alone.
 [[nodiscard]] auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path,
-    bool                               materials_as_references = false
+    bool                               materials_as_references = false,
+    bool                               fit_view_to_content     = false
 ) -> std::shared_ptr<Operation>;
 
 // Queues the import compound built by make_import_gltf_operation().

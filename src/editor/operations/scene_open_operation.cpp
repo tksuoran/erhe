@@ -77,7 +77,13 @@ void Scene_open_operation::execute(App_context& context)
         // a single undo entry. The compound is one-shot: undo() only
         // unregisters the scene -- the imported content stays alive inside
         // m_scene_root, so redo re-registers it without re-importing.
-        std::shared_ptr<Operation> import_operation = make_import_gltf_operation(context, make_import_build_info(context), m_scene_root, m_path);
+        // fit_view_to_content: the file becomes a scene of its own here, so
+        // the camera depth range and shadow range are sized to it instead of
+        // the room-sized import defaults (a large scene is otherwise clipped
+        // away entirely at the fixed 80 unit far plane).
+        std::shared_ptr<Operation> import_operation = make_import_gltf_operation(
+            context, make_import_build_info(context), m_scene_root, m_path, false, true
+        );
         import_operation->execute(context);
 
         // Show the opened scene in a NEW viewport window, like "Create Scene"
