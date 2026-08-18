@@ -30,6 +30,7 @@ erhe_target_sources_grouped(
     config/editor/renderer.json
     config/editor/text_renderer.json
 
+    res/editor/shaders/ddgi_trace.comp
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert
     res/editor/shaders/brush.frag
@@ -61,6 +62,7 @@ erhe_target_sources_grouped(
     res/shaders/erhe_ggx.glsl
     res/shaders/erhe_light.glsl
     res/shaders/erhe_math.glsl
+    res/shaders/erhe_ray_hit.glsl
     res/shaders/erhe_srgb.glsl
     res/shaders/erhe_texture.glsl
     res/shaders/erhe_tonemap.glsl

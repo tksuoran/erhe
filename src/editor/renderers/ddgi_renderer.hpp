@@ -1,19 +1,34 @@
 #pragma once
 
+#include "renderers/scene_tlas.hpp"
+
+#include "erhe_graphics/sampler.hpp"
+#include "erhe_graphics/shader_resource.hpp"
 #include "erhe_math/aabb.hpp"
 
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <random>
 
 namespace erhe::graphics {
+    class Bind_group_layout;
     class Command_buffer;
+    class Compute_pipeline;
     class Device;
+    class Reloadable_shader_stages;
+    class Ring_buffer_client;
     class Texture;
+    class Texture_heap;
 }
 namespace erhe::scene_renderer {
+    class Light_buffer;
+    class Light_projections;
+    class Material_buffer;
     class Mesh_memory;
+    class Program_interface;
 }
 
 // erhe_codegen-generated config structs live in the global namespace.
@@ -21,6 +36,7 @@ struct Ddgi_config;
 
 namespace editor {
 
+class App_context;
 class Scene_root;
 
 // Dynamic diffuse global illumination (doc/ddgi-plan.md).
@@ -34,8 +50,8 @@ class Scene_root;
 // tick() does nothing. All probe state is held in 2D textures because the
 // graphics abstraction only exposes image2D storage images.
 //
-// Milestone status: phase 2 - grid fit and texture allocation only. The
-// trace / blend / relocation compute passes land in phases 3-5.
+// Milestone status: phase 3 - grid fit, texture allocation and the probe
+// trace pass. The blend / relocation passes land in phases 4-5.
 class Ddgi_renderer
 {
 public:
@@ -56,9 +72,12 @@ public:
     };
 
     Ddgi_renderer(
-        erhe::graphics::Device&            graphics_device,
-        erhe::scene_renderer::Mesh_memory& mesh_memory,
-        const Ddgi_config&                 config
+        erhe::graphics::Device&                  graphics_device,
+        erhe::graphics::Command_buffer&          init_command_buffer,
+        App_context&                             context,
+        erhe::scene_renderer::Program_interface& program_interface,
+        erhe::scene_renderer::Mesh_memory&       mesh_memory,
+        const Ddgi_config&                       config
     );
     ~Ddgi_renderer() noexcept;
 
@@ -77,9 +96,13 @@ public:
     [[nodiscard]] auto get_rays_per_probe          () const -> int;
     [[nodiscard]] auto get_irradiance_texels       () const -> int;
     [[nodiscard]] auto get_distance_texels         () const -> int;
+    // Probes updated per tick (config budget clamped to the grid), and how
+    // many ticks one full sweep of the grid therefore takes.
+    [[nodiscard]] auto get_probes_per_update       () const -> int;
+    [[nodiscard]] auto get_instance_count          () const -> std::size_t;
 
-    // Refits the grid to the scene's content bounds and reallocates the
-    // probe textures when the grid or the texel settings changed. Must be
+    // Refits the grid, reallocates the probe textures when needed, and
+    // records this tick's probe trace into the command buffer. Must be
     // called outside a render pass. No-op unless supported and enabled.
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
@@ -95,16 +118,29 @@ private:
     // (Re)creates the probe textures for the current grid + texel settings.
     void allocate_textures(erhe::graphics::Command_buffer& command_buffer);
 
-    erhe::graphics::Device&            m_graphics_device;
-    erhe::scene_renderer::Mesh_memory& m_mesh_memory;
+    // Refits + reallocates when needed. Returns false when there is no
+    // usable volume this tick.
+    [[nodiscard]] auto update_volume(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root) -> bool;
+
+    // Writes this tick's control UBO (grid, dispatch window, rotation).
+    [[nodiscard]] auto update_control_buffer() -> erhe::graphics::Ring_buffer_range;
+
+    // A uniformly distributed random rotation for this tick's ray set.
+    [[nodiscard]] auto next_random_rotation() -> glm::vec4;
+
+    erhe::graphics::Device& m_graphics_device;
+    App_context&            m_context;
     // Live reference to the editor's Ddgi_config (editor_settings.ddgi).
-    const Ddgi_config&                 m_config;
-    bool                               m_supported{false};
+    const Ddgi_config&      m_config;
+    bool                    m_supported{false};
 
     Grid m_grid{};
     int  m_rays_per_probe   {0};
     int  m_irradiance_texels{0};
     int  m_distance_texels  {0};
+    int  m_probes_per_update{0};
+    // Round-robin cursor: the first probe this tick's budget updates.
+    uint32_t m_probe_cursor{0};
     // Config values the current grid was fitted with. Changing any of them
     // changes the fit itself, so they force a refit even when the scene's
     // content bounds did not move.
@@ -123,6 +159,46 @@ private:
     // inside it - refitting on every content transform would reallocate the
     // probe textures (and throw away their converged contents) every frame.
     erhe::math::Aabb m_volume_bounds{};
+
+    // Radiance a probe ray gets when it escapes the scene. Scene ambient for
+    // now; the atmosphere LUTs are a later refinement.
+    glm::vec3 m_sky_radiance{0.0f};
+
+    // GPU side. The acceleration structures are the shared Scene_tlas; the
+    // material / light buffers and the texture heap mirror
+    // Ray_trace_renderer's, because the probe trace shades hits with the
+    // same erhe_ray_hit.glsl path.
+    std::unique_ptr<Scene_tlas>                               m_scene_tlas;
+    erhe::graphics::Shader_resource                           m_control_block;
+    std::unique_ptr<erhe::graphics::Ring_buffer_client>       m_control_buffer;
+    std::unique_ptr<erhe::graphics::Bind_group_layout>        m_trace_bind_group_layout;
+    std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_trace_shader_stages;
+    std::unique_ptr<erhe::graphics::Compute_pipeline>         m_trace_pipeline;
+    std::unique_ptr<erhe::scene_renderer::Material_buffer>    m_material_buffer;
+    std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
+    std::unique_ptr<erhe::scene_renderer::Light_projections>  m_light_projections;
+    erhe::graphics::Sampler                                   m_fallback_sampler;
+    std::shared_ptr<erhe::graphics::Texture>                  m_dummy_texture;
+    std::unique_ptr<erhe::graphics::Texture_heap>             m_texture_heap;
+    uint32_t                                                  m_tlas_binding_point      {0};
+    uint32_t                                                  m_ray_data_binding_point  {0};
+    uint32_t                                                  m_probe_data_binding_point{0};
+
+    // Control block field offsets, resolved once at construction.
+    class Control_offsets
+    {
+    public:
+        std::size_t grid_origin    {0};
+        std::size_t grid_spacing   {0};
+        std::size_t grid_counts    {0};
+        std::size_t dispatch       {0};
+        std::size_t random_rotation{0};
+        std::size_t params         {0};
+        std::size_t sky_radiance   {0};
+    };
+    Control_offsets m_control_offsets{};
+
+    std::mt19937 m_random_engine{0x0DD91u};
 };
 
 } // namespace editor

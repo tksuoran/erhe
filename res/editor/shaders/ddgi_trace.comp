@@ -1,0 +1,115 @@
+#include "erhe_bxdf.glsl"
+#include "erhe_light.glsl"
+#include "erhe_texture.glsl"
+
+// DDGI probe trace (doc/ddgi-plan.md phase 3).
+//
+// One thread per (probe, ray). Each ray leaves its probe along a spherical
+// Fibonacci direction rotated by a per-frame random rotation - the rotation
+// is what turns a fixed low-discrepancy direction set into a temporally
+// converging estimator. The hit is shaded with the shared ray-query surface
+// path (erhe_ray_hit.glsl: real materials through the texture heap, the
+// scene lights with traced shadow rays), and the outgoing radiance plus the
+// hit distance are stored in the ray data texture for the blend passes.
+//
+// Distance sign carries the DDGI backface convention: a ray that hits a
+// backface stores a NEGATIVE distance. The distance blend shortens the
+// probe's recorded visibility with it, and the relocation / classification
+// pass counts them to find probes stuck inside geometry.
+//
+// The material / light / instance-record blocks and the storage images are
+// declared by the bind group layout + interface blocks; the acceleration
+// structure binding and the stream-1 attribute offsets come in through
+// ERHE_* defines.
+
+layout(local_size_x = ERHE_DDGI_TRACE_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = ERHE_TLAS_BINDING) uniform accelerationStructureEXT s_tlas;
+
+#include "erhe_ray_hit.glsl"
+
+// Golden-ratio spherical Fibonacci: a fixed, near-uniform direction set.
+// Rotating it per update decorrelates successive frames.
+vec3 spherical_fibonacci(uint index, uint count)
+{
+    const float c_golden_ratio = 1.6180339887498948482;
+    float       fi             = float(index) + 0.5;
+    float       phi            = 6.2831853071795864769 * fract(fi * (1.0 / c_golden_ratio));
+    float       cos_theta      = 1.0 - (2.0 * fi / float(count));
+    float       sin_theta      = sqrt(clamp(1.0 - cos_theta * cos_theta, 0.0, 1.0));
+    return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+vec3 rotate_by_quaternion(vec4 q, vec3 v)
+{
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+
+// Probe (x,y,z) from its linear index; matches Ddgi_renderer's
+// probe_index = x + counts.x * (y + counts.y * z).
+ivec3 probe_coords(uint probe_index)
+{
+    uvec3 counts = ddgi.grid_counts.xyz;
+    uint  x      = probe_index % counts.x;
+    uint  y      = (probe_index / counts.x) % counts.y;
+    uint  z      = probe_index / (counts.x * counts.y);
+    return ivec3(x, y, z);
+}
+
+// One texel per probe in the probe data texture, laid out like the atlas
+// tiles: tile (x + counts.x * z, y).
+ivec2 probe_data_texel(ivec3 coords)
+{
+    return ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y);
+}
+
+void main()
+{
+    uint ray_index  = gl_GlobalInvocationID.x;
+    uint probe_slot = gl_GlobalInvocationID.y;
+    uint ray_count  = ddgi.grid_counts.w;
+    if (ray_index >= ray_count) {
+        return;
+    }
+    uint probe_count = ddgi.grid_counts.x * ddgi.grid_counts.y * ddgi.grid_counts.z;
+    if (probe_slot >= ddgi.dispatch.y) {
+        return;
+    }
+    // Round-robin budget: this dispatch updates probes
+    // [first_probe, first_probe + dispatch.y) modulo the grid.
+    uint  probe_index = (ddgi.dispatch.x + probe_slot) % probe_count;
+    ivec3 coords      = probe_coords(probe_index);
+
+    vec3 probe_position =
+        ddgi.grid_origin.xyz +
+        vec3(coords) * ddgi.grid_spacing.xyz +
+        imageLoad(i_probe_data, probe_data_texel(coords)).xyz; // relocation offset
+
+    vec3 direction = normalize(rotate_by_quaternion(ddgi.random_rotation, spherical_fibonacci(ray_index, ray_count)));
+
+    // The ray data texture is one row per PROBE SLOT of this dispatch, not
+    // per probe: the blend passes read the same slot layout back.
+    ivec2 ray_texel = ivec2(int(ray_index), int(probe_slot));
+
+    Hit_surface surface;
+    if (!trace_closest(probe_position, direction, ddgi.params.z, surface)) {
+        // Miss: the ray escaped the scene. Sky radiance is the scene ambient
+        // for now; the atmosphere LUTs are a later refinement.
+        imageStore(i_ray_data, ray_texel, vec4(ddgi.sky_radiance.rgb, ddgi.params.z));
+        return;
+    }
+
+    if (surface.backface) {
+        // Inside geometry along this direction. Zero radiance, negative
+        // distance - the blend shortens the probe's visibility and the
+        // classification pass counts these.
+        imageStore(i_ray_data, ray_texel, vec4(0.0, 0.0, 0.0, -surface.hit_t));
+        return;
+    }
+
+    // Outgoing radiance toward the probe. -direction is the view vector, so
+    // the shared shading path evaluates the BxDF for an observer sitting at
+    // the probe, exactly like a camera ray would.
+    vec3 radiance = shade_surface(surface, -direction);
+    imageStore(i_ray_data, ray_texel, vec4(radiance, surface.hit_t));
+}

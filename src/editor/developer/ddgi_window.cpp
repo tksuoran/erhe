@@ -69,7 +69,9 @@ void Ddgi_window::imgui()
         if (!texture) {
             return;
         }
-        if (!ImGui::CollapsingHeader(label)) {
+        // Default-open: the previews are the whole point of this window, and
+        // a headless screenshot cannot expand a collapsed header.
+        if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen)) {
             return;
         }
         const float avail_width    = std::max(64.0f, ImGui::GetContentRegionAvail().x);
