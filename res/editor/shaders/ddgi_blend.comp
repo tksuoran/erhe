@@ -1,0 +1,174 @@
+// DDGI probe blend (doc/ddgi-plan.md phase 4).
+//
+// One workgroup per updated probe. The workgroup walks its probe's
+// octahedral tile, and for each interior texel accumulates this tick's rays
+// weighted by how well each ray direction matches the texel's direction:
+//
+//  - irradiance (ERHE_DDGI_BLEND_DISTANCE 0): cosine weight, giving the
+//    cosine-convolved irradiance the shading path wants,
+//  - distance (ERHE_DDGI_BLEND_DISTANCE 1): a much sharper cosine power,
+//    accumulating mean distance and mean squared distance for the
+//    Chebyshev visibility test. Backface hits (negative stored distance)
+//    contribute their shortened distance, which is what stops light
+//    leaking through walls a probe sits behind.
+//
+// The result is blended into the existing texel with the configured
+// hysteresis, and the tile's 1-texel border is then filled from the
+// interior so bilinear taps inside a tile never reach a neighbouring probe.
+//
+// Ray directions are recomputed here rather than stored: they are a pure
+// function of the ray index and the tick's random rotation, both of which
+// the control block carries.
+
+layout(local_size_x = ERHE_DDGI_BLEND_GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+#if ERHE_DDGI_BLEND_DISTANCE
+#   define PROBE_TEXELS  int(ddgi.dispatch.w)
+#   define VALUE_TYPE    vec2
+#else
+#   define PROBE_TEXELS  int(ddgi.dispatch.z)
+#   define VALUE_TYPE    vec3
+#endif
+
+vec3 spherical_fibonacci(uint index, uint count)
+{
+    const float c_golden_ratio = 1.6180339887498948482;
+    float       fi             = float(index) + 0.5;
+    float       phi            = 6.2831853071795864769 * fract(fi * (1.0 / c_golden_ratio));
+    float       cos_theta      = 1.0 - (2.0 * fi / float(count));
+    float       sin_theta      = sqrt(clamp(1.0 - cos_theta * cos_theta, 0.0, 1.0));
+    return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+vec3 rotate_by_quaternion(vec4 q, vec3 v)
+{
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+
+// Octahedral decode: [-1,1]^2 square -> unit sphere (Cigolle et al. 2014).
+vec3 octahedral_decode(vec2 f)
+{
+    vec3  n = vec3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
+    float t = max(-n.z, 0.0);
+    n.x += (n.x > 0.0) ? -t : t;
+    n.y += (n.y > 0.0) ? -t : t;
+    return normalize(n);
+}
+
+ivec3 probe_coords(uint probe_index)
+{
+    uvec3 counts = ddgi.grid_counts.xyz;
+    uint  x      = probe_index % counts.x;
+    uint  y      = (probe_index / counts.x) % counts.y;
+    uint  z      = probe_index / (counts.x * counts.y);
+    return ivec3(x, y, z);
+}
+
+// Tile origin of a probe in the atlas, including its border.
+ivec2 probe_tile_origin(ivec3 coords, int tile_size)
+{
+    return ivec2(coords.x + int(ddgi.grid_counts.x) * coords.z, coords.y) * tile_size;
+}
+
+void main()
+{
+    uint probe_slot = gl_WorkGroupID.x;
+    if (probe_slot >= ddgi.dispatch.y) {
+        return;
+    }
+    uint probe_count = ddgi.grid_counts.x * ddgi.grid_counts.y * ddgi.grid_counts.z;
+    uint probe_index = (ddgi.dispatch.x + probe_slot) % probe_count;
+    uint ray_count   = ddgi.grid_counts.w;
+
+    int interior    = PROBE_TEXELS;
+    int tile_size   = interior + 2;
+    int texel_count = tile_size * tile_size;
+    ivec2 tile_origin = probe_tile_origin(probe_coords(probe_index), tile_size);
+
+    float hysteresis   = ddgi.params.x;
+    float max_distance = ddgi.params.z;
+
+    // Interior texels: accumulate this tick's rays into the texel's cone.
+    for (int texel = int(gl_LocalInvocationID.x); texel < texel_count; texel += ERHE_DDGI_BLEND_GROUP_SIZE) {
+        ivec2 local = ivec2(texel % tile_size, texel / tile_size);
+        if ((local.x == 0) || (local.y == 0) || (local.x == tile_size - 1) || (local.y == tile_size - 1)) {
+            continue; // border, filled below
+        }
+        vec2 uv        = (vec2(local - ivec2(1)) + vec2(0.5)) / float(interior);
+        vec3 direction = octahedral_decode(uv * 2.0 - 1.0);
+
+        VALUE_TYPE sum         = VALUE_TYPE(0.0);
+        float      weight_sum  = 0.0;
+        for (uint ray = 0u; ray < ray_count; ++ray) {
+            vec4  ray_data      = imageLoad(i_ray_data, ivec2(int(ray), int(probe_slot)));
+            vec3  ray_direction = normalize(rotate_by_quaternion(ddgi.random_rotation, spherical_fibonacci(ray, ray_count)));
+            float cos_weight    = dot(direction, ray_direction);
+#if ERHE_DDGI_BLEND_DISTANCE
+            // Sharper lobe: the visibility test needs each texel to describe
+            // a narrow cone, or thin geometry averages away.
+            float weight = pow(max(cos_weight, 0.0), ddgi.params.y);
+            if (weight <= 1.0e-6) {
+                continue;
+            }
+            // Backface hits store a negative distance; taking the magnitude
+            // keeps them in the statistics (they are what makes a probe
+            // behind a wall report a short distance).
+            float distance_value = min(abs(ray_data.w), max_distance);
+            sum        += vec2(distance_value, distance_value * distance_value) * weight;
+            weight_sum += weight;
+#else
+            if (cos_weight <= 0.0) {
+                continue;
+            }
+            // Backface hits carry no radiance and must not dilute the
+            // estimate either - skip them entirely.
+            if (ray_data.w < 0.0) {
+                continue;
+            }
+            sum        += ray_data.rgb * cos_weight;
+            weight_sum += cos_weight;
+#endif
+        }
+        if (weight_sum > 1.0e-6) {
+            sum /= weight_sum;
+        }
+
+#if ERHE_DDGI_BLEND_DISTANCE
+        vec2 previous = imageLoad(i_probe_atlas, tile_origin + local).rg;
+        vec2 blended  = mix(sum, previous, hysteresis);
+        imageStore(i_probe_atlas, tile_origin + local, vec4(blended, 0.0, 0.0));
+#else
+        vec3 previous = imageLoad(i_probe_atlas, tile_origin + local).rgb;
+        vec3 blended  = mix(sum, previous, hysteresis);
+        imageStore(i_probe_atlas, tile_origin + local, vec4(blended, 1.0));
+#endif
+    }
+
+    // The border copy reads the interior texels this workgroup just wrote.
+    memoryBarrierImage();
+    barrier();
+
+    // Octahedral border: an edge texel mirrors the interior texel on the
+    // opposite side of that edge (the octahedral map wraps that way), and a
+    // corner texel takes the diagonally opposite interior corner.
+    for (int texel = int(gl_LocalInvocationID.x); texel < texel_count; texel += ERHE_DDGI_BLEND_GROUP_SIZE) {
+        ivec2 local = ivec2(texel % tile_size, texel / tile_size);
+        bool  x_border = (local.x == 0) || (local.x == tile_size - 1);
+        bool  y_border = (local.y == 0) || (local.y == tile_size - 1);
+        if (!x_border && !y_border) {
+            continue;
+        }
+        ivec2 source;
+        if (x_border && y_border) {
+            source = ivec2(
+                (local.x == 0) ? interior : 1,
+                (local.y == 0) ? interior : 1
+            );
+        } else if (x_border) {
+            source = ivec2((local.x == 0) ? 1 : interior, tile_size - 1 - local.y);
+        } else {
+            source = ivec2(tile_size - 1 - local.x, (local.y == 0) ? 1 : interior);
+        }
+        imageStore(i_probe_atlas, tile_origin + local, imageLoad(i_probe_atlas, tile_origin + source));
+    }
+}

@@ -30,6 +30,7 @@ erhe_target_sources_grouped(
     config/editor/renderer.json
     config/editor/text_renderer.json
 
+    res/editor/shaders/ddgi_blend.comp
     res/editor/shaders/ddgi_trace.comp
     res/editor/shaders/brdf_slice.frag
     res/editor/shaders/brdf_slice.vert

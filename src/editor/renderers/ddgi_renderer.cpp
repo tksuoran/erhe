@@ -58,6 +58,17 @@ constexpr int c_border_texels = 1;
 constexpr unsigned int c_control_binding_point         = 2;
 constexpr unsigned int c_instance_record_binding_point = 3;
 
+// Blend pass layout: the control UBO plus the two storage images. Raw
+// bindings are not offset past the buffer bindings, and there are no
+// samplers in the set, so 3 / 4 are free.
+constexpr unsigned int c_blend_ray_data_binding_point = 3;
+constexpr unsigned int c_blend_atlas_binding_point    = 4;
+
+// One workgroup per probe; the workgroup strides over its tile's texels, so
+// the group size is independent of the configurable octahedral resolution
+// (which would otherwise force a shader recompile per setting change).
+constexpr int c_blend_workgroup_size = 64;
+
 constexpr erhe::dataformat::Format c_irradiance_format = erhe::dataformat::Format::format_16_vec4_float;
 constexpr erhe::dataformat::Format c_distance_format   = erhe::dataformat::Format::format_16_vec2_float;
 constexpr erhe::dataformat::Format c_probe_data_format = erhe::dataformat::Format::format_16_vec4_float;
@@ -298,8 +309,80 @@ Ddgi_renderer::Ddgi_renderer(
         c_control_binding_point
     );
 
+    create_blend_pass(graphics_device, m_blend_irradiance, false, "i_probe_atlas", "rgba16f", "DDGI blend irradiance");
+    create_blend_pass(graphics_device, m_blend_distance,   true,  "i_probe_atlas", "rg16f",   "DDGI blend distance"  );
+
     m_supported = true;
     log_startup->info("Ddgi_renderer: DDGI available");
+}
+
+void Ddgi_renderer::create_blend_pass(
+    erhe::graphics::Device& graphics_device,
+    Blend_pass&             pass,
+    const bool              distance,
+    const char*             image_name,
+    const char*             image_format,
+    const char*             debug_label
+)
+{
+    using namespace erhe::graphics;
+
+    const std::filesystem::path editor_shaders = std::filesystem::path{"res"} / std::filesystem::path{"editor"} / std::filesystem::path{"shaders"};
+
+    pass.bind_group_layout = std::make_unique<Bind_group_layout>(
+        graphics_device,
+        Bind_group_layout_create_info{
+            .bindings = {
+                {
+                    .binding_point = c_control_binding_point,
+                    .type          = Binding_type::uniform_buffer,
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_blend_ray_data_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = "i_ray_data",
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = "rgba16f",
+                    .stage_flags   = Shader_stage_flags::compute
+                },
+                {
+                    .binding_point = c_blend_atlas_binding_point,
+                    .type          = Binding_type::storage_image,
+                    .name          = image_name,
+                    .glsl_type     = Glsl_type::image_2d,
+                    .image_format  = image_format,
+                    .stage_flags   = Shader_stage_flags::compute
+                }
+            },
+            .debug_label = debug_label
+        }
+    );
+
+    pass.shader_stages = std::make_unique<Reloadable_shader_stages>(
+        graphics_device,
+        Shader_stages_create_info{
+            .name                = distance ? "ddgi_blend_distance" : "ddgi_blend_irradiance",
+            .defines             = {
+                { "ERHE_DDGI_BLEND_GROUP_SIZE", fmt::format("{}", c_blend_workgroup_size) },
+                { "ERHE_DDGI_BLEND_DISTANCE",   distance ? "1" : "0" }
+            },
+            .interface_blocks    = { &m_control_block },
+            .shaders             = { { Shader_type::compute_shader, editor_shaders / "ddgi_blend.comp" } },
+            .extra_include_paths = shader_paths(),
+            .bind_group_layout   = pass.bind_group_layout.get()
+        }
+    );
+    graphics_device.get_shader_monitor().add(*pass.shader_stages);
+
+    pass.pipeline = std::make_unique<Compute_pipeline>(
+        graphics_device,
+        Compute_pipeline_data{
+            .name              = distance ? "ddgi_blend_distance" : "ddgi_blend_irradiance",
+            .shader_stages     = &pass.shader_stages->shader_stages,
+            .bind_group_layout = pass.bind_group_layout.get()
+        }
+    );
 }
 
 Ddgi_renderer::~Ddgi_renderer() noexcept = default;
@@ -747,15 +830,35 @@ void Ddgi_renderer::tick(erhe::graphics::Command_buffer& command_buffer, Scene_r
     }
     material_range.release();
     light_range.release();
-    control_range.release();
     tlas_frame.instance_records.release();
     m_texture_heap->unbind(command_buffer);
 
-    // The ray data becomes the blend passes' input (phase 4); until then it
-    // is only read back by the DDGI window preview.
+    // The blend passes read this tick's ray data.
+    command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
+    command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::general);
+    command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::general);
+    {
+        Compute_command_encoder encoder = m_graphics_device.make_compute_command_encoder(command_buffer);
+        const auto blend = [&](const Blend_pass& pass, const std::shared_ptr<Texture>& atlas) {
+            encoder.set_bind_group_layout(pass.bind_group_layout.get());
+            encoder.set_compute_pipeline(*pass.pipeline);
+            m_control_buffer->bind(encoder, control_range);
+            encoder.set_storage_image(c_blend_ray_data_binding_point, *m_ray_data_texture);
+            encoder.set_storage_image(c_blend_atlas_binding_point,    *atlas);
+            encoder.dispatch_compute(static_cast<std::uintptr_t>(m_probes_per_update), 1, 1);
+        };
+        blend(m_blend_irradiance, m_irradiance_texture);
+        blend(m_blend_distance,   m_distance_texture  );
+    }
+    control_range.release();
+
+    // Both atlases become sampled textures for the DDGI window preview and,
+    // from phase 6, the forward shading path.
     command_buffer.memory_barrier(Memory_barrier_mask::shader_image_access_barrier_bit);
     command_buffer.transition_texture_layout(*m_ray_data_texture,   Image_layout::shader_read_only_optimal);
     command_buffer.transition_texture_layout(*m_probe_data_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_irradiance_texture, Image_layout::shader_read_only_optimal);
+    command_buffer.transition_texture_layout(*m_distance_texture,   Image_layout::shader_read_only_optimal);
 
     // Advance the round-robin cursor for the next tick.
     const uint32_t probe_count = static_cast<uint32_t>(m_grid.get_probe_count());

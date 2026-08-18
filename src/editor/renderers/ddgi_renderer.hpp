@@ -107,6 +107,17 @@ public:
     void tick(erhe::graphics::Command_buffer& command_buffer, Scene_root& scene_root);
 
 private:
+    // The two blend passes share one source (ddgi_blend.comp, switched by
+    // ERHE_DDGI_BLEND_DISTANCE) but need separate layouts: the irradiance
+    // atlas is rgba16f and the distance atlas rg16f.
+    class Blend_pass
+    {
+    public:
+        std::unique_ptr<erhe::graphics::Bind_group_layout>        bind_group_layout;
+        std::unique_ptr<erhe::graphics::Reloadable_shader_stages> shader_stages;
+        std::unique_ptr<erhe::graphics::Compute_pipeline>         pipeline;
+    };
+
     // Union of the visible content meshes' world bounds, grown by
     // volume_padding_m. Invalid when the scene has no visible content.
     [[nodiscard]] auto compute_volume_bounds(Scene_root& scene_root) const -> erhe::math::Aabb;
@@ -124,6 +135,16 @@ private:
 
     // Writes this tick's control UBO (grid, dispatch window, rotation).
     [[nodiscard]] auto update_control_buffer() -> erhe::graphics::Ring_buffer_range;
+
+    // Builds one of the two blend passes from the shared ddgi_blend.comp.
+    void create_blend_pass(
+        erhe::graphics::Device& graphics_device,
+        Blend_pass&             pass,
+        bool                    distance,
+        const char*             image_name,
+        const char*             image_format,
+        const char*             debug_label
+    );
 
     // A uniformly distributed random rotation for this tick's ray set.
     [[nodiscard]] auto next_random_rotation() -> glm::vec4;
@@ -174,6 +195,9 @@ private:
     std::unique_ptr<erhe::graphics::Bind_group_layout>        m_trace_bind_group_layout;
     std::unique_ptr<erhe::graphics::Reloadable_shader_stages> m_trace_shader_stages;
     std::unique_ptr<erhe::graphics::Compute_pipeline>         m_trace_pipeline;
+
+    Blend_pass m_blend_irradiance;
+    Blend_pass m_blend_distance;
     std::unique_ptr<erhe::scene_renderer::Material_buffer>    m_material_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_buffer>       m_light_buffer;
     std::unique_ptr<erhe::scene_renderer::Light_projections>  m_light_projections;
