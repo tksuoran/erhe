@@ -3,6 +3,7 @@
 #include "erhe_utility/pimpl_ptr.hpp"
 
 #include <memory>
+#include <cstdint>
 
 namespace erhe::graphics {
 
