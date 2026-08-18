@@ -1706,12 +1706,14 @@ private:
                 apply_texture(pbr_data.metallicRoughnessTexture.value(), create_samplers.metallic_roughness, Gltf_material_texture_slot::metallic_roughness, true);
             }
 
+#if 0
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
                 create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
                 apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, Gltf_material_texture_slot::base_color, false);
             }
+#endif
 
             create_data.base_color = glm::vec3{
                 pbr_data.baseColorFactor[0],
