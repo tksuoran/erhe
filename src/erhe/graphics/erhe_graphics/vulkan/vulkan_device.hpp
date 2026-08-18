@@ -470,6 +470,32 @@ private:
     // the log skimmable.
     void set_state(Device_frame_state new_state, const char* site);
 
+    // True when this physical device would support GPU ray tracing but it
+    // must be left disabled because RenderDoc capture is active.
+    //
+    // Narrowly scoped to the configuration where it was actually measured:
+    // AMD on Windows. With RenderDoc's capture layer loaded, that driver
+    // faults on a wild GPU virtual address (a single unmapped 4 KiB page in
+    // the device-address range, reported as an Invalid Read or Invalid Write
+    // by VK_EXT_device_fault) shortly after a texture-heavy load. Bisected to
+    // VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT on allocations: enabling the
+    // bufferDeviceAddress feature alone is harmless, and the ray tracing
+    // extensions alone are harmless, but allocating device-address memory is
+    // not. erhe cannot avoid that flag and still build acceleration
+    // structures - vkCmdBuildAccelerationStructuresKHR consumes device
+    // addresses for scratch, geometry and instance data, and
+    // VUID-vkBindBufferMemory-bufferDeviceAddress-03339 then requires the
+    // backing memory to carry the flag.
+    //
+    // AMD on Linux and NVIDIA on Windows were both verified unaffected, so
+    // this deliberately does not fire for them. The Metal backend has the
+    // same shape of workaround for acceleration structure encoders crashing
+    // inside GPUToolsCapture (metal_device.cpp), and reports it through the
+    // same Device_info::ray_query_disabled_by_capture_layer flag.
+    [[nodiscard]] static auto is_ray_tracing_blocked_by_capture_layer(
+        VkPhysicalDevice vulkan_physical_device,
+        bool             renderdoc_capture_support
+    ) -> bool;
     [[nodiscard]] static auto get_physical_device_score(VkPhysicalDevice vulkan_physical_device, Surface_impl* surface_impl, bool disable_ray_tracing) -> float;
     [[nodiscard]] static auto query_device_queue_family_indices(
         VkPhysicalDevice vulkan_physical_device,
@@ -512,6 +538,11 @@ private:
     // buffers with Buffer_usage::shader_device_address. See
     // get_allocator_for_buffer_usage().
     VmaAllocator             m_vma_device_address_allocator{VK_NULL_HANDLE};
+
+    // Set during physical device selection; drives
+    // Device_info::ray_query_disabled_by_capture_layer so the editor can tell
+    // the user why ray tracing is unavailable.
+    bool                     m_ray_tracing_blocked_by_capture_layer{false};
     VkDebugReportCallbackEXT m_debug_report_callback      {VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT m_debug_utils_messenger      {VK_NULL_HANDLE};
     std::unique_ptr<Surface> m_surface                    {};

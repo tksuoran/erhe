@@ -753,6 +753,45 @@ auto Device_impl::get_or_create_compatible_render_pass(
     return render_pass;
 }
 
+auto Device_impl::is_ray_tracing_blocked_by_capture_layer(
+    const VkPhysicalDevice vulkan_physical_device,
+    const bool             renderdoc_capture_support
+) -> bool
+{
+#if defined(ERHE_OS_WINDOWS)
+    if (!renderdoc_capture_support) {
+        return false;
+    }
+    VkPhysicalDeviceProperties device_properties{};
+    vkGetPhysicalDeviceProperties(vulkan_physical_device, &device_properties);
+    constexpr uint32_t vendor_id_amd{0x1002u};
+    if (device_properties.vendorID != vendor_id_amd) {
+        return false;
+    }
+    // Only report a block when the device would otherwise have offered ray
+    // tracing, so Device_info::ray_query_disabled_by_capture_layer means
+    // "you lost something" rather than "this GPU never had it".
+    uint32_t device_extension_count{0};
+    if (vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, nullptr) != VK_SUCCESS) {
+        return false;
+    }
+    std::vector<VkExtensionProperties> device_extensions(device_extension_count);
+    if (vkEnumerateDeviceExtensionProperties(vulkan_physical_device, nullptr, &device_extension_count, device_extensions.data()) != VK_SUCCESS) {
+        return false;
+    }
+    for (const VkExtensionProperties& extension : device_extensions) {
+        if (strcmp(extension.extensionName, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0) {
+            return true;
+        }
+    }
+    return false;
+#else
+    static_cast<void>(vulkan_physical_device);
+    static_cast<void>(renderdoc_capture_support);
+    return false;
+#endif
+}
+
 auto Device_impl::choose_physical_device(
     Surface_impl*             surface_impl,
     std::vector<const char*>& device_extensions_c_str
@@ -790,7 +829,13 @@ auto Device_impl::choose_physical_device(
         for (uint32_t physical_device_index = 0; physical_device_index < physical_device_count; ++physical_device_index) {
             const VkPhysicalDevice physical_device = physical_devices[physical_device_index];
 
-            const float score = get_physical_device_score(physical_device, surface_impl, m_graphics_config.vulkan.disable_ray_tracing);
+            // Score the device as it will actually be created: if the capture
+            // layer forces ray tracing off for this device, its ray tracing
+            // extensions must not contribute to its score.
+            const bool device_disable_ray_tracing =
+                m_graphics_config.vulkan.disable_ray_tracing ||
+                is_ray_tracing_blocked_by_capture_layer(physical_device, m_graphics_config.renderdoc_capture_support);
+            const float score = get_physical_device_score(physical_device, surface_impl, device_disable_ray_tracing);
             if (score > best_score) {
                 best_score      = score;
                 selected_device = physical_device;
@@ -820,8 +865,25 @@ auto Device_impl::choose_physical_device(
         return false;
     }
 
+    m_ray_tracing_blocked_by_capture_layer = is_ray_tracing_blocked_by_capture_layer(
+        m_vulkan_physical_device, m_graphics_config.renderdoc_capture_support
+    );
+    if (m_graphics_config.vulkan.disable_ray_tracing) {
+        log_context->info("GPU ray tracing disabled via erhe_graphics.json vulkan.disable_ray_tracing");
+    }
+    if (m_ray_tracing_blocked_by_capture_layer) {
+        log_context->info(
+            "GPU ray tracing disabled: RenderDoc capture is enabled on an AMD Windows driver, where "
+            "device address memory allocations fault under capture. Disable renderdoc_capture_support "
+            "in erhe_graphics.json to use ray tracing."
+        );
+    }
+    const bool disable_ray_tracing =
+        m_graphics_config.vulkan.disable_ray_tracing ||
+        m_ray_tracing_blocked_by_capture_layer;
+
     const bool headless = (surface_impl == nullptr) || surface_impl->is_headless();
-    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless, m_graphics_config.vulkan.disable_ray_tracing);
+    query_device_extensions(m_vulkan_physical_device, m_device_extensions, &device_extensions_c_str, headless, disable_ray_tracing);
     return true;
 }
 
@@ -1021,7 +1083,9 @@ auto Device_impl::query_device_extensions(
         // without binding every mesh vertex buffer to the shader).
         check_device_extension(VK_KHR_RAY_TRACING_POSITION_FETCH_EXTENSION_NAME, device_extensions_out.m_VK_KHR_ray_tracing_position_fetch    , 1.0f);
     } else {
-        log_context->info("Vulkan ray tracing disabled via erhe_graphics.json vulkan.disable_ray_tracing");
+        // The reason (config setting or capture layer guard) is logged by
+        // choose_physical_device, which is where the decision is made.
+        log_context->info("Vulkan ray tracing extensions not enabled");
     }
     // Conservative rasterization (overestimation) for the lightmap G-buffer
     // raster (one pass instead of the 9-tap jitter fallback). Properties-only

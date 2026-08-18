@@ -1979,6 +1979,7 @@ Device_impl::Device_impl(
     m_info.use_compute_shader          = true;
     m_info.use_shader_storage_buffers  = true;
     m_info.use_ray_query                    = enable_ray_query;
+    m_info.ray_query_disabled_by_capture_layer = m_ray_tracing_blocked_by_capture_layer;
     m_info.use_ray_tracing_position_fetch   = enable_ray_tracing_position_fetch;
     log_startup->info(
         "Ray query (GPU ray tracing): {}, position fetch: {}",
