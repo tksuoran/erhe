@@ -435,6 +435,8 @@ erhe_target_sources_grouped(
     renderers/lightmap_tile_io.hpp
     renderers/ray_trace_renderer.cpp
     renderers/ray_trace_renderer.hpp
+    renderers/scene_tlas.cpp
+    renderers/scene_tlas.hpp
     renderers/sky_renderer.cpp
     renderers/sky_renderer.hpp
     renderers/viewport_config.cpp

@@ -1,14 +1,13 @@
 #pragma once
 
-#include "erhe_graphics/acceleration_structure.hpp"
+#include "renderers/scene_tlas.hpp"
+
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
-#include <array>
 #include <cstdint>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace erhe::graphics {
@@ -63,10 +62,9 @@ class Scene_root;
 // mechanism the attribute fetch already uses), so backends without the
 // extension (Metal) still work.
 //
-// Bottom level acceleration structures are built lazily, once per unique
-// Buffer_mesh (non-skinned meshes only), reading the Mesh_memory vertex/index
-// pools in place. The top level structure is rebuilt every frame from the
-// visible content meshes, with one structure per frame-in-flight slot.
+// The acceleration structures (per-Buffer_mesh bottom level cache, per-frame
+// top level rebuild, per-instance record SSBO) live in the shared Scene_tlas
+// helper - see renderers/scene_tlas.hpp.
 class Ray_trace_renderer
 {
 public:
@@ -109,53 +107,15 @@ public:
     );
 
 private:
-    class Blas_entry
-    {
-    public:
-        // Pins the GPU vertex/index ranges the structure references.
-        std::shared_ptr<erhe::primitive::Primitive>            primitive;
-        std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
-        bool                                                   built{false};
-    };
-
-    // CPU mirror of the std430 Instance_record the compute shader reads,
-    // indexed by instance_custom_index. Layout is verified against the
-    // generated Shader_resource offsets at construction.
-    class Instance_record_data
-    {
-    public:
-        uint64_t index_address;         // device address of the first triangle index
-        uint64_t vertex_address;        // device address of the stream-1 vertex range start
-        uint64_t position_address;      // device address of the stream-0 vertex range start (position-fetch fallback)
-        uint32_t vertex_stride_uints;
-        uint32_t position_stride_uints;
-        uint32_t material_index;
-        uint32_t flags;
-        // Pads the struct to a multiple of 16 so the std140-rounded
-        // Shader_resource size matches sizeof (the layout VERIFYs in the
-        // constructor compare the two).
-        uint32_t reserved0;
-        uint32_t reserved1;
-    };
-    static_assert(sizeof(Instance_record_data) == 48);
-
-    [[nodiscard]] auto get_or_create_blas(
-        erhe::graphics::Command_buffer&                    command_buffer,
-        const std::shared_ptr<erhe::primitive::Primitive>& primitive,
-        const erhe::primitive::Buffer_mesh&                buffer_mesh
-    ) -> erhe::graphics::Acceleration_structure*;
-
     erhe::graphics::Device&            m_graphics_device;
     App_context&                       m_context;
-    erhe::scene_renderer::Mesh_memory& m_mesh_memory;
     // Live reference to the editor's Ray_trace_config
     // (editor_settings.ray_trace): resolution scale, ray budget, bounce cap.
     const Ray_trace_config&            m_config;
     bool                               m_enabled{false};
 
     std::shared_ptr<erhe::graphics::Texture>                   m_output_texture;
-    erhe::graphics::Shader_resource                            m_instance_struct;
-    erhe::graphics::Shader_resource                            m_instance_block;
+    std::unique_ptr<Scene_tlas>                                m_scene_tlas;
     erhe::graphics::Shader_resource                            m_control_block;
     std::size_t                                                m_control_max_rays_offset   {0};
     std::size_t                                                m_control_max_bounces_offset{0};
@@ -169,30 +129,8 @@ private:
     erhe::graphics::Sampler                                    m_fallback_sampler;
     std::shared_ptr<erhe::graphics::Texture>                   m_dummy_texture;
     std::unique_ptr<erhe::graphics::Texture_heap>              m_texture_heap;
-    std::unique_ptr<erhe::graphics::Ring_buffer_client>        m_instance_record_buffer;
     uint32_t                                                   m_tlas_binding_point  {0};
     uint32_t                                                   m_output_binding_point{0};
-
-    // Bottom level structure per unique Buffer_mesh. Entries are never
-    // evicted (milestone limitation; stale entries for edited/deleted
-    // geometry only cost memory, they drop out of the top level rebuild).
-    std::unordered_map<const erhe::primitive::Buffer_mesh*, Blas_entry> m_blas_cache;
-
-    // One top level structure per frame-in-flight slot: rebuilding a
-    // structure a still-in-flight frame reads is a data race. Slot count
-    // must be >= the backend's frames in flight (Vulkan: 2).
-    static constexpr std::size_t s_tlas_slot_count = 4;
-    class Tlas_slot
-    {
-    public:
-        std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
-        uint32_t                                                capacity{0};
-    };
-    std::array<Tlas_slot, s_tlas_slot_count> m_tlas_slots;
-
-    // Per-frame scratch, cleared at point of use (capacity kept).
-    std::vector<erhe::graphics::Acceleration_structure_instance> m_instances;
-    std::vector<Instance_record_data>                             m_instance_records;
 };
 
 } // namespace editor
