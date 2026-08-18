@@ -176,10 +176,14 @@ void initialize_frame_capture(std::string_view library_path_override)
     }
 #elif defined(ERHE_OS_LINUX)
     // For android replace librenderdoc.so with libVkLayer_GLES_RenderDoc.so
-    const std::string library_path = have_override
+    std::string library_path = have_override
         ? std::string{library_path_override}
         : std::string{"librenderdoc.so"};
     void* renderdoc_so = dlopen(library_path.c_str(), RTLD_NOW);
+    if (renderdoc_so == nullptr) {
+        library_path = std::string{"/opt/renderdoc/lib/librenderdoc.so"};
+        renderdoc_so = dlopen(library_path.c_str(), RTLD_NOW);
+    }
     if (renderdoc_so != nullptr) {
         pRENDERDOC_GetAPI RENDERDOC_GetAPI = (pRENDERDOC_GetAPI)dlsym(renderdoc_so, "RENDERDOC_GetAPI");
         int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_7_0, (void **)&renderdoc_api);
