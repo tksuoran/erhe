@@ -52,7 +52,8 @@ Buffer_impl::Buffer_impl(Device& device, const Buffer_create_info& create_info) 
         .pQueueFamilyIndices   = nullptr
     };
 
-    VmaAllocator& allocator   = m_device_impl.get_allocator();
+    m_vma_allocator = m_device_impl.get_allocator_for_buffer_usage(create_info.usage);
+    VmaAllocator  allocator   = m_vma_allocator;
     VkResult      result      = VK_SUCCESS;
 
     const VmaAllocationCreateInfo allocation_create_info{
@@ -163,11 +164,16 @@ Buffer_impl::~Buffer_impl() noexcept
     const bool          persistently_mapped = m_persistently_mapped;
     const VmaAllocation vma_allocation      = m_vma_allocation;
     const VkBuffer      vk_buffer           = m_vk_buffer;
+    const VmaAllocator  allocator           = m_vma_allocator;
+
+    // Default constructed and moved-from buffers own no allocator; there is
+    // nothing to destroy and vmaDestroyBuffer() would dereference null.
+    if (allocator == VK_NULL_HANDLE) {
+        return;
+    }
 
     m_device_impl.add_completion_handler(
-        [persistently_mapped, vma_allocation, vk_buffer](Device_impl& device_impl) {
-            VmaAllocator& allocator = device_impl.get_allocator();
-
+        [persistently_mapped, vma_allocation, vk_buffer, allocator](Device_impl&) {
             if (persistently_mapped) {
                 vmaUnmapMemory(allocator, vma_allocation);
             }
@@ -178,6 +184,7 @@ Buffer_impl::~Buffer_impl() noexcept
 
 Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
     : m_device_impl        {old.m_device_impl}
+    , m_vma_allocator      {std::exchange(old.m_vma_allocator,  VK_NULL_HANDLE)}
     , m_vma_allocation     {std::exchange(old.m_vma_allocation, VK_NULL_HANDLE)}
     , m_vk_buffer          {std::exchange(old.m_vk_buffer,      VK_NULL_HANDLE)}
     , m_debug_label        {std::move(old.m_debug_label)}
@@ -189,6 +196,7 @@ Buffer_impl::Buffer_impl(Buffer_impl&& old) noexcept
 
 auto Buffer_impl::operator=(Buffer_impl&& old) noexcept -> Buffer_impl&
 {
+    m_vma_allocator       = std::exchange(old.m_vma_allocator,  VK_NULL_HANDLE);
     m_vma_allocation      = std::exchange(old.m_vma_allocation, VK_NULL_HANDLE);
     m_vk_buffer           = std::exchange(old.m_vk_buffer,      VK_NULL_HANDLE);
     m_debug_label         = std::move(old.m_debug_label);
@@ -254,7 +262,7 @@ auto Buffer_impl::map_all_bytes() noexcept -> std::span<std::byte>
     ERHE_VERIFY(m_vk_buffer != VK_NULL_HANDLE);
     ERHE_VERIFY(m_vma_allocation != VK_NULL_HANDLE);
 
-    VmaAllocator& allocator = m_device_impl.get_allocator();
+    VmaAllocator  allocator = m_vma_allocator;
     VkResult      result    = VK_SUCCESS;
 
     void* map_pointer = nullptr;
@@ -306,7 +314,7 @@ void Buffer_impl::unmap() noexcept
     // it either -- doing so trips VMA's "Unmapping allocation not previously mapped"
     // assertion. Only the transient (non-persistent) mapping is released here.
     if (!m_persistently_mapped) {
-        VmaAllocator& allocator = m_device_impl.get_allocator();
+        VmaAllocator  allocator = m_vma_allocator;
         vmaUnmapMemory(allocator, m_vma_allocation);
         m_map_all = {};
     }
@@ -321,7 +329,7 @@ void Buffer_impl::invalidate(const std::size_t byte_offset, const std::size_t by
     ERHE_VERIFY(m_map.data() != nullptr);
 
     VkDevice      vulkan_device = m_device_impl.get_vulkan_device();
-    VmaAllocator& allocator     = m_device_impl.get_allocator();
+    VmaAllocator  allocator     = m_vma_allocator;
     VkResult      result        = VK_SUCCESS;
 
     VmaAllocationInfo allocation_info{};
@@ -353,7 +361,7 @@ void Buffer_impl::flush_bytes(const std::size_t byte_offset, const std::size_t b
     }
 
     VkDevice      vulkan_device = m_device_impl.get_vulkan_device();
-    VmaAllocator& allocator     = m_device_impl.get_allocator();
+    VmaAllocator  allocator     = m_vma_allocator;
     VkResult      result        = VK_SUCCESS;
 
     VmaAllocationInfo allocation_info{};

@@ -1784,13 +1784,17 @@ Device_impl::Device_impl(
     m_surface = std::make_unique<Surface>(std::move(surface_impl));
 
     VmaAllocatorCreateInfo vma_create_info{
-        // Buffers created with Buffer_usage::shader_device_address (ray
-        // tracing build inputs / scratch) need their backing memory allocated
-        // with VK_MEMORY_ALLOCATE_FLAG_DEVICE_ADDRESS; VMA only does that
-        // when this allocator-level flag is set (valid only when the
-        // bufferDeviceAddress feature was enabled on the device).
+        // VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT is deliberately NOT
+        // set here. It is allocator-wide: VMA stamps
+        // VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT onto every block it allocates
+        // (vk_mem_alloc.h, canContainBufferWithDeviceAddress defaults to true
+        // for block allocations), so setting it on the main allocator would
+        // request device addresses for texture memory and for every plain
+        // buffer, none of which ever has its address taken. The separate
+        // m_vma_device_address_allocator below carries the flag and serves
+        // exactly the buffers that need it; see
+        // Device_impl::get_allocator_for_buffer_usage().
         .flags                          =
-            (enable_ray_query ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : VmaAllocatorCreateFlags{0}) |
             // Driver-reported heap budgets for vmaGetHeapBudgets(); the
             // flag is only valid when VK_EXT_memory_budget was enabled on
             // the device (VMA falls back to internal estimates without it).
@@ -1821,6 +1825,28 @@ Device_impl::Device_impl(
     if (result != VK_SUCCESS) {
         log_context->critical("vmaCreateAllocator() failed with {} {}", static_cast<int32_t>(result), c_str(result));
         abort();
+    }
+
+    // Buffers created with Buffer_usage::shader_device_address (ray tracing
+    // build inputs / scratch / acceleration structure storage, and the mesh
+    // memory vertex+index pools that serve as build input) need their backing
+    // memory allocated with VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT. Only this
+    // second allocator carries the flag, so only those buffers pay for it.
+    // Not created at all when ray tracing is off: no buffer can then carry
+    // shader_device_address usage, and get_allocator_for_buffer_usage()
+    // falls back to the main allocator.
+    if (enable_ray_query) {
+        VmaAllocatorCreateInfo device_address_vma_create_info = vma_create_info;
+        device_address_vma_create_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        result = vmaCreateAllocator(&device_address_vma_create_info, &m_vma_device_address_allocator);
+        if (result != VK_SUCCESS) {
+            log_context->critical(
+                "vmaCreateAllocator() for device address buffers failed with {} {}",
+                static_cast<int32_t>(result), c_str(result)
+            );
+            abort();
+        }
+        log_startup->info("Created separate VMA allocator for buffer device address allocations");
     }
 
     vkGetDeviceQueue(m_vulkan_device, m_graphics_queue_family_index, 0, &m_vulkan_graphics_queue);

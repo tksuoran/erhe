@@ -338,6 +338,17 @@ Device_impl::~Device_impl() noexcept
         }
     }
 
+    if (m_vma_device_address_allocator != VK_NULL_HANDLE) {
+        char* stats_string = nullptr;
+        vmaBuildStatsString(m_vma_device_address_allocator, &stats_string, VK_TRUE);
+        if (stats_string != nullptr) {
+            log_context->info("VMA device address allocator stats before destroy:\n{}", stats_string);
+            vmaFreeStatsString(m_vma_device_address_allocator, stats_string);
+        }
+        vmaDestroyAllocator(m_vma_device_address_allocator);
+        m_vma_device_address_allocator = VK_NULL_HANDLE;
+    }
+
     vmaDestroyAllocator(m_vma_allocator);
     if (m_vulkan_device != VK_NULL_HANDLE) {
         vkDestroyDevice(m_vulkan_device, nullptr);
@@ -1323,6 +1334,17 @@ auto Device_impl::get_allocator() -> VmaAllocator&
     return m_vma_allocator;
 }
 
+auto Device_impl::get_allocator_for_buffer_usage(const Buffer_usage usage) -> VmaAllocator&
+{
+    if (
+        erhe::utility::test_bit_set(usage, Buffer_usage::shader_device_address) &&
+        (m_vma_device_address_allocator != VK_NULL_HANDLE)
+    ) {
+        return m_vma_device_address_allocator;
+    }
+    return m_vma_allocator;
+}
+
 auto Device_impl::get_buffer_alignment(const Buffer_target target) -> std::size_t
 {
     switch (target) {
@@ -2223,12 +2245,21 @@ auto Device_impl::get_memory_budget() const -> Memory_budget
     }
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(m_vma_allocator, budgets.data());
+    // The device-address allocator (ray tracing buffers) draws from the same
+    // heaps, so its usage has to be added in or the reported figure would
+    // under-count. budget is the driver's per-heap ceiling and is reported
+    // identically by both allocators, so only usage accumulates.
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> device_address_budgets{};
+    if (m_vma_device_address_allocator != VK_NULL_HANDLE) {
+        vmaGetHeapBudgets(m_vma_device_address_allocator, device_address_budgets.data());
+    }
     for (uint32_t heap = 0; heap < memory_properties->memoryHeapCount; ++heap) {
         if ((memory_properties->memoryHeaps[heap].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) == 0) {
             continue;
         }
         result.device_local_budget += budgets[heap].budget;
         result.device_local_usage  += budgets[heap].usage;
+        result.device_local_usage  += device_address_budgets[heap].usage;
     }
     return result;
 }

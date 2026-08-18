@@ -67,6 +67,13 @@ private:
 
     ERHE_PROFILE_MUTEX(std::mutex, m_allocate_mutex);
     Device_impl&  m_device_impl;
+    // The allocator this buffer was created from - the device-address
+    // allocator for shader_device_address buffers, the main one otherwise
+    // (Device_impl::get_allocator_for_buffer_usage()). Every later VMA call
+    // for this buffer, including the deferred destroy, must use this same
+    // allocator, so it is captured once at construction rather than looked
+    // up again from the usage.
+    VmaAllocator  m_vma_allocator      {VK_NULL_HANDLE};
     VmaAllocation m_vma_allocation     {VK_NULL_HANDLE};
     VkBuffer      m_vk_buffer          {VK_NULL_HANDLE};	
     VkMemoryType  m_vk_memory_type     {};

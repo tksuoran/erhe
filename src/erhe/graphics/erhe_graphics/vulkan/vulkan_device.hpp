@@ -2,6 +2,7 @@
 
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_graphics/enums.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_frame_pacing/frame_time_recorder.hpp"
@@ -249,6 +250,16 @@ public:
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
+    // Allocator to use for a buffer with the given usage. Buffers that carry
+    // Buffer_usage::shader_device_address must come from an allocator created
+    // with VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT; everything else
+    // must not, because that flag is allocator-wide - VMA stamps
+    // VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT onto every block it allocates
+    // (vk_mem_alloc.h, canContainBufferWithDeviceAddress), which would request
+    // device addresses for texture and plain-buffer memory that never needs
+    // one. Falls back to the main allocator when the device-address allocator
+    // does not exist (ray tracing disabled: no such buffer can be created).
+    [[nodiscard]] auto get_allocator_for_buffer_usage     (Buffer_usage usage) -> VmaAllocator&;
     [[nodiscard]] auto get_context_window                 () const -> erhe::window::Context_window*;
 
     void set_debug_label(VkObjectType object_type, uint64_t object_handle, const char* label);
@@ -496,6 +507,11 @@ private:
     VkPhysicalDevice         m_vulkan_physical_device     {VK_NULL_HANDLE};
     VkDevice                 m_vulkan_device              {VK_NULL_HANDLE};
     VmaAllocator             m_vma_allocator              {VK_NULL_HANDLE};
+    // Second allocator, created only when ray tracing is enabled, carrying
+    // VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT. Used exclusively for
+    // buffers with Buffer_usage::shader_device_address. See
+    // get_allocator_for_buffer_usage().
+    VmaAllocator             m_vma_device_address_allocator{VK_NULL_HANDLE};
     VkDebugReportCallbackEXT m_debug_report_callback      {VK_NULL_HANDLE};
     VkDebugUtilsMessengerEXT m_debug_utils_messenger      {VK_NULL_HANDLE};
     std::unique_ptr<Surface> m_surface                    {};
