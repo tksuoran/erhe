@@ -134,6 +134,12 @@ public:
     // editor_settings.json and callers that default post processing to
     // enabled (Scene_views::create_viewport_scene_view clamps on it).
     bool  force_post_processing_off{false};
+    // --fix-spot-lights: workaround for a broken glTF exporter. Every spot
+    // light parsed from a glTF asset gets full color value, intensity
+    // 1000, a doubled outer cone angle and the original outer cone angle as
+    // its inner cone angle. Import-time only - the loaded scene keeps the
+    // fixed-up values, and nothing rewrites the source file.
+    bool  fix_gltf_spot_lights{false};
     bool  use_sleep     {false};
     float sleep_margin  {0.0f}; // TODO
 

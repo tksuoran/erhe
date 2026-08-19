@@ -15,6 +15,7 @@
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_log/log_glm.hpp"
+#include "erhe_math/math_util.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -1865,6 +1866,29 @@ private:
             camera.camera
         );
     }
+    // --fix-spot-lights workaround for a broken glTF exporter: push the color
+    // value to 1.0 (hue and saturation kept), force the intensity, widen the
+    // outer cone to twice its exported angle and move the exported outer angle
+    // in as the inner angle. See Gltf_parse_arguments::fix_spot_lights.
+    static void fix_spot_light(erhe::scene::Light& light)
+    {
+        float h{0.0f};
+        float s{0.0f};
+        float v{0.0f};
+        erhe::math::rgb_to_hsv(light.color.r, light.color.g, light.color.b, h, s, v);
+        erhe::math::hsv_to_rgb(h, s, 1.0f, light.color.r, light.color.g, light.color.b);
+
+        light.intensity = 1000.0f;
+
+        const float original_outer_spot_angle = light.outer_spot_angle;
+        light.outer_spot_angle = std::min(2.0f * original_outer_spot_angle, glm::pi<float>());
+        light.inner_spot_angle = original_outer_spot_angle;
+
+        log_gltf->info(
+            "fix_spot_lights: light '{}': color = {}, intensity = {}, inner spot angle = {}, outer spot angle = {}",
+            light.get_name(), light.color, light.intensity, light.inner_spot_angle, light.outer_spot_angle
+        );
+    }
     void parse_light(const std::size_t light_index)
     {
         ERHE_PROFILE_FUNCTION();
@@ -1887,6 +1911,9 @@ private:
         erhe_light->inner_spot_angle = light.innerConeAngle.has_value() ? light.innerConeAngle.value() : 0.0f;
         erhe_light->outer_spot_angle = light.outerConeAngle.has_value() ? light.outerConeAngle.value() : glm::pi<float>() / 4.0f;
         // TODO Sensible defaults for inner and outer cone angles
+        if (m_arguments.fix_spot_lights && (erhe_light->type == erhe::scene::Light_type::spot)) {
+            fix_spot_light(*erhe_light);
+        }
         erhe_light->layer_id = 0;
         erhe_light->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
     }

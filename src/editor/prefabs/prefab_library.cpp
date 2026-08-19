@@ -171,6 +171,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
         .root_node       = prefab.template_root,
         .mesh_layer_id   = 0, // instances are retargeted to the destination scene's content layer
         .path            = prefab.source_path,
+        .fix_spot_lights = m_context.fix_gltf_spot_lights,
     };
     prefab.gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 

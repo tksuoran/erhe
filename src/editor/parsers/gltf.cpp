@@ -710,6 +710,7 @@ auto make_import_gltf_operation(
             .mesh_layer_id   = scene_root->layers().content()->id,
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
+            .fix_spot_lights = context.fix_gltf_spot_lights,
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         gltf_data = erhe::gltf::parse_gltf(parse_arguments);
@@ -1264,6 +1265,7 @@ auto open_scene_gltf(
             .mesh_layer_id   = Mesh_layer_id::content,
             .path            = path,
             .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
+            .fix_spot_lights = context.fix_gltf_spot_lights,
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);

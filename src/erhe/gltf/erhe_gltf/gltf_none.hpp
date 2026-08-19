@@ -155,6 +155,7 @@ struct Gltf_parse_arguments
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;
     bool                                      parallel{true};
+    bool                                      fix_spot_lights{false};
     std::span<const std::byte>                glb_data{};
 };
 

@@ -964,6 +964,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
         .root_node       = record->root_node,
         .mesh_layer_id   = 0,
         .path            = canonical_path,
+        .fix_spot_lights = m_context.fix_gltf_spot_lights,
     };
     record->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
 

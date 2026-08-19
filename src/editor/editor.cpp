@@ -1300,7 +1300,7 @@ public:
         return std::make_unique<erhe::window::Context_window>(configuration);
     }
 
-    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off)
+    Editor(std::string startup_commands_path, std::string startup_scene_path, bool no_startup_scene, bool force_post_processing_off, bool fix_gltf_spot_lights)
         : m_startup_commands_path{std::move(startup_commands_path)}
         , m_startup_scene_path   {std::move(startup_scene_path)}
         , m_no_startup_scene     {no_startup_scene}
@@ -1352,6 +1352,13 @@ public:
         m_app_context.force_post_processing_off = force_post_processing_off;
         if (force_post_processing_off) {
             log_startup->info("Post processing forced OFF for this session (--no-post-processing)");
+        }
+
+        // --fix-spot-lights: import-time fixup for broken glTF spot light
+        // exports; applies to every glTF asset loaded in this session.
+        m_app_context.fix_gltf_spot_lights = fix_gltf_spot_lights;
+        if (fix_gltf_spot_lights) {
+            log_startup->info("glTF spot light fixup enabled for this session (--fix-spot-lights)");
         }
 
         // Editor is constructed on the main thread; parts constructed on init
@@ -4139,7 +4146,7 @@ public:
     std::unique_ptr<Mcp_server         >                     m_mcp_server;
 };
 
-void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off)
+void run_editor(const std::string& startup_commands_path, const std::string& startup_scene_path, const bool no_startup_scene, const bool force_post_processing_off, const bool fix_gltf_spot_lights)
 {
 //#if defined(ERHE_PROFILE_LIBRARY_TRACY) && TRACY_ENABLE
 //    while (!TracyIsConnected) {
@@ -4269,7 +4276,7 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         //    editor.tick();
         //}
 
-        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off};
+        Editor editor{startup_commands_path, startup_scene_path, no_startup_scene, force_post_processing_off, fix_gltf_spot_lights};
         editor.run();
     }
 

@@ -194,6 +194,12 @@ struct Gltf_parse_arguments
     // executor tasks (GPU uploads always stay on the calling thread). When
     // false every parse step runs inline, serially.
     bool                                      parallel{true};
+    // Workaround for broken glTF exports of spot lights (--fix-spot-lights):
+    // when true, every parsed spot light gets its color value pushed to
+    // 1.0 (hue and saturation kept), its intensity forced to 1000, its outer cone
+    // angle doubled (clamped to pi) and its inner cone angle set to the
+    // original outer cone angle. Other light types are untouched.
+    bool                                      fix_spot_lights{false};
     // When non-empty, parse this in-memory GLB instead of reading `path`
     // (`path` is then used only for logging and base-directory resolution).
     // All buffers and images must be embedded in the GLB, as with assets

@@ -31,12 +31,17 @@ auto main(int argc, char** argv) -> int
     //     --scene "res/editor/scenes/Default Scene.glb".
     //   --no-scene starts with an empty editor: no procedural default scene and no
     //     scene load (takes precedence over --scene).
+    //   --fix-spot-lights fixes up spot lights of every loaded glTF asset (broken
+    //     exporter workaround): full color value, intensity 1000, doubled
+    //     outer cone angle, and the original outer cone angle used as the inner
+    //     cone angle. Source files are not modified.
     // Unknown options are ignored (the OS / launcher may append its own), and any
     // parse error falls back to the defaults rather than failing to start.
     std::string startup_commands_path{"config/editor/commands.json"};
     std::string startup_scene_path{};
     bool        no_startup_scene{false};
     bool        no_post_processing{false};
+    bool        fix_spot_lights{false};
     try {
         cxxopts::Options options{"editor", "erhe editor"};
         options.add_options()
@@ -44,6 +49,7 @@ auto main(int argc, char** argv) -> int
             ("scene",    "Scene file (.glb / .gltf) to load on startup instead of building the default scene", cxxopts::value<std::string>()->default_value(""))
             ("no-scene", "Start with an empty editor: no procedural default scene and no scene load (overrides --scene)")
             ("no-post-processing", "Force viewport post processing off for this session, overriding editor_settings.json (the stored setting is not modified)")
+            ("fix-spot-lights", "Fix up spot lights when loading glTF assets: full color value, intensity 1000, doubled outer cone angle, inner cone angle taken from the original outer cone angle")
             ("h,help",   "Print usage");
         options.allow_unrecognised_options();
         const cxxopts::ParseResult result = options.parse(argc, argv);
@@ -55,6 +61,7 @@ auto main(int argc, char** argv) -> int
         startup_scene_path    = result["scene"].as<std::string>();
         no_startup_scene      = (result.count("no-scene") != 0);
         no_post_processing    = (result.count("no-post-processing") != 0);
+        fix_spot_lights       = (result.count("fix-spot-lights") != 0);
     } catch (const std::exception&) {
         // Keep the default startup paths on any parse failure.
     }
@@ -79,6 +86,6 @@ auto main(int argc, char** argv) -> int
     // android-project/app/build.gradle.
     (void)erhe::file::migrate_android_assets_to_writable("erhe_migrate_manifest.txt");
 #endif
-    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene, no_post_processing);
+    editor::run_editor(startup_commands_path, startup_scene_path, no_startup_scene, no_post_processing, fix_spot_lights);
     return 0;
 }
