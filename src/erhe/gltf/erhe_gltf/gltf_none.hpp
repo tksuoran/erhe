@@ -21,6 +21,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Sampler;
     class Texture;
@@ -81,6 +82,24 @@ public:
     std::vector<std::pair<std::string, std::string>> entries;
 };
 
+// Mirrors the fastgltf backend's residency split (see gltf_fastgltf.hpp):
+// with no parser there is never anything to make resident, so every entry
+// point is a no-op.
+class Gltf_data;
+
+class Gltf_image_residency
+{
+public:
+    [[nodiscard]] auto get_pending_image_count() const -> std::size_t { return 0; }
+    [[nodiscard]] auto get_pending_byte_count () const -> std::size_t { return 0; }
+
+    auto process_next_image(Gltf_data&, erhe::graphics::Device&, Image_transfer&) -> bool { return false; }
+    void create_samplers(Gltf_data&, erhe::graphics::Device&) const {}
+    auto process_next_image_into_frame(Gltf_data&, erhe::graphics::Device&, Image_transfer&, erhe::graphics::Command_buffer&, std::size_t&) -> bool { return false; }
+    void bind_material_textures(Gltf_data&) const {}
+    void drain(Gltf_data&, erhe::graphics::Device&, Image_transfer&) {}
+};
+
 class Gltf_data
 {
 public:
@@ -93,6 +112,7 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<std::shared_ptr<erhe::graphics::Texture>>   images;
     std::vector<std::shared_ptr<Gltf_image_source>>         image_sources;
+    Gltf_image_residency                                    image_residency;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
@@ -146,11 +166,19 @@ public:
     std::optional<erhe::math::Aabb> bounding_box;
 };
 
+class Gltf_device_options
+{
+public:
+    unsigned int transcode_format_preference{0};
+    float        max_sampler_anisotropy{1.0f};
+};
+
+[[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;
+
 struct Gltf_parse_arguments
 {
-    erhe::graphics::Device&                   graphics_device;
     ::tf::Executor&                           executor;
-    Image_transfer&                           image_transfer;
+    Gltf_device_options                       device_options{};
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;

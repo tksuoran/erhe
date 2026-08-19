@@ -488,12 +488,26 @@ void instantiate_gltf_prefab(
     if ((source_path == nullptr) || (context.prefab_library == nullptr)) {
         return;
     }
-    const std::shared_ptr<Prefab> prefab = context.prefab_library->get_or_load(*source_path);
-    if (!prefab) {
-        log_tree->warn("Dropped glTF could not be loaded as a prefab: {}", source_path->string());
-        return;
-    }
-    instantiate_prefab(context, prefab, scene_root, parent->world_from_node(), parent, index_in_parent);
+    // Asynchronous prefab load (doc/async-asset-loading-plan.md step 7): the
+    // drop returns immediately and the instance appears once the template is
+    // ready. Scene_root is enable_shared_from_this, so the callback can hold
+    // it weakly and bail if the scene closed meanwhile.
+    const std::weak_ptr<Scene_root> weak_scene_root = scene_root.shared_from_this();
+    const std::filesystem::path     path            = *source_path;
+    context.prefab_library->get_or_load_async(
+        path,
+        [&context, weak_scene_root, path, parent, index_in_parent](const std::shared_ptr<Prefab>& prefab) {
+            if (!prefab) {
+                log_tree->warn("Dropped glTF could not be loaded as a prefab: {}", path.string());
+                return;
+            }
+            const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+            if (!target || !parent->get_item_host()) {
+                return; // scene closed, or the drop parent left the scene
+            }
+            instantiate_prefab(context, prefab, *target, parent->world_from_node(), parent, index_in_parent);
+        }
+    );
 }
 
 }

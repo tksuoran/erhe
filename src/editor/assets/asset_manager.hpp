@@ -7,8 +7,10 @@
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -30,6 +32,11 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class App_scenes;
+class Asset_load_handle;
+class Asset_load_request;
+class Asset_load_result;
+class Asset_load_task;
+class Asset_load_tick_context;
 class Content_library_node;
 class Scene_root;
 
@@ -196,6 +203,27 @@ public:
 // an already-loaded container ADOPTS the record (resolution 3) - the
 // record becomes the scene's record and the import reuses its parse.
 // save_container() / dirty tracking arrive with R5.8.
+// What a pending-capable acquire found (doc/async-asset-loading-plan.md 2.9).
+// `pending` is the state that must not be confused with `failed`: the
+// container is loading, so the caller retries (Asset_reference) or suspends
+// its task (the parse-time substitution sites) instead of falling through to
+// the "keep the imported copy" path.
+enum class Asset_acquire_state : int {
+    resolved = 0,
+    pending  = 1,
+    failed   = 2
+};
+
+[[nodiscard]] auto c_str(Asset_acquire_state state) -> const char*;
+
+class Asset_acquire_result
+{
+public:
+    std::shared_ptr<erhe::Item_base> item;                                 // non-null only when resolved
+    Asset_acquire_state              state{Asset_acquire_state::failed};
+    std::string                      error;                                // populated when failed
+};
+
 class Asset_manager
 {
 public:
@@ -205,12 +233,68 @@ public:
     Asset_manager(const Asset_manager&)            = delete;
     Asset_manager& operator=(const Asset_manager&) = delete;
 
+    // The per-frame entry point for asynchronous asset loading
+    // (doc/async-asset-loading-plan.md 2.1). Called from Editor::tick()
+    // immediately after Scene_commit_queue::flush() - worker results land
+    // first - with the frame's command buffer recording, so that a task may
+    // create GPU objects and record transfers from here and only from here.
+    // Advances every live Asset_load_task a bounded amount, sharing one
+    // Frame_load_budget round-robin between them.
+    void tick(Asset_load_tick_context& tick_context);
+
     // The only way assets come to exist (single-loader axiom): loads on
     // first request, otherwise returns THE copy. Resolution precedence
     // within a container: uid match wins; else a unique conforming name;
     // ambiguous identities fail with a clear error (plan decision 11).
+    // Synchronous load-or-fail: a not-yet-loaded container is loaded here and
+    // now, so these never report `pending`. This is what the user-facing verbs
+    // keep using (asset browser / Scene_root context menu / debug_acquire).
     auto acquire(const Asset_key& key) -> std::shared_ptr<erhe::Item_base>;
     auto acquire(const Asset_key& key, std::string& out_error) -> std::shared_ptr<erhe::Item_base>;
+
+    // Pending-capable acquire (plan 2.9): a container that is loading reports
+    // `pending` with a null item rather than failing. Used by Asset_reference
+    // and, from step 6 on, by the parse-time substitution sites, which must
+    // suspend rather than silently keep an imported copy.
+    auto acquire_or_pending(const Asset_key& key) -> Asset_acquire_result;
+
+    // Queue an asynchronous load of an erhe-authored glTF scene. The handle
+    // is returned immediately, before the load has advanced at all - the
+    // message bus is pumped later in the tick than the asset tick slot, so a
+    // load queued by a message first advances on the FOLLOWING frame.
+    // Returns null when asynchronous loading is disabled (async_gltf_load).
+    // on_done runs on the MAIN thread from the tick that publishes, with the
+    // opened Scene_root, or with null when the load failed or was cancelled.
+    auto queue_load(
+        const std::filesystem::path&                  path,
+        std::function<void(const Asset_load_result&)> on_done = {}
+    ) -> std::shared_ptr<Asset_load_handle>;
+
+    // General form: see Asset_load_request (open a new scene vs import into
+    // an existing one).
+    auto queue_load(
+        Asset_load_request                            request,
+        std::function<void(const Asset_load_result&)> on_done = {}
+    ) -> std::shared_ptr<Asset_load_handle>;
+
+    // Scene-close reap (plan 2.11 first reap point): cancels every load
+    // importing INTO this scene. Does NOT wait - GPU objects a cancelled load
+    // recorded are released through frame-completion handlers, which cannot
+    // fire in the same tick as the close, so waiting here would reintroduce
+    // exactly the blocking drain this work removes. The tasks are reaped from
+    // tick() once their workers go idle, well before the scene-close leak
+    // CHECK 60 frames later.
+    void cancel_loads_for_scene(const Scene_root* scene_root);
+
+    // Handles of every live load, for UI progress (plan 3 step 8). The
+    // handles outlive their tasks, so holding one is safe.
+    [[nodiscard]] auto get_load_handles() const -> std::vector<std::shared_ptr<Asset_load_handle>>;
+
+    // Number of asset load tasks currently in flight. Feeds the `asset_loads`
+    // term of App_context::get_async_in_flight_count(), so that "idle" accounts
+    // for loading (plan 2.12). Atomic: the idle accounting is read from
+    // stale-data guards that do not all run on the main thread.
+    [[nodiscard]] auto get_load_task_count() const -> std::size_t;
 
     // Registers a procedural item as a builtin-scope asset (Scene_builder
     // palette brushes). Builtin names are a persistence contract.
@@ -390,6 +474,19 @@ private:
     void unregister_user(Asset_reference* reference);
 
     void verify_main_thread() const;
+
+    // Cancels every live load task and BLOCKS until their workers are idle.
+    // Called from the destructor; see the definition for why it must block.
+    void cancel_and_reap_load_tasks();
+
+    // Live Asset_load_task count (plan 2.12). Mirrors m_load_tasks, kept as
+    // an atomic because the idle accounting is read from stale-data guards
+    // that do not all run on the main thread.
+    std::atomic<std::size_t> m_load_task_count{0};
+
+    // Owned by the manager, advanced from tick(), reaped once settled AND
+    // their workers are idle (plan 2.3 invariant 4).
+    std::vector<std::unique_ptr<Asset_load_task>> m_load_tasks;
 
     // create<T>() bookkeeping (R5.5): validates the type and records the
     // creation against the defining scene's container record.

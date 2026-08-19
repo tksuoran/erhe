@@ -19,8 +19,12 @@
 
 namespace editor {
 
-Scene_open_operation::Scene_open_operation(const std::filesystem::path& path)
-    : m_path{path}
+Scene_open_operation::Scene_open_operation(
+    const std::filesystem::path&                path,
+    const std::shared_ptr<Prepared_gltf_parse>& prepared_parse
+)
+    : m_path          {path}
+    , m_prepared_parse{prepared_parse}
 {
     set_description(
         fmt::format("[{}] Scene_open_operation(path = {})", get_serial(), m_path.string())
@@ -82,8 +86,12 @@ void Scene_open_operation::execute(App_context& context)
         // the room-sized import defaults (a large scene is otherwise clipped
         // away entirely at the fixed 80 unit far plane).
         std::shared_ptr<Operation> import_operation = make_import_gltf_operation(
-            context, make_import_build_info(context), m_scene_root, m_path, false, true
+            context, make_import_build_info(context), m_scene_root, m_path, false, true,
+            m_prepared_parse.get()
         );
+        // Consumed: a redo must not try to re-use a moved-from parse (it does
+        // not re-import at all - see the class comment).
+        m_prepared_parse.reset();
         import_operation->execute(context);
 
         // Show the opened scene in a NEW viewport window, like "Create Scene"

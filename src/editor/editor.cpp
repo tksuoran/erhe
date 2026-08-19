@@ -51,6 +51,7 @@
 #include "animation/animation_player.hpp"
 #include "animation/animation_window.hpp"
 #include "asset_browser/asset_browser.hpp"
+#include "assets/asset_load_tick_context.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/brdf_slice.hpp"
@@ -604,6 +605,28 @@ public:
         // sees scenes that only the main thread changes.
         erhe::log::set_breadcrumb("tick: scene_commit_queue flush");
         m_scene_commit_queue.flush();
+
+        // Advance asynchronous asset loads a bounded amount
+        // (doc/async-asset-loading-plan.md). This sits right after the commit
+        // queue so that worker results land first, and it runs on hidden ticks
+        // too: the command buffer is recording for the whole tick either way
+        // (see the begin() above), so a load keeps streaming while the window
+        // is occluded instead of stalling until it comes back.
+        erhe::log::set_breadcrumb("tick: asset loads");
+        {
+            Frame_load_budget budget{m_app_context.editor_settings->load};
+            Asset_load_tick_context asset_load_tick_context{
+                .app_context                 = m_app_context,
+                .graphics_device             = *m_graphics_device,
+                .command_buffer              = command_buffer,
+                .executor                    = *m_app_context.executor,
+                .budget                      = budget,
+                .max_decoded_bytes_in_flight = static_cast<std::size_t>(
+                    std::max(0, m_app_context.editor_settings->load.max_decoded_bytes_in_flight)
+                )
+            };
+            m_asset_manager->tick(asset_load_tick_context);
+        }
 
         m_time->prepare_update(m_frame_activity != Frame_activity::hidden, display_advance_ns);
         m_time->update_transform_animations(*m_app_message_bus.get());

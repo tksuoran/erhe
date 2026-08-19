@@ -152,13 +152,16 @@ public:
 
         m_gltf_data = erhe::gltf::parse_gltf(
             erhe::gltf::Gltf_parse_arguments{
-                .graphics_device = m_graphics_device,
                 .executor        = executor,
-                .image_transfer  = m_image_transfer,
+                .device_options  = erhe::gltf::query_gltf_device_options(m_graphics_device),
                 .root_node       = m_scene.get_root_node(),
                 .path            = "res/example/models/SM_Deccer_Cubes_Textured.glb"
             }
         );
+        // No frame loop exists yet here, so this stays a blocking drain
+        // (async-asset-loading plan 2.6): parse_gltf creates no GPU objects,
+        // residency does.
+        m_gltf_data.image_residency.drain(m_gltf_data, m_graphics_device, m_image_transfer);
 
         // Convert triangle soup vertex and index data to GL buffers
         erhe::primitive::Buffer_info buffer_info = m_mesh_memory.make_primitive_buffer_info();

@@ -274,6 +274,14 @@ private:
     // confirming would save an already-closed scene.
     void on_close_scene(const std::shared_ptr<Scene_root>& scene_root);
 
+    // UI wiring for a freshly opened scene (browser window, viewport,
+    // Scene_created_message). Shared by the blocking open and the
+    // asynchronous Gltf_load_task completion callback.
+    void on_scene_opened(const std::shared_ptr<Scene_root>& scene_root);
+
+    // Per-load progress + cancel for asynchronous asset loads (plan 3 step 8).
+    void imgui_asset_loads();
+
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
     App_context& m_context;

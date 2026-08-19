@@ -248,7 +248,9 @@ void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bo
 
     // JSON-level scan (cheap, cached on the asset node) providing the AABB
     // for the preview box and bottom-snap placement.
-    ensure_scanned(gltf);
+    // Drag-and-drop must decide right now (the drop target needs the bounding
+    // box for the preview box this frame), so this one stays blocking.
+    ensure_scanned_blocking(gltf);
 
     // Anchor at the hovered surface point (scene content or grid); when the
     // cursor misses both, fall back to a point in front of the camera.
@@ -284,16 +286,32 @@ void Viewport_window::gltf_drag_preview_and_drop(Asset_file_gltf& gltf, const bo
     }
 
     if (delivery) {
-        const std::shared_ptr<Prefab> prefab = m_app_context.prefab_library->get_or_load(*source_path);
-        if (!prefab) {
-            log_scene->warn("Dropped glTF could not be loaded as a prefab: {}", source_path->string());
-            return;
-        }
         const std::shared_ptr<Scene_root> scene_root = viewport_scene_view->get_scene_root();
         if (!scene_root) {
             return;
         }
-        instantiate_prefab(m_app_context, prefab, *scene_root, erhe::math::create_translation<float>(translation));
+        // Asynchronous prefab load (doc/async-asset-loading-plan.md step 7):
+        // the drop returns immediately and the instance appears once the
+        // template is ready. on_ready runs on the main thread, and inline
+        // when the prefab is already cached.
+        const std::weak_ptr<Scene_root> weak_scene_root = scene_root;
+        const std::filesystem::path     path            = *source_path;
+        const glm::mat4                 world_from_node = erhe::math::create_translation<float>(translation);
+        App_context&                    context         = m_app_context;
+        m_app_context.prefab_library->get_or_load_async(
+            path,
+            [&context, weak_scene_root, path, world_from_node](const std::shared_ptr<Prefab>& prefab) {
+                if (!prefab) {
+                    log_scene->warn("Dropped glTF could not be loaded as a prefab: {}", path.string());
+                    return;
+                }
+                const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+                if (!target) {
+                    return; // destination scene closed while the template loaded
+                }
+                instantiate_prefab(context, prefab, *target, world_from_node);
+            }
+        );
     }
 }
 

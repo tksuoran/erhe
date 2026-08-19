@@ -17,7 +17,13 @@ class Asset_manager;
 enum class Asset_resolve_state : int {
     unresolved = 0,
     resolved   = 1,
-    failed     = 2
+    failed     = 2,
+    // The container this reference addresses is loading. Distinct from
+    // `failed` because a load in flight is not a broken container: pending
+    // must NOT latch, or the first touch of a not-yet-loaded container would
+    // turn into a permanent failure the moment loads span frames
+    // (doc/async-asset-loading-plan.md 2.9).
+    pending    = 3
 };
 
 [[nodiscard]] auto c_str(Asset_resolve_state state) -> const char*;
@@ -34,6 +40,8 @@ enum class Asset_resolve_state : int {
 // the manager. A file-scope load failure latches `failed` so a broken
 // container is not re-hit every frame; scene_local / builtin misses do not
 // latch (callers drive retry, e.g. a per-frame slot-resolve cadence).
+// A file-scope container that is still LOADING resolves to `pending`, which
+// also does not latch - callers drive the retry through needs_resolve().
 class Asset_reference
 {
 public:
@@ -71,6 +79,13 @@ public:
     }
 
     [[nodiscard]] auto get_state() const -> Asset_resolve_state;
+
+    // Whether a retry of resolve() is worth making: true while unresolved or
+    // pending, false once resolved or latched failed. Retry cadences must ask
+    // this rather than comparing against `unresolved`, which would stop
+    // retrying a load that is merely still in flight.
+    [[nodiscard]] auto needs_resolve() const -> bool;
+
     void reset_resolution();                                   // releases usership, clears the failed latch, allows retry
 
     // Human-readable holder description used when the manager names an

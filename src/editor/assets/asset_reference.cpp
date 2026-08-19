@@ -18,6 +18,7 @@ auto c_str(const Asset_resolve_state state) -> const char*
     switch (state) {
         case Asset_resolve_state::resolved: return "resolved";
         case Asset_resolve_state::failed:   return "failed";
+        case Asset_resolve_state::pending:  return "pending";
         case Asset_resolve_state::unresolved:
         default:                            return "unresolved";
     }
@@ -136,15 +137,26 @@ auto Asset_reference::resolve(Asset_manager& manager) -> const std::shared_ptr<e
     if (m_state == Asset_resolve_state::failed) {
         return s_empty_item; // latched; reset_resolution() allows retry
     }
-    std::string error;
-    std::shared_ptr<erhe::Item_base> item = manager.acquire(m_key, error);
-    if (!item) {
+    const Asset_acquire_result acquired = manager.acquire_or_pending(m_key);
+    if (!acquired.item) {
+        if (acquired.state == Asset_acquire_state::pending) {
+            // The container is loading. Never latch: resolve() is retried on
+            // a later frame (see needs_resolve()).
+            m_state = Asset_resolve_state::pending;
+            return s_empty_item;
+        }
         if (m_key.scope == Asset_scope::file) {
             m_state = Asset_resolve_state::failed;
-            log_asset->warn("Asset_reference '{}': resolve failed for {}: {}", m_user_label, m_key.describe(), error);
+            log_asset->warn("Asset_reference '{}': resolve failed for {}: {}", m_user_label, m_key.describe(), acquired.error);
+        } else {
+            // scene_local / builtin misses do not latch, and a pending state
+            // would be wrong here: nothing is loading, the asset just is not
+            // there yet.
+            m_state = Asset_resolve_state::unresolved;
         }
         return s_empty_item;
     }
+    const std::shared_ptr<erhe::Item_base>& item = acquired.item;
     m_resolved = item;
     m_manager  = &manager;
     m_state    = Asset_resolve_state::resolved;
@@ -155,6 +167,11 @@ auto Asset_reference::resolve(Asset_manager& manager) -> const std::shared_ptr<e
         m_key.uid = item->get_gltf_uid();
     }
     return m_resolved;
+}
+
+auto Asset_reference::needs_resolve() const -> bool
+{
+    return (m_state == Asset_resolve_state::unresolved) || (m_state == Asset_resolve_state::pending);
 }
 
 void Asset_reference::adopt(Asset_manager& manager, const std::shared_ptr<erhe::Item_base>& item)

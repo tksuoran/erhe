@@ -10,6 +10,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_load_task.hpp"
 #include "assets/asset_manager.hpp"
 #include "assets/asset_paths.hpp"
 #include "content_library/content_library.hpp"
@@ -518,7 +519,10 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
 
 }
 
-auto make_import_build_info(App_context& context) -> erhe::primitive::Build_info
+auto make_import_build_info(
+    App_context&                              context,
+    const erhe::scene_renderer::Mesh_memory_queue queue
+) -> erhe::primitive::Build_info
 {
     return erhe::primitive::Build_info{
         .primitive_types = {
@@ -528,8 +532,67 @@ auto make_import_build_info(App_context& context) -> erhe::primitive::Build_info
             .corner_points           = true,
             .centroid_points         = true
         },
-        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
+        .buffer_info = context.mesh_memory->make_primitive_buffer_info(queue)
     };
+}
+
+// Worker-side half of finalize_imported_meshes (async-asset-loading plan
+// phase 3a): builds every imported primitive's Buffer_mesh. Everything else
+// finalize_imported_meshes does - the raytrace proxy, update_rt_primitives,
+// collecting the mesh node items - mutates scene-side state and stays on the
+// main thread. make_renderable_mesh is idempotent (it returns true when the
+// shape already has buffer-mesh triangles), so the later main-thread pass
+// simply fast-paths over what this built.
+//
+// Deliberately SERIAL over the primitives rather than a per-mesh fan-out:
+// the parse clones a mesh per instantiating node and the clones share
+// Primitive objects, and make_buffer_mesh has no per-shape serialization of
+// its own, so building two meshes concurrently could build one shared
+// primitive twice at once. The point here is to get the work off the main
+// thread; parallelising within it needs that serialization first.
+//
+// build_info / skinned_build_info must be constructed by the CALLER on the
+// main thread: make_primitive_buffer_info can create a Vertex_input_state.
+void build_imported_buffer_meshes(
+    const erhe::primitive::Build_info& build_info,
+    const erhe::primitive::Build_info& skinned_build_info,
+    const erhe::gltf::Gltf_data&       gltf_data
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+    std::size_t built_count = 0;
+    for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+        if (!node) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        if (!mesh) {
+            continue;
+        }
+        // Same choice finalize_imported_meshes makes: a skinned mesh needs
+        // joint_indices + joint_weights in the GPU vertex buffer, and getting
+        // this wrong here would be invisible - the main-thread pass would
+        // fast-path over the wrongly-built mesh and skinning would silently
+        // not happen.
+        const erhe::primitive::Build_info& mesh_build_info = mesh->skin ? skinned_build_info : build_info;
+        for (erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_mutable_primitives()) {
+            erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
+            if (!primitive.make_renderable_mesh(mesh_build_info, erhe::primitive::Normal_style::corner_normals)) {
+                log_parsers->error(
+                    "async glTF load: failed to build renderable mesh for '{}' (out of GPU mesh memory?)",
+                    mesh->get_name()
+                );
+            }
+            ++built_count;
+        }
+    }
+    log_parsers->info(
+        "build_imported_buffer_meshes: {} primitives, {} ms",
+        built_count,
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_time).count()
+    );
 }
 
 void finalize_imported_meshes(
@@ -651,7 +714,8 @@ auto make_import_gltf_operation(
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path,
     const bool                         materials_as_references,
-    const bool                         fit_view_to_content
+    const bool                         fit_view_to_content,
+    Prepared_gltf_parse* const         prepared_parse
 ) -> std::shared_ptr<Operation>
 {
     ERHE_VERIFY(scene_root);
@@ -666,10 +730,20 @@ auto make_import_gltf_operation(
     std::shared_ptr<erhe::scene::Node> root_node;
     erhe::gltf::Gltf_data              gltf_data;
     std::optional<Adopted_container_parse> adopted_parse;
-    if (context.asset_manager != nullptr) {
+    // An asynchronously prepared parse wins over everything: the caller
+    // already checked adoptability before queueing the load, and re-checking
+    // here would take a record whose parse we would then throw away.
+    if ((prepared_parse == nullptr) && (context.asset_manager != nullptr)) {
         adopted_parse = context.asset_manager->take_adopted_parse(*scene_root, path);
     }
-    if (adopted_parse.has_value()) {
+    if (prepared_parse != nullptr) {
+        gltf_data = std::move(prepared_parse->gltf_data);
+        root_node = prepared_parse->root_node;
+        log_parsers->info(
+            "import '{}': consuming asynchronously prepared parse",
+            erhe::file::to_string(path.filename())
+        );
+    } else if (adopted_parse.has_value()) {
         gltf_data = std::move(adopted_parse->gltf_data);
         root_node = adopted_parse->root_node;
         // The container's free root node becomes the import_root wrapper:
@@ -703,9 +777,8 @@ auto make_import_gltf_operation(
 
         erhe::gltf::Image_transfer image_transfer{graphics_device};
         erhe::gltf::Gltf_parse_arguments parse_arguments{
-            .graphics_device = graphics_device,
             .executor        = executor,
-            .image_transfer  = image_transfer,
+            .device_options  = erhe::gltf::query_gltf_device_options(graphics_device),
             .root_node       = root_node,
             .mesh_layer_id   = scene_root->layers().content()->id,
             .path            = path,
@@ -714,6 +787,11 @@ auto make_import_gltf_operation(
         };
         const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
         gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+        // parse_gltf creates no GPU objects (async-asset-loading plan step 3):
+        // it leaves decoded pixels in Gltf_data::image_residency. Drain it in
+        // full here, so this path behaves exactly as it did before the split.
+        // Step 6 replaces this blocking drain with a budgeted one.
+        gltf_data.image_residency.drain(gltf_data, graphics_device, image_transfer);
         const std::chrono::steady_clock::duration parse_duration = std::chrono::steady_clock::now() - parse_start_time;
         log_parsers->info(
             "parse_gltf '{}': {} ms",
@@ -1022,6 +1100,41 @@ void import_gltf(
     const bool                         materials_as_references
 )
 {
+    // Asynchronous path (doc/async-asset-loading-plan.md step 7): the parse,
+    // the Buffer_mesh build and texture residency happen off the tick; the
+    // undoable operation is then built from the finished parse and stays the
+    // cheap synchronous thing plan 2.8 wants it to be.
+    if (context.asset_manager != nullptr) {
+        Asset_load_request request{
+            .path                    = path,
+            .import_target           = scene_root,
+            .materials_as_references = materials_as_references
+        };
+        const std::weak_ptr<Scene_root> weak_scene_root = scene_root;
+        std::shared_ptr<Asset_load_handle> handle = context.asset_manager->queue_load(
+            std::move(request),
+            [&context, weak_scene_root, path, materials_as_references](const Asset_load_result& result) {
+                const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+                if (!target) {
+                    return; // scene closed while loading; the task cancelled itself
+                }
+                context.operation_stack->queue(
+                    make_import_gltf_operation(
+                        context,
+                        make_import_build_info(context),
+                        target,
+                        path,
+                        materials_as_references,
+                        false,
+                        result.prepared_parse.get()
+                    )
+                );
+            }
+        );
+        if (handle) {
+            return;
+        }
+    }
     context.operation_stack->queue(
         make_import_gltf_operation(context, std::move(build_info), scene_root, path, materials_as_references)
     );
@@ -1223,81 +1336,15 @@ auto resolve_scene_save_path(const Scene_root& scene_root) -> std::filesystem::p
     return default_scene_dir() / (scene_root.get_name() + ".glb");
 }
 
-auto open_scene_gltf(
-    App_context&                 context,
-    const std::filesystem::path& path
+auto finish_open_scene_gltf(
+    App_context&                              context,
+    const std::filesystem::path&              path,
+    erhe::gltf::Gltf_data&                    gltf_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    const bool                                adopted
 ) -> std::shared_ptr<Scene_root>
 {
     ERHE_VERIFY(context.current_command_buffer != nullptr);
-
-    // R5.7 record adoption (plan resolution 3): a container already loaded
-    // for this path lends its parse - read in place, because the ERHE_scene
-    // payload (enable_physics) must be known before the Scene_root can be
-    // constructed. Registering the scene below adopts the record; the
-    // take_adopted_parse call at the end severs the record's structure pins
-    // once the open succeeded. Until then the record stays intact, so a
-    // failed open leaves the loaded container exactly as it was.
-    std::shared_ptr<Asset_container_record> adoptable_record;
-    if (context.asset_manager != nullptr) {
-        adoptable_record = context.asset_manager->find_adoptable_container(path);
-    }
-
-    // Parse into a temporary container when there is nothing to adopt. Mesh
-    // layer ids are editor-wide constants (Mesh_layer_id), so parsing before
-    // the destination scene exists is safe.
-    erhe::scene::Scene temp_scene{"temp scene", nullptr};
-    std::shared_ptr<erhe::scene::Node> container_node;
-    erhe::gltf::Gltf_data              parsed_gltf_data;
-    if (adoptable_record) {
-        container_node = adoptable_record->root_node;
-        log_parsers->info("open_scene_gltf: adopting loaded container record for '{}'", erhe::file::to_string(path));
-    } else {
-        const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
-        container_node = std::make_shared<erhe::scene::Node>("open scene container");
-        container_node->set_parent(temp_scene_root_node);
-
-        erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
-        erhe::gltf::Gltf_parse_arguments parse_arguments{
-            .graphics_device = *context.graphics_device,
-            .executor        = *context.executor,
-            .image_transfer  = image_transfer,
-            .root_node       = container_node,
-            .mesh_layer_id   = Mesh_layer_id::content,
-            .path            = path,
-            .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
-            .fix_spot_lights = context.fix_gltf_spot_lights,
-        };
-        const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
-        parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
-        const std::chrono::steady_clock::duration parse_duration = std::chrono::steady_clock::now() - parse_start_time;
-        log_parsers->info(
-            "parse_gltf '{}': {} ms",
-            erhe::file::to_string(path.filename()),
-            std::chrono::duration_cast<std::chrono::milliseconds>(parse_duration).count()
-        );
-    }
-    // Non-const: the R6 asset-reference resolution below substitutes
-    // manager-acquired materials into the parse (for the adopted case that
-    // mutates the record's data, which the successful open consumes anyway;
-    // a failed open bails out before the resolution runs).
-    erhe::gltf::Gltf_data& gltf_data = adoptable_record ? adoptable_record->gltf_data : parsed_gltf_data;
-
-    // Container parses use mesh layer 0 (their node trees are never
-    // rendered); scene content draws the content layer. Walk the node
-    // attachments, not gltf_data.meshes: the parse clones the template mesh
-    // per instantiating node, and the clones are what enter the scene.
-    if (adoptable_record) {
-        for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
-            if (!node) {
-                continue;
-            }
-            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
-            if (mesh) {
-                mesh->layer_id = Mesh_layer_id::content;
-            }
-        }
-    }
-
     const std::optional<Gltf_scene_state> scene_state = parse_gltf_scene_state(gltf_data);
     if (!scene_state.has_value()) {
         // The callers route only ERHE_scene-marked files here, so a missing
@@ -1402,11 +1449,98 @@ auto open_scene_gltf(
     // Adopted open succeeded: sever the record's structure pins (the parse
     // was consumed in place; the nodes now live in - and must die with -
     // this scene). The record became the scene's record at registration.
-    if (adoptable_record && (context.asset_manager != nullptr)) {
+    if (adopted && (context.asset_manager != nullptr)) {
         static_cast<void>(context.asset_manager->take_adopted_parse(*scene_root, path));
     }
 
     log_parsers->info("open_scene_gltf: opened scene '{}' from '{}'", scene_root->get_name(), erhe::file::to_string(path));
+    return scene_root;
+}
+
+auto open_scene_gltf(
+    App_context&                 context,
+    const std::filesystem::path& path
+) -> std::shared_ptr<Scene_root>
+{
+    ERHE_VERIFY(context.current_command_buffer != nullptr);
+
+    // R5.7 record adoption (plan resolution 3): a container already loaded
+    // for this path lends its parse - read in place, because the ERHE_scene
+    // payload (enable_physics) must be known before the Scene_root can be
+    // constructed. Registering the scene below adopts the record; the
+    // take_adopted_parse call at the end severs the record's structure pins
+    // once the open succeeded. Until then the record stays intact, so a
+    // failed open leaves the loaded container exactly as it was.
+    std::shared_ptr<Asset_container_record> adoptable_record;
+    if (context.asset_manager != nullptr) {
+        adoptable_record = context.asset_manager->find_adoptable_container(path);
+    }
+
+    // Parse into a temporary container when there is nothing to adopt. Mesh
+    // layer ids are editor-wide constants (Mesh_layer_id), so parsing before
+    // the destination scene exists is safe.
+    erhe::scene::Scene temp_scene{"temp scene", nullptr};
+    std::shared_ptr<erhe::scene::Node> container_node;
+    erhe::gltf::Gltf_data              parsed_gltf_data;
+    if (adoptable_record) {
+        container_node = adoptable_record->root_node;
+        log_parsers->info("open_scene_gltf: adopting loaded container record for '{}'", erhe::file::to_string(path));
+    } else {
+        const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
+        container_node = std::make_shared<erhe::scene::Node>("open scene container");
+        container_node->set_parent(temp_scene_root_node);
+
+        erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
+        erhe::gltf::Gltf_parse_arguments parse_arguments{
+            .executor        = *context.executor,
+            .device_options  = erhe::gltf::query_gltf_device_options(*context.graphics_device),
+            .root_node       = container_node,
+            .mesh_layer_id   = Mesh_layer_id::content,
+            .path            = path,
+            .parallel        = (context.editor_settings == nullptr) || context.editor_settings->load.parallel_gltf_parse,
+            .fix_spot_lights = context.fix_gltf_spot_lights,
+        };
+        const std::chrono::steady_clock::time_point parse_start_time = std::chrono::steady_clock::now();
+        parsed_gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+        // See the note at the other parse_gltf call: residency is a separate
+        // step now, drained in full here to keep this path synchronous.
+        parsed_gltf_data.image_residency.drain(parsed_gltf_data, *context.graphics_device, image_transfer);
+        const std::chrono::steady_clock::duration parse_duration = std::chrono::steady_clock::now() - parse_start_time;
+        log_parsers->info(
+            "parse_gltf '{}': {} ms",
+            erhe::file::to_string(path.filename()),
+            std::chrono::duration_cast<std::chrono::milliseconds>(parse_duration).count()
+        );
+    }
+    // Non-const: the R6 asset-reference resolution below substitutes
+    // manager-acquired materials into the parse (for the adopted case that
+    // mutates the record's data, which the successful open consumes anyway;
+    // a failed open bails out before the resolution runs).
+    erhe::gltf::Gltf_data& gltf_data = adoptable_record ? adoptable_record->gltf_data : parsed_gltf_data;
+
+    // Container parses use mesh layer 0 (their node trees are never
+    // rendered); scene content draws the content layer. Walk the node
+    // attachments, not gltf_data.meshes: the parse clones the template mesh
+    // per instantiating node, and the clones are what enter the scene.
+    if (adoptable_record) {
+        for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+            if (!node) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            if (mesh) {
+                mesh->layer_id = Mesh_layer_id::content;
+            }
+        }
+    }
+
+    // The main-thread tail, shared with the asynchronous path
+    // (Gltf_load_task): everything from here on constructs the Scene_root,
+    // builds Buffer_meshes and mutates the scene, so it may only run on the
+    // main thread with a live command buffer.
+    std::shared_ptr<Scene_root> scene_root = finish_open_scene_gltf(
+        context, path, gltf_data, container_node, adoptable_record ? true : false
+    );
     return scene_root;
 }
 

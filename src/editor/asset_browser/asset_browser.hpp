@@ -10,7 +10,10 @@
 
 #include <glm/glm.hpp>
 
+#include <atomic>
 #include <filesystem>
+#include <memory>
+#include <string>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -22,6 +25,21 @@ namespace editor {
 class App_context;
 class App_message_bus;
 class Scene_root;
+
+// An asynchronous glTF scan in flight (doc/async-asset-loading-plan.md
+// step 8). scan_gltf is a whole-file read plus a full JSON parse, so it must
+// not run inside ImGui iteration - hovering a large .glb in the asset browser
+// used to freeze the editor for as long as the read took.
+class Gltf_scan_request
+{
+public:
+    std::atomic<bool>        finished{false};
+    std::vector<std::string> contents;
+    std::vector<std::string> extensions_used;
+    std::optional<erhe::math::Aabb> bounding_box;
+    std::vector<std::string> material_names;
+    std::vector<std::string> material_uids;
+};
 
 class Asset_node
     : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Asset_node>
@@ -79,11 +97,22 @@ public:
     // Material into Scene" context menu on scanned sub-assets.
     std::vector<std::string>        material_names;
     std::vector<std::string>        material_uids;
+
+    // Non-null while an asynchronous scan is in flight. Callers that need the
+    // scan results this frame should check is_scanned first and show a
+    // placeholder otherwise.
+    std::shared_ptr<Gltf_scan_request> scan_request;
 };
 
-// Lazily populate contents + bounding_box (scan_gltf); no-op when already
-// scanned. Shared by the asset browser tooltip and the viewport drop target.
-void ensure_scanned(Asset_file_gltf& gltf);
+// Lazily populate contents + bounding_box, by scanning on a WORKER: the first
+// call spawns the scan and returns immediately with is_scanned still false;
+// a later call picks the result up. No-op once scanned. Shared by the asset
+// browser tooltip / context menu and the viewport drop target.
+void ensure_scanned(App_context& context, Asset_file_gltf& gltf);
+
+// Blocking variant, for the few callers that genuinely cannot proceed without
+// the scan (a drag-and-drop drop that must decide right now).
+void ensure_scanned_blocking(Asset_file_gltf& gltf);
 
 class Asset_file_geogram : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_geogram>
 {

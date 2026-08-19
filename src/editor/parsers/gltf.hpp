@@ -1,6 +1,8 @@
 #pragma once
 
+#include "erhe_gltf/gltf.hpp"
 #include "erhe_math/aabb.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -15,7 +17,7 @@ namespace erhe {
 namespace erhe::gltf      { class Gltf_data; class Gltf_image_source; class Image_transfer; }
 namespace erhe::graphics  { class Device; class Texture; }
 namespace erhe::primitive { class Build_info; }
-namespace erhe::scene     { class Animation; }
+namespace erhe::scene     { class Animation; class Node; }
 namespace tf              { class Executor; }
 
 namespace editor {
@@ -44,13 +46,30 @@ class Scene_root;
 // far plane and shadow range widened to cover it. Used when the file becomes
 // a scene of its own (Scene_open_operation, e.g. --scene); importing into an
 // existing scene leaves that scene's view alone.
+// A glTF parse already produced by an asynchronous load
+// (doc/async-asset-loading-plan.md step 7): the parsed data plus the
+// import_root node its content hangs from, ready to hand to
+// make_import_gltf_operation instead of having it parse inline. The root node
+// must already carry the import_root flags and be unparented, exactly as the
+// inline parse leaves it.
+class Prepared_gltf_parse
+{
+public:
+    erhe::gltf::Gltf_data              gltf_data;
+    std::shared_ptr<erhe::scene::Node> root_node;
+};
+
 [[nodiscard]] auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path,
     bool                               materials_as_references = false,
-    bool                               fit_view_to_content     = false
+    bool                               fit_view_to_content     = false,
+    // When non-null, the parse (and its Buffer_mesh build) has already been
+    // done asynchronously: this consumes it instead of parsing inline, and
+    // record adoption is skipped - the caller decided that at queue time.
+    Prepared_gltf_parse*               prepared_parse          = nullptr
 ) -> std::shared_ptr<Operation>;
 
 // Queues the import compound built by make_import_gltf_operation().
@@ -65,7 +84,15 @@ void import_gltf(
 // The Build_info every glTF import entry point uses (asset browser, MCP
 // import_gltf, scene open, prefab loading): all primitive types enabled,
 // GPU buffers from the shared Mesh_memory.
-[[nodiscard]] auto make_import_build_info(App_context& context) -> erhe::primitive::Build_info;
+// The queue selector picks which Mesh_memory transfer queue the built
+// vertex / index bytes go through (doc/async-asset-loading-plan.md 2.6).
+// Only a caller whose publish gates on the loader watermark may pass
+// Mesh_memory_queue::loader; everything that publishes immediately must keep
+// the default interactive queue.
+[[nodiscard]] auto make_import_build_info(
+    App_context&                              context,
+    erhe::scene_renderer::Mesh_memory_queue   queue = erhe::scene_renderer::Mesh_memory_queue::interactive
+) -> erhe::primitive::Build_info;
 
 // Make freshly parsed glTF meshes renderable: build geometry edges +
 // smooth vertex normals, allocate GPU buffers in Mesh_memory (skinned
@@ -73,6 +100,17 @@ void import_gltf(
 // Shared by import_gltf and Prefab_library. When out_mesh_node_items is
 // non-null, nodes carrying meshes are appended to it (for the raytrace
 // kickoff operation).
+// Worker-side Buffer_mesh build for an asynchronous load
+// (doc/async-asset-loading-plan.md phase 3a). Safe off the main thread; the
+// build_infos must be made on the main thread by the caller. See the
+// definition for why it is serial. finalize_imported_meshes still runs
+// afterwards on the main thread and fast-paths over the built primitives.
+void build_imported_buffer_meshes(
+    const erhe::primitive::Build_info& build_info,
+    const erhe::primitive::Build_info& skinned_build_info,
+    const erhe::gltf::Gltf_data&       gltf_data
+);
+
 void finalize_imported_meshes(
     App_context&                                   context,
     const erhe::primitive::Build_info&             build_info,
@@ -152,6 +190,23 @@ public:
 [[nodiscard]] auto open_scene_gltf(
     App_context&                 context,
     const std::filesystem::path& path
+) -> std::shared_ptr<Scene_root>;
+
+// The MAIN-THREAD TAIL of open_scene_gltf, split out so the asynchronous
+// path (Gltf_load_task) can share it: everything from reading the ERHE_scene
+// payload to the raytrace kickoff. Constructs the Scene_root, registers it,
+// resolves asset references, builds Buffer_meshes, executes the
+// content-library / physics / editor-state operations and reparents the
+// parsed nodes under the new scene root. Requires a live command buffer.
+// `adopted` says the parse came from an Asset_manager container record, so
+// the record's structure pins are severed on success. Returns nullptr when
+// the file carries no ERHE_scene payload.
+[[nodiscard]] auto finish_open_scene_gltf(
+    App_context&                              context,
+    const std::filesystem::path&              path,
+    erhe::gltf::Gltf_data&                    gltf_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    bool                                      adopted
 ) -> std::shared_ptr<Scene_root>;
 
 // Gltf_export_arguments::image_source_provider backed by the scene's

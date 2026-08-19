@@ -344,15 +344,51 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     }
 
     const std::filesystem::path path{path_str};
-    const std::shared_ptr<Prefab> prefab = m_context.prefab_library->get_or_load(path);
-    if (!prefab) {
-        return make_error_content("Failed to load prefab (missing file, no nodes, or reference cycle - see log): " + path_str);
-    }
-
     const glm::vec3 position        = get_vec3(args, "position", glm::vec3{0.0f});
     const glm::mat4 world_from_node = erhe::math::create_translation<float>(position);
 
-    const std::shared_ptr<erhe::scene::Node> node = instantiate_prefab(m_context, prefab, *sr, world_from_node);
+    // Asynchronous template load (doc/async-asset-loading-plan.md 2.12): the
+    // callback runs INLINE when the prefab is already cached, and only then
+    // can this report the created node_id. A first load of a file defers, so
+    // the response says so and the caller polls get_async_status.
+    bool                               ran_inline{false};
+    bool                               load_failed{false};
+    std::shared_ptr<erhe::scene::Node> node;
+    std::shared_ptr<Prefab>            loaded_prefab;
+    const std::weak_ptr<Scene_root>    weak_scene_root = sr->shared_from_this();
+    m_context.prefab_library->get_or_load_async(
+        path,
+        [this, weak_scene_root, world_from_node, &ran_inline, &load_failed, &node, &loaded_prefab]
+        (const std::shared_ptr<Prefab>& prefab)
+        {
+            ran_inline = true; // only observed while still inside the call below
+            if (!prefab) {
+                load_failed = true;
+                return;
+            }
+            const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+            if (!target) {
+                load_failed = true;
+                return;
+            }
+            loaded_prefab = prefab;
+            node = instantiate_prefab(m_context, prefab, *target, world_from_node);
+        }
+    );
+    if (!ran_inline) {
+        // The template is loading on a worker; the instance is created when
+        // it lands.
+        return make_json_content({
+            {"instantiated", false},
+            {"queued",       true},
+            {"loading",      true},
+            {"path",         path.generic_string()},
+            {"message",      "prefab template is loading - poll get_async_status until asset_loads and queued_operations are 0, then find the node via get_scene_nodes"}
+        }).dump();
+    }
+    if (load_failed || !loaded_prefab) {
+        return make_error_content("Failed to load prefab (missing file, no nodes, or reference cycle - see log): " + path_str);
+    }
     if (!node) {
         return make_error_content("Failed to instantiate prefab: " + path_str);
     }
@@ -361,7 +397,7 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     return make_json_content({
         {"instantiated", true},
         {"queued",       true},
-        {"path",         prefab->source_path.generic_string()},
+        {"path",         loaded_prefab->source_path.generic_string()},
         {"node_id",      node->get_id()},
         {"node_name",    node->get_name()}
     }).dump();

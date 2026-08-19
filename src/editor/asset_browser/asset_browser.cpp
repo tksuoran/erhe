@@ -15,6 +15,8 @@
 #include "parsers/geogram.hpp"
 #include "parsers/gltf.hpp"
 #include "prefabs/prefab_library.hpp"
+#include <taskflow/taskflow.hpp>
+
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -177,7 +179,13 @@ Asset_browser::Asset_browser(
                 // phase 4): an erhe-authored scene file (ERHE_scene in
                 // extensionsUsed) loads as a full scene; any other glTF keeps
                 // the import-as-asset flow (Load = foreign glTF as new scene).
-                ensure_scanned(*gltf);
+                ensure_scanned(m_context, *gltf);
+                if (!gltf->is_scanned) {
+                    // Scan still on a worker; the open-vs-import branch below
+                    // needs its result, so offer nothing this frame rather
+                    // than the wrong thing. The menu re-evaluates every frame.
+                    ImGui::TextUnformatted("Scanning...");
+                } else {
                 const bool erhe_scene = is_erhe_scene(gltf->extensions_used);
                 if (erhe_scene && try_load(gltf)) {
                     close = true;
@@ -189,6 +197,7 @@ Asset_browser::Asset_browser(
                     close = true;
                 }
                 add_reference_material_menu_items(*gltf, deferred_operations, close);
+                }
             }
             // Copy-path items for every asset that has a source path: folders and
             // all file-based assets (gltf/glb, geogram, other).
@@ -267,7 +276,21 @@ void Asset_browser::scan()
     m_node_tree_window->set_root(m_root);
 }
 
-void ensure_scanned(Asset_file_gltf& gltf)
+namespace {
+
+void apply_scan_summary(Asset_file_gltf& gltf, Gltf_scan_summary&& summary)
+{
+    gltf.contents        = std::move(summary.contents);
+    gltf.extensions_used = std::move(summary.extensions_used);
+    gltf.bounding_box    = summary.bounding_box;
+    gltf.material_names  = std::move(summary.material_names);
+    gltf.material_uids   = std::move(summary.material_uids);
+    gltf.is_scanned      = true;
+}
+
+} // anonymous namespace
+
+void ensure_scanned_blocking(Asset_file_gltf& gltf)
 {
     if (gltf.is_scanned) {
         return;
@@ -276,13 +299,53 @@ void ensure_scanned(Asset_file_gltf& gltf)
     if (source_path == nullptr) {
         return;
     }
-    Gltf_scan_summary summary = scan_gltf(*source_path);
-    gltf.contents        = std::move(summary.contents);
-    gltf.extensions_used = std::move(summary.extensions_used);
-    gltf.bounding_box    = summary.bounding_box;
-    gltf.material_names  = std::move(summary.material_names);
-    gltf.material_uids   = std::move(summary.material_uids);
-    gltf.is_scanned      = true;
+    apply_scan_summary(gltf, scan_gltf(*source_path));
+    gltf.scan_request.reset();
+}
+
+void ensure_scanned(App_context& context, Asset_file_gltf& gltf)
+{
+    if (gltf.is_scanned) {
+        return;
+    }
+    // A scan already finished on a worker: pick it up. This runs on the main
+    // thread from ImGui iteration, so nothing else touches the item.
+    if (gltf.scan_request) {
+        if (!gltf.scan_request->finished.load(std::memory_order_acquire)) {
+            return; // still scanning; the caller shows a placeholder
+        }
+        Gltf_scan_request& request = *gltf.scan_request;
+        gltf.contents        = std::move(request.contents);
+        gltf.extensions_used = std::move(request.extensions_used);
+        gltf.bounding_box    = request.bounding_box;
+        gltf.material_names  = std::move(request.material_names);
+        gltf.material_uids   = std::move(request.material_uids);
+        gltf.is_scanned      = true;
+        gltf.scan_request.reset();
+        return;
+    }
+    const std::filesystem::path* source_path = gltf.get_source_path();
+    if (source_path == nullptr) {
+        return;
+    }
+    if (context.executor == nullptr) {
+        ensure_scanned_blocking(gltf);
+        return;
+    }
+    auto request = std::make_shared<Gltf_scan_request>();
+    gltf.scan_request = request;
+    const std::filesystem::path path = *source_path;
+    context.executor->silent_async(
+        [request, path]() {
+            Gltf_scan_summary summary = scan_gltf(path);
+            request->contents        = std::move(summary.contents);
+            request->extensions_used = std::move(summary.extensions_used);
+            request->bounding_box    = summary.bounding_box;
+            request->material_names  = std::move(summary.material_names);
+            request->material_uids   = std::move(summary.material_uids);
+            request->finished.store(true, std::memory_order_release);
+        }
+    );
 }
 
 auto Asset_browser::get_target_scene_root() -> std::shared_ptr<Scene_root>
@@ -337,10 +400,20 @@ auto Asset_browser::try_instantiate(const std::shared_ptr<Asset_file_gltf>& gltf
     const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
     std::string instantiate_label = fmt::format("Instantiate as prefab '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(instantiate_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
-        const std::shared_ptr<Prefab> prefab = m_context.prefab_library->get_or_load(*gltf->get_source_path());
-        if (prefab) {
-            instantiate_prefab(m_context, prefab, *scene_root, glm::mat4{1.0f});
-        }
+        // Asynchronous: the menu closes immediately and the instance appears
+        // when the template is ready (inline when it is already cached).
+        const std::weak_ptr<Scene_root> weak_scene_root = scene_root;
+        const std::filesystem::path     path            = *gltf->get_source_path();
+        App_context&                    context         = m_context;
+        m_context.prefab_library->get_or_load_async(
+            path,
+            [&context, weak_scene_root, path](const std::shared_ptr<Prefab>& prefab) {
+                const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
+                if (prefab && target) {
+                    instantiate_prefab(context, prefab, *target, glm::mat4{1.0f});
+                }
+            }
+        );
         return true;
     }
     return false;
@@ -467,9 +540,15 @@ auto Asset_browser::item_callback(const std::shared_ptr<erhe::Item_base>& item) 
     if (!gltf) {
         return false;
     }
-    ensure_scanned(*gltf);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+        // Only scan what the user actually hovers, and only from here on -
+        // the scan runs on a worker, so the first hovered frame shows the
+        // placeholder and the contents appear a frame or two later.
+        ensure_scanned(m_context, *gltf);
         ImGui::BeginTooltip();
+        if (!gltf->is_scanned) {
+            ImGui::TextUnformatted("Scanning...");
+        }
         for (const std::string& line : gltf->contents) {
             ImGui::TextUnformatted(line.c_str());
         }

@@ -167,9 +167,10 @@ public:
     Scene_commit_queue*                     scene_commit_queue    {nullptr};
 
     // Async work that has not yet landed in a scene: worker tasks pending
-    // or running, operations queued for the main thread and scene commits
-    // waiting for the next flush. Stale-data guards (lightmap prepare, MCP
-    // get_async_status) must treat any of these as "scene still changing".
+    // or running, operations queued for the main thread, scene commits
+    // waiting for the next flush and asset loads in flight. Stale-data guards
+    // (lightmap prepare, MCP get_async_status) must treat any of these as
+    // "scene still changing".
     [[nodiscard]] auto get_async_in_flight_count() const -> std::size_t;
 
     // Set at the top of Editor construction, before parts construction.

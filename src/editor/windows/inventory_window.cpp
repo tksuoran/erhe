@@ -200,7 +200,10 @@ auto Inventory_window::resolve_slot_references() -> bool
     const auto resolve_slots = [asset_manager, &hotbar_changed](std::vector<Slot_entry>& slots, const bool hotbar) {
         for (Slot_entry& slot : slots) {
             for (Asset_reference* const reference : { &slot.brush, &slot.material }) {
-                if ((reference->get_state() != Asset_resolve_state::unresolved) || reference->get_key().is_empty()) {
+                // needs_resolve(), not "== unresolved": a reference whose
+                // container is still loading is `pending` and must keep being
+                // retried on later frames.
+                if (!reference->needs_resolve() || reference->get_key().is_empty()) {
                     continue;
                 }
                 if (reference->resolve(*asset_manager)) {

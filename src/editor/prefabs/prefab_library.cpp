@@ -1,5 +1,8 @@
 #include "prefabs/prefab_library.hpp"
 
+#include "assets/asset_load_task.hpp"
+#include "assets/asset_manager.hpp"
+
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
@@ -147,33 +150,145 @@ auto Prefab_library::get_or_load(const std::filesystem::path& path) -> std::shar
     return prefab;
 }
 
+void Prefab_library::get_or_load_async(
+    const std::filesystem::path&                       path,
+    std::function<void(const std::shared_ptr<Prefab>&)> on_ready
+)
+{
+    std::error_code error_code;
+    std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+    if (error_code) {
+        canonical_path = path;
+    }
+
+    // Already loaded: no task, no frame of latency.
+    const auto existing = m_prefabs.find(canonical_path);
+    if (existing != m_prefabs.end()) {
+        record_reference(canonical_path);
+        on_ready(existing->second);
+        return;
+    }
+
+    // Cycle detection still works on the call stack here: a nested prefab
+    // load runs synchronously inside finish_load_template, so anything that
+    // reaches this while a template is being finished is on the stack.
+    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), canonical_path);
+    if (cycle != m_active_load_stack.end()) {
+        std::string cycle_description;
+        for (auto i = cycle; i != m_active_load_stack.end(); ++i) {
+            cycle_description += erhe::file::to_string(*i);
+            cycle_description += " -> ";
+        }
+        cycle_description += erhe::file::to_string(canonical_path);
+        log_parsers->error("Prefab reference cycle detected (prohibited by glTF 2.1): {}", cycle_description);
+        on_ready({});
+        return;
+    }
+
+    const bool exists = std::filesystem::exists(canonical_path, error_code);
+    if (!exists || error_code) {
+        log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(canonical_path));
+        on_ready({});
+        return;
+    }
+
+    if (m_context.asset_manager == nullptr) {
+        on_ready(get_or_load(canonical_path));
+        return;
+    }
+
+    const std::string prefab_name = erhe::file::to_string(canonical_path.filename());
+    Asset_load_request request{
+        .path            = canonical_path,
+        .prefab_template = true,
+        .root_node_name  = prefab_name
+    };
+    std::shared_ptr<Asset_load_handle> handle = m_context.asset_manager->queue_load(
+        std::move(request),
+        [this, canonical_path, prefab_name, on_ready](const Asset_load_result& result) {
+            // A second request for the same path may have completed while
+            // this one was in flight (both were queued before either
+            // finished): keep the cached one, drop this parse.
+            const auto already = m_prefabs.find(canonical_path);
+            if (already != m_prefabs.end()) {
+                record_reference(canonical_path);
+                on_ready(already->second);
+                return;
+            }
+            if (!result.prepared_parse) {
+                on_ready({}); // failed or cancelled
+                return;
+            }
+            std::shared_ptr<Prefab> prefab = std::make_shared<Prefab>();
+            prefab->source_path = canonical_path;
+            prefab->name        = prefab_name;
+            const bool ok = finish_load_template(
+                *prefab,
+                std::move(result.prepared_parse->gltf_data),
+                result.prepared_parse->root_node
+            );
+            if (!ok) {
+                log_parsers->error("Prefab '{}' produced no nodes - not caching", erhe::file::to_string(canonical_path));
+                on_ready({});
+                return;
+            }
+            m_prefabs.emplace(canonical_path, prefab);
+            record_reference(canonical_path);
+            log_parsers->info("Prefab loaded (async): {}", erhe::file::to_string(canonical_path));
+            on_ready(prefab);
+        }
+    );
+    if (!handle) {
+        on_ready(get_or_load(canonical_path)); // async_gltf_load is off
+    }
+}
+
 auto Prefab_library::load_template(Prefab& prefab) -> bool
 {
     ERHE_VERIFY(m_context.graphics_device != nullptr);
     ERHE_VERIFY(m_context.executor != nullptr);
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
 
-    // A fresh holding scene / template root every time: reload discards the
-    // previous template wholesale (existing instance clones keep their own
-    // copies alive until they are refreshed).
-    prefab.holding_scene = std::make_shared<erhe::scene::Scene>(fmt::format("prefab holding scene: {}", prefab.name), nullptr);
-    prefab.template_root = std::make_shared<erhe::scene::Node>(prefab.name);
-    prefab.template_root->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-    prefab.template_root->set_parent(prefab.holding_scene->get_root_node());
-
-    m_active_load_stack.push_back(prefab.source_path);
+    auto template_root = std::make_shared<erhe::scene::Node>(prefab.name);
+    template_root->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_device = *m_context.graphics_device,
         .executor        = *m_context.executor,
-        .image_transfer  = image_transfer,
-        .root_node       = prefab.template_root,
+        .device_options  = erhe::gltf::query_gltf_device_options(*m_context.graphics_device),
+        .root_node       = template_root,
         .mesh_layer_id   = 0, // instances are retargeted to the destination scene's content layer
         .path            = prefab.source_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
     };
-    prefab.gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    // parse_gltf creates no GPU objects (async-asset-loading plan step 3);
+    // this is the synchronous path, so drain residency in full.
+    gltf_data.image_residency.drain(gltf_data, *m_context.graphics_device, image_transfer);
+
+    return finish_load_template(prefab, std::move(gltf_data), template_root);
+}
+
+auto Prefab_library::finish_load_template(
+    Prefab&                                   prefab,
+    erhe::gltf::Gltf_data&&                   gltf_data,
+    const std::shared_ptr<erhe::scene::Node>& template_root
+) -> bool
+{
+    ERHE_VERIFY(m_context.current_command_buffer != nullptr);
+
+    // A fresh holding scene / template root every time: reload discards the
+    // previous template wholesale (existing instance clones keep their own
+    // copies alive until they are refreshed). The parse produced an UNHOSTED
+    // template_root (that is what makes an asynchronous parse safe); hosting
+    // it here reproduces the ordering the synchronous path always had -
+    // everything below runs with the template hosted.
+    prefab.holding_scene = std::make_shared<erhe::scene::Scene>(fmt::format("prefab holding scene: {}", prefab.name), nullptr);
+    prefab.template_root = template_root;
+    prefab.template_root->set_parent(prefab.holding_scene->get_root_node());
+    prefab.gltf_data = std::move(gltf_data);
+
+    m_active_load_stack.push_back(prefab.source_path);
 
     const bool has_nodes = std::any_of(
         prefab.gltf_data.nodes.begin(),

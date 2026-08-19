@@ -3,15 +3,21 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
+#include "assets/asset_load_task.hpp"
+#include "assets/asset_load_tick_context.hpp"
+#include "assets/gltf_load_task.hpp"
 #include "assets/asset_paths.hpp"
 #include "assets/asset_workflow.hpp"
 #include "content_library/content_library.hpp"
+#include "config/generated/editor_settings_config.hpp"
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
 
+#include "erhe_file/file.hpp"
 #include "erhe_gltf/image_transfer.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
@@ -24,6 +30,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <chrono>
 #include <thread>
 #include <utility>
 
@@ -255,8 +262,52 @@ Asset_manager::Asset_manager(App_context& context, App_message_bus& app_message_
     );
 }
 
+void Asset_manager::cancel_and_reap_load_tasks()
+{
+    if (m_load_tasks.empty()) {
+        return;
+    }
+    // Plan 2.11 second reap point: application exit. A task's worker
+    // lambdas hold Build_infos whose Buffer_info carries REFERENCES to
+    // Mesh_memory's buffer sinks, so returning from here while a worker is
+    // still running would leave it writing through references into objects
+    // that are about to be destroyed. Cancellation is cooperative and cannot
+    // interrupt a running parse or build, so this genuinely has to wait -
+    // and unlike the scene-close reap (which must not block), blocking at
+    // exit is the correct trade.
+    log_asset->info("cancelling {} in-flight asset load task(s) at teardown", m_load_tasks.size());
+    for (const std::unique_ptr<Asset_load_task>& task : m_load_tasks) {
+        task->get_handle()->request_cancel();
+    }
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{30};
+    while (
+        std::any_of(
+            m_load_tasks.begin(),
+            m_load_tasks.end(),
+            [](const std::unique_ptr<Asset_load_task>& task) { return !task->is_worker_idle(); }
+        )
+    ) {
+        if (std::chrono::steady_clock::now() > deadline) {
+            // Never observed; if it happens, leaking the tasks is strictly
+            // safer than destroying them under a live worker.
+            log_asset->error("asset load workers did not finish within 30 s at teardown - leaking the tasks");
+            for (std::unique_ptr<Asset_load_task>& task : m_load_tasks) {
+                static_cast<void>(task.release());
+            }
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    m_load_tasks.clear();
+    m_load_task_count.store(0, std::memory_order_relaxed);
+}
+
 Asset_manager::~Asset_manager() noexcept
 {
+    // Before anything else: no worker may still be running when the objects
+    // its Build_info references start being torn down.
+    cancel_and_reap_load_tasks();
+
     // Unhook the content libraries' bookkeeping pointers: libraries (and
     // their scenes) can outlive this manager during editor teardown, and
     // their claim/release walks must not call into a destroyed manager.
@@ -287,6 +338,149 @@ Asset_manager::~Asset_manager() noexcept
 void Asset_manager::verify_main_thread() const
 {
     ERHE_VERIFY(std::this_thread::get_id() == m_context.main_thread_id);
+}
+
+auto Asset_manager::queue_load(
+    const std::filesystem::path&                  path,
+    std::function<void(const Asset_load_result&)> on_done
+) -> std::shared_ptr<Asset_load_handle>
+{
+    return queue_load(Asset_load_request{.path = path}, std::move(on_done));
+}
+
+auto Asset_manager::queue_load(
+    Asset_load_request                            request,
+    std::function<void(const Asset_load_result&)> on_done
+) -> std::shared_ptr<Asset_load_handle>
+{
+    verify_main_thread();
+    if ((m_context.editor_settings == nullptr) || !m_context.editor_settings->load.async_gltf_load) {
+        return {};
+    }
+    const std::filesystem::path path = request.path;
+    const bool                  is_import = !request.import_target.expired();
+    auto handle = std::make_shared<Asset_load_handle>(path);
+    m_load_tasks.push_back(
+        std::make_unique<Gltf_load_task>(m_context, std::move(request), handle, std::move(on_done))
+    );
+    m_load_task_count.store(m_load_tasks.size(), std::memory_order_relaxed);
+    log_asset->info(
+        "queued async {} '{}' ({} in flight)",
+        is_import ? "import" : "load",
+        erhe::file::to_string(path),
+        m_load_tasks.size()
+    );
+    return handle;
+}
+
+auto Asset_manager::get_load_handles() const -> std::vector<std::shared_ptr<Asset_load_handle>>
+{
+    std::vector<std::shared_ptr<Asset_load_handle>> handles;
+    handles.reserve(m_load_tasks.size());
+    for (const std::unique_ptr<Asset_load_task>& task : m_load_tasks) {
+        handles.push_back(task->get_handle());
+    }
+    return handles;
+}
+
+void Asset_manager::cancel_loads_for_scene(const Scene_root* const scene_root)
+{
+    verify_main_thread();
+    if ((scene_root == nullptr) || m_load_tasks.empty()) {
+        return;
+    }
+    std::size_t cancelled = 0;
+    for (const std::unique_ptr<Asset_load_task>& task : m_load_tasks) {
+        const std::shared_ptr<Scene_root> target = task->get_import_target().lock();
+        if (target.get() == scene_root) {
+            task->get_handle()->request_cancel();
+            ++cancelled;
+        }
+    }
+    if (cancelled > 0) {
+        log_asset->info("scene close cancelled {} in-flight asset import(s)", cancelled);
+    }
+}
+
+void Asset_manager::tick(Asset_load_tick_context& tick_context)
+{
+    verify_main_thread();
+
+    // Budgeted drain of the LOADER transfer queue, and the only call site of
+    // flush_budgeted (plan 2.6). The interactive queue keeps its full drain
+    // in Mesh_memory::flush, later in the tick. This runs BEFORE the tasks
+    // below so a task whose build bytes finish draining this frame can
+    // publish in the same tick rather than waiting for the next one; it is
+    // what advances the loader watermark that the publish gate and the
+    // pool-free gate read.
+    erhe::scene_renderer::Mesh_memory* const mesh_memory = m_context.mesh_memory;
+    if (mesh_memory != nullptr) {
+        const std::size_t granted = tick_context.budget.take_gpu_upload_bytes(
+            tick_context.budget.get_remaining_gpu_upload_bytes()
+        );
+        if (granted > 0) {
+            const std::size_t recorded = mesh_memory->flush_budgeted(tick_context.command_buffer, granted);
+            // Hand back what the drain did not use, so texture residency in
+            // the same tick can spend it.
+            tick_context.budget.give_back_gpu_upload_bytes(granted - recorded);
+        }
+    }
+
+    // Advance every live task, sharing one Frame_load_budget round-robin, so
+    // N concurrent loads degrade gracefully instead of multiplying per-frame
+    // cost (plan 2.1). A task whose phase is main-thread-bound spends budget;
+    // one waiting on a worker returns immediately and costs nothing.
+    for (const std::unique_ptr<Asset_load_task>& task : m_load_tasks) {
+        if (task->get_state() == Asset_load_state::queued || !editor::is_settled(task->get_state())) {
+            task->tick(tick_context);
+        }
+    }
+
+    // Reap: settled AND no worker still writing into the task's result
+    // (plan 2.3 invariant 4).
+    const std::size_t before = m_load_tasks.size();
+    std::erase_if(
+        m_load_tasks,
+        [](const std::unique_ptr<Asset_load_task>& task) {
+            return editor::is_settled(task->get_state()) && task->is_worker_idle();
+        }
+    );
+    if (m_load_tasks.size() != before) {
+        m_load_task_count.store(m_load_tasks.size(), std::memory_order_relaxed);
+    }
+}
+
+auto c_str(const Asset_acquire_state state) -> const char*
+{
+    switch (state) {
+        case Asset_acquire_state::resolved: return "resolved";
+        case Asset_acquire_state::pending:  return "pending";
+        case Asset_acquire_state::failed:
+        default:                            return "failed";
+    }
+}
+
+auto Asset_manager::get_load_task_count() const -> std::size_t
+{
+    return m_load_task_count.load(std::memory_order_relaxed);
+}
+
+auto Asset_manager::acquire_or_pending(const Asset_key& key) -> Asset_acquire_result
+{
+    verify_main_thread();
+    Asset_acquire_result result{};
+    result.item = acquire(key, result.error);
+    if (result.item) {
+        result.state = Asset_acquire_state::resolved;
+        return result;
+    }
+    // No load spans frames yet: get_or_load_container still parses inline
+    // (Gltf_load_task is step 6 of doc/async-asset-loading-plan.md 3), so a
+    // null item here is always a real failure. Once container loads become
+    // tasks this is where `pending` starts coming back, and the callers below
+    // already treat it as "retry" rather than "give up".
+    result.state = Asset_acquire_state::failed;
+    return result;
 }
 
 auto Asset_manager::acquire(const Asset_key& key) -> std::shared_ptr<erhe::Item_base>
@@ -958,15 +1152,17 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_device = *m_context.graphics_device,
         .executor        = *m_context.executor,
-        .image_transfer  = image_transfer,
+        .device_options  = erhe::gltf::query_gltf_device_options(*m_context.graphics_device),
         .root_node       = record->root_node,
         .mesh_layer_id   = 0,
         .path            = canonical_path,
         .fix_spot_lights = m_context.fix_gltf_spot_lights,
     };
     record->gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    // parse_gltf creates no GPU objects (async-asset-loading plan step 3);
+    // container loads are still fully synchronous, so drain residency here.
+    record->gltf_data.image_residency.drain(record->gltf_data, *m_context.graphics_device, image_transfer);
 
     const bool has_content =
         !record->gltf_data.nodes.empty()     ||
@@ -1390,6 +1586,8 @@ void Asset_manager::on_close_scene(Scene_root* scene_root)
     if (scene_root == nullptr) {
         return;
     }
+    // An import into this scene has nowhere left to land (plan 2.11).
+    cancel_loads_for_scene(scene_root);
     // Resolution 5: a surviving animation must not pin the closing scene's
     // nodes (nodes must die with their scene; the watchdog's must-die half
     // would flag them). Reset every channel target pointing into the

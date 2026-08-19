@@ -213,16 +213,20 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
 
     erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
     const erhe::gltf::Gltf_parse_arguments parse_arguments{
-        .graphics_device = *context.graphics_device,
         .executor        = *context.executor,
-        .image_transfer  = image_transfer,
+        .device_options  = erhe::gltf::query_gltf_device_options(*context.graphics_device),
         .root_node       = model_root,
         .mesh_layer_id   = m_content_layer_id,
         .path            = std::filesystem::path{model.name + ".glb"},
         .parallel        = false,
         .glb_data        = std::span<const std::byte>{reinterpret_cast<const std::byte*>(model.data.data()), model.data.size()}
     };
-    const erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    erhe::gltf::Gltf_data gltf_data = erhe::gltf::parse_gltf(parse_arguments);
+    // Blocking-drain exemption (async-asset-loading plan 2.6): a small
+    // controller GLB already in memory, loaded from a live tick through its
+    // own Image_transfer. parse_gltf no longer creates the textures, so this
+    // caller runs the residency drain itself.
+    gltf_data.image_residency.drain(gltf_data, *context.graphics_device, image_transfer);
 
     const erhe::primitive::Build_info build_info{
         .primitive_types = { .fill_triangles = true },

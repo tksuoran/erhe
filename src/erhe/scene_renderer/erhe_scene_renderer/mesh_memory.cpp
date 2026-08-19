@@ -193,6 +193,8 @@ Mesh_memory::Mesh_memory(
     , m_mesh_memory_config   {mesh_memory_config}
     , m_graphics_device      {graphics_device}
     , m_buffer_transfer_queue{graphics_device}
+    , m_loader_transfer_queue{graphics_device}
+    , m_loader_sink          {*this}
     , m_alive_token          {std::make_shared<int>(0)}
 {
     get_vertex_input_from_vertex_format(vertex_format_empty);
@@ -328,7 +330,11 @@ auto Mesh_memory::allocate_vertex_buffer_range(
     return m_vertex_pools.back().allocate(vertex_count);
 }
 
-void Mesh_memory::enqueue_vertex_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+void Mesh_memory::enqueue_vertex_data_to(
+    erhe::graphics::Buffer_transfer_queue& queue,
+    const erhe::primitive::Buffer_range&   buffer_range,
+    std::vector<uint8_t>&&                 data
+)
 {
     log_mesh_memory->trace(
         "Enqueue vertex data for pool_id = {}, buffer_id = {}, byte_offset = {}, byte_count = {}",
@@ -339,10 +345,18 @@ void Mesh_memory::enqueue_vertex_data(const erhe::primitive::Buffer_range& buffe
     );
     const Buffer_pool&      buffer_pool = m_vertex_pools.at(buffer_range.pool_id);
     erhe::graphics::Buffer* buffer      = buffer_pool.get_buffer(buffer_range.buffer_id);
-    m_buffer_transfer_queue.enqueue(buffer, buffer_range.byte_offset, std::move(data));
+    static_cast<void>(queue.enqueue(buffer, buffer_range.byte_offset, std::move(data)));
 }
 
-void Mesh_memory::vertex_writer_ready(erhe::primitive::Vertex_buffer_writer& writer)
+void Mesh_memory::enqueue_vertex_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+{
+    enqueue_vertex_data_to(m_buffer_transfer_queue, buffer_range, std::move(data));
+}
+
+void Mesh_memory::vertex_writer_ready_to(
+    erhe::graphics::Buffer_transfer_queue& queue,
+    erhe::primitive::Vertex_buffer_writer& writer
+)
 {
     log_mesh_memory->trace(
         "Vertex buffer writer ready for pool_id = {}, buffer_id = {}, byte_offset = {}, byte_count = {}",
@@ -353,7 +367,12 @@ void Mesh_memory::vertex_writer_ready(erhe::primitive::Vertex_buffer_writer& wri
     );
     const Buffer_pool&      buffer_pool = m_vertex_pools.at(writer.buffer_range.pool_id);
     erhe::graphics::Buffer* buffer      = buffer_pool.get_buffer(writer.buffer_range.buffer_id);
-    m_buffer_transfer_queue.enqueue(buffer, writer.start_offset(), std::move(writer.vertex_data));
+    static_cast<void>(queue.enqueue(buffer, writer.start_offset(), std::move(writer.vertex_data)));
+}
+
+void Mesh_memory::vertex_writer_ready(erhe::primitive::Vertex_buffer_writer& writer)
+{
+    vertex_writer_ready_to(m_buffer_transfer_queue, writer);
 }
 
 auto Mesh_memory::allocate_index_buffer_range(
@@ -393,7 +412,11 @@ auto Mesh_memory::allocate_index_buffer_range(
     return m_index_pools.back().allocate(index_count);
 }
 
-void Mesh_memory::enqueue_index_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+void Mesh_memory::enqueue_index_data_to(
+    erhe::graphics::Buffer_transfer_queue& queue,
+    const erhe::primitive::Buffer_range&   buffer_range,
+    std::vector<uint8_t>&&                 data
+)
 {
     log_mesh_memory->trace(
         "Enqueue index data for pool_id = {}, buffer_id = {}, byte_offset = {}, byte_count = {}",
@@ -404,10 +427,18 @@ void Mesh_memory::enqueue_index_data(const erhe::primitive::Buffer_range& buffer
     );
     const Buffer_pool&      buffer_pool = m_index_pools.at(buffer_range.pool_id);
     erhe::graphics::Buffer* buffer      = buffer_pool.get_buffer(buffer_range.buffer_id);
-    m_buffer_transfer_queue.enqueue(buffer, buffer_range.byte_offset, std::move(data));
+    static_cast<void>(queue.enqueue(buffer, buffer_range.byte_offset, std::move(data)));
 }
 
-void Mesh_memory::index_writer_ready(erhe::primitive::Index_buffer_writer& writer)
+void Mesh_memory::enqueue_index_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+{
+    enqueue_index_data_to(m_buffer_transfer_queue, buffer_range, std::move(data));
+}
+
+void Mesh_memory::index_writer_ready_to(
+    erhe::graphics::Buffer_transfer_queue& queue,
+    erhe::primitive::Index_buffer_writer&  writer
+)
 {
     log_mesh_memory->trace(
         "Index buffer writer ready for pool_id = {}, buffer_id = {}, byte_offset = {}, byte_count = {}",
@@ -418,7 +449,58 @@ void Mesh_memory::index_writer_ready(erhe::primitive::Index_buffer_writer& write
     );
     const Buffer_pool&      buffer_pool = m_index_pools.at(writer.buffer_range.pool_id);
     erhe::graphics::Buffer* buffer      = buffer_pool.get_buffer(writer.buffer_range.buffer_id);
-    m_buffer_transfer_queue.enqueue(buffer, writer.start_offset(), std::move(writer.index_data));
+    static_cast<void>(queue.enqueue(buffer, writer.start_offset(), std::move(writer.index_data)));
+}
+
+void Mesh_memory::index_writer_ready(erhe::primitive::Index_buffer_writer& writer)
+{
+    index_writer_ready_to(m_buffer_transfer_queue, writer);
+}
+
+// --- Loader_buffer_sink ---------------------------------------------------
+//
+// Allocation is identical (the pools are shared); only the enqueue target
+// differs. See Mesh_memory_queue.
+
+Mesh_memory::Loader_buffer_sink::Loader_buffer_sink(Mesh_memory& mesh_memory)
+    : m_mesh_memory{mesh_memory}
+{
+}
+
+auto Mesh_memory::Loader_buffer_sink::allocate_vertex_buffer_range(
+    const erhe::dataformat::Vertex_stream& vertex_stream,
+    const std::size_t                      vertex_count
+) -> erhe::primitive::Buffer_sink_allocation
+{
+    return m_mesh_memory.allocate_vertex_buffer_range(vertex_stream, vertex_count);
+}
+
+void Mesh_memory::Loader_buffer_sink::enqueue_vertex_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+{
+    m_mesh_memory.enqueue_vertex_data_to(m_mesh_memory.m_loader_transfer_queue, buffer_range, std::move(data));
+}
+
+void Mesh_memory::Loader_buffer_sink::vertex_writer_ready(erhe::primitive::Vertex_buffer_writer& writer)
+{
+    m_mesh_memory.vertex_writer_ready_to(m_mesh_memory.m_loader_transfer_queue, writer);
+}
+
+auto Mesh_memory::Loader_buffer_sink::allocate_index_buffer_range(
+    const erhe::dataformat::Format index_format,
+    const std::size_t              index_count
+) -> erhe::primitive::Buffer_sink_allocation
+{
+    return m_mesh_memory.allocate_index_buffer_range(index_format, index_count);
+}
+
+void Mesh_memory::Loader_buffer_sink::enqueue_index_data(const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data)
+{
+    m_mesh_memory.enqueue_index_data_to(m_mesh_memory.m_loader_transfer_queue, buffer_range, std::move(data));
+}
+
+void Mesh_memory::Loader_buffer_sink::index_writer_ready(erhe::primitive::Index_buffer_writer& writer)
+{
+    m_mesh_memory.index_writer_ready_to(m_mesh_memory.m_loader_transfer_queue, writer);
 }
 
 auto Mesh_memory::get_empty_vertex_input() -> const Vertex_input_entry&
@@ -489,13 +571,19 @@ auto Mesh_memory::get_index_format(const Pool_buffer_identity& buffer_identity) 
     return buffer_pool.get_index_format();
 }
 
-auto Mesh_memory::make_primitive_buffer_info() -> erhe::primitive::Buffer_info
+auto Mesh_memory::make_primitive_buffer_info(const Mesh_memory_queue queue) -> erhe::primitive::Buffer_info
 {
+    erhe::primitive::Vertex_buffer_sink& vertex_sink = (queue == Mesh_memory_queue::loader)
+        ? static_cast<erhe::primitive::Vertex_buffer_sink&>(m_loader_sink)
+        : static_cast<erhe::primitive::Vertex_buffer_sink&>(*this);
+    erhe::primitive::Index_buffer_sink& index_sink = (queue == Mesh_memory_queue::loader)
+        ? static_cast<erhe::primitive::Index_buffer_sink&>(m_loader_sink)
+        : static_cast<erhe::primitive::Index_buffer_sink&>(*this);
     return erhe::primitive::Buffer_info{
         .index_type                = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format             = vertex_format_not_skinned,
-        .vertex_buffer_sink        = *this,
-        .index_buffer_sink         = *this,
+        .vertex_buffer_sink        = vertex_sink,
+        .index_buffer_sink         = index_sink,
         .vertex_input_key          = get_vertex_input_from_vertex_format(vertex_format_not_skinned).key,
         .edge_line_vertex_stream   = &vertex_format_edge_line       .streams.front(),
         .edge_line_joint_stream    = &vertex_format_edge_line_joints.streams.front(),
@@ -504,13 +592,19 @@ auto Mesh_memory::make_primitive_buffer_info() -> erhe::primitive::Buffer_info
     };
 }
 
-auto Mesh_memory::make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info
+auto Mesh_memory::make_skinned_primitive_buffer_info(const Mesh_memory_queue queue) -> erhe::primitive::Buffer_info
 {
+    erhe::primitive::Vertex_buffer_sink& vertex_sink = (queue == Mesh_memory_queue::loader)
+        ? static_cast<erhe::primitive::Vertex_buffer_sink&>(m_loader_sink)
+        : static_cast<erhe::primitive::Vertex_buffer_sink&>(*this);
+    erhe::primitive::Index_buffer_sink& index_sink = (queue == Mesh_memory_queue::loader)
+        ? static_cast<erhe::primitive::Index_buffer_sink&>(m_loader_sink)
+        : static_cast<erhe::primitive::Index_buffer_sink&>(*this);
     return erhe::primitive::Buffer_info{
         .index_type                = erhe::dataformat::Format::format_32_scalar_uint,
         .vertex_format             = vertex_format_skinned,
-        .vertex_buffer_sink        = *this,
-        .index_buffer_sink         = *this,
+        .vertex_buffer_sink        = vertex_sink,
+        .index_buffer_sink         = index_sink,
         .vertex_input_key          = get_vertex_input_from_vertex_format(vertex_format_skinned).key,
         .edge_line_vertex_stream   = &vertex_format_edge_line       .streams.front(),
         .edge_line_joint_stream    = &vertex_format_edge_line_joints.streams.front(),
@@ -519,10 +613,64 @@ auto Mesh_memory::make_skinned_primitive_buffer_info() -> erhe::primitive::Buffe
     };
 }
 
+auto Mesh_memory::get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
+{
+    return m_loader_transfer_queue;
+}
+
+auto Mesh_memory::flush_budgeted(erhe::graphics::Command_buffer& command_buffer, const std::size_t max_byte_count) -> std::size_t
+{
+    // ONLY the loader queue. The interactive queue keeps its full-drain
+    // contract in flush() below - see Mesh_memory_queue.
+    const std::size_t recorded = m_loader_transfer_queue.flush_budgeted(command_buffer, max_byte_count);
+    if (recorded > 0) {
+        log_mesh_memory->trace(
+            "Mesh_memory::flush_budgeted(): recorded {} of {} budgeted bytes, watermark now {}",
+            recorded,
+            max_byte_count,
+            m_loader_transfer_queue.get_watermark()
+        );
+    }
+    return recorded;
+}
+
+void Mesh_memory::apply_ready_pending_frees()
+{
+    const erhe::graphics::Buffer_transfer_queue::Ticket watermark = m_loader_transfer_queue.get_watermark();
+
+    std::vector<Pending_free> ready;
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_free_mutex};
+        for (auto it = m_pending_frees.begin(); it != m_pending_frees.end(); ) {
+            if (it->loader_ticket <= watermark) {
+                ready.push_back(std::move(*it));
+                it = m_pending_frees.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    if (ready.empty()) {
+        return;
+    }
+    // All pools of a vertex format must see identical alloc / free histories
+    // (buffer_mesh.hpp lockstep invariant): apply each batch under the
+    // allocation mutex so no builder's multi-stream allocation transaction
+    // interleaves with it.
+    const std::lock_guard<std::mutex> lock{erhe::primitive::buffer_mesh_allocation_mutex()};
+    for (const Pending_free& pending : ready) {
+        Buffer_pool::apply_retired(pending.ranges);
+    }
+}
+
 void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
 {
     log_mesh_memory->trace("Mesh_memory::flush()");
     m_buffer_transfer_queue.flush(command_buffer);
+
+    // Free gate (doc/async-asset-loading-plan.md 2.5): batches whose frame
+    // has completed but whose loader watermark had not caught up yet.
+    apply_ready_pending_frees();
 
     // Frame-safe frees (see Pool_block): every range retired so far had its
     // last GPU use recorded no later than the current frame (draws are only
@@ -549,18 +697,23 @@ void Mesh_memory::flush(erhe::graphics::Command_buffer& command_buffer)
         retired_byte_count,
         m_graphics_device.get_frame_index()
     );
+    // Second gate, on top of frame completion: the pools are SHARED between
+    // the interactive and the loader queue, so a range retired by the
+    // interactive path can still be the target of a queued loader write. If
+    // it were freed now, it could be re-allocated and re-enqueued while that
+    // older write is still pending, and the stale write would land last.
+    // Taking the loader queue's ticket high-water mark here bounds every
+    // write that could possibly target these ranges: they were all enqueued
+    // before this point.
+    const erhe::graphics::Buffer_transfer_queue::Ticket loader_ticket = m_loader_transfer_queue.get_last_ticket();
     m_graphics_device.add_completion_handler(
-        [alive = std::weak_ptr<int>{m_alive_token}, retired = std::move(retired)]()
+        [this, alive = std::weak_ptr<int>{m_alive_token}, retired = std::move(retired), loader_ticket]() mutable
         {
             if (alive.expired()) {
                 return; // Mesh_memory (and its pools) already destroyed
             }
-            // All pools of a vertex format must see identical alloc / free
-            // histories (buffer_mesh.hpp lockstep invariant): apply the
-            // whole batch under the allocation mutex so no builder's
-            // multi-stream allocation transaction interleaves with it.
-            const std::lock_guard<std::mutex> lock{erhe::primitive::buffer_mesh_allocation_mutex()};
-            Buffer_pool::apply_retired(retired);
+            const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_pending_free_mutex};
+            m_pending_frees.push_back(Pending_free{.loader_ticket = loader_ticket, .ranges = std::move(retired)});
         }
     );
 }

@@ -7,6 +7,11 @@ auto parse_gltf(const Gltf_parse_arguments&) -> Gltf_data
     return {};
 }
 
+auto query_gltf_device_options(erhe::graphics::Device&) -> Gltf_device_options
+{
+    return {};
+}
+
 auto scan_gltf(std::filesystem::path) -> Gltf_scan
 {
     return {};

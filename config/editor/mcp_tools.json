@@ -356,7 +356,7 @@
     "name": "clear_undo_history"
   },
   {
-    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread) and pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush). The scene is settled only when all four are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
+    "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread), pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush) and asset_loads (asset load tasks in flight, which change the scene when they publish). The scene is settled only when all five are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -2495,7 +2495,7 @@
     "name": "export_gltf"
   },
   {
-    "description": "Import a glTF file into an existing scene. With materials_as_references (R7 import-as-reference) the parsed materials are acquired from the source container through the asset manager and listed as reference entries instead of copied definitions.",
+    "description": "Import a glTF file into an existing scene. The import is ASYNCHRONOUS: the response returns immediately, the file is read, parsed and made GPU-resident over the following frames, and the (undoable) import operation runs once that finishes. Poll get_async_status until asset_loads + queued_operations + pending_scene_commits are 0 before reading the result. Closing the destination scene while the import is in flight cancels it. With materials_as_references (R7 import-as-reference) the parsed materials are acquired from the source container through the asset manager and listed as reference entries instead of copied definitions.",
     "inputSchema": {
       "properties": {
         "materials_as_references": {
@@ -2824,7 +2824,7 @@
     "name": "set_inventory_slot"
   },
   {
-    "description": "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable.",
+    "description": "Instantiate a glTF file as a prefab into a scene: the file is parsed once (cached app-wide) and inserted as a clone that stays a reference to the source file. Instances share GPU buffers; insertion is undoable. The FIRST instantiation of a file loads its template asynchronously and returns {instantiated:false, loading:true} with no node_id - poll get_async_status until asset_loads and queued_operations are 0, then find the node via get_scene_nodes. Once the template is cached (any later instantiation of the same file) the response is immediate and carries node_id.",
     "inputSchema": {
       "properties": {
         "path": {

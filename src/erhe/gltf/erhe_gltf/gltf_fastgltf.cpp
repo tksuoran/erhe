@@ -904,16 +904,12 @@ public:
         , m_arguments{arguments}
         , m_asset    {std::move(asset)}
     {
-        // Pick the GPU target for transcoded (KTX2 / Basis Universal) images
-        // from device format support: block-compressed stays 4x smaller in
-        // VRAM than the old always-RGBA8 expansion. Computed once here
-        // because decode_image() runs concurrently on executor workers.
-        erhe::graphics::Device& device = m_arguments.graphics_device;
-        if (device.get_format_properties(erhe::dataformat::Format::format_bc7_srgb).supported) {
-            m_transcode_format_preference = erhe::graphics::Transcode_format_preference::bc7;
-        } else if (device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_srgb).supported) {
-            m_transcode_format_preference = erhe::graphics::Transcode_format_preference::astc_4x4;
-        }
+        // The GPU target for transcoded (KTX2 / Basis Universal) images comes
+        // in with the arguments: block-compressed stays 4x smaller in VRAM
+        // than the old always-RGBA8 expansion, but picking it needs device
+        // format support, which the caller queries on the main thread (see
+        // query_gltf_device_options) so this parser touches no device at all.
+        m_transcode_format_preference = m_arguments.device_options.transcode_format_preference;
         trace_info();
     }
 
@@ -960,6 +956,9 @@ public:
         log_gltf->trace("parsing images");
         m_data_out.images.resize(m_asset->images.size());
         m_data_out.image_sources.resize(m_asset->images.size());
+        // Parallel to images: the decoded payloads whose textures a later
+        // residency step creates (doc/async-asset-loading-plan.md step 3).
+        m_data_out.image_residency.decoded_images.resize(m_asset->images.size());
         const Clock::time_point image_start_time = Clock::now();
         // Decode every material-referenced image (in parallel when enabled)
         // and upload on this thread; images referenced some other way fall
@@ -969,6 +968,7 @@ public:
 
         log_gltf->trace("parsing samplers");
         m_data_out.samplers.resize(m_asset->samplers.size() + 1);
+        m_data_out.image_residency.sampler_create_infos.resize(m_asset->samplers.size() + 1);
         for (std::size_t i = 0, end = m_asset->samplers.size(); i < end; ++i) {
             parse_sampler(i);
         }
@@ -1297,23 +1297,15 @@ private:
     }
     // CPU half of image loading: decode (and retain the encoded source
     // stream) into plain memory. No GPU objects and no Image_transfer ring
-    // buffer are touched, so this is safe to run on executor workers.
-    class Decoded_image
-    {
-    public:
-        bool                               ok{false};
-        erhe::graphics::Image_info         info{};
-        std::vector<std::uint8_t>          pixels;
-        std::shared_ptr<Gltf_image_source> source;
-        std::string                        name;
-        std::filesystem::path              source_path;
-    };
-
-    [[nodiscard]] auto decode_image(const std::size_t image_index, const bool linear) -> Decoded_image
+    // buffer are touched, so this is safe to run on executor workers. The
+    // GPU half now lives in Gltf_image_residency (see gltf_fastgltf.hpp).
+    [[nodiscard]] auto decode_image(const std::size_t image_index, const bool linear) -> Gltf_decoded_image
     {
         ERHE_PROFILE_FUNCTION();
 
-        Decoded_image decoded;
+        Gltf_decoded_image decoded;
+        decoded.requested = true;
+        decoded.uid       = m_asset->images[image_index].uid;
         const fastgltf::Image& image = m_asset->images[image_index];
         decoded.name = safe_resource_name(image.name, "image", image_index);
 
@@ -1418,80 +1410,13 @@ private:
         return decoded;
     }
 
-    // GPU half of image loading: texture creation, ring-buffer staging and
-    // upload. Must run on the loading thread (single Image_transfer /
-    // command buffer).
-    [[nodiscard]] auto upload_decoded_image(const Decoded_image& decoded) -> std::shared_ptr<erhe::graphics::Texture>
-    {
-        ERHE_PROFILE_FUNCTION();
 
-        if (!decoded.ok) {
-            log_gltf->warn("Image '{}' load failed", decoded.name);
-            return {};
-        }
-        const erhe::graphics::Image_info& image_info = decoded.info;
-        erhe::graphics::Texture_create_info texture_create_info{
-            .device      = m_arguments.graphics_device,
-            .usage_mask  =
-                erhe::graphics::Image_usage_flag_bit_mask::sampled |
-                erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-            .pixelformat = image_info.format,
-            .use_mipmaps = true, //(image_info.level_count > 1),
-            .width       = image_info.width,
-            .height      = image_info.height,
-            .depth       = image_info.depth,
-            .level_count = image_info.level_count,
-            .row_stride  = image_info.row_stride,
-            .debug_label = erhe::utility::Debug_label{decoded.name}
-        };
-        const int  mipmap_count    = texture_create_info.get_texture_level_count();
-        // Mipmap generation blits level to level, which cannot write
-        // block-compressed levels; a compressed image samples only the levels
-        // its container provides (explicit level_count wins over use_mipmaps
-        // in Texture_impl).
-        const bool generate_mipmap =
-            (mipmap_count != image_info.level_count) &&
-            !erhe::dataformat::is_block_compressed(image_info.format);
-        if (generate_mipmap) {
-            texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
-            texture_create_info.level_count = mipmap_count;
-        }
-
-        ERHE_VERIFY(decoded.pixels.size() >= 1);
-
-        auto texture = std::make_shared<erhe::graphics::Texture>(m_arguments.graphics_device, texture_create_info);
-        texture->set_source_path(decoded.source_path);
-        texture->set_two_component_normal(image_info.two_component_normal);
-
-        m_arguments.image_transfer.upload(
-            image_info,
-            std::span<const std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()},
-            *texture.get(),
-            generate_mipmap
-        );
-
-        log_gltf->info(
-            "Loaded image '{}': width = {}, height = {}",
-            decoded.name, image_info.width, image_info.height
-        );
-        return texture;
-    }
-
-    void finish_image(const std::size_t image_index, const Decoded_image& decoded)
-    {
-        std::shared_ptr<erhe::graphics::Texture> erhe_texture = upload_decoded_image(decoded);
-        if (erhe_texture) {
-            copy_uid(m_asset->images[image_index], *erhe_texture);
-        }
-        m_data_out.images[image_index]        = erhe_texture;
-        m_data_out.image_sources[image_index] = decoded.source;
-    }
-
-    // Decode every image referenced by a material texture slot - in parallel
-    // executor tasks when enabled - then create + upload the textures on
-    // this thread. The slot determines the color space, exactly like the
-    // lazy get_image() calls in parse_material() did (first referencing slot
-    // wins for images shared between slots).
+    // Decode every image referenced by a material texture slot, in parallel
+    // executor tasks when enabled. No GPU object is created here - the
+    // decoded payloads go to Gltf_image_residency. The slot determines the
+    // color space, exactly like the lazy bind_image() calls in
+    // parse_material() do (first referencing slot wins for images shared
+    // between slots).
     void parse_images()
     {
         ERHE_PROFILE_FUNCTION();
@@ -1539,7 +1464,7 @@ private:
             }
         }
 
-        std::vector<Decoded_image> decoded_images(image_count);
+        std::vector<Gltf_decoded_image>& decoded_images = m_data_out.image_residency.decoded_images;
         if (m_arguments.parallel) {
             ::tf::Taskflow taskflow;
             for (std::size_t i = 0; i < image_count; ++i) {
@@ -1567,24 +1492,23 @@ private:
             if (image_used[i] == 0) {
                 continue;
             }
-            finish_image(i, decoded_images[i]);
+            m_data_out.image_sources[i] = decoded_images[i].source;
         }
     }
-    [[nodiscard]] auto get_image(const std::size_t image_index, const bool linear)
+    // Make sure image_index is decoded. The texture itself is created later,
+    // by Gltf_image_residency::process_next_image.
+    void ensure_image_decoded(const std::size_t image_index, const bool linear)
     {
-        if (!m_data_out.images[image_index]) {
-            parse_image(image_index, linear);
+        Gltf_decoded_image& decoded = m_data_out.image_residency.decoded_images[image_index];
+        if (decoded.requested) {
+            return;
         }
-        return m_data_out.images[image_index];
-    }
-    // Lazy fallback for images not covered by the up-front parse_images()
-    // material-slot scan.
-    void parse_image(const std::size_t image_index, const bool linear)
-    {
-        ERHE_PROFILE_FUNCTION();
+        // Lazy fallback for images not covered by the up-front
+        // parse_images() material-slot scan.
+        ERHE_PROFILE_SCOPE("parse_image");
         log_gltf->trace("Image: image index = {}", image_index);
-        const Decoded_image decoded = decode_image(image_index, linear);
-        finish_image(image_index, decoded);
+        decoded = decode_image(image_index, linear);
+        m_data_out.image_sources[image_index] = decoded.source;
     }
     void parse_sampler(const std::size_t sampler_index)
     {
@@ -1629,12 +1553,12 @@ private:
         create_info.address_mode[0] = from_gl(sampler.wrapS);
         create_info.address_mode[1] = from_gl(sampler.wrapT);
         create_info.address_mode[2] = from_gl(sampler.wrapT);
-        create_info.max_anisotropy  = m_arguments.graphics_device.get_info().max_texture_max_anisotropy; // TODO
+        create_info.max_anisotropy  = m_arguments.device_options.max_sampler_anisotropy; // TODO
         create_info.debug_label     = erhe::utility::Debug_label{sampler_name};
 
-        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
-        // TODO erhe_sampler->set_source_path(m_path);
-        m_data_out.samplers[sampler_index] = erhe_sampler;
+        // Description only: creating the Sampler needs the device, so
+        // residency does it (Gltf_image_residency::create_samplers).
+        m_data_out.image_residency.sampler_create_infos[sampler_index] = create_info;
     }
     void make_default_sampler()
     {
@@ -1647,8 +1571,7 @@ private:
         create_info.address_mode[2] = erhe::graphics::Sampler_address_mode::repeat;
         create_info.max_anisotropy  = 1.0f;
         create_info.debug_label     = erhe::utility::Debug_label{"glTF default samppler"};
-        auto erhe_sampler = std::make_shared<erhe::graphics::Sampler>(m_arguments.graphics_device, create_info);
-        m_data_out.samplers[m_asset->samplers.size()] = erhe_sampler;
+        m_data_out.image_residency.sampler_create_infos[m_asset->samplers.size()] = create_info;
     }
     [[nodiscard]] auto is_tangent_frame_needed(const std::size_t material_index) -> bool {
         const fastgltf::Material& material = m_asset->materials[material_index];
@@ -1672,22 +1595,35 @@ private:
             .name = material_name
         };
 
-        auto apply_texture = [this](
+        // The texture_reference slot is NOT filled here: the Texture does not
+        // exist during the parse any more. The image binding is recorded and
+        // Gltf_image_residency::bind_material_textures assigns the slot once
+        // the texture is resident.
+        auto apply_texture = [this, material_index](
             const fastgltf::TextureInfo&               gltf_texture_info,
             erhe::primitive::Material_texture_sampler& erhe_texture_sampler,
+            const Gltf_material_texture_slot           slot,
             const bool                                 linear
         )
         {
             const fastgltf::Texture& texture = m_asset->textures[gltf_texture_info.textureIndex];
             const std::optional<std::size_t> resolved_image_index = texture_image_index(texture);
+            // ONE binding record per (material, slot), carrying both the
+            // image and the sampler - two records would double-assign the
+            // slot and each would clear what the other set.
+            Gltf_material_texture_binding binding{
+                .material_index = material_index,
+                .slot           = slot,
+                .image_index    = Gltf_material_texture_binding::no_image,
+                .sampler_index  = texture.samplerIndex.has_value()
+                    ? texture.samplerIndex.value()
+                    : m_asset->samplers.size() // default sampler
+            };
             if (resolved_image_index.has_value()) {
-                erhe_texture_sampler.texture_reference = get_image(resolved_image_index.value(), linear);
+                ensure_image_decoded(resolved_image_index.value(), linear);
+                binding.image_index = resolved_image_index.value();
             }
-            if (texture.samplerIndex.has_value()) {
-                erhe_texture_sampler.sampler = m_data_out.samplers[texture.samplerIndex.value()];
-            } else {
-                erhe_texture_sampler.sampler = m_data_out.samplers[m_asset->samplers.size()]; // default sampler
-            }
+            m_data_out.image_residency.material_texture_bindings.push_back(binding);
             erhe_texture_sampler.tex_coord = static_cast<uint8_t>(gltf_texture_info.texCoordIndex);
             if (gltf_texture_info.transform) {
                 erhe_texture_sampler.rotation = gltf_texture_info.transform->rotation;
@@ -1730,30 +1666,30 @@ private:
         }
 
         if (material.normalTexture.has_value()) {
-            apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, true);
+            apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, Gltf_material_texture_slot::normal, true);
             create_data.normal_texture_scale = material.normalTexture.value().scale;
         }
         if (material.occlusionTexture.has_value()) {
-            apply_texture(material.occlusionTexture.value(), create_samplers.occlusion, true);
+            apply_texture(material.occlusionTexture.value(), create_samplers.occlusion, Gltf_material_texture_slot::occlusion, true);
             create_data.occlusion_texture_strength = material.occlusionTexture.value().strength;
         }
         create_data.emissive = material.emissiveStrength * glm::vec3{material.emissiveFactor[0], material.emissiveFactor[1], material.emissiveFactor[2]};
         if (material.emissiveTexture.has_value()) {
-            apply_texture(material.emissiveTexture.value(), create_samplers.emissive, false);
+            apply_texture(material.emissiveTexture.value(), create_samplers.emissive, Gltf_material_texture_slot::emissive, false);
         } {
             const fastgltf::PBRData& pbr_data = material.pbrData;
             if (pbr_data.baseColorTexture.has_value()) {
-                apply_texture(pbr_data.baseColorTexture.value(), create_samplers.base_color, false);
+                apply_texture(pbr_data.baseColorTexture.value(), create_samplers.base_color, Gltf_material_texture_slot::base_color, false);
             }
             if (pbr_data.metallicRoughnessTexture.has_value()) {
-                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_samplers.metallic_roughness, true);
+                apply_texture(pbr_data.metallicRoughnessTexture.value(), create_samplers.metallic_roughness, Gltf_material_texture_slot::metallic_roughness, true);
             }
 
             // NOTE: MaterialSpecularGlossiness is only supported in a hacky way to load Hintze Hall
             const std::unique_ptr<fastgltf::MaterialSpecularGlossiness>& specular_glossiness = material.specularGlossiness;
             if (specular_glossiness && specular_glossiness->diffuseTexture.has_value()) {
                 create_data.bxdf_model = erhe::primitive::Bxdf_model::unlit;
-                apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, false);
+                apply_texture(specular_glossiness->diffuseTexture.value(), create_samplers.base_color, Gltf_material_texture_slot::base_color, false);
             }
 
             create_data.base_color = glm::vec3{
@@ -2949,6 +2885,289 @@ private:
     }
 }
 
+// --- Gltf_image_residency: the GPU half of image loading -------------------
+//
+// Split out of the parse so that parse_gltf creates no GPU objects
+// (doc/async-asset-loading-plan.md step 3). Everything below must run on a
+// thread that owns image_transfer and may touch the device; everything the
+// parser does may not.
+
+namespace {
+
+// Mipmap generation blits level to level, which cannot write
+// block-compressed levels; a compressed image samples only the levels its
+// container provides (explicit level_count wins over use_mipmaps in
+// Texture_impl).
+[[nodiscard]] auto needs_generated_mipmaps(
+    const Gltf_decoded_image&      decoded,
+    const erhe::graphics::Texture& texture
+) -> bool
+{
+    return (texture.get_level_count() != decoded.info.level_count) &&
+        !erhe::dataformat::is_block_compressed(decoded.info.format);
+}
+
+// Create the Texture for one decoded image. No pixels are moved here: this
+// is the cheap half that plan 2.7 requires to have happened for EVERY image
+// before publish, whatever the upload budget did.
+[[nodiscard]] auto create_image_texture(
+    const Gltf_decoded_image& decoded,
+    erhe::graphics::Device&   graphics_device
+) -> std::shared_ptr<erhe::graphics::Texture>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (!decoded.ok) {
+        log_gltf->warn("Image '{}' load failed", decoded.name);
+        return {};
+    }
+    const erhe::graphics::Image_info& image_info = decoded.info;
+    erhe::graphics::Texture_create_info texture_create_info{
+        .device      = graphics_device,
+        .usage_mask  =
+            erhe::graphics::Image_usage_flag_bit_mask::sampled |
+            erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+        .pixelformat = image_info.format,
+        .use_mipmaps = true, //(image_info.level_count > 1),
+        .width       = image_info.width,
+        .height      = image_info.height,
+        .depth       = image_info.depth,
+        .level_count = image_info.level_count,
+        .row_stride  = image_info.row_stride,
+        .debug_label = erhe::utility::Debug_label{decoded.name}
+    };
+    const int  mipmap_count    = texture_create_info.get_texture_level_count();
+    const bool generate_mipmap =
+        (mipmap_count != image_info.level_count) &&
+        !erhe::dataformat::is_block_compressed(image_info.format);
+    if (generate_mipmap) {
+        texture_create_info.usage_mask |= erhe::graphics::Image_usage_flag_bit_mask::transfer_src;
+        texture_create_info.level_count = mipmap_count;
+    }
+
+    ERHE_VERIFY(decoded.pixels.size() >= 1);
+
+    auto texture = std::make_shared<erhe::graphics::Texture>(graphics_device, texture_create_info);
+    texture->set_source_path(decoded.source_path);
+    texture->set_two_component_normal(image_info.two_component_normal);
+
+    log_gltf->info(
+        "Loaded image '{}': width = {}, height = {}",
+        decoded.name, image_info.width, image_info.height
+    );
+    return texture;
+}
+
+// Publish one image's result: the Texture (possibly null for a failed
+// decode) goes into Gltf_data::images, the image is marked resident so it is
+// never processed again, and the decoded pixels - which dominate loading
+// memory - are released.
+void finish_resident_image(
+    Gltf_data&                                      data,
+    const std::size_t                               image_index,
+    Gltf_decoded_image&                             decoded,
+    const std::shared_ptr<erhe::graphics::Texture>& texture
+)
+{
+    if (texture && !decoded.uid.empty()) {
+        texture->set_gltf_uid(std::string_view{decoded.uid});
+    }
+    if (image_index < data.images.size()) {
+        data.images[image_index] = texture;
+    }
+    decoded.resident = true;
+    decoded.pixels   = std::vector<std::uint8_t>{};
+}
+
+[[nodiscard]] auto find_next_pending_image(const std::vector<Gltf_decoded_image>& decoded_images) -> std::size_t
+{
+    for (std::size_t i = 0, end = decoded_images.size(); i < end; ++i) {
+        const Gltf_decoded_image& decoded = decoded_images[i];
+        if (decoded.requested && !decoded.resident) {
+            return i;
+        }
+    }
+    return decoded_images.size();
+}
+
+[[nodiscard]] auto get_material_texture_slot(
+    erhe::primitive::Material_texture_samplers& samplers,
+    const Gltf_material_texture_slot            slot
+) -> erhe::primitive::Material_texture_sampler&
+{
+    switch (slot) {
+        case Gltf_material_texture_slot::metallic_roughness: return samplers.metallic_roughness;
+        case Gltf_material_texture_slot::normal:             return samplers.normal;
+        case Gltf_material_texture_slot::occlusion:          return samplers.occlusion;
+        case Gltf_material_texture_slot::emissive:           return samplers.emissive;
+        case Gltf_material_texture_slot::base_color:
+        default:                                            return samplers.base_color;
+    }
+}
+
+} // anonymous namespace
+
+auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options
+{
+    Gltf_device_options options{};
+    if (graphics_device.get_format_properties(erhe::dataformat::Format::format_bc7_srgb).supported) {
+        options.transcode_format_preference = erhe::graphics::Transcode_format_preference::bc7;
+    } else if (graphics_device.get_format_properties(erhe::dataformat::Format::format_astc_4x4_srgb).supported) {
+        options.transcode_format_preference = erhe::graphics::Transcode_format_preference::astc_4x4;
+    }
+    options.max_sampler_anisotropy = graphics_device.get_info().max_texture_max_anisotropy;
+    return options;
+}
+
+auto Gltf_image_residency::get_pending_image_count() const -> std::size_t
+{
+    std::size_t count = 0;
+    for (const Gltf_decoded_image& decoded : decoded_images) {
+        if (decoded.requested && !decoded.resident) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+auto Gltf_image_residency::get_pending_byte_count() const -> std::size_t
+{
+    std::size_t bytes = 0;
+    for (const Gltf_decoded_image& decoded : decoded_images) {
+        if (decoded.requested && !decoded.resident) {
+            bytes += decoded.pixels.size();
+        }
+    }
+    return bytes;
+}
+
+auto Gltf_image_residency::process_next_image(
+    Gltf_data&                    data,
+    erhe::graphics::Device&       graphics_device,
+    Image_transfer&               image_transfer
+) -> bool
+{
+    const std::size_t i = find_next_pending_image(decoded_images);
+    if (i == decoded_images.size()) {
+        return false;
+    }
+    Gltf_decoded_image& decoded = decoded_images[i];
+    std::shared_ptr<erhe::graphics::Texture> texture = create_image_texture(decoded, graphics_device);
+    if (texture) {
+        image_transfer.upload(
+            decoded.info,
+            std::span<const std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()},
+            *texture.get(),
+            needs_generated_mipmaps(decoded, *texture.get())
+        );
+    }
+    finish_resident_image(data, i, decoded, texture);
+    return true;
+}
+
+auto Gltf_image_residency::process_next_image_into_frame(
+    Gltf_data&                      data,
+    erhe::graphics::Device&         graphics_device,
+    Image_transfer&                 image_transfer,
+    erhe::graphics::Command_buffer& command_buffer,
+    std::size_t&                    remaining_budget_bytes
+) -> bool
+{
+    const std::size_t i = find_next_pending_image(decoded_images);
+    if (i == decoded_images.size()) {
+        return false;
+    }
+    Gltf_decoded_image& decoded = decoded_images[i];
+
+    // A failed decode has no pixels to upload but still must not be retried
+    // forever, and it costs no budget.
+    if (!decoded.ok) {
+        finish_resident_image(data, i, decoded, {});
+        return true;
+    }
+    if (remaining_budget_bytes == 0) {
+        return false;
+    }
+
+    // The Texture object is created before the copy is recorded, and it is
+    // published into Gltf_data::images either way: plan 2.7 requires a real
+    // Texture for every image by publish - only the pixels may lag.
+    std::shared_ptr<erhe::graphics::Texture> texture = create_image_texture(decoded, graphics_device);
+    if (!texture) {
+        finish_resident_image(data, i, decoded, {});
+        return true;
+    }
+    const Image_upload_result result = image_transfer.upload_into_frame(
+        command_buffer,
+        decoded.info,
+        std::span<const std::uint8_t>{decoded.pixels.data(), decoded.pixels.size()},
+        *texture.get(),
+        needs_generated_mipmaps(decoded, *texture.get()),
+        remaining_budget_bytes
+    );
+    if (result == Image_upload_result::budget_exhausted) {
+        // Nothing was recorded; drop the texture and retry the whole image
+        // next frame. Dropping is safe precisely because no command
+        // referencing it was recorded.
+        return false;
+    }
+    finish_resident_image(data, i, decoded, texture);
+    return true;
+}
+
+void Gltf_image_residency::create_samplers(Gltf_data& data, erhe::graphics::Device& graphics_device) const
+{
+    ERHE_PROFILE_FUNCTION();
+    data.samplers.resize(sampler_create_infos.size());
+    for (std::size_t i = 0, end = sampler_create_infos.size(); i < end; ++i) {
+        if (data.samplers[i]) {
+            continue; // already created (repeat drain)
+        }
+        data.samplers[i] = std::make_shared<erhe::graphics::Sampler>(graphics_device, sampler_create_infos[i]);
+    }
+}
+
+void Gltf_image_residency::bind_material_textures(Gltf_data& data) const
+{
+    for (const Gltf_material_texture_binding& binding : material_texture_bindings) {
+        if (binding.material_index >= data.materials.size()) {
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Material>& material = data.materials[binding.material_index];
+        if (!material) {
+            continue;
+        }
+        erhe::primitive::Material_texture_sampler& slot = get_material_texture_slot(material->data.texture_samplers, binding.slot);
+        if (binding.image_index < data.images.size()) {
+            slot.texture_reference = data.images[binding.image_index];
+        }
+        if (binding.sampler_index < data.samplers.size()) {
+            slot.sampler = data.samplers[binding.sampler_index];
+        }
+    }
+}
+
+void Gltf_image_residency::drain(
+    Gltf_data&              data,
+    erhe::graphics::Device& graphics_device,
+    Image_transfer&         image_transfer
+)
+{
+    ERHE_PROFILE_FUNCTION();
+    create_samplers(data, graphics_device);
+    while (process_next_image(data, graphics_device, image_transfer)) {
+        // keep going
+    }
+    // Submit the recorded copies and wait. This used to live at the end of
+    // parse_gltf; it belongs here now, because the parse records no uploads
+    // at all. The reason is unchanged: the Image_transfer's transfer command
+    // buffer comes from the device's per-frame pool, so a long-lived
+    // Image_transfer (the example app holds one as a member) must not carry
+    // a recording cb across frames.
+    image_transfer.flush();
+    bind_material_textures(data);
+}
+
 auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
 {
     ERHE_PROFILE_FUNCTION();
@@ -3176,12 +3395,6 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     }
 
     erhe_parser.parse_and_build();
-
-    // Flush pending texture uploads before returning: the Image_transfer's
-    // transfer command buffer comes from the device's per-frame pool, so a
-    // long-lived Image_transfer (e.g. the example app's member) must not
-    // carry a recording cb across frames.
-    arguments.image_transfer.flush();
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
     // parallel to the glTF nodes array).

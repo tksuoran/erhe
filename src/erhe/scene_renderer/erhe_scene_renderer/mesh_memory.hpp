@@ -8,11 +8,14 @@
 #include "erhe_primitive/buffer_info.hpp"
 #include "erhe_primitive/buffer_sink.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_scene_renderer/buffer_pool.hpp"
 #include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
+#include "erhe_profile/profile.hpp"
 #include "erhe_scene_renderer/shader_key.hpp"
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <vector>
@@ -73,6 +76,26 @@ public:
     erhe::dataformat::Vertex_format                     vertex_format;
 };
 
+// Which transfer queue a build path's vertex / index bytes go through
+// (doc/async-asset-loading-plan.md 2.6).
+enum class Mesh_memory_queue : unsigned int
+{
+    // Full drain once per frame, in Mesh_memory::flush. "Enqueued implies
+    // uploaded by end of frame" holds, which is what lets callers build a
+    // mesh and draw it in the SAME command buffer with no gate at all -
+    // rendertarget meshes, brush previews, the scene builder, and the
+    // init-command-buffer paths of example / rendering_test all rely on it.
+    interactive = 0,
+
+    // Budget-drained, only from Mesh_memory::flush_budgeted. Enqueued does
+    // NOT imply uploaded, so the ONLY traffic allowed here is traffic whose
+    // publish gates on the watermark:
+    //     ticket_snapshot <= get_loader_transfer_queue().get_watermark()
+    // Anything that publishes immediately must stay on the interactive
+    // queue, or it will draw from buffers that are still trickling in.
+    loader = 1
+};
+
 class Mesh_memory final
     : public erhe::primitive::Vertex_buffer_sink
     , public erhe::primitive::Index_buffer_sink
@@ -89,12 +112,16 @@ public:
 
     [[nodiscard]] auto get_vertex_input(size_t vertex_input_key) const -> const Vertex_input_entry&;
 
-    [[nodiscard]] auto make_primitive_buffer_info        () -> erhe::primitive::Buffer_info;
+    // The queue selector is not a parameter on the queue but a choice of
+    // SINK: Buffer_info holds a Vertex_buffer_sink& / Index_buffer_sink&,
+    // and Mesh_memory itself is the interactive sink, so the loader queue
+    // needs a second sink object (see m_loader_sink).
+    [[nodiscard]] auto make_primitive_buffer_info        (Mesh_memory_queue queue = Mesh_memory_queue::interactive) -> erhe::primitive::Buffer_info;
     // Same as make_primitive_buffer_info but uses vertex_format_skinned, so
     // skinned meshes get joint_indices + joint_weights vertex attributes in
     // the GPU vertex buffer. Required for the standard.vert skinning path
     // (Shader_key::derive checks the vertex_format for joint attributes).
-    [[nodiscard]] auto make_skinned_primitive_buffer_info() -> erhe::primitive::Buffer_info;
+    [[nodiscard]] auto make_skinned_primitive_buffer_info(Mesh_memory_queue queue = Mesh_memory_queue::interactive) -> erhe::primitive::Buffer_info;
 
     // Main thread, once per frame, before the frame's draws are recorded:
     // records the queued vertex / index uploads into command_buffer and
@@ -104,6 +131,14 @@ public:
     // then the ranges stay allocated, so no new mesh can be written into
     // memory a frame in flight may still read.
     void flush(erhe::graphics::Command_buffer& command_buffer);
+
+    // Drains ONLY the loader queue, up to max_byte_count bytes, and returns
+    // the bytes recorded. Called from the asset-load tick slot; never from
+    // the per-frame flush above, which must keep its full-drain semantics.
+    auto flush_budgeted(erhe::graphics::Command_buffer& command_buffer, std::size_t max_byte_count) -> std::size_t;
+
+    // The loader queue, for tickets and the publish watermark (plan 2.5).
+    [[nodiscard]] auto get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
     [[nodiscard]] auto get_vertex_buffer(const erhe::primitive::Buffer_range& buffer_range) -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_vertex_buffer(const Pool_buffer_identity& buffer_identity) -> erhe::graphics::Buffer*;
@@ -155,17 +190,68 @@ public:
     // its own Buffer_pool keyed on this stream.
     erhe::dataformat::Vertex_format vertex_format_edge_line_joints;
 
+    // A retired-range batch whose frame has completed but which may still be
+    // the target of a queued LOADER write: freeing it would let the range be
+    // re-allocated and re-enqueued while the older write is still pending, so
+    // the stale write would land last. Held until the loader watermark passes
+    // the ticket high-water mark taken when the batch was collected (plan 2.5
+    // free gate).
+    class Pending_free
+    {
+    public:
+        erhe::graphics::Buffer_transfer_queue::Ticket loader_ticket{0};
+        std::vector<Retired_range>                    ranges;
+    };
+
+    // Second sink, so that Buffer_info can select the loader queue. Every
+    // allocation delegates to Mesh_memory (the pools are SHARED between the
+    // two queues - which is exactly why the free gate above is evaluated
+    // against the loader watermark); only the enqueue target differs.
+    class Loader_buffer_sink final
+        : public erhe::primitive::Vertex_buffer_sink
+        , public erhe::primitive::Index_buffer_sink
+    {
+    public:
+        explicit Loader_buffer_sink(Mesh_memory& mesh_memory);
+
+        auto allocate_vertex_buffer_range(const erhe::dataformat::Vertex_stream& vertex_stream, std::size_t vertex_count) -> erhe::primitive::Buffer_sink_allocation override;
+        void enqueue_vertex_data         (const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data) override;
+        void vertex_writer_ready         (erhe::primitive::Vertex_buffer_writer& writer)                                  override;
+
+        auto allocate_index_buffer_range(erhe::dataformat::Format index_format, std::size_t index_count) -> erhe::primitive::Buffer_sink_allocation override;
+        void enqueue_index_data         (const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data) override;
+        void index_writer_ready         (erhe::primitive::Index_buffer_writer&  writer)                                  override;
+
+    private:
+        Mesh_memory& m_mesh_memory;
+    };
+
 private:
+    friend class Loader_buffer_sink;
+
+    void enqueue_vertex_data_to(erhe::graphics::Buffer_transfer_queue& queue, const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data);
+    void enqueue_index_data_to (erhe::graphics::Buffer_transfer_queue& queue, const erhe::primitive::Buffer_range& buffer_range, std::vector<uint8_t>&& data);
+    void vertex_writer_ready_to(erhe::graphics::Buffer_transfer_queue& queue, erhe::primitive::Vertex_buffer_writer& writer);
+    void index_writer_ready_to (erhe::graphics::Buffer_transfer_queue& queue, erhe::primitive::Index_buffer_writer&  writer);
+
+    // Applies every pending free whose loader ticket the watermark has now
+    // passed. Called from flush().
+    void apply_ready_pending_frees();
+
     Mesh_memory_config                    m_mesh_memory_config;
     erhe::graphics::Device&               m_graphics_device;
     std::vector<Vertex_input_entry>       m_vertex_input_entries;
     std::vector<Buffer_pool>              m_vertex_pools;
     std::vector<Buffer_pool>              m_index_pools;
     erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue;
+    erhe::graphics::Buffer_transfer_queue m_loader_transfer_queue;
+    Loader_buffer_sink                    m_loader_sink;
     // Frame-completion handlers registered by flush() capture a weak_ptr to
     // this token; a handler that outlives the Mesh_memory (pools already
     // destroyed) then does nothing.
     std::shared_ptr<int>                  m_alive_token;
+    ERHE_PROFILE_MUTEX(std::mutex, m_pending_free_mutex);
+    std::vector<Pending_free>             m_pending_frees;
 };
 
 // Vertex input key / vertex buffer ranges of a Buffer_mesh for a primitive

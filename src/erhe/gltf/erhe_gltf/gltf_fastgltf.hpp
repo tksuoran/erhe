@@ -2,9 +2,12 @@
 
 #include "gltf_physics.hpp"
 
+#include "erhe_graphics/image_loader.hpp"
+#include "erhe_graphics/sampler.hpp"
 #include "erhe_math/aabb.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -21,6 +24,7 @@ namespace erhe::geometry {
     class Geometry;
 }
 namespace erhe::graphics {
+    class Command_buffer;
     class Device;
     class Sampler;
     class Texture;
@@ -98,6 +102,117 @@ public:
     std::vector<std::pair<std::string, std::string>> entries;
 };
 
+// Decoded pixels of one glTF image plus everything needed to create and
+// upload its Texture. parse_gltf produces these on the CPU only - decoding
+// touches no device, so it is safe on executor workers - and creating the
+// GPU texture from one is a separate residency step run by whoever owns a
+// command buffer (doc/async-asset-loading-plan.md step 3, phase 3b).
+class Gltf_decoded_image
+{
+public:
+    bool                               requested{false}; // an image no material slot references is never decoded
+    bool                               resident {false}; // texture created and upload recorded
+    bool                               ok       {false}; // decode succeeded
+    erhe::graphics::Image_info         info{};
+    std::vector<std::uint8_t>          pixels;           // released once resident
+    std::shared_ptr<Gltf_image_source> source;
+    std::string                        name;
+    std::string                        uid;              // glTF 2.1 uid, carried onto the Texture
+    std::filesystem::path              source_path;
+};
+
+// The five texture slots of erhe::primitive::Material_texture_samplers.
+// Material texture slots cannot be filled during the parse any more (the
+// Texture does not exist yet), so the parse records which image belongs in
+// which slot and residency assigns them.
+enum class Gltf_material_texture_slot : unsigned int {
+    base_color         = 0,
+    metallic_roughness = 1,
+    normal             = 2,
+    occlusion          = 3,
+    emissive           = 4
+};
+
+class Gltf_material_texture_binding
+{
+public:
+    // image_index value for a texture slot that names a sampler but no
+    // usable image (a glTF texture whose source cannot be resolved).
+    static constexpr std::size_t no_image = ~std::size_t{0};
+
+    std::size_t                material_index{0};
+    Gltf_material_texture_slot slot{Gltf_material_texture_slot::base_color};
+    std::size_t                image_index{0};
+    // Index into Gltf_image_residency::sampler_create_infos. The last entry
+    // is the default sampler, used by textures that name none.
+    std::size_t                sampler_index{0};
+};
+
+class Gltf_data;
+
+// The GPU half of image loading, split out of the parse. parse_gltf leaves
+// Gltf_data::images empty and every decoded payload here; nothing in
+// Gltf_data holds a Texture until residency has run, so a caller that needs
+// textures (everything today) must drain this before using the result.
+class Gltf_image_residency
+{
+public:
+    std::vector<Gltf_decoded_image>            decoded_images;            // parallel to Gltf_data::images
+    // Sampler descriptions built by the parse; residency turns them into
+    // erhe::graphics::Sampler objects in Gltf_data::samplers. Creating a
+    // Sampler needs the device, so the parse cannot do it and stay
+    // device-free. One entry per glTF sampler plus a trailing default.
+    std::vector<erhe::graphics::Sampler_create_info> sampler_create_infos;
+    std::vector<Gltf_material_texture_binding> material_texture_bindings;
+
+    [[nodiscard]] auto get_pending_image_count() const -> std::size_t;
+    [[nodiscard]] auto get_pending_byte_count () const -> std::size_t;
+
+    // Create the Texture for the next pending image and record its upload
+    // through a blocking_drain Image_transfer. Returns false when nothing is
+    // pending. Must run on a thread that owns the image_transfer and may
+    // touch the device. Does NOT flush: a caller driving this itself must
+    // flush the Image_transfer before the frame ends (drain() does).
+    auto process_next_image(
+        Gltf_data&              data,
+        erhe::graphics::Device& graphics_device,
+        Image_transfer&         image_transfer
+    ) -> bool;
+
+    // Same, for a frame_recording Image_transfer: the copies go into
+    // command_buffer and the staged bytes come out of
+    // remaining_budget_bytes. Returns false when nothing is pending OR when
+    // the budget ran out - get_pending_image_count() distinguishes the two.
+    // The texture object is always created before its pixels are uploaded,
+    // so callers see a real erhe::graphics::Texture in Gltf_data::images as
+    // soon as an image is processed (plan 2.7 requires this by publish).
+    auto process_next_image_into_frame(
+        Gltf_data&                      data,
+        erhe::graphics::Device&         graphics_device,
+        Image_transfer&                 image_transfer,
+        erhe::graphics::Command_buffer& command_buffer,
+        std::size_t&                    remaining_budget_bytes
+    ) -> bool;
+
+    // Create Gltf_data::samplers from sampler_create_infos. Cheap, no
+    // uploads; must run before bind_material_textures.
+    void create_samplers(Gltf_data& data, erhe::graphics::Device& graphics_device) const;
+
+    // Assign the parse-recorded image and sampler bindings into the material
+    // texture slots. Requires every referenced image to be resident and
+    // create_samplers to have run.
+    void bind_material_textures(Gltf_data& data) const;
+
+    // Blocking convenience: make every pending image resident and bind the
+    // material slots - the behavior a synchronous caller had before the
+    // split.
+    void drain(
+        Gltf_data&              data,
+        erhe::graphics::Device& graphics_device,
+        Image_transfer&         image_transfer
+    );
+};
+
 class Gltf_data
 {
 public:
@@ -112,6 +227,9 @@ public:
     // Parallel to images: the retained encoded source stream of each loaded
     // image (null for images that failed to load or were never referenced).
     std::vector<std::shared_ptr<Gltf_image_source>>         image_sources;
+    // Deferred GPU half of image loading (see Gltf_image_residency): after
+    // parse_gltf every entry of `images` is null and the pixels live here.
+    Gltf_image_residency                                    image_residency;
     std::vector<std::shared_ptr<erhe::graphics::Sampler>>   samplers;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
@@ -182,11 +300,26 @@ public:
     std::optional<erhe::math::Aabb> bounding_box;
 };
 
+// The two device-derived values the parse needs. Queried by the caller on
+// the main thread and passed in by value, so parse_gltf itself never touches
+// an erhe::graphics::Device - which is what makes it safe to run on a worker
+// (doc/async-asset-loading-plan.md 2.3 invariant 1). See
+// query_gltf_device_options().
+class Gltf_device_options
+{
+public:
+    erhe::graphics::Transcode_format_preference transcode_format_preference{
+        erhe::graphics::Transcode_format_preference::rgba8
+    };
+    float max_sampler_anisotropy{1.0f};
+};
+
+[[nodiscard]] auto query_gltf_device_options(erhe::graphics::Device& graphics_device) -> Gltf_device_options;
+
 struct Gltf_parse_arguments
 {
-    erhe::graphics::Device&                   graphics_device;
     ::tf::Executor&                           executor;
-    Image_transfer&                           image_transfer;
+    Gltf_device_options                       device_options{};
     const std::shared_ptr<erhe::scene::Node>& root_node;
     erhe::scene::Layer_id                     mesh_layer_id{};
     std::filesystem::path                     path;

@@ -79,11 +79,11 @@ class McpClient:
         return parsed
 
     def wait_async(self, timeout=10.0, poll_interval=0.1):
-        """Poll get_async_status until pending+running reach 0. Returns True if settled."""
+        """Poll get_async_status until pending+running+asset_loads reach 0. Returns True if settled."""
         start = time.time()
         while time.time() - start < timeout:
             status = self.call_ok("get_async_status")
-            if status["pending"] == 0 and status["running"] == 0:
+            if status["pending"] == 0 and status["running"] == 0 and status.get("asset_loads", 0) == 0:
                 return True
             time.sleep(poll_interval)
         return False

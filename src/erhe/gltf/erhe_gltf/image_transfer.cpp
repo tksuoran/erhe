@@ -38,16 +38,29 @@ constexpr unsigned int s_transfer_thread_slot = 0;
 } // anonymous namespace
 
 Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device)
-    : m_graphics_device{graphics_device}
-    , m_staging{
-        graphics_device,
-        erhe::graphics::Ring_buffer_create_info{
-            .size              = s_staging_byte_count,
-            .ring_buffer_usage = erhe::graphics::Ring_buffer_usage::CPU_write,
-            .debug_label       = "Image_transfer staging"
-        }
-    }
+    : Image_transfer{graphics_device, Image_transfer_mode::blocking_drain}
 {
+}
+
+Image_transfer::Image_transfer(erhe::graphics::Device& graphics_device, const Image_transfer_mode mode)
+    : m_graphics_device{graphics_device}
+    , m_mode           {mode}
+{
+    if (m_mode == Image_transfer_mode::blocking_drain) {
+        // The private ring exists only for the blocking mode. In
+        // frame_recording mode staging comes from the device's shared ring
+        // and is reclaimed by frame completion, so allocating 64 MiB per
+        // loader here would be pure waste - and N concurrent loads would
+        // multiply it.
+        m_staging.emplace(
+            graphics_device,
+            erhe::graphics::Ring_buffer_create_info{
+                .size              = s_staging_byte_count,
+                .ring_buffer_usage = erhe::graphics::Ring_buffer_usage::CPU_write,
+                .debug_label       = "Image_transfer staging"
+            }
+        );
+    }
 }
 
 Image_transfer::~Image_transfer()
@@ -67,7 +80,7 @@ auto Image_transfer::get_transfer_command_buffer() -> erhe::graphics::Command_bu
 void Image_transfer::flush()
 {
     if (m_command_buffer == nullptr) {
-        return;
+        return; // also the frame_recording case: the frame owns the command buffer
     }
     // Uploads run outside the device frame (and possibly off the main
     // thread), so the driver-owned temporaries created here - the command
@@ -79,10 +92,11 @@ void Image_transfer::flush()
     m_command_buffer = nullptr;
     // Every consumer of the staged ranges was recorded in the command
     // buffer we just waited on, so all staging space is reclaimable.
-    m_staging.complete_all_syncs();
+    m_staging->complete_all_syncs();
 }
 
 void Image_transfer::record_copies(
+    erhe::graphics::Command_buffer&   command_buffer,
     const erhe::graphics::Image_info& image_info,
     const erhe::graphics::Buffer&     source_buffer,
     const std::size_t                 source_offset,
@@ -90,7 +104,7 @@ void Image_transfer::record_copies(
     const bool                        generate_mipmap
 )
 {
-    erhe::graphics::Blit_command_encoder encoder{m_graphics_device, get_transfer_command_buffer()};
+    erhe::graphics::Blit_command_encoder encoder{m_graphics_device, command_buffer};
 
     const erhe::graphics::Texture* destination_texture = &texture;
     const std::uintptr_t           destination_slice   = 0;
@@ -142,6 +156,7 @@ void Image_transfer::upload(
     const bool                          generate_mipmap
 )
 {
+    ERHE_VERIFY(m_mode == Image_transfer_mode::blocking_drain);
     const std::size_t byte_count = pixels.size();
     ERHE_VERIFY(byte_count > 0);
 
@@ -151,7 +166,7 @@ void Image_transfer::upload(
     // staging buffer instead (rare: e.g. 8k uncompressed sources). The
     // copies are flushed immediately so the buffer can be released right
     // away instead of piling up until some later frame completes.
-    if (byte_count + s_staging_alignment > m_staging.get_capacity_byte_count()) {
+    if (byte_count + s_staging_alignment > m_staging->get_capacity_byte_count()) {
         log_gltf->info("Image_transfer: {} byte image exceeds the staging ring; using a dedicated staging buffer", byte_count);
         erhe::graphics::Buffer staging_buffer{
             m_graphics_device,
@@ -163,12 +178,12 @@ void Image_transfer::upload(
                 .debug_label                       = "Image_transfer oversize staging"
             }
         };
-        record_copies(image_info, staging_buffer, 0, texture, generate_mipmap);
+        record_copies(get_transfer_command_buffer(), image_info, staging_buffer, 0, texture, generate_mipmap);
         flush(); // GPU is done with staging_buffer when this returns
         return;
     }
 
-    erhe::graphics::Ring_buffer_range range = m_staging.acquire(
+    erhe::graphics::Ring_buffer_range range = m_staging->acquire(
         s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count
     );
     if (range.get_span().empty()) {
@@ -176,7 +191,7 @@ void Image_transfer::upload(
         // wait + reclaim) and retry. This is what keeps staging bounded and
         // the load progressing without depending on frame completions.
         flush();
-        range = m_staging.acquire(s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
+        range = m_staging->acquire(s_staging_alignment, erhe::graphics::Ring_buffer_usage::CPU_write, byte_count);
     }
     ERHE_VERIFY(!range.get_span().empty());
 
@@ -184,13 +199,64 @@ void Image_transfer::upload(
     range.bytes_written(byte_count);
     range.close();
     record_copies(
+        get_transfer_command_buffer(),
         image_info,
-        *m_staging.get_buffer(),
+        *m_staging->get_buffer(),
         range.get_byte_start_offset_in_buffer(),
         texture,
         generate_mipmap
     );
     range.release();
+}
+
+auto Image_transfer::upload_into_frame(
+    erhe::graphics::Command_buffer&     command_buffer,
+    const erhe::graphics::Image_info&   image_info,
+    const std::span<const std::uint8_t> pixels,
+    erhe::graphics::Texture&            texture,
+    const bool                          generate_mipmap,
+    std::size_t&                        remaining_budget_bytes
+) -> Image_upload_result
+{
+    ERHE_VERIFY(m_mode == Image_transfer_mode::frame_recording);
+    const std::size_t byte_count = pixels.size();
+    ERHE_VERIFY(byte_count > 0);
+
+    if (remaining_budget_bytes == 0) {
+        return Image_upload_result::budget_exhausted;
+    }
+
+    // Staging comes from the device ring, so the range is reclaimed by frame
+    // completion - which is exactly what makes this mode non-blocking, and
+    // exactly why it requires a frame loop that keeps advancing. Note this
+    // call never fails: it spills a new ring buffer sized to the request
+    // when nothing has room, so remaining_budget_bytes above is what keeps
+    // staging memory bounded.
+    erhe::graphics::Ring_buffer_range range = m_graphics_device.allocate_ring_buffer_entry(
+        erhe::graphics::Buffer_target::transfer_src,
+        erhe::graphics::Ring_buffer_usage::CPU_write,
+        byte_count
+    );
+    ERHE_VERIFY(range.get_span().size() >= byte_count);
+
+    std::memcpy(range.get_span().data(), pixels.data(), byte_count);
+    range.bytes_written(byte_count);
+    range.close();
+    record_copies(
+        command_buffer,
+        image_info,
+        *range.get_buffer()->get_buffer(),
+        range.get_byte_start_offset_in_buffer(),
+        texture,
+        generate_mipmap
+    );
+    range.release();
+
+    // An image bigger than what is left this frame still goes in one piece;
+    // the budget bounds how much a frame starts, not how far one image may
+    // overshoot.
+    remaining_budget_bytes -= std::min(remaining_budget_bytes, byte_count);
+    return Image_upload_result::recorded;
 }
 
 } // namespace erhe::gltf

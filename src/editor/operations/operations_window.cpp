@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_scenes.hpp"
 #include "app_message_bus.hpp"
+#include "assets/asset_load_task.hpp"
 #include "assets/asset_manager.hpp"
 #include "brushes/brush.hpp"
 #include "app_settings.hpp"
@@ -667,6 +668,39 @@ void Operations::async_mesh_operation(const bool selection_aware)
     );
 }
 
+void Operations::on_scene_opened(const std::shared_ptr<Scene_root>& scene_root)
+{
+    log_operations->info("Scene loaded: {}", scene_root->get_name());
+    // The content library is shown nested under the Scene row in the
+    // Hierarchy (browser) window (#240); the standalone Content
+    // Library window was removed (#241).
+    auto browser_window = scene_root->make_browser_window(
+        *m_context.imgui_renderer,
+        *m_context.imgui_windows,
+        m_context,
+        *m_context.app_settings
+    );
+    browser_window->show_window();
+    // Dock (tab) the new scene's Hierarchy window with the existing one
+    // instead of leaving it floating at ImGui's default cascade position
+    // (#258).
+    apply_hierarchy_window_placement(*m_context.imgui_windows, *browser_window);
+
+    // Show the loaded scene in a viewport window: repurposes an existing
+    // viewport that shows no scene when one exists (#265 follow-up), else
+    // creates a new one docked (tabbed) with the existing viewport (#258)
+    // and brings its tab to the front.
+    m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
+
+    // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to this
+    // scene if none existed yet -- e.g. a load-only commands.json with no
+    // scene.create. on_scene_created() ignores this once the tools are
+    // already homed in an earlier (created) scene.
+    m_context.app_message_bus->scene_created.send_message(
+        Scene_created_message{ scene_root }
+    );
+}
+
 void Operations::async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, const bool selection_aware)
 {
     std::vector<std::shared_ptr<erhe::Item_base>> items;
@@ -889,6 +923,39 @@ Operations::Operations(
                 // extensionsUsed) opens as a full scene with its saved
                 // editor state; any other glTF opens as a foreign scene
                 // (Scene_open_operation: undoable, own new viewport).
+                //
+                // Asynchronous path (doc/async-asset-loading-plan.md step 6):
+                // the task runs the scan AND the parse on workers and spreads
+                // residency over frames, so nothing here reads the file on
+                // the main thread. The erhe-vs-foreign decision comes back
+                // through the completion callback. queue_load returns null
+                // when async_gltf_load is off; then the blocking path below
+                // runs, scan included.
+                const std::filesystem::path load_path = message.path;
+                if (m_context.asset_manager != nullptr) {
+                    std::shared_ptr<Asset_load_handle> handle = m_context.asset_manager->queue_load(
+                        load_path,
+                        [this, load_path](const Asset_load_result& result) {
+                            if (result.foreign_gltf) {
+                                log_operations->info(
+                                    "Load Scene: '{}' is not an erhe-authored scene - opening as foreign glTF{}",
+                                    erhe::file::to_string(load_path),
+                                    result.prepared_parse ? " (parse already done)" : ""
+                                );
+                                m_context.operation_stack->queue(
+                                    std::make_shared<Scene_open_operation>(load_path, result.prepared_parse)
+                                );
+                                return;
+                            }
+                            if (result.scene_root) {
+                                on_scene_opened(result.scene_root);
+                            }
+                        }
+                    );
+                    if (handle) {
+                        return;
+                    }
+                }
                 const Gltf_scan_summary summary = editor::scan_gltf(message.path);
                 if (!is_erhe_scene(summary.extensions_used)) {
                     log_operations->info(
@@ -900,36 +967,7 @@ Operations::Operations(
                 }
                 std::shared_ptr<Scene_root> scene_root = editor::open_scene_gltf(m_context, message.path);
                 if (scene_root) {
-                    log_operations->info("Scene loaded: {}", scene_root->get_name());
-                    // The content library is shown nested under the Scene row in the
-                    // Hierarchy (browser) window (#240); the standalone Content
-                    // Library window was removed (#241).
-                    auto browser_window = scene_root->make_browser_window(
-                        *m_context.imgui_renderer,
-                        *m_context.imgui_windows,
-                        m_context,
-                        *m_context.app_settings
-                    );
-                    browser_window->show_window();
-                    // Dock (tab) the new scene's Hierarchy window with the
-                    // existing one instead of leaving it floating at ImGui's
-                    // default cascade position (#258).
-                    apply_hierarchy_window_placement(*m_context.imgui_windows, *browser_window);
-
-                    // Show the loaded scene in a viewport window: repurposes an
-                    // existing viewport that shows no scene when one exists
-                    // (#265 follow-up), else creates a new one docked (tabbed)
-                    // with the existing viewport (#258) and brings its tab to
-                    // the front.
-                    m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
-
-                    // Attach the global tools (Hud / Hotbar / OpenXR Headset_view) to
-                    // this scene if none existed yet -- e.g. a load-only commands.json
-                    // with no scene.create. on_scene_created() ignores this once the
-                    // tools are already homed in an earlier (created) scene.
-                    m_context.app_message_bus->scene_created.send_message(
-                        Scene_created_message{ scene_root }
-                    );
+                    on_scene_opened(scene_root);
                 }
             } catch (...) {
                 log_operations->error("exception: load scene");
@@ -982,9 +1020,46 @@ auto Operations::count_selected_meshes() const -> size_t
     return count;
 }
 
+void Operations::imgui_asset_loads()
+{
+    if (m_context.asset_manager == nullptr) {
+        return;
+    }
+    const std::vector<std::shared_ptr<Asset_load_handle>> handles = m_context.asset_manager->get_load_handles();
+    if (handles.empty()) {
+        return;
+    }
+    if (!ImGui::CollapsingHeader("Loading", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+    ImGui::Indent(10.0f);
+    ERHE_DEFER( ImGui::Unindent(10.0f); );
+    for (const std::shared_ptr<Asset_load_handle>& handle : handles) {
+        ImGui::PushID(handle.get());
+        ERHE_DEFER( ImGui::PopID(); );
+        const std::string name  = erhe::file::to_string(handle->get_path().filename());
+        const std::string state = handle->is_cancel_requested() ? "cancelling" : c_str(handle->get_state());
+        ImGui::ProgressBar(handle->get_progress(), ImVec2{-1.0f, 0.0f}, fmt::format("{} - {}", name, state).c_str());
+        // An in-flight load has no operation to undo yet (plan 4), so
+        // cancelling is the only thing the user can do to it.
+        if (!handle->is_settled() && !handle->is_cancel_requested()) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Cancel")) {
+                handle->request_cancel();
+            }
+        }
+        const std::string error = handle->get_error();
+        if (!error.empty()) {
+            ImGui::TextUnformatted(error.c_str());
+        }
+    }
+}
+
 void Operations::imgui()
 {
     ERHE_PROFILE_FUNCTION();
+
+    imgui_asset_loads();
 
     Property_editor& p = m_property_editor;
     p.reset();

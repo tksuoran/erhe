@@ -116,6 +116,10 @@ erhe_target_sources_grouped(
     asset_browser/asset_browser.hpp
     assets/asset_key.cpp
     assets/asset_key.hpp
+    assets/asset_load_task.cpp
+    assets/asset_load_task.hpp
+    assets/asset_load_tick_context.cpp
+    assets/asset_load_tick_context.hpp
     assets/asset_manager.cpp
     assets/asset_manager.hpp
     assets/asset_paths.cpp
@@ -126,6 +130,8 @@ erhe_target_sources_grouped(
     assets/asset_reference_config.hpp
     assets/asset_workflow.cpp
     assets/asset_workflow.hpp
+    assets/gltf_load_task.cpp
+    assets/gltf_load_task.hpp
     brushes/brush.cpp
     brushes/brush.hpp
     brushes/brush_placement.cpp

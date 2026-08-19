@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -56,6 +57,20 @@ public:
     // glTF 2.1).
     auto get_or_load(const std::filesystem::path& path) -> std::shared_ptr<Prefab>;
 
+    // Asynchronous form (doc/async-asset-loading-plan.md step 7): the file is
+    // read, parsed and made GPU-resident off the tick, then the template is
+    // finished on the main thread and on_ready is called with it.
+    //
+    // on_ready runs on the MAIN thread. It is called INLINE and immediately
+    // when the prefab is already cached, when the path is bad, or when
+    // asynchronous loading is off (in which case this falls back to the
+    // blocking get_or_load) - so callers must not assume it is deferred.
+    // A null prefab means the load failed.
+    void get_or_load_async(
+        const std::filesystem::path&                       path,
+        std::function<void(const std::shared_ptr<Prefab>&)> on_ready
+    );
+
     // Re-parse a previously loaded prefab from its source file and propagate
     // the change everywhere: templates of prefabs that (transitively)
     // reference the reloaded prefab are rebuilt in dependency order, then
@@ -75,6 +90,22 @@ private:
     // root inside the (already constructed) Prefab, finalize meshes and
     // resolve nested external assets. Shared by get_or_load and reload.
     auto load_template(Prefab& prefab) -> bool;
+
+    // The MAIN-THREAD tail of load_template, shared with the asynchronous
+    // path: hosts the parsed template under a fresh holding scene, finalizes
+    // the meshes and resolves nested external assets. template_root must be
+    // the unhosted node the parse filled.
+    //
+    // NOTE the nested external-asset resolution inside this is still
+    // SYNCHRONOUS: it recurses through get_or_load, so a prefab that
+    // references further prefabs loads those inline here. Plan 2.10's
+    // dependent child tasks would lift that; the top-level parse - which
+    // dominates - is already off the main thread.
+    auto finish_load_template(
+        Prefab&                                   prefab,
+        erhe::gltf::Gltf_data&&                   gltf_data,
+        const std::shared_ptr<erhe::scene::Node>& template_root
+    ) -> bool;
 
     // Record that the prefab currently being loaded (top of the active load
     // stack, if any) directly references referenced_path. Feeds reload's
