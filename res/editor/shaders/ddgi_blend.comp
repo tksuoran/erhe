@@ -100,7 +100,7 @@ void main()
         VALUE_TYPE sum         = VALUE_TYPE(0.0);
         float      weight_sum  = 0.0;
         for (uint ray = 0u; ray < ray_count; ++ray) {
-            vec4  ray_data      = imageLoad(i_ray_data, ivec2(int(ray), int(probe_slot)));
+            vec4  ray_sample      = imageLoad(i_ray_data, ivec2(int(ray), int(probe_slot)));
             vec3  ray_direction = normalize(rotate_by_quaternion(ddgi.random_rotation, spherical_fibonacci(ray, ray_count)));
             float cos_weight    = dot(direction, ray_direction);
 #if ERHE_DDGI_BLEND_DISTANCE
@@ -113,7 +113,7 @@ void main()
             // Backface hits store a negative distance; taking the magnitude
             // keeps them in the statistics (they are what makes a probe
             // behind a wall report a short distance).
-            float distance_value = min(abs(ray_data.w), max_distance);
+            float distance_value = min(abs(ray_sample.w), max_distance);
             sum        += vec2(distance_value, distance_value * distance_value) * weight;
             weight_sum += weight;
 #else
@@ -122,10 +122,10 @@ void main()
             }
             // Backface hits carry no radiance and must not dilute the
             // estimate either - skip them entirely.
-            if (ray_data.w < 0.0) {
+            if (ray_sample.w < 0.0) {
                 continue;
             }
-            sum        += ray_data.rgb * cos_weight;
+            sum        += ray_sample.rgb * cos_weight;
             weight_sum += cos_weight;
 #endif
         }
