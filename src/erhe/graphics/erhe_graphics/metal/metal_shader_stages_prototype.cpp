@@ -2,6 +2,7 @@
 #include "erhe_graphics/metal/metal_acceleration_structure.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/metal/metal_bind_group_layout.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/glsl_format_source.hpp"
 #include "erhe_graphics/graphics_log.hpp"
@@ -153,17 +154,28 @@ auto compile_spirv_to_mtl_function(
                     compiler.add_msl_resource_binding(rb);
                     arg_offset += 2 * array_size;
                 } else {
-                    // Dedicated sampler: keep in discrete set 0 and assign a
-                    // direct [[texture(N)]]/[[sampler(N)]] index that matches
-                    // the SPIRV binding so set_sampled_image() can use the
-                    // same number on the host side.
+                    // Dedicated sampler: keep in discrete set 0 with a direct
+                    // [[texture(N)]]/[[sampler(M)]] binding.
+                    //
+                    // The texture index matches the SPIRV binding, so
+                    // set_sampled_image() can use the same number on the host
+                    // side. The sampler index cannot: Metal only accepts
+                    // [[sampler(M)]] for M in [0, 15], while the SPIRV binding
+                    // is offset past the buffer bindings and runs out of that
+                    // range with far fewer than 16 samplers declared. So the
+                    // sampler index comes from the bind group layout's compact
+                    // dedicated-sampler allocation, which set_sampled_image()
+                    // queries the same way.
+                    const uint32_t msl_sampler = (bind_group_layout != nullptr)
+                        ? bind_group_layout->get_impl().get_metal_sampler_slot(binding)
+                        : binding;
                     spirv_cross::MSLResourceBinding rb{};
                     rb.stage       = exec_model;
                     rb.desc_set    = 0;
                     rb.binding     = binding;
                     rb.count       = array_size;
                     rb.msl_texture = binding;
-                    rb.msl_sampler = binding;
+                    rb.msl_sampler = msl_sampler;
                     compiler.add_msl_resource_binding(rb);
                 }
             }

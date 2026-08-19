@@ -2,11 +2,18 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/shader_resource.hpp"
 
+#include "erhe_verify/verify.hpp"
+
 #include <algorithm>
+#include <vector>
 
 namespace erhe::graphics {
 
 namespace {
+
+// Metal's per-stage limit on directly bound sampler states: [[sampler(N)]]
+// requires 0 <= N <= 15.
+constexpr uint32_t c_metal_max_dedicated_samplers = 16;
 
 [[nodiscard]] auto binding_has_texture_heap_sampler(const Bind_group_layout_create_info& create_info) -> bool
 {
@@ -92,6 +99,30 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
         }
     }
 
+    // Allocate the compact Metal sampler index for every dedicated sampler.
+    // See Bind_group_layout_impl::get_metal_sampler_slot for why the GLSL
+    // binding number cannot be reused as the [[sampler(N)]] index.
+    {
+        std::vector<uint32_t> dedicated_sampler_bindings;
+        for (const Bind_group_layout_binding& binding : create_info.bindings) {
+            if ((binding.type == Binding_type::combined_image_sampler) && !binding.is_texture_heap) {
+                dedicated_sampler_bindings.push_back(binding.binding_point + m_sampler_binding_offset);
+            }
+        }
+        std::sort(dedicated_sampler_bindings.begin(), dedicated_sampler_bindings.end());
+        uint32_t next_slot = 0;
+        for (const uint32_t glsl_binding : dedicated_sampler_bindings) {
+            m_metal_sampler_slots[glsl_binding] = next_slot;
+            ++next_slot;
+        }
+        // Metal caps [[sampler(N)]] at N < 16 per stage. A layout that declares
+        // more dedicated samplers than that cannot be expressed, and would
+        // otherwise surface as an opaque MSL compile error ("'sampler'
+        // attribute parameter is out of bounds") much later, in every shader
+        // built from this layout.
+        ERHE_VERIFY(next_slot <= c_metal_max_dedicated_samplers);
+    }
+
     // Metal argument-buffer path: if no caller-supplied binding declared
     // a texture-heap sampler (and no dedicated binding has already
     // claimed the s_texture name), add a default s_texture so Metal's
@@ -135,6 +166,13 @@ auto Bind_group_layout_impl::get_sampler_binding_offset() const -> uint32_t
 auto Bind_group_layout_impl::get_default_uniform_block() const -> const Shader_resource&
 {
     return m_default_uniform_block;
+}
+
+auto Bind_group_layout_impl::get_metal_sampler_slot(const uint32_t glsl_binding) const -> uint32_t
+{
+    const auto i = m_metal_sampler_slots.find(glsl_binding);
+    ERHE_VERIFY(i != m_metal_sampler_slots.end());
+    return i->second;
 }
 
 } // namespace erhe::graphics

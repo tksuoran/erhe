@@ -8,6 +8,7 @@
 #include "erhe_graphics/metal/metal_shader_stages.hpp"
 #include "erhe_graphics/metal/metal_texture.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/metal/metal_bind_group_layout.hpp"
 #include "erhe_graphics/command_buffer.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_graphics/compute_pipeline_state.hpp"
@@ -145,21 +146,24 @@ void Compute_command_encoder_impl::set_storage_image(uint32_t binding_point, con
 
 void Compute_command_encoder_impl::set_sampled_image(uint32_t binding_point, const Texture& texture, const Sampler& sampler)
 {
-    // Dedicated named samplers are direct [[texture(N)]]/[[sampler(N)]]
-    // bindings on Metal; the slot is the user-facing binding_point plus the
-    // bind group layout's sampler binding offset, exactly like
-    // Render_command_encoder_impl::set_sampled_image (the lightmap gather
-    // compute pass samples its G-buffer and sky LUTs this way).
+    // Dedicated named samplers are direct [[texture(N)]]/[[sampler(M)]]
+    // bindings on Metal; the texture slot is the user-facing binding_point plus
+    // the bind group layout's sampler binding offset and the sampler slot is
+    // the layout's compact dedicated-sampler index (Metal caps [[sampler(M)]]
+    // at M <= 15), exactly like Render_command_encoder_impl::set_sampled_image
+    // (the lightmap gather compute pass samples its G-buffer and sky LUTs this
+    // way).
     ERHE_VERIFY(m_bind_group_layout != nullptr);
-    const uint32_t metal_slot = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+    const uint32_t glsl_binding = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+    const uint32_t sampler_slot = m_bind_group_layout->get_impl().get_metal_sampler_slot(glsl_binding);
 
     MTL::Texture*      mtl_texture = texture.get_impl().get_mtl_texture();
     MTL::SamplerState* mtl_sampler = sampler.get_impl().get_mtl_sampler();
     if ((mtl_texture == nullptr) || (mtl_sampler == nullptr)) {
         return;
     }
-    m_encoder->setTexture     (mtl_texture, static_cast<NS::UInteger>(metal_slot));
-    m_encoder->setSamplerState(mtl_sampler, static_cast<NS::UInteger>(metal_slot));
+    m_encoder->setTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
+    m_encoder->setSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
 }
 
 void Compute_command_encoder_impl::set_acceleration_structure(uint32_t binding_point, const Acceleration_structure& acceleration_structure)

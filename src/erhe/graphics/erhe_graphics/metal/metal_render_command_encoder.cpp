@@ -7,6 +7,7 @@
 #include "erhe_graphics/metal/metal_helpers.hpp"
 #include "erhe_graphics/metal/metal_device.hpp"
 #include "erhe_graphics/bind_group_layout.hpp"
+#include "erhe_graphics/metal/metal_bind_group_layout.hpp"
 #include "erhe_graphics/buffer.hpp"
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/draw_indirect.hpp"
@@ -71,21 +72,28 @@ void Render_command_encoder_impl::set_sampled_image(uint32_t binding_point, cons
     }
     ERHE_VERIFY(m_bind_group_layout != nullptr);
 
-    // Scalar named samplers are emitted as direct [[texture(N)]]/[[sampler(N)]]
-    // bindings on Metal (see metal_shader_stages_prototype.cpp). The Metal
-    // slot index is computed the same way SPIRV-Cross sees it: the user-
-    // facing binding_point plus the bind group layout's sampler binding
-    // offset (= one past the highest buffer binding). The shader emitter's
-    // ERHE_SAMPLER_BINDING_OFFSET macro applies the same offset.
-    const uint32_t metal_slot = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+    // Scalar named samplers are emitted as direct [[texture(N)]]/[[sampler(M)]]
+    // bindings on Metal (see metal_shader_stages_prototype.cpp).
+    //
+    // The texture slot is the GLSL binding number, computed the same way
+    // SPIRV-Cross sees it: the user-facing binding_point plus the bind group
+    // layout's sampler binding offset (= one past the highest buffer binding).
+    // The shader emitter's ERHE_SAMPLER_BINDING_OFFSET macro applies the same
+    // offset.
+    //
+    // The sampler slot is *not* that number: Metal caps [[sampler(M)]] at
+    // M <= 15, so dedicated samplers are allocated a separate compact index by
+    // the bind group layout, which the shader-compile path pins to match.
+    const uint32_t glsl_binding = binding_point + m_bind_group_layout->get_sampler_binding_offset();
+    const uint32_t sampler_slot = m_bind_group_layout->get_impl().get_metal_sampler_slot(glsl_binding);
 
     MTL::Texture*      mtl_texture = texture.get_impl().get_mtl_texture();
     MTL::SamplerState* mtl_sampler = sampler.get_impl().get_mtl_sampler();
     if (mtl_texture == nullptr || mtl_sampler == nullptr) {
         return;
     }
-    encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(metal_slot));
-    encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(metal_slot));
+    encoder->setFragmentTexture     (mtl_texture, static_cast<NS::UInteger>(glsl_binding));
+    encoder->setFragmentSamplerState(mtl_sampler, static_cast<NS::UInteger>(sampler_slot));
 }
 
 void Render_command_encoder_impl::set_render_pipeline(const Render_pipeline& pipeline)
