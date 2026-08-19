@@ -11,16 +11,20 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 - `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers; plus `Gltf_physics_data physics`.
 - `Gltf_physics_data` (`gltf_physics.hpp`) -- Plain-data 1:1 carrier for the physics extensions: implicit shapes, physics materials, collision filters, joints, per-node body descriptions (motion / collider / trigger / joint), and export-only `synthesized_colliders` (colliders the exporter places on synthesized glTF child nodes: compound shape children, non-Y shape axes, non-node wrapper scales). Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
-- `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: graphics device, executor, image transfer, root node, mesh layer, file path.
-- `Image_transfer` -- GPU texture uploads through a private fixed-size (64 MiB) staging ring and its own transfer command buffer. When the ring fills, `flush()` submits + fence-waits + reclaims, so scene loads make progress with bounded staging memory even when no frames are rendered while loading. Destructor flushes.
+- `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/async-asset-loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
+- `Gltf_device_options` -- The two device-derived values the parse needs: the transcode format preference for KTX2/Basis images, and max sampler anisotropy.
+- `Gltf_image_residency` (`Gltf_data::image_residency`) -- The GPU half of image loading, split out of the parse. Holds the decoded pixels, the `Sampler_create_info`s and the material texture/sampler bindings the parse recorded. `create_samplers()` + `process_next_image()` / `process_next_image_into_frame()` create the objects and record the uploads; `bind_material_textures()` fills the material slots; `drain()` does all of it synchronously and flushes. After `parse_gltf` returns, `Gltf_data::images` and `::samplers` are EMPTY until residency runs.
+- `Image_transfer` -- GPU texture uploads, in one of two modes. `blocking_drain` (the original): a private fixed-size (64 MiB) staging ring and its own transfer command buffer; when the ring fills, `flush()` submits + fence-waits + reclaims, so loads make progress with bounded staging memory even when no frames are rendered. Required by callers with no frame loop (`src/example`, `src/rendering_test`, the OpenXR controller model loader). `frame_recording`: `upload_into_frame()` stages from the device ring and records copies into the caller's frame command buffer, returning `budget_exhausted` instead of blocking; the private ring is not allocated at all. Destructor flushes.
 
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
 - `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `Gltf_physics_data` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children/attachments, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0.
 - `Image_transfer(device)` -- Create image upload manager.
-- `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies.
-- `Image_transfer::flush()` -- Submit pending copies, wait for the GPU, reclaim staging.
+- `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies. `blocking_drain` mode only.
+- `Image_transfer::upload_into_frame(command_buffer, ..., remaining_budget_bytes)` -- Same, into the frame's command buffer, decrementing the caller's per-frame byte budget. `frame_recording` mode only. NOTE `Device::allocate_ring_buffer_entry` never refuses -- it spills a new ring buffer sized to the request -- so that budget is the only thing bounding staging memory in this mode.
+- `Image_transfer::flush()` -- Submit pending copies, wait for the GPU, reclaim staging. No-op in `frame_recording` mode.
+- `query_gltf_device_options(device)` -- Main-thread query filling `Gltf_device_options`.
 
 ## Dependencies
 - **erhe libraries:** `erhe::graphics` (private), `erhe::scene` (private), `erhe::primitive` (private), `erhe::geometry` (private), `erhe::file` (private), `erhe::log` (private), `erhe::profile` (private)
@@ -28,6 +32,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 
 ## Notes
 - Backend is selected at CMake time: `ERHE_GLTF_LIBRARY_FASTGLTF` or `ERHE_GLTF_LIBRARY_NONE`.
+- `parse_gltf` creates NO GPU objects at all -- not textures, not samplers. Keep it that way: it is what makes the editor's asynchronous loading safe (doc/async-asset-loading.md), and nothing will catch a regression automatically.
 - `gltf.hpp` is a dispatch header that includes the appropriate backend.
 - `Image_transfer` no longer records into the caller's frame command buffer: uploads go through its own transfer command buffer, submitted (and fence-waited) whenever the staging ring fills and at destruction. Images larger than the staging ring use a dedicated one-shot staging buffer.
 - fastgltf is pinned in the top-level CMakeLists to the `tksuoran/fastgltf` fork, which

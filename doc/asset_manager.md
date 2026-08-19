@@ -7,6 +7,11 @@ Code lives in `src/editor/assets/` (`asset_key`, `asset_reference`,
 specified in
 [`doc/gltf_extensions/ERHE_asset_reference.md`](gltf_extensions/ERHE_asset_reference.md).
 
+The manager is also the owner of **asynchronous loading** - `Asset_load_task`,
+`Asset_manager::tick()` and `queue_load()` - which is documented separately in
+[`async-asset-loading.md`](async-asset-loading.md). This document covers asset
+identity, ownership and the registry; that one covers how a file gets loaded.
+
 ## Requirement
 
 - An **asset reference** that holds (1) the identity of an asset - the
@@ -166,9 +171,11 @@ record type covers three flavors:
   scene's assets. Resolution against a scene record reads names/uids LIVE
   from the items (scene content is mutable), with the same
   uid-then-unique-name precedence.
-- **Parsed containers**: `get_or_load_container()` parses a glTF once
-  (free root node, no holding scene; container node trees are never
-  rendered) and builds per-type resolution maps, validating
+- **Parsed containers**: `get_or_load_container()` parses a glTF once,
+  **synchronously** - it is the one loading path asynchronous loading has not
+  converted; every other glTF entry point goes through an `Asset_load_task`.
+  It parses into a free root node with no holding scene (container node trees
+  are never rendered) and builds per-type resolution maps, validating
   identifiability up front - assets without a uid whose names are missing
   or duplicated are recorded as errors and cannot be acquired. File-scope
   types served from a parsed container are **material and animation**
@@ -194,7 +201,20 @@ and container loads never recurse.
 - `acquire(key)` is the only load path: builtin keys hit the builtin
   registry; file keys load the container on demand and resolve inside it;
   scene-local keys resolve by name through the registry and open scene
-  libraries. Repeated acquires of the same identity return THE copy.
+  libraries. Repeated acquires of the same identity return THE copy. It is
+  **synchronous load-or-fail**: a not-yet-loaded container is parsed here and
+  now, which is what the user-facing verbs (asset browser, `Scene_root`
+  context menu, `debug_acquire`) want.
+- `acquire_or_pending(key)` is the pending-capable form used by
+  `Asset_reference::resolve`: a container that is *loading* reports
+  `Asset_acquire_state::pending` with a null item rather than failing, so the
+  reference retries on a later frame instead of latching `failed`.
+  `Asset_reference` has a matching `Asset_resolve_state::pending`, and retry
+  cadences must ask `needs_resolve()` rather than comparing against
+  `unresolved`. This machinery exists but does not fire yet:
+  `get_or_load_container` is still synchronous, so `acquire` never actually
+  returns pending. See the future work in
+  [`async-asset-loading.md`](async-asset-loading.md).
 - `create<T>(defining_scene, args...)` is the in-editor creation funnel:
   every site that brings a new managed asset into existence constructs it
   through the manager, naming the scene whose container record is the
@@ -433,3 +453,6 @@ Standing checks:
 - Renaming or moving a container file on disk leaves stored keys pointing
   at the old path; affected references fall back to their stubs with a
   warning until the file returns or the references are re-made.
+- `get_or_load_container` is still a blocking parse on the calling tick,
+  unlike every other glTF load; `acquire` therefore never reports `pending`
+  even though the state exists.

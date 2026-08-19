@@ -258,7 +258,9 @@ Returns: `{undo: [{description, error?}], redo: [{description, error?}], can_und
 
 ### get_async_status
 
-Get pending/running async operation counts.
+Get pending/running async operation counts. The scene is settled only when
+`pending`, `running`, `queued_operations`, `pending_scene_commits` and
+`asset_loads` are all 0.
 
 ```bash
 curl -X POST http://127.0.0.1:8080/mcp \
@@ -266,7 +268,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_async_status","arguments":{}}}'
 ```
 
-Returns: `{pending, running}`
+Returns: `{pending, running, queued_operations, pending_scene_commits, asset_loads, lightmap_prepare?}`
 
 ## Physics Tools
 

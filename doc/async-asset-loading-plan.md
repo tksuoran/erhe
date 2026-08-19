@@ -5,8 +5,68 @@ Goal: a glTF load never blocks the main loop. Loading becomes a task owned by
 ticking, stays interactive and keeps presenting frames while a scene streams
 in.
 
-Status: plan only, nothing implemented. Passed independent review. Revision 7 (incorporates six rounds
-of independent review; every claim below is cited to the code it depends on).
+Status: **steps 1-5 complete; steps 6-8 substantially complete** (see
+"Implementation status" below). Passed independent review. Revision 7
+(incorporates six rounds of independent review; every claim below is cited to
+the code it depends on).
+
+## 0. Implementation status
+
+Done and verified:
+
+- **1 tick skeleton** - `Asset_load_tick_context`, `Frame_load_budget`,
+  `Asset_manager::tick()` at `editor.cpp`, `Load_config` v2 with the 2.4
+  budget fields.
+- **2 pending state** - `Asset_resolve_state::pending`,
+  `Asset_reference::needs_resolve()`, `Asset_manager::acquire_or_pending()`,
+  the `asset_loads` term in `get_async_in_flight_count()` / `get_async_status`.
+  The handle-facing half was deliberately folded into step 6 rather than
+  shipped inert.
+- **3 GPU out of the parse** - `Gltf_image_residency`; `parse_gltf` is now
+  structurally device-free (`Gltf_parse_arguments` carries `Gltf_device_options`
+  by value and holds no `Device&` / `Image_transfer&`), samplers included.
+- **4 frame-recorded uploads** - `Image_transfer_mode::frame_recording` +
+  `upload_into_frame`, blocking-drain mode kept for example / rendering_test /
+  controller_visualization.
+- **5 loader queue, tickets, gates** - `Buffer_transfer_queue::Ticket` /
+  `flush_budgeted` / watermark, `Mesh_memory::Loader_buffer_sink` +
+  `flush_budgeted`, and the pool-free gate.
+- **6 `Gltf_load_task`** - scan / parse / build on workers, budgeted
+  residency, watermark-gated publish; modes for erhe-scene open, foreign-glTF
+  open, import-into-scene and prefab-template load. Cancellation at phase
+  boundaries, on scene close, and a blocking reap at application exit.
+- **7 entry points** - `--scene` / File > Load Scene / MCP `load_scene`,
+  foreign glTF open, `import_gltf` (asset browser + MCP), and prefab
+  instantiate (viewport drop, hierarchy drop, asset browser, MCP).
+- **8 UI** - per-load progress + Cancel in the Operations window; the asset
+  browser's `ensure_scanned` runs on a worker.
+
+Not done, and why:
+
+- **Dependent child tasks (2.10).** `Prefab_library`'s nested
+  `resolve_external_assets` recursion and `Asset_manager::get_or_load_container`
+  are still synchronous, so the dependency graph, its refcounting and the
+  graph-based cycle detection do not exist; `m_active_load_stack` still does
+  cycle detection on the call stack, which remains correct because the nested
+  loads are synchronous. `Prefab_library::reload`'s empty-stack verify is
+  therefore still valid and untouched. The top-level parse - which dominates -
+  is off the main thread.
+- **Suspend/resume of phase 1b (2.9).** Because `get_or_load_container` is
+  still synchronous, `acquire` never actually returns `pending`, so the
+  parse-time substitution sites never see it and cannot silently turn
+  references into copies.
+- **`wait_for_idle` as a named API.** The `asset_loads` term in
+  `get_async_status` plus the existing poll idiom covers it; the Python
+  pollers use it.
+- **Publish slicing.** Publish is still one atomic main-thread step
+  (`max_publish_items_per_frame` is unused). 2.7 accepts this.
+- **MCP `reload_prefab` / `load_asset_file`** are still synchronous.
+
+Determinism note not in section 4: **glTF 2.1 uids and ERHE_brushes export
+ordering are already nondeterministic run to run**, independently of this
+work - a source file with no uids gets fresh random ones on every import, and
+the brush extra-mesh order after an import varies between runs of the SAME
+configuration. Comparisons against a blocking baseline must ignore both.
 
 ## 1. Where we are today
 

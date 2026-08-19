@@ -43,8 +43,12 @@ allocations come in; nothing is reserved up front.
   pool; see "Lockstep invariant" below for why.
 - `std::vector<Buffer_pool> m_index_pools` -- one pool per index `Format`.
   Grown lazily by `allocate_index_buffer_range`.
-- `erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue` -- collects
-  enqueued vertex/index uploads; `flush(command_buffer)` submits them.
+- `erhe::graphics::Buffer_transfer_queue m_buffer_transfer_queue` -- the
+  INTERACTIVE queue: collects enqueued vertex/index uploads;
+  `flush(command_buffer)` submits all of them.
+- `erhe::graphics::Buffer_transfer_queue m_loader_transfer_queue` +
+  `Loader_buffer_sink m_loader_sink` -- the LOADER queue, drained a budgeted
+  amount by `flush_budgeted()`. See "Two transfer queues" below.
 
 The constructor allocates no GPU buffers. It populates the two vertex format
 members and pre-warms one `Vertex_input_entry` per format; the pools start
@@ -53,7 +57,33 @@ empty.
 `make_primitive_buffer_info()` returns a `Buffer_info` configured for the
 non-skinned vertex format with 32-bit indices, with `*this` as both the
 vertex and index buffer sink. Every editor call site that builds a primitive
-without skinning data uses this helper.
+without skinning data uses this helper. It takes a `Mesh_memory_queue`
+selector defaulting to `interactive`; passing `loader` swaps in
+`m_loader_sink` instead (a `Buffer_info` holds a sink *reference* and
+`Mesh_memory` itself IS the interactive sink, so the selector is a choice of
+sink object, not a parameter on the queue).
+
+### Two transfer queues
+
+Asynchronous asset loading (see
+[`async-asset-loading.md`](async-asset-loading.md)) needs vertex/index uploads
+to be spread over frames, but almost every other caller relies on the opposite
+guarantee. Hence two queues:
+
+- **interactive** -- full drain in `flush()`. "Enqueued implies uploaded by
+  end of frame" holds, which is what lets a caller build a mesh and draw it in
+  the SAME command buffer with no gate at all (rendertarget meshes, brush
+  previews, the scene builder, the init-command-buffer paths of `example` and
+  `rendering_test`).
+- **loader** -- partial FIFO drain in `flush_budgeted(command_buffer, bytes)`,
+  called only from `Asset_manager::tick`. "Enqueued" does NOT imply
+  "uploaded", so the rule is: **only traffic whose publish gates on the
+  watermark may use this queue.**
+
+`Buffer_transfer_queue::enqueue` returns a monotonic `Ticket`; a drain records
+the highest ticket drained as `get_watermark()`. A loader consumer snapshots
+`get_last_ticket()` when it finishes enqueuing and must not draw until
+`get_watermark()` has reached it.
 
 ### Buffer_pool
 
@@ -120,8 +150,26 @@ Geometry build code calls into the sinks via `Buffer_info`:
 - `vertex_writer_ready` / `index_writer_ready` -- same path for the writer
   flow that drains a `Vertex_buffer_writer` / `Index_buffer_writer`.
 
-`flush(command_buffer)` drains the transfer queue. Callers schedule this once
-per frame around mesh uploads.
+`flush(command_buffer)` drains the INTERACTIVE transfer queue in full, and
+also applies pending pool frees (below). Callers schedule this once per frame
+around mesh uploads. `flush_budgeted(command_buffer, max_bytes)` drains only
+the loader queue and is called only from `Asset_manager::tick`.
+
+### Frame-safe frees, and the loader free gate
+
+`flush()` collects the ranges retired since the last call and registers a
+device frame-completion handler for them, so a range is never freed while a
+frame in flight may still read it.
+
+The handler does not free directly: the pools are **shared** between the two
+transfer queues, so a range retired by the interactive path can still be the
+target of a queued LOADER write. Freeing it would let it be re-allocated and
+re-enqueued while that older write is pending, and the stale write would land
+last. The handler therefore parks the batch in `m_pending_frees` together with
+the loader queue's ticket high-water mark, and a later `flush()` applies the
+batches whose ticket the loader watermark has passed. With no loader traffic
+this simply means frees land one `flush()` later than the frame completion --
+strictly safer, never earlier.
 
 ## Render bucketing
 

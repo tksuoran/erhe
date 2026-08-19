@@ -120,6 +120,7 @@ Per-library configuration structs are loaded from individual JSON files in `conf
 - `physics/` -- `Physics_tool` (drag/push/pull), `Physics_window` (settings UI), collision shape generation
 - `create/` -- `Create` tool and shape generators (box, cone, torus, UV sphere)
 - `parsers/` -- glTF, Wavefront OBJ, Geogram, and JSON polyhedra importers
+- `assets/` -- `Asset_manager` (identity, ownership, registry: `doc/asset_manager.md`) and the asynchronous load tasks (`doc/async-asset-loading.md`)
 - `graphics/` -- `Icon_set` (icon atlas), `Thumbnails` (material/brush previews), gradients
 - `transform/` -- Transform gizmo system (`Transform_tool` + `Move_tool`, `Rotate_tool`, `Scale_tool`)
 - `xr/` -- OpenXR headset view, hand tracking, controller visualization
@@ -169,6 +170,23 @@ Each `Scene_root` owns a physics world. `Node_physics` is a `Node_attachment` wr
 ### Scene Serialization
 
 Scenes persist as single erhe-authored glTF files (`.glb`; `ERHE_scene` in `extensionsUsed` marks the file): one `export_gltf()` call carries render content, physics (KHR_physics_rigid_bodies), prefab external-asset references, texture sources, animations, and the editor-domain `ERHE_*` extension payloads (`parsers/gltf.hpp` `save_scene_gltf` / `open_scene_gltf`; full reference `doc/scene_serialization.md`, design history `doc/gltf-scene-roundtrip-plan.md`). Collision shape types (box, sphere, cylinder, capsule, compound) are persisted and faithfully recreated on load instead of degrading to convex hulls. The legacy `.erhescene` directory-bundle format (scene.json via `erhe_codegen` structs) was removed in phase 5 of the plan; the scene codegen unit now generates only `Gltf_source_reference` and `Scene_settings`.
+
+### Asynchronous asset loading
+
+A glTF load is an `Asset_load_task` owned by `Asset_manager` and advanced a
+bounded amount from `Asset_manager::tick()`, called from `Editor::tick()` right
+after `Scene_commit_queue::flush()`. Scan, parse and `Buffer_mesh` build run on
+workers; texture residency is spread over frames under `Frame_load_budget`;
+vertex/index bytes go through a second, budget-drained `Mesh_memory` transfer
+queue and publish is gated on its watermark. Converted entry points: erhe-scene
+open, foreign-glTF open, import-into-scene, and prefab template load
+(`assets/asset_load_task.hpp`, `assets/gltf_load_task.hpp`). Master switch
+`Load_config::async_gltf_load`, default on; with it off every path falls back
+to the original blocking code, which is kept for comparison. Full reference:
+`doc/async-asset-loading.md`, design history `doc/async-asset-loading-plan.md`.
+
+`Asset_manager::get_or_load_container()` and `Prefab_library`'s nested
+external-asset resolution are the parts that are still synchronous.
 
 ### Item Locking and Tagging
 

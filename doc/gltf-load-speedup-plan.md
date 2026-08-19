@@ -1,5 +1,14 @@
 # glTF load/import speedup plan
 
+**Superseded in part.** This plan made the *blocking* load faster by deferring
+work to background tasks. Loading is now also *asynchronous* - the read, scan,
+parse and `Buffer_mesh` build no longer run on the main thread at all - see
+[`async-asset-loading.md`](async-asset-loading.md). The deferral options this
+plan added (`deferred_raytrace`, `deferred_edge_lines`, `parallel_gltf_parse`)
+are unchanged and still apply; `finalize_imported_meshes` still runs on the
+main thread, but only its scene-side half, because the buffer-mesh build moved
+to a worker.
+
 **Status (2026-08-04): implemented** (all three parts + `Load_config`
 options, defaults on). Measured on hintze-hall_-_vr_tour_1k.glb, headless
 Vulkan Debug build: blocking load time 139 s -> 10 s (parse 1105 ms -> 349 ms;
