@@ -183,6 +183,15 @@ auto Command_buffer_impl::begin_swapchain(const Frame_begin_info& frame_begin_in
         return false;
     }
 
+    // Bound the number of presented-but-uncompleted frames before acquiring
+    // another drawable. When presentation is stalled this returns false rather
+    // than queueing yet another frame behind the stuck one - see
+    // Device_impl::wait_for_presented_frame_slot.
+    if (!m_device->get_impl().wait_for_presented_frame_slot()) {
+        out_frame_state.should_render = false;
+        return false;
+    }
+
     const bool ok = swapchain->get_impl().begin_frame(frame_begin_info);
     out_frame_state.should_render = ok;
     if (ok) {
@@ -557,6 +566,14 @@ void Command_buffer_impl::memory_barrier(Memory_barrier_mask /*barriers*/)
     // here, encode an MTL::Event wait/signal via m_implicit_gpu_event.
     // Today no caller relies on that, so keep this as a no-op and let
     // the fence and cross-cb queue order carry the burden.
+}
+
+void Command_buffer_impl::release_mtl_command_buffer() noexcept
+{
+    if (m_mtl_command_buffer != nullptr) {
+        m_mtl_command_buffer->release();
+        m_mtl_command_buffer = nullptr;
+    }
 }
 
 auto Command_buffer_impl::get_mtl_command_buffer() const noexcept -> MTL::CommandBuffer*

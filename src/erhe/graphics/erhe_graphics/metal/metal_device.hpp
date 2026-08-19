@@ -3,12 +3,15 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/metal/metal_pixel_format_table.hpp"
 #include "erhe_graphics/ring_buffer.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/shader_monitor.hpp"
 
 #include <array>
 #include <functional>
 #include <memory>
+#include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 typedef int GLint;
@@ -73,6 +76,26 @@ public:
     // drain the queue under m_completion_mutex and recycle ring buffer
     // ranges pinned to those frames.
     void notify_command_buffer_completed(uint64_t frame_index);
+
+    // Presented-frame throttle. A command buffer that presents a drawable
+    // does not complete until the compositor has consumed that drawable, so
+    // when presentation stalls these never retire. Without a bound the main
+    // loop keeps submitting frames until the command queue's in-flight limit
+    // (maxCommandBufferCount, 64) is reached, at which point
+    // MTL::CommandQueue::commandBuffer() blocks inside the driver and the
+    // process is wedged until presentation resumes - observed live: a
+    // presentation stall left the editor hung in Command_buffer::begin() for
+    // two hours, until a display wake released the drawables and all 64
+    // queued command buffers drained at once.
+    //
+    // begin_swapchain waits here instead: normal FIFO backpressure at
+    // s_max_frames_in_flight, and if presentation is not progressing the wait
+    // times out and the frame is reported as non-renderable, so the tick keeps
+    // running (input, UI, non-present GPU work) and recovers as soon as
+    // presentation resumes.
+    [[nodiscard]] auto wait_for_presented_frame_slot() -> bool;
+    void               note_presented_frame_submitted();
+    void               note_presented_frame_completed();
 
     void resize_swapchain_to_window();
     void start_frame_capture       ();
@@ -200,6 +223,20 @@ private:
     // "2-frame delay" heuristic that assumed frame N-2 was GPU-done.
     std::mutex                       m_completion_mutex;
     std::vector<uint64_t>            m_pending_completed_frames;
+
+    // Autorelease pool covering one device frame: opened by wait_frame(),
+    // drained by end_frame(). Every command buffer, command encoder and
+    // drawable metal-cpp hands out during the frame is autoreleased into
+    // it; without it they are never deallocated and the command queue runs
+    // out of in-flight slots (see Scoped_transient_object_pool).
+    std::optional<Scoped_transient_object_pool> m_frame_object_pool;
+
+    // Frames that presented a drawable and have not completed yet. See
+    // wait_for_presented_frame_slot().
+    static constexpr int     s_max_frames_in_flight{3};
+    std::mutex               m_presented_frames_mutex;
+    std::condition_variable  m_presented_frames_cv;
+    int                      m_presented_frames_in_flight{0};
     MTL::Device*             m_mtl_device          {nullptr};
     MTL::CommandQueue*       m_mtl_command_queue   {nullptr};
     MTL::SamplerState*       m_default_sampler_state{nullptr};

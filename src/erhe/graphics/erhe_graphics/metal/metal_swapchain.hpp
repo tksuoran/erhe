@@ -29,6 +29,12 @@ public:
 
     [[nodiscard]] auto get_current_drawable() const -> CA::MetalDrawable*;
 
+    // Releases the reference taken in begin_frame(). Called by
+    // Device_impl::submit_command_buffers once presentDrawable has been
+    // encoded - the drawable must not be held past that point, or the
+    // layer's small drawable pool runs dry.
+    void clear_current_drawable();
+
 private:
     Device_impl&      m_device_impl;
     Surface_impl&     m_surface_impl;

@@ -8,6 +8,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/ring_buffer_range.hpp"
+#include "erhe_graphics/scoped_transient_object_pool.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_verify/verify.hpp"
@@ -68,6 +69,11 @@ void Image_transfer::flush()
     if (m_command_buffer == nullptr) {
         return;
     }
+    // Uploads run outside the device frame (and possibly off the main
+    // thread), so the driver-owned temporaries created here - the command
+    // buffer, the blit encoders - need a pool of their own. See
+    // Scoped_transient_object_pool.
+    erhe::graphics::Scoped_transient_object_pool object_pool{};
     m_command_buffer->end();
     m_graphics_device.submit_command_buffer_and_wait(*m_command_buffer);
     m_command_buffer = nullptr;
@@ -138,6 +144,8 @@ void Image_transfer::upload(
 {
     const std::size_t byte_count = pixels.size();
     ERHE_VERIFY(byte_count > 0);
+
+    erhe::graphics::Scoped_transient_object_pool object_pool{};
 
     // Images larger than the whole staging ring take a dedicated one-shot
     // staging buffer instead (rare: e.g. 8k uncompressed sources). The

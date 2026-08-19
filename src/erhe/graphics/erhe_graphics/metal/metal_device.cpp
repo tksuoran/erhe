@@ -22,6 +22,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include "erhe_utility/align.hpp"
@@ -315,6 +316,15 @@ Device_impl::~Device_impl() noexcept
 auto Device_impl::wait_frame() -> bool
 {
     ERHE_VERIFY(m_state == Device_frame_state::idle);
+
+    // Open the frame's autorelease pool. Everything metal-cpp hands out
+    // autoreleased from here on - command buffers, command encoders,
+    // drawables - is drained by the matching end_frame(). Without this the
+    // command queue's in-flight slots are never recycled and commandBuffer()
+    // eventually blocks forever.
+    ERHE_VERIFY(!m_frame_object_pool.has_value());
+    m_frame_object_pool.emplace();
+
     m_state = Device_frame_state::waited;
     return true;
 }
@@ -398,6 +408,10 @@ auto Device_impl::end_frame() -> bool
 
     ++m_frame_index;
     m_state = Device_frame_state::idle;
+
+    // Drain the frame's autorelease pool last: the completion handlers
+    // above may still touch Metal objects that belong to it.
+    m_frame_object_pool.reset();
     return true;
 }
 
@@ -507,22 +521,49 @@ void Device_impl::submit_command_buffers(std::span<Command_buffer* const> comman
             CA::MetalDrawable* drawable = swapchain->get_current_drawable();
             if (drawable != nullptr) {
                 mtl_cb->presentDrawable(drawable);
+
+                // This cb now completes only once the compositor has consumed
+                // the drawable; count it against the presented-frame budget
+                // that begin_swapchain waits on.
+                note_presented_frame_submitted();
+                Device_impl* device_impl_ptr = this;
+                mtl_cb->addCompletedHandler(
+                    [device_impl_ptr](MTL::CommandBuffer*) {
+                        device_impl_ptr->note_presented_frame_completed();
+                    }
+                );
             }
+            swapchain->clear_current_drawable();
         }
         impl.clear_swapchain_used();
 
         mtl_cb->commit();
+
+        // Drop our reference now that the cb is committed: Metal keeps the
+        // command buffer alive until its completion handlers have run, and
+        // the queue only frees the in-flight slot the cb occupies when the
+        // cb deallocates. Holding the reference until the Command_buffer
+        // wrapper is swept at frame retire exhausted the queue's 64 slots
+        // during a glTF load (which submits many cbs while the frame index
+        // stands still) and deadlocked the next commandBuffer() call.
+        impl.release_mtl_command_buffer();
     }
 }
 
 void Device_impl::submit_command_buffer_and_wait(Command_buffer& command_buffer)
 {
     // Metal: commit the cb, then block until this cb (only) has completed.
+    // submit_command_buffers drops the Command_buffer's reference at commit,
+    // so take one of our own to wait on.
     MTL::CommandBuffer* mtl_cb = command_buffer.get_impl().get_mtl_command_buffer();
+    if (mtl_cb != nullptr) {
+        mtl_cb->retain();
+    }
     Command_buffer* command_buffers[] = { &command_buffer };
     submit_command_buffers(std::span<Command_buffer* const>{command_buffers});
     if (mtl_cb != nullptr) {
         mtl_cb->waitUntilCompleted();
+        mtl_cb->release();
     }
 }
 
@@ -571,6 +612,46 @@ void Device_impl::notify_command_buffer_completed(const uint64_t frame_index)
     m_pending_completed_frames.push_back(frame_index);
 }
 
+auto Device_impl::wait_for_presented_frame_slot() -> bool
+{
+    // One refresh period of backpressure is normal (the compositor releases a
+    // drawable per display refresh); anything past this timeout means
+    // presentation is not progressing at all.
+    constexpr std::chrono::milliseconds timeout{250};
+
+    std::unique_lock<std::mutex> lock{m_presented_frames_mutex};
+    const bool got_slot = m_presented_frames_cv.wait_for(
+        lock,
+        timeout,
+        [this]() { return m_presented_frames_in_flight < s_max_frames_in_flight; }
+    );
+    if (!got_slot) {
+        log_swapchain->warn(
+            "presentation stalled: {} presented frames still in flight after {} ms; skipping this frame's rendering",
+            m_presented_frames_in_flight,
+            timeout.count()
+        );
+    }
+    return got_slot;
+}
+
+void Device_impl::note_presented_frame_submitted()
+{
+    std::lock_guard<std::mutex> lock{m_presented_frames_mutex};
+    ++m_presented_frames_in_flight;
+}
+
+void Device_impl::note_presented_frame_completed()
+{
+    {
+        std::lock_guard<std::mutex> lock{m_presented_frames_mutex};
+        if (m_presented_frames_in_flight > 0) {
+            --m_presented_frames_in_flight;
+        }
+    }
+    m_presented_frames_cv.notify_all();
+}
+
 auto Device_impl::recreate_surface_for_new_window() -> bool
 {
     // Not applicable on Metal -- CAMetalLayer is recreated by the
@@ -594,12 +675,17 @@ void Device_impl::wait_idle()
     if (m_mtl_command_queue == nullptr) {
         return;
     }
-    MTL::CommandBuffer* command_buffer = m_mtl_command_queue->commandBuffer();
-    if (command_buffer == nullptr) {
-        return;
+    {
+        // The cb below is autoreleased; wait_idle is also called outside
+        // device frames (editor init), so it cannot rely on the frame pool.
+        Scoped_transient_object_pool object_pool{};
+        MTL::CommandBuffer* command_buffer = m_mtl_command_queue->commandBuffer();
+        if (command_buffer == nullptr) {
+            return;
+        }
+        command_buffer->commit();
+        command_buffer->waitUntilCompleted();
     }
-    command_buffer->commit();
-    command_buffer->waitUntilCompleted();
 
     // All prior cbs (including device-frame cbs) have now completed on
     // the GPU. Drain any pending frame-completion enqueues and flush

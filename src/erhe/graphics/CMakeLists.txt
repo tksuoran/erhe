@@ -68,6 +68,8 @@ erhe_target_sources_grouped(
     erhe_graphics/sampler.hpp
     erhe_graphics/scoped_debug_group.cpp
     erhe_graphics/scoped_debug_group.hpp
+    erhe_graphics/scoped_transient_object_pool.cpp
+    erhe_graphics/scoped_transient_object_pool.hpp
     erhe_graphics/scoped_gpu_zone.cpp
     erhe_graphics/scoped_gpu_zone.hpp
     erhe_graphics/shader_monitor.cpp

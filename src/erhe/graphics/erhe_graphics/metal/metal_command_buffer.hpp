@@ -71,6 +71,11 @@ public:
     // record/commit on this MTL::CommandBuffer. Returns nullptr if begin()
     // has not been called.
     [[nodiscard]] auto get_mtl_command_buffer  () const noexcept -> MTL::CommandBuffer*;
+    // Drops the reference taken in begin(). Called by
+    // Device_impl::submit_command_buffers right after commit: Metal keeps
+    // the cb alive until its completion handlers have run, and the queue
+    // frees the in-flight slot the cb holds only when it deallocates.
+    void release_mtl_command_buffer() noexcept;
     // Per-cb MTL::Fence for serializing encoders inside this cb. Replaces
     // the legacy device-frame-fence path on Device_impl. Each encoder
     // waitForFence at start and updateFence at end.
