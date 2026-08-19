@@ -97,6 +97,7 @@ Texture_heap_impl::Texture_heap_impl(
         // and arg_offset + info.array_size for samplers.
         m_array_base_texture_id = arg_offset;
         m_array_base_sampler_id = arg_offset + info.array_size;
+        m_slot_capacity         = info.array_size;
         arg_offset += 2 * info.array_size;
     }
 
@@ -161,6 +162,7 @@ void Texture_heap_impl::reset_heap(Command_buffer& command_buffer)
     m_textures.clear();
     m_samplers.clear();
     m_used_slot_count = 0;
+    m_reported_full   = false;
     m_dirty = true;
 }
 
@@ -175,6 +177,25 @@ auto Texture_heap_impl::allocate(const Texture* texture, const Sampler* sampler)
         if ((m_textures[i] == texture) && (m_samplers[i] == sampler)) {
             return static_cast<uint64_t>(i);
         }
+    }
+
+    // The argument buffer lays the texture array and the sampler array back to
+    // back, so slot m_slot_capacity would encode its texture on top of the
+    // first sampler entry. Refuse instead, matching the GL sampler-array and
+    // Vulkan descriptor-indexing paths; the caller falls back to the material's
+    // untextured path rather than tripping Metal's argument buffer validation.
+    if (m_used_slot_count >= m_slot_capacity) {
+        if (!m_reported_full) {
+            m_reported_full = true;
+            log_texture_heap->error(
+                "Texture heap full ({} slots); further material textures fall back to untextured. "
+                "Texture '{}' sampler '{}' was not allocated.",
+                m_slot_capacity,
+                texture->get_debug_label().string_view(),
+                sampler->get_debug_label().string_view()
+            );
+        }
+        return invalid_texture_handle;
     }
 
     m_textures.push_back(texture);

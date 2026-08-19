@@ -15,6 +15,17 @@ namespace {
 // requires 0 <= N <= 15.
 constexpr uint32_t c_metal_max_dedicated_samplers = 16;
 
+// Number of material (texture, sampler) pairs the argument-buffer texture heap
+// holds. Unlike the GL sampler-array path, this does NOT come out of the
+// per-stage sampler budget: dedicated samplers are direct
+// [[texture(N)]]/[[sampler(M)]] bindings while the heap lives in its own
+// argument-buffer index space, so the two never compete. Tier 2 argument
+// buffers (every Metal device erhe targets) allow far more than this; the value
+// matches the Vulkan descriptor-indexing path's
+// Texture_heap_impl::m_max_textures so a scene that fits on one backend fits on
+// the other. Texture_heap_impl refuses allocations past it.
+constexpr uint32_t c_metal_texture_heap_slot_count = 4096;
+
 [[nodiscard]] auto binding_has_texture_heap_sampler(const Bind_group_layout_create_info& create_info) -> bool
 {
     for (const Bind_group_layout_binding& binding : create_info.bindings) {
@@ -131,25 +142,14 @@ Bind_group_layout_impl::Bind_group_layout_impl(Device& device, const Bind_group_
         !binding_has_texture_heap_sampler(create_info) &&
         !binding_has_sampler_named(create_info, "s_texture"))
     {
-        uint32_t dedicated_sampler_count = 0;
-        for (const Bind_group_layout_binding& binding : create_info.bindings) {
-            if (binding.type == Binding_type::combined_image_sampler) {
-                dedicated_sampler_count += binding.descriptor_count;
-            }
-        }
-        const uint32_t max_units = device.get_info().max_per_stage_descriptor_samplers;
-        const uint32_t available = (dedicated_sampler_count < max_units) ? (max_units - dedicated_sampler_count) : 0;
-        if (available > 0) {
-            const uint32_t array_size = std::min(available, uint32_t{64});
-            m_default_uniform_block.add_sampler(
-                "s_texture",
-                Glsl_type::sampler_2d,
-                Sampler_aspect::color,
-                /*is_texture_heap=*/true,
-                /*dedicated_texture_unit=*/std::optional<uint32_t>{},
-                /*array_size=*/array_size
-            );
-        }
+        m_default_uniform_block.add_sampler(
+            "s_texture",
+            Glsl_type::sampler_2d,
+            Sampler_aspect::color,
+            /*is_texture_heap=*/true,
+            /*dedicated_texture_unit=*/std::optional<uint32_t>{},
+            /*array_size=*/c_metal_texture_heap_slot_count
+        );
     }
 }
 

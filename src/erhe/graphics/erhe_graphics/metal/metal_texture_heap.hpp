@@ -48,6 +48,16 @@ private:
     uint32_t                         m_array_base_texture_id{0};
     uint32_t                         m_array_base_sampler_id{0};
 
+    // Number of (texture, sampler) pairs the argument buffer's arrays can
+    // hold -- the array_size of the texture-heap sampler declaration. Slot
+    // index array_size would land on the first entry of the sampler array
+    // (m_array_base_sampler_id), so allocate() must refuse past this point;
+    // Metal's argument buffer validation catches the overrun as
+    // "Trying to set a Texture at index N but the argument buffer has a
+    // Sampler at this index".
+    std::size_t                      m_slot_capacity{0};
+    bool                             m_reported_full{false};
+
     // Per-frame state
     Ring_buffer_range                m_argument_buffer_range;
     bool                             m_dirty{true};
