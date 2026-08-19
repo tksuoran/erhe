@@ -396,9 +396,24 @@ void Text_renderer::render(
         1.0f
     );
 
-    // Allocate font texture in the heap (for bindless handle / descriptor
-    // indexing paths that read the handle from a UBO).
-    const uint64_t shader_handle = m_texture_heap->allocate(m_font->texture(), &m_nearest_sampler);
+    // Allocate the font texture in the heap only on the backends whose
+    // text.frag actually samples through the heap: GL bindless builds a
+    // sampler2D from the uvec2 handle, Vulkan indexes erhe_texture_heap[]
+    // with it. The GL sampler-array and Metal argument-buffer builds take
+    // the #else branch and sample the dedicated s_texture bound below by
+    // set_sampled_image(), so projection.texture is never read there.
+    //
+    // On Metal the dedicated s_texture binding also suppresses the implicit
+    // texture-heap sampler that Bind_group_layout_impl would otherwise add,
+    // leaving the heap with zero slots -- allocating from it would only
+    // report the heap as full.
+    const erhe::graphics::Texture_heap_path texture_heap_path = m_graphics_device.get_info().texture_heap_path;
+    const bool shader_reads_texture_heap =
+        (texture_heap_path == erhe::graphics::Texture_heap_path::opengl_bindless_textures) ||
+        (texture_heap_path == erhe::graphics::Texture_heap_path::vulkan_descriptor_indexing);
+    const uint64_t shader_handle = shader_reads_texture_heap
+        ? m_texture_heap->allocate(m_font->texture(), &m_nearest_sampler)
+        : uint64_t{0};
 
     encoder.set_viewport_rect(viewport.x, viewport.y, viewport.width, viewport.height);
     encoder.set_bind_group_layout(&m_bind_group_layout);
