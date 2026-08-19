@@ -4,6 +4,7 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -77,14 +78,28 @@ public:
     explicit Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup);
     ~Primitive_shape() noexcept;
 
-    // Geometry creation and the deferred-finalize prepare/commit steps are
-    // serialized on an internal mutex: deferred glTF finalize tasks run
-    // make_geometry() on executor workers while on-demand callers (physics
-    // import, geometry operations, properties) may call get_geometry()
-    // concurrently. The mutex is the innermost lock: nothing here acquires a
-    // scene (Item_host) lock while holding it.
+    // Two locks, see doc/primitive-shape-lock-split-plan.md:
+    //
+    // - m_build_mutex is held for the duration of the expensive idempotent
+    //   builds (geometry conversion, BVH build, buffer mesh build). Its only
+    //   job is dedup: a Primitive shared by many meshes (glTF instances,
+    //   brush instances) is built exactly once. Long hold times are intended.
+    // - m_state_mutex is held only for short reads/writes of the mutable
+    //   slots. It is never held across a build, so main-thread state reads
+    //   (raytrace hover, the deferred-finalize commits) never wait for a
+    //   loader worker.
+    //
+    // Full lock order: Item_host::item_host_mutex -> m_build_mutex ->
+    // m_state_mutex. Both are innermost: no Primitive_shape method touches
+    // scene state, so the reverse edge does not exist.
+    //
+    // Locking lives in the public entry points only; the *_build_locked() /
+    // *_state_locked() helpers assume the corresponding lock is already held.
     auto make_geometry() -> bool;
     auto make_raytrace() -> bool;
+    // Builds the raytrace from a caller-supplied mesh. Used by shapes that
+    // carry a Buffer_mesh with no Geometry of their own (scene_builder's
+    // instanced cubes), where the no-arg overload has nothing to build from.
     auto make_raytrace(const GEO::Mesh& mesh) -> bool;
     // Installs an AABB proxy raytrace when no raytrace exists yet.
     auto make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool;
@@ -102,7 +117,15 @@ public:
     auto commit_real_raytrace() -> bool;
     [[nodiscard]] auto has_raytrace_triangles      () const -> bool;
     [[nodiscard]] auto has_real_raytrace           () const -> bool;
+    // Builds the Geometry on demand and MAY BLOCK for seconds behind a loader
+    // worker building this same shape. Main-thread per-frame code must not
+    // call this - use get_geometry_const().
     [[nodiscard]] auto get_geometry                () -> const std::shared_ptr<erhe::geometry::Geometry>&;
+    // Never builds, never blocks, never locks. Returns null until the
+    // geometry has been published; a shape that still carries only its
+    // load-time AABB proxy raytrace reads as null here. The slot is written
+    // exactly once (publish-once, see m_geometry_published), so the returned
+    // reference stays valid.
     [[nodiscard]] auto get_geometry_const          () const -> const std::shared_ptr<erhe::geometry::Geometry>&;
     [[nodiscard]] auto get_raytrace                () -> Primitive_raytrace&;
     [[nodiscard]] auto get_raytrace                () const -> const Primitive_raytrace&;
@@ -117,7 +140,14 @@ public:
     [[nodiscard]] auto get_mesh_facet_from_triangle(const erhe::raytrace::IGeometry* geometry, const uint32_t triangle) const -> GEO::index_t;
 
 protected:
-    auto make_geometry_locked() -> bool; // caller holds m_mutex
+    // Caller holds m_build_mutex. Returns the published geometry (never null
+    // on success) so callers do not have to read m_geometry themselves.
+    auto make_geometry_build_locked() -> std::shared_ptr<erhe::geometry::Geometry>;
+    // Caller holds m_build_mutex. Builds the raytrace aside and installs it
+    // under m_state_mutex.
+    auto make_raytrace_build_locked(const GEO::Mesh& mesh) -> bool;
+    // Caller holds m_state_mutex.
+    [[nodiscard]] auto has_real_raytrace_state_locked() const -> bool;
 
     // Keep this before members - at least m_renderable_mesh - which initialization
     // in constructors uses m_element_mappings.
@@ -125,7 +155,14 @@ protected:
     std::shared_ptr<erhe::geometry::Geometry> m_geometry{};
     std::shared_ptr<Triangle_soup>            m_triangle_soup{};
     Primitive_raytrace                        m_raytrace{};
-    mutable std::mutex                        m_mutex;
+    mutable std::mutex                        m_build_mutex;
+    mutable std::mutex                        m_state_mutex;
+    // Set (release) right after m_geometry is published under m_state_mutex.
+    // m_geometry is written exactly once after construction, never cleared or
+    // replaced, so an acquire load of this flag is all a lock-free reader
+    // needs. This is about the slot, not the pointee: the Geometry object
+    // itself is still mutated in place by e.g. gltf.cpp.
+    std::atomic<bool>                         m_geometry_published{false};
     std::unique_ptr<Primitive_raytrace>       m_pending_raytrace{};
     std::unique_ptr<Primitive_raytrace>       m_retired_proxy_raytrace{};
 };
@@ -157,6 +194,11 @@ public:
     auto commit_geometry_buffer_mesh() -> bool;
 
 private:
+    // Caller holds m_build_mutex; see the locking note on Primitive_shape.
+    auto make_buffer_mesh_build_locked(const Build_info& build_info, Normal_style normal_style) -> bool;
+    auto make_buffer_mesh_build_locked(const Buffer_info& buffer_info) -> bool;
+    [[nodiscard]] auto has_edge_lines_state_locked() const -> bool;
+
     class Pending_buffer_mesh
     {
     public:

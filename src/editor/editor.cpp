@@ -726,6 +726,7 @@ public:
 
         //m_fly_camera_tool->update_once_per_frame(timestamp);
 
+        erhe::log::set_breadcrumb("tick: update_hover_info");
         auto* imgui_host = m_imgui_windows->get_window_imgui_host().get(); // get window hosted viewport
         if (imgui_host != nullptr) {
             m_viewport_scene_views->update_hover_info(imgui_host); // updates what viewport window is being hovered

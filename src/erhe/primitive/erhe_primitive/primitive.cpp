@@ -379,6 +379,10 @@ Primitive_shape::Primitive_shape(Primitive_shape&& old) noexcept
     , m_pending_raytrace       {std::move(old.m_pending_raytrace)}
     , m_retired_proxy_raytrace {std::move(old.m_retired_proxy_raytrace)}
 {
+    // Carry the publish flag and clear the source's: a moved-from m_geometry
+    // is null, and leaving the source flag set would publish that null to
+    // lock-free readers.
+    m_geometry_published.store(old.m_geometry_published.exchange(false, std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
 Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
@@ -390,6 +394,7 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
         m_raytrace               = std::move(old.m_raytrace);
         m_pending_raytrace       = std::move(old.m_pending_raytrace);
         m_retired_proxy_raytrace = std::move(old.m_retired_proxy_raytrace);
+        m_geometry_published.store(old.m_geometry_published.exchange(false, std::memory_order_relaxed), std::memory_order_relaxed);
     }
     return *this;
 }
@@ -397,6 +402,7 @@ Primitive_shape& Primitive_shape::operator=(Primitive_shape&& old) noexcept
 Primitive_shape::Primitive_shape(const std::shared_ptr<erhe::geometry::Geometry>& geometry)
     : m_geometry{geometry}
 {
+    m_geometry_published.store(m_geometry != nullptr, std::memory_order_release);
 }
 
 Primitive_shape::Primitive_shape(const std::shared_ptr<Triangle_soup>& triangle_soup)
@@ -410,49 +416,75 @@ Primitive_shape::~Primitive_shape() noexcept
 
 auto Primitive_shape::make_geometry() -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    return make_geometry_locked();
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    return make_geometry_build_locked() != nullptr;
 }
 
-auto Primitive_shape::make_geometry_locked() -> bool
+auto Primitive_shape::make_geometry_build_locked() -> std::shared_ptr<erhe::geometry::Geometry>
 {
-    if (m_geometry) {
-        return true;
+    // Fast path: already published. Safe without the state lock - the slot is
+    // written exactly once (see m_geometry_published).
+    if (m_geometry_published.load(std::memory_order_acquire)) {
+        return m_geometry;
     }
-    if (m_triangle_soup) {
+    if (!m_triangle_soup) {
+        return {};
+    }
+
+    // Authoritative pre-build check under the state lock. m_element_mappings
+    // is a state-protected slot (commit_geometry_buffer_mesh() writes it), so
+    // the preconditions are asserted here rather than under the build lock
+    // alone. They cannot change between here and the publish below: a commit
+    // requires a prepare, which requires a published geometry.
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_geometry_published.load(std::memory_order_relaxed)) {
+            return m_geometry;
+        }
         ERHE_VERIFY(m_element_mappings.triangle_to_mesh_facet.empty());
         ERHE_VERIFY(m_element_mappings.mesh_corner_to_vertex_buffer_index.empty());
-        // Build into a local and publish as the last step, so unlocked
-        // readers of m_geometry (get_geometry_const and the double-checked
-        // fast path in get_geometry) never see a half-built Geometry.
-        std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
-        GEO::Mesh& mesh = geometry->get_mesh();
-
-        // Geogram concurrency: mesh_from_triangle_soup (colocate) and
-        // Geometry::process serialize themselves internally on
-        // erhe::geometry::geogram_lock(); compute_mesh_tangents is
-        // mesh-local erhe code and needs no lock.
-        mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, m_element_mappings);
-
-        const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
-        if (tangent_stream.attribute == nullptr) {
-            erhe::geometry::compute_mesh_tangents(mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = 0});
-        }
-        geometry->process({.flags =
-            erhe::geometry::Geometry::process_flag_connect                       |
-            erhe::geometry::Geometry::process_flag_build_edges                   |
-            erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
-            erhe::geometry::Geometry::process_flag_compute_facet_centroids
-        });
-        m_geometry = std::move(geometry);
-        return true;
     }
-    return false;
+
+    // Build into locals with no state lock held: this is the multi-second
+    // part, and nothing on the main thread may wait for it.
+    std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>();
+    Element_mappings element_mappings;
+    GEO::Mesh& mesh = geometry->get_mesh();
+
+    // Geogram concurrency: mesh_from_triangle_soup (colocate) and
+    // Geometry::process serialize themselves internally on
+    // erhe::geometry::geogram_lock(); compute_mesh_tangents is
+    // mesh-local erhe code and needs no lock.
+    mesh_from_triangle_soup(*m_triangle_soup.get(), mesh, element_mappings);
+
+    const erhe::dataformat::Attribute_stream tangent_stream = m_triangle_soup->vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::tangent);
+    if (tangent_stream.attribute == nullptr) {
+        erhe::geometry::compute_mesh_tangents(mesh, {.orthonormalize = false, .make_facets_flat = false, .texcoord_usage_index = 0});
+    }
+    geometry->process({.flags =
+        erhe::geometry::Geometry::process_flag_connect                       |
+        erhe::geometry::Geometry::process_flag_build_edges                   |
+        erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+        erhe::geometry::Geometry::process_flag_compute_facet_centroids
+    });
+
+    // Publish: the mappings and the geometry they index become visible
+    // together, and the release store hands both to lock-free readers.
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_geometry_published.load(std::memory_order_relaxed)) {
+            return m_geometry; // another path won while we built; drop ours
+        }
+        m_element_mappings = std::move(element_mappings);
+        m_geometry         = std::move(geometry);
+        m_geometry_published.store(true, std::memory_order_release);
+        return m_geometry;
+    }
 }
 
 auto Primitive_shape::get_geometry() -> const std::shared_ptr<erhe::geometry::Geometry>&
 {
-    if (!m_geometry) {
+    if (!m_geometry_published.load(std::memory_order_acquire)) {
         make_geometry();
     }
     return m_geometry;
@@ -460,6 +492,10 @@ auto Primitive_shape::get_geometry() -> const std::shared_ptr<erhe::geometry::Ge
 
 auto Primitive_shape::get_geometry_const() const -> const std::shared_ptr<erhe::geometry::Geometry>&
 {
+    if (!m_geometry_published.load(std::memory_order_acquire)) {
+        static const std::shared_ptr<erhe::geometry::Geometry> empty{};
+        return empty;
+    }
     return m_geometry;
 }
 
@@ -480,36 +516,55 @@ auto Primitive_shape::get_triangle_soup() const -> const std::shared_ptr<Triangl
 
 auto Primitive_shape::has_raytrace_triangles() const -> bool
 {
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     return m_raytrace.has_raytrace_triangles();
 }
 
 auto Primitive_shape::has_real_raytrace() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return has_real_raytrace_state_locked();
+}
+
+auto Primitive_shape::has_real_raytrace_state_locked() const -> bool
 {
     return m_raytrace.has_raytrace_triangles() && !m_raytrace.is_proxy();
 }
 
 auto Primitive_shape::make_raytrace(const GEO::Mesh& mesh) -> bool
 {
-    m_raytrace = Primitive_raytrace{mesh};
-    return m_raytrace.has_raytrace_triangles();
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    return make_raytrace_build_locked(mesh);
+}
+
+auto Primitive_shape::make_raytrace_build_locked(const GEO::Mesh& mesh) -> bool
+{
+    // Build aside, install under the state lock: the BVH build is one of the
+    // long steps the state lock must never be held across.
+    Primitive_raytrace raytrace{mesh};
+    if (!raytrace.has_raytrace_triangles()) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_raytrace = std::move(raytrace);
+    return true;
 }
 
 auto Primitive_shape::make_raytrace() -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
 
     // Ensure geometry and element mappings exists
-    if (!m_geometry) {
-        if (!make_geometry_locked()) {
-            return false;
-        }
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = make_geometry_build_locked();
+    if (!geometry) {
+        return false;
     }
 
     //bool has_element_mappings =
     //    !m_element_mappings.triangle_to_mesh_facet.empty() &&
     //    !m_element_mappings.mesh_corner_to_vertex_buffer_index.empty();
 
-    return make_raytrace(m_geometry->get_mesh());
+    return make_raytrace_build_locked(geometry->get_mesh());
 
     // TODO Is it possible to make raytrace only / directly from triangle soup?
     //      We would lack element mappings, is that still useful?
@@ -523,32 +578,61 @@ auto Primitive_shape::make_raytrace() -> bool
 
 auto Primitive_shape::make_raytrace_proxy(const erhe::math::Aabb& aabb) -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    if (m_raytrace.has_raytrace_triangles()) {
-        return true;
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_raytrace.has_raytrace_triangles()) {
+            return true;
+        }
     }
     if (!aabb.is_valid()) {
         return false;
     }
-    m_raytrace = Primitive_raytrace{aabb};
-    return m_raytrace.has_raytrace_triangles();
+    // 12 triangles, but built aside and installed under the state lock like
+    // every other build step, so the sequence is the same everywhere.
+    Primitive_raytrace raytrace{aabb};
+    if (!raytrace.has_raytrace_triangles()) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (m_raytrace.has_raytrace_triangles()) {
+        return true; // another path won while we built; drop ours
+    }
+    m_raytrace = std::move(raytrace);
+    return true;
 }
 
 auto Primitive_shape::prepare_real_raytrace() -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    if (has_real_raytrace()) {
-        return true;
+    // The build lock is what makes this idempotent for a shape shared by many
+    // meshes: the second task in blocks here, then sees the first task's
+    // result in the authoritative check below and returns without rebuilding.
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (has_real_raytrace_state_locked()) {
+            return true;
+        }
+        if (m_pending_raytrace) {
+            return true; // prepared by another task, not yet committed
+        }
     }
-    if (m_pending_raytrace) {
-        return true; // prepared by another task, not yet committed
-    }
-    if (!make_geometry_locked()) {
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = make_geometry_build_locked();
+    if (!geometry) {
         return false;
     }
-    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(m_geometry->get_mesh());
+    // The BVH build runs with no state lock held.
+    std::unique_ptr<Primitive_raytrace> pending = std::make_unique<Primitive_raytrace>(geometry->get_mesh());
     if (!pending->has_raytrace_triangles()) {
         return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    // Re-check: commit_real_raytrace() runs on the main thread under the state
+    // lock only, so it can have landed while we built. Installing a stale
+    // second pending would later free an IGeometry that live
+    // Raytrace_primitives still point at (see the retirement below).
+    if (has_real_raytrace_state_locked() || m_pending_raytrace) {
+        return true;
     }
     m_pending_raytrace = std::move(pending);
     return true;
@@ -556,7 +640,9 @@ auto Primitive_shape::prepare_real_raytrace() -> bool
 
 auto Primitive_shape::commit_real_raytrace() -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    // State lock only: the main thread's Scene_commit_queue::flush() must
+    // never wait for a loader worker's build.
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     if (!m_pending_raytrace) {
         return false;
     }
@@ -601,28 +687,44 @@ Primitive_render_shape::Primitive_render_shape(const std::shared_ptr<Triangle_so
 
 auto Primitive_render_shape::has_buffer_mesh_triangles() const -> bool
 {
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     return m_renderable_mesh.index_range(Primitive_mode::polygon_fill).index_count > 0;
 }
 
 auto Primitive_render_shape::has_edge_lines() const -> bool
+{
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    return has_edge_lines_state_locked();
+}
+
+auto Primitive_render_shape::has_edge_lines_state_locked() const -> bool
 {
     return m_renderable_mesh.index_range(Primitive_mode::edge_lines).index_count > 0;
 }
 
 auto Primitive_render_shape::prepare_geometry_buffer_mesh(const Build_info& build_info, const Normal_style normal_style) -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
-    if (m_pending_buffer_mesh) {
-        return true; // prepared by another task, not yet committed
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    {
+        const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+        if (m_pending_buffer_mesh) {
+            return true; // prepared by another task, not yet committed
+        }
+        if (has_edge_lines_state_locked()) {
+            return true; // already committed; a second task must not rebuild
+        }
     }
-    if (!make_geometry_locked()) {
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = make_geometry_build_locked();
+    if (!geometry) {
         return false;
     }
+    // The buffer mesh build (GPU allocation, polygon fill, edge lines) runs
+    // with no state lock held.
     std::unique_ptr<Pending_buffer_mesh> pending = std::make_unique<Pending_buffer_mesh>();
     pending->normal_style = normal_style;
     const bool ok = build_buffer_mesh(
         pending->buffer_mesh,
-        m_geometry->get_mesh(),
+        geometry->get_mesh(),
         build_info,
         pending->element_mappings,
         normal_style
@@ -630,13 +732,20 @@ auto Primitive_render_shape::prepare_geometry_buffer_mesh(const Build_info& buil
     if (!ok) {
         return false;
     }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    if (m_pending_buffer_mesh || has_edge_lines_state_locked()) {
+        return true; // another path won while we built; drop ours
+    }
     m_pending_buffer_mesh = std::move(pending);
     return true;
 }
 
 auto Primitive_render_shape::commit_geometry_buffer_mesh() -> bool
 {
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    // State lock only, and the caller must hold the item host lock: the
+    // per-frame readers of get_renderable_mesh() are protected by that lock,
+    // not by this one. See doc/primitive-shape-lock-split-plan.md.
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     if (!m_pending_buffer_mesh) {
         return false;
     }
@@ -649,33 +758,55 @@ auto Primitive_render_shape::commit_geometry_buffer_mesh() -> bool
 
 auto Primitive_render_shape::make_buffer_mesh(const Build_info& build_info, Normal_style normal_style) -> bool
 {
-    if (m_geometry) {
-        // TODO temp hack
-        m_element_mappings.triangle_to_mesh_facet.clear();
-        m_element_mappings.mesh_corner_to_vertex_buffer_index.clear();
-        m_element_mappings.mesh_vertex_to_vertex_buffer_index.clear();
-        return build_buffer_mesh(
-            m_renderable_mesh,
-            m_geometry->get_mesh(),
-            build_info,
-            m_element_mappings,
-            normal_style
-        );
-    } else {
-        return make_buffer_mesh(build_info.buffer_info);
-    }
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    return make_buffer_mesh_build_locked(build_info, normal_style);
 }
 
 auto Primitive_render_shape::make_buffer_mesh(const Buffer_info& buffer_info) -> bool
+{
+    const std::lock_guard<std::mutex> build_lock{m_build_mutex};
+    return make_buffer_mesh_build_locked(buffer_info);
+}
+
+auto Primitive_render_shape::make_buffer_mesh_build_locked(const Build_info& build_info, Normal_style normal_style) -> bool
+{
+    if (!m_geometry_published.load(std::memory_order_acquire)) {
+        // The overload below takes the same build lock via its own entry
+        // point, so it must be called through the *_build_locked() helper.
+        return make_buffer_mesh_build_locked(build_info.buffer_info);
+    }
+    // Build into locals and publish under the state lock: m_renderable_mesh
+    // and m_element_mappings are state-protected slots.
+    Buffer_mesh      buffer_mesh;
+    Element_mappings element_mappings;
+    const bool ok = build_buffer_mesh(
+        buffer_mesh,
+        m_geometry->get_mesh(),
+        build_info,
+        element_mappings,
+        normal_style
+    );
+    if (!ok) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_renderable_mesh  = std::move(buffer_mesh);
+    m_element_mappings = std::move(element_mappings);
+    return true;
+}
+
+auto Primitive_render_shape::make_buffer_mesh_build_locked(const Buffer_info& buffer_info) -> bool
 {
     if (!m_triangle_soup) {
         return false;
     }
     std::optional<Buffer_mesh> buffer_mesh_opt = build_buffer_mesh_from_triangle_soup(*m_triangle_soup.get(), buffer_info);
-    if (buffer_mesh_opt.has_value()) {
-        m_renderable_mesh = std::move(buffer_mesh_opt.value());
+    if (!buffer_mesh_opt.has_value()) {
+        return false;
     }
-    return buffer_mesh_opt.has_value();
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
+    m_renderable_mesh = std::move(buffer_mesh_opt.value());
+    return true;
 }
 #pragma endregion Primitive_render_shape
 
@@ -811,7 +942,8 @@ auto Primitive_shape::get_mesh_facet_from_triangle(const erhe::raytrace::IGeomet
     if (geometry == nullptr) {
         return GEO::NO_INDEX;
     }
-    const std::lock_guard<std::mutex> lock{m_mutex};
+    // State lock only: this is a per-frame main-thread read on the hover path.
+    const std::lock_guard<std::mutex> state_lock{m_state_mutex};
     if (m_raytrace.get_raytrace_geometry().get() == geometry) {
         return m_raytrace.get_mesh_facet_from_triangle(triangle);
     }

@@ -565,7 +565,11 @@ void Scene_view::update_hover_with_raytrace()
             SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: RT instance {}", Hover_entry::slot_names[slot], raytrace_primitive->rt_instance->is_enabled());
             const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
             ERHE_VERIFY(shape);
-            entry.geometry = shape->get_geometry();
+            // Non-blocking: get_geometry() would build the Geometry on the
+            // main thread, or wait seconds for a loader worker building this
+            // same shape. A hit on a still-proxy raytrace simply has no facet
+            // detail this frame. See doc/primitive-shape-lock-split-plan.md.
+            entry.geometry = shape->get_geometry_const();
             if (entry.geometry) {
                 GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 SPDLOG_LOGGER_TRACE(log_controller_ray, "{}: Hit geometry: {}", Hover_entry::slot_names[slot], entry.geometry->get_name());

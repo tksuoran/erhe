@@ -1176,7 +1176,8 @@ void apply_scan_hits_to_selection(
         if (!shape) {
             continue;
         }
-        const std::shared_ptr<erhe::geometry::Geometry> geometry = shape->get_geometry();
+        // Non-blocking: a null geometry is skipped below, so do not build one.
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = shape->get_geometry_const();
         if (!geometry) {
             continue;
         }

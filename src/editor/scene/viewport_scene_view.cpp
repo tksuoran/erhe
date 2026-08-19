@@ -1132,7 +1132,8 @@ void Viewport_scene_view::update_hover_with_id_render()
         const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
         const std::shared_ptr<erhe::primitive::Primitive_shape> shape = primitive.get_shape_for_raytrace();
         if (shape) {
-            entry.geometry = shape->get_geometry();
+            // Non-blocking, see doc/primitive-shape-lock-split-plan.md.
+            entry.geometry = shape->get_geometry_const();
             if (entry.geometry) {
                 const GEO::Mesh& geo_mesh = entry.geometry->get_mesh();
                 // The id pass emits the GEO facet index per vertex, so id_query.facet_id

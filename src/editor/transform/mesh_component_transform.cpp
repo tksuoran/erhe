@@ -992,7 +992,10 @@ auto Mesh_component_transform::is_geometry_shared(App_context&, const std::share
             }
             for (const erhe::scene::Mesh_primitive& mesh_primitive : other->get_primitives()) {
                 const std::shared_ptr<erhe::primitive::Primitive>& primitive = mesh_primitive.primitive;
-                if (primitive && primitive->render_shape && (primitive->render_shape->get_geometry().get() == geometry)) {
+                // Non-blocking: pointer identity only. get_geometry() here
+                // would force synchronous construction of every not-yet-built
+                // shape in the scene.
+                if (primitive && primitive->render_shape && (primitive->render_shape->get_geometry_const().get() == geometry)) {
                     return true;
                 }
             }

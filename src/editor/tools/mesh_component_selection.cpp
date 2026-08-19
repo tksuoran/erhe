@@ -421,7 +421,10 @@ auto Mesh_component_selection::is_live(const Mesh_component_entry& entry) const 
     }
     // Live only if the primitive still carries the exact Geometry these indices
     // address; a swap installs a different object and the entry goes dormant.
-    return shape->get_geometry() == geometry;
+    // Non-blocking: this is an identity comparison against a Geometry the
+    // caller already holds, so if there is one it was published. is_live() is
+    // called every frame from several tools; it must never build.
+    return shape->get_geometry_const() == geometry;
 }
 
 auto Mesh_component_selection::get_entries() -> std::vector<Mesh_component_entry>&

@@ -98,7 +98,14 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     const std::shared_ptr<Primitive_shape> shape = primitive.get_shape_for_raytrace();
     ERHE_VERIFY(shape);
     const GEO::index_t facet = shape->get_mesh_facet_from_triangle(hit.geometry, hit.triangle_id);
-    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry();
+    if (facet == GEO::NO_INDEX) {
+        // Proxy (or retired proxy) raytrace hit: no facet mapping, so there is
+        // no facet normal to compute. mesh_facet_normalf() below would index
+        // out of range.
+        return hit.normal;
+    }
+    // Non-blocking, see doc/primitive-shape-lock-split-plan.md.
+    const std::shared_ptr<erhe::geometry::Geometry>& geometry = shape->get_geometry_const();
     if (!geometry) {
         return hit.normal;
     }
