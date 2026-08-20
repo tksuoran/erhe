@@ -34,6 +34,7 @@ fallback only.
     "frustum_right": 0.5,
     "frustum_bottom": -0.5,
     "frustum_top": 0.5,
+    "infinite_z_far": false,
     "exposure": 1,
     "shadow_range": 22,
     "flags": ["content", "show_in_ui"]
@@ -46,6 +47,15 @@ fallback only.
   `orthogonal_rectangle`, `generic_frustum`.
 - All projection fields are always written (the active subset depends on
   `projection_type`); angles are radians, distances scene units.
+- `infinite_z_far` (boolean, default `false`): the perspective projection
+  types put their far plane at infinity, which is what an absent
+  `camera.perspective.zfar` means in core glTF. `z_far` stays a finite,
+  meaningful number while this is set - it is the depth hint the rest of the
+  editor works from (shadow range fitting, gizmo distances, the properties
+  slider) - and only the projection matrix is unbounded. The exporter omits
+  the core camera's `zfar` when this is set, so a reader without this
+  extension also sees an infinite camera. Ignored for the orthographic
+  types, where glTF requires a finite `zfar`.
 - `exposure`, `shadow_range`: erhe camera parameters.
 - `flags`: the camera attachment's persistent Item flags
   (see [flags.md](flags.md)).

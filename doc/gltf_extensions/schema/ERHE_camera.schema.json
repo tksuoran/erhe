@@ -35,6 +35,7 @@
         "frustum_right":  {"type": "number"},
         "frustum_bottom": {"type": "number"},
         "frustum_top":    {"type": "number"},
+        "infinite_z_far": {"type": "boolean", "default": false},
         "exposure":       {"type": "number"},
         "shadow_range":   {"type": "number"},
         "flags":          {"type": "array", "items": {"type": "string"}}
