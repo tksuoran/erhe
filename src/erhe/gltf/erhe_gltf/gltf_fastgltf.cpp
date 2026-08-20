@@ -2579,6 +2579,82 @@ private:
     // Per glTF mesh: has a node clone already claimed the mesh's uid
     // (see the mesh instantiation in parse_node)?
     std::vector<bool> m_mesh_uid_claimed;
+
+    // EXT_mesh_gpu_instancing per-instance transforms of one node, decoded
+    // from the extension's TRANSLATION / ROTATION / SCALE accessors. Empty
+    // when the node does not use the extension.
+    //
+    // erhe has no GPU instancing path, so the instances are expanded into
+    // child nodes (one mesh clone each) below. The extension's own wording
+    // allows a renderer to fall back to this: the instance transform is a
+    // local transform under the node, applied before the node's own.
+    [[nodiscard]] auto parse_instance_transforms(const fastgltf::Node& node) -> std::vector<erhe::scene::Trs_transform>
+    {
+        std::vector<erhe::scene::Trs_transform> instances;
+        if (node.instancingAttributes.empty()) {
+            return instances;
+        }
+
+        // The spec requires every instancing attribute accessor to have the
+        // same count; take the minimum so a malformed file cannot over-read.
+        std::size_t instance_count = std::numeric_limits<std::size_t>::max();
+        for (const fastgltf::Attribute& attribute : node.instancingAttributes) {
+            instance_count = std::min(instance_count, m_asset->accessors.at(attribute.accessorIndex).count);
+        }
+        if ((instance_count == 0) || (instance_count == std::numeric_limits<std::size_t>::max())) {
+            return instances;
+        }
+
+        std::vector<glm::vec3> translations(instance_count, glm::vec3{0.0f, 0.0f, 0.0f});
+        std::vector<glm::quat> rotations   (instance_count, glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
+        std::vector<glm::vec3> scales      (instance_count, glm::vec3{1.0f, 1.0f, 1.0f});
+
+        const fastgltf::Asset& asset = m_asset.get();
+        for (const fastgltf::Attribute& attribute : node.instancingAttributes) {
+            const fastgltf::Accessor& accessor = asset.accessors.at(attribute.accessorIndex);
+            const std::string_view name{attribute.name.c_str(), attribute.name.size()};
+            if (name == "TRANSLATION") {
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+                    asset, accessor,
+                    [&](fastgltf::math::fvec3 value, std::size_t index) {
+                        if (index < instance_count) {
+                            translations[index] = glm::vec3{value.x(), value.y(), value.z()};
+                        }
+                    }
+                );
+            } else if (name == "ROTATION") {
+                // fastgltf dequantizes normalized byte / short accessors,
+                // which the extension allows for rotations.
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(
+                    asset, accessor,
+                    [&](fastgltf::math::fvec4 value, std::size_t index) {
+                        if (index < instance_count) {
+                            // glm has [w x y z], glTF has [x y z w]
+                            rotations[index] = glm::normalize(glm::quat{value.w(), value.x(), value.y(), value.z()});
+                        }
+                    }
+                );
+            } else if (name == "SCALE") {
+                fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+                    asset, accessor,
+                    [&](fastgltf::math::fvec3 value, std::size_t index) {
+                        if (index < instance_count) {
+                            scales[index] = glm::vec3{value.x(), value.y(), value.z()};
+                        }
+                    }
+                );
+            } else {
+                log_gltf->warn("EXT_mesh_gpu_instancing: ignoring unsupported attribute '{}'", attribute.name.c_str());
+            }
+        }
+
+        instances.resize(instance_count);
+        for (std::size_t i = 0; i < instance_count; ++i) {
+            instances[i].set_trs(translations[i], rotations[i], scales[i]);
+        }
+        return instances;
+    }
+
     void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
     {
         ERHE_PROFILE_FUNCTION();
@@ -2627,23 +2703,62 @@ private:
             const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
 
             // Mesh needs to be cloned, because erhe currently puts skin into the mesh.
-            std::shared_ptr<erhe::scene::Mesh> erhe_mesh = std::make_shared<erhe::scene::Mesh>(
-                template_mesh,
-                erhe::for_clone{true}
-            );
-            // The clone starts uid-less (a clone is a new object); the FIRST
-            // instantiation of a glTF mesh inherits the file identity so it
-            // round-trips. Later instantiations of the same mesh are
-            // additional objects (a glTF mesh shared by N nodes re-exports
-            // as N meshes) and get fresh uids at export.
-            if (!template_mesh.get_gltf_uid().empty() && !m_mesh_uid_claimed[mesh_index]) {
-                erhe_mesh->set_gltf_uid(template_mesh.get_gltf_uid());
-                m_mesh_uid_claimed[mesh_index] = true;
+            const auto clone_mesh = [&]() -> std::shared_ptr<erhe::scene::Mesh> {
+                std::shared_ptr<erhe::scene::Mesh> clone = std::make_shared<erhe::scene::Mesh>(
+                    template_mesh,
+                    erhe::for_clone{true}
+                );
+                // The clone starts uid-less (a clone is a new object); the FIRST
+                // instantiation of a glTF mesh inherits the file identity so it
+                // round-trips. Later instantiations of the same mesh are
+                // additional objects (a glTF mesh shared by N nodes re-exports
+                // as N meshes) and get fresh uids at export.
+                if (!template_mesh.get_gltf_uid().empty() && !m_mesh_uid_claimed[mesh_index]) {
+                    clone->set_gltf_uid(template_mesh.get_gltf_uid());
+                    m_mesh_uid_claimed[mesh_index] = true;
+                }
+                return clone;
+            };
+
+            // EXT_mesh_gpu_instancing: the node draws its mesh once per
+            // instance transform. erhe has no instanced draw path, so each
+            // instance becomes a child node carrying its own mesh clone.
+            // The extension forbids combining it with a skin, and a skinned
+            // mesh here would attach the skin to only one of the clones, so
+            // instancing is ignored in that (invalid) case.
+            const std::vector<erhe::scene::Trs_transform> instances = node.skinIndex.has_value()
+                ? std::vector<erhe::scene::Trs_transform>{}
+                : parse_instance_transforms(node);
+            if (!instances.empty()) {
+                log_gltf->info(
+                    "Node '{}': EXT_mesh_gpu_instancing with {} instances - expanding into child nodes",
+                    node_name, instances.size()
+                );
+                for (std::size_t i = 0, end = instances.size(); i < end; ++i) {
+                    auto instance_node = std::make_shared<erhe::scene::Node>(
+                        fmt::format("{} instance {}", node_name, i)
+                    );
+                    instance_node->set_source_path(m_arguments.path);
+                    instance_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+                    instance_node->Hierarchy::set_parent(erhe_node);
+                    instance_node->node_data.transforms.parent_from_node = instances[i];
+                    instance_node->update_world_from_node();
+                    instance_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+                    instance_node->attach(clone_mesh());
+                    instance_node->set_parent(erhe_node);
+                }
+            } else {
+                if (node.skinIndex.has_value()) {
+                    if (!node.instancingAttributes.empty()) {
+                        log_gltf->warn(
+                            "Node '{}': EXT_mesh_gpu_instancing on a skinned mesh node is not allowed - instancing ignored",
+                            node_name
+                        );
+                    }
+                    m_nodes_with_skin.push_back(node_index);
+                }
+                erhe_node->attach(clone_mesh());
             }
-            if (node.skinIndex.has_value()) {
-                m_nodes_with_skin.push_back(node_index);
-            }
-            erhe_node->attach(erhe_mesh);
         }
     }
 
