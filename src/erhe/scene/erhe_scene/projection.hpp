@@ -76,6 +76,14 @@ public:
     Type  projection_type{Type::perspective_vertical};
     float z_near         { 0.03f};
     float z_far          {64.0};
+
+    // Far plane at infinity, for the perspective projection types only (glTF
+    // makes camera.perspective.zfar optional and the reference implementation
+    // treats an absent zfar as Infinity). z_far stays a finite, meaningful
+    // number while this is set: it is the depth hint the rest of the editor
+    // works from (shadow range fitting, the transform tool's gizmo distance,
+    // the properties slider), and only the projection matrix goes to infinity.
+    bool  infinite_z_far {false};
     float fov_x          { glm::pi<float>() / 4.0f};
     float fov_y          { glm::pi<float>() / 4.0f};
     float fov_left       {-glm::pi<float>() / 4.0f};

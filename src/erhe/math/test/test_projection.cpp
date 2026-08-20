@@ -394,3 +394,101 @@ TEST(DefaultParameter, OrthographicDefaultIsZeroToOne)
     EXPECT_NEAR(project_z(m_default, at_near), project_z(m_explicit, at_near), tol);
     EXPECT_NEAR(project_z(m_default, at_far),  project_z(m_explicit, at_far),  tol);
 }
+
+// ============================================================================
+// create_frustum_infinite_far, reverse depth
+//
+// Reverse depth cannot be produced by swapping z_near / z_far the way the
+// finite builders do (there is no finite far value to swap in), so the
+// infinite builders take it as a flag. The near plane must land at the far
+// end of the depth range and infinity at the near end.
+// ============================================================================
+
+TEST(CreateFrustumInfiniteFarReverse, ZeroToOne_NearMapsTo1)
+{
+    const auto m = erhe::math::create_frustum_infinite_far(
+        -1.0f, 1.0f, -1.0f, 1.0f, z_near, erhe::math::Depth_range::zero_to_one, true
+    );
+    EXPECT_NEAR(project_z(m, at_near), 1.0f, tol);
+}
+
+TEST(CreateFrustumInfiniteFarReverse, ZeroToOne_VeryFarApproaches0)
+{
+    const auto m = erhe::math::create_frustum_infinite_far(
+        -1.0f, 1.0f, -1.0f, 1.0f, z_near, erhe::math::Depth_range::zero_to_one, true
+    );
+    const float z = project_z(m, {0.0f, 0.0f, -1e6f});
+    EXPECT_LT(z, 0.001f);
+    EXPECT_GE(z, 0.0f);
+}
+
+TEST(CreateFrustumInfiniteFarReverse, ZeroToOne_DepthIsMonotonicDecreasing)
+{
+    const auto m = erhe::math::create_frustum_infinite_far(
+        -1.0f, 1.0f, -1.0f, 1.0f, z_near, erhe::math::Depth_range::zero_to_one, true
+    );
+    const float z1 = project_z(m, {0.0f, 0.0f, -1.0f});
+    const float z2 = project_z(m, {0.0f, 0.0f, -10.0f});
+    const float z3 = project_z(m, {0.0f, 0.0f, -100.0f});
+    EXPECT_GT(z1, z2);
+    EXPECT_GT(z2, z3);
+}
+
+TEST(CreateFrustumInfiniteFarReverse, NegOneToOne_NearMapsTo1)
+{
+    const auto m = erhe::math::create_frustum_infinite_far(
+        -1.0f, 1.0f, -1.0f, 1.0f, z_near, erhe::math::Depth_range::negative_one_to_one, true
+    );
+    EXPECT_NEAR(project_z(m, at_near), 1.0f, tol);
+}
+
+TEST(CreateFrustumInfiniteFarReverse, NegOneToOne_VeryFarApproachesNeg1)
+{
+    const auto m = erhe::math::create_frustum_infinite_far(
+        -1.0f, 1.0f, -1.0f, 1.0f, z_near, erhe::math::Depth_range::negative_one_to_one, true
+    );
+    const float z = project_z(m, {0.0f, 0.0f, -1e6f});
+    EXPECT_LT(z, -0.999f);
+    EXPECT_GE(z, -1.0f);
+}
+
+// The infinite builder must keep the same x / y frustum scale as the finite
+// one; only the depth row differs.
+TEST(CreateFrustumInfiniteFar, MatchesFiniteFrustumInXY)
+{
+    const auto finite = erhe::math::create_frustum(-1.0f, 1.0f, -1.0f, 1.0f, z_near, z_far);
+    const auto infinite = erhe::math::create_frustum_infinite_far(-1.0f, 1.0f, -1.0f, 1.0f, z_near);
+    EXPECT_NEAR(finite[0][0], infinite[0][0], tol);
+    EXPECT_NEAR(finite[1][1], infinite[1][1], tol);
+}
+
+TEST(CreatePerspectiveVerticalInfiniteFar, MatchesFiniteInXY)
+{
+    constexpr float fov_y  = glm::pi<float>() / 4.0f;
+    constexpr float aspect = 16.0f / 9.0f;
+    const auto finite   = erhe::math::create_perspective_vertical(fov_y, aspect, z_near, z_far);
+    const auto infinite = erhe::math::create_perspective_vertical_infinite_far(fov_y, aspect, z_near);
+    EXPECT_NEAR(finite[0][0], infinite[0][0], tol);
+    EXPECT_NEAR(finite[1][1], infinite[1][1], tol);
+    EXPECT_NEAR(project_z(infinite, at_near), 0.0f, tol);
+}
+
+TEST(CreatePerspectiveHorizontalInfiniteFar, MatchesFiniteInXY)
+{
+    constexpr float fov_x  = glm::pi<float>() / 3.0f;
+    constexpr float aspect = 16.0f / 9.0f;
+    const auto finite   = erhe::math::create_perspective_horizontal(fov_x, aspect, z_near, z_far);
+    const auto infinite = erhe::math::create_perspective_horizontal_infinite_far(fov_x, aspect, z_near);
+    EXPECT_NEAR(finite[0][0], infinite[0][0], tol);
+    EXPECT_NEAR(finite[1][1], infinite[1][1], tol);
+}
+
+TEST(CreatePerspectiveInfiniteFar, MatchesFiniteInXY)
+{
+    constexpr float fov_x = glm::pi<float>() / 3.0f;
+    constexpr float fov_y = glm::pi<float>() / 4.0f;
+    const auto finite   = erhe::math::create_perspective(fov_x, fov_y, z_near, z_far);
+    const auto infinite = erhe::math::create_perspective_infinite_far(fov_x, fov_y, z_near);
+    EXPECT_NEAR(finite[0][0], infinite[0][0], tol);
+    EXPECT_NEAR(finite[1][1], infinite[1][1], tol);
+}

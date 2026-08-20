@@ -392,7 +392,16 @@ template <typename T>
 }
 
 [[nodiscard]] auto create_frustum(float left, float right, float bottom, float top, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
-[[nodiscard]] auto create_frustum_infinite_far(float left, float right, float bottom, float top, float z_near, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
+// Perspective frustum with the far plane at infinity (glTF's optional-zfar
+// camera). reverse_depth cannot be expressed by swapping z_near / z_far the
+// way the finite builders do, so it is a parameter here: with it the near
+// plane maps to the far end of the depth range and infinity to the near end,
+// which is the numerically best-behaved combination.
+[[nodiscard]] auto create_frustum_infinite_far(float left, float right, float bottom, float top, float z_near, Depth_range depth_range = Depth_range::zero_to_one, bool reverse_depth = false) -> glm::mat4;
+[[nodiscard]] auto create_perspective_vertical_infinite_far(float fov_y, float aspect_ratio, float z_near, Depth_range depth_range = Depth_range::zero_to_one, bool reverse_depth = false) -> glm::mat4;
+[[nodiscard]] auto create_perspective_horizontal_infinite_far(float fov_x, float aspect_ratio, float z_near, Depth_range depth_range = Depth_range::zero_to_one, bool reverse_depth = false) -> glm::mat4;
+[[nodiscard]] auto create_perspective_infinite_far(float fov_x, float fov_y, float z_near, Depth_range depth_range = Depth_range::zero_to_one, bool reverse_depth = false) -> glm::mat4;
+[[nodiscard]] auto create_perspective_xr_infinite_far(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, Depth_range depth_range = Depth_range::zero_to_one, bool reverse_depth = false) -> glm::mat4;
 [[nodiscard]] auto create_frustum_simple(float width, float height, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 [[nodiscard]] auto create_perspective(float fov_x, float fov_y, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;
 [[nodiscard]] auto create_perspective_xr(float fov_left, float fov_right, float fov_up, float fov_down, float z_near, float z_far, Depth_range depth_range = Depth_range::zero_to_one) -> glm::mat4;

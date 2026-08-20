@@ -1780,12 +1780,32 @@ private:
                         log_gltf->trace("Camera.zfar:              {}", perspective.zfar.value());
                     }
                     log_gltf->trace("Camera.znear:             {}", perspective.znear);
-                    projection->projection_type = erhe::scene::Projection::Type::perspective_vertical;
-                    projection->fov_y           = perspective.yfov;
-                    projection->z_near          = perspective.znear;
-                    projection->z_far           = perspective.zfar.has_value()
-                        ? perspective.zfar.value()
-                        : 0.0f;
+                    projection->fov_y  = perspective.yfov;
+                    projection->z_near = perspective.znear;
+                    // camera.perspective.aspectRatio is optional: when it is
+                    // given the camera has a fixed aspect ratio and must not
+                    // adopt the viewport's. Type::perspective is the erhe
+                    // projection that takes both fov angles and ignores the
+                    // viewport aspect ratio, so derive the horizontal fov from
+                    // the authored ratio (aspect = tan(fov_x/2) / tan(fov_y/2)).
+                    if (perspective.aspectRatio.has_value() && (perspective.aspectRatio.value() > 0.0f)) {
+                        projection->projection_type = erhe::scene::Projection::Type::perspective;
+                        projection->fov_x = 2.0f * std::atan(
+                            perspective.aspectRatio.value() * std::tan(0.5f * perspective.yfov)
+                        );
+                    } else {
+                        projection->projection_type = erhe::scene::Projection::Type::perspective_vertical;
+                    }
+                    // An absent zfar means an infinite far plane. Keep z_far a
+                    // usable finite depth hint for everything that reads it as
+                    // a number (shadow fitting, gizmo distances, the UI
+                    // slider) and let only the projection matrix go infinite.
+                    if (perspective.zfar.has_value()) {
+                        projection->z_far          = perspective.zfar.value();
+                        projection->infinite_z_far = false;
+                    } else {
+                        projection->infinite_z_far = true;
+                    }
                 },
                 [&](const fastgltf::Camera::Orthographic& orthographic) {
                     log_gltf->trace("Camera.xmag:              {}", orthographic.xmag);
@@ -1793,8 +1813,13 @@ private:
                     log_gltf->trace("Camera.zfar:              {}", orthographic.zfar);
                     log_gltf->trace("Camera.znear:             {}", orthographic.znear);
                     projection->projection_type = erhe::scene::Projection::Type::orthogonal;
-                    projection->ortho_width     = orthographic.xmag;
-                    projection->ortho_height    = orthographic.ymag;
+                    // glTF xmag / ymag are half extents: the view spans
+                    // [-xmag, xmag] horizontally (the reference implementation
+                    // builds the projection as 1/xmag along X). erhe's
+                    // ortho_width / ortho_height are full extents, so the
+                    // orthogonal projection uses +/- 0.5 * ortho_width.
+                    projection->ortho_width     = 2.0f * orthographic.xmag;
+                    projection->ortho_height    = 2.0f * orthographic.ymag;
                     projection->z_far           = orthographic.zfar;
                     projection->z_near          = orthographic.znear;
                 }
@@ -3512,6 +3537,15 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
             return true;
         };
 
+        const auto read_bool = [](const simdjson::dom::object& object, const char* key, bool& out_value) -> bool {
+            bool value{false};
+            if (object.at_key(key).get_bool().get(value) != simdjson::SUCCESS) {
+                return false;
+            }
+            out_value = value;
+            return true;
+        };
+
         for (std::size_t i = 0; i < result.node_extensions.size(); ++i) {
             const std::shared_ptr<erhe::scene::Node>& node = result.nodes[i];
             if (!node) {
@@ -3587,6 +3621,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     static_cast<void>(read_float(extension_object, "frustum_right",  projection->frustum_right));
                     static_cast<void>(read_float(extension_object, "frustum_bottom", projection->frustum_bottom));
                     static_cast<void>(read_float(extension_object, "frustum_top",    projection->frustum_top));
+                    static_cast<void>(read_bool (extension_object, "infinite_z_far", projection->infinite_z_far));
                 }
                 float float_value{0.0f};
                 if (read_float(extension_object, "exposure", float_value)) {
@@ -4751,10 +4786,26 @@ private:
             if (aspect_ratio.has_value() && (aspect_ratio.value() > 0.0f)) {
                 perspective.aspectRatio = aspect_ratio.value();
             }
-            if (z_far_raw > z_near) {
+            // An absent zfar is glTF's infinite far plane; writing the finite
+            // depth hint erhe keeps alongside it would silently turn an
+            // infinite camera into a clipped one on the next import.
+            if (!erhe_projection->infinite_z_far && (z_far_raw > z_near)) {
                 perspective.zfar = z_far_raw;
             }
             gltf_camera.camera = perspective;
+        };
+        // aspect = tan(fov_x / 2) / tan(fov_y / 2), the inverse of the import
+        // in parse_camera(). The ratio of the angles themselves is not the
+        // aspect ratio.
+        const auto fov_aspect_ratio = [](const float fov_x, const float fov_y) -> std::optional<float> {
+            if ((fov_x <= 0.0f) || (fov_y <= 0.0f)) {
+                return std::nullopt;
+            }
+            const float tan_y_half = std::tan(0.5f * fov_y);
+            if (!(tan_y_half > 0.0f)) {
+                return std::nullopt;
+            }
+            return std::tan(0.5f * fov_x) / tan_y_half;
         };
         switch (erhe_projection->projection_type) {
             case erhe::scene::Projection::Type::perspective_horizontal: {
@@ -4769,7 +4820,7 @@ private:
             case erhe::scene::Projection::Type::perspective: {
                 make_perspective(
                     erhe_projection->fov_y,
-                    (erhe_projection->fov_y != 0.0f) ? std::optional<float>{erhe_projection->fov_x / erhe_projection->fov_y} : std::nullopt
+                    fov_aspect_ratio(erhe_projection->fov_x, erhe_projection->fov_y)
                 );
                 break;
             }
@@ -4777,7 +4828,7 @@ private:
                 const float yfov = erhe_projection->fov_up - erhe_projection->fov_down;
                 make_perspective(
                     yfov,
-                    (yfov != 0.0f) ? std::optional<float>{(erhe_projection->fov_right - erhe_projection->fov_left) / yfov} : std::nullopt
+                    fov_aspect_ratio(erhe_projection->fov_right - erhe_projection->fov_left, yfov)
                 );
                 break;
             }
@@ -4785,9 +4836,11 @@ private:
             case erhe::scene::Projection::Type::orthogonal_vertical:
             case erhe::scene::Projection::Type::orthogonal:
             case erhe::scene::Projection::Type::orthogonal_rectangle: {
+                // glTF xmag / ymag are half extents; erhe's ortho_width /
+                // ortho_height are full extents (see parse_camera()).
                 gltf_camera.camera = fastgltf::Camera::Orthographic{
-                    .xmag  = erhe_projection->ortho_width,
-                    .ymag  = erhe_projection->ortho_height,
+                    .xmag  = 0.5f * erhe_projection->ortho_width,
+                    .ymag  = 0.5f * erhe_projection->ortho_height,
                     .zfar  = z_far_raw,
                     .znear = z_near_raw
                 };
@@ -4834,6 +4887,7 @@ private:
             ",\"fov_x\":{},\"fov_y\":{},\"fov_left\":{},\"fov_right\":{},\"fov_up\":{},\"fov_down\":{}"
             ",\"ortho_left\":{},\"ortho_width\":{},\"ortho_bottom\":{},\"ortho_height\":{}"
             ",\"frustum_left\":{},\"frustum_right\":{},\"frustum_bottom\":{},\"frustum_top\":{}"
+            ",\"infinite_z_far\":{}"
             ",\"exposure\":{},\"shadow_range\":{},\"flags\":{}}}",
             projection_type_name(projection.projection_type),
             projection.z_near, projection.z_far,
@@ -4841,6 +4895,7 @@ private:
             projection.fov_left, projection.fov_right, projection.fov_up, projection.fov_down,
             projection.ortho_left, projection.ortho_width, projection.ortho_bottom, projection.ortho_height,
             projection.frustum_left, projection.frustum_right, projection.frustum_bottom, projection.frustum_top,
+            projection.infinite_z_far ? "true" : "false",
             erhe_camera.get_exposure(), erhe_camera.get_shadow_range(),
             persistent_item_flags_to_json(erhe_camera.get_flag_bits())
         );

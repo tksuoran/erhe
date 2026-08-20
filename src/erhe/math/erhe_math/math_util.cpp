@@ -78,7 +78,8 @@ auto create_frustum_infinite_far(
     const float       bottom,
     const float       top,
     const float       z_near,
-    const Depth_range depth_range
+    const Depth_range depth_range,
+    const bool        reverse_depth
 ) -> mat4
 {
     const float width  = right  - left;
@@ -92,10 +93,30 @@ auto create_frustum_infinite_far(
     const float y =  (2.0f  * z_near) / height;
     const float a =  (right + left  ) / width;
     const float b =  (top   + bottom) / height;
-    const float c = -1.0f; // same for both depth ranges
-    const float d = (depth_range == Depth_range::zero_to_one)
-        ? -z_near          // zero to one
-        : -2.0f * z_near;  // negative one to one
+
+    // With z_clip = c * z_view + d and w_clip = -z_view, the depth of a point
+    // is (c * z_view + d) / -z_view, which tends to -c as z_view -> -infinity.
+    // Solving for the two endpoints of each depth range gives:
+    //
+    //                          forward                reverse
+    //   zero_to_one     c = -1, d = -z_near     c = 0, d =        z_near
+    //   negative_one..  c = -1, d = -2 z_near   c = 1, d = 2.0f * z_near
+    //
+    // (Reverse depth puts z_near at the far end of the range and infinity at
+    // the near end - the finite builders get the same effect by swapping
+    // z_near and z_far, which has no meaning when the far plane is at
+    // infinity.)
+    float c{0.0f};
+    float d{0.0f};
+    if (reverse_depth) {
+        c = (depth_range == Depth_range::zero_to_one) ? 0.0f :         1.0f;
+        d = (depth_range == Depth_range::zero_to_one) ? z_near : 2.0f * z_near;
+    } else {
+        c = -1.0f; // same for both depth ranges
+        d = (depth_range == Depth_range::zero_to_one)
+            ? -z_near          // zero to one
+            : -2.0f * z_near;  // negative one to one
+    }
 
     return mat4{
         x, 0, 0, 0,
@@ -103,6 +124,90 @@ auto create_frustum_infinite_far(
         a, b, c, -1.0f,
         0, 0, d, 0
     };
+}
+
+auto create_perspective_vertical_infinite_far(
+    const float       fov_y,
+    const float       aspect_ratio,
+    const float       z_near,
+    const Depth_range depth_range,
+    const bool        reverse_depth
+) -> mat4
+{
+    if (aspect_ratio == 0.0f) {
+        return glm::mat4{1.0f}; // TODO log warning
+    }
+    const float fov_y_clamped  = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const auto  tan_half_angle = std::tan(fov_y_clamped * 0.5f);
+    const auto  height         = 2.0f * z_near * tan_half_angle;
+    const auto  width          = height * aspect_ratio;
+    return create_frustum_infinite_far(
+        -0.5f * width, 0.5f * width, -0.5f * height, 0.5f * height, z_near, depth_range, reverse_depth
+    );
+}
+
+auto create_perspective_horizontal_infinite_far(
+    const float       fov_x,
+    const float       aspect_ratio,
+    const float       z_near,
+    const Depth_range depth_range,
+    const bool        reverse_depth
+) -> mat4
+{
+    if (aspect_ratio == 0.0f) {
+        return glm::mat4{1.0f}; // TODO log warning
+    }
+    const auto fov_x_clamped  = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
+    const auto tan_half_angle = std::tan(fov_x_clamped * 0.5f);
+    const auto width          = 2.0f * z_near * tan_half_angle;
+    const auto height         = width / aspect_ratio;
+    return create_frustum_infinite_far(
+        -0.5f * width, 0.5f * width, -0.5f * height, 0.5f * height, z_near, depth_range, reverse_depth
+    );
+}
+
+auto create_perspective_infinite_far(
+    const float       fov_x,
+    const float       fov_y,
+    const float       z_near,
+    const Depth_range depth_range,
+    const bool        reverse_depth
+) -> mat4
+{
+    const auto fov_y_clamped    = std::min(std::max(fov_y, epsilon), pi_minus_epsilon);
+    const auto fov_x_clamped    = std::min(std::max(fov_x, epsilon), pi_minus_epsilon);
+    const auto tan_x_half_angle = std::tan(fov_x_clamped * 0.5f);
+    const auto tan_y_half_angle = std::tan(fov_y_clamped * 0.5f);
+    const auto width            = 2.0f * z_near * tan_x_half_angle;
+    const auto height           = 2.0f * z_near * tan_y_half_angle;
+    return create_frustum_infinite_far(
+        -0.5f * width, 0.5f * width, -0.5f * height, 0.5f * height, z_near, depth_range, reverse_depth
+    );
+}
+
+auto create_perspective_xr_infinite_far(
+    const float       fov_left,
+    const float       fov_right,
+    const float       fov_up,
+    const float       fov_down,
+    const float       z_near,
+    const Depth_range depth_range,
+    const bool        reverse_depth
+) -> mat4
+{
+    const auto fov_left_clamped  = std::min(std::max(fov_left,  -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_right_clamped = std::min(std::max(fov_right, -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_up_clamped    = std::min(std::max(fov_up,    -pi_minus_epsilon), pi_minus_epsilon);
+    const auto fov_down_clamped  = std::min(std::max(fov_down,  -pi_minus_epsilon), pi_minus_epsilon);
+    return create_frustum_infinite_far(
+        z_near * std::tan(fov_left_clamped),
+        z_near * std::tan(fov_right_clamped),
+        z_near * std::tan(fov_down_clamped),
+        z_near * std::tan(fov_up_clamped),
+        z_near,
+        depth_range,
+        reverse_depth
+    );
 }
 
 auto create_frustum_simple(

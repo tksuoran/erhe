@@ -28,36 +28,56 @@ auto Projection::get_projection_matrix(
     const erhe::math::Coordinate_conventions& conventions
 ) const -> glm::mat4
 {
+    // The finite builders get reverse depth by being handed z_far and z_near
+    // the other way round - the x/y frustum scale works out the same either
+    // way and only the depth row changes. That trick has no infinite
+    // counterpart, so the infinite builders take reverse_depth directly.
     const auto clip_range = reverse_depth ? Clip_range{z_far, z_near} : Clip_range{z_near, z_far};
 
     glm::mat4 result{1.0f};
     switch (projection_type) {
         //using enum Projection::Type;
         case Projection::Type::perspective: {
-            result = erhe::math::create_perspective(
-                fov_x, fov_y, clip_range.z_near, clip_range.z_far, depth_range
-            );
+            result = infinite_z_far
+                ? erhe::math::create_perspective_infinite_far(
+                    fov_x, fov_y, z_near, depth_range, reverse_depth
+                )
+                : erhe::math::create_perspective(
+                    fov_x, fov_y, clip_range.z_near, clip_range.z_far, depth_range
+                );
             break;
         }
 
         case Projection::Type::perspective_xr: {
-            result = erhe::math::create_perspective_xr(
-                fov_left, fov_right, fov_up, fov_down, clip_range.z_near, clip_range.z_far, depth_range
-            );
+            result = infinite_z_far
+                ? erhe::math::create_perspective_xr_infinite_far(
+                    fov_left, fov_right, fov_up, fov_down, z_near, depth_range, reverse_depth
+                )
+                : erhe::math::create_perspective_xr(
+                    fov_left, fov_right, fov_up, fov_down, clip_range.z_near, clip_range.z_far, depth_range
+                );
             break;
         }
 
         case Projection::Type::perspective_horizontal: {
-            result = erhe::math::create_perspective_horizontal(
-                fov_x, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
-            );
+            result = infinite_z_far
+                ? erhe::math::create_perspective_horizontal_infinite_far(
+                    fov_x, aspect_ratio, z_near, depth_range, reverse_depth
+                )
+                : erhe::math::create_perspective_horizontal(
+                    fov_x, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
+                );
             break;
         }
 
         case Projection::Type::perspective_vertical: {
-            result = erhe::math::create_perspective_vertical(
-                fov_y, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
-            );
+            result = infinite_z_far
+                ? erhe::math::create_perspective_vertical_infinite_far(
+                    fov_y, aspect_ratio, z_near, depth_range, reverse_depth
+                )
+                : erhe::math::create_perspective_vertical(
+                    fov_y, aspect_ratio, clip_range.z_near, clip_range.z_far, depth_range
+                );
             break;
         }
 

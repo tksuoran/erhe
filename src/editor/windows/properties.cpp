@@ -347,6 +347,16 @@ void Properties::camera_properties(erhe::scene::Camera& camera)
         }
         add_entry("Z Near", [=](){ImGui::SliderFloat("##", &projection->z_near, 0.0f, 1000.0f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);});
         add_entry("Z Far",  [=](){ImGui::SliderFloat("##", &projection->z_far,  0.0f, 1000.0f, "%.4f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat);});
+        // Perspective only: Z Far stays live as the depth hint the shadow and
+        // gizmo code reads even while the projection itself is unbounded.
+        const bool is_perspective =
+            (projection->projection_type == erhe::scene::Projection::Type::perspective)            ||
+            (projection->projection_type == erhe::scene::Projection::Type::perspective_xr)         ||
+            (projection->projection_type == erhe::scene::Projection::Type::perspective_horizontal) ||
+            (projection->projection_type == erhe::scene::Projection::Type::perspective_vertical);
+        if (is_perspective) {
+            add_entry("Infinite Z Far", [=](){ImGui::Checkbox("##", &projection->infinite_z_far);});
+        }
 
         pop_group();
     }
