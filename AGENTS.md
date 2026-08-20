@@ -540,6 +540,31 @@ closing, or it keeps showing / editing / simulating content of a dead scene
   teardown paths, close a scene and grep `logs/log.txt` for
   `scene-close leak` as part of verification.
 
+A scene closing is only half of it: content also leaves the editor **without**
+any scene closing, when an undo removes it - undoing a glTF import takes every
+imported asset back out of the content library and every imported node back out
+of the scene. So a cached reference must handle BOTH.
+
+- Subscribe to `App_message_bus::items_removed` and drop the reference when
+  `message.removed->lookup.contains(ptr)` names it (precedent:
+  `Animation_window::on_items_removed()`). Handlers do that set lookup ONLY -
+  no manager lookups, no linear scans - because undoing a large import
+  announces thousands of items in one message.
+- The message is published once per frame by
+  `Asset_manager::flush_pending_removals()`, from `Editor::tick` just before
+  the message bus pump. The producers are the content-library detach walk
+  (`release_host_for_subtree`), `Item_insert_remove_operation`, and
+  `Asset_manager::on_scene_unregistered` - so no new removal path needs its own
+  integration.
+- Re-resolving state needs the same care as a cached `shared_ptr`: an item
+  removed by an undo stays alive in the undo history for redo, so a weak
+  "last selected" entry is still lockable and a part that re-resolves it every
+  frame will resurrect the reference (`Selection::on_items_removed()` forgets
+  those entries for exactly this reason).
+- Verify with `scripts/undo_reference_clearing_smoke_test.py` (drives a running
+  editor over MCP) and the `get_editor_references` MCP query, which reports
+  every such cached reference. See doc/import-undo-reference-clearing.md.
+
 ## No Band-Aid Fixes
 
 Every proposed solution must be evaluated with the question: "is this just a band-aid?" If the answer is yes, the solution must be rejected. A band-aid is any change that masks, works around, or tolerates the symptom of a bug without addressing the root cause - for example, a defensive null check that lets shutdown proceed when an object should not have been null in the first place, a try/catch that swallows an unexpected error, or a "tolerant" code path that accommodates state the system was not supposed to enter. Find and fix the actual cause; do not paper over it.
