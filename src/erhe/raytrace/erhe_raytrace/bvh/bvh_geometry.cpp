@@ -30,7 +30,9 @@
 #include <bvh/v2/thread_pool.h>
 
 #include <algorithm>
+#include <atomic>
 #include <fstream>
+#include <system_error>
 
 namespace erhe::raytrace {
 
@@ -52,26 +54,53 @@ using Bvh = bvh::v2::Bvh<bvh::v2::Node<float, 3>>;
 auto save_bvh(const Bvh& bvh, const uint64_t hash_code) -> bool
 {
     const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
-    const std::string file_name = cache_path.string();
-    if (file_name.empty()) {
-        return false;
-    }
-    std::ofstream out{file_name, std::ofstream::binary};
-    if (!out) {
+    if (cache_path.empty()) {
         return false;
     }
 
-    try {
-        bvh::v2::StdOutputStream stream{out};
-        bvh.serialize(stream);
-        return true;
-    } catch (...) {
+    // Write to a process/thread unique temporary file and rename it in place, so that
+    // readers never observe a partially written cache entry. Multiple geometries with
+    // identical content hash to the same cache entry, and they can be committed
+    // concurrently from task workers.
+    static std::atomic<uint64_t> s_temp_counter{0};
+    const std::filesystem::path temp_path = cache_path.parent_path() / std::filesystem::path{
+        fmt::format("{}.{}.tmp", cache_path.filename().string(), s_temp_counter.fetch_add(1))
+    };
+
+    {
+        std::ofstream out{temp_path.string(), std::ofstream::binary};
+        if (!out) {
+            return false;
+        }
+        try {
+            bvh::v2::StdOutputStream stream{out};
+            bvh.serialize(stream);
+        } catch (...) {
+            out.close();
+            std::error_code discarded_error_code{};
+            std::filesystem::remove(temp_path, discarded_error_code);
+            return false;
+        }
+        out.close();
+        if (!out) {
+            std::error_code discarded_error_code{};
+            std::filesystem::remove(temp_path, discarded_error_code);
+            return false;
+        }
+    }
+
+    std::error_code error_code{};
+    std::filesystem::rename(temp_path, cache_path, error_code);
+    if (error_code) {
+        std::error_code discarded_error_code{};
+        std::filesystem::remove(temp_path, discarded_error_code);
         return false;
     }
+    return true;
 }
 
 // TODO Add versioning
-auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
+auto load_bvh(Bvh& bvh, const uint64_t hash_code, const std::size_t primitive_count) -> bool
 {
     const std::filesystem::path cache_path = get_bvh_cache_path(hash_code);
     const std::string file_name = cache_path.string();
@@ -82,13 +111,30 @@ auto load_bvh(Bvh& bvh, const uint64_t hash_code) -> bool
     if (!in) {
         return false;
     }
+    Bvh loaded_bvh{};
     try {
         bvh::v2::StdInputStream stream{in};
-        bvh = Bvh::deserialize(stream);
-        return true;
+        loaded_bvh = Bvh::deserialize(stream);
     } catch (...) {
         return false;
     }
+
+    // Bvh::deserialize() does not report short reads: a truncated or empty cache entry
+    // simply yields empty / partial node and primitive id arrays. Validate the result
+    // instead of trusting the file.
+    if (loaded_bvh.nodes.empty() || (loaded_bvh.prim_ids.size() != primitive_count)) {
+        log_geometry->warn("Ignoring invalid BVH cache entry {}", file_name);
+        return false;
+    }
+    for (const std::size_t prim_id : loaded_bvh.prim_ids) {
+        if (prim_id >= primitive_count) {
+            log_geometry->warn("Ignoring invalid BVH cache entry {}", file_name);
+            return false;
+        }
+    }
+
+    bvh = std::move(loaded_bvh);
+    return true;
 }
 
 auto IGeometry::create(const std::string_view debug_label, const Geometry_type geometry_type) -> IGeometry*
@@ -261,7 +307,7 @@ void Bvh_geometry::commit()
 
         Executor_resources& executor_resources = Executor_resources::get_instance();
 
-        const bool load_ok = load_bvh(m_bvh, hash_code);
+        const bool load_ok = load_bvh(m_bvh, hash_code, triangle_count);
         if (!load_ok) {
             typename bvh::v2::DefaultBuilder<Node>::Config config;
             config.quality = bvh::v2::DefaultBuilder<Node>::Quality::High; // TODO Low
