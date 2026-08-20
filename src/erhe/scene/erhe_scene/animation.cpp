@@ -3,6 +3,8 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_verify/verify.hpp"
 
+#include <algorithm>
+
 namespace erhe::scene {
 
 auto get_component_count(const Animation_path path) -> std::size_t
@@ -252,6 +254,10 @@ void Animation_sampler::apply(Animation_channel& channel, const float time_curre
 {
     seek(channel, time_current);
 
+    // The component write goes straight into the node data: a channel carries only
+    // one of translation / rotation / scale, and several channels can target the
+    // same node, so notifying per channel would be redundant. Animation::apply()
+    // does the world-transform update and the notification, once per target node.
     Trs_transform& target = channel.target->node_data.transforms.parent_from_node;
 
     const glm::vec4 value = evaluate(channel, time_current);
@@ -320,6 +326,15 @@ auto Animation::evaluate(const float time_current, const std::size_t channel_ind
 
 void Animation::apply(float time_current)
 {
+    // Animation_sampler::apply() writes the sampled component directly into the
+    // target's parent_from_node, bypassing the Node transform setters. Collect the
+    // touched nodes so that each one gets exactly one world-transform update and
+    // one handle_transform_update() after all of its channels have been applied.
+    // Without that notification the attachments never see the new pose and the
+    // node is never marked dirty, so Scene::update_node_transforms() - dirty-list
+    // driven since 1d2375d6a - has nothing to propagate and the viewport keeps
+    // rendering the old pose.
+    m_applied_nodes.clear();
     for (auto& channel : channels) {
         // A channel can lose its target node (the editor resets targets
         // pointing into a closing scene); the sampler data stays, the
@@ -329,6 +344,21 @@ void Animation::apply(float time_current)
         }
         auto& sampler = samplers.at(channel.sampler_index);
         sampler.apply(channel, time_current);
+        m_applied_nodes.push_back(channel.target.get());
+    }
+
+    std::sort(m_applied_nodes.begin(), m_applied_nodes.end());
+    m_applied_nodes.erase(std::unique(m_applied_nodes.begin(), m_applied_nodes.end()), m_applied_nodes.end());
+
+    // One serial for the whole pose: all of these nodes moved at the same time.
+    // A node whose animated parent is updated after it briefly holds a world
+    // transform computed from the parent's previous pose; the scene's next
+    // update_node_transforms() pass walks dirty nodes ancestors-first and
+    // recomputes those descendants from the final parent transform.
+    const uint64_t serial = Node_transforms::get_next_serial();
+    for (Node* node : m_applied_nodes) {
+        node->update_world_from_node();
+        node->handle_transform_update(serial);
     }
 }
 

@@ -84,6 +84,11 @@ public:
 
     std::vector<Animation_sampler> samplers;
     std::vector<Animation_channel> channels;
+
+private:
+    // Distinct channel target nodes of the last apply(). A member only to keep
+    // its capacity across frames; carries no state between calls.
+    std::vector<Node*> m_applied_nodes;
 };
 
 } // namespace erhe::scene
