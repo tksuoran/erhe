@@ -465,6 +465,24 @@
         "max_rays": 24,
         "max_bounces": 8
     },
+    "ddgi": {
+        "enabled": false,
+        "probe_spacing_m": 1.5,
+        "volume_padding_m": 1,
+        "max_probes": 4096,
+        "rays_per_probe": 128,
+        "irradiance_texels": 6,
+        "distance_texels": 14,
+        "hysteresis": 0.97,
+        "depth_sharpness": 50,
+        "normal_bias": 0.15,
+        "view_bias": 0.1,
+        "intensity": 1,
+        "probes_per_frame": 512,
+        "relocation_enabled": true,
+        "classification_enabled": true,
+        "debug_draw_probes": false
+    },
     "lightmap": {
         "cell_size_m": 10,
         "hard_angles_deg": 60,
@@ -559,9 +577,17 @@
         ]
     },
     "load": {
+        "_version": 2,
         "deferred_raytrace": true,
         "deferred_edge_lines": true,
-        "parallel_gltf_parse": true
+        "parallel_gltf_parse": true,
+        "async_gltf_load": true,
+        "gpu_upload_bytes_per_frame": 4194304,
+        "io_read_bytes_per_frame": 67108864,
+        "max_decoded_bytes_in_flight": 134217728,
+        "max_residency_items_per_frame": 64,
+        "max_publish_items_per_frame": 256,
+        "load_time_slice_ms": 4
     },
     "network": {
         "upstream_address": "127.0.0.1",
