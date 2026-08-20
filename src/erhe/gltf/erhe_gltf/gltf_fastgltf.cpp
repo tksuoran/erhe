@@ -179,6 +179,10 @@ constexpr glm::mat4 mat4_yup_from_zup{
     }
 }
 
+[[nodiscard]] auto c_str(fastgltf::ComponentType value) -> const char*;
+
+// Returns Format::format_undefined when the accessor cannot be expressed as an
+// erhe vertex attribute format; the caller is expected to drop the primitive.
 auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::Format
 {
     using namespace erhe::dataformat;
@@ -194,6 +198,7 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::Float        : return Format::format_32_scalar_float;
                 default: break;
             }
+            break;
         }
         case fastgltf::AccessorType::Vec2: {
             switch (accessor.componentType) {
@@ -206,6 +211,7 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec2_float;
                 default: break;
             }
+            break;
         }
         case fastgltf::AccessorType::Vec3:{
             switch (accessor.componentType) {
@@ -218,6 +224,7 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec3_float;
                 default: break;
             }
+            break;
         }
         case fastgltf::AccessorType::Vec4: {
             switch (accessor.componentType) {
@@ -230,12 +237,23 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
                 case fastgltf::ComponentType::Float        : return Format::format_32_vec4_float;
                 default: break;
             }
+            break;
         }
         default: {
             break;
         }
     }
-    ERHE_FATAL("Unsupported attribute type");
+    // No erhe vertex format matches this accessor - a matrix-typed vertex
+    // attribute, or a component type no glTF vertex attribute may use. Report
+    // it and let the caller drop the primitive; aborting the process over one
+    // malformed attribute in an imported file is not the right trade.
+    log_gltf->error(
+        "glTF attribute accessor: unsupported accessor type {} / component type {} (normalized = {})",
+        fastgltf::getAccessorTypeName(accessor.type),
+        c_str(accessor.componentType),
+        accessor.normalized != 0
+    );
+    return Format::format_undefined;
 }
 
 [[nodiscard]] auto c_str(const fastgltf::AnimationInterpolation value) -> const char*
@@ -1950,6 +1968,18 @@ private:
             const std::size_t                              attribute_usage_index = get_attribute_index(gltf_attribute.name);
             const fastgltf::Accessor&                      accessor              = m_asset->accessors[gltf_attribute.accessorIndex];
             const erhe::dataformat::Format                 format                = to_erhe_attribute(accessor);
+            // to_erhe_attribute() already logged what it could not express.
+            // Building the vertex format around an undefined attribute would
+            // give it a zero size and desynchronize every following attribute
+            // offset, so drop the whole primitive instead.
+            if (format == erhe::dataformat::Format::format_undefined) {
+                log_gltf->error(
+                    "glTF primitive attribute '{}' has an unsupported format - primitive skipped",
+                    gltf_attribute.name.c_str()
+                );
+                primitive_entry.triangle_soup.reset();
+                return;
+            }
             if (attribute_usage_type == erhe::dataformat::Vertex_attribute_usage::tangent) {
                 generate_tangents = false;
             }
