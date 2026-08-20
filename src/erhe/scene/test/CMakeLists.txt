@@ -12,6 +12,7 @@ set(_target "erhe_scene_tests")
 add_executable(${_target}
     main.cpp
     test_animation_apply.cpp
+    test_animation_sampler.cpp
     test_light_frame.cpp
 )
 

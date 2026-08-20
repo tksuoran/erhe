@@ -12,9 +12,10 @@ namespace editor {
 
 namespace {
 
-// Minimum separation between neighboring keyframe timestamps. Keeps
-// timestamps strictly increasing (Animation_sampler::evaluate VERIFYs
-// t_start < t_next).
+// Minimum separation between neighboring keyframe timestamps. glTF requires
+// strictly increasing timestamps; Animation_sampler::evaluate() holds the
+// start keyframe rather than interpolating across a zero-length span, so a
+// collapsed pair would silently freeze that segment.
 constexpr float c_min_key_separation = 1.0e-4f;
 
 [[nodiscard]] auto get_key_value_count(const erhe::scene::Animation_interpolation_mode interpolation_mode) -> std::size_t
