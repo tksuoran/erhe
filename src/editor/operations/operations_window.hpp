@@ -213,6 +213,9 @@ public:
     void create_collision_filter();
     void create_joint_settings();
 
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_make_mesh_material() const -> const std::shared_ptr<erhe::primitive::Material>&;
 private:
     // Saves the scene as a single erhe-authored glTF file (shared by
     // save_scene and the overwrite-confirmation modal).
@@ -273,6 +276,8 @@ private:
     // closing scene - the modal's shared_ptr would pin the scene, and
     // confirming would save an already-closed scene.
     void on_close_scene(const std::shared_ptr<Scene_root>& scene_root);
+    // Content removed without a scene closing (undo of a glTF import).
+    void on_items_removed(const Removed_items& removed);
 
     // UI wiring for a freshly opened scene (browser window, viewport,
     // Scene_created_message). Shared by the blocking open and the
@@ -284,6 +289,7 @@ private:
 
     erhe::message_bus::Subscription<Load_scene_file_message>  m_load_scene_file_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>    m_items_removed_subscription;
     App_context& m_context;
 
     // Maps each draggable operation's registered command to a thunk that runs that

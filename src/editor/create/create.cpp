@@ -1,6 +1,7 @@
 #include "create/create.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
 #include "assets/asset_manager.hpp"
@@ -46,6 +47,29 @@ Create::Create(
 {
     set_base_priority(c_priority);
     set_description  ("Create");
+
+    // The created brush is a raw shared_ptr held across frames; drop it when
+    // the brush leaves the editor (doc/import-undo-reference-clearing.md).
+    if (context.app_message_bus != nullptr) {
+        m_items_removed_subscription = context.app_message_bus->items_removed.subscribe(
+            [this](Items_removed_message& message) {
+                on_items_removed(*message.removed.get());
+            }
+        );
+    }
+}
+
+auto Create::get_brush() const -> const std::shared_ptr<Brush>&
+{
+    return m_brush;
+}
+
+void Create::on_items_removed(const Removed_items& removed)
+{
+    if (m_brush && removed.lookup.contains(m_brush.get())) {
+        m_brush.reset();
+        m_brush_name.clear();
+    }
 }
 
 

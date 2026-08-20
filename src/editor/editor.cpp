@@ -1,4 +1,4 @@
-// Using llvm pipe appears to have broken GL context sharing at least with what I do here.
+﻿// Using llvm pipe appears to have broken GL context sharing at least with what I do here.
 #define ERHE_SERIAL_INIT 1
 
 #if !defined(ERHE_SERIAL_INIT)
@@ -754,6 +754,16 @@ public:
         //    - App_scenes (updates physics)
         //    - Fly_camera_tool
         //    - Network_window
+        // Announce content removed this frame (undo of a glTF import, node
+        // deletes, scene unregistration) before the pump, so subscribers drop
+        // their cached references in the same frame the removal happened. Here
+        // and not at the producers: this is outside ImGui iteration and
+        // outside the Content_library / Item_host mutexes the producing
+        // operations hold (doc/import-undo-reference-clearing.md).
+        if (m_asset_manager) {
+            m_asset_manager->flush_pending_removals();
+        }
+
         m_app_message_bus->update(); // Flushes queued messages
 
         // Release completed per-item async task handles: a retained handle
@@ -2810,6 +2820,11 @@ public:
                 on_close_scene(message);
             }
         );
+        m_items_removed_subscription = m_app_message_bus->items_removed.subscribe(
+            [this](Items_removed_message& message) {
+                on_items_removed(message);
+            }
+        );
 
         // Run the startup command script while the init-time command
         // buffer is still open. Several scripted commands (e.g.
@@ -3058,6 +3073,7 @@ public:
         m_app_context.node_properties_window   = m_node_properties_window.get();
         m_app_context.operation_stack          = m_operation_stack       .get();
         m_app_context.operations               = m_operations            .get();
+        m_app_context.properties               = m_properties            .get();
         m_app_context.paint_tool               = m_paint_tool            .get();
         m_app_context.physics_tool             = m_physics_tool          .get();
         m_app_context.post_processing          = m_post_processing       .get();
@@ -3240,6 +3256,51 @@ public:
     // Close a scene (Hierarchy window Scene row "Close" context menu entry).
     // Runs from the message bus pump, outside ImGui iteration, because it
     // destroys ImGui windows (the scene's viewports and browser window).
+    // Applies the two visitors to the primary graph editor windows and to
+    // every extra "Open Editor" window. Both the scene-close teardown and the
+    // item-removal cleanup below have to reach the same set.
+    template <typename Geometry_visitor, typename Texture_visitor>
+    void for_each_graph_window(Geometry_visitor&& geometry_visitor, Texture_visitor&& texture_visitor)
+    {
+        geometry_visitor(*m_geometry_graph_window.get());
+        texture_visitor (*m_texture_graph_window.get());
+        for (const std::shared_ptr<Geometry_graph_window>& window : m_editor_windows->get_extra_geometry_graph_windows()) {
+            geometry_visitor(*window.get());
+        }
+        for (const std::shared_ptr<Texture_graph_window>& window : m_editor_windows->get_extra_texture_graph_windows()) {
+            texture_visitor(*window.get());
+        }
+    }
+
+    // Content taken out of the editor without a scene closing - undo of a
+    // glTF import, a node delete, a scene leaving the registry. Parts that
+    // cache their own references subscribe themselves; this handles the
+    // references Editor owns (doc/import-undo-reference-clearing.md).
+    void on_items_removed(Items_removed_message& message)
+    {
+        const Removed_items& removed = *message.removed.get();
+
+        // The window's resolved shared_ptr is what keeps the asset alive, so
+        // the weak target never expires on its own.
+        for_each_graph_window(
+            [&removed](Geometry_graph_window& window) {
+                const std::shared_ptr<Graph_mesh> target = window.get_target();
+                if (target && removed.lookup.contains(target.get())) {
+                    window.set_target({});
+                }
+            },
+            [&removed](Texture_graph_window& window) {
+                const std::shared_ptr<Graph_texture> target = window.get_target();
+                if (target && removed.lookup.contains(target.get())) {
+                    window.set_target({});
+                }
+            }
+        );
+
+        // Selection prunes itself (and its last-selected map) - see
+        // Selection::on_items_removed.
+    }
+
     void on_close_scene(Close_scene_message& message)
     {
         const std::shared_ptr<Scene_root>& scene_root = message.scene_root;
@@ -3310,26 +3371,20 @@ public:
         // Animation_window; see AGENTS.md "Scene-hosted references").
         {
             erhe::Item_host* const closing_host = static_cast<erhe::Item_host*>(scene_root.get());
-            const auto clear_geometry_target_if_hosted = [closing_host](Geometry_graph_window& window) {
-                const std::shared_ptr<Graph_mesh> target = window.get_target();
-                if (target && (target->get_item_host() == closing_host)) {
-                    window.set_target({});
+            for_each_graph_window(
+                [closing_host](Geometry_graph_window& window) {
+                    const std::shared_ptr<Graph_mesh> target = window.get_target();
+                    if (target && (target->get_item_host() == closing_host)) {
+                        window.set_target({});
+                    }
+                },
+                [closing_host](Texture_graph_window& window) {
+                    const std::shared_ptr<Graph_texture> target = window.get_target();
+                    if (target && (target->get_item_host() == closing_host)) {
+                        window.set_target({});
+                    }
                 }
-            };
-            const auto clear_texture_target_if_hosted = [closing_host](Texture_graph_window& window) {
-                const std::shared_ptr<Graph_texture> target = window.get_target();
-                if (target && (target->get_item_host() == closing_host)) {
-                    window.set_target({});
-                }
-            };
-            clear_geometry_target_if_hosted(*m_geometry_graph_window.get());
-            clear_texture_target_if_hosted (*m_texture_graph_window.get());
-            for (const std::shared_ptr<Geometry_graph_window>& window : m_editor_windows->get_extra_geometry_graph_windows()) {
-                clear_geometry_target_if_hosted(*window.get());
-            }
-            for (const std::shared_ptr<Texture_graph_window>& window : m_editor_windows->get_extra_texture_graph_windows()) {
-                clear_texture_target_if_hosted(*window.get());
-            }
+            );
         }
 
         // Viewport windows are not destroyed with the scene: they exist
@@ -3987,6 +4042,7 @@ public:
     // is created or loaded. m_tools_attached_to_scene makes that happen exactly once.
     erhe::message_bus::Subscription<Scene_created_message> m_scene_created_subscription;
     erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message>   m_items_removed_subscription;
 
     // Scene-close leak watchdog state (see on_close_scene /
     // update_scene_close_leak_watches).

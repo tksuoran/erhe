@@ -1537,6 +1537,18 @@ void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
             asset_count += entries->items.size();
         }
     }
+    // The scene left the editor registry: undoing Scene_open_operation gets
+    // here without closing the scene and without publishing any message at
+    // all, so this is the only notice the editor parts holding this scene's
+    // assets ever get (doc/import-undo-reference-clearing.md). Redo
+    // re-registers and re-arms the record, but does not restore a window's
+    // selection - intended.
+    visit_record_assets(
+        *record,
+        [this](const Asset_type_info&, const std::shared_ptr<erhe::Item_base>& item) {
+            note_item_detached(item);
+        }
+    );
     log_asset->info(
         "scene '{}' container record {} closed ({}; keeps {} assets until the courtesy unload)",
         record->scene_name, record->id,
@@ -1681,6 +1693,48 @@ void Asset_manager::on_library_node_attached(erhe::Item_host* const owner, Conte
         );
         node.asset_usership->adopt(*this, node.item);
     }
+}
+
+void Asset_manager::note_item_detached(const std::shared_ptr<erhe::Item_base>& item)
+{
+    verify_main_thread();
+    m_pending_removals.note_detached(item);
+}
+
+void Asset_manager::note_item_attached(const erhe::Item_base* const item)
+{
+    verify_main_thread();
+    m_pending_removals.note_attached(item);
+}
+
+void Asset_manager::flush_pending_removals()
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_in_flush);
+    const std::shared_ptr<const Removed_items> removed = m_pending_removals.take();
+    if (!removed) {
+        return; // nothing was removed since the last frame
+    }
+    log_asset->trace("announcing {} removed item(s)", removed->owners.size());
+    ++m_items_removed_announcement_count;
+    m_last_announced_uids.clear();
+    m_last_announced_uids.reserve(removed->owners.size());
+    for (const std::shared_ptr<erhe::Item_base>& item : removed->owners) {
+        m_last_announced_uids.push_back(item->get_id());
+    }
+    m_in_flush = true;
+    m_app_message_bus.items_removed.send_message(Items_removed_message{removed});
+    m_in_flush = false;
+}
+
+auto Asset_manager::get_items_removed_announcement_count() const -> std::size_t
+{
+    return m_items_removed_announcement_count;
+}
+
+auto Asset_manager::get_last_announced_uids() const -> const std::vector<std::size_t>&
+{
+    return m_last_announced_uids;
 }
 
 void Asset_manager::on_library_node_detached(erhe::Item_host* const owner, Content_library_node& node)

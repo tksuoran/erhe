@@ -87,6 +87,22 @@ Animation_window::Animation_window(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+}
+
+void Animation_window::on_items_removed(const Removed_items& removed)
+{
+    // The edited animation was taken out of the editor - undo of the glTF
+    // import that brought it in, or its defining scene leaving the registry.
+    // Keeping it here would show and play content that is no longer in the
+    // editor, and pin the asset (doc/import-undo-reference-clearing.md).
+    if (m_animation && removed.lookup.contains(m_animation.get())) {
+        set_animation({}); // also clears the player
+    }
 }
 
 void Animation_window::on_close_scene(erhe::Item_host* const closing_host)

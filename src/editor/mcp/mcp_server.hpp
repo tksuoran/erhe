@@ -305,6 +305,11 @@ private:
     auto action_set_transform_mode            (const nlohmann::json& args) -> std::string;
     auto action_set_gizmo_visibility          (const nlohmann::json& args) -> std::string;
     auto query_transform_state                (const nlohmann::json& args) -> std::string;
+
+    // doc/import-undo-reference-clearing.md
+    auto query_editor_references              (const nlohmann::json& args) -> std::string;
+    auto action_move_library_item             (const nlohmann::json& args) -> std::string;
+    auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
     auto action_set_geometry_graph_target     (const nlohmann::json& args) -> std::string;
     auto action_geometry_graph_add_node       (const nlohmann::json& args) -> std::string;

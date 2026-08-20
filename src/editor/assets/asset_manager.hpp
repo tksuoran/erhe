@@ -2,6 +2,7 @@
 
 #include "app_message.hpp"
 #include "assets/asset_key.hpp"
+#include "assets/pending_item_removals.hpp"
 #include "assets/asset_reference.hpp"
 
 #include "erhe_gltf/gltf.hpp"
@@ -325,6 +326,29 @@ public:
     void on_library_node_attached(erhe::Item_host* owner, Content_library_node& node);
     void on_library_node_detached(erhe::Item_host* owner, Content_library_node& node);
 
+    // Removal announcement (doc/import-undo-reference-clearing.md). The
+    // library claim / release walks call these for EVERY entry type, not only
+    // the manager-owned ones the two hooks above handle: the graph editor
+    // windows hold Graph_mesh / Graph_texture assets, which are not
+    // manager-owned but are removed by the same undo. note_item_attached()
+    // cancels a pending note so a library folder move - a detach immediately
+    // followed by an attach - announces nothing.
+    void note_item_detached(const std::shared_ptr<erhe::Item_base>& item);
+    void note_item_attached(const erhe::Item_base* item);
+
+    // Publishes one Items_removed_message for everything noted since the last
+    // call, and returns immediately when nothing was noted. Called once per
+    // frame from Editor::tick, just before the message bus pump: after the
+    // operation stack has run (so an undo made this frame is announced this
+    // frame) and outside every lock the producing operations hold.
+    void flush_pending_removals();
+
+    // Observability for the removal announcement, so a test can assert that
+    // one happened - or that no further one followed. An absence is otherwise
+    // indistinguishable from a subscriber that was never wired.
+    [[nodiscard]] auto get_items_removed_announcement_count() const -> std::size_t;
+    [[nodiscard]] auto get_last_announced_uids() const -> const std::vector<std::size_t>&;
+
     // Identity
     [[nodiscard]] auto find_loaded(const Asset_key& key) const -> std::shared_ptr<erhe::Item_base>;
     // Finds a loaded managed asset object by its unique item id (scans the
@@ -502,6 +526,14 @@ private:
     // (nodes must die with the scene; a surviving animation must not pin
     // them). Channels keep their sampler data.
     void on_close_scene(Scene_root* scene_root);
+
+    Pending_item_removals m_pending_removals;
+    // Re-entrancy guard: Message_bus::send_message holds its non-recursive
+    // receivers mutex across every handler, so a subscriber that reached
+    // flush_pending_removals() would deadlock. Fail loudly instead.
+    bool                  m_in_flush{false};
+    std::size_t              m_items_removed_announcement_count{0};
+    std::vector<std::size_t> m_last_announced_uids;
 
     // The unload core shared by request_unload and the courtesy unload:
     // refuses (naming users) while any asset of the record has declared

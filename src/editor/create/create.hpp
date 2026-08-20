@@ -5,6 +5,9 @@
 #include "create/create_cone.hpp"
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
+#include "app_message.hpp"
+
+#include "erhe_message_bus/message_bus.hpp"
 #include "tools/tool.hpp"
 #include "tools/tool_window.hpp"
 
@@ -33,8 +36,14 @@ public:
     );
 
     void tool_render(const Render_context& context) override;
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_brush() const -> const std::shared_ptr<Brush>&;
 
 private:
+    // Content removed without a scene closing (undo of a glTF import).
+    void on_items_removed(const Removed_items& removed);
+
     void window_imgui();
 
     [[nodiscard]] auto get_button_size() -> ImVec2;
@@ -56,6 +65,7 @@ private:
     Create_shape*                 m_create_shape{nullptr};
     std::string                   m_brush_name;
     std::shared_ptr<Brush>        m_brush;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 };
 
 }

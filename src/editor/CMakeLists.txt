@@ -122,6 +122,8 @@ erhe_target_sources_grouped(
     assets/asset_load_tick_context.hpp
     assets/asset_manager.cpp
     assets/asset_manager.hpp
+    assets/pending_item_removals.cpp
+    assets/pending_item_removals.hpp
     assets/asset_paths.cpp
     assets/asset_paths.hpp
     assets/asset_reference.cpp
@@ -326,6 +328,7 @@ erhe_target_sources_grouped(
     mcp/mcp_server_graphs.cpp
     mcp/mcp_server_material.cpp
     mcp/mcp_server_mesh_components.cpp
+    mcp/mcp_server_references.cpp
     mcp/mcp_server_physics.cpp
     mcp/mcp_server_scene_action.cpp
     mcp/mcp_server_scene_query.cpp
@@ -1148,5 +1151,6 @@ if (NOT ERHE_TARGET_OS_ANDROID)
 endif ()
 
 if (${ERHE_BUILD_TESTS})
+    add_subdirectory(assets/test)
     add_subdirectory(mcp/test)
 endif ()

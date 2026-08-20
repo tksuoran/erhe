@@ -84,6 +84,9 @@ public:
     // The live extra graph-editor instances (the primaries are in
     // App_context). Used by the Node Properties window to gather the
     // canvas-selected nodes of every graph editor window.
+    // Every Properties window (the primary plus the per-target extras), for
+    // the MCP get_editor_references query.
+    [[nodiscard]] auto get_properties_windows() const -> const std::vector<std::shared_ptr<Properties>>&;
     [[nodiscard]] auto get_extra_geometry_graph_windows() const -> const std::vector<std::shared_ptr<Geometry_graph_window>>&;
     [[nodiscard]] auto get_extra_texture_graph_windows () const -> const std::vector<std::shared_ptr<Texture_graph_window>>&;
 

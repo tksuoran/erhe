@@ -84,6 +84,13 @@ void claim_host_for_subtree(Content_library_node& subtree_root, erhe::Item_host*
             if (manager_owned && (asset_manager != nullptr)) {
                 asset_manager->on_library_node_attached(owner, node);
             }
+            if (asset_manager != nullptr) {
+                // Cancels a pending removal note: a library folder move is a
+                // detach immediately followed by this attach, and must not be
+                // announced as a removal
+                // (doc/import-undo-reference-clearing.md).
+                asset_manager->note_item_attached(node.item.get());
+            }
             return true;
         }
     );
@@ -106,6 +113,13 @@ void release_host_for_subtree(Content_library_node& subtree_root, erhe::Item_hos
             }
             if (manager_owned && (asset_manager != nullptr)) {
                 asset_manager->on_library_node_detached(owner, node);
+            }
+            if (asset_manager != nullptr) {
+                // EVERY entry type, not just the manager-owned ones above:
+                // the graph editor windows hold Graph_mesh / Graph_texture
+                // assets, which the same undo removes
+                // (doc/import-undo-reference-clearing.md).
+                asset_manager->note_item_detached(node.item);
             }
             return true;
         }

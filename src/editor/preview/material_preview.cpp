@@ -54,6 +54,11 @@ Material_preview::Material_preview(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
 }
 
 Material_preview::~Material_preview() noexcept
@@ -170,6 +175,25 @@ void Material_preview::render_preview(
     set_clear_color(glm::vec4{0.0f, 0.0f, 0.0f, 0.0f});
     update_rendertarget(*m_context.graphics_device);
     render_preview(material);
+}
+
+auto Material_preview::get_last_material() const -> const std::shared_ptr<erhe::primitive::Material>&
+{
+    return m_last_material;
+}
+
+void Material_preview::on_items_removed(const Removed_items& removed)
+{
+    if (!m_last_material || !removed.lookup.contains(m_last_material.get())) {
+        return;
+    }
+    if (m_content_library && m_content_library->materials) {
+        m_content_library->materials->remove_all_children_recursively();
+    }
+    if (m_mesh && !m_mesh->get_primitives().empty()) {
+        m_mesh->set_primitive_material(0, {});
+    }
+    m_last_material.reset();
 }
 
 void Material_preview::on_close_scene(erhe::Item_host* const closing_host)

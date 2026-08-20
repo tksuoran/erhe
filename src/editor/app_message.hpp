@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 namespace erhe        { class Item_base; }
@@ -170,6 +171,28 @@ struct Render_scene_view_message
 
 struct Animation_update_message
 {
+};
+
+// Payload of Items_removed_message. Shared, because Message_bus::send_message
+// takes the message by value and undoing a large import announces thousands of
+// items at once.
+struct Removed_items
+{
+    std::unordered_set<const erhe::Item_base*>    lookup; // membership test
+    std::vector<std::shared_ptr<erhe::Item_base>> owners; // keeps them alive for the dispatch
+};
+
+// Published once per frame for content taken out of the editor without a scene
+// closing: undoing a glTF import removes every imported asset from the content
+// library and every imported node from the scene. Same contract as close_scene
+// (AGENTS.md "Scene-hosted references in editor parts") - a part that caches a
+// reference to editor content must drop it when this message names that item,
+// or the item survives as an undeclared user in the exclusivity check of
+// Asset_manager::unload_record. Handlers do a lookup against the set ONLY: no
+// manager lookups and no linear scans, because the batch can be large.
+struct Items_removed_message
+{
+    std::shared_ptr<const Removed_items> removed;
 };
 
 }

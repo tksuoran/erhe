@@ -83,6 +83,9 @@ public:
     // it is also the MCP set_tool_asset entry point.
     void set_material(const std::shared_ptr<erhe::primitive::Material>& material);
 
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_material() const -> const std::shared_ptr<erhe::Item_base>&;
 private:
     [[nodiscard]] auto get_hover_mesh() const -> const Hover_entry*;
 
@@ -94,9 +97,13 @@ private:
     // persistence mechanism (the inventory is), so it is still cleared here
     // as belt-and-braces.
     void on_close_scene(erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import):
+    // drop the reference when it names one of the removed items.
+    void on_items_removed(const Removed_items& removed);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     Material_paint_command m_paint_command;
     Material_pick_command  m_pick_command;
 

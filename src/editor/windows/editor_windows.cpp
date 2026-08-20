@@ -257,6 +257,11 @@ void Editor_windows::update_once_per_frame()
     }
 }
 
+auto Editor_windows::get_properties_windows() const -> const std::vector<std::shared_ptr<Properties>>&
+{
+    return m_properties_windows;
+}
+
 auto Editor_windows::get_extra_geometry_graph_windows() const -> const std::vector<std::shared_ptr<Geometry_graph_window>>&
 {
     return m_geometry_graph_windows;

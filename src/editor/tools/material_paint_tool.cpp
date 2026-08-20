@@ -130,6 +130,11 @@ Material_paint_tool::Material_paint_tool(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
 }
 
 auto Material_paint_tool::get_hover_mesh() const -> const Hover_entry*
@@ -182,6 +187,19 @@ void Material_paint_tool::from_drag_and_drop(const std::shared_ptr<erhe::primiti
 void Material_paint_tool::set_material(const std::shared_ptr<erhe::primitive::Material>& material)
 {
     m_material.adopt(*m_context.asset_manager, material);
+}
+
+auto Material_paint_tool::get_material() const -> const std::shared_ptr<erhe::Item_base>&
+{
+    return m_material.get();
+}
+
+void Material_paint_tool::on_items_removed(const Removed_items& removed)
+{
+    const std::shared_ptr<erhe::Item_base>& material = m_material.get();
+    if (material && removed.lookup.contains(material.get())) {
+        m_material.set_key(Asset_key{});
+    }
 }
 
 void Material_paint_tool::on_close_scene(erhe::Item_host* const closing_host)

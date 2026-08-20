@@ -1,5 +1,9 @@
 #pragma once
 
+#include "app_message.hpp"
+
+#include "erhe_message_bus/message_bus.hpp"
+
 #include "operations/compound_operation.hpp"
 
 #include "erhe_imgui/imgui_window.hpp"
@@ -48,6 +52,28 @@ class Item_tree
 {
 public:
     Item_tree(App_context& context);
+    virtual ~Item_tree() noexcept;
+
+    // Every live Item_tree, in construction order. There is no other registry:
+    // instances are owned by four unrelated places (Scene_root, Tools,
+    // Asset_browser, Editor), so this is what lets the MCP reference query and
+    // its test hook reach them (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] static auto get_instances() -> const std::vector<Item_tree*>&;
+
+    // Identifies this tree in the reference query / test hook. Defaults to the
+    // window title for Item_tree_window; bare trees get a caller-set label.
+    void set_tree_label(std::string_view label);
+    [[nodiscard]] auto get_tree_label() const -> const std::string&;
+
+    // Cached references this tree holds across frames, for the MCP query.
+    // m_hovered_item / m_popup_item are reset only by the render path, so a
+    // tree that stops rendering keeps whatever it last hovered alive.
+    [[nodiscard]] auto get_popup_item      () const -> const std::shared_ptr<erhe::Item_base>&;
+    [[nodiscard]] auto get_cached_row_count() const -> std::size_t;
+
+    // Test hook: drives the hover / popup pin that only ImGui interaction
+    // sets, so its release can be verified headless.
+    void debug_set_hovered_item(const std::shared_ptr<erhe::Item_base>& item);
 
     // Callback to render custom context menu items before the generic
     // Cut/Copy/Paste/Duplicate/Delete section.  Set `close` to true
@@ -77,12 +103,17 @@ public:
 
     ERHE_PROFILE_MUTEX(std::mutex, item_tree_mutex);
 
-protected:
     [[nodiscard]] auto get_hovered_item() const -> const std::shared_ptr<erhe::Item_base>&;
 
+protected:
     App_context& m_context;
 
 private:
+    // Content removed without a scene closing (undo of a glTF import): the
+    // row cache and the hover / popup pins hold shared_ptrs to items and
+    // brushes, so they must let go or the "removed" content stays alive.
+    void on_items_removed(const Removed_items& removed);
+
     void set_item_selection_terminator(const std::shared_ptr<erhe::Item_base>& item);
     void set_item_selection           (const std::shared_ptr<erhe::Item_base>& item, bool selected);
     void clear_selection              ();
@@ -183,6 +214,9 @@ private:
     unsigned int                       m_popup_id{0};
     bool                               m_shift_down_range_selection_started{false};
     float                              m_ui_scale{1.0f};
+
+    std::string                        m_tree_label;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     std::vector<Flat_row>              m_flat_rows;
     bool                               m_flat_rows_dirty{true};

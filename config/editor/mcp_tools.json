@@ -6169,5 +6169,63 @@
       "properties": {},
       "type": "object"
     }
+  },
+  {
+    "description": "Report every cross-frame reference the editor parts cache: the animation window / player target, each Properties window's target and inspected material, the brush tool's active and drag-and-drop brush, the material paint tool, material preview, BRDF slice, Operations make-mesh material, Create brush, physics tool target mesh, each graph editor window target, each item tree's hovered / popup item and cached row count, and the selection. Also reports items_removed_announcement_count, last_announced_uids and selection_change_count. Use to verify that content removed by an undo was actually let go (doc/import-undo-reference-clearing.md).",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_editor_references"
+  },
+  {
+    "description": "Move a content library entry into another folder of the same library, creating the folder under the entry's current parent when it does not exist. A move is a detach immediately followed by an attach and must NOT read as a removal, which is what this exercises.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Scene whose content library holds the item",
+          "type": "string"
+        },
+        "item_name": {
+          "description": "Name of the library item to move (must be unique in the library)",
+          "type": "string"
+        },
+        "folder_name": {
+          "description": "Destination folder name; created under the item's current parent when missing",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_name",
+        "folder_name"
+      ],
+      "type": "object"
+    },
+    "name": "move_library_item"
+  },
+  {
+    "description": "Test hook: set or clear an item tree's hovered / popup item. Those pins are normally set only by live ImGui interaction and are reset by the render path, so the reference they keep alive is only observable on a tree that is not rendering. Pass clear=true to release.",
+    "inputSchema": {
+      "properties": {
+        "tree": {
+          "description": "Item tree label (the window title; see get_editor_references item_trees)",
+          "type": "string"
+        },
+        "item_name": {
+          "description": "Name of an item in that tree to pin as hovered / popup item",
+          "type": "string"
+        },
+        "clear": {
+          "description": "Clear the hover / popup pins instead of setting them",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tree"
+      ],
+      "type": "object"
+    },
+    "name": "debug_set_item_tree_hover"
   }
 ]

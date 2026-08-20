@@ -149,6 +149,19 @@ Brdf_slice::Brdf_slice(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+}
+
+void Brdf_slice::on_items_removed(const Removed_items& removed)
+{
+    erhe::primitive::Material* const material = m_node ? m_node->get_material() : nullptr;
+    if ((material != nullptr) && removed.lookup.contains(material)) {
+        m_node->set_material({});
+    }
 }
 
 void Brdf_slice::on_close_scene(erhe::Item_host* const closing_host)

@@ -85,18 +85,25 @@ public:
     auto on_drag_ready() -> bool;
     auto on_drag      () -> bool;
 
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_last_target_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
 private:
     void on_message(Hover_scene_view_message& message);
     void tool_hover(Scene_view* scene_view);
     // Scene close: drop the last-target cache when the closing scene hosts
     // it (write-only debug state; it would keep the dead scene's mesh alive).
     void on_close_scene(erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import):
+    // drop the reference when it names one of the removed items.
+    void on_items_removed(const Removed_items& removed);
 
     void move_drag_point_instant  (glm::vec3 position);
     void move_drag_point_kinematic(glm::vec3 position);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     // Commands
     Physics_tool_drag_command                 m_drag_command;

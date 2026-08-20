@@ -3,6 +3,7 @@
 #include "erhe_item/item_host.hpp"
 
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "tools/selection_tool.hpp"
 
@@ -12,6 +13,36 @@
 #include <sstream>
 
 namespace editor {
+
+namespace {
+
+// Announces the subtree that is leaving the scene, so editor parts drop their
+// cached references to it (doc/import-undo-reference-clearing.md). Scene nodes
+// have no editor-level detach hook, so the removing operation reports them.
+//
+// Must be called with the subtree in its final shape - immediately around the
+// set_parent() that orphans it. In Mode::remove, execute() first promotes the
+// non-bone-proxy children to the grandparent, so a walk taken any earlier
+// would announce nodes that are still in the scene and make every subscriber
+// drop a live node.
+void note_subtree_removed(App_context& context, const std::shared_ptr<erhe::Hierarchy>& item)
+{
+    if ((context.asset_manager == nullptr) || !item) {
+        return;
+    }
+    context.asset_manager->note_item_detached(item);
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        note_subtree_removed(context, child);
+    }
+    const auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    if (node) {
+        for (const auto& attachment : node->get_attachments()) {
+            context.asset_manager->note_item_detached(attachment);
+        }
+    }
+}
+
+} // anonymous namespace
 
 auto c_str(Item_insert_remove_operation::Mode mode) -> const char*
 {
@@ -127,6 +158,12 @@ void Item_insert_remove_operation::execute(App_context& context)
         child_parent_change->execute(context);
     }
 
+    if (m_mode == Mode::remove) {
+        // The children have been promoted; what is left under m_item is what
+        // actually leaves the scene.
+        note_subtree_removed(context, m_item);
+    }
+
     m_item->set_parent(m_after_parent, m_index_in_parent);
 
     context.selection->set_selection(m_selection_after);
@@ -141,6 +178,13 @@ void Item_insert_remove_operation::undo(App_context& context)
     if (m_mode == Mode::remove) {
         m_after_parent = m_item->get_parent().lock();
     }
+    if (m_mode == Mode::insert) {
+        // Undoing an insert removes the item: announce the subtree as it
+        // stands now. m_parent_changes is empty for an insert, so the shape
+        // does not change under the loop below.
+        note_subtree_removed(context, m_item);
+    }
+
     m_item->set_parent(m_before_parent, m_index_in_parent);
 
     for (auto i = rbegin(m_parent_changes), end = rend(m_parent_changes); i < end; ++i) {

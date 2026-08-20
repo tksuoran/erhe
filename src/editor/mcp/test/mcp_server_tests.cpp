@@ -1203,3 +1203,174 @@ TEST_F(Mcp_test, auth_tampered_token_rejected)
     ASSERT_TRUE(tampered);
     EXPECT_EQ(tampered->status, 401) << "Wrong bearer token should be 401";
 }
+
+// ---- Undo reference clearing (doc/import-undo-reference-clearing.md) --------
+//
+// Undoing a glTF import takes the imported content back out of the editor;
+// every editor part that cached a reference to it must let go, or the window
+// keeps showing dead content and the asset can never be unloaded. These cover
+// the two routes into the reported bug plus the announcement itself; the
+// broader matrix (tool references, tree pins, selection pruning, the false
+// positive of a library folder move) lives in
+// scripts/undo_reference_clearing_smoke_test.py.
+
+namespace {
+
+constexpr const char* c_undo_ref_gltf = "res/editor/assets/RiggedFigure/RiggedFigure.glb";
+
+// The removal announcement is published once per frame, just before the
+// message bus pump, so every mutation needs a frame before it is observable.
+void advance_frames(Mcp_client& client, int frames)
+{
+    for (int i = 0; i < frames; ++i) {
+        client.call_tool("advance_time", json{{"seconds", 0.016}});
+    }
+}
+
+[[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>
+{
+    std::vector<std::string> names;
+    Mcp_client::Tool_result result = client.call_tool("list_scenes", json::object());
+    if (result.is_error || !result.payload.contains("scenes")) {
+        return names;
+    }
+    for (const json& scene : result.payload["scenes"]) {
+        names.push_back(scene.value("name", ""));
+    }
+    return names;
+}
+
+// Creates a scene (queued, so the name has to be discovered by diffing) and
+// imports the test glTF into it.
+[[nodiscard]] auto import_into_new_scene(Mcp_client& client) -> std::string
+{
+    const std::vector<std::string> before = scene_names(client);
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (std::find(before.begin(), before.end(), name) == before.end()) {
+            scene = name;
+        }
+    }
+    if (scene.empty()) {
+        return scene;
+    }
+    client.call_tool("import_gltf", json{{"scene_name", scene}, {"path", c_undo_ref_gltf}});
+    advance_frames(client, 10);
+    return scene;
+}
+
+[[nodiscard]] auto first_animation_name(Mcp_client& client, const std::string& scene) -> std::string
+{
+    Mcp_client::Tool_result result = client.call_tool("get_scene_animations", json{{"scene_name", scene}});
+    if (result.is_error || !result.payload.contains("animations")) {
+        return {};
+    }
+    const json& animations = result.payload["animations"];
+    if (!animations.is_array() || animations.empty()) {
+        return {};
+    }
+    return animations[0].value("name", "");
+}
+
+[[nodiscard]] auto editor_references(Mcp_client& client) -> json
+{
+    Mcp_client::Tool_result result = client.call_tool("get_editor_references", json::object());
+    return result.payload;
+}
+
+} // anonymous namespace
+
+TEST_F(Mcp_test, undo_of_gltf_import_clears_the_animation_target)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty()) << "could not create a scene to import into";
+    const std::string animation = first_animation_name(client, scene);
+    ASSERT_FALSE(animation.empty()) << "test glTF carries no animation";
+
+    client.call_tool("set_animation_target", json{{"animation", animation}, {"scene_name", scene}});
+    advance_frames(client, 3);
+
+    json before = editor_references(client);
+    ASSERT_TRUE(before.contains("animation_window"));
+    ASSERT_TRUE(before["animation_window"].is_object())
+        << "animation window did not take the target: " << before["animation_window"].dump();
+    EXPECT_EQ(before["animation_window"].value("name", ""), animation);
+    EXPECT_EQ(before["animation_player"].value("name", ""), animation);
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    json after = editor_references(client);
+    EXPECT_TRUE(after["animation_window"].is_null())
+        << "animation window still holds removed content: " << after["animation_window"].dump();
+    EXPECT_TRUE(after["animation_player"].is_null())
+        << "animation player still holds removed content: " << after["animation_player"].dump();
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}
+
+// The second route into the same symptom: Scene_open_operation::undo only
+// unregisters the scene - it publishes no Close_scene_message, so none of the
+// close_scene subscribers run.
+TEST_F(Mcp_test, undo_of_open_scene_clears_the_animation_target)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    client.call_tool("open_scene", json{{"path", c_undo_ref_gltf}});
+    advance_frames(client, 10);
+
+    std::string scene;
+    for (const std::string& name : scene_names(client)) {
+        if (name.find("RiggedFigure") != std::string::npos) {
+            scene = name;
+        }
+    }
+    ASSERT_FALSE(scene.empty()) << "glTF was not opened as a scene";
+    const std::string animation = first_animation_name(client, scene);
+    ASSERT_FALSE(animation.empty()) << "opened scene carries no animation";
+
+    client.call_tool("set_animation_target", json{{"animation", animation}, {"scene_name", scene}});
+    advance_frames(client, 3);
+    ASSERT_EQ(editor_references(client)["animation_window"].value("name", ""), animation);
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    json after = editor_references(client);
+    EXPECT_TRUE(after["animation_window"].is_null())
+        << "animation window still points into the unregistered scene: "
+        << after["animation_window"].dump();
+    EXPECT_TRUE(after["animation_player"].is_null())
+        << "animation player still points into the unregistered scene: "
+        << after["animation_player"].dump();
+}
+
+// The producer side, independent of whether any subscriber happened to hold
+// the content: the undo must announce the removed items.
+TEST_F(Mcp_test, undo_of_gltf_import_announces_the_removed_items)
+{
+    Mcp_client& client = Mcp_env::get().client();
+
+    const std::string scene = import_into_new_scene(client);
+    ASSERT_FALSE(scene.empty());
+
+    const std::size_t before = editor_references(client)
+        .value("items_removed_announcement_count", std::size_t{0});
+
+    client.call_tool("undo", json::object());
+    advance_frames(client, 4);
+
+    json after = editor_references(client);
+    EXPECT_GT(after.value("items_removed_announcement_count", std::size_t{0}), before);
+    ASSERT_TRUE(after.contains("last_announced_uids"));
+    EXPECT_FALSE(after["last_announced_uids"].empty())
+        << "an undo that removed imported content announced nothing";
+
+    client.call_tool("close_scene", json{{"scene_name", scene}});
+    advance_frames(client, 4);
+}

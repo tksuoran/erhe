@@ -171,6 +171,19 @@ public:
 
     // Public API
     [[nodiscard]] auto get_selected_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+    // Monotonic count of Selection_message dispatches. Lets a test assert
+    // that a batched prune dispatches ONCE
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_selection_change_count() const -> std::size_t;
+
+    // Content removed without a scene closing (undo of a glTF import): drop
+    // the removed items from the selection - in ONE batched change - and
+    // forget them as "last selected". The last-selected map is weak, but the
+    // undo history keeps a removed item alive for redo, so without this the
+    // parts that re-resolve get_last_selected() every frame (Operations'
+    // make-mesh material) resurrect the reference on the next frame
+    // (doc/import-undo-reference-clearing.md).
+    void on_items_removed(const Removed_items& removed);
     [[nodiscard]] auto is_in_selection   (const std::shared_ptr<erhe::Item_base>& item) const -> bool;
     [[nodiscard]] auto range_selection   () -> Range_selection&;
     [[nodiscard]] auto get_last_selected (uint64_t type) -> std::shared_ptr<erhe::Item_base>;
@@ -277,6 +290,8 @@ private:
     bool                                          m_hover_tool   {false};
 
     int                                           m_selection_change_depth{0};
+    std::size_t                                   m_selection_change_count{0};
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     std::vector<std::shared_ptr<erhe::Item_base>> m_begin_selection_change_state;
     std::unordered_map<uint64_t, std::weak_ptr<erhe::Item_base>> m_last_selected_by_type;
 };

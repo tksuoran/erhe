@@ -74,12 +74,16 @@ private:
     // content library hosts it (write-only cache; it would keep the dead
     // scene's material alive).
     void on_close_scene(erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import):
+    // drop the reference when it names one of the removed items.
+    void on_items_removed(const Removed_items& removed);
 
     erhe::rendergraph::Rendergraph&              m_rendergraph;
     App_context&                                 m_context;
     std::shared_ptr<Brdf_slice_rendergraph_node> m_node;
 
     erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 };
 
 }

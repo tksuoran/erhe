@@ -979,6 +979,11 @@ Operations::Operations(
             on_close_scene(message.scene_root);
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
 }
 
 
@@ -2595,6 +2600,22 @@ void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesyste
         }
     } catch (...) {
         log_operations->error("exception: save scene");
+    }
+}
+
+auto Operations::get_make_mesh_material() const -> const std::shared_ptr<erhe::primitive::Material>&
+{
+    return m_make_mesh_config.material;
+}
+
+void Operations::on_items_removed(const Removed_items& removed)
+{
+    // See on_close_scene(): this member is what keeps the weak last-selected
+    // material lockable, so it must be dropped explicitly. m_save_confirm_*
+    // keys on Scene_root and needs nothing here.
+    const std::shared_ptr<erhe::primitive::Material>& make_mesh_material = m_make_mesh_config.material;
+    if (make_mesh_material && removed.lookup.contains(make_mesh_material.get())) {
+        m_make_mesh_config.material.reset();
     }
 }
 

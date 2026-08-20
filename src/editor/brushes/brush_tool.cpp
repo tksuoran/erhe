@@ -194,6 +194,11 @@ Brush_tool::Brush_tool(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
 
     m_grid_scale = scene_config.object_scale;
 
@@ -228,6 +233,34 @@ auto Brush_tool::get_effective_brush() const -> std::shared_ptr<Brush>
         return active_brush;
     }
     return m_context.selection->get_last_selected<Brush>();
+}
+
+auto Brush_tool::get_active_brush() const -> std::shared_ptr<Brush>
+{
+    return m_active_brush.get_as<Brush>();
+}
+
+auto Brush_tool::get_drag_and_drop_brush() const -> const std::shared_ptr<Brush>&
+{
+    return m_drag_and_drop_brush;
+}
+
+void Brush_tool::on_items_removed(const Removed_items& removed)
+{
+    const std::shared_ptr<Brush> active_brush = m_active_brush.get_as<Brush>();
+    if (active_brush && removed.lookup.contains(active_brush.get())) {
+        clear_active_brush();
+    }
+    // Only ever set while an ImGui drag is in flight - Viewport_window cancels
+    // it on any frame without a drag payload - so this can only fire when the
+    // removal lands mid-drag. Kept for that case; it is not a cross-frame pin,
+    // which is why the smoke test does not cover it.
+    if (m_drag_and_drop_brush && removed.lookup.contains(m_drag_and_drop_brush.get())) {
+        m_drag_and_drop_brush.reset();
+    }
+    if (m_preview_node && removed.lookup.contains(m_preview_node.get())) {
+        remove_preview_mesh();
+    }
 }
 
 void Brush_tool::on_close_scene(erhe::Item_host* const closing_host)

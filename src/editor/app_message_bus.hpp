@@ -35,6 +35,12 @@ public:
     erhe::message_bus::Message_bus<Mesh_component_mode_changed_message, sync> mesh_component_mode_changed;
     erhe::message_bus::Message_bus<Render_scene_view_message,     sync>  render_scene_view;
     erhe::message_bus::Message_bus<Animation_update_message,      sync>  animation_update;
+    // Sent only from Asset_manager::flush_pending_removals(), which Editor::tick
+    // calls just before the bus pump - i.e. outside ImGui iteration and outside
+    // every lock the producing operations hold. Subscribers only null out
+    // cached references, so synchronous dispatch is safe and gives them the
+    // drop before the frame that removed the content renders again.
+    erhe::message_bus::Message_bus<Items_removed_message,         sync>  items_removed;
 };
 
 }

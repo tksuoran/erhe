@@ -334,6 +334,11 @@ Selection::Selection(erhe::commands::Commands& commands, App_context& context, A
     , m_duplicate_command             {commands, context}
     , m_range_selection               {*this}
 {
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
     commands.register_command            (&m_viewport_select_command);
     commands.register_command            (&m_delete_command);
     commands.register_command            (&m_cut_command);
@@ -806,6 +811,10 @@ void Selection::end_selection_change()
         }
     }
 
+    // One increment per dispatch, so a test can tell a single batched prune
+    // from an N-call loop that dispatches N times
+    // (doc/import-undo-reference-clearing.md).
+    ++m_selection_change_count;
     m_context.app_message_bus->selection.send_message(
         Selection_message{
             .selection_change = selection_change
@@ -818,6 +827,47 @@ void Selection::end_selection_change()
     // next selection change / command-target query, which may never come.
     m_begin_selection_change_state.clear();
     m_command_target_selection.clear();
+}
+
+void Selection::on_items_removed(const Removed_items& removed)
+{
+    // One batched change, never a remove_from_selection() loop: each of those
+    // opens its own Scoped_selection_change, which sorts the whole selection
+    // twice and dispatches a Selection_message.
+    const bool selection_hit = std::any_of(
+        m_selection.begin(),
+        m_selection.end(),
+        [&removed](const std::shared_ptr<erhe::Item_base>& item) {
+            return item && removed.lookup.contains(item.get());
+        }
+    );
+    if (selection_hit) {
+        std::vector<std::shared_ptr<erhe::Item_base>> kept;
+        kept.reserve(m_selection.size());
+        for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+            if (item && !removed.lookup.contains(item.get())) {
+                kept.push_back(item);
+            }
+        }
+        set_selection(kept);
+    }
+
+    // The last-selected entries are weak, but a removed item stays alive in
+    // the undo history for redo, so they stay lockable and would be
+    // re-resolved into a strong reference by the next frame.
+    for (auto i = m_last_selected_by_type.begin(); i != m_last_selected_by_type.end(); ) {
+        const std::shared_ptr<erhe::Item_base> item = i->second.lock();
+        if (!item || removed.lookup.contains(item.get())) {
+            i = m_last_selected_by_type.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+auto Selection::get_selection_change_count() const -> std::size_t
+{
+    return m_selection_change_count;
 }
 
 auto Selection::on_viewport_select_try_ready() -> bool

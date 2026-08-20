@@ -22,6 +22,22 @@ Animation_player::Animation_player(App_context& context, App_message_bus& app_me
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+}
+
+void Animation_player::on_items_removed(const Removed_items& removed)
+{
+    // The played animation left the editor (undo of its import, or its
+    // defining scene leaving the registry). The window clears the player
+    // through set_animation(), but the player can also be targeted directly
+    // (MCP set_animation_target), so it drops its own reference.
+    if (m_animation && removed.lookup.contains(m_animation.get())) {
+        set_animation({});
+    }
 }
 
 void Animation_player::on_close_scene(erhe::Item_host* const closing_host)

@@ -95,6 +95,7 @@ class Physics_tool;
 class Post_processing;
 class Prefab_library;
 class Programs;
+class Properties;
 class Lightmap_baker;
 class Lightmap_partitioner;
 class Lightmap_report;
@@ -250,6 +251,7 @@ public:
     Node_properties_window*            node_properties_window{nullptr};
     Operation_stack*                   operation_stack      {nullptr};
     Operations*                        operations           {nullptr};
+    Properties*                        properties           {nullptr}; // the primary Properties window
     Paint_tool*                        paint_tool           {nullptr};
     Physics_tool*                      physics_tool         {nullptr};
     Post_processing*                   post_processing      {nullptr};

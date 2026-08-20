@@ -108,6 +108,57 @@ Properties::Properties(
             on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
         }
     );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
+}
+
+auto Properties::get_target() const -> std::shared_ptr<erhe::Item_base>
+{
+    return m_target.lock();
+}
+
+auto Properties::get_target_items() const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+{
+    return m_target_items;
+}
+
+auto Properties::get_inspected_material() const -> const std::shared_ptr<erhe::primitive::Material>&
+{
+    return m_inspected_material;
+}
+
+void Properties::on_items_removed(const Removed_items& removed)
+{
+    const std::shared_ptr<erhe::Item_base> target = m_target.lock();
+    if (target && removed.lookup.contains(target.get())) {
+        m_target.reset();
+        m_target_items.clear();
+    } else {
+        // The target itself survives, but individual inspected items may not.
+        std::erase_if(
+            m_target_items,
+            [&removed](const std::shared_ptr<erhe::Item_base>& item) {
+                return item && removed.lookup.contains(item.get());
+            }
+        );
+    }
+    if (m_inspected_material && removed.lookup.contains(m_inspected_material.get())) {
+        // Unlike a scene close, an undo does NOT drop the undo history, so a
+        // dirty edit session dying here is a real loss of user work rather
+        // than a consequence of the teardown. Say so instead of discarding it
+        // silently (doc/import-undo-reference-clearing.md).
+        if (m_material_state != Editor_state::clean) {
+            log_asset->warn(
+                "Material '{}' was removed while its property edits were unsaved; the pending edits are discarded",
+                m_inspected_material->get_name()
+            );
+        }
+        m_inspected_material.reset();
+        m_material_state = Editor_state::clean;
+    }
 }
 
 void Properties::on_close_scene(erhe::Item_host* const closing_host)

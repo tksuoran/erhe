@@ -99,6 +99,10 @@ public:
 
     // Active brush (set from hotbar slot)
     void set_active_brush  (const std::shared_ptr<Brush>& brush);
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_active_brush       () const -> std::shared_ptr<Brush>;
+    [[nodiscard]] auto get_drag_and_drop_brush() const -> const std::shared_ptr<Brush>&;
     void clear_active_brush();
 
     // Commands
@@ -124,6 +128,9 @@ private:
     // but transient tool state is not a persistence mechanism (the inventory
     // is), so it is still cleared here as belt-and-braces.
     void on_close_scene                    (erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import):
+    // drop the reference when it names one of the removed items.
+    void on_items_removed(const Removed_items& removed);
     void update_preview_mesh               ();
     void do_insert_operation               (Brush& brush);
     void add_preview_mesh                  (Brush& brush);
@@ -145,6 +152,7 @@ private:
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
     erhe::message_bus::Subscription<Hover_mesh_message>       m_hover_mesh_subscription;
     erhe::message_bus::Subscription<Close_scene_message>      m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     Brush_preview_command                   m_preview_command;
     Brush_insert_command                    m_insert_command;
     Brush_pick_command                      m_pick_command;

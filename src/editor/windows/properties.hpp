@@ -83,6 +83,11 @@ public:
     // the target selector row at the top of the window.
     void set_target(const std::shared_ptr<erhe::Item_base>& item);
 
+    // Cached reference, for the MCP get_editor_references query
+    // (doc/import-undo-reference-clearing.md).
+    [[nodiscard]] auto get_target            () const -> std::shared_ptr<erhe::Item_base>;
+    [[nodiscard]] auto get_target_items      () const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+    [[nodiscard]] auto get_inspected_material() const -> const std::shared_ptr<erhe::primitive::Material>&;
 private:
 
     // The items whose properties to show: { target } when pinned, else the
@@ -127,10 +132,13 @@ private:
     // would otherwise keep the closed scene's items alive (a weak_ptr
     // target alone does not expire while m_target_items pins the item).
     void on_close_scene(erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import).
+    void on_items_removed(const Removed_items& removed);
 
     App_context& m_context;
 
-    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     // Issue #252: the explicit pinned target (weak_ptr so a deleted item
     // reverts the window to selection mode), and the reused single-element

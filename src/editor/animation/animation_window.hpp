@@ -101,6 +101,9 @@ private:
     // Scene close: drop the edited animation when the closing scene's
     // content library hosts it (set_animation({}) also clears the player).
     void on_close_scene     (erhe::Item_host* closing_host);
+    // Content removed without a scene closing (undo of a glTF import): drop
+    // the edited animation when it is one of the removed items.
+    void on_items_removed   (const Removed_items& removed);
 
     void animation_combo    ();
     void transport_toolbar  ();
@@ -144,7 +147,8 @@ private:
 
     App_context& m_context;
 
-    erhe::message_bus::Subscription<Close_scene_message> m_close_scene_subscription;
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     std::shared_ptr<erhe::scene::Animation> m_animation;
 

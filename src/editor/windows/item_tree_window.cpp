@@ -58,6 +58,19 @@ namespace editor {
 
 using Light_type = erhe::scene::Light_type;
 
+namespace {
+
+// Live Item_tree instances, in construction order. Raw pointers: entries are
+// added and removed by the constructor / destructor below.
+std::vector<Item_tree*> g_item_trees;
+
+}
+
+auto Item_tree::get_instances() -> const std::vector<Item_tree*>&
+{
+    return g_item_trees;
+}
+
 Item_tree::Item_tree(App_context& context)
     : m_context{context}
     , m_filter{
@@ -67,6 +80,73 @@ Item_tree::Item_tree(App_context& context)
         .require_at_least_one_bit_clear = 0
     }
 {
+    g_item_trees.push_back(this);
+    if (m_context.app_message_bus != nullptr) {
+        m_items_removed_subscription = m_context.app_message_bus->items_removed.subscribe(
+            [this](Items_removed_message& message) {
+                on_items_removed(*message.removed.get());
+            }
+        );
+    }
+}
+
+Item_tree::~Item_tree() noexcept
+{
+    const auto i = std::find(g_item_trees.begin(), g_item_trees.end(), this);
+    if (i != g_item_trees.end()) {
+        g_item_trees.erase(i);
+    }
+}
+
+void Item_tree::on_items_removed(const Removed_items& removed)
+{
+    // The row cache holds a shared_ptr to every listed item AND to the brush
+    // of a brush row; a tree that is not rendering never rebuilds it, so drop
+    // it wholesale. The hover / popup pins are reset only by the render path
+    // (see imgui_tree), so they are what a hidden tree keeps alive.
+    if (m_hovered_item && removed.lookup.contains(m_hovered_item.get())) {
+        m_hovered_item.reset();
+    }
+    if (m_popup_item && removed.lookup.contains(m_popup_item.get())) {
+        m_popup_item.reset();
+        m_popup_id_string.clear();
+        m_popup_id = 0;
+    }
+    for (const Flat_row& row : m_flat_rows) {
+        const bool row_removed =
+            (row.item  && removed.lookup.contains(row.item.get())) ||
+            (row.brush && removed.lookup.contains(static_cast<const erhe::Item_base*>(row.brush.get())));
+        if (row_removed) {
+            clear_cached_rows();
+            break;
+        }
+    }
+}
+
+void Item_tree::set_tree_label(const std::string_view label)
+{
+    m_tree_label.assign(label);
+}
+
+auto Item_tree::get_tree_label() const -> const std::string&
+{
+    return m_tree_label;
+}
+
+auto Item_tree::get_popup_item() const -> const std::shared_ptr<erhe::Item_base>&
+{
+    return m_popup_item;
+}
+
+auto Item_tree::get_cached_row_count() const -> std::size_t
+{
+    return m_flat_rows.size();
+}
+
+void Item_tree::debug_set_hovered_item(const std::shared_ptr<erhe::Item_base>& item)
+{
+    m_hovered_item = item;
+    m_popup_item   = item;
 }
 
 void Item_tree::set_root(const std::shared_ptr<erhe::Hierarchy>& root)
@@ -1972,6 +2052,8 @@ Item_tree_window::Item_tree_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, window_title, ini_label}
     , Item_tree{context}
 {
+    // Identifies this tree in get_editor_references / debug_set_item_tree_hover.
+    set_tree_label(window_title);
 }
 
 auto Item_tree_window::get_tree_scene_root() const -> Scene_root*
