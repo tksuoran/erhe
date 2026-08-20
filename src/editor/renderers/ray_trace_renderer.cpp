@@ -323,6 +323,11 @@ auto Ray_trace_renderer::get_instance_count() const -> std::size_t
     return m_scene_tlas ? m_scene_tlas->get_instance_count() : 0;
 }
 
+auto Ray_trace_renderer::get_blas_count() const -> std::size_t
+{
+    return m_scene_tlas ? m_scene_tlas->get_blas_count() : 0;
+}
+
 auto Ray_trace_renderer::read_output_rgba8(std::vector<uint8_t>& out_pixels) -> bool
 {
     using namespace erhe::graphics;

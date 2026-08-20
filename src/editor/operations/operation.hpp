@@ -33,6 +33,28 @@ public:
     // (mechanism a) and need no override here.
     virtual void collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const;
 
+    // Called by Operation_stack::undo() on the top-level entry it just undid,
+    // and only when nothing recorded after it survives in the redo stack -
+    // i.e. releasing what this operation holds cannot invalidate a later redo.
+    // An operation that can rebuild itself from recorded inputs (a glTF import
+    // re-reading the file) uses this to drop its payload; everything else
+    // ignores it. Default: keep everything.
+    //
+    // Deliberately NOT forwarded by Compound_operation: a child cannot know
+    // whether a sibling recorded after it still holds references to its
+    // content, so a nested import keeps its payload.
+    // See doc/reloadable-asset-loads.md.
+    virtual void on_lossless_undo(App_context& context);
+
+    // True when this operation is holding content it could rebuild from
+    // recorded inputs - i.e. free_undone_loads has something to release here.
+    [[nodiscard]] virtual auto has_droppable_payload() const -> bool;
+
+    // Releases that content. The caller is responsible for making it safe:
+    // every entry recorded after this one must be discarded, because they hold
+    // raw references to what is being dropped (doc/reloadable-asset-loads.md).
+    virtual void drop_payload();
+
     [[nodiscard]] auto        describe  () const -> const std::string&;
     [[nodiscard]] inline auto get_serial() const -> std::size_t { return m_id.get_id(); }
     [[nodiscard]] auto        get_error () const -> const std::string&;

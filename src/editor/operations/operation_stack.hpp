@@ -1,5 +1,7 @@
 #pragma once
 
+#include "operations/operation_stack_selection.hpp"
+
 #include "erhe_commands/command.hpp"
 #include "erhe_imgui/imgui_window.hpp"
 #include "erhe_profile/profile.hpp"
@@ -7,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_set>
+#include <optional>
 #include <vector>
 
 namespace erhe            { class Item_base; }
@@ -26,6 +29,19 @@ class Undo_command : public erhe::commands::Command
 {
 public:
     Undo_command(erhe::commands::Commands& commands, App_context& context);
+    auto try_call() -> bool override;
+
+private:
+    App_context& m_context;
+};
+
+// Edit > Free undone loads: gives back the memory of undone loads that the
+// automatic (lossless-only) drop declined, at the cost of the redo entries
+// recorded after them (doc/reloadable-asset-loads.md).
+class Free_undone_loads_command : public erhe::commands::Command
+{
+public:
+    Free_undone_loads_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -115,6 +131,26 @@ public:
     // executing -- indefinitely.
     void clear_history();
 
+    // Releases the payload of the deepest reloadable entry in the redo stack -
+    // the one that would be redone FIRST - and discards every entry recorded
+    // after it, which frees theirs too.
+    //
+    // Discarding is required, not incidental: those entries hold raw
+    // shared_ptrs to content the drop releases, and a rebuild produces fresh
+    // objects, so redoing them would act on dead orphans. Entries recorded
+    // BEFORE the released one are untouched and stay redoable, because they
+    // cannot reference content that did not exist yet.
+    //
+    // This is the explicit counterpart to the automatic drop, which only fires
+    // when nothing would have to be discarded (doc/reloadable-asset-loads.md).
+    class Free_undone_loads_result
+    {
+    public:
+        std::size_t released_count {0}; // payloads dropped
+        std::size_t discarded_count{0}; // redo entries thrown away
+    };
+    auto free_undone_loads() -> Free_undone_loads_result;
+
     // R5.4: union of Operation::collect_item_references over every recorded
     // operation (undo + redo histories plus not-yet-executed queued ones).
     // Asset_manager::request_unload consults this so a container whose asset
@@ -139,6 +175,7 @@ private:
 
     App_context&  m_context;
     Undo_command  m_undo_command;
+    Free_undone_loads_command m_free_undone_loads_command;
     Redo_command  m_redo_command;
 
     bool                                    m_executing{false};

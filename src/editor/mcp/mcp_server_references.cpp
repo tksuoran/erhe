@@ -7,6 +7,9 @@
 //   move_library_item         - moves a content-library entry between folders,
 //                               the detach-then-attach that must NOT be
 //                               announced as a removal.
+//   get_memory_usage          - where a loaded scene's memory actually sits, so
+//                               "did dropping it free anything?" is answerable
+//                               (doc/reloadable-asset-loads.md).
 //   debug_set_item_tree_hover - drives the tree hover / popup pin that only
 //                               ImGui interaction sets, so its release is
 //                               verifiable. Test hook, same category as
@@ -28,6 +31,7 @@
 #include "create/create.hpp"
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
+#include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "physics/physics_tool.hpp"
 #include "preview/material_preview.hpp"
@@ -40,7 +44,12 @@
 #include "windows/item_tree_window.hpp"
 #include "windows/properties.hpp"
 
+#include "renderers/ray_trace_renderer.hpp"
+
+#include "erhe_graphics/device.hpp"
+#include "erhe_graphics/texture.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -212,6 +221,102 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
     }
 
     return make_json_content(result).dump();
+}
+
+auto Mcp_server::query_memory_usage(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    json result;
+
+    // Mesh vertex / index pools. `capacity` only ever grows - pool blocks are
+    // never destroyed - so `used` is the figure that moves when meshes are
+    // released, and the release is frame-deferred.
+    json pools = json::array();
+    std::size_t total_capacity{0};
+    std::size_t total_used    {0};
+    std::size_t total_pending {0};
+    if (m_context.mesh_memory != nullptr) {
+        for (const erhe::scene_renderer::Mesh_memory::Pool_statistics& pool : m_context.mesh_memory->get_pool_statistics()) {
+            pools.push_back({
+                {"label",                 pool.label},
+                {"index_pool",            pool.is_index_pool},
+                {"block_count",           pool.statistics.block_count},
+                {"capacity_bytes",        pool.statistics.capacity_bytes},
+                {"used_bytes",            pool.statistics.used_bytes},
+                {"free_bytes",            pool.statistics.free_bytes},
+                {"allocation_count",      pool.statistics.allocation_count},
+                {"pending_retired_bytes", pool.statistics.pending_retired_bytes}
+            });
+            total_capacity += pool.statistics.capacity_bytes;
+            total_used     += pool.statistics.used_bytes;
+            total_pending  += pool.statistics.pending_retired_bytes;
+        }
+    }
+    result["mesh_pools"] = pools;
+    result["mesh_memory"] = {
+        {"capacity_bytes",        total_capacity},
+        {"used_bytes",            total_used},
+        {"pending_retired_bytes", total_pending}
+    };
+
+    // Textures: estimated from create info, and unlike the mesh pools this
+    // really is returned to the driver when the texture dies.
+    const erhe::graphics::Texture::Memory_statistics texture_statistics =
+        erhe::graphics::Texture::get_memory_statistics();
+    result["textures"] = {
+        {"count",       texture_statistics.texture_count},
+        {"byte_count",  texture_statistics.byte_count}
+    };
+
+    // Driver-reported figure; Vulkan only, zeros elsewhere.
+    if (m_context.graphics_device != nullptr) {
+        const erhe::graphics::Memory_budget budget = m_context.graphics_device->get_memory_budget();
+        result["device_memory"] = {
+            {"device_local_budget", budget.device_local_budget},
+            {"device_local_usage",  budget.device_local_usage}
+        };
+    }
+
+    // Acceleration structures pin their primitives, so this must drop too.
+    result["blas_count"] = (m_context.ray_trace_renderer != nullptr)
+        ? m_context.ray_trace_renderer->get_blas_count()
+        : 0;
+
+    // Undo/redo entries, and which container records still hold a parse.
+    if (m_context.operation_stack != nullptr) {
+        result["undo_entry_count"] = m_context.operation_stack->get_undo_stack().size();
+        result["redo_entry_count"] = m_context.operation_stack->get_redo_stack().size();
+    }
+    if (m_context.asset_manager != nullptr) {
+        json containers = json::array();
+        for (const Asset_container_info& info : m_context.asset_manager->inspect_containers()) {
+            containers.push_back({
+                {"path",           info.path},
+                {"open_as_scene",  info.open_as_scene},
+                {"material_count", info.material_count},
+                {"animation_count", info.animation_count}
+            });
+        }
+        result["containers"] = containers;
+    }
+
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_free_undone_loads(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.operation_stack == nullptr) {
+        return make_error_content("Operation stack not available");
+    }
+    // Shadows the same-named editor command deliberately: the command returns
+    // only success, and a caller (or a test) needs the counts.
+    const Operation_stack::Free_undone_loads_result result = m_context.operation_stack->free_undone_loads();
+    return make_json_content({
+        {"released_count",  result.released_count},
+        {"discarded_count", result.discarded_count}
+    }).dump();
 }
 
 auto Mcp_server::action_move_library_item(const json& args) -> std::string

@@ -6227,5 +6227,23 @@
       "type": "object"
     },
     "name": "debug_set_item_tree_hover"
+  },
+  {
+    "description": "Report where loaded content's memory sits: per-pool mesh vertex/index bytes (capacity only ever grows because pool blocks are never destroyed, so 'used_bytes' is the figure that drops when meshes are released), estimated texture bytes and count, the driver memory budget (Vulkan only), the cached bottom-level acceleration structure count, undo/redo entry counts, and the loaded asset containers. Mesh and texture releases are frame-deferred, so advance a few frames before sampling after a removal. See doc/reloadable-asset-loads.md.",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "get_memory_usage"
+  },
+  {
+    "description": "Give back the memory of undone glTF loads that the automatic drop declined. Releases the payload of the load that would be redone first, and DISCARDS every redo entry recorded after it - those entries hold references to the released content, so they cannot survive it. Redo entries recorded before the load are untouched. Redoing the released load re-reads the file. Reports released_count and discarded_count. See doc/reloadable-asset-loads.md.",
+    "inputSchema": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "name": "free_undone_loads"
   }
 ]

@@ -59,6 +59,27 @@ public:
     std::shared_ptr<erhe::scene::Node> root_node;
 };
 
+// Everything needed to build - or REBUILD - one glTF import
+// (doc/reloadable-asset-loads.md). An Import_gltf_operation keeps this after
+// dropping its payload, so a redo can re-read the file.
+class Gltf_import_recipe
+{
+public:
+    std::filesystem::path       path;
+    std::weak_ptr<Scene_root>   scene_root; // weak: a recorded load must not pin its target
+    bool materials_as_references{false};
+    bool fit_view_to_content    {false};
+
+    // Decisions the FIRST build derived from the target scene's live state:
+    // an existing camera, or any non-empty light layer, suppresses the
+    // corresponding default. Recorded rather than re-derived, so a redo after
+    // the user added a camera still produces the node set the original import
+    // produced. `decisions_recorded` is false until the first build fills them.
+    bool decisions_recorded{false};
+    bool add_default_camera{true};
+    bool add_default_light {true};
+};
+
 [[nodiscard]] auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
@@ -69,7 +90,11 @@ public:
     // When non-null, the parse (and its Buffer_mesh build) has already been
     // done asynchronously: this consumes it instead of parsing inline, and
     // record adoption is skipped - the caller decided that at queue time.
-    Prepared_gltf_parse*               prepared_parse          = nullptr
+    Prepared_gltf_parse*               prepared_parse          = nullptr,
+    // In/out. When non-null and `decisions_recorded` is set, the recorded
+    // default-camera / default-light decisions are used instead of deriving
+    // them from the target scene; otherwise they are derived and written back.
+    Gltf_import_recipe*                recipe                  = nullptr
 ) -> std::shared_ptr<Operation>;
 
 // Queues the import compound built by make_import_gltf_operation().

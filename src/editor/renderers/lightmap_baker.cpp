@@ -3552,6 +3552,19 @@ auto Lightmap_baker::debug_write_gbuffer_pngs(const std::string& base_path) -> b
     return position_ok && normal_ok && albedo_ok;
 }
 
+void Lightmap_baker::evict_unreferenced_blas()
+{
+    for (auto i = m_blas_cache.begin(); i != m_blas_cache.end(); ) {
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = i->second.primitive;
+        const bool unreferenced = !primitive || !primitive->render_shape || (primitive->render_shape.use_count() == 1);
+        if (unreferenced) {
+            i = m_blas_cache.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
 auto Lightmap_baker::get_or_create_blas(
     erhe::graphics::Command_buffer&                    command_buffer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
@@ -3868,6 +3881,10 @@ void Lightmap_baker::collect_instances(
 )
 {
     using namespace erhe::graphics;
+
+    // Give back structures whose geometry left the scene before gathering
+    // this pass's set.
+    evict_unreferenced_blas();
 
     out_instances.clear();
     out_records.clear();

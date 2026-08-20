@@ -2,6 +2,20 @@
 
 namespace editor {
 
+void Operation::on_lossless_undo(App_context&)
+{
+    // Default: an operation that cannot rebuild itself keeps what it holds.
+}
+
+auto Operation::has_droppable_payload() const -> bool
+{
+    return false;
+}
+
+void Operation::drop_payload()
+{
+}
+
 void Operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
 {
     static_cast<void>(out_items);

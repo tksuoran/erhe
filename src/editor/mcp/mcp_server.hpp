@@ -308,6 +308,8 @@ private:
 
     // doc/import-undo-reference-clearing.md
     auto query_editor_references              (const nlohmann::json& args) -> std::string;
+    auto query_memory_usage                   (const nlohmann::json& args) -> std::string;
+    auto action_free_undone_loads             (const nlohmann::json& args) -> std::string;
     auto action_move_library_item             (const nlohmann::json& args) -> std::string;
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;

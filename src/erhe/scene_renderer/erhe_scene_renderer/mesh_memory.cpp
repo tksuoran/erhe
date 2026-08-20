@@ -613,6 +613,27 @@ auto Mesh_memory::make_skinned_primitive_buffer_info(const Mesh_memory_queue que
     };
 }
 
+auto Mesh_memory::get_pool_statistics() const -> std::vector<Mesh_memory::Pool_statistics>
+{
+    std::vector<Pool_statistics> result;
+    result.reserve(m_vertex_pools.size() + m_index_pools.size());
+    for (const Buffer_pool& pool : m_vertex_pools) {
+        result.push_back(Pool_statistics{
+            .label         = pool.get_debug_label(),
+            .is_index_pool = false,
+            .statistics    = pool.get_statistics()
+        });
+    }
+    for (const Buffer_pool& pool : m_index_pools) {
+        result.push_back(Pool_statistics{
+            .label         = pool.get_debug_label(),
+            .is_index_pool = true,
+            .statistics    = pool.get_statistics()
+        });
+    }
+    return result;
+}
+
 auto Mesh_memory::get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&
 {
     return m_loader_transfer_queue;

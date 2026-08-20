@@ -140,6 +140,20 @@ public:
     // The loader queue, for tickets and the publish watermark (plan 2.5).
     [[nodiscard]] auto get_loader_transfer_queue() -> erhe::graphics::Buffer_transfer_queue&;
 
+    // Aggregated pool byte accounting for memory reporting
+    // (doc/reloadable-asset-loads.md). `capacity` only ever grows - pool
+    // blocks are never destroyed - so `used` is the figure that drops when
+    // meshes are released. Note the release is frame-deferred: a caller
+    // sampling this must advance several frames after a removal.
+    class Pool_statistics
+    {
+    public:
+        std::string            label;
+        bool                   is_index_pool{false};
+        Buffer_pool::Statistics statistics;
+    };
+    [[nodiscard]] auto get_pool_statistics() const -> std::vector<Pool_statistics>;
+
     [[nodiscard]] auto get_vertex_buffer(const erhe::primitive::Buffer_range& buffer_range) -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_vertex_buffer(const Pool_buffer_identity& buffer_identity) -> erhe::graphics::Buffer*;
     [[nodiscard]] auto get_index_buffer (const erhe::primitive::Buffer_range& buffer_range) -> erhe::graphics::Buffer*;

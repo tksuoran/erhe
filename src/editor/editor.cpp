@@ -3357,6 +3357,15 @@ public:
         // executing against the torn-down scene every frame. Drop the history.
         m_operation_stack->clear_history();
 
+        // The lightmap bake working set holds a BLAS per traced mesh - each
+        // pinning its Primitive and the GPU ranges behind it - plus the
+        // G-buffer and accumulation targets. Pause semantics keep all of that
+        // on a plain disable so a resume continues where it left off, but a
+        // closed scene is never resumed (doc/reloadable-asset-loads.md).
+        if (m_lightmap_baker) {
+            m_lightmap_baker->release_working_set();
+        }
+
         // Graph editor windows (the primaries and the "Open Editor" extras)
         // may be editing a Graph_mesh / Graph_texture asset owned by this
         // scene's content library. The target weak_ptr does not expire on

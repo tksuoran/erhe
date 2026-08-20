@@ -103,6 +103,12 @@ public:
     // Instance count of the most recent update() (diagnostics / MCP).
     [[nodiscard]] auto get_instance_count() const -> std::size_t;
 
+    // Cached bottom level structure count, for memory reporting
+    // (doc/reloadable-asset-loads.md). Each entry pins its Primitive, and
+    // through it the GPU vertex / index ranges, so this is the figure that
+    // must drop when imported content is released.
+    [[nodiscard]] auto get_blas_count() const -> std::size_t;
+
     // Builds any missing bottom level structures into command_buffer,
     // gathers the visible non-skinned content mesh primitives into this
     // frame's top level structure, and uploads their records. Must be
@@ -124,6 +130,27 @@ private:
         std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
         bool                                                    built{false};
     };
+
+    // Drops cached bottom level structures whose primitive nothing else refers to.
+//
+    // Without this the cache is an unbounded pin: each entry holds a
+    // shared_ptr<Primitive>, and through it the GPU vertex / index ranges, so
+    // content removed from the scene (an undone glTF import) can never give its
+    // memory back (doc/reloadable-asset-loads.md).
+//
+    // The refcount is tested on render_shape, not on the Primitive: Primitive's
+    // copy constructor is defaulted and render_shape is a shared_ptr, so two
+    // distinct Primitive objects can produce the same Buffer_mesh key, and a
+    // use_count of 1 on the entry's Primitive could still have a live mesh
+    // referring to the same shape. use_count() == 1 on the shape means the cache
+    // is the last owner.
+//
+    // Erasing synchronously is safe: ~Acceleration_structure defers the device
+    // destroy to frame completion, and each top level structure is built and
+    // consumed inside a single update(), so no submitted frame still names an
+    // evicted structure. The key cannot dangle either - it points into a by-value
+    // member of the shape the entry itself keeps alive until the erase.
+    void evict_unreferenced_blas();
 
     [[nodiscard]] auto get_or_create_blas(
         erhe::graphics::Command_buffer&                    command_buffer,

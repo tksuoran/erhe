@@ -348,6 +348,8 @@ erhe_target_sources_grouped(
     operations/geometry_operations.hpp
     operations/operation.cpp
     operations/operation.hpp
+    operations/import_gltf_operation.cpp
+    operations/import_gltf_operation.hpp
     operations/item_insert_remove_operation.cpp
     operations/item_insert_remove_operation.hpp
     operations/item_parent_change_operation.cpp
@@ -380,6 +382,8 @@ erhe_target_sources_grouped(
     operations/node_transform_operation.hpp
     operations/operations_window.cpp
     operations/operations_window.hpp
+    operations/operation_stack_selection.cpp
+    operations/operation_stack_selection.hpp
     operations/operation_stack.cpp
     operations/operation_stack.hpp
     operations/scene_open_operation.cpp

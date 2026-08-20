@@ -88,6 +88,24 @@ auto Scene_tlas::get_instance_count() const -> std::size_t
     return m_instances.size();
 }
 
+void Scene_tlas::evict_unreferenced_blas()
+{
+    for (auto i = m_blas_cache.begin(); i != m_blas_cache.end(); ) {
+        const std::shared_ptr<erhe::primitive::Primitive>& primitive = i->second.primitive;
+        const bool unreferenced = !primitive || !primitive->render_shape || (primitive->render_shape.use_count() == 1);
+        if (unreferenced) {
+            i = m_blas_cache.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+auto Scene_tlas::get_blas_count() const -> std::size_t
+{
+    return m_blas_cache.size();
+}
+
 auto Scene_tlas::get_or_create_blas(
     erhe::graphics::Command_buffer&                    command_buffer,
     const std::shared_ptr<erhe::primitive::Primitive>& primitive,
@@ -164,6 +182,10 @@ auto Scene_tlas::update(
     // build() ends with the build->build barrier). Each instance also gets a
     // record (indexed by instance_custom_index = ordinal) carrying its
     // material index and the device addresses for attribute fetch.
+    // Give back structures whose geometry left the scene, before building this
+    // frame's set.
+    evict_unreferenced_blas();
+
     m_instances.clear();
     m_instance_records.clear();
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer.meshes) {

@@ -73,6 +73,21 @@ public:
     // Implements Texture_reference
     auto get_referenced_texture() const -> const Texture* override;
 
+    // Process-wide image memory accounting for memory reporting
+    // (doc/reloadable-asset-loads.md). Estimated from the create info - format
+    // times dimensions times levels times layers - not queried from the
+    // allocator, so it is backend-neutral and approximate. Views and textures
+    // wrapping an externally owned image are not counted, since they own no
+    // allocation. Unlike the mesh pools, destroying a Texture really does
+    // return its memory, so this figure drops when content is released.
+    class Memory_statistics
+    {
+    public:
+        std::size_t texture_count{0};
+        std::size_t byte_count   {0};
+    };
+    [[nodiscard]] static auto get_memory_statistics() -> Memory_statistics;
+
     [[nodiscard]] static auto get_mipmap_dimensions(Texture_type type) -> int;
     [[nodiscard]] static auto get_size_level_count (int size) -> int;
 
@@ -109,6 +124,8 @@ public:
 
 private:
     std::unique_ptr<Texture_impl> m_impl;
+    // Counted into the process-wide totals; 0 for views and wrapped images.
+    std::size_t                   m_estimated_byte_count{0};
     bool                          m_two_component_normal{false};
 };
 

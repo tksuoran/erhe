@@ -1,6 +1,7 @@
 #include "operations/operation_stack.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/operation.hpp"
 
@@ -51,6 +52,18 @@ auto Redo_command::try_call() -> bool
         return false;
     }
 }
+Free_undone_loads_command::Free_undone_loads_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "free_undone_loads"}
+    , m_context{context}
+{
+}
+
+auto Free_undone_loads_command::try_call() -> bool
+{
+    const Operation_stack::Free_undone_loads_result result = m_context.operation_stack->free_undone_loads();
+    return result.released_count > 0;
+}
+
 #pragma endregion Commands
 
 Operation_stack::Operation_stack(
@@ -62,6 +75,7 @@ Operation_stack::Operation_stack(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Operation Stack", "operation_stack", true}
     , m_context     {context}
     , m_undo_command{commands, context}
+    , m_free_undone_loads_command{commands, context}
     , m_redo_command{commands, context}
 {
     commands.register_command(&m_undo_command);
@@ -70,6 +84,8 @@ Operation_stack::Operation_stack(
     commands.bind_command_to_key(&m_redo_command, erhe::window::Key_y, true, erhe::window::Key_modifier_bit_ctrl);
     commands.bind_command_to_menu(&m_undo_command, "Edit.Undo");
     commands.bind_command_to_menu(&m_redo_command, "Edit.Redo");
+    commands.register_command     (&m_free_undone_loads_command);
+    commands.bind_command_to_menu (&m_free_undone_loads_command, "Edit.Free undone loads");
 
     m_undo_command.set_host(this);
     m_redo_command.set_host(this);
@@ -219,6 +235,57 @@ void Operation_stack::undo()
     operation->undo(m_context);
     m_executing = false;
     m_undone.push_back(operation);
+
+    // Every recording path clears m_undone (execute_now, end_group, update),
+    // and undo is strict LIFO, so a redo stack holding only this entry means
+    // nothing recorded after it survived. An operation that can rebuild itself
+    // may therefore release its payload without invalidating a later redo.
+    // Driven here rather than queried by the operation, because a child of a
+    // Compound_operation would see the stack instead of its siblings
+    // (doc/reloadable-asset-loads.md).
+    if (m_undone.size() == 1) {
+        operation->on_lossless_undo(m_context);
+    }
+}
+
+auto Operation_stack::free_undone_loads() -> Operation_stack::Free_undone_loads_result
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+
+    Free_undone_loads_result result;
+    if (m_undone.empty()) {
+        return result;
+    }
+
+    // m_undone index 0 is the most recently recorded entry and back() is the
+    // one that would be redone first, so the HIGHEST index with a payload is
+    // the earliest-recorded load - releasing that one frees the most, and
+    // everything before it (lower indices, recorded later) has to go.
+    std::vector<bool> has_payload;
+    has_payload.reserve(m_undone.size());
+    for (const std::shared_ptr<Operation>& operation : m_undone) {
+        has_payload.push_back(operation && operation->has_droppable_payload());
+    }
+    const std::optional<std::size_t> selected = select_free_undone_loads_target(has_payload);
+    if (!selected.has_value()) {
+        return result; // nothing holds a droppable payload
+    }
+    const std::size_t target = selected.value();
+
+    m_undone[target]->drop_payload();
+    result.released_count = 1;
+
+    // Destroying these releases their payloads as well.
+    result.discarded_count = target;
+    m_undone.erase(m_undone.begin(), m_undone.begin() + static_cast<std::ptrdiff_t>(target));
+
+    log_operations->info(
+        "free_undone_loads: released 1 payload, discarded {} redo entr{}",
+        result.discarded_count,
+        (result.discarded_count == 1) ? "y" : "ies"
+    );
+    return result;
 }
 
 void Operation_stack::clear_history()

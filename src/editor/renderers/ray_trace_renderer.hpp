@@ -83,6 +83,8 @@ public:
     void               set_enabled       (bool enabled);
     [[nodiscard]] auto get_output_texture() const -> std::shared_ptr<erhe::graphics::Texture>;
     [[nodiscard]] auto get_instance_count() const -> std::size_t;
+    // Cached bottom level structure count, for memory reporting.
+    [[nodiscard]] auto get_blas_count() const -> std::size_t;
 
     // Reads the output texture back as tightly packed RGBA8 rows (top row
     // first). Self-contained submit + wait; intended for the MCP

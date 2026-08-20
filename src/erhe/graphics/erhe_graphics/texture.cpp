@@ -21,9 +21,52 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
+#include <atomic>
+
 namespace erhe::graphics {
 
 Texture_reference::~Texture_reference() noexcept = default;
+
+namespace {
+
+// Process-wide image memory accounting. Atomics because textures are created
+// and destroyed from worker threads (glTF image residency) as well as the
+// main thread.
+std::atomic<std::size_t> g_texture_count{0};
+std::atomic<std::size_t> g_texture_byte_count{0};
+
+// Estimate from the create info. A view or a wrapped external image owns no
+// allocation of its own and is not counted.
+[[nodiscard]] auto estimate_texture_byte_count(const Texture_create_info& create_info) -> std::size_t
+{
+    if ((create_info.wrap_texture_name != 0) || (create_info.buffer != nullptr)) {
+        return 0;
+    }
+    const int width  = std::max(create_info.width,  1);
+    const int height = std::max(create_info.height, 1);
+    const int depth  = std::max(create_info.depth,  1);
+    const int layers = std::max(create_info.array_layer_count, 1);
+    const int levels = std::max(create_info.get_texture_level_count(), 1);
+    const std::size_t slice_bytes = erhe::dataformat::get_mip_chain_byte_count(
+        create_info.pixelformat,
+        static_cast<std::size_t>(width),
+        static_cast<std::size_t>(height),
+        static_cast<std::size_t>(levels)
+    );
+    const std::size_t samples = static_cast<std::size_t>(std::max(create_info.sample_count, 1));
+    return slice_bytes * static_cast<std::size_t>(depth) * static_cast<std::size_t>(layers) * samples;
+}
+
+}
+
+auto Texture::get_memory_statistics() -> Texture::Memory_statistics
+{
+    return Memory_statistics{
+        .texture_count = g_texture_count.load(std::memory_order_relaxed),
+        .byte_count    = g_texture_byte_count.load(std::memory_order_relaxed)
+    };
+}
 
 auto Texture::get_mipmap_dimensions(const Texture_type type) -> int
 {
@@ -46,6 +89,10 @@ Texture::Texture(Texture&&) noexcept = default;
 Texture::~Texture() noexcept
 {
     SPDLOG_LOGGER_TRACE(log_texture, "Deleting texture {} {}", gl_name(), m_debug_label);
+    if (m_estimated_byte_count > 0) {
+        g_texture_count     .fetch_sub(1,                      std::memory_order_relaxed);
+        g_texture_byte_count.fetch_sub(m_estimated_byte_count, std::memory_order_relaxed);
+    }
 }
 
 auto Texture::get_referenced_texture() const -> const Texture*
@@ -126,9 +173,14 @@ auto Texture_create_info::make_view(Device& device, const std::shared_ptr<Textur
 Texture::Texture(Device& device, const Texture_create_info& create_info)
     : Item{create_info.debug_label.string_view()}
     , m_impl{std::make_unique<Texture_impl>(device, create_info)}
+    , m_estimated_byte_count{estimate_texture_byte_count(create_info)}
 {
     ERHE_VERIFY(create_info.usage_mask != 0);
     enable_flag_bits(erhe::Item_flags::show_in_ui);
+    if (m_estimated_byte_count > 0) {
+        g_texture_count     .fetch_add(1,                     std::memory_order_relaxed);
+        g_texture_byte_count.fetch_add(m_estimated_byte_count, std::memory_order_relaxed);
+    }
 }
 auto Texture::get_debug_label() const -> erhe::utility::Debug_label
 {

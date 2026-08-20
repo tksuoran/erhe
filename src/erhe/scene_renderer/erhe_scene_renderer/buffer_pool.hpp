@@ -164,6 +164,23 @@ public:
     // no allocation transaction may interleave with the frees).
     static void apply_retired(const std::vector<Retired_range>& retired);
 
+    // Byte accounting for memory reporting (doc/reloadable-asset-loads.md).
+    // Capacity is what the pool has committed in VkBuffer blocks - it only
+    // ever grows, because blocks are never destroyed. Used is what the free
+    // list currently hands out, so it is what drops when meshes are released.
+    class Statistics
+    {
+    public:
+        std::size_t block_count         {0};
+        std::size_t capacity_bytes      {0};
+        std::size_t used_bytes          {0};
+        std::size_t free_bytes          {0};
+        std::size_t allocation_count    {0};
+        std::size_t pending_retired_bytes{0}; // released, not yet frame-safe to reuse
+    };
+    [[nodiscard]] auto get_statistics() const -> Statistics;
+    [[nodiscard]] auto get_debug_label() const -> const std::string&;
+
 private:
     [[nodiscard]] auto allocate_internal(std::size_t allocation_byte_count, std::size_t allocation_alignment) -> std::optional<std::pair<Pool_block*, std::size_t>>;
     [[nodiscard]] auto create_new_block (std::size_t min_capacity_bytes) -> bool;

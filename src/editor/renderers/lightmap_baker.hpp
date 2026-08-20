@@ -226,6 +226,14 @@ public:
     ~Lightmap_baker() noexcept;
 
     void set_options(const Bake_options& options);
+
+    // Frees the bake working set - G-buffer, accumulation, BLAS/TLAS - keeping
+    // only the display atlas so the scene retains its last published lighting.
+    // Everything released is rebuilt on demand by the next enabled tick.
+    // Called when a scene closes: pause semantics deliberately keep the
+    // working set on a plain disable, but a closed scene is never resumed
+    // (doc/reloadable-asset-loads.md).
+    void release_working_set();
     [[nodiscard]] auto get_options() const -> const Bake_options& { return m_options; }
 
     void set_sky_lighting(const Sky_lighting& sky) { m_sky = sky; }
@@ -556,7 +564,7 @@ private:
     auto ensure_tile_accum(erhe::graphics::Command_buffer& command_buffer, int tile) -> erhe::graphics::Texture*;
     // Free every rebuildable working-set allocation, keeping only the
     // display atlas (see set_baking_enabled).
-    void release_working_set();
+
     // Pause autosave: park resident published unsaved tiles in the
     // pending-save queue for the owner's drain.
     void queue_dirty_tiles_for_save();
@@ -638,6 +646,13 @@ private:
         std::shared_ptr<erhe::primitive::Primitive>            primitive; // keeps the Buffer_mesh alive
         std::unique_ptr<erhe::graphics::Acceleration_structure> acceleration_structure;
     };
+    // Same unbounded pin as Scene_tlas's cache, and the same remedy: drop
+    // entries whose primitive nothing else refers to, so content removed from
+    // the scene can give its memory back. Tested on render_shape.use_count(),
+    // because a defaulted Primitive copy can alias one Buffer_mesh key
+    // (doc/reloadable-asset-loads.md).
+    void evict_unreferenced_blas();
+
     auto get_or_create_blas(
         erhe::graphics::Command_buffer&                    command_buffer,
         const std::shared_ptr<erhe::primitive::Primitive>& primitive,

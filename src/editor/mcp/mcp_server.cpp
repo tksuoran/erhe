@@ -587,6 +587,8 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_gizmo_visibility",           &Mcp_server::action_set_gizmo_visibility          },
         { "get_transform_state",            &Mcp_server::query_transform_state                },
         { "get_editor_references",          &Mcp_server::query_editor_references              },
+        { "get_memory_usage",               &Mcp_server::query_memory_usage                   },
+        { "free_undone_loads",              &Mcp_server::action_free_undone_loads             },
         { "move_library_item",              &Mcp_server::action_move_library_item             },
         { "debug_set_item_tree_hover",      &Mcp_server::action_debug_set_item_tree_hover     },
         { "get_geometry_graph",             &Mcp_server::query_geometry_graph                 },

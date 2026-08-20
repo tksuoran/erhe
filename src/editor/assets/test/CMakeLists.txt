@@ -15,7 +15,9 @@ add_executable(${_target}
     # executable: the editor itself is an executable, so there is no editor
     # library to link against.
     ${CMAKE_CURRENT_SOURCE_DIR}/../pending_item_removals.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../operations/operation_stack_selection.cpp
     test_pending_item_removals.cpp
+    test_free_undone_loads.cpp
 )
 
 # app_message.hpp (for Removed_items) is reached as "app_message.hpp", which

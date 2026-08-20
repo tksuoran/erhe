@@ -18,6 +18,7 @@
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/content_library_attach_operation.hpp"
+#include "operations/import_gltf_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -715,7 +716,8 @@ auto make_import_gltf_operation(
     const std::filesystem::path&       path,
     const bool                         materials_as_references,
     const bool                         fit_view_to_content,
-    Prepared_gltf_parse* const         prepared_parse
+    Prepared_gltf_parse* const         prepared_parse,
+    Gltf_import_recipe* const          recipe
 ) -> std::shared_ptr<Operation>
 {
     ERHE_VERIFY(scene_root);
@@ -922,6 +924,22 @@ auto make_import_gltf_operation(
         }
     }
 
+    // A rebuild (redo of a dropped import) replays the decisions the first
+    // build made, instead of re-deriving them from a scene that may have
+    // gained a camera or a light meanwhile - otherwise the redo would produce
+    // a different node set than the import it is redoing
+    // (doc/reloadable-asset-loads.md).
+    if (recipe != nullptr) {
+        if (recipe->decisions_recorded) {
+            add_default_camera = recipe->add_default_camera;
+            add_default_light  = recipe->add_default_light;
+        } else {
+            recipe->add_default_camera = add_default_camera;
+            recipe->add_default_light  = add_default_light;
+            recipe->decisions_recorded = true;
+        }
+    }
+
     // Build default camera and light nodes but do NOT parent them; the
     // Item_insert_remove_operation sub-ops below will parent them to
     // scene_root_node on execute() and detach on undo().
@@ -1118,16 +1136,19 @@ void import_gltf(
                 if (!target) {
                     return; // scene closed while loading; the task cancelled itself
                 }
+                // Wrapped in the reloadable operation so an undo can give the
+                // memory back and a redo re-reads the file
+                // (doc/reloadable-asset-loads.md). The asynchronously prepared
+                // parse is handed over for the first execute; later rebuilds
+                // parse inline.
+                Gltf_import_recipe recipe{
+                    .path                    = path,
+                    .scene_root              = target,
+                    .materials_as_references = materials_as_references,
+                    .fit_view_to_content     = false
+                };
                 context.operation_stack->queue(
-                    make_import_gltf_operation(
-                        context,
-                        make_import_build_info(context),
-                        target,
-                        path,
-                        materials_as_references,
-                        false,
-                        result.prepared_parse.get()
-                    )
+                    std::make_shared<Import_gltf_operation>(std::move(recipe), result.prepared_parse)
                 );
             }
         );
@@ -1135,9 +1156,14 @@ void import_gltf(
             return;
         }
     }
-    context.operation_stack->queue(
-        make_import_gltf_operation(context, std::move(build_info), scene_root, path, materials_as_references)
-    );
+    static_cast<void>(build_info); // the reloadable operation makes its own, per build
+    Gltf_import_recipe recipe{
+        .path                    = path,
+        .scene_root              = scene_root,
+        .materials_as_references = materials_as_references,
+        .fit_view_to_content     = false
+    };
+    context.operation_stack->queue(std::make_shared<Import_gltf_operation>(std::move(recipe)));
 }
 
 auto scan_gltf(const std::filesystem::path& path) -> Gltf_scan_summary

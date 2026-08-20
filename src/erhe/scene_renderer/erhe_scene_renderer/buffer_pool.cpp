@@ -151,6 +151,28 @@ void Buffer_pool::collect_retired(std::vector<Retired_range>& out_retired)
     }
 }
 
+auto Buffer_pool::get_statistics() const -> Buffer_pool::Statistics
+{
+    Statistics statistics;
+    statistics.block_count = m_blocks.size();
+    for (const std::unique_ptr<Pool_block>& block : m_blocks) {
+        if (!block) {
+            continue;
+        }
+        statistics.capacity_bytes       += block->allocator.get_capacity();
+        statistics.used_bytes           += block->allocator.get_used();
+        statistics.free_bytes           += block->allocator.get_free();
+        statistics.allocation_count     += block->allocator.get_allocation_count();
+        statistics.pending_retired_bytes += block->get_pending_retired_byte_count();
+    }
+    return statistics;
+}
+
+auto Buffer_pool::get_debug_label() const -> const std::string&
+{
+    return m_block_create_info.debug_label_prefix;
+}
+
 void Buffer_pool::apply_retired(const std::vector<Retired_range>& retired)
 {
     for (const Retired_range& range : retired) {
