@@ -240,7 +240,8 @@ auto Base_render_pipeline::get_pipeline_for(
     const Shader_stages*                   shader_stages,
     const Vertex_input_state*              vertex_input,
     const erhe::dataformat::Vertex_format* vertex_format,
-    const bool                             front_face_flip
+    const bool                             front_face_flip,
+    const bool                             disable_face_culling
 ) -> Render_pipeline*
 {
     if (m_device == nullptr) {
@@ -261,6 +262,10 @@ auto Base_render_pipeline::get_pipeline_for(
 
     if (front_face_flip) {
         ci.base.rasterization = ci.base.rasterization.with_winding_flip();
+    }
+
+    if (disable_face_culling) {
+        ci.base.rasterization = ci.base.rasterization.with_face_culling_disabled();
     }
 
     ci.set_format_from_render_pass(render_pass_desc);

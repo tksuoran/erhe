@@ -37,6 +37,18 @@ auto Rasterization_state::with_winding_flip_if(const bool condition) const -> Ra
     return condition ? with_winding_flip() : *this;
 }
 
+auto Rasterization_state::with_face_culling_disabled() const -> Rasterization_state
+{
+    Rasterization_state result = *this;
+    result.face_cull_enable = false;
+    return result;
+}
+
+auto Rasterization_state::with_face_culling_disabled_if(const bool condition) const -> Rasterization_state
+{
+    return condition ? with_face_culling_disabled() : *this;
+}
+
 auto Rasterization_state::with_depth_bias() const -> Rasterization_state
 {
     Rasterization_state result = *this;

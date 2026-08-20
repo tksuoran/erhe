@@ -775,11 +775,13 @@ Render_bucket::Render_bucket(
     const Shader_key&                     shader_key,
     const uint64_t                        shader_key_hash,
     const bool                            negative_determinant,
+    const bool                            double_sided,
     const erhe::primitive::Primitive_mode primitive_mode
 )
     : shader_key          {shader_key}
     , shader_key_hash     {shader_key_hash}
     , negative_determinant{negative_determinant}
+    , double_sided        {double_sided}
     , primitive_mode      {primitive_mode}
 {
     buffer_set.vertex_input_key = bucket_vertex_input_key(buffer_mesh, primitive_mode);
@@ -789,7 +791,7 @@ Render_bucket::Render_bucket(
         buffer_set.vertex_buffers.emplace_back(vr.pool_id, vr.buffer_id);
     }
 
-    const bool done = accept(mesh, mesh_primitive_index, buffer_mesh, shader_key_hash, negative_determinant);
+    const bool done = accept(mesh, mesh_primitive_index, buffer_mesh, shader_key_hash, negative_determinant, double_sided);
     ERHE_VERIFY(done);
 }
 
@@ -800,10 +802,14 @@ auto Render_bucket::accept(
     const std::size_t                   mesh_primitive_index,
     const erhe::primitive::Buffer_mesh& buffer_mesh,
     const uint64_t                      primitive_shader_key_hash,
-    const bool                          primitive_negative_determinant
+    const bool                          primitive_negative_determinant,
+    const bool                          primitive_double_sided
 ) -> bool
 {
     if (primitive_negative_determinant != negative_determinant) {
+        return false;
+    }
+    if (primitive_double_sided != double_sided) {
         return false;
     }
     const std::vector<erhe::primitive::Buffer_range>& vertex_ranges = bucket_vertex_ranges(buffer_mesh, primitive_mode);
@@ -947,9 +953,13 @@ void bucket_primitives(
             }
             const uint64_t shader_key_hash = shader_key.get_hash();
 
+            // glTF material.doubleSided: no material means erhe's own default
+            // material behavior, which is single sided like the glTF default.
+            const bool primitive_double_sided = (material != nullptr) && material->data.double_sided;
+
             bool done = false;
             for (Render_bucket& b : buckets) {
-                if (b.accept(*mesh.get(), i, *buffer_mesh, shader_key_hash, mesh_negative_determinant)) {
+                if (b.accept(*mesh.get(), i, *buffer_mesh, shader_key_hash, mesh_negative_determinant, primitive_double_sided)) {
                     done = true;
                     break;
                 }
@@ -958,7 +968,7 @@ void bucket_primitives(
                 continue;
             }
 
-            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant, primitive_mode);
+            buckets.emplace_back(*mesh.get(), i, *buffer_mesh, shader_key, shader_key_hash, mesh_negative_determinant, primitive_double_sided, primitive_mode);
         }
     }
 }

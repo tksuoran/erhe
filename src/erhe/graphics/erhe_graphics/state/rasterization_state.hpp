@@ -38,6 +38,15 @@ public:
     // Use when projection Y-flip reverses apparent triangle winding.
     [[nodiscard]] auto with_winding_flip() const -> Rasterization_state;
 
+    // Returns a copy with face culling turned off, keeping every other piece
+    // of state. Used for glTF's material.doubleSided (Material_data::
+    // double_sided), where both faces of a surface must be rendered.
+    [[nodiscard]] auto with_face_culling_disabled() const -> Rasterization_state;
+
+    // Returns with_face_culling_disabled() when condition is true, otherwise
+    // returns *this.
+    [[nodiscard]] auto with_face_culling_disabled_if(bool condition) const -> Rasterization_state;
+
     // Returns a copy with depth_bias_enable set (the pipeline then honours
     // Render_command_encoder::set_depth_bias()).
     [[nodiscard]] auto with_depth_bias() const -> Rasterization_state;

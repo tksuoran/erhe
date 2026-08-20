@@ -1665,6 +1665,9 @@ private:
                 break;
         }
 
+        // glTF material.doubleSided (default false = cull back faces).
+        create_data.double_sided = material.doubleSided;
+
         if (material.normalTexture.has_value()) {
             apply_texture(material.normalTexture.value(), create_data.texture_samplers.normal, Gltf_material_texture_slot::normal, true);
             create_data.normal_texture_scale = material.normalTexture.value().scale;
@@ -4482,6 +4485,8 @@ private:
                     gltf_material.alphaMode = fastgltf::AlphaMode::Blend;
                     break;
             }
+
+            gltf_material.doubleSided = data.double_sided;
 
             // Texture references (phase 0): each slot embeds its retained
             // source image stream; slots whose texture has no exportable

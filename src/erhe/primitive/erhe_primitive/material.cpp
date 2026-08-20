@@ -60,6 +60,7 @@ Material::Material(const Material_create_info& create_info)
         (lhs.occlusion_texture_strength == rhs.occlusion_texture_strength) &&
         (lhs.bxdf_model                 == rhs.bxdf_model                ) &&
         (lhs.blending_mode              == rhs.blending_mode             ) &&
+        (lhs.double_sided               == rhs.double_sided              ) &&
         (lhs.alpha_cutoff               == rhs.alpha_cutoff              ) &&
         (lhs.use_circular_brushed_metal == rhs.use_circular_brushed_metal) &&
         (lhs.circular_brushed_metal_tex_coord == rhs.circular_brushed_metal_tex_coord) &&

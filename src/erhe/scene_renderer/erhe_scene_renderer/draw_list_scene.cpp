@@ -40,8 +40,9 @@ namespace {
 class Primitive_classification
 {
 public:
-    bool                                accepted   {false};
-    const erhe::primitive::Buffer_mesh* buffer_mesh{nullptr};
+    bool                                accepted    {false};
+    bool                                double_sided{false};
+    const erhe::primitive::Buffer_mesh* buffer_mesh {nullptr};
     Draw_blending                       blending   {Draw_blending::opaque};
     Buffer_set                          buffer_set {};
     Shader_key                          key        {};
@@ -82,6 +83,10 @@ public:
         (material != nullptr) &&
         (material->data.blending_mode == erhe::primitive::Material_blending_mode::opaque);
     result.blending = is_opaque ? Draw_blending::opaque : Draw_blending::translucent;
+
+    // glTF material.doubleSided. No material means erhe's own default
+    // material behavior, which is single sided like the glTF default.
+    result.double_sided = (material != nullptr) && material->data.double_sided;
 
     // Shadow lists take opaque casters only (Shadow_renderer uses
     // opaque_primitives_only today).
@@ -314,6 +319,7 @@ void Draw_list_scene::add_entries(const uint32_t object_index)
             key.mobility             = object.mobility;
             key.blending             = classification.blending;
             key.negative_determinant = object.negative_determinant;
+            key.double_sided         = classification.double_sided;
             key.primitive_mode       = primitive_mode;
             key.layer_id             = object.layer_id;
             key.buffer_set           = classification.buffer_set;
@@ -1332,7 +1338,8 @@ auto Draw_list_scene::draw_color(const Draw_color_parameters& parameters) -> Dra
                 &stages->shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format,
-                key.negative_determinant
+                key.negative_determinant,
+                key.double_sided
             );
             if (render_pipeline == nullptr) {
                 log_draw_list->warn("No render pipeline for draw list {}: {}", list_index, key.describe());

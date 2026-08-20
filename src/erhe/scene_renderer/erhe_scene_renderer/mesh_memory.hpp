@@ -313,7 +313,9 @@ public:
 // Buckets are also partitioned by the negative-determinant flag of the mesh world
 // transform: mirrored geometry has reversed apparent triangle winding and must be
 // drawn with a front-face-flipped pipeline variant (see
-// Base_render_pipeline::get_pipeline_for front_face_flip).
+// Base_render_pipeline::get_pipeline_for front_face_flip), and by the
+// material's double_sided flag (glTF material.doubleSided), which selects a
+// face-culling-disabled pipeline variant.
 class Render_bucket
 {
 public:
@@ -327,6 +329,7 @@ public:
         const Shader_key&                   shader_key,
         const uint64_t                      shader_key_hash,
         const bool                          negative_determinant,
+        const bool                          double_sided,
         const erhe::primitive::Primitive_mode primitive_mode
     );
 
@@ -335,7 +338,8 @@ public:
         const std::size_t                   mesh_primitive_index,
         const erhe::primitive::Buffer_mesh& buffer_mesh,
         const uint64_t                      primitive_shader_key_hash,
-        const bool                          primitive_negative_determinant
+        const bool                          primitive_negative_determinant,
+        const bool                          primitive_double_sided
     ) -> bool;
 
     Buffer_set                        buffer_set;
@@ -343,6 +347,7 @@ public:
     Shader_key                        shader_key{};
     uint64_t                          shader_key_hash;
     bool                              negative_determinant{false};
+    bool                              double_sided{false};
     // The primitive mode this bucket draws. solid_wireframe selects the
     // expanded vertex input key + expanded vertex buffer ranges of each
     // Buffer_mesh (the index buffer is shared with the normal ranges).

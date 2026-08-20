@@ -136,7 +136,11 @@ public:
         const Shader_stages*                   shader_stages,
         const Vertex_input_state*              vertex_input,
         const erhe::dataformat::Vertex_format* vertex_format,
-        bool                                   front_face_flip = false
+        bool                                   front_face_flip     = false,
+        // glTF material.doubleSided: render both faces of the surface. Drops
+        // face culling from this variant only, leaving the base pipeline's
+        // cull face mode and winding untouched.
+        bool                                   disable_face_culling = false
     ) -> Render_pipeline*;
 
     [[nodiscard]] auto get_create_info() const -> const Base_render_pipeline_create_info&;

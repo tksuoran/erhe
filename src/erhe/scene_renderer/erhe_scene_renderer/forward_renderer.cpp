@@ -390,7 +390,8 @@ void Forward_renderer::render(const Render_parameters& parameters)
                 shader_stages,
                 vertex_input.vertex_input.get(),
                 &vertex_input.vertex_format,
-                bucket.negative_determinant
+                bucket.negative_determinant,
+                bucket.double_sided
             );
             if (render_pipeline == nullptr) {
                 log_draw->warn(

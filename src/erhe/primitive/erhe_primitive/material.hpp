@@ -90,6 +90,12 @@ public:
     float                     occlusion_texture_strength{1.0f};
     Bxdf_model                bxdf_model                {Bxdf_model::isotropic_brdf};
     Material_blending_mode    blending_mode             {Material_blending_mode::opaque};
+    // glTF material.doubleSided: when set, both faces of the surface are
+    // rendered (face culling off). The glTF default is false - back faces are
+    // culled - which is what erhe's content pipelines do without this flag.
+    // Renderers partition draws by this so a double-sided material selects a
+    // culling-disabled pipeline variant.
+    bool                      double_sided              {false};
     float                     alpha_cutoff              {0.5f};
     bool                      use_circular_brushed_metal{false};
     // Texcoord set read by the in-shader circular brushed metal block

@@ -1857,6 +1857,10 @@ void Properties::material_properties(const std::vector<std::shared_ptr<erhe::Ite
             ImGui::SliderFloat("##", &data.alpha_cutoff, 0.0f, 1.0f);
         });
     }
+    // glTF material.doubleSided: draws both faces instead of culling back faces.
+    add_entry("Double Sided", [&](){
+        ImGui::Checkbox("##", &data.double_sided);
+    });
     add_entry("Circular Brushed Metal", [&](){
         ImGui::Checkbox("##", &data.use_circular_brushed_metal);
     });
