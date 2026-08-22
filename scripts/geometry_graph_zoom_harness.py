@@ -12,7 +12,7 @@ post-transform. Screenshots go to logs/zoom_<label>_<zoom>.png; READ the PNGs
 (do not just diff file sizes) to judge text crispness at 2x / 4x.
 
 Usage (headless editor already running, see the erhe-headless-verify skill):
-    py -3 scripts/geometry_graph_zoom_harness.py [--label baseline] [--port 8080]
+    py -3 scripts/geometry_graph_zoom_harness.py [--label baseline] [--port 3743]
 
 Commit this script; do NOT commit the captured images.
 
@@ -78,7 +78,7 @@ def build_known_graph(call):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--label", default="baseline", help="filename tag, e.g. baseline / after")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=3743)
     args = parser.parse_args()
 
     rpc = make_rpc(args.port)

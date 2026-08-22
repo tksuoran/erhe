@@ -9,7 +9,7 @@ Usage:
 
 Options:
     --host HOST          MCP server host (default: 127.0.0.1)
-    --port PORT          MCP server port (default: 8080)
+    --port PORT          MCP server port (default: 3743)
     --seed SEED          Random seed for smoke test (default: random)
     --smoke-time SECS    Smoke test duration in seconds (default: 10, 0=run until Ctrl+C)
     --unit-only          Run only unit tests
@@ -30,7 +30,7 @@ import urllib.request
 # ---------------------------------------------------------------------------
 
 class McpClient:
-    def __init__(self, host="127.0.0.1", port=8080):
+    def __init__(self, host="127.0.0.1", port=3743):
         self.base_url = f"http://{host}:{port}"
         self.mcp_url = f"{self.base_url}/mcp"
         self._id = 0
@@ -1333,7 +1333,7 @@ class SmokeTestRunner:
 def main():
     parser = argparse.ArgumentParser(description="Test erhe editor MCP server")
     parser.add_argument("--host", default="127.0.0.1", help="MCP server host")
-    parser.add_argument("--port", type=int, default=8080, help="MCP server port")
+    parser.add_argument("--port", type=int, default=3743, help="MCP server port")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for smoke test")
     parser.add_argument("--smoke-time", type=float, default=10.0, help="Smoke test duration (0=infinite)")
     parser.add_argument("--unit-only", action="store_true", help="Run only unit tests")

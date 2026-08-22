@@ -28,7 +28,7 @@ import sys
 import time
 import urllib.request
 
-PORT = 8080
+PORT = 3743
 LOG_PATH = pathlib.Path("logs/log.txt")
 RESULTS = []
 

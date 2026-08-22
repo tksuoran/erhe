@@ -72,7 +72,7 @@ public:
     Mcp_server(
         erhe::commands::Commands& commands,
         App_context&              context,
-        int                       port = 8080
+        int                       port = 3743 // "erhe" on a phone keypad; ERHE_MCP_PORT env var overrides
     );
     ~Mcp_server() noexcept;
 
@@ -98,11 +98,12 @@ private:
     void server_thread_main();
     void setup_routes();
 
-    // JSON-RPC handlers
-    auto handle_initialize(const std::string& id) -> std::string;
-    auto handle_tools_list(const std::string& id) -> std::string;
-    auto handle_tools_call(const std::string& id, const std::string& tool_name, const nlohmann::json& arguments) -> std::string;
-    auto handle_error     (const std::string& id, int code, const std::string& message) -> std::string;
+    // JSON-RPC handlers. The id parameter is the request id echoed verbatim
+    // (string, number or null) - see make_jsonrpc_response.
+    auto handle_initialize(const nlohmann::json& id, const nlohmann::json& params) -> std::string;
+    auto handle_tools_list(const nlohmann::json& id) -> std::string;
+    auto handle_tools_call(const nlohmann::json& id, const std::string& tool_name, const nlohmann::json& arguments) -> std::string;
+    auto handle_error     (const nlohmann::json& id, int code, const std::string& message) -> std::string;
 
     void refresh_tool_list();
 

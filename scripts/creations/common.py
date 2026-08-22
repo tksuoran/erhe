@@ -5,7 +5,7 @@ preferred, so capture_screenshot works) to build one self-contained scene:
 procedural texture graphs, geometry node graphs, brush placement and direct
 geometry operations. Run with:
 
-    py -3 scripts/creations/<script>.py [--port 8080]
+    py -3 scripts/creations/<script>.py [--port 3743]
 
 The editor must already be running (see AGENTS.md "In-editor MCP server").
 """
@@ -54,7 +54,7 @@ class Creation:
     """Wraps an McpClient with busy-retry, scene bootstrap and camera/screenshot
     helpers used by every creation script."""
 
-    def __init__(self, title, port=8080, wait_s=120.0, pause_s=10.0,
+    def __init__(self, title, port=3743, wait_s=120.0, pause_s=10.0,
                  editor_exe=None, reuse=False, keep_scenes=False):
         self.title = title
         if not reuse:
@@ -1459,7 +1459,7 @@ def reframe(args, title, base_path, views):
 
 def standard_args(description):
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=3743)
     parser.add_argument("--no-save", action="store_true", help="skip save_scene")
     parser.add_argument("--pause", type=float, default=10.0,
                         help="seconds to pause after the first visible mesh, "

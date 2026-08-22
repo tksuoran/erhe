@@ -89,11 +89,11 @@ This skill is the condensed, cross-platform run-book.
   playbook.
 - Do NOT blind-sleep. Poll for readiness: either `logs/log.txt` showing the editor
   is presenting frames, or poll `mcp__renderdoc__list_targets` until the editor
-  appears, or poll the in-editor MCP (`http://127.0.0.1:8080/mcp`, `list_scenes`).
+  appears, or poll the in-editor MCP (`http://127.0.0.1:3743/mcp`, `list_scenes`).
 
 ## Step 3 -- set up the repro scene (in-editor MCP)
 
-The in-editor MCP server (`http://127.0.0.1:8080/mcp`, JSON-RPC over POST) drives
+The in-editor MCP server (`http://127.0.0.1:3743/mcp`, JSON-RPC over POST) drives
 the live editor so the frame you capture contains the state you want. Stand up /
 mutate the scene and trigger the operation under test *before* capturing. For the
 mesh-component selection scan specifically:

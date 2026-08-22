@@ -49,14 +49,17 @@ namespace mcp_server_detail {
 // Build timestamp of mcp_server_shared.cpp and the running process id. Both are
 // surfaced in the startup log, the initialize response and get_server_info so a
 // stale editor.exe holding the MCP port (a second process launched earlier that
-// still owns 127.0.0.1:8080) is easy to detect: compare the reported pid/build
+// still owns 127.0.0.1:3743) is easy to detect: compare the reported pid/build
 // against the editor you just launched.
 extern const char* const c_mcp_build_timestamp;
 
 [[nodiscard]] auto get_process_id() -> long;
 
-auto make_jsonrpc_response(const std::string& id, const json& result) -> std::string;
-auto make_jsonrpc_error(const std::string& id, int code, const std::string& message) -> std::string;
+// The id is echoed verbatim: JSON-RPC 2.0 requires the response id to have
+// the same type as the request id (a numeric id must not come back as a
+// string). Pass nullptr when no request id is known (parse error, auth).
+auto make_jsonrpc_response(const json& id, const json& result) -> std::string;
+auto make_jsonrpc_error(const json& id, int code, const std::string& message) -> std::string;
 auto make_text_content(const std::string& text) -> json;
 auto make_json_content(const json& data) -> json;
 

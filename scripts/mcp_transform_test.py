@@ -16,7 +16,7 @@ entry:
   5. Local-space rotation and scale spot checks.
 
 Usage:
-  py -3 scripts/mcp_transform_test.py [--port 8080] [--scene NAME] [--wait 30]
+  py -3 scripts/mcp_transform_test.py [--port 3743] [--scene NAME] [--wait 30]
 
 The editor must already be running. Exit code 0 = all checks passed.
 """
@@ -30,7 +30,7 @@ from erhe_mcp import McpClient, check_close, pick_scene, report, wait_for_server
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port",  type=int,   default=8080, help="MCP server port (default 8080)")
+    parser.add_argument("--port",  type=int,   default=3743, help="MCP server port (default 3743)")
     parser.add_argument("--scene", type=str,   default="",   help="Scene name (default: first scene)")
     parser.add_argument("--wait",  type=float, default=30.0, help="Seconds to wait for the MCP server")
     args = parser.parse_args()

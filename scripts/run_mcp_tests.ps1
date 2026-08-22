@@ -4,13 +4,13 @@
 # Usage:
 #   pwsh scripts\run_mcp_tests.ps1 [-BuildDir <dir>] [-Config <Debug|Release>] [-Port <int>] [-EditorTimeoutSec <int>]
 #
-# Defaults: BuildDir=build_vs2026_opengl, Config=Debug, Port=8080, EditorTimeoutSec=60.
+# Defaults: BuildDir=build_vs2026_opengl, Config=Debug, Port=3743, EditorTimeoutSec=60.
 
 [CmdletBinding()]
 param(
     [string]$BuildDir         = "build_vs2026_opengl",
     [string]$Config           = "Debug",
-    [int]   $Port             = 8080,
+    [int]   $Port             = 3743,
     [int]   $EditorTimeoutSec = 60
 )
 

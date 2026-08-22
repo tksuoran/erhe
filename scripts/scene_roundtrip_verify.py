@@ -51,7 +51,7 @@ import tempfile
 import time
 import urllib.request
 
-PORT = 8080
+PORT = 3743
 SCHEMA_DIR = pathlib.Path("doc/gltf_extensions/schema")
 RESULTS = []
 
@@ -1318,7 +1318,7 @@ def section_foreign_tools(gltf_validator_arg, blender_arg):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port", type=int, default=8080, help="MCP server port (default 8080)")
+    parser.add_argument("--port", type=int, default=3743, help="MCP server port (default 3743)")
     parser.add_argument("--gltf-validator", help="path to the Khronos gltf_validator executable")
     parser.add_argument("--blender", help="path to the Blender executable")
     parser.add_argument("--keep-files", action="store_true", help="keep the saved .glb test artifacts")

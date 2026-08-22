@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <future>
@@ -60,6 +61,21 @@ Mcp_server::Mcp_server(
     , m_context {context}
     , m_port    {port}
 {
+    // ERHE_MCP_PORT overrides the construction-time port (the preferred port
+    // for the fallback scan in start()). Lets an operator run several editors
+    // on known ports, or move the server without a rebuild.
+    const char* const port_env = std::getenv("ERHE_MCP_PORT");
+    if (port_env != nullptr) {
+        char* end = nullptr;
+        const long value = std::strtol(port_env, &end, 10);
+        if ((end != port_env) && (*end == '\0') && (value >= 1) && (value <= 65535)) {
+            m_port = static_cast<int>(value);
+            log_mcp->info("MCP server: preferred port {} from ERHE_MCP_PORT", m_port);
+        } else {
+            log_mcp->warn("MCP server: ignoring invalid ERHE_MCP_PORT value '{}'", port_env);
+        }
+    }
+
     m_auth_token = load_auth_token();
     if (m_auth_token.empty()) {
         log_mcp->warn(
@@ -103,8 +119,8 @@ void Mcp_server::start()
     validate_tool_list_against_dispatch();
 
     // Bind the preferred port, falling back through up to k_port_retry_count-1
-    // successors (e.g. 8080..8099) when it is already in use. This matters on
-    // Quest, where another service may already hold 8080; without the fallback
+    // successors (e.g. 3743..3762) when it is already in use. This matters on
+    // Quest, where another service may already hold the port; without the fallback
     // the editor came up with no reachable MCP endpoint. Each FAILED
     // httplib::Server::bind_to_port() permanently decommissions that Server
     // instance (it sets is_decommissioned, after which every later bind on the
@@ -218,7 +234,7 @@ void Mcp_server::setup_routes()
             if (!presented.has_value() || !constant_time_equal(*presented, m_auth_token)) {
                 res.status = 401;
                 res.set_header("WWW-Authenticate", "Bearer realm=\"erhe-mcp\"");
-                res.body = make_jsonrpc_error("null", -32001, "Unauthorized");
+                res.body = make_jsonrpc_error(nullptr, -32001, "Unauthorized");
                 return;
             }
         }
@@ -227,31 +243,35 @@ void Mcp_server::setup_routes()
         try {
             request = json::parse(req.body);
         } catch (const json::parse_error&) {
-            res.body = make_jsonrpc_error("null", -32700, "Parse error");
+            res.body = make_jsonrpc_error(nullptr, -32700, "Parse error");
             return;
         }
 
-        // JSON-RPC allows the id to be a string, a number, or null. json::value
-        // with a string default throws json::type_error on a numeric id, which
-        // httplib turns into an opaque HTTP 500. Normalize any id type to the
-        // string form used internally for the response echo.
-        std::string id = "null";
-        if (request.contains("id")) {
-            const json& id_json = request.at("id");
-            if (id_json.is_string()) {
-                id = id_json.get<std::string>();
-            } else if (id_json.is_number_integer()) {
-                id = std::to_string(id_json.get<int64_t>());
-            } else if (id_json.is_number_unsigned()) {
-                id = std::to_string(id_json.get<uint64_t>());
-            } else if (id_json.is_number_float()) {
-                id = std::to_string(id_json.get<double>());
-            }
-        }
         const std::string method = request.value("method", "");
 
+        // A request without an id is a JSON-RPC notification (the MCP client
+        // sends notifications/initialized after the initialize handshake, and
+        // may send notifications/cancelled). Notifications must not receive a
+        // response body; acknowledge with 202 Accepted per MCP streamable
+        // HTTP. Nothing here acts on notifications yet.
+        if (!request.contains("id")) {
+            log_mcp->debug("MCP server: notification '{}' acknowledged", method);
+            res.status = 202;
+            res.body.clear();
+            return;
+        }
+
+        // JSON-RPC allows the id to be a string, a number, or null, and the
+        // response must echo it with the same type. Anything else (array,
+        // object, bool) is invalid; echo null for those rather than throwing
+        // (json::type_error would surface as an opaque HTTP 500).
+        json id = request.at("id");
+        if (!id.is_string() && !id.is_number() && !id.is_null()) {
+            id = nullptr;
+        }
+
         if (method == "initialize") {
-            res.body = handle_initialize(id);
+            res.body = handle_initialize(id, request.value("params", json::object()));
         } else if (method == "tools/list") {
             res.body = handle_tools_list(id);
         } else if (method == "tools/call") {
@@ -274,10 +294,29 @@ void Mcp_server::setup_routes()
     });
 }
 
-auto Mcp_server::handle_initialize(const std::string& id) -> std::string
+auto Mcp_server::handle_initialize(const json& id, const json& params) -> std::string
 {
+    // Version negotiation per the MCP lifecycle spec: if the client requests
+    // a protocol revision the server supports, echo it back; otherwise answer
+    // with the latest revision the server supports and let the client decide
+    // whether to proceed. All three revisions listed here are equivalent for
+    // this server's feature set (tools over plain HTTP POST responses).
+    static const char* const k_supported_protocol_versions[] = {
+        "2025-06-18",
+        "2025-03-26",
+        "2024-11-05"
+    };
+    std::string protocol_version = k_supported_protocol_versions[0];
+    const std::string requested_version = params.value("protocolVersion", "");
+    for (const char* supported : k_supported_protocol_versions) {
+        if (requested_version == supported) {
+            protocol_version = requested_version;
+            break;
+        }
+    }
+
     json result = {
-        {"protocolVersion", "2024-11-05"},
+        {"protocolVersion", protocol_version},
         {"capabilities", {
             {"tools", json::object()}
         }},
@@ -291,7 +330,7 @@ auto Mcp_server::handle_initialize(const std::string& id) -> std::string
     return make_jsonrpc_response(id, result);
 }
 
-auto Mcp_server::handle_tools_list(const std::string& id) -> std::string
+auto Mcp_server::handle_tools_list(const json& id) -> std::string
 {
     refresh_tool_list();
 
@@ -313,7 +352,7 @@ auto Mcp_server::handle_tools_list(const std::string& id) -> std::string
 }
 
 auto Mcp_server::handle_tools_call(
-    const std::string& id,
+    const json&        id,
     const std::string& tool_name,
     const json&        arguments
 ) -> std::string
@@ -361,7 +400,7 @@ auto Mcp_server::handle_tools_call(
     return make_jsonrpc_response(id, result);
 }
 
-auto Mcp_server::handle_error(const std::string& id, int code, const std::string& message) -> std::string
+auto Mcp_server::handle_error(const json& id, int code, const std::string& message) -> std::string
 {
     return make_jsonrpc_error(id, code, message);
 }
@@ -396,7 +435,7 @@ auto Mcp_server::process_queued_requests() -> int
         // settle the promise so the future destructor does not abort.
         if ((now - req->enqueued_at) >= k_request_timeout) {
             req->result_promise.set_value(
-                make_jsonrpc_error("dropped", -32000, "Request expired before processing: " + req->tool_name)
+                make_jsonrpc_error(nullptr, -32000, "Request expired before processing: " + req->tool_name)
             );
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;

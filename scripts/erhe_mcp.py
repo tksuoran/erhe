@@ -13,8 +13,12 @@ import urllib.error
 import urllib.request
 
 
+# Matches the editor's default preferred port; both sides honor ERHE_MCP_PORT.
+DEFAULT_PORT = int(os.environ.get("ERHE_MCP_PORT", "3743"))
+
+
 class McpClient:
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int = DEFAULT_PORT) -> None:
         self.url = f"http://127.0.0.1:{port}/mcp"
         self.next_id = 0
         self.headers = {"Content-Type": "application/json"}

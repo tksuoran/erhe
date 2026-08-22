@@ -203,7 +203,7 @@ Content library items can be dragged between libraries (e.g., materials from one
 
 ### MCP Server (`mcp/`)
 
-The editor embeds an MCP (Model Context Protocol) server on `127.0.0.1:8080` for external tool integration. It exposes:
+The editor embeds an MCP (Model Context Protocol) server on `127.0.0.1:3743` for external tool integration. It exposes:
 
 - **Query tools**: `list_scenes`, `get_scene_nodes`, `get_node_details`, `get_scene_cameras`, `get_scene_lights`, `get_scene_materials`, `get_material_details`, `get_scene_brushes`, `get_selection`, `get_physics_items`
 - **Action tools**: `select_items` (by ID), `place_brush` (by brush ID + position), `toggle_physics`, `lock_items`, `unlock_items`, `add_tags`, `remove_tags`

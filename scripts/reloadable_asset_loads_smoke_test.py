@@ -22,7 +22,7 @@ import sys
 import time
 import urllib.request
 
-PORT = 8080
+PORT = 3743
 GLTF = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
 LOG_PATH = pathlib.Path("logs/log.txt")
 RESULTS = []
@@ -382,7 +382,7 @@ def main():
         call("list_scenes")
     except Exception as error:  # noqa: BLE001 - the editor is simply not up
         print(f"Cannot reach the editor MCP server on port {PORT}: {error}")
-        print("Start the editor first (it serves MCP on 127.0.0.1:8080).")
+        print("Start the editor first (it serves MCP on 127.0.0.1:3743).")
         return 2
 
     def run(section_name, function, *args):

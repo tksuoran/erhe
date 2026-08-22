@@ -15,7 +15,7 @@ is scene save/load, covered by section_graph_texture_asset. Prints a
 structured PASS/FAIL report and exits non-zero on any failure.
 
 Assumes the headless editor is already running with the MCP server reachable on
-127.0.0.1:8080 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
+127.0.0.1:3743 (exactly like scripts/geometry_nodes_smoke_test.py). Texture
 graph evaluation is synchronous (doc/texture-graph-plan.md decision 8), so a
 get_texture_graph after a mutation reads settled state with no async barrier.
 """
@@ -28,7 +28,7 @@ import time
 import urllib.request
 import zlib
 
-PORT = 8080
+PORT = 3743
 LOG_PATH = pathlib.Path("logs/log.txt")
 TMP_DIR = pathlib.Path("logs/texgraph_smoke")
 RESULTS = []

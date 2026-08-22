@@ -13,7 +13,7 @@ Normal) / Extrude (Vertex Normal) modes end to end:
 
 Usage: launch build_*/src/editor/<Config>/editor.exe (cwd = repo root), then
     py -3 scripts/mcp_extrude_normal_test.py
-Env: ERHE_MCP_PORT (default 8080), ERHE_MCP_TIMEOUT_S (default 30).
+Env: ERHE_MCP_PORT (default 3743), ERHE_MCP_TIMEOUT_S (default 30).
 """
 
 import os
@@ -103,7 +103,7 @@ def run_case(client: McpClient, scene: str, name: str, mode: str, expect_grows: 
 
 
 def main() -> int:
-    port = int(os.environ.get("ERHE_MCP_PORT", "8080"))
+    port = int(os.environ.get("ERHE_MCP_PORT", "3743"))
     timeout_s = float(os.environ.get("ERHE_MCP_TIMEOUT_S", "30"))
     client = McpClient(port)
     wait_for_server(client, timeout_s)

@@ -31,7 +31,7 @@ creation script (scripts/creations/creation_N_*.py)
 scripts/creations/common.py        shared Creation API + math helpers
         |  uses
 scripts/erhe_mcp.py                JSON-RPC client (retry, bearer token)
-        |  HTTP POST http://127.0.0.1:8080/mcp
+        |  HTTP POST http://127.0.0.1:3743/mcp
 src/editor/mcp/mcp_server.*        in-editor MCP server (~180 tools)
         |  dispatches on the main thread, once per frame
 editor subsystems                  scene graph, brushes, geometry,
@@ -43,7 +43,7 @@ editor subsystems                  scene graph, brushes, geometry,
   into `mcp_server_scene_query.cpp`, `mcp_server_scene_action.cpp`,
   `mcp_server_physics.cpp`, `mcp_server_graphs.cpp`, and friends;
   schemas in `config/editor/mcp_tools.json`). It listens on
-  `127.0.0.1:8080` (fallback scan to 8100), runs on a background
+  `127.0.0.1:3743` (fallback scan to 3763), runs on a background
   thread, and queues every call to the main thread - so it can drive a
   *running* editor safely, windowed or headless.
 - Nothing in a creation is hand-edited in the UI: the script is the

@@ -1,6 +1,6 @@
 # erhe Editor MCP Server
 
-The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:8080`. If that port is already in use it falls back to the next free port, scanning `[8080, 8100)`; the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`.
+The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:3743` ("erhe" on a phone keypad). The `ERHE_MCP_PORT` environment variable overrides the preferred port. If the preferred port is already in use the server falls back to the next free port, scanning 20 successors (`[3743, 3763)` by default); the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`. The client scripts (`scripts/mcp_call.py`, `scripts/erhe_mcp.py`) also honor `ERHE_MCP_PORT` for their default port.
 
 ## Endpoints
 
@@ -8,6 +8,50 @@ The editor embeds an MCP (Model Context Protocol) server that exposes editor com
 |--------|------|-------------|
 | POST | `/mcp` | JSON-RPC 2.0 endpoint for MCP protocol |
 | GET | `/health` | Health check, returns `{"status":"ok"}` |
+
+## Registering as an HTTP MCP server
+
+The server is a spec-conformant MCP HTTP endpoint (request/response only, no
+SSE stream), so MCP clients can register it directly and get native
+`mcp__erhe__*` tools instead of driving raw HTTP. Verified end-to-end with
+Claude Code 2026-08-22 (handshake, `tools/list`, native tool calls):
+
+```bash
+claude mcp add --transport http erhe http://127.0.0.1:3743/mcp
+claude mcp list        # erhe: ... - Connected  (requires the editor to be running)
+```
+
+or equivalently in a project `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "erhe": {
+      "type": "http",
+      "url": "http://127.0.0.1:3743/mcp"
+    }
+  }
+}
+```
+
+Caveats:
+
+- **The server only exists while the editor runs.** A client session started
+  before the editor shows the server as failed/disconnected; reconnect (in
+  Claude Code: `/mcp`) or start a new session after launching the editor.
+  `scripts/mcp_call.py` remains the right tool for scripted flows that
+  launch the editor themselves.
+- **Register a fixed port.** The registration pins one URL, but the editor's
+  fallback scan may move the server off 3743 when the port is taken (e.g. a
+  second editor). Set `ERHE_MCP_PORT` to give an instance a deterministic
+  port, and verify identity with `get_server_info` (it reports pid + build
+  timestamp).
+- **Bearer auth**: if `~/.agents/erhe_mcp_token` exists the server requires
+  the token; add it to the registration:
+  `claude mcp add --transport http erhe http://127.0.0.1:3743/mcp --header "Authorization: Bearer <token>"`.
+- **The tool list is a startup snapshot.** The server does not send
+  `tools/list_changed`, so tools added at runtime (registered editor
+  commands) appear only after the client re-lists.
 
 ## MCP Methods
 
@@ -18,7 +62,7 @@ All requests are JSON-RPC 2.0 POST to `/mcp`.
 Handshake - returns server info and capabilities.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"initialize"}'
 ```
@@ -28,7 +72,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 List all available tools (query tools + editor commands).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}'
 ```
@@ -38,7 +82,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 Invoke a tool by name. All tools are queued for execution on the main editor thread (5-second timeout).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"TOOL_NAME","arguments":{}}}'
 ```
@@ -52,7 +96,7 @@ These tools query editor state and return structured JSON data.
 List all scenes with summary counts.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"list_scenes","arguments":{}}}'
 ```
@@ -64,7 +108,7 @@ Returns: `{scenes: [{name, node_count, camera_count, light_count, material_count
 List all nodes in a scene with transform and attachment info.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_nodes","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -76,7 +120,7 @@ Returns: `{nodes: [{name, id, parent, position, rotation_xyzw, scale, attachment
 Get detailed info for a specific node including world position, local transform, attachments (with mesh materials, camera/light properties), children, and selection state.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_node_details","arguments":{"scene_name":"Default Scene","node_name":"Cube"}}}'
 ```
@@ -86,7 +130,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 List all cameras in a scene.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_cameras","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -98,7 +142,7 @@ Returns: `{cameras: [{name, node, exposure, shadow_range}]}`
 List all lights in a scene.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_lights","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -110,7 +154,7 @@ Returns: `{lights: [{name, node, type, color, intensity, range}]}`
 List all materials in a scene's content library.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_materials","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -122,7 +166,7 @@ Returns: `{materials: [{name, base_color, metallic, roughness, emissive}]}`
 Get full material properties including texture presence flags.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_material_details","arguments":{"scene_name":"Default Scene","material_name":"Gold"}}}'
 ```
@@ -134,7 +178,7 @@ Returns: `{name, base_color, opacity, roughness, metallic, reflectance, emissive
 List all brushes in a scene's content library.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_brushes","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -169,7 +213,7 @@ Returns: `{x, y, slots: [{slot, valid, mesh?, node?, joint?, grid?, position?, n
 Get currently selected items.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_selection","arguments":{}}}'
 ```
@@ -181,7 +225,7 @@ Returns: `{items: [{name, type, id}]}`
 Select items by unique ID. Searches scene nodes, cameras, lights, materials, and brushes.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"select_items","arguments":{"scene_name":"Default Scene","ids":[716,720]}}}'
 ```
@@ -197,7 +241,7 @@ Pass an empty `ids` array to clear selection. All query responses include `id` f
 Place a brush instance in a scene at a given world position.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"place_brush","arguments":{"scene_name":"Default Scene","brush_id":354,"position":[0,0.5,0],"material_name":"Gold","scale":1.0}}}'
 ```
@@ -217,7 +261,7 @@ Returns: `{node_name, node_id, brush, material, position, scale}`
 Toggle dynamic physics simulation on/off.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"toggle_physics","arguments":{}}}'
 ```
@@ -229,7 +273,7 @@ Returns: `{dynamic_physics_enabled: true/false}`
 Lock or unlock items by ID. Locked items (`lock_edit` flag) cannot be deleted or have properties edited.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"lock_items","arguments":{"scene_name":"Default Scene","ids":[506]}}}'
 ```
@@ -239,7 +283,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 Add or remove string tags on items by ID.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"add_tags","arguments":{"scene_name":"Default Scene","ids":[506],"tags":["important"]}}}'
 ```
@@ -249,7 +293,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 Get the undo/redo operation history.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_undo_redo_stack","arguments":{}}}'
 ```
@@ -263,7 +307,7 @@ Get pending/running async operation counts. The scene is settled only when
 `asset_loads` are all 0.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_async_status","arguments":{}}}'
 ```
@@ -279,7 +323,7 @@ Create and edit KHR_physics_rigid_bodies features: rigid body / joint node attac
 List the shared physics content-library items with full properties.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_physics_items","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -291,7 +335,7 @@ Returns: `{physics_materials: [...], collision_filters: [...], physics_joint_set
 Attach a rigid body (Node_physics) to a node / edit it. One rigid body per node. `get_node_details` reports the body state (`motion_mode`, `collision_shape`, `mass`, `is_trigger`, `physics_material`, `collision_filter`, ...).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_body","arguments":{"scene_name":"Default Scene","node_name":"Cube","shape":"box","half_extents":[0.5,0.5,0.5],"motion_mode":"dynamic","mass":2.0}}}'
 ```
@@ -312,7 +356,7 @@ Parameters (all optional except `scene_name` + node reference):
 Attach a joint (Node_joint) to a node / edit it. The joint joins the nearest self-or-ancestor rigid body of its node to that of the connected node (no connected node = the world).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint","arguments":{"scene_name":"Default Scene","node_name":"Door","connected_node_name":"Frame","settings_name":"Hinge","enable_collision":false}}}'
 ```
@@ -324,7 +368,7 @@ Parameters: node reference, `connected_node_id`/`connected_node_name` (optional)
 Shared physics material in the content library.
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_material","arguments":{"scene_name":"Default Scene","name":"Ice","static_friction":0.05,"dynamic_friction":0.02,"restitution":0.1,"friction_combine":"minimum"}}}'
 ```
@@ -336,7 +380,7 @@ Fields: `static_friction`, `dynamic_friction`, `restitution`, `friction_combine`
 Shared collision filter (collision-system lists).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_collision_filter","arguments":{"scene_name":"Default Scene","name":"Debris","collision_systems":["debris"],"not_collide_with_systems":["debris"]}}}'
 ```
@@ -348,7 +392,7 @@ Fields: `collision_systems`, `collide_with_systems` (allowlist), `not_collide_wi
 Shared joint settings (per-axis limits + drives).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_physics_joint_settings","arguments":{"scene_name":"Default Scene","name":"Hinge","limits":[{"linear_axes":[true,true,true],"min":0,"max":0},{"angular_axes":[false,true,false],"min":-1.57,"max":1.57},{"angular_axes":[true,false,true],"min":0,"max":0}]}}}'
 ```
@@ -360,7 +404,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 Activate all dynamic rigid bodies in a scene (bodies enter the world deactivated).
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"wake_physics_bodies","arguments":{"scene_name":"Default Scene"}}}'
 ```
@@ -378,7 +422,7 @@ curl -X POST http://127.0.0.1:8080/mcp \
 All registered editor commands are also exposed as tools (undo, redo, clipboard operations, scene commands, etc.). These take no arguments:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/mcp \
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"Undo","arguments":{}}}'
 ```
@@ -389,21 +433,21 @@ The HTTP server runs on a dedicated background thread. All `tools/call` requests
 
 ## Configuration
 
-The server listens on `127.0.0.1:8080` by default (localhost only). The preferred port can be changed via the `Mcp_server` constructor parameter. If the preferred port is already bound, the server retries the next ports in sequence - up to 20 attempts, i.e. the range `[8080, 8100)` - and binds the first that is free, logging `MCP server: listening on 127.0.0.1:<port>`. If all 20 are unavailable it logs `failed to bind any port in [8080, 8100)` and the server stays offline (the editor otherwise runs normally).
+The server listens on `127.0.0.1:3743` by default (localhost only). The preferred port can be changed via the `Mcp_server` constructor parameter. If the preferred port is already bound, the server retries the next ports in sequence - up to 20 attempts, i.e. the range `[3743, 3763)` - and binds the first that is free, logging `MCP server: listening on 127.0.0.1:<port>`. If all 20 are unavailable it logs `failed to bind any port in [3743, 3763)` and the server stays offline (the editor otherwise runs normally).
 
 ## Accessing the server on Quest / Android
 
-On device the server binds the same loopback address (`127.0.0.1:8080`), which is not reachable from the host directly. Forward the port over adb and then talk to it exactly as on desktop:
+On device the server binds the same loopback address (`127.0.0.1:3743`), which is not reachable from the host directly. Forward the port over adb and then talk to it exactly as on desktop:
 
 ```bash
 # host -> device loopback (re-run after each device reconnect)
-adb forward tcp:8080 tcp:8080
-curl -X POST http://127.0.0.1:8080/mcp \
+adb forward tcp:3743 tcp:3743
+curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"list_scenes","arguments":{}}}'
 ```
 
-The Quest / Android APK declares the `INTERNET` permission (`android-project/app/src/main/AndroidManifest.xml`). Android gates **all** socket creation - even loopback `127.0.0.1` - behind this permission: an app not in the `AID_INET` group gets `EACCES` from `socket()`/`bind()` on **every** port. Without it the server's port-fallback loop logs `failed to bind any port in [8080, 8100)` (a blanket denial, not a port clash). The permission is granted at install; confirm with:
+The Quest / Android APK declares the `INTERNET` permission (`android-project/app/src/main/AndroidManifest.xml`). Android gates **all** socket creation - even loopback `127.0.0.1` - behind this permission: an app not in the `AID_INET` group gets `EACCES` from `socket()`/`bind()` on **every** port. Without it the server's port-fallback loop logs `failed to bind any port in [3743, 3763)` (a blanket denial, not a port clash). The permission is granted at install; confirm with:
 
 ```bash
 adb shell dumpsys package org.libsdl.app.quest | grep INTERNET

@@ -62,7 +62,7 @@ auto get_process_id() -> long
 #endif
 }
 
-auto make_jsonrpc_response(const std::string& id, const json& result) -> std::string
+auto make_jsonrpc_response(const json& id, const json& result) -> std::string
 {
     json response = {
         {"jsonrpc", "2.0"},
@@ -72,7 +72,7 @@ auto make_jsonrpc_response(const std::string& id, const json& result) -> std::st
     return response.dump();
 }
 
-auto make_jsonrpc_error(const std::string& id, int code, const std::string& message) -> std::string
+auto make_jsonrpc_error(const json& id, int code, const std::string& message) -> std::string
 {
     json response = {
         {"jsonrpc", "2.0"},

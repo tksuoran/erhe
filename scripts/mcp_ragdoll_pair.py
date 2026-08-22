@@ -13,7 +13,7 @@ between the two part centers at build time vs after settling. The joint
 locks the pivot, so any growth here is constraint stretch.
 
 Usage:
-  py -3 scripts/mcp_ragdoll_pair.py [--port 8080] [--scene NAME] [--wait 30]
+  py -3 scripts/mcp_ragdoll_pair.py [--port 3743] [--scene NAME] [--wait 30]
       [--name pair] [--position X Y Z] [--height 0.85] [--scale 1.0]
       [--clearance 0.025] [--angular-limit 0.35] [--material NAME]
       [--simulate] [--settle 3.0]
@@ -39,7 +39,7 @@ def part_centers(client, scene_name, names):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port",          type=int,   default=8080)
+    parser.add_argument("--port",          type=int,   default=3743)
     parser.add_argument("--scene",         type=str,   default="")
     parser.add_argument("--wait",          type=float, default=30.0)
     parser.add_argument("--name",          type=str,   default="pair", help="Node name prefix")

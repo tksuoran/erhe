@@ -14,7 +14,7 @@ PowerShell example (base64 sidesteps PowerShell 5.1 quote mangling):
     $b64 = "b64:" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"shape":"box"}'))
     py -3 scripts/mcp_call.py create_shape $b64
 
-The editor binds 127.0.0.1:8080 by default and scans [8080, 8100) when the
+The editor binds 127.0.0.1:3743 by default and scans [3743, 3763) when the
 port is taken; grep logs/log.txt for "MCP server: listening" to find the
 actual port and pass it with --port. If ~/.agents/erhe_mcp_token exists its
 contents are sent as a bearer token (matches the server's auth behavior).
@@ -23,6 +23,7 @@ contents are sent as a bearer token (matches the server's auth behavior).
 import argparse
 import base64
 import json
+import os
 import pathlib
 import sys
 import urllib.error
@@ -52,7 +53,7 @@ def main():
     parser = argparse.ArgumentParser(description="Call a tool on the in-editor MCP server")
     parser.add_argument("tool", nargs="?", help="tool name (see --list)")
     parser.add_argument("arguments", nargs="?", default=None, help="JSON object / b64:<base64 JSON> / '-' for stdin")
-    parser.add_argument("--port", type=int, default=8080, help="MCP port (default 8080)")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("ERHE_MCP_PORT", "3743")), help="MCP port (default: ERHE_MCP_PORT env var, else 3743)")
     parser.add_argument("--list", nargs="?", const="", default=None, metavar="PATTERN", help="list tool names (optionally filtered by substring)")
     args = parser.parse_args()
 

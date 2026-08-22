@@ -6,7 +6,7 @@
 //
 // Configuration (env vars):
 //   ERHE_MCP_TEST_HOST      default "127.0.0.1"
-//   ERHE_MCP_TEST_PORT      default 8080
+//   ERHE_MCP_TEST_PORT      default 3743
 //   ERHE_MCP_TEST_TIMEOUT_S default 30  (initial /health wait)
 
 #include <gtest/gtest.h>
@@ -151,7 +151,7 @@ public:
     void initialize()
     {
         const std::string host       = env_or    ("ERHE_MCP_TEST_HOST",      "127.0.0.1");
-        const int         port       = env_or_int("ERHE_MCP_TEST_PORT",      8080);
+        const int         port       = env_or_int("ERHE_MCP_TEST_PORT",      3743);
         const int         timeout_s  = env_or_int("ERHE_MCP_TEST_TIMEOUT_S", 30);
 
         m_client = std::make_unique<Mcp_client>(host, port);
@@ -1053,7 +1053,7 @@ TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
     // (parse() will fail), so build the body by hand to inject it.
     const std::string body = R"({"jsonrpc":"2.0","id":"test","method":"tools/call","params":{"name":"edit_material","arguments":{"scene_name":")" + env.scene_name() + R"(","material_name":")" + env.material_name() + R"(","opacity":NaN}}})";
 
-    httplib::Client c{env_or("ERHE_MCP_TEST_HOST", "127.0.0.1"), env_or_int("ERHE_MCP_TEST_PORT", 8080)};
+    httplib::Client c{env_or("ERHE_MCP_TEST_HOST", "127.0.0.1"), env_or_int("ERHE_MCP_TEST_PORT", 3743)};
     c.set_read_timeout(10, 0);
     httplib::Result res = c.Post("/mcp", body, "application/json");
 
@@ -1080,12 +1080,77 @@ TEST_F(Mcp_test, edit_material_rejects_nan_opacity)
     EXPECT_TRUE(result.value("isError", false)) << "Server should have rejected NaN opacity: " << result.dump();
 }
 
+// JSON-RPC 2.0 requires the response id to echo the request id with the
+// same type: a numeric id must not come back stringified.
+TEST_F(Mcp_test, jsonrpc_numeric_id_round_trips)
+{
+    httplib::Client c{env_or("ERHE_MCP_TEST_HOST", "127.0.0.1"), env_or_int("ERHE_MCP_TEST_PORT", 3743)};
+    c.set_read_timeout(10, 0);
+    const json req = {
+        {"jsonrpc", "2.0"},
+        {"id",      7},
+        {"method",  "tools/list"}
+    };
+    httplib::Result res = c.Post("/mcp", req.dump(), "application/json");
+    ASSERT_TRUE(res) << "HTTP request failed";
+    ASSERT_EQ(res->status, 200);
+    json response = json::parse(res->body, nullptr, false);
+    ASSERT_FALSE(response.is_discarded()) << "Unparseable body: " << res->body;
+    ASSERT_TRUE(response.contains("id"));
+    EXPECT_TRUE(response["id"].is_number_integer()) << "Numeric id must stay numeric, got: " << response["id"].dump();
+    EXPECT_EQ(response["id"], json(7));
+}
+
+// A request without an id is a JSON-RPC notification and must not receive
+// a response body; the MCP streamable HTTP transport acknowledges it with
+// 202 Accepted. Every MCP client sends notifications/initialized right
+// after the initialize handshake.
+TEST_F(Mcp_test, notification_is_acknowledged_without_response)
+{
+    httplib::Client c{env_or("ERHE_MCP_TEST_HOST", "127.0.0.1"), env_or_int("ERHE_MCP_TEST_PORT", 3743)};
+    c.set_read_timeout(10, 0);
+    const json req = {
+        {"jsonrpc", "2.0"},
+        {"method",  "notifications/initialized"}
+    };
+    httplib::Result res = c.Post("/mcp", req.dump(), "application/json");
+    ASSERT_TRUE(res) << "HTTP request failed";
+    EXPECT_EQ(res->status, 202);
+    EXPECT_TRUE(res->body.empty()) << "Notification must not get a response body, got: " << res->body;
+}
+
+// initialize echoes a supported requested protocolVersion, and answers
+// with the server's latest supported revision for an unknown one.
+TEST_F(Mcp_test, initialize_negotiates_protocol_version)
+{
+    Mcp_env& env = Mcp_env::get();
+
+    const auto initialize_with = [&](const char* requested) -> std::string {
+        json params = {
+            {"protocolVersion", requested},
+            {"capabilities",    json::object()},
+            {"clientInfo",      {{"name", "mcp_server_tests"}, {"version", "1"}}}
+        };
+        json response = env.client().rpc("initialize", params);
+        if (!response.is_object() || !response.contains("result")) {
+            ADD_FAILURE() << "Missing 'result' in initialize response: " << response.dump();
+            return {};
+        }
+        return response["result"].value("protocolVersion", std::string{});
+    };
+
+    EXPECT_EQ(initialize_with("2024-11-05"), "2024-11-05");
+    EXPECT_EQ(initialize_with("2025-06-18"), "2025-06-18");
+    // Unknown revision: the server answers with its latest supported one.
+    EXPECT_EQ(initialize_with("1999-01-01"), "2025-06-18");
+}
+
 // (c) Queue overflow: spam concurrent slow tool calls and verify at
 // least one returns the "Server busy" -32000 error.
 TEST_F(Mcp_test, queue_overflow_returns_busy_error)
 {
     const std::string host = env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1");
-    const int         port = env_or_int("ERHE_MCP_TEST_PORT", 8080);
+    const int         port = env_or_int("ERHE_MCP_TEST_PORT", 3743);
 
     // Spam more requests than the server's k_max_queue_depth (64) in
     // parallel. Use list_scenes (a query that the main thread can
@@ -1180,7 +1245,7 @@ TEST_F(Mcp_test, edit_material_ambiguous_name_returns_candidates)
 TEST_F(Mcp_test, auth_tampered_token_rejected)
 {
     const std::string host = env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1");
-    const int         port = env_or_int("ERHE_MCP_TEST_PORT", 8080);
+    const int         port = env_or_int("ERHE_MCP_TEST_PORT", 3743);
 
     httplib::Client c_noauth{host, port};
     c_noauth.set_read_timeout(5, 0);

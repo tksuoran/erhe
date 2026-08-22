@@ -19,7 +19,7 @@ settling:
     only growth beyond the built value indicates stretch).
 
 Usage:
-  py -3 scripts/mcp_ragdoll_leg.py [--port 8080] [--scene NAME] [--wait 30]
+  py -3 scripts/mcp_ragdoll_leg.py [--port 3743] [--scene NAME] [--wait 30]
       [--name leg] [--position X Y Z] [--height 1.2] [--scale 1.0]
       [--clearance 0.025] [--angular-limit 0.7] [--free] [--material NAME]
       [--simulate] [--settle 3.0]
@@ -115,7 +115,7 @@ def link_distances(centers):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port",          type=int,   default=8080)
+    parser.add_argument("--port",          type=int,   default=3743)
     parser.add_argument("--scene",         type=str,   default="")
     parser.add_argument("--wait",          type=float, default=30.0)
     parser.add_argument("--name",          type=str,   default="leg", help="Node name prefix")

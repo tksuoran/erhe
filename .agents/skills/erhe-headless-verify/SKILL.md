@@ -23,14 +23,14 @@ mainly buys display independence.)
 ## Step 2 -- launch and wait for the MCP server (NEVER blind-sleep)
 
 FIRST kill any editor left over from a previous run. A stale editor.exe keeps
-port 8080 and SILENTLY eats every MCP call, so you drive an OLD binary and see
+port 3743 and SILENTLY eats every MCP call, so you drive an OLD binary and see
 impossible results (a fix that "does nothing", node counts that grow across
 runs) -- this wastes a lot of time. Then launch from the **repo root** (config/,
 res/, logs/ are cwd-relative) and poll `logs/log.txt` for the listening line
-(startup takes a variable few seconds; the port can fall back within [8080, 8100)):
+(startup takes a variable few seconds; the port can fall back within [3743, 3763)):
 
 ```powershell
-Get-Process editor -ErrorAction SilentlyContinue | Stop-Process -Force   # no stale server on 8080
+Get-Process editor -ErrorAction SilentlyContinue | Stop-Process -Force   # no stale server on 3743
 Start-Sleep -Milliseconds 800
 if (Test-Path logs\log.txt) { Clear-Content logs\log.txt }
 $p = Start-Process -FilePath "build_vs2026_vulkan_headless\src\editor\Debug\editor.exe" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden
@@ -38,7 +38,7 @@ for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 1000
     if ((Test-Path logs\log.txt) -and (Select-String -Path logs\log.txt -Pattern "MCP server: listening" -Quiet)) { break }
 }
-Select-String -Path logs\log.txt -Pattern "MCP server: listening"   # "... on 127.0.0.1:8080 (pid <pid>, built <ts>)"
+Select-String -Path logs\log.txt -Pattern "MCP server: listening"   # "... on 127.0.0.1:3743 (pid <pid>, built <ts>)"
 ```
 
 Then CONFIRM you are talking to the process you just launched (not a stale one):
@@ -49,7 +49,7 @@ py -3 scripts/mcp_call.py get_server_info    # { name, version, pid, build, port
 
 Assert the reported `pid` == `$p.Id` and `build` is your just-built binary; a
 mismatch, or a fallback port (8081+) in the listening line, means another
-editor.exe owns 8080 -- kill it and relaunch. Remember `$p.Id` for cleanup.
+editor.exe owns 3743 -- kill it and relaunch. Remember `$p.Id` for cleanup.
 
 ## Step 3 -- drive it with scripts/mcp_call.py
 
@@ -106,7 +106,7 @@ git status --short    # confirm nothing else got dirtied (never commit the ini)
 - The scripted startup scene comes from `config/editor/commands.json` --
   adjust it when a test needs a reproducible scene before init completes.
 - One editor instance at a time. A second instance binds the next port in
-  [8080, 8100), so your `mcp_call.py` (which defaults to 8080) keeps hitting the
+  [3743, 3763), so your `mcp_call.py` (which defaults to 3743) keeps hitting the
   FIRST, stale one. Always kill all editors before launching (Step 2) and verify
   `get_server_info` reports the pid/build you expect. `get_server_info` + the
   `(pid ..., built ...)` suffix on the listening line exist precisely for this.

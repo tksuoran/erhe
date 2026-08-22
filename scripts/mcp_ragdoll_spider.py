@@ -22,7 +22,7 @@ Dynamic physics is toggled off while building so parts stay posed; pass
 --simulate to enable it at the end and watch the spider collapse.
 
 Usage:
-  py -3 scripts/mcp_ragdoll_spider.py [--port 8080] [--scene NAME] [--wait 30]
+  py -3 scripts/mcp_ragdoll_spider.py [--port 3743] [--scene NAME] [--wait 30]
       [--name spider] [--position X Y Z] [--height 0.85] [--scale 1.0]
       [--clearance 0.025] [--material NAME] [--simulate] [--settle 3.0]
 
@@ -281,7 +281,7 @@ def set_dynamic_physics(client, enabled):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--port",      type=int,   default=8080)
+    parser.add_argument("--port",      type=int,   default=3743)
     parser.add_argument("--scene",     type=str,   default="")
     parser.add_argument("--wait",      type=float, default=30.0)
     parser.add_argument("--name",      type=str,   default="spider", help="Node name prefix")
