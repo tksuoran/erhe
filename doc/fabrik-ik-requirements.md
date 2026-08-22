@@ -41,6 +41,12 @@ reach, without changing any bone lengths.
 - Multi-selection: IK applies only when the resolved transform target is
   exactly one bone node. When several nodes are selected (bones or not), the
   drag uses today's plain multi-node FK translation.
+- Drag handles (added in implementation): a non-bone node parented directly
+  under a bone (e.g. a node created by the Hierarchy window's Add Bone Tip
+  Nodes) also starts an IK drag - it joins the chain as the effector point,
+  so its parent bone rotates to aim at it, which a bone-effector drag never
+  does (the effector bone keeps its own orientation). The ancestor walk is
+  otherwise identical, starting from the handle's parent bone.
 
 ### 2. IK lock flag
 

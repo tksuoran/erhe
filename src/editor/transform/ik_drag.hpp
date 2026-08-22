@@ -38,11 +38,14 @@ void fabrik_solve(
 class Ik_drag
 {
 public:
-    // Discover the chain for a dragged bone: ancestors are collected while
+    // Discover the chain for a dragged node: ancestors are collected while
     // they are bones, stopping at (and including, as the fixed root) the
-    // first ik_lock ancestor. Returns false - leaving the drag to plain FK -
-    // when the effector is not a bone, is itself ik_lock, or has no bone
-    // parent (chain of at least two joints required).
+    // first ik_lock ancestor. The effector is either a bone, or a non-bone
+    // drag handle parented under a bone (e.g. an Add Bone Tip Nodes tip) -
+    // the handle joins the chain as the effector point, so its parent bone
+    // rotates to aim at it. Returns false - leaving the drag to plain FK -
+    // when the effector is an ik_lock bone, or when neither the effector nor
+    // its parent is a bone (chain of at least two joints required).
     auto begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool;
 
     // Solve against target and write the pose to the joint nodes. Restores

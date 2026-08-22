@@ -126,8 +126,22 @@ void fabrik_solve(
 auto Ik_drag::begin(const std::shared_ptr<erhe::scene::Node>& effector) -> bool
 {
     reset();
-    if (!effector || !erhe::scene::is_bone(effector.get()) || has_ik_lock(*effector)) {
+    if (!effector) {
         return false;
+    }
+    if (erhe::scene::is_bone(effector.get())) {
+        if (has_ik_lock(*effector)) {
+            return false;
+        }
+    } else {
+        // Non-bone drag handle (an Add Bone Tip Nodes tip, or any node
+        // parented under a bone): it joins the chain as the effector point,
+        // so the parent bone rotates to aim at it - which a bone-effector
+        // drag never does (the effector keeps its own orientation).
+        const std::shared_ptr<erhe::scene::Node> parent = effector->get_parent_node();
+        if (!parent || !erhe::scene::is_bone(parent.get())) {
+            return false;
+        }
     }
 
     // Collect effector..root, then reverse. The walk stops after collecting
