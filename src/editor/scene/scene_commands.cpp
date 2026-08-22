@@ -19,6 +19,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
+#include "operations/node_transform_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "mesh_rendertarget_view.hpp"
 #include "rendertarget_mesh.hpp"
@@ -766,7 +767,6 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
 
         auto tip_node = std::make_shared<erhe::scene::Node>(fmt::format("{} tip", bone->get_name()));
         tip_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
-        tip_node->set_parent_from_node(erhe::math::create_translation<float>(tail_local));
         compound_parameters.operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
                 Item_insert_remove_operation::Parameters{
@@ -774,6 +774,22 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
                     .item    = tip_node,
                     .parent  = bone,
                     .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+        // The local placement must come AFTER the insert: Node::set_parent
+        // preserves the node's WORLD transform, so a local translation set on
+        // the unparented node would be reinterpreted as a world position at
+        // parenting time. A follow-up transform operation in the same
+        // compound pins the local offset instead (before == after: undo of
+        // the transform is a no-op; the insert undo removes the node).
+        const erhe::scene::Trs_transform tip_transform{tail_local};
+        compound_parameters.operations.push_back(
+            std::make_shared<Node_transform_operation>(
+                Node_transform_operation::Parameters{
+                    .node                    = tip_node,
+                    .parent_from_node_before = tip_transform,
+                    .parent_from_node_after  = tip_transform
                 }
             )
         );
