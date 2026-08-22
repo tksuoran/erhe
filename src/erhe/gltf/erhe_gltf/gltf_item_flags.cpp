@@ -36,7 +36,8 @@ constexpr Serialized_item_flag c_persistent_item_flags[] = {
     { erhe::Item_flags::lock_edit,                 "lock_edit"                 },
     { erhe::Item_flags::show_in_developer_ui,      "show_in_developer_ui"      },
     { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       },
-    { erhe::Item_flags::lightmapped,               "lightmapped"               }
+    { erhe::Item_flags::lightmapped,               "lightmapped"               },
+    { erhe::Item_flags::ik_lock,                   "ik_lock"                   }
 };
 
 } // anonymous namespace

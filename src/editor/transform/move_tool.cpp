@@ -41,6 +41,12 @@ void Move_tool::imgui(Property_editor& property_editor)
     p.reset();
     p.push_group("Move tool", ImGuiTreeNodeFlags_DefaultOpen);
     p.add_entry("Snap Enable", [this]() { ImGui::Checkbox("##", &get_shared().settings.translate_snap_enable); });
+    p.add_entry("Bone IK", [this]() {
+        ImGui::Checkbox("##", &get_shared().settings.translate_ik_enable);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Dragging a bone solves its ancestor chain with FABRIK IK (chain root: first IK Lock bone); off = plain translation");
+        }
+    });
     // Persistent preference (Transform_tool_config); touch() schedules the autosave.
     p.add_entry("Snap Absolute", [this]() {
         if (ImGui::Checkbox("##", &m_context.editor_settings->transform_tool.translate_snap_absolute)) {

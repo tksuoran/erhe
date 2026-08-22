@@ -598,6 +598,8 @@ erhe_target_sources_grouped(
     transform/handle_visualizations.hpp
     transform/mesh_component_extrude.cpp
     transform/mesh_component_extrude.hpp
+    transform/ik_drag.cpp
+    transform/ik_drag.hpp
     transform/lattice_point_transform.cpp
     transform/lattice_point_transform.hpp
     transform/mesh_component_transform.cpp

@@ -46,6 +46,10 @@ public:
     float                    edge_normal_blend    {0.5f};
     bool                     translate_snap_enable{false};
     float                    translate_snap       {0.1f};
+    // Translate-dragging a bone with a valid ancestor chain solves the chain
+    // with FABRIK IK instead of translating the bone (see
+    // doc/fabrik-ik-requirements.md). Off = plain FK translation.
+    bool                     translate_ik_enable  {true};
     bool                     rotate_snap_enable   {false};
     float                    rotate_snap          {15.0f};
     Scale_gizmo_mode         scale_gizmo_mode     {Scale_gizmo_mode::basic};

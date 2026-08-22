@@ -687,6 +687,9 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         );
         return;
     }
+    if (try_translate_ik(translation)) {
+        return;
+    }
     touch();
     for (auto& entry : shared.entries) {
         auto& node = entry.node;
@@ -702,6 +705,59 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     update_transforms();
+}
+
+auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
+{
+    // IK applies only to an interactive translate drag (m_active_tool is set
+    // for the duration of a subtool drag; numeric edits never set it), with
+    // the setting on and exactly one selected node - a bone with a valid
+    // ancestor chain. Everything else falls through to plain FK translation.
+    if ((m_active_tool == nullptr) || !shared.settings.translate_ik_enable) {
+        return false;
+    }
+    if (!m_ik_drag_attempted) {
+        // Chain discovery once per drag gesture, on the first update, while
+        // every node still sits at its drag-start transform.
+        m_ik_drag_attempted = true;
+        if (shared.entries.size() == 1) {
+            const std::shared_ptr<erhe::scene::Node>& effector = shared.entries.front().node;
+            const bool effector_locked =
+                effector &&
+                erhe::utility::test_bit_set(effector->get_flag_bits(), erhe::Item_flags::lock_viewport_transform);
+            if (effector && !effector_locked && m_ik_drag.begin(effector)) {
+                // Append the ancestor joints so record_transform_operation()
+                // (undo, autokey) covers every node the solve changes. The
+                // effector is entries[0] already.
+                const auto& joints = m_ik_drag.get_joints();
+                for (std::size_t i = 0; i + 1 < joints.size(); ++i) {
+                    shared.entries.push_back(
+                        Transform_entry{
+                            .node                    = joints[i],
+                            .parent_from_node_before = joints[i]->parent_from_node_transform(),
+                            .world_from_node_before  = joints[i]->world_from_node_transform(),
+                            .original_motion_mode    = {}
+                        }
+                    );
+                }
+                m_ik_entries_appended = joints.size() > 1;
+            }
+        }
+    }
+    if (!m_ik_drag.is_active()) {
+        return false;
+    }
+
+    touch();
+    // The target is absolute: the effector's drag-start position plus the
+    // drag delta. The anchor mirrors the FK path, so the gizmo follows the
+    // drag target even when the target is out of the chain's reach and the
+    // effector rests at the closest reachable point.
+    const glm::vec3 target = glm::vec3{shared.entries.front().world_from_node_before.get_translation()} + translation;
+    m_ik_drag.apply(target);
+    shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
+    update_transforms();
+    return true;
 }
 
 void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat rotation)
@@ -1183,6 +1239,17 @@ void Transform_tool::end_drag()
     m_active_handle = Handle::e_handle_none;
     m_active_tool   = nullptr;
     shared.initial_drag_position_distance_to_camera = 0.0;
+
+    // record_transform_operation() already ran (via Subtool::end above) and
+    // captured the IK chain entries. Rebuild entries from the selection so
+    // later edits (numeric fields, next drag) do not treat the appended
+    // chain joints as selected nodes.
+    m_ik_drag.reset();
+    m_ik_drag_attempted = false;
+    if (m_ik_entries_appended) {
+        m_ik_entries_appended = false;
+        update_target_nodes(nullptr);
+    }
 
     log_trs_tool->trace("drag ended");
 }

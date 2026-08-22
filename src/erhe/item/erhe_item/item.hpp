@@ -104,7 +104,13 @@ public:
     static constexpr uint64_t hovered_in_graph          = (uint64_t{1} << 34);
     static constexpr uint64_t child_hovered_in_graph    = (uint64_t{1} << 35);
     static constexpr uint64_t ancestor_hovered_in_graph = (uint64_t{1} << 36);
-    static constexpr uint64_t count                     = 37;
+    // Masks a bone from IK: dragging a bone with the translate tool solves the
+    // chain of ancestor bones up to (and including, as the fixed-position
+    // root) the first ik_lock bone. Dragging an ik_lock bone itself falls
+    // back to plain FK translation. Authored + serialized (by name; see
+    // gltf_item_flags.cpp). See doc/fabrik-ik-requirements.md.
+    static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
+    static constexpr uint64_t count                     = 38;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -154,6 +160,7 @@ public:
         "Hovered in Graph",
         "Child Hovered in Graph",
         "Ancestor Hovered in Graph",
+        "IK Lock",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

@@ -3,6 +3,7 @@
 #include "transform/handle_enums.hpp"
 #include "transform/handle_visualizations.hpp"
 #include "transform/transform_tool_settings.hpp"
+#include "transform/ik_drag.hpp"
 #include "transform/lattice_point_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
 #include "transform/rotation_inspector.hpp"
@@ -371,6 +372,22 @@ private:
 
     Mesh_component_transform m_component_transform;
     Lattice_point_transform  m_lattice_point_transform;
+
+    // Interactive FABRIK IK for a translate drag of a bone. Chain discovery
+    // runs lazily on the first adjust_translation() of a drag (attempted
+    // gates it to once per gesture); on success the chain's ancestor joints
+    // are appended to shared.entries so record_transform_operation() covers
+    // them. Both reset in end_drag().
+    Ik_drag m_ik_drag;
+    bool    m_ik_drag_attempted{false};
+    // True when m_ik_drag appended ancestor entries: end_drag() then rebuilds
+    // shared.entries from the selection so later anchor edits do not iterate
+    // the chain joints as if they were selected.
+    bool    m_ik_entries_appended{false};
+
+    // IK branch of adjust_translation(): returns true when an IK chain drag
+    // consumed the translation (FK translation must not run).
+    auto try_translate_ik(glm::vec3 translation) -> bool;
 
     // Reused scratch for the Reference node picker popup (cleared + refilled each frame).
     std::vector<std::shared_ptr<erhe::Item_base>> m_reference_candidates;
