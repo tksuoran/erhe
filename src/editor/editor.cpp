@@ -109,6 +109,8 @@
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "tools/bone_visualization.hpp"
+#include "tools/weight_display.hpp"
+#include "tools/weight_paint_tool.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "tools/lattice_tool.hpp"
@@ -2270,6 +2272,12 @@ public:
                 // primitive lazily on the first skin registration.
                 m_bone_visualization = std::make_unique<Bone_visualization>(m_app_context, *m_app_message_bus.get(), *m_mesh_memory.get());
                 m_app_context.bone_visualization = m_bone_visualization.get();
+
+                // Active-joint tracking for the Joint Weight Ramp debug mode.
+                // Purely message-driven; grouped here with the other
+                // skin/bone-related editor parts.
+                m_weight_display = std::make_unique<Weight_display>(m_app_context, *m_app_message_bus.get());
+                m_app_context.weight_display = m_weight_display.get();
             }
             ERHE_TASK_FOOTER(
                 .name("Scene_builder")
@@ -2479,6 +2487,14 @@ public:
                     *m_tools.get()
                 );
                 m_material_paint_tool = std::make_unique<Material_paint_tool>(
+                    *m_commands.get(),
+                    m_app_context,
+                    *m_app_message_bus.get(),
+                    *m_headset_view.get(),
+                    *m_icon_set.get(),
+                    *m_tools.get()
+                );
+                m_weight_paint_tool = std::make_unique<Weight_paint_tool>(
                     *m_commands.get(),
                     m_app_context,
                     *m_app_message_bus.get(),
@@ -3075,6 +3091,7 @@ public:
         m_app_context.operations               = m_operations            .get();
         m_app_context.properties               = m_properties            .get();
         m_app_context.paint_tool               = m_paint_tool            .get();
+        m_app_context.weight_paint_tool        = m_weight_paint_tool     .get();
         m_app_context.physics_tool             = m_physics_tool          .get();
         m_app_context.post_processing          = m_post_processing       .get();
         m_app_context.prefab_library           = m_prefab_library        .get();
@@ -4149,6 +4166,7 @@ public:
     std::unique_ptr<Selection                       >        m_selection;
     std::unique_ptr<Mesh_component_selection        >        m_mesh_component_selection;
     std::unique_ptr<Bone_visualization              >        m_bone_visualization;
+    std::unique_ptr<Weight_display                  >        m_weight_display;
     std::unique_ptr<Operation_stack                 >        m_operation_stack;
     std::unique_ptr<Scene_commands                  >        m_scene_commands;
     std::unique_ptr<Clipboard_window                >        m_clipboard_window;
@@ -4228,6 +4246,7 @@ public:
     std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
     std::unique_ptr<Lattice_tool>                            m_lattice_tool;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
+    std::unique_ptr<Weight_paint_tool  >                     m_weight_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;
     std::unique_ptr<Selection_tool     >                     m_selection_tool;
 

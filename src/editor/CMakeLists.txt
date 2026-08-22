@@ -370,6 +370,8 @@ erhe_target_sources_grouped(
     operations/mesh_operation.hpp
     operations/move_mesh_vertices_operation.cpp
     operations/move_mesh_vertices_operation.hpp
+    operations/paint_weights_operation.cpp
+    operations/paint_weights_operation.hpp
     operations/flip_joint_operation.cpp
     operations/flip_joint_operation.hpp
     operations/fork_geometry_operation.cpp
@@ -586,6 +588,10 @@ erhe_target_sources_grouped(
     tools/tool_window.hpp
     tools/tools.cpp
     tools/tools.hpp
+    tools/weight_display.cpp
+    tools/weight_display.hpp
+    tools/weight_paint_tool.cpp
+    tools/weight_paint_tool.hpp
     transform/handle_enums.cpp
     transform/handle_enums.hpp
     transform/handle_visualizations.cpp

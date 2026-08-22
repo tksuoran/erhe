@@ -31,6 +31,10 @@ Implements the undo/redo operation system and all concrete editor operations.
   - `Material_change_operation` -- undo/redo material property edits
   - `Merge_operation` -- merge multiple meshes
 
+- **In-place vertex edits** (NOT `Mesh_operation`: they mutate and reuse the SAME `Geometry` object so `Mesh_component_selection` entries keyed on the Geometry pointer survive, then rebuild one `Primitive` and share it across every mesh referencing the Geometry):
+  - `Move_mesh_vertices_operation` -- moves a vertex set of one primitive (mesh-component transform commit); refreshes normals, rebuilds static physics.
+  - `Paint_weights_operation` -- rewrites `vertex_joint_indices_0` / `vertex_joint_weights_0` of a vertex set (one `Weight_paint_tool` stroke); no physics or normal work (positions unchanged), but the primitive rebuild refreshes the solid-wireframe / edge-line streams that carry their own copy of the joint data.
+
 - **`Operations`** window -- ImGui window providing buttons for all geometry operations.
 
 ## Public API / Integration Points

@@ -27,6 +27,7 @@
 #include "scene/viewport_scene_view.hpp"
 #include "tools/debug_visualizations.hpp"
 #include "tools/mesh_component_selection.hpp"
+#include "tools/weight_display.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
 #endif
@@ -1477,6 +1478,12 @@ void App_rendering::imgui()
     };
 
     if (ImGui::TreeNodeEx("Skin Debug", flags)) {
+        // Active joint / zero-black options for the Joint Weight Ramp mode.
+        // Weight_display owns debug_joint_indices.x/.y; the manual slider
+        // below overrides .x until the next selection or skin change.
+        if (m_context.weight_display != nullptr) {
+            m_context.weight_display->imgui();
+        }
         int index = static_cast<int>(debug_joint_indices.x);
         ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
         debug_joint_indices.x = index;

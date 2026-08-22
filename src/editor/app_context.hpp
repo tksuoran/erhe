@@ -111,6 +111,8 @@ class Scene_builder;
 class Scene_commands;
 class Scene_commit_queue;
 class Bone_visualization;
+class Weight_display;
+class Weight_paint_tool;
 class Selection;
 class Selection_tool;
 class Settings_window;
@@ -274,6 +276,8 @@ public:
     Rendergraph_window*                rendergraph_window   {nullptr};
     Rotate_tool*                       rotate_tool          {nullptr};
     Bone_visualization*                bone_visualization   {nullptr};
+    Weight_display*                    weight_display       {nullptr};
+    Weight_paint_tool*                 weight_paint_tool    {nullptr};
     Scale_tool*                        scale_tool           {nullptr};
     Scene_builder*                     scene_builder        {nullptr};
     Scene_commands*                    scene_commands       {nullptr};
