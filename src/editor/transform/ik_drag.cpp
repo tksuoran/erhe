@@ -199,10 +199,21 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
     // child direction is re-read under the already-updated ancestors before
     // computing that joint's world-space shortest-arc delta (computing all
     // deltas against the pre-solve pose simultaneously would be wrong).
+    //
+    // Cache refreshes are explicit: a transform setter updates only the SET
+    // node's cached world transform - descendants wait for the scene's next
+    // update_node_transforms() pass (Node::handle_transform_update). Without
+    // the update_world_from_node() calls below, each joint's world read here
+    // would be its pre-solve state, and set_world_from_node would bake that
+    // stale translation back in - pinning every joint at its old position
+    // (rotating but never translating).
     for (std::size_t i = 0; i + 1 < m_joints.size(); ++i) {
         erhe::scene::Node& joint = *m_joints[i];
+        erhe::scene::Node& child = *m_joints[i + 1];
+        joint.update_world_from_node(); // ancestors (i-1 and up) are final
+        child.update_world_from_node(); // reflect ancestors up to and including joint's current (pre-delta) state
         const vec3 joint_position = vec3{joint.position_in_world()};
-        const vec3 child_position = vec3{m_joints[i + 1]->position_in_world()};
+        const vec3 child_position = vec3{child.position_in_world()};
         const erhe::scene::Trs_transform& world_from_joint = joint.world_from_node_transform();
         const quat rotation_delta = shortest_arc(
             child_position - joint_position,
@@ -215,6 +226,7 @@ void Ik_drag::apply(const glm::vec3 target_position_in_world)
     // The effector keeps its drag-start world orientation; only its position
     // follows the chain.
     erhe::scene::Node& effector = *m_joints.back();
+    effector.update_world_from_node(); // its parent joint is final
     const quat effector_rotation = effector.world_from_node_transform().get_rotation();
     const quat restore_delta = m_effector_world_rotation_before * inverse(effector_rotation);
     effector.set_world_from_node(erhe::scene::rotate(effector.world_from_node_transform(), restore_delta));
