@@ -504,7 +504,7 @@ void Id_renderer::render_content_seed(const Seed_render_parameters& parameters)
     const bool        bind_joint_buffer = (parameters.joint_buffer != nullptr);
     if (bind_joint_buffer) {
         joint_range = parameters.joint_buffer->update(
-            glm::uvec4{0u, 0u, 0u, 0u},
+            glm::uvec4{0xffffffffu, 0u, 0u, 0u},
             {},
             parameters.skins
         );
@@ -1209,7 +1209,7 @@ void Id_renderer::render(const Render_parameters& parameters)
     const bool        bind_joint_buffer = (parameters.joint_buffer != nullptr);
     if (bind_joint_buffer) {
         joint_range = parameters.joint_buffer->update(
-            glm::uvec4{0u, 0u, 0u, 0u},
+            glm::uvec4{0xffffffffu, 0u, 0u, 0u},
             {},
             parameters.skins
         );

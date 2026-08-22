@@ -391,7 +391,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
 
     m_texture_heap->reset_heap(parameters.command_buffer);
     Ring_buffer_range material_range = m_material_buffer.update(*m_texture_heap.get(), parameters.materials);
-    Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0, 0, 0, 0}, {}, parameters.skins);
+    Ring_buffer_range joint_range    = m_joint_buffer.update(glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, parameters.skins);
     Ring_buffer_range light_range    = m_light_buffer.update(&parameters.light_projections, glm::vec3{0.0f}, 0);
 
     // log_shadow_renderer->trace("Rendering shadow map to '{}'", parameters.texture->get_debug_label().string_view());

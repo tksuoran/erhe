@@ -1479,14 +1479,10 @@ void App_rendering::imgui()
 
     if (ImGui::TreeNodeEx("Skin Debug", flags)) {
         // Active joint / zero-black options for the Joint Weight Ramp mode.
-        // Weight_display owns debug_joint_indices.x/.y; the manual slider
-        // below overrides .x until the next selection or skin change.
+        // Weight_display owns debug_joint_indices and debug_target_joint.
         if (m_context.weight_display != nullptr) {
             m_context.weight_display->imgui();
         }
-        int index = static_cast<int>(debug_joint_indices.x);
-        ImGui::SliderInt("Debug Joint Index", &index, 0, 200); // TODO correct range
-        debug_joint_indices.x = index;
 
         for (int joint_index = 0, end = static_cast<int>(debug_joint_colors.size()); joint_index < end; ++joint_index) {
             std::string label = fmt::format("Joint {}", joint_index);

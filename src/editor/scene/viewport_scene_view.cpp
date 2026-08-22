@@ -508,7 +508,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                 if ((content_wide_line_mesh_count > 0) && (scene_for_joints != nullptr) && (m_context.forward_renderer != nullptr)) {
                     erhe::scene_renderer::Joint_buffer& joint_buffer = m_context.forward_renderer->get_joint_buffer();
                     erhe::graphics::Ring_buffer_range   joint_buffer_range = joint_buffer.update(
-                        glm::uvec4{0, 0, 0, 0}, {}, scene_for_joints->get_skins()
+                        glm::uvec4{0xffffffffu, 0u, 0u, 0u}, {}, scene_for_joints->get_skins() // no weight-ramp target in this pass
                     );
                     m_context.content_wide_line_renderer->set_joint_buffer(&joint_buffer, std::move(joint_buffer_range));
                 }

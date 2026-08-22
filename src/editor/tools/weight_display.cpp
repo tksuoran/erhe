@@ -19,32 +19,28 @@ namespace {
 
 constexpr uint32_t c_no_joint = 0xffffffffu;
 
-// Global joint-buffer index of `joint` in its scene: joints counted in
-// Scene::get_skins() order, the same order every Joint_buffer::update()
-// caller passes skins in. Computed by walking rather than reading back
-// Skin_data::joint_buffer_index, which is only assigned during update()
-// (stale on the first frame and after skin changes). Returns c_no_joint
-// when the node is not a joint of any skin in its scene.
-auto global_joint_index(const erhe::scene::Node& joint) -> uint32_t
+// Is `joint` a joint of any skin in its scene? Only used to decide whether
+// the active joint is still meaningful; the shader-side match is done per
+// joint slot in the joint buffer (Joint_buffer::update writes
+// debug_flags.x).
+auto is_joint_of_any_skin(const erhe::scene::Node& joint) -> bool
 {
     Scene_root* const scene_root = static_cast<Scene_root*>(joint.get_item_host());
     if (scene_root == nullptr) {
-        return c_no_joint;
+        return false;
     }
-    uint32_t base = 0;
     for (const std::shared_ptr<erhe::scene::Skin>& skin : scene_root->get_scene().get_skins()) {
         if (!skin) {
             continue;
         }
         const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
-        for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
-            if (joints[i].get() == &joint) {
-                return base + static_cast<uint32_t>(i);
+        for (const std::shared_ptr<erhe::scene::Node>& skin_joint : joints) {
+            if (skin_joint.get() == &joint) {
+                return true;
             }
         }
-        base += static_cast<uint32_t>(joints.size());
     }
-    return c_no_joint;
+    return false;
 }
 
 } // anonymous namespace
@@ -115,8 +111,9 @@ void Weight_display::on_selection(Selection_message& message)
 
 void Weight_display::on_skin_registered(Skin_registered_message&)
 {
-    // Any skin entering or leaving a scene shifts the global joint indices of
-    // the skins after it; re-resolve.
+    // A skin leaving a scene can be the one that made the active joint a
+    // joint at all; re-resolve so a joint that is no longer skinned is
+    // dropped.
     update_debug_joint_indices();
 }
 
@@ -134,16 +131,14 @@ void Weight_display::update_debug_joint_indices()
     if (m_context.app_rendering == nullptr) {
         return;
     }
-    uint32_t index = c_no_joint;
-    const std::shared_ptr<erhe::scene::Node> joint = m_active_joint.lock();
-    if (joint) {
-        index = global_joint_index(*joint);
-        if (index == c_no_joint) {
-            m_active_joint.reset(); // no longer a joint of any skin
-        }
+    std::shared_ptr<erhe::scene::Node> joint = m_active_joint.lock();
+    if (joint && !is_joint_of_any_skin(*joint)) {
+        m_active_joint.reset(); // no longer a joint of any skin
+        joint.reset();
     }
+    m_context.app_rendering->debug_target_joint  = joint;
     m_context.app_rendering->debug_joint_indices = glm::uvec4{
-        index,
+        joint ? 0u : c_no_joint,
         m_show_zero_weight_black ? 1u : 0u,
         0u,
         0u

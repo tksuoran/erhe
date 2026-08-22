@@ -44,6 +44,7 @@ namespace erhe::scene {
     class Light;
     class Mesh;
     class Mesh_layer;
+    class Node;
 }
 namespace erhe::ui {
     class Glyph_outline_set;
@@ -190,8 +191,15 @@ public:
         // (D32_SFLOAT -- there is no 32-bit UNORM depth) and 0 mean "float / no
         // snap".
         uint32_t                                               shadow_depth_bits{0};
-        const glm::uvec4&                                      debug_joint_indices{0, 0, 0, 0};
+        // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
+        // mode ("missing data" magenta), anything else = one is active and
+        // marked per-slot in the joint buffer (see debug_target_joint).
+        // .y: 1 = show zero-weight vertices as black.
+        const glm::uvec4&                                      debug_joint_indices{0xffffffffu, 0, 0, 0};
         const std::span<glm::vec4>&                            debug_joint_colors{};
+        // Active joint for the joint_weight_ramp debug mode, matched per
+        // joint slot by Joint_buffer::update(). nullptr = none.
+        const erhe::scene::Node*                               debug_target_joint{nullptr};
         // When non-null, bypass the Shader_variant_cache lookup and use
         // these stages for every bucket. Used by non-standard primitive
         // passes (e.g. macOS GL 4.1 edge_lines, where the geometry-shader
@@ -237,8 +245,15 @@ public:
         uint32_t                                               shadow_bias{1};
         uint32_t                                               shadow_technique{0};
         uint32_t                                               shadow_depth_bits{0};
-        const glm::uvec4&                                      debug_joint_indices{0, 0, 0, 0};
+        // .x: 0xffffffffu = no active joint for the joint_weight_ramp debug
+        // mode ("missing data" magenta), anything else = one is active and
+        // marked per-slot in the joint buffer (see debug_target_joint).
+        // .y: 1 = show zero-weight vertices as black.
+        const glm::uvec4&                                      debug_joint_indices{0xffffffffu, 0, 0, 0};
         const std::span<glm::vec4>&                            debug_joint_colors{};
+        // Active joint for the joint_weight_ramp debug mode, matched per
+        // joint slot by Joint_buffer::update(). nullptr = none.
+        const erhe::scene::Node*                               debug_target_joint{nullptr};
         const erhe::graphics::Color_blend_state*               color_blend_override{nullptr};
     };
     auto render_draw_lists(const Draw_list_render_parameters& parameters) -> Draw_statistics;
@@ -317,7 +332,12 @@ private:
         erhe::graphics::Ring_buffer_range                joint_range{};
         erhe::graphics::Ring_buffer_range                light_range{};
     };
-    auto begin_pass(const Base_render_parameters& base, const glm::uvec4& debug_joint_indices, const std::span<glm::vec4>& debug_joint_colors) -> Pass_state;
+    auto begin_pass(
+        const Base_render_parameters& base,
+        const glm::uvec4&             debug_joint_indices,
+        const std::span<glm::vec4>&   debug_joint_colors,
+        const erhe::scene::Node*      debug_target_joint
+    ) -> Pass_state;
     void end_pass  (Pass_state& state, erhe::graphics::Render_command_encoder& render_encoder);
 
     erhe::graphics::Device&                       m_graphics_device;

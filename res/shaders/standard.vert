@@ -322,21 +322,18 @@ void main()
 #   endif
 
 #   if (ERHE_SHADER_DEBUG == 34) && defined(ERHE_USE_SKINNING)
-    // joint_weight_ramp: sum this vertex's influence from the target joint
-    // (joint.debug_joint_indices.x, a global joint-buffer index; the
-    // per-primitive base_joint_index offsets the attribute indices into the
-    // same space, as in erhe_skin_matrices). 0xffffffffu = no target.
-    // debug_joint_indices.y != 0 = show zero-weight vertices as black (-1).
+    // joint_weight_ramp: sum this vertex's influence from the target joint.
+    // debug_joint_indices.x == 0xffffffffu = no target joint;
+    // .y != 0 = show zero-weight vertices as black (-1).
     if ((primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) || (joint.debug_joint_indices.x == 0xffffffffu)) {
         v_weight = -2.0;
     } else {
-        uint target_joint = joint.debug_joint_indices.x;
-        uint base_joint   = primitive.primitives[ERHE_DRAW_ID].base_joint_index;
+        uint base_joint = primitive.primitives[ERHE_DRAW_ID].base_joint_index;
         float w =
-            (((a_joint_indices_0.x + base_joint) == target_joint) ? a_joint_weights_0.x : 0.0) +
-            (((a_joint_indices_0.y + base_joint) == target_joint) ? a_joint_weights_0.y : 0.0) +
-            (((a_joint_indices_0.z + base_joint) == target_joint) ? a_joint_weights_0.z : 0.0) +
-            (((a_joint_indices_0.w + base_joint) == target_joint) ? a_joint_weights_0.w : 0.0);
+            ((joint.joints[int(a_joint_indices_0.x) + int(base_joint)].debug_flags.x != 0u) ? a_joint_weights_0.x : 0.0) +
+            ((joint.joints[int(a_joint_indices_0.y) + int(base_joint)].debug_flags.x != 0u) ? a_joint_weights_0.y : 0.0) +
+            ((joint.joints[int(a_joint_indices_0.z) + int(base_joint)].debug_flags.x != 0u) ? a_joint_weights_0.z : 0.0) +
+            ((joint.joints[int(a_joint_indices_0.w) + int(base_joint)].debug_flags.x != 0u) ? a_joint_weights_0.w : 0.0);
         bool zero_black = joint.debug_joint_indices.y != 0u;
         v_weight = ((w <= 0.0) && zero_black) ? -1.0 : w;
     }

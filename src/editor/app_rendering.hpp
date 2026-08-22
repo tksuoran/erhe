@@ -17,6 +17,7 @@
 
 namespace erhe::commands       { class Commands; }
 namespace erhe::imgui          { class Imgui_windows; }
+namespace erhe::scene          { class Node; }
 namespace erhe::scene_renderer { class Content_wide_line_renderer; class Mesh_memory; }
 namespace erhe::window         { class Context_window; }
 
@@ -186,7 +187,15 @@ public:
     void imgui();
     void request_renderdoc_capture();
 
-    glm::uvec4                        debug_joint_indices{0, 0, 0, 0};
+    // Joint_weight_ramp debug mode state, owned by Weight_display:
+    //   debug_joint_indices.x = 0xffffffffu when no joint is active (the
+    //     shader's "missing data" magenta), 0 when one is;
+    //   debug_joint_indices.y = 1 to show zero-weight vertices as black;
+    //   debug_target_joint    = the active joint itself. Matched per joint
+    //     slot in the joint buffer, so it lights up every skin that uses the
+    //     joint - a character rig's skins all share the rig's joint nodes.
+    glm::uvec4                        debug_joint_indices{0xffffffffu, 0, 0, 0};
+    std::weak_ptr<erhe::scene::Node>  debug_target_joint;
     std::vector<glm::vec4>            debug_joint_colors;
     std::shared_ptr<Composition_pass> selection_outline;
     std::shared_ptr<Composition_pass> hover_outline;

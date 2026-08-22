@@ -37,8 +37,9 @@ Joint_interface::Joint_interface(erhe::graphics::Device& graphics_device, const 
     offsets.extra3                  = joint_block.add_uint ("extra3"                 )->get_offset_in_parent(),
     offsets.debug_joint_colors      = joint_block.add_vec4 ("debug_joint_colors",  32)->get_offset_in_parent();
     offsets.joint = {
-        .world_from_bind  = joint_struct.add_mat4("world_from_bind"       )->get_offset_in_parent(),
-        .normal_transform = joint_struct.add_mat4("world_from_bind_normal")->get_offset_in_parent()
+        .world_from_bind  = joint_struct.add_mat4 ("world_from_bind"       )->get_offset_in_parent(),
+        .normal_transform = joint_struct.add_mat4 ("world_from_bind_normal")->get_offset_in_parent(),
+        .debug_flags      = joint_struct.add_uvec4("debug_flags"           )->get_offset_in_parent()
     };
 
     std::optional<std::size_t> array_size;
@@ -71,7 +72,8 @@ Joint_buffer::Joint_buffer(erhe::graphics::Device& graphics_device, Joint_interf
 auto Joint_buffer::update(
     const glm::uvec4&                                          debug_joint_indices,
     const std::span<glm::vec4>&                                debug_joint_colors,
-    const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins
+    const std::span<const std::shared_ptr<erhe::scene::Skin>>& skins,
+    const erhe::scene::Node*                                   debug_target_joint
 ) -> erhe::graphics::Ring_buffer_range
 {
     ERHE_PROFILE_FUNCTION();
@@ -148,8 +150,17 @@ auto Joint_buffer::update(
             const glm::mat4 world_from_bind  = world_from_joint * joint_from_bind;
             const glm::mat4 normal_transform = glm::transpose(glm::adjugate(world_from_bind)); // TODO compute shader pass?
 
+            // Weight-display target marker for this slot.
+            const glm::uvec4 debug_flags{
+                ((debug_target_joint != nullptr) && (joint.get() == debug_target_joint)) ? 1u : 0u,
+                0u,
+                0u,
+                0u
+            };
+
             write(primitive_gpu_data, write_offset + offsets.joint.world_from_bind,  as_span(world_from_bind ));
             write(primitive_gpu_data, write_offset + offsets.joint.normal_transform, as_span(normal_transform));
+            write(primitive_gpu_data, write_offset + offsets.joint.debug_flags,      as_span(debug_flags     ));
             write_offset += entry_size;
             ++joint_index;
         }

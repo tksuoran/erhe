@@ -106,7 +106,8 @@ const char* safe_str(const char* str)
 auto Forward_renderer::begin_pass(
     const Base_render_parameters& base,
     const glm::uvec4&             debug_joint_indices,
-    const std::span<glm::vec4>&   debug_joint_colors
+    const std::span<glm::vec4>&   debug_joint_colors,
+    const erhe::scene::Node*      debug_target_joint
 ) -> Pass_state
 {
     Pass_state state{};
@@ -179,7 +180,7 @@ auto Forward_renderer::begin_pass(
     state.material_range = m_material_buffer.update(*m_texture_heap.get(), base.materials);
     m_material_buffer.bind(render_encoder, state.material_range);
 
-    state.joint_range = m_joint_buffer.update(debug_joint_indices, debug_joint_colors, base.skins);
+    state.joint_range = m_joint_buffer.update(debug_joint_indices, debug_joint_colors, base.skins, debug_target_joint);
     m_joint_buffer.bind(render_encoder, state.joint_range);
 
     // This must be done even if lights is empty.
@@ -229,7 +230,7 @@ auto Forward_renderer::render_draw_lists(const Draw_list_render_parameters& para
     }
 
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
-    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors);
+    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors, parameters.debug_target_joint);
 
     // Environment (R18): recomputed per pass, compared inside draw_color.
     Color_environment environment{};
@@ -299,7 +300,7 @@ void Forward_renderer::render(const Render_parameters& parameters)
     const auto& filter     = parameters.filter;
 
     erhe::graphics::Render_command_encoder& render_encoder = base.render_encoder;
-    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors);
+    Pass_state pass_state = begin_pass(base, parameters.debug_joint_indices, parameters.debug_joint_colors, parameters.debug_target_joint);
 
     using Ring_buffer_range = erhe::graphics::Ring_buffer_range;
 

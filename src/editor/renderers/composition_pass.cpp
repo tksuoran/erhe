@@ -23,6 +23,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
@@ -302,6 +303,12 @@ void Composition_pass::render(const Render_context& context)
                 edge_line_width = edge_settings.constant_size;
             }
 
+            // Weight_display's active joint for the joint_weight_ramp debug
+            // mode. Locked into a local so the node outlives the render call
+            // below, which takes it as a raw pointer.
+            const std::shared_ptr<erhe::scene::Node> debug_target_joint =
+                context.app_context.app_rendering->debug_target_joint.lock();
+
             // Draw-list path (doc/draw_list_renderer_requirements.md, plan
             // phase 3/5): route to the scene's persistent draw lists when the
             // gate is on and this pass is fully expressible with them -
@@ -369,6 +376,7 @@ void Composition_pass::render(const Render_context& context)
                         .shadow_depth_bits     = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
                         .debug_joint_indices   = context.app_context.app_rendering->debug_joint_indices,
                         .debug_joint_colors    = context.app_context.app_rendering->debug_joint_colors,
+                        .debug_target_joint    = debug_target_joint.get(),
                         .color_blend_override  = nullptr,
                     }
                 );
@@ -421,6 +429,7 @@ void Composition_pass::render(const Render_context& context)
                     .shadow_depth_bits      = static_cast<uint32_t>(context.app_context.app_settings->graphics.current_graphics_preset.shadow_depth_bits),
                     .debug_joint_indices    = context.app_context.app_rendering->debug_joint_indices,
                     .debug_joint_colors     = context.app_context.app_rendering->debug_joint_colors,
+                    .debug_target_joint     = debug_target_joint.get(),
                     .shader_stages_override = data.shader_stages,
                     .color_blend_override   = data.color_blend_override,
                 }

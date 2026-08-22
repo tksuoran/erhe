@@ -8,8 +8,11 @@ joint + zero-black flag via `App_rendering::debug_joint_indices`),
 `operations/paint_weights_operation.{hpp,cpp}` (per-stroke undo +
 primitive rebuild). Verified with res/editor/assets/RiggedFigure: the
 ramp follows the selected bone; non-skinned meshes keep normal shading.
-One deliberate divergence from the plan text is noted inline (the
-zero-black flag rides in `debug_joint_indices.y`, not `extra1`).
+Two divergences from the plan text are noted inline: the zero-black flag
+rides in `debug_joint_indices.y`, not `extra1`, and the target joint is
+marked per joint SLOT instead of by a single global index (see phase-1
+step 2 - the global-index design only ever lit up one skin, which made
+every joint of a multi-skinned character rig read as zero weight).
 
 Goal: add weight painting to the erhe editor in two stages, keeping each
 stage small and shippable:
@@ -183,6 +186,21 @@ weight of a single target joint using the Blender HSV ramp.
    `debug_joint_colors`): this is one global value applied to every scene's
    joint buffer, so with two open scenes the second scene highlights
    whatever joint occupies that global index; acceptable for now.
+
+   **Superseded (2026-08-22).** A single global index cannot express the
+   target at all once a rig has more than one skin. One joint `Node` is a
+   joint of *every* skin that uses it. Matching one global index lit up at
+   most one skin and left every other skinned mesh reading as zero weight
+   (all black with zero-black on), which is exactly how the bug was reported.
+   What the implementation does instead: the `Joint` struct carries a
+   per-slot `uvec4 debug_flags` whose `.x` is 1 for the active joint, written
+   by `Joint_buffer::update()` from a new `debug_target_joint` `Node*` plumbed
+   alongside `debug_joint_indices`; the shader tests that flag.
+   `debug_joint_indices.x` keeps only its sentinel role (`0xffffffffu` = no
+   active joint). The `App_rendering` "Debug Joint Index" slider is gone with
+   the index it fed - it addressed one slot, and cast the sentinel to `0` on
+   the way through `int`. The two-open-scenes caveat above still stands, now
+   as "the flag is set in whichever scenes' skins list that node".
 3. **The "zero weight shows black" toggle**: pass it in
    `debug_joint_indices.y` — the uvec4 is already plumbed end to end and
    only `.x` carries a value, so no renderer signature change is needed at
