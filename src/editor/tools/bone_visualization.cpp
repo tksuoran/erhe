@@ -114,19 +114,22 @@ void make_bone(GEO::Mesh& mesh)
 
 namespace {
 
-// Tail estimate from the vertices the joint actually skins: the union of the
+// Bone length estimate from the vertices the joint actually skins, measured
+// along a caller-chosen joint-space direction (unit): the union of the
 // per-primitive joint bounding boxes (rest pose, bind space - computed at
 // import, see Buffer_mesh::joint_bounding_boxes) of every mesh skinned by
-// `skin`, transformed into joint space by the inverse bind matrix. The tail
-// points from the joint origin toward the box center and reaches the farthest
-// box corner along that direction, so it stays inside the influenced region.
-// Empty when no mesh provides joint bounds for this joint, or when the joint
-// sits at the box center (no direction cue).
-[[nodiscard]] auto bone_tail_from_skinned_bounds(
+// `skin` is transformed into joint space by the inverse bind matrix, and the
+// length is the farthest box corner's projection onto the direction. The
+// direction itself is NOT derived here - the tail direction always comes from
+// the hierarchy rules in bone_tail_in_joint_space; the bounds only size it.
+// Empty when no mesh provides joint bounds for this joint, or when the box
+// does not extend along the direction.
+[[nodiscard]] auto bone_length_from_skinned_bounds(
     const erhe::scene::Skin& skin,
     const std::size_t        joint_index,
-    const erhe::scene::Node& joint
-) -> std::optional<glm::vec3>
+    const erhe::scene::Node& joint,
+    const glm::vec3          direction
+) -> std::optional<float>
 {
     const erhe::scene::Scene* const scene = joint.get_scene();
     if (scene == nullptr) {
@@ -165,12 +168,6 @@ namespace {
     const erhe::math::Aabb joint_box = bind_box.transformed_by(inverse_bind);
 
     constexpr float epsilon = 1.0e-6f;
-    const glm::vec3 center          = joint_box.center();
-    const float     center_distance = glm::length(center);
-    if (center_distance < epsilon) {
-        return {};
-    }
-    const glm::vec3 direction = center / center_distance;
     float extent = 0.0f;
     for (int corner = 0; corner < 8; ++corner) {
         const glm::vec3 p{
@@ -183,7 +180,7 @@ namespace {
     if (extent < epsilon) {
         return {};
     }
-    return direction * extent;
+    return extent;
 }
 
 } // anonymous namespace
@@ -229,11 +226,18 @@ auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, const std::size_t j
         return first_child_translation;
     }
 
-    // Leaf joint, or children that don't agree: bound the vertices this joint
-    // skins and point at them.
-    const std::optional<glm::vec3> from_bounds = bone_tail_from_skinned_bounds(skin, joint_index, *joint);
-    if (from_bounds.has_value()) {
-        return from_bounds.value();
+    // Leaf joint, or children that don't agree: the DIRECTION still follows
+    // the long-standing rules (first child's direction when there were
+    // children, local +Y for a leaf), and the skinned-vertex bounds only
+    // resize it - the length becomes the box extent along that direction.
+    constexpr float epsilon = 1.0e-6f;
+    const float first_child_distance = glm::length(first_child_translation);
+    const glm::vec3 direction = (have_child && (first_child_distance > epsilon))
+        ? first_child_translation / first_child_distance
+        : glm::vec3{0.0f, 1.0f, 0.0f};
+    const std::optional<float> length_from_bounds = bone_length_from_skinned_bounds(skin, joint_index, *joint, direction);
+    if (length_from_bounds.has_value()) {
+        return direction * length_from_bounds.value();
     }
 
     // No skinned bounds available. Disagreeing children: fall back to the

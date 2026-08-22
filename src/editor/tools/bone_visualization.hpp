@@ -42,9 +42,12 @@ class Scene_root;
 //   1. Child joints that agree on a location (a single child, or several with
 //      the same local translation): that translation.
 //   2. Leaf joints and joints whose children disagree (a hand fanning into
-//      fingers): the rest-pose bounds of the vertices the joint skins
-//      (Buffer_mesh::joint_bounding_boxes transformed into joint space) - the
-//      tail points at the box center and reaches its farthest corner.
+//      fingers): the direction still follows the long-standing rules (the
+//      first child's direction when there were children, local +Y for a
+//      leaf), and the rest-pose bounds of the vertices the joint skins
+//      (Buffer_mesh::joint_bounding_boxes transformed into joint space)
+//      supply only the LENGTH - the farthest box corner's projection onto
+//      that direction.
 //   3. No skinned bounds: the first child's translation if there were
 //      (disagreeing) children; else, for a joint with a parent, the parent
 //      offset length along local +Y; else a short local +X stub.
