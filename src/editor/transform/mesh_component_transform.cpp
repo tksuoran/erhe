@@ -49,6 +49,36 @@ auto to_extrude_normal_mode(const Mesh_transform_mode mode) -> Extrude_normal_mo
     }
 }
 
+// Build_info for rebuilding a primitive of `geometry`, choosing the packed
+// vertex format from the geometry's own joint attributes. Buffer_info decides
+// the format (it is NOT derived from the attributes at build time), so the
+// plain make_primitive_buffer_info would rebuild a skinned mesh into the
+// non-skinned format, silently dropping joints/weights from the GPU streams -
+// the mesh would stop deforming after a vertex edit, fork or extrude. Same
+// rule as Weight_paint_tool::end_stroke.
+[[nodiscard]] auto make_rebuild_build_info(
+    erhe::scene_renderer::Mesh_memory& mesh_memory,
+    const erhe::geometry::Geometry&    geometry
+) -> erhe::primitive::Build_info
+{
+    const GEO::AttributesManager& vertex_attrs = geometry.get_mesh().vertices.attributes();
+    const bool skinned =
+        vertex_attrs.is_defined(erhe::geometry::c_joint_indices_0) &&
+        vertex_attrs.is_defined(erhe::geometry::c_joint_weights_0);
+    return erhe::primitive::Build_info{
+        .primitive_types = {
+            .fill_triangles          = true,
+            .fill_triangles_expanded = true,
+            .edge_lines              = true,
+            .corner_points           = true,
+            .centroid_points         = true
+        },
+        .buffer_info = skinned
+            ? mesh_memory.make_skinned_primitive_buffer_info()
+            : mesh_memory.make_primitive_buffer_info()
+    };
+}
+
 // Has the gizmo actually moved? Used to defer fork-on-edit to the first real drag
 // (a click on a handle without dragging passes an identity delta and must not fork).
 auto is_nontrivial_delta(const glm::mat4& m) -> bool
@@ -548,17 +578,6 @@ void Mesh_component_transform::commit(App_context& context)
     }
     m_active = false;
 
-    const erhe::primitive::Build_info build_info{
-        .primitive_types = {
-            .fill_triangles  = true,
-            .fill_triangles_expanded = true,
-            .edge_lines      = true,
-            .corner_points   = true,
-            .centroid_points = true
-        },
-        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
-    };
-
     std::vector<std::shared_ptr<Operation>> operations;
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
@@ -576,6 +595,10 @@ void Mesh_component_transform::commit(App_context& context)
         if (!primitive.render_shape) {
             continue;
         }
+
+        // Per group: the vertex format follows this group's geometry (skinned
+        // meshes keep their joint attributes through the rebuild).
+        const erhe::primitive::Build_info build_info = make_rebuild_build_info(*context.mesh_memory, *group.geometry);
 
         // Extruded group: the topology changed, so an in-place vertex move can't be
         // undone back to the original. Finalize normals from the now-final positions,
@@ -1030,16 +1053,7 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
     std::shared_ptr<erhe::geometry::Geometry> fork_geometry = std::make_shared<erhe::geometry::Geometry>(old_geometry->get_name() + " (fork)");
     fork_geometry->copy_with_transform(*old_geometry, GEO::create_scaling_matrix(1.0f));
 
-    const erhe::primitive::Build_info build_info{
-        .primitive_types = {
-            .fill_triangles  = true,
-            .fill_triangles_expanded = true,
-            .edge_lines      = true,
-            .corner_points   = true,
-            .centroid_points = true
-        },
-        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
-    };
+    const erhe::primitive::Build_info build_info = make_rebuild_build_info(*context.mesh_memory, *fork_geometry);
     std::shared_ptr<erhe::primitive::Primitive> fork_primitive = std::make_shared<erhe::primitive::Primitive>(fork_geometry);
     const bool renderable_ok = fork_primitive->make_renderable_mesh(build_info, normal_style);
     const bool raytrace_ok   = fork_primitive->make_raytrace();
@@ -1119,16 +1133,7 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     }
 
     const erhe::primitive::Normal_style normal_style = original_mesh_primitive.primitive->render_shape->get_normal_style();
-    const erhe::primitive::Build_info   build_info{
-        .primitive_types = {
-            .fill_triangles  = true,
-            .fill_triangles_expanded = true,
-            .edge_lines      = true,
-            .corner_points   = true,
-            .centroid_points = true
-        },
-        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
-    };
+    const erhe::primitive::Build_info   build_info   = make_rebuild_build_info(*context.mesh_memory, *extrude.geometry);
     std::shared_ptr<erhe::primitive::Primitive> extrude_primitive = std::make_shared<erhe::primitive::Primitive>(extrude.geometry);
     const bool renderable_ok = extrude_primitive->make_renderable_mesh(build_info, normal_style);
     const bool raytrace_ok   = extrude_primitive->make_raytrace();
