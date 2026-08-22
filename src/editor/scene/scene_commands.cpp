@@ -30,6 +30,7 @@
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
+#include "tools/bone_visualization.hpp"
 #include "tools/selection_tool.hpp"
 #include "windows/viewport_window.hpp"
 #include "windows/window_placement.hpp"
@@ -53,10 +54,13 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <functional>
+#include <unordered_set>
 
 
 namespace editor {
@@ -668,6 +672,120 @@ auto Scene_commands::create_new_empty_node(erhe::scene::Node* parent) -> std::sh
     );
 
     return new_empty_node;
+}
+
+auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t
+{
+    if (!clicked_node) {
+        return 0;
+    }
+
+    // Roots: when the clicked node is part of the selection the operation
+    // covers every selected node's subtree (the same convention as the tree
+    // context menu clipboard entries); otherwise just the clicked subtree.
+    std::vector<std::shared_ptr<erhe::scene::Node>> roots;
+    if (clicked_node->is_selected() && (m_context.selection != nullptr)) {
+        for (const std::shared_ptr<erhe::Item_base>& item : m_context.selection->get_selected_items()) {
+            std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+            if (node) {
+                roots.push_back(std::move(node));
+            }
+        }
+    }
+    if (roots.empty()) {
+        roots.push_back(clicked_node);
+    }
+
+    // Leaf bones of the subtrees: bones with no bone child. Non-bone children
+    // (bone proxies, meshes, previously added tip nodes) do not make a bone an
+    // interior one. Deduplicated: selected roots can overlap.
+    std::vector<std::shared_ptr<erhe::scene::Node>> leaf_bones;
+    std::unordered_set<const erhe::scene::Node*> visited;
+    const std::function<void(const std::shared_ptr<erhe::scene::Node>&)> visit =
+        [&](const std::shared_ptr<erhe::scene::Node>& node)
+        {
+            if (!visited.insert(node.get()).second) {
+                return;
+            }
+            bool has_bone_child = false;
+            for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
+                const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+                if (!child_node) {
+                    continue;
+                }
+                if (erhe::scene::is_bone(child_node.get())) {
+                    has_bone_child = true;
+                }
+                visit(child_node);
+            }
+            if (erhe::scene::is_bone(node.get()) && !has_bone_child) {
+                leaf_bones.push_back(node);
+            }
+        };
+    for (const std::shared_ptr<erhe::scene::Node>& root : roots) {
+        visit(root);
+    }
+    if (leaf_bones.empty()) {
+        return 0;
+    }
+
+    // One tip node per leaf bone, placed at the bone tail
+    // (bone_tail_in_joint_space - the same rule the bone visualizations use,
+    // including the skinned-vertex-bounds method for leaves). The skin and
+    // joint index are looked up from the joint's scene; a bone no skin lists
+    // is skipped (the flag only ever comes from a skin's joint list).
+    Compound_operation::Parameters compound_parameters;
+    std::size_t created_count = 0;
+    for (const std::shared_ptr<erhe::scene::Node>& bone : leaf_bones) {
+        const erhe::scene::Scene* const scene = bone->get_scene();
+        if (scene == nullptr) {
+            continue;
+        }
+        const erhe::scene::Skin* skin{nullptr};
+        std::size_t              joint_index{0};
+        for (const std::shared_ptr<erhe::scene::Skin>& scene_skin : scene->get_skins()) {
+            if (!scene_skin) {
+                continue;
+            }
+            const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = scene_skin->skin_data.joints;
+            for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
+                if (joints[i] == bone) {
+                    skin        = scene_skin.get();
+                    joint_index = i;
+                    break;
+                }
+            }
+            if (skin != nullptr) {
+                break;
+            }
+        }
+        if (skin == nullptr) {
+            continue;
+        }
+        const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, joint_index);
+
+        auto tip_node = std::make_shared<erhe::scene::Node>(fmt::format("{} tip", bone->get_name()));
+        tip_node->enable_flag_bits(Item_flags::content | Item_flags::visible | Item_flags::show_in_ui);
+        tip_node->set_parent_from_node(erhe::math::create_translation<float>(tail_local));
+        compound_parameters.operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = tip_node,
+                    .parent  = bone,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+        ++created_count;
+    }
+    if (compound_parameters.operations.empty()) {
+        return 0;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_parameters))
+    );
+    return created_count;
 }
 
 auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Light>

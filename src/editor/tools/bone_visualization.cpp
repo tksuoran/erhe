@@ -28,8 +28,10 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <optional>
 
 namespace editor {
 
@@ -110,6 +112,82 @@ void make_bone(GEO::Mesh& mesh)
 
 } // anonymous namespace
 
+namespace {
+
+// Tail estimate from the vertices the joint actually skins: the union of the
+// per-primitive joint bounding boxes (rest pose, bind space - computed at
+// import, see Buffer_mesh::joint_bounding_boxes) of every mesh skinned by
+// `skin`, transformed into joint space by the inverse bind matrix. The tail
+// points from the joint origin toward the box center and reaches the farthest
+// box corner along that direction, so it stays inside the influenced region.
+// Empty when no mesh provides joint bounds for this joint, or when the joint
+// sits at the box center (no direction cue).
+[[nodiscard]] auto bone_tail_from_skinned_bounds(
+    const erhe::scene::Skin& skin,
+    const std::size_t        joint_index,
+    const erhe::scene::Node& joint
+) -> std::optional<glm::vec3>
+{
+    const erhe::scene::Scene* const scene = joint.get_scene();
+    if (scene == nullptr) {
+        return {};
+    }
+
+    erhe::math::Aabb bind_box{};
+    for (const std::shared_ptr<erhe::scene::Mesh_layer>& layer : scene->get_mesh_layers()) {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
+            if (!mesh || (mesh->skin.get() != &skin)) {
+                continue;
+            }
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                if (!mesh_primitive.primitive) {
+                    continue;
+                }
+                const erhe::primitive::Primitive_render_shape* const shape = mesh_primitive.primitive->render_shape.get();
+                if (shape == nullptr) {
+                    continue;
+                }
+                const std::vector<erhe::math::Aabb>& joint_boxes = shape->get_renderable_mesh().joint_bounding_boxes;
+                if ((joint_index >= joint_boxes.size()) || !joint_boxes[joint_index].is_valid()) {
+                    continue;
+                }
+                bind_box.include(joint_boxes[joint_index]);
+            }
+        }
+    }
+    if (!bind_box.is_valid()) {
+        return {};
+    }
+
+    const glm::mat4 inverse_bind = (joint_index < skin.skin_data.inverse_bind_matrices.size())
+        ? skin.skin_data.inverse_bind_matrices[joint_index]
+        : glm::mat4{1.0f};
+    const erhe::math::Aabb joint_box = bind_box.transformed_by(inverse_bind);
+
+    constexpr float epsilon = 1.0e-6f;
+    const glm::vec3 center          = joint_box.center();
+    const float     center_distance = glm::length(center);
+    if (center_distance < epsilon) {
+        return {};
+    }
+    const glm::vec3 direction = center / center_distance;
+    float extent = 0.0f;
+    for (int corner = 0; corner < 8; ++corner) {
+        const glm::vec3 p{
+            (corner & 1) ? joint_box.max.x : joint_box.min.x,
+            (corner & 2) ? joint_box.max.y : joint_box.min.y,
+            (corner & 4) ? joint_box.max.z : joint_box.min.z
+        };
+        extent = std::max(extent, glm::dot(p, direction));
+    }
+    if (extent < epsilon) {
+        return {};
+    }
+    return direction * extent;
+}
+
+} // anonymous namespace
+
 auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, const std::size_t joint_index) -> glm::vec3
 {
     const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin.skin_data.joints;
@@ -121,15 +199,47 @@ auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, const std::size_t j
         return glm::vec3{0.2f, 0.0f, 0.0f};
     }
 
-    // First child joint wins: its local translation IS the tail offset.
+    // Child joints agreeing on the tail win: their shared local translation IS
+    // the tail offset. Multiple children that disagree (a hand joint fanning
+    // into fingers) give no single answer, so the skinned-vertex bounds below
+    // decide instead.
+    bool      have_child{false};
+    bool      children_agree{true};
+    glm::vec3 first_child_translation{0.0f};
     for (std::size_t j = 0, end = joints.size(); j < end; ++j) {
         if (j == joint_index) {
             continue;
         }
         const std::shared_ptr<erhe::scene::Node>& other = joints[j];
-        if (other && (other->get_parent_node() == joint)) {
-            return other->parent_from_node_transform().get_translation();
+        if (!other || (other->get_parent_node() != joint)) {
+            continue;
         }
+        const glm::vec3 translation = other->parent_from_node_transform().get_translation();
+        if (!have_child) {
+            have_child              = true;
+            first_child_translation = translation;
+        } else {
+            const float tolerance = std::max(1.0e-4f, 1.0e-3f * glm::length(first_child_translation));
+            if (glm::distance(translation, first_child_translation) > tolerance) {
+                children_agree = false;
+            }
+        }
+    }
+    if (have_child && children_agree) {
+        return first_child_translation;
+    }
+
+    // Leaf joint, or children that don't agree: bound the vertices this joint
+    // skins and point at them.
+    const std::optional<glm::vec3> from_bounds = bone_tail_from_skinned_bounds(skin, joint_index, *joint);
+    if (from_bounds.has_value()) {
+        return from_bounds.value();
+    }
+
+    // No skinned bounds available. Disagreeing children: fall back to the
+    // first child (the long-standing rule).
+    if (have_child) {
+        return first_child_translation;
     }
 
     // Leaf joint: point along local +Y, as long as this joint's own offset from

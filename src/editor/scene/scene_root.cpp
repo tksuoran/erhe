@@ -334,6 +334,26 @@ Scene_root::~Scene_root() noexcept
     }
 }
 
+namespace {
+
+// Early-exit depth-first check used to gate the Add Bone Tip Nodes context
+// menu entry; only runs while the popup is open.
+[[nodiscard]] auto subtree_contains_bone(const erhe::scene::Node& node) -> bool
+{
+    if (erhe::scene::is_bone(&node)) {
+        return true;
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
+        const erhe::scene::Node* const child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+        if ((child_node != nullptr) && subtree_contains_bone(*child_node)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
 auto Scene_root::make_browser_window(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
@@ -503,6 +523,24 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
                 ImGui::EndMenu();
+            }
+            // Rigging: offered only when the clicked subtree contains a bone
+            // (early-exit walk; runs only while the popup is open).
+            if (subtree_contains_bone(*node)) {
+                if (ImGui::MenuItem("Add Bone Tip Nodes")) {
+                    deferred_operations.push_back(
+                        [&context, node]() {
+                            context.scene_commands->add_bone_tip_nodes(node);
+                        }
+                    );
+                    close = true;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Add an empty child node at the tip of every leaf bone in the\n"
+                        "selected subtrees (this subtree when nothing relevant is selected)"
+                    );
+                }
             }
             // "Add Attachment": the full attachment catalog (issue #249), each
             // entry disabled when the node cannot take that kind. Joint keeps its

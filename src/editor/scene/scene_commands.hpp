@@ -264,6 +264,13 @@ public:
     auto create_new_scene       () -> std::shared_ptr<Scene_root>;
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
     auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+
+    // Adds an empty child node at the tip of every leaf bone (a bone with no
+    // bone children) in the target subtrees, placed with
+    // bone_tail_in_joint_space. Targets: the selection when clicked_node is
+    // selected, otherwise clicked_node's subtree alone. One undoable compound
+    // operation; returns the number of tip nodes created.
+    auto add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t;
     auto create_new_light       (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Light>;
     auto create_new_layout      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Layout>;
     auto create_new_rendertarget(erhe::scene::Node* parent = nullptr) -> std::shared_ptr<Rendertarget_mesh>;

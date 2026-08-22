@@ -37,10 +37,17 @@ class Scene_root;
 // animation - the common case - never changes it, and a proxy parented under
 // the joint needs no per-frame transform refresh at all.
 //
-// Rule (unchanged from the long-standing line visualization, factored out here
-// so lines and solid bones cannot disagree): the first child joint's local
-// translation; else, for a joint with a parent, the parent offset length along
-// local +Y; else a short local +X stub.
+// Rule (shared by the line and solid bone visualizations and by the item tree's
+// Add Bone Tip Nodes operation, so none can disagree):
+//   1. Child joints that agree on a location (a single child, or several with
+//      the same local translation): that translation.
+//   2. Leaf joints and joints whose children disagree (a hand fanning into
+//      fingers): the rest-pose bounds of the vertices the joint skins
+//      (Buffer_mesh::joint_bounding_boxes transformed into joint space) - the
+//      tail points at the box center and reaches its farthest corner.
+//   3. No skinned bounds: the first child's translation if there were
+//      (disagreeing) children; else, for a joint with a parent, the parent
+//      offset length along local +Y; else a short local +X stub.
 [[nodiscard]] auto bone_tail_in_joint_space(const erhe::scene::Skin& skin, std::size_t joint_index) -> glm::vec3;
 
 // Editor-generated, pickable proxy geometry for skeleton bones.
