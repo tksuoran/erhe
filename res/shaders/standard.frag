@@ -119,6 +119,18 @@ const uvec2 v_valency_edge_count = uvec2(0u);
 #  endif
 #endif
 
+// Single-joint weight for the joint_weight_ramp debug mode, written by
+// standard.vert (sign-encoded: >= 0 weight, -1 zero-weight alert, -2 no
+// target). The const fallback only makes non-skinned variants link;
+// their debug branch is empty, so the value is never displayed.
+#if (ERHE_SHADER_DEBUG == 34) && !defined(ERHE_VARIANT_POSITION_PASS)
+#  ifdef ERHE_USE_SKINNING
+layout(location = 23) in float v_weight;
+#  else
+const float v_weight = -2.0;
+#  endif
+#endif
+
 // Solid-wireframe varyings (expanded fill mesh): per-vertex barycentric basis,
 // per-triangle real-edge mask, and wireframe color / width. See standard.vert.
 #if defined(ERHE_SOLID_WIREFRAME) && defined(ERHE_ATTRIBUTE_a_custom_4) && !defined(ERHE_VARIANT_POSITION_PASS)
@@ -935,6 +947,34 @@ void main()
         // Dimmed (0.3x) version of vdotn, easier on the eyes when
         // editing vertices / edges / faces in mesh-component mode.
         out_color.rgb = vec3(0.3 * max(dot(V, N), 0.0));
+#  elif ERHE_SHADER_DEBUG == 34 // joint_weight_ramp
+        // Blender-style single-joint weight ramp: hue sweeps 240deg (blue)
+        // -> 0deg (red) with weight, brightness 0.5 -> 1.0 through a gamma
+        // 1.5 correction (Blender's default viewport weight ramp,
+        // overlay_instance.cc; gamma 1.0 would reproduce the classic 2.79
+        // piecewise ramp). v_weight < 0 encodes alerts from standard.vert:
+        // -1 = zero weight with the zero-black option on (fade in with
+        // alert^2, as Blender does), -2 = no target joint selected (dim
+        // magenta "missing data"). |N.V| fake shading keeps the surface
+        // shape readable under the flat ramp colors. Non-skinned variants
+        // deliberately keep their lit color: empty #else.
+#    ifdef ERHE_USE_SKINNING
+        {
+            float w_dbg   = clamp(v_weight, 0.0, 1.0);
+            float hue_dbg = (2.0 / 3.0) * (1.0 - w_dbg);
+            float val_dbg = pow(0.5 + 0.5 * w_dbg, 1.5);
+            vec3  ramp_rgb = val_dbg * clamp(abs(mod(hue_dbg * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+            ramp_rgb = pow(ramp_rgb, vec3(1.0 / 1.5));
+            if (v_weight < -1.5) {
+                ramp_rgb = vec3(0.35, 0.05, 0.35);
+            } else if (v_weight < 0.0) {
+                float alert_dbg = clamp(-v_weight, 0.0, 1.0);
+                ramp_rgb = mix(ramp_rgb, vec3(0.0), alert_dbg * alert_dbg);
+            }
+            float shade_dbg = abs(dot(V, N)) * 0.9 + 0.1;
+            out_color.rgb = srgb_to_linear(ramp_rgb * shade_dbg);
+        }
+#    endif
 #  endif
         out_color.a = 1.0;
     }

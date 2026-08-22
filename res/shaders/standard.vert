@@ -136,6 +136,16 @@ layout(location = 11) flat out uvec2 v_valency_edge_count;
 #  endif
 #endif
 
+// Single-joint weight for the joint_weight_ramp debug mode. Sign-encoded
+// Blender-style: >= 0 = the target joint's weight at this vertex, -1 =
+// no influence from the target joint with the zero-black option on
+// (joint.debug_joint_indices.y != 0), -2 = no target joint selected.
+// Only skinned variants emit it; the fragment side falls back to a const
+// and leaves non-skinned meshes with their normal shading.
+#if (ERHE_SHADER_DEBUG == 34) && defined(ERHE_USE_SKINNING) && !defined(ERHE_VARIANT_POSITION_PASS)
+layout(location = 23) out float v_weight;
+#endif
+
 // Solid-wireframe varyings: a per-vertex barycentric basis (reconstructed from
 // the packed corner index in a_custom_4) plus the per-triangle real-edge mask
 // and the wireframe color / width. Only emitted for the expanded fill mesh
@@ -308,6 +318,27 @@ void main()
             a_joint_weights_0.y * joint.debug_joint_colors[(int(a_joint_indices_0.y) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count] +
             a_joint_weights_0.z * joint.debug_joint_colors[(int(a_joint_indices_0.z) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count] +
             a_joint_weights_0.w * joint.debug_joint_colors[(int(a_joint_indices_0.w) + primitive.primitives[ERHE_DRAW_ID].base_joint_index) % joint.debug_joint_color_count];
+    }
+#   endif
+
+#   if (ERHE_SHADER_DEBUG == 34) && defined(ERHE_USE_SKINNING)
+    // joint_weight_ramp: sum this vertex's influence from the target joint
+    // (joint.debug_joint_indices.x, a global joint-buffer index; the
+    // per-primitive base_joint_index offsets the attribute indices into the
+    // same space, as in erhe_skin_matrices). 0xffffffffu = no target.
+    // debug_joint_indices.y != 0 = show zero-weight vertices as black (-1).
+    if ((primitive.primitives[ERHE_DRAW_ID].skinning_factor < 0.5) || (joint.debug_joint_indices.x == 0xffffffffu)) {
+        v_weight = -2.0;
+    } else {
+        uint target_joint = joint.debug_joint_indices.x;
+        uint base_joint   = primitive.primitives[ERHE_DRAW_ID].base_joint_index;
+        float w =
+            (((a_joint_indices_0.x + base_joint) == target_joint) ? a_joint_weights_0.x : 0.0) +
+            (((a_joint_indices_0.y + base_joint) == target_joint) ? a_joint_weights_0.y : 0.0) +
+            (((a_joint_indices_0.z + base_joint) == target_joint) ? a_joint_weights_0.z : 0.0) +
+            (((a_joint_indices_0.w + base_joint) == target_joint) ? a_joint_weights_0.w : 0.0);
+        bool zero_black = joint.debug_joint_indices.y != 0u;
+        v_weight = ((w <= 0.0) && zero_black) ? -1.0 : w;
     }
 #   endif
 

@@ -61,7 +61,8 @@ enum class Shader_debug : uint16_t
     shadow_visibility  = 30,
     vdotn_dim          = 31,
     texcoord_2         = 32,
-    ddgi_irradiance    = 33
+    ddgi_irradiance    = 33,
+    joint_weight_ramp  = 34
 };
 
 // User-visible display strings matching the Shader_debug enum, in
@@ -100,7 +101,8 @@ inline constexpr const char* c_shader_debug_strings[] = {
     "Shadow Visibility",
     "V.N (dim)",
     "TexCoord 2 (Lightmap)",
-    "DDGI Irradiance"
+    "DDGI Irradiance",
+    "Joint Weight Ramp"
 };
 
 #define ERHE_SHADER_BOOL(X) \
