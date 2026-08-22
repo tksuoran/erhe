@@ -145,8 +145,8 @@ void Weight_display::update_debug_joint_indices()
         0u
     };
     log_tools->trace(
-        "Weight_display: active joint = '{}' global index = {:#x} zero_black = {}",
-        joint ? joint->get_name() : "(none)", index, m_show_zero_weight_black
+        "Weight_display: active joint = '{}' zero_black = {}",
+        joint ? joint->get_name() : "(none)", m_show_zero_weight_black
     );
 }
 
