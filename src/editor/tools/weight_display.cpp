@@ -3,6 +3,7 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
+#include "editor_log.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_scene/node.hpp"
@@ -143,6 +144,10 @@ void Weight_display::update_debug_joint_indices()
         0u,
         0u
     };
+    log_tools->trace(
+        "Weight_display: active joint = '{}' global index = {:#x} zero_black = {}",
+        joint ? joint->get_name() : "(none)", index, m_show_zero_weight_black
+    );
 }
 
 void Weight_display::imgui()

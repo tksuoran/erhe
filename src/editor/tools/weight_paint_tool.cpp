@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
+#include "editor_log.hpp"
 #include "graphics/icon_set.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/paint_weights_operation.hpp"
@@ -71,25 +72,32 @@ Weight_paint_command::Weight_paint_command(erhe::commands::Commands& commands, A
 void Weight_paint_command::try_ready()
 {
     if (!m_context.weight_paint_tool->is_enabled()) {
+        log_tools->trace("WPT command try_ready: tool not enabled");
         return;
     }
     if (m_context.weight_paint_tool->try_ready()) {
+        log_tools->trace("WPT command try_ready: READY");
         set_ready();
+    } else {
+        log_tools->trace("WPT command try_ready: tool try_ready() returned false");
     }
 }
 
 auto Weight_paint_command::try_call() -> bool
 {
     if (!m_context.weight_paint_tool->is_enabled()) {
+        log_tools->trace("WPT command try_call: tool not enabled");
         return false;
     }
     if (get_command_state() == erhe::commands::State::Ready) {
         set_active();
     }
     if (get_command_state() != erhe::commands::State::Active) {
+        log_tools->trace("WPT command try_call: state != Active ({})", static_cast<int>(get_command_state()));
         return false;
     }
     if (m_context.weight_paint_tool->get_hover_scene_view() == nullptr) {
+        log_tools->trace("WPT command try_call: no hover scene view -> inactive");
         set_inactive();
         return false;
     }
@@ -196,14 +204,24 @@ void Weight_paint_tool::tool_render(const Render_context& context)
 auto Weight_paint_tool::try_ready() -> bool
 {
     if (!Command_host::is_enabled()) {
+        log_tools->trace("WPT try_ready: command host not enabled");
         return false;
     }
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
+        log_tools->trace("WPT try_ready: no hover scene view");
         return false;
     }
     const Hover_entry* hover = scene_view->get_nearest_hover(Hover_entry::all_bits);
-    if ((hover == nullptr) || (hover->mask != Hover_entry::content_bit) || !hover->valid) {
+    if (hover == nullptr) {
+        log_tools->trace("WPT try_ready: get_nearest_hover returned nullptr");
+        return false;
+    }
+    // Compare the slot, not the mask: the mask is canonical only since
+    // set_hover started stamping it, and the slot is the direct intent
+    // ("the nearest hover is the content surface").
+    if ((hover->slot != Hover_entry::content_slot) || !hover->valid) {
+        log_tools->trace("WPT try_ready: nearest hover slot = {} (want content = {}), valid = {}", hover->slot, Hover_entry::content_slot, hover->valid);
         return false;
     }
     return begin_stroke();
@@ -216,24 +234,29 @@ auto Weight_paint_tool::begin_stroke() -> bool
 
     Scene_view* scene_view = get_hover_scene_view();
     if (scene_view == nullptr) {
+        log_tools->trace("WPT begin_stroke: no hover scene view");
         return false;
     }
     const Hover_entry& content = scene_view->get_hover(Hover_entry::content_slot);
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = content.scene_mesh_weak.lock();
     if (!content.valid || !scene_mesh || !content.geometry) {
+        log_tools->trace("WPT begin_stroke: content hover unusable: valid = {}, mesh = {}, geometry = {}", content.valid, scene_mesh ? scene_mesh->get_name() : "null", content.geometry ? "yes" : "null");
         return false;
     }
 
     if (m_context.weight_display == nullptr) {
+        log_tools->trace("WPT begin_stroke: no weight_display");
         return false;
     }
     const std::shared_ptr<erhe::scene::Node> joint = m_context.weight_display->get_active_joint();
     if (!joint) {
+        log_tools->trace("WPT begin_stroke: no active joint");
         m_status = "No active joint - select a bone first";
         return false;
     }
     const std::shared_ptr<erhe::scene::Skin>& skin = scene_mesh->skin;
     if (!skin) {
+        log_tools->trace("WPT begin_stroke: mesh '{}' has no skin", scene_mesh->get_name());
         m_status = "Hovered mesh is not skinned";
         return false;
     }
@@ -246,6 +269,7 @@ auto Weight_paint_tool::begin_stroke() -> bool
         }
     }
     if (joint_local_index == std::numeric_limits<uint32_t>::max()) {
+        log_tools->trace("WPT begin_stroke: joint '{}' not in skin '{}' ({} joints)", joint->get_name(), skin->get_name(), joints.size());
         m_status = "Active joint is not part of the hovered mesh's skin";
         return false;
     }
@@ -257,6 +281,7 @@ auto Weight_paint_tool::begin_stroke() -> bool
         !attributes.vertex_joint_indices_0.try_get(0).has_value() ||
         !attributes.vertex_joint_weights_0.try_get(0).has_value()
     ) {
+        log_tools->trace("WPT begin_stroke: geometry '{}' has no joint attributes (vertices = {})", content.geometry->get_name(), geo_mesh.vertices.nb());
         m_status = "Mesh geometry has no joint attributes";
         return false;
     }
@@ -270,6 +295,10 @@ auto Weight_paint_tool::begin_stroke() -> bool
     m_stroke_joint_local_index = joint_local_index;
     m_stroke_active            = true;
     m_status.clear();
+    log_tools->trace(
+        "WPT begin_stroke: OK mesh = '{}' primitive = {} joint = '{}' (local index {}) vertices = {}",
+        scene_mesh->get_name(), m_stroke_primitive_index, joint->get_name(), joint_local_index, geo_mesh.vertices.nb()
+    );
     return true;
 }
 
@@ -292,6 +321,7 @@ auto Weight_paint_tool::blend_weight(const float base, const float alpha) const 
 void Weight_paint_tool::paint()
 {
     if (!m_stroke_active) {
+        log_tools->trace("WPT paint: no active stroke");
         return;
     }
     apply_dab();
@@ -307,11 +337,13 @@ void Weight_paint_tool::apply_dab()
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = content.scene_mesh_weak.lock();
     std::shared_ptr<erhe::scene::Mesh> stroke_mesh = m_stroke_mesh.lock();
     if (!content.valid || !content.position.has_value() || !scene_mesh || !stroke_mesh) {
+        log_tools->trace("WPT dab: hover unusable: valid = {}, position = {}, mesh = {}, stroke mesh = {}", content.valid, content.position.has_value(), scene_mesh ? "yes" : "null", stroke_mesh ? "yes" : "null");
         return;
     }
     // Stroke lock: dabs landing on another mesh or another primitive of the
     // same mesh are ignored until the stroke ends.
     if ((scene_mesh != stroke_mesh) || (content.scene_mesh_primitive_index != m_stroke_primitive_index)) {
+        log_tools->trace("WPT dab: stroke lock rejected: mesh '{}' primitive {} (locked to '{}' primitive {})", scene_mesh->get_name(), content.scene_mesh_primitive_index, stroke_mesh->get_name(), m_stroke_primitive_index);
         return;
     }
 
@@ -341,10 +373,21 @@ void Weight_paint_tool::apply_dab()
 
     const erhe::scene::Node* node = stroke_mesh->get_node();
 
+    // Dab statistics for debugging
+    std::size_t stat_no_attributes    = 0;
+    std::size_t stat_out_of_radius    = 0;
+    std::size_t stat_back_face        = 0;
+    std::size_t stat_zero_alpha       = 0;
+    std::size_t stat_alpha_max_skip   = 0;
+    std::size_t stat_no_slot          = 0;
+    std::size_t stat_written          = 0;
+    float       stat_min_distance     = std::numeric_limits<float>::max();
+
     for (GEO::index_t vertex = 0, end = geo_mesh.vertices.nb(); vertex < end; ++vertex) {
         const std::optional<GEO::vec4u> ji_opt = attributes.vertex_joint_indices_0.try_get(vertex);
         const std::optional<GEO::vec4f> jw_opt = attributes.vertex_joint_weights_0.try_get(vertex);
         if (!ji_opt.has_value() || !jw_opt.has_value()) {
+            ++stat_no_attributes;
             continue;
         }
         const GEO::vec4u ji = ji_opt.value();
@@ -372,7 +415,9 @@ void Weight_paint_tool::apply_dab()
         }
 
         const float distance = glm::distance(p_world, brush_center);
+        stat_min_distance = std::min(stat_min_distance, distance);
         if (distance > m_radius) {
+            ++stat_out_of_radius;
             continue;
         }
 
@@ -385,6 +430,7 @@ void Weight_paint_tool::apply_dab()
                 const glm::vec3 n_world  = glm::mat3{skin_matrix} * to_glm_vec3(ns_opt.value());
                 const glm::vec3 view_dir = p_world - camera_position; // camera -> surface
                 if (glm::dot(view_dir, n_world) > 0.0f) {
+                    ++stat_back_face;
                     continue; // facing away
                 }
             }
@@ -392,6 +438,7 @@ void Weight_paint_tool::apply_dab()
 
         const float alpha = smooth_falloff(distance, m_radius) * m_strength;
         if (alpha <= 0.0f) {
+            ++stat_zero_alpha;
             continue;
         }
 
@@ -428,6 +475,7 @@ void Weight_paint_tool::apply_dab()
             // stroke-start weight - overlapping dabs converge to the target
             // instead of compounding.
             if (alpha <= stroke_vertex.alpha_max) {
+                ++stat_alpha_max_skip;
                 continue;
             }
             stroke_vertex.alpha_max = alpha;
@@ -446,6 +494,7 @@ void Weight_paint_tool::apply_dab()
         }
         if (slot < 0) {
             if (new_weight <= 0.0f) {
+                ++stat_no_slot;
                 continue; // not influenced and painting zero: nothing to do
             }
             // Insert by evicting the smallest influence - but only if the new
@@ -457,6 +506,7 @@ void Weight_paint_tool::apply_dab()
                 }
             }
             if (weights[min_slot] >= new_weight) {
+                ++stat_no_slot;
                 continue;
             }
             slot = min_slot;
@@ -490,7 +540,15 @@ void Weight_paint_tool::apply_dab()
         }
 
         write_vertex_joints(vertex, indices, weights);
+        ++stat_written;
     }
+
+    log_tools->trace(
+        "WPT dab: center = ({:.3f}, {:.3f}, {:.3f}) radius = {:.3f} min_dist = {:.3f} | written = {} out_of_radius = {} back_face = {} alpha_max_skip = {} zero_alpha = {} no_slot = {} no_attr = {} (of {} vertices)",
+        brush_center.x, brush_center.y, brush_center.z, m_radius, stat_min_distance,
+        stat_written, stat_out_of_radius, stat_back_face, stat_alpha_max_skip, stat_zero_alpha, stat_no_slot, stat_no_attributes,
+        geo_mesh.vertices.nb()
+    );
 }
 
 void Weight_paint_tool::write_vertex_joints(const GEO::index_t vertex, const glm::uvec4& joint_indices, const glm::vec4& joint_weights)
@@ -604,6 +662,7 @@ void Weight_paint_tool::end_stroke()
         return;
     }
     m_stroke_active = false;
+    log_tools->trace("WPT end_stroke: {} touched vertices", m_stroke_vertices.size());
 
     std::shared_ptr<erhe::scene::Mesh> stroke_mesh = m_stroke_mesh.lock();
     if (!stroke_mesh || !m_stroke_geometry || m_stroke_vertices.empty()) {
@@ -637,7 +696,12 @@ void Weight_paint_tool::end_stroke()
                 .corner_points           = true,
                 .centroid_points         = true
             },
-            .buffer_info = m_context.mesh_memory->make_primitive_buffer_info()
+            // Skinned variant: the Buffer_info chooses the packed vertex
+            // format (it is NOT derived from the geometry's attributes), and
+            // the plain make_primitive_buffer_info would rebuild this
+            // skinned mesh into the non-skinned format, silently dropping
+            // joints/weights from the GPU streams.
+            .buffer_info = m_context.mesh_memory->make_skinned_primitive_buffer_info()
         },
         .normal_style    = primitive.render_shape->get_normal_style()
     };

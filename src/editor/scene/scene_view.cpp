@@ -225,6 +225,13 @@ void Scene_view::set_hover(const std::size_t slot, const Hover_entry& entry)
     const bool grid_changed = (hover_grid       != entry_grid);
     m_hover_entries[slot]      = entry;
     m_hover_entries[slot].slot = slot;
+    // The slot's Hover_entry bit is stamped here, canonically, because the
+    // two producers disagree: the raytrace path fills mask with
+    // Raytrace_node_mask values (which match the Hover_entry bit only for
+    // content, both bit 0) and the ID-render path (skinned meshes) does not
+    // fill it at all. Consumers (Paint_tool / Weight_paint_tool try_ready,
+    // Headset_view) all test Hover_entry bits.
+    m_hover_entries[slot].mask = uint32_t{1} << slot;
     if (mesh_changed || grid_changed) {
         m_hover_update_pending = true;
     }
