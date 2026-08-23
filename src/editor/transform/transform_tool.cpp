@@ -57,6 +57,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 
 namespace editor {
@@ -586,6 +587,25 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         shared.entries.clear();
     }
     std::size_t i = 0;
+
+    // Refresh each target's world transform through its ancestor chain before
+    // reading: transform setters update only the set node's own cached world
+    // transform, so when an operation (an IK drag undo, an animation step)
+    // changes a target's ANCESTORS, the target's cache is stale until the
+    // scene's next update_node_transforms() pass - and the anchor would be
+    // computed from the old position, leaving the gizmo behind.
+    const std::function<void(erhe::scene::Node*)> refresh_from_root =
+        [&refresh_from_root](erhe::scene::Node* node)
+        {
+            if (node == nullptr) {
+                return;
+            }
+            refresh_from_root(node->get_parent_node().get());
+            node->update_world_from_node();
+        };
+    for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
+        refresh_from_root(node.get());
+    }
 
     for (const std::shared_ptr<erhe::scene::Node>& node : m_target_nodes) {
         const Trs_transform& world_from_node = node->world_from_node_transform();

@@ -134,7 +134,12 @@ Notable Blender facts that shaped this plan:
   Phase 4 on, constraints introduce cross-hierarchy dependencies (owner
   depends on target) and whole-chain solves (IK), so scene update needs an
   explicit evaluation pass with dependency ordering and cycle detection —
-  the single largest architectural change in this plan.
+  the single largest architectural change in this plan. Phase 1 experience
+  reinforces this: erhe's transform setters refresh only the set node's
+  cached world transform (descendants wait for the next
+  `update_node_transforms()` pass), so every same-frame chain computation
+  currently has to refresh caches by hand — an evaluation pass would own
+  that ordering instead (see the requirements doc's implementation notes).
 - **Undo**: every interactive tool records one operation per gesture through
   the existing operation machinery; every new data type (constraint, weights)
   needs corresponding operations.
@@ -153,13 +158,29 @@ skinning), then deformation quality, then animation-system integration.
 Phases 3 and 5 are independent of each other and can be reordered or
 interleaved; phase boundaries are release points, not waterfalls.
 
-### Phase 1 — Interactive FABRIK IK on translate drag
+### Phase 1 — Interactive FABRIK IK on translate drag — DONE (2026-08-23)
 
 Scope: exactly `fabrik-ik-requirements.md`. Dragged bone = effector; chain up
 to first `Item_flags::ik_lock` bone; unconstrained FABRIK; rotations-only
 write-back; one undo op per gesture; Transform tool toggle.
 
 Deliverable: pose an imported glTF character by dragging bones.
+
+Shipped, plus extras pulled forward (see the requirements doc's
+Implementation status section for commits and code locations):
+
+- **Drag handles**: non-bone nodes parented under a bone act as IK effector
+  points — the parent bone rotates to aim at them (Blender-Auto-IK tail
+  grabbing).
+- **Add Bone Tip Nodes** (Hierarchy window context menu): places empty child
+  nodes at the tips of leaf bones, ready to use as drag handles — an early
+  slice of Phase 3's authoring UX.
+- **Data-driven bone tails**: `bone_tail_in_joint_space` (shared by the bone
+  visualizations and tip placement) now sizes leaf/ambiguous bones from the
+  rest-pose bounds of the vertices each joint skins
+  (`Buffer_mesh::joint_bounding_boxes` in joint space); direction still
+  follows the hierarchy rules. This is a head-start on Phase 3's "bone
+  head/tail model" decision.
 
 ### Phase 2 — IK quality of life
 
@@ -360,7 +381,7 @@ Collected from the survey; explicitly not scheduled:
 
 | Phase | Title | Depends on | Rough size |
 |---|---|---|---|
-| 1 | FABRIK IK on drag | — | S-M |
+| 1 | FABRIK IK on drag — DONE | — | S-M |
 | 2 | IK quality of life (pole, limits, locks) | 1; serialization decision | M |
 | 3 | Skeleton editing + posing basics | — (1 for testing) | M-L |
 | 4 | Constraint system foundation | 1-2 (solver), scene update rework | L |

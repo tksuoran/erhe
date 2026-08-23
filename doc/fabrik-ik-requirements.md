@@ -1,6 +1,6 @@
 # FABRIK Inverse Kinematics — Initial Requirements
 
-Status: draft, awaiting review.
+Status: IMPLEMENTED (2026-08-23); see Implementation status at the end.
 This document is Phase 1 of the rigging roadmap in `rigging-tools-plan.md`.
 
 ## Motivation
@@ -207,17 +207,47 @@ These are not v1 requirements, but they are planned; see
 7. `ik_lock` survives a save/load round trip of the scene.
 8. Non-bone nodes and rotation/scale drags behave exactly as before.
 
-## Open questions for review
+## Open questions for review — resolved in implementation
 
-1. Flag name: `ik_lock` vs `ik_root` vs `ik_pin` — "lock" chosen here since it
-   masks the bone from IK, but naming is open.
-2. Should the effector keep its world orientation during the drag (current
-   proposal), or align with the last segment?
-3. Should IK-on-drag be default-on for bones (current proposal), or opt-in via
-   the Transform tool setting?
-4. Is re-solving from the drag-start pose each update the desired feel, or
-   should the solve be incremental from the previous frame's pose (converges
-   with hysteresis, feels "springier")?
-5. When the dragged bone has bone children (mid-chain drag, e.g. dragging an
-   elbow), v1 still treats it as the effector and its subtree follows rigidly —
-   confirm that is acceptable.
+1. Flag name: `ik_lock` was kept.
+2. Effector orientation: keeps its world orientation during the drag, as
+   proposed. For aiming the last bone too, drag a tip handle instead (see §1
+   drag handles) — the parent bone then rotates to aim at it.
+3. IK-on-drag is default-on for bones, with the Move tool "Bone IK" checkbox
+   to disable (as proposed).
+4. Re-solve from the drag-start pose each update (absolute targets), as
+   proposed; dragging back to the start restores the starting pose.
+5. Mid-chain drag: the dragged bone is the effector and its subtree follows
+   rigidly, as proposed.
+
+## Implementation status (2026-08-23)
+
+Implemented as specified, in commits `0330a6fd` (core), `1df65a38` (drag
+handles), `5e14619c` + follow-ups (fixes). Key locations:
+
+- `Item_flags::ik_lock` — `src/erhe/item/erhe_item/item.hpp`, persisted via
+  `src/erhe/gltf/erhe_gltf/gltf_item_flags.cpp`, editable in Properties.
+- Solver + chain state — `src/editor/transform/ik_drag.{hpp,cpp}`
+  (`fabrik_solve` is a pure function; `Ik_drag` owns chain discovery,
+  drag-start capture, write-back).
+- Transform tool integration — `Transform_tool::try_translate_ik`
+  (`src/editor/transform/transform_tool.cpp`), Move tool "Bone IK" toggle.
+
+Extension beyond the spec: non-bone drag handles (§1) — nodes parented under
+a bone act as effector points, giving Blender-Auto-IK-style tail grabbing;
+pairs with the Hierarchy window's Add Bone Tip Nodes operation
+(`Scene_commands::add_bone_tip_nodes`), which places empty nodes at bone
+tips using the shared bone-tail rule (`bone_tail_in_joint_space`, now sized
+by the skinned-vertex bounds — see `src/editor/tools/bone_visualization.*`).
+
+erhe-specific implementation notes (learned the hard way; relevant to
+Phase 2+):
+
+- Transform setters refresh only the SET node's cached world transform;
+  descendants wait for the scene's next `update_node_transforms()` pass. Any
+  same-frame sequential read-modify-write over a chain (the IK write-back,
+  the gizmo anchor after a compound undo) must refresh caches explicitly via
+  `Node::update_world_from_node()` along the ancestor chain.
+- `Node::set_parent` preserves the node's WORLD transform, so a local
+  transform intended for a not-yet-parented node must be applied after
+  parenting (e.g. via a `Node_transform_operation` in the same compound).
