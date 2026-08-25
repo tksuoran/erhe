@@ -10,6 +10,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "operations/content_library_attach_operation.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/graph_texture_serialization.hpp"
@@ -61,7 +62,12 @@ namespace {
 
 [[nodiscard]] auto to_vec3(const nlohmann::json& value, const glm::vec3& fallback) -> glm::vec3
 {
-    if (!value.is_array() || (value.size() < 3)) {
+    if (
+        !value.is_array() || (value.size() < 3) ||
+        !value[0].is_number() || !value[1].is_number() || !value[2].is_number()
+    ) {
+        // Element type check per element: an unguarded get<float>() on a
+        // non-numeric element throws and would abort the whole scene load.
         return fallback;
     }
     return glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
@@ -219,6 +225,70 @@ void import_layouts(const erhe::gltf::Gltf_data& gltf_data)
             apply_flags(*layout_item, ij);
             node->attach(layout_item);
         }
+    }
+}
+
+// ERHE_rig: per-bone IK settings -> Ik_settings attachment
+// (doc/ik-settings-requirements.md section 6). Absent fields keep defaults;
+// out-of-range limits and stiffness are clamped to their valid ranges
+// (min in [-pi, 0], max in [0, pi], stiffness in [0, 0.99]).
+void import_rigs(const erhe::gltf::Gltf_data& gltf_data)
+{
+    for (std::size_t i = 0, end = gltf_data.node_extensions.size(); i < end; ++i) {
+        if ((i >= gltf_data.nodes.size()) || !gltf_data.nodes[i]) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node>& node = gltf_data.nodes[i];
+        const std::string* extension_json = find_extension(gltf_data.node_extensions[i], "ERHE_rig");
+        if (extension_json == nullptr) {
+            continue;
+        }
+        const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_rig", node->get_name());
+        if (payload.is_null()) {
+            continue;
+        }
+        const auto ik_it = payload.find("ik");
+        if ((ik_it == payload.end()) || !ik_it->is_object()) {
+            continue;
+        }
+        const nlohmann::json& ij = *ik_it;
+        auto ik_settings = std::make_shared<Ik_settings>(ij.value("name", std::string{"IK settings"}));
+        Ik_settings_data& ik = ik_settings->data;
+        const auto read_bool3 = [&ij](const char* key, std::array<bool, 3>& out_values) {
+            const auto it = ij.find(key);
+            if ((it == ij.end()) || !it->is_array() || (it->size() < 3)) {
+                return;
+            }
+            for (std::size_t axis = 0; axis < 3; ++axis) {
+                if ((*it)[axis].is_boolean()) {
+                    out_values[axis] = (*it)[axis].get<bool>();
+                }
+            }
+        };
+        read_bool3("lock",  ik.lock);
+        read_bool3("limit", ik.limit);
+        ik.limit_min = glm::clamp(to_vec3(ij.value("min",       nlohmann::json{}), ik.limit_min), glm::vec3{-glm::pi<float>()}, glm::vec3{0.0f});
+        ik.limit_max = glm::clamp(to_vec3(ij.value("max",       nlohmann::json{}), ik.limit_max), glm::vec3{0.0f},             glm::vec3{glm::pi<float>()});
+        ik.stiffness = glm::clamp(to_vec3(ij.value("stiffness", nlohmann::json{}), ik.stiffness), glm::vec3{0.0f},             glm::vec3{0.99f});
+        const auto rest_it = ij.find("rest_rotation");
+        if (
+            (rest_it != ij.end()) && rest_it->is_array() && (rest_it->size() >= 4) &&
+            (*rest_it)[0].is_number() && (*rest_it)[1].is_number() &&
+            (*rest_it)[2].is_number() && (*rest_it)[3].is_number()
+        ) {
+            const glm::quat rest{
+                (*rest_it)[3].get<float>(), // w
+                (*rest_it)[0].get<float>(), // x
+                (*rest_it)[1].get<float>(), // y
+                (*rest_it)[2].get<float>()  // z
+            };
+            if (glm::length(rest) > 1.0e-6f) {
+                ik.rest_rotation = glm::normalize(rest);
+            }
+        }
+        ik_settings->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        apply_flags(*ik_settings, ij);
+        node->attach(ik_settings);
     }
 }
 
@@ -606,6 +676,7 @@ void import_gltf_editor_state(
     const std::string gltf_path_str = path.generic_string();
 
     import_layouts(gltf_data);
+    import_rigs(gltf_data);
     import_collections(gltf_data);
     import_brushes(context, gltf_data, content_library, gltf_path_str, operations);
     import_node_graphs(context, gltf_data, content_library, gltf_path_str, operations);

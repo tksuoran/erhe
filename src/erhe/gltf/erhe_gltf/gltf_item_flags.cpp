@@ -37,7 +37,16 @@ constexpr Serialized_item_flag c_persistent_item_flags[] = {
     { erhe::Item_flags::show_in_developer_ui,      "show_in_developer_ui"      },
     { erhe::Item_flags::exclude_from_prefab,       "exclude_from_prefab"       },
     { erhe::Item_flags::lightmapped,               "lightmapped"               },
-    { erhe::Item_flags::ik_lock,                   "ik_lock"                   }
+    { erhe::Item_flags::ik_lock,                   "ik_lock"                   },
+    { erhe::Item_flags::lock_translation_x,        "lock_translation_x"        },
+    { erhe::Item_flags::lock_translation_y,        "lock_translation_y"        },
+    { erhe::Item_flags::lock_translation_z,        "lock_translation_z"        },
+    { erhe::Item_flags::lock_rotation_x,           "lock_rotation_x"           },
+    { erhe::Item_flags::lock_rotation_y,           "lock_rotation_y"           },
+    { erhe::Item_flags::lock_rotation_z,           "lock_rotation_z"           },
+    { erhe::Item_flags::lock_scale_x,              "lock_scale_x"              },
+    { erhe::Item_flags::lock_scale_y,              "lock_scale_y"              },
+    { erhe::Item_flags::lock_scale_z,              "lock_scale_z"              }
 };
 
 } // anonymous namespace

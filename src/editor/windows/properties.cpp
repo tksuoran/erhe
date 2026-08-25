@@ -13,6 +13,9 @@
 #include "texture_graph/graph_texture.hpp"
 #include "editor_log.hpp"
 #include "items.hpp"
+#include "operations/ik_settings_change_operation.hpp"
+#include <algorithm>
+#include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/material_change_operation.hpp"
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -159,6 +162,9 @@ void Properties::on_items_removed(const Removed_items& removed)
         m_inspected_material.reset();
         m_material_state = Editor_state::clean;
     }
+    if (m_ik_settings_drag_target && removed.lookup.contains(m_ik_settings_drag_target.get())) {
+        m_ik_settings_drag_target.reset(); // in-progress drag session dies with the item
+    }
 }
 
 void Properties::on_close_scene(erhe::Item_host* const closing_host)
@@ -177,6 +183,9 @@ void Properties::on_close_scene(erhe::Item_host* const closing_host)
         // is recorded (the close drops the undo history anyway).
         m_inspected_material.reset();
         m_material_state = Editor_state::clean;
+    }
+    if (m_ik_settings_drag_target && (m_ik_settings_drag_target->get_item_host() == closing_host)) {
+        m_ik_settings_drag_target.reset();
     }
 }
 
@@ -1459,6 +1468,116 @@ void Properties::physics_joint_settings_properties(const std::shared_ptr<erhe::p
     pop_group();
 }
 
+void Properties::queue_ik_settings_change(const std::shared_ptr<Ik_settings>& ik_settings, const Ik_settings_data& before)
+{
+    if (!ik_settings || (before == ik_settings->data)) {
+        return;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Ik_settings_change_operation>(ik_settings, before, ik_settings->data)
+    );
+}
+
+void Properties::ik_settings_properties(const std::shared_ptr<Ik_settings>& ik_settings)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // Undo is recorded immediately per completed edit, with the before-copy
+    // captured at the start of the interaction - deliberately NOT the
+    // material_properties inspect latch: a single-slot latch flaps and
+    // silently loses records when several Ik_settings attachments render
+    // at once (multi-selection), and its retained initial state goes stale
+    // across undo. A checkbox or button click is a complete edit by
+    // itself; the drag widget snapshots on activation and queues on
+    // deactivation-after-edit. (Property_editor::use_state() is also
+    // unsuitable here: it samples ImGui item state only for the LAST
+    // widget an entry submitted, losing edits from multi-widget rows.)
+
+    add_entry(
+        "Lock",
+        [this, ik_settings]() {
+            Ik_settings_data&      data   = ik_settings->data;
+            const Ik_settings_data before = data;
+            bool changed = false;
+            changed |= ImGui::Checkbox("X##ik_lock", &data.lock[0]); ImGui::SameLine();
+            changed |= ImGui::Checkbox("Y##ik_lock", &data.lock[1]); ImGui::SameLine();
+            changed |= ImGui::Checkbox("Z##ik_lock", &data.lock[2]);
+            if (changed) {
+                queue_ik_settings_change(ik_settings, before);
+            }
+        },
+        "IK DOF locks: a locked axis does not rotate under IK.\n"
+        "Locks win over limits on the same axis. A lock on the bone's\n"
+        "twist axis has no effect (IK never generates twist)."
+    );
+
+    static constexpr const char* axis_labels  [] = { "Limit X", "Limit Y", "Limit Z" };
+    static constexpr const char* axis_tooltips[] = {
+        "Enable a rotation limit about local X, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])",
+        "Enable a rotation limit about local Y, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])",
+        "Enable a rotation limit about local Z, in degrees relative to the rest orientation (min in [-180, 0], max in [0, 180])"
+    };
+    for (int axis = 0; axis < 3; ++axis) {
+        add_entry(
+            axis_labels[axis],
+            [this, ik_settings, axis]() {
+                Ik_settings_data&      data   = ik_settings->data;
+                const Ik_settings_data before = data;
+                bool enabled = data.limit[axis];
+                if (ImGui::Checkbox("##limit_enable", &enabled)) {
+                    data.limit[axis] = enabled;
+                    queue_ik_settings_change(ik_settings, before);
+                }
+                if (data.limit[axis]) {
+                    float min_degrees = glm::degrees(data.limit_min[axis]);
+                    float max_degrees = glm::degrees(data.limit_max[axis]);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    // min in [-180, 0], max in [0, 180] (see Ik_settings_data)
+                    float min_max[2] = { min_degrees, max_degrees };
+                    if (ImGui::DragFloat2("##limit_range", min_max, 0.5f, 0.0f, 0.0f, "%.1f")) {
+                        data.limit_min[axis] = glm::radians(std::clamp(min_max[0], -180.0f, 0.0f));
+                        data.limit_max[axis] = glm::radians(std::clamp(min_max[1], 0.0f, 180.0f));
+                    }
+                    // The item-state queries below refer to the DragFloat2
+                    // just submitted. `before` predates any change this
+                    // frame, including the activation frame's first delta.
+                    if (ImGui::IsItemActivated()) {
+                        m_ik_settings_drag_target = ik_settings;
+                        m_ik_settings_drag_before = before;
+                    }
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        if (m_ik_settings_drag_target == ik_settings) {
+                            queue_ik_settings_change(ik_settings, m_ik_settings_drag_before);
+                            m_ik_settings_drag_target.reset();
+                        } else {
+                            queue_ik_settings_change(ik_settings, before);
+                        }
+                    } else if (ImGui::IsItemDeactivated() && (m_ik_settings_drag_target == ik_settings)) {
+                        m_ik_settings_drag_target.reset(); // no edit committed
+                    }
+                }
+            },
+            axis_tooltips[axis]
+        );
+    }
+
+    add_entry(
+        "Rest",
+        [this, ik_settings]() {
+            if (ImGui::Button("Set rest from current pose", ImVec2{-FLT_MIN, 0.0f})) {
+                erhe::scene::Node* node = ik_settings->get_node();
+                if (node != nullptr) {
+                    const Ik_settings_data before = ik_settings->data;
+                    ik_settings->data.rest_rotation = node->parent_from_node_transform().get_rotation();
+                    queue_ik_settings_change(ik_settings, before);
+                }
+            }
+        },
+        "Re-capture the reference orientation that defines the zero angle of the limits from the bone's current local rotation"
+    );
+}
+
 void Properties::item_flags(const std::shared_ptr<erhe::Item_base>& item)
 {
     ERHE_PROFILE_FUNCTION();
@@ -1507,6 +1626,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     const auto& node_physics    = std::dynamic_pointer_cast<Node_physics           >(item);
     const auto& node_joint      = std::dynamic_pointer_cast<Node_joint             >(item);
+    const auto& ik_settings     = std::dynamic_pointer_cast<Ik_settings            >(item);
     const auto& rendertarget    = std::dynamic_pointer_cast<Rendertarget_mesh      >(item);
     const auto& scene           = std::dynamic_pointer_cast<erhe::scene::Scene     >(item);
     const auto& camera          = std::dynamic_pointer_cast<erhe::scene::Camera    >(item);
@@ -1614,6 +1734,48 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
             }
         });
 
+        // Per-component transform channel locks (doc/ik-settings-requirements.md
+        // section 2): respected by the Transform tool, the numeric transform fields,
+        // and IK. Undoable per toggle (Item_set_flag_bits_operation).
+        if (std::dynamic_pointer_cast<erhe::scene::Node>(item)) {
+            add_entry("Channel Locks", [this, item]() {
+                class Channel {
+                public:
+                    const char* label;
+                    uint64_t    bits[3];
+                };
+                static constexpr Channel channels[] = {
+                    { "T", { erhe::Item_flags::lock_translation_x, erhe::Item_flags::lock_translation_y, erhe::Item_flags::lock_translation_z } },
+                    { "R", { erhe::Item_flags::lock_rotation_x,    erhe::Item_flags::lock_rotation_y,    erhe::Item_flags::lock_rotation_z    } },
+                    { "S", { erhe::Item_flags::lock_scale_x,       erhe::Item_flags::lock_scale_y,       erhe::Item_flags::lock_scale_z       } },
+                };
+                static constexpr const char* axis_names[] = { "X", "Y", "Z" };
+                for (const Channel& channel : channels) {
+                    ImGui::TextUnformatted(channel.label);
+                    for (int axis = 0; axis < 3; ++axis) {
+                        ImGui::SameLine();
+                        const uint64_t bit   = channel.bits[axis];
+                        bool           value = (item->get_flag_bits() & bit) != 0;
+                        const std::string checkbox_label = fmt::format("{}##channel_lock_{}_{}", axis_names[axis], channel.label, axis);
+                        if (ImGui::Checkbox(checkbox_label.c_str(), &value)) {
+                            m_context.operation_stack->queue(
+                                std::make_shared<Item_set_flag_bits_operation>(
+                                    std::vector<std::shared_ptr<erhe::Item_base>>{item},
+                                    bit,
+                                    value,
+                                    "channel lock"
+                                )
+                            );
+                        }
+                    }
+                    if (channel.label != channels[2].label) {
+                        ImGui::SameLine();
+                        ImGui::Dummy(ImVec2{6.0f, 0.0f});
+                    }
+                }
+            }, "Per-component locks of the local translation / rotation / scale, respected by the Transform tool, numeric editing, and IK");
+        }
+
         if (m_context.developer_mode) {
             add_entry("Id", [item]() { ImGui::Text("%u", static_cast<unsigned int>(item->get_id())); });
             item_flags(item);
@@ -1645,6 +1807,10 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 
     if (node_joint) {
         node_joint_properties(*node_joint);
+    }
+
+    if (ik_settings) {
+        ik_settings_properties(ik_settings);
     }
 
     if (physics_material) {

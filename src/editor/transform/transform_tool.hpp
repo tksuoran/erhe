@@ -173,6 +173,14 @@ public:
     glm::vec3                          m_translation{0.0f};
     glm::vec3                          m_skew       {0.0f};
 
+    // Per-component channel locks of the (single, local-mode) edited node
+    // (doc/ik-settings-requirements.md section 2): grey out locked widgets. The
+    // commit paths (apply_*_edit) mask locked components regardless, which
+    // also covers MCP callers.
+    std::array<bool, 3>                m_lock_translation{false, false, false};
+    std::array<bool, 3>                m_lock_rotation   {false, false, false};
+    std::array<bool, 3>                m_lock_scale      {false, false, false};
+
     erhe::imgui::Value_edit_state      m_translate_state{};
     erhe::imgui::Value_edit_state      m_rotate_quaternion_state;
     erhe::imgui::Value_edit_state      m_rotate_euler_state;
@@ -180,6 +188,13 @@ public:
     erhe::imgui::Value_edit_state      m_scale_state;
     erhe::imgui::Value_edit_state      m_skew_state;
 };
+
+// Per-component transform channel locks (doc/ik-settings-requirements.md
+// section 2): masks locked LOCAL components of the node's parent-from-node
+// transform back to their reference (pre-edit) values. Call after applying
+// any transform edit to a node; every Transform tool delta path, the
+// numeric-edit commit paths, and the MCP direct set-transform path do.
+void enforce_channel_locks(erhe::scene::Node& node, const erhe::scene::Trs_transform& parent_from_node_before);
 
 class Transform_tool : public Tool
 {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "windows/property_editor.hpp"
 
 #include "erhe_message_bus/message_bus.hpp"
@@ -118,6 +119,7 @@ private:
     void geometry_graph_mesh_properties(Geometry_graph_mesh& geometry_graph_mesh);
     void node_physics_properties      (Node_physics& node_physics);
     void node_joint_properties        (Node_joint& node_joint);
+    void ik_settings_properties       (const std::shared_ptr<Ik_settings>& ik_settings);
     void physics_material_properties  (const std::shared_ptr<erhe::physics::Physics_material>& physics_material);
     void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
     void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
@@ -125,6 +127,9 @@ private:
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
 
     void end_material_inspect();
+    // Queues one Ik_settings_change_operation (before -> current data);
+    // no-op when nothing changed.
+    void queue_ik_settings_change(const std::shared_ptr<Ik_settings>& ik_settings, const Ik_settings_data& before);
 
     // Scene-hosted references (see AGENTS.md "Scene-hosted references in
     // editor parts"): drop the pinned target and the material-edit latch
@@ -149,6 +154,15 @@ private:
     Editor_state                               m_material_state{Editor_state::clean};
     std::shared_ptr<erhe::primitive::Material> m_inspected_material;
     erhe::primitive::Material_data             m_inspected_material_initial_state;
+
+    // Ik_settings edits queue one operation per completed edit, with the
+    // before-copy captured at interaction start (NOT the material latch
+    // pattern - a single-slot latch flaps and loses records when several
+    // Ik_settings attachments render at once). These two members carry the
+    // before-state of an in-progress drag on a limit-range widget from
+    // activation to deactivation.
+    std::shared_ptr<Ik_settings>               m_ik_settings_drag_target;
+    Ik_settings_data                           m_ik_settings_drag_before;
 
     std::vector<std::string> m_vertex_stream_labels;
     std::vector<std::string> m_primitive_labels;

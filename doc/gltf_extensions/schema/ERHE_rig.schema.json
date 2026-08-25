@@ -1,0 +1,26 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "ERHE_rig.schema.json",
+    "title": "ERHE_rig glTF node extension",
+    "type": "object",
+    "$defs": {
+        "bool3": {"type": "array", "items": {"type": "boolean"}, "minItems": 3, "maxItems": 3},
+        "quat":  {"type": "array", "items": {"type": "number"},  "minItems": 4, "maxItems": 4}
+    },
+    "properties": {
+        "ik": {
+            "type": "object",
+            "properties": {
+                "name":          {"type": "string"},
+                "lock":          {"$ref": "#/$defs/bool3"},
+                "limit":         {"$ref": "#/$defs/bool3"},
+                "min":           {"type": "array", "items": {"type": "number", "minimum": -3.14159266, "maximum": 0.0}, "minItems": 3, "maxItems": 3},
+                "max":           {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 3.14159266}, "minItems": 3, "maxItems": 3},
+                "stiffness":     {"type": "array", "items": {"type": "number", "minimum": 0.0, "maximum": 0.99}, "minItems": 3, "maxItems": 3},
+                "rest_rotation": {"$ref": "#/$defs/quat"},
+                "flags":         {"type": "array", "items": {"type": "string"}}
+            }
+        }
+    },
+    "required": ["ik"]
+}

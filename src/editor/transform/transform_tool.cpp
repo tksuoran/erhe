@@ -664,6 +664,78 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
     }
 }
 
+// Per-component transform channel locks (doc/ik-settings-requirements.md
+// section 2): masks locked LOCAL components of the node's parent-from-node
+// transform back to their reference (drag-start / pre-edit) values, after a
+// delta application. Rotation masking is per Euler XYZ component of the
+// local rotation - approximate for large deltas, exact in the locked
+// component. No-op when the node has no channel-lock flags (zero cost on
+// the common path). Non-static: the MCP direct set-transform path calls
+// this too, so programmatic edits cannot bypass the locks.
+void enforce_channel_locks(erhe::scene::Node& node, const erhe::scene::Trs_transform& parent_from_node_before)
+{
+    using namespace erhe::utility;
+    using Item_flags = erhe::Item_flags;
+    const uint64_t flags = node.get_flag_bits();
+    const uint64_t locks = flags & Item_flags::lock_channel_mask;
+    if (locks == 0) {
+        return;
+    }
+    erhe::scene::Trs_transform parent_from_node = node.parent_from_node_transform();
+    if ((locks & Item_flags::lock_translation_mask) != 0) {
+        glm::vec3       translation = parent_from_node.get_translation();
+        const glm::vec3 before      = parent_from_node_before.get_translation();
+        if (test_bit_set(locks, Item_flags::lock_translation_x)) { translation.x = before.x; }
+        if (test_bit_set(locks, Item_flags::lock_translation_y)) { translation.y = before.y; }
+        if (test_bit_set(locks, Item_flags::lock_translation_z)) { translation.z = before.z; }
+        parent_from_node.set_translation(translation);
+    }
+    if ((locks & Item_flags::lock_rotation_mask) != 0) {
+        // Any 3-D rotation has two Euler XYZ representations: (x, y, z) and
+        // the alternate branch (x + pi, pi - y, z + pi). glm::eulerAngles
+        // returns whichever is canonical, which can jump branches as the
+        // rotation crosses ~90 degrees - masking components across two
+        // independent decompositions would then snap the node to a wildly
+        // wrong orientation. Pick the branch of the NEW rotation closest to
+        // the reference decomposition before masking, so the locked
+        // component compares within one consistent branch.
+        const auto wrap_angle = [](float angle) -> float {
+            while (angle >  glm::pi<float>()) { angle -= glm::two_pi<float>(); }
+            while (angle < -glm::pi<float>()) { angle += glm::two_pi<float>(); }
+            return angle;
+        };
+        const glm::vec3 before = glm::eulerAngles(parent_from_node_before.get_rotation());
+        glm::vec3       euler  = glm::eulerAngles(parent_from_node.get_rotation());
+        const glm::vec3 alternate{
+            wrap_angle(euler.x + glm::pi<float>()),
+            wrap_angle(glm::pi<float>() - euler.y),
+            wrap_angle(euler.z + glm::pi<float>())
+        };
+        const auto branch_distance = [&](const glm::vec3& e) -> float {
+            return
+                std::abs(wrap_angle(e.x - before.x)) +
+                std::abs(wrap_angle(e.y - before.y)) +
+                std::abs(wrap_angle(e.z - before.z));
+        };
+        if (branch_distance(alternate) < branch_distance(euler)) {
+            euler = alternate;
+        }
+        if (test_bit_set(locks, Item_flags::lock_rotation_x)) { euler.x = before.x; }
+        if (test_bit_set(locks, Item_flags::lock_rotation_y)) { euler.y = before.y; }
+        if (test_bit_set(locks, Item_flags::lock_rotation_z)) { euler.z = before.z; }
+        parent_from_node.set_rotation(glm::quat{euler});
+    }
+    if ((locks & Item_flags::lock_scale_mask) != 0) {
+        glm::vec3       scale  = parent_from_node.get_scale();
+        const glm::vec3 before = parent_from_node_before.get_scale();
+        if (test_bit_set(locks, Item_flags::lock_scale_x)) { scale.x = before.x; }
+        if (test_bit_set(locks, Item_flags::lock_scale_y)) { scale.y = before.y; }
+        if (test_bit_set(locks, Item_flags::lock_scale_z)) { scale.z = before.z; }
+        parent_from_node.set_scale(scale);
+    }
+    node.set_parent_from_node(parent_from_node);
+}
+
 void Transform_tool::adjust(const mat4& updated_world_from_anchor)
 {
     using namespace erhe::utility;
@@ -693,6 +765,7 @@ void Transform_tool::adjust(const mat4& updated_world_from_anchor)
             }
         }();
         node->set_parent_from_node(parent_from_world);
+        enforce_channel_locks(*node, entry.parent_from_node_before);
     }
 
     shared.world_from_anchor.set(updated_world_from_anchor);
@@ -722,6 +795,7 @@ void Transform_tool::adjust_translation(const glm::vec3 translation)
         }
 
         node->set_world_from_node(erhe::scene::translate(entry.world_from_node_before, translation));
+        enforce_channel_locks(*node, entry.parent_from_node_before);
     }
     shared.world_from_anchor = erhe::scene::translate(shared.world_from_anchor_initial_state, translation);
     update_transforms();
@@ -804,6 +878,7 @@ void Transform_tool::adjust_rotation(const vec3 center_of_rotation, const quat r
             }
 
             node->set_world_from_node(erhe::scene::rotate(entry.world_from_node_before, rotation));
+            enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::rotate(shared.world_from_anchor_initial_state, rotation);
     } else {
@@ -840,6 +915,7 @@ void Transform_tool::adjust_scale(const vec3 center_of_scale, const vec3 scale)
             }
 
             node->set_world_from_node(erhe::scene::scale(entry.world_from_node_before, scale));
+            enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor = erhe::scene::scale(shared.world_from_anchor_initial_state, scale);
     } else {
@@ -880,6 +956,7 @@ void Transform_tool::apply_translation_edit(const glm::vec3 translation, const b
     Trs_transform parent_from_node = entry.parent_from_node_before;
     parent_from_node.set_translation(translation);
     entry.node->set_parent_from_node(parent_from_node);
+    enforce_channel_locks(*entry.node, entry.parent_from_node_before);
     shared.world_from_anchor.set(entry.node->world_from_node());
     update_transforms();
 }
@@ -908,6 +985,7 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             Trs_transform world_from_node = entry.world_from_node_before;
             world_from_node.set_rotation(rotation);
             node->set_world_from_node(world_from_node);
+            enforce_channel_locks(*node, entry.parent_from_node_before);
         }
         shared.world_from_anchor.set_rotation(rotation);
     } else {
@@ -919,6 +997,7 @@ void Transform_tool::apply_rotation_edit(const glm::quat rotation, const bool lo
             Trs_transform parent_from_node = entry.parent_from_node_before;
             parent_from_node.set_rotation(rotation);
             node->set_parent_from_node(parent_from_node);
+            enforce_channel_locks(*node, entry.parent_from_node_before);
             shared.world_from_anchor.set(node->world_from_node());
         }
     }
@@ -955,6 +1034,7 @@ void Transform_tool::apply_scale_edit(const glm::vec3 scale, const bool local)
     Trs_transform parent_from_node = entry.parent_from_node_before;
     parent_from_node.set_scale(scale);
     entry.node->set_parent_from_node(parent_from_node);
+    enforce_channel_locks(*entry.node, entry.parent_from_node_before);
     shared.world_from_anchor.set(entry.node->world_from_node());
     update_transforms();
 }
@@ -2351,6 +2431,30 @@ Edit_state::Edit_state(
     m_translation = m_transform->get_translation();
     m_skew        = m_transform->get_skew       ();
 
+    // Channel locks grey out the locked components' widgets for the single
+    // node in local mode - the only case where a field maps one-to-one to a
+    // local component (the commit paths mask locked components in every
+    // case, world/multiselect edits included).
+    if (!component_mode && !m_multiselect && !m_use_world_mode && m_first_node) {
+        using namespace erhe::utility;
+        const uint64_t flags = m_first_node->get_flag_bits();
+        m_lock_translation = {
+            test_bit_set(flags, erhe::Item_flags::lock_translation_x),
+            test_bit_set(flags, erhe::Item_flags::lock_translation_y),
+            test_bit_set(flags, erhe::Item_flags::lock_translation_z)
+        };
+        m_lock_rotation = {
+            test_bit_set(flags, erhe::Item_flags::lock_rotation_x),
+            test_bit_set(flags, erhe::Item_flags::lock_rotation_y),
+            test_bit_set(flags, erhe::Item_flags::lock_rotation_z)
+        };
+        m_lock_scale = {
+            test_bit_set(flags, erhe::Item_flags::lock_scale_x),
+            test_bit_set(flags, erhe::Item_flags::lock_scale_y),
+            test_bit_set(flags, erhe::Item_flags::lock_scale_z)
+        };
+    }
+
     const glm::mat4 m           = m_transform->get_matrix();
     const float     determinant = glm::determinant(m);
     if (determinant < 0.0f) {
@@ -2373,19 +2477,24 @@ Edit_state::Edit_state(
     Property_editor& p = property_editor;
     p.reset();
     p.push_group("Translation", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.x, 0.0f, 0.0f, "##T.X")); });
-    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.y, 0.0f, 0.0f, "##T.Y")); });
-    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_translate_state.combine(make_scalar_button(&m_translation.z, 0.0f, 0.0f, "##T.Z")); });
+    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ ImGui::BeginDisabled(m_lock_translation[0]); m_translate_state.combine(make_scalar_button(&m_translation.x, 0.0f, 0.0f, "##T.X")); ImGui::EndDisabled(); });
+    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ ImGui::BeginDisabled(m_lock_translation[1]); m_translate_state.combine(make_scalar_button(&m_translation.y, 0.0f, 0.0f, "##T.Y")); ImGui::EndDisabled(); });
+    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ ImGui::BeginDisabled(m_lock_translation[2]); m_translate_state.combine(make_scalar_button(&m_translation.z, 0.0f, 0.0f, "##T.Z")); ImGui::EndDisabled(); });
     p.pop_group();
 
     p.push_group("Rotation", ImGuiTreeNodeFlags_DefaultOpen);
+    // Per-component rotation disabling is not expressible in the rotation
+    // inspector's widgets (quaternion / axis-angle views mix axes, and the
+    // inspector registers deferred entries of its own); rotation locks are
+    // enforced by the commit path (apply_rotation_edit masks locked
+    // components in every case).
     rotation_inspector.imgui(m_rotate_quaternion_state, m_rotate_euler_state, m_rotate_axis_angle_state, m_rotation, euler_matches_gizmo, p);
     p.pop_group();
 
     p.push_group("Scale", ImGuiTreeNodeFlags_DefaultOpen);
-    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.x, 0.01f, FLT_MAX, "##S.X")); });
-    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.y, 0.01f, FLT_MAX, "##S.Y")); });
-    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ m_scale_state.combine(make_scalar_button(&m_scale.z, 0.01f, FLT_MAX, "##S.Z")); });
+    p.add_entry("X", 0xff8888ffu, 0xff222266u, [this](){ ImGui::BeginDisabled(m_lock_scale[0]); m_scale_state.combine(make_scalar_button(&m_scale.x, 0.01f, FLT_MAX, "##S.X")); ImGui::EndDisabled(); });
+    p.add_entry("Y", 0xff88ff88u, 0xff226622u, [this](){ ImGui::BeginDisabled(m_lock_scale[1]); m_scale_state.combine(make_scalar_button(&m_scale.y, 0.01f, FLT_MAX, "##S.Y")); ImGui::EndDisabled(); });
+    p.add_entry("Z", 0xffff8888u, 0xff662222u, [this](){ ImGui::BeginDisabled(m_lock_scale[2]); m_scale_state.combine(make_scalar_button(&m_scale.z, 0.01f, FLT_MAX, "##S.Z")); ImGui::EndDisabled(); });
     p.pop_group();
 
     p.push_group("Skew", ImGuiTreeNodeFlags_None);

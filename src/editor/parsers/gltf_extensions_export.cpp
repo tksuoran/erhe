@@ -11,6 +11,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
 #include "prefabs/prefab_instance.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -266,6 +267,7 @@ void add_gltf_editor_state(
 
     bool used_physics = false;
     bool used_layout  = false;
+    bool used_rig     = false;
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         if (node == scene_root_node) {
@@ -363,6 +365,30 @@ void add_gltf_editor_state(
             used_layout = true;
         }
 
+        // ERHE_rig: per-bone IK settings (Ik_settings attachment; emitted
+        // for every node carrying one, all-default included - the
+        // attachment's presence is user intent). Angles in radians,
+        // rest_rotation as glTF-order quaternion [x, y, z, w].
+        // doc/ik-settings-requirements.md section 6.
+        const std::shared_ptr<Ik_settings> ik_settings = erhe::scene::get_attachment<Ik_settings>(node.get());
+        if (ik_settings) {
+            const Ik_settings_data& ik = ik_settings->data;
+            nlohmann::json rig_json{
+                {"ik", nlohmann::json{
+                    {"name",          ik_settings->get_name()},
+                    {"lock",          nlohmann::json::array({ik.lock[0],  ik.lock[1],  ik.lock[2]})},
+                    {"limit",         nlohmann::json::array({ik.limit[0], ik.limit[1], ik.limit[2]})},
+                    {"min",           json_vec3(ik.limit_min)},
+                    {"max",           json_vec3(ik.limit_max)},
+                    {"stiffness",     json_vec3(ik.stiffness)},
+                    {"rest_rotation", json_vec4(glm::vec4{ik.rest_rotation.x, ik.rest_rotation.y, ik.rest_rotation.z, ik.rest_rotation.w})},
+                    {"flags",         json_flags(*ik_settings)},
+                }}
+            };
+            append_members(arguments.extension_payloads.nodes[node.get()], fmt::format("\"ERHE_rig\":{}", rig_json.dump()));
+            used_rig = true;
+        }
+
         // ERHE_collections: item tags (runtime-only Item_base state; never
         // persisted before).
         for (const std::string& tag : node->get_tags()) {
@@ -376,6 +402,9 @@ void add_gltf_editor_state(
     }
     if (used_layout) {
         arguments.extensions_used.push_back("ERHE_layout");
+    }
+    if (used_rig) {
+        arguments.extensions_used.push_back("ERHE_rig");
     }
 
     // ERHE_scene: per-scene settings (#239), ambient light (#237),

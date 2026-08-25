@@ -2,8 +2,11 @@
 
 #include "grid/grid.hpp"
 #include "scene/frame_controller.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
+
+#include "erhe_item/item.hpp"
 
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
@@ -31,6 +34,15 @@ auto layout_gate          (const Node& node) -> bool { return !erhe::scene::get_
 auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<Grid                    >(&node); }
 auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
 
+// IK settings are meaningful only on bone nodes (Item_flags::bone), one per
+// bone (doc/ik-settings-requirements.md).
+auto ik_settings_gate(const Node& node) -> bool
+{
+    return
+        ((node.get_flag_bits() & erhe::Item_flags::bone) != 0) &&
+        !erhe::scene::get_attachment<Ik_settings>(&node);
+}
+
 // A Layout_item is meaningful only on a direct child of a layout node, and a
 // node holds at most one (same gate as the former one-off Properties button).
 auto layout_item_gate(const Node& node) -> bool
@@ -51,6 +63,7 @@ void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layou
 void make_layout_item     (Scene_commands& sc, Node& node) { sc.attach_new_layout_item      (node); }
 void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
 void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame_controller (node); }
+void make_ik_settings     (Scene_commands& sc, Node& node) { sc.attach_new_ik_settings      (node); }
 
 } // anonymous namespace
 
@@ -65,7 +78,8 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
         {"layout",           "Layout",           layout_gate,           make_layout          },
         {"layout_item",      "Layout Item",      layout_item_gate,      make_layout_item     },
         {"grid",             "Grid",             grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller}
+        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller},
+        {"ik_settings",      "IK Settings",      ik_settings_gate,      make_ik_settings     }
     };
     return catalog;
 }

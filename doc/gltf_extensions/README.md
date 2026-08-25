@@ -33,6 +33,7 @@ importing it as an asset).
 | [`ERHE_physics`](ERHE_physics.md) | node (rigid-body-carrying) | motion_mode, per-body friction / restitution, damping |
 | [`ERHE_scene`](ERHE_scene.md) | scene | per-scene settings, ambient light, enable_physics |
 | [`ERHE_layout`](ERHE_layout.md) | node | Layout / Layout_item attachment fields |
+| [`ERHE_rig`](ERHE_rig.md) | node | Ik_settings attachment fields (per-bone IK locks / limits / rest) |
 | [`ERHE_brushes`](ERHE_brushes.md) | asset root | brush library (geometry via unreferenced meshes) |
 | [`ERHE_node_graphs`](ERHE_node_graphs.md) | asset root | procedural texture / mesh node graphs + bindings |
 | [`ERHE_collections`](ERHE_collections.md) | asset root | named node collections (item tags) |
@@ -46,6 +47,6 @@ Writer / reader: `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` (library-domain
 extensions: geometry, node, camera, light, material) and
 `src/editor/parsers/gltf_extensions_export.cpp` /
 `gltf_extensions_import.cpp` (editor-domain extensions: physics, scene,
-layout, brushes, node_graphs, collections). Legacy carriers (`erhe_flags`
+layout, rig, brushes, node_graphs, collections). Legacy carriers (`erhe_flags`
 node extras, material extras) remain parsed for one transition period but
 are no longer written.

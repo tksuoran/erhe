@@ -1,5 +1,7 @@
 #pragma once
 
+#include "transform/ik_solver.hpp"
+
 #include "erhe_scene/trs_transform.hpp"
 
 #include <glm/glm.hpp>
@@ -14,27 +16,14 @@ namespace erhe::scene {
 
 namespace editor {
 
-// FABRIK solve (Aristidou & Lasenby 2011) on a chain of world-space joint
-// positions. positions[0] is the fixed root; segment_lengths[i] is the
-// distance from joint i to joint i+1 (positions.size() == lengths + 1).
-// Positions are updated in place toward placing positions.back() at target
-// without changing segment lengths. When the target is farther from the root
-// than the total chain length, the chain is laid out straight toward the
-// target in one pass (closest reachable point). Zero-length segments and
-// degenerate directions are epsilon-guarded (never NaN).
-void fabrik_solve(
-    std::vector<glm::vec3>&   positions,
-    const std::vector<float>& segment_lengths,
-    glm::vec3                 target,
-    float                     tolerance,
-    int                       max_iterations
-);
-
 // Interactive IK state for one translate drag of a bone (see
-// doc/fabrik-ik-requirements.md). Captures the chain and its drag-start pose
+// doc/fabrik-ik-requirements.md and doc/ik-settings-requirements.md).
+// Captures the chain, its drag-start pose, and the per-joint constraints
+// (Ik_settings attachments OR-ed with lock_rotation_* channel-lock flags)
 // in begin(); each apply() re-solves from that pose against an absolute
-// world-space target and writes rotation-only changes back to the joint
-// nodes (local translations never change, so bone lengths are preserved).
+// world-space target through the Ik_solver interface and writes
+// rotation-only changes back to the joint nodes (local translations never
+// change, so bone lengths are preserved).
 class Ik_drag
 {
 public:
@@ -65,8 +54,15 @@ private:
     std::vector<erhe::scene::Trs_transform> m_parent_from_joint_before;
     std::vector<glm::vec3>                  m_initial_positions;
     std::vector<float>                      m_lengths;
+    std::vector<glm::quat>                  m_local_rotations_before;
+    std::vector<glm::vec3>                  m_child_dir_local;
+    std::vector<Ik_joint_constraint>        m_constraints;
+    glm::quat                               m_root_parent_world_rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    bool                                    m_has_constraints{false};
     glm::quat                               m_effector_world_rotation_before{1.0f, 0.0f, 0.0f, 0.0f};
     std::vector<glm::vec3>                  m_scratch_positions;
+    Ik_chain                                m_chain;
+    Fabrik_solver                           m_solver;
 };
 
 }

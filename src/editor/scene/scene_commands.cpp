@@ -25,6 +25,7 @@
 #include "rendertarget_mesh.hpp"
 #include "rendertarget_imgui_host.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
@@ -1108,6 +1109,68 @@ auto Scene_commands::attach_new_frame_controller(erhe::scene::Node& node) -> std
     frame_controller->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(frame_controller, node.shared_node_from_this()));
     return frame_controller;
+}
+
+namespace {
+
+// Rest orientation for IK limits (doc/ik-settings-requirements.md section 1):
+// the local bind rotation when the node and its parent are joints of the
+// same skin - the rotation of world_from_bind(parent)^-1 *
+// world_from_bind(joint) - using the first such skin in Scene::get_skins()
+// order; otherwise the node's current local rotation.
+[[nodiscard]] auto capture_ik_rest_rotation(erhe::scene::Node& node) -> glm::quat
+{
+    const std::shared_ptr<erhe::scene::Node> parent = node.get_parent_node();
+    const erhe::scene::Scene* const          scene  = node.get_scene();
+    if (parent && (scene != nullptr)) {
+        for (const std::shared_ptr<erhe::scene::Skin>& skin : scene->get_skins()) {
+            if (!skin) {
+                continue;
+            }
+            const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
+            std::size_t node_index  {joints.size()};
+            std::size_t parent_index{joints.size()};
+            for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
+                if (joints[i].get() == &node) {
+                    node_index = i;
+                }
+                if (joints[i] == parent) {
+                    parent_index = i;
+                }
+            }
+            if ((node_index == joints.size()) || (parent_index == joints.size())) {
+                continue;
+            }
+            const std::optional<glm::mat4> world_from_bind_joint  = skin->skin_data.get_world_from_bind(node_index);
+            const std::optional<glm::mat4> world_from_bind_parent = skin->skin_data.get_world_from_bind(parent_index);
+            if (!world_from_bind_joint.has_value() || !world_from_bind_parent.has_value()) {
+                continue;
+            }
+            const glm::mat4 parent_from_joint_bind = glm::inverse(world_from_bind_parent.value()) * world_from_bind_joint.value();
+            const glm::mat3 basis{
+                glm::normalize(glm::vec3{parent_from_joint_bind[0]}),
+                glm::normalize(glm::vec3{parent_from_joint_bind[1]}),
+                glm::normalize(glm::vec3{parent_from_joint_bind[2]})
+            };
+            return glm::normalize(glm::quat_cast(basis));
+        }
+    }
+    return node.parent_from_node_transform().get_rotation();
+}
+
+} // anonymous namespace
+
+auto Scene_commands::attach_new_ik_settings(erhe::scene::Node& node) -> std::shared_ptr<Ik_settings>
+{
+    if (erhe::scene::get_attachment<Ik_settings>(&node)) {
+        log_scene->warn("Node '{}' already has an IK settings attachment", node.get_name());
+        return {};
+    }
+    auto ik_settings = std::make_shared<Ik_settings>("IK settings");
+    ik_settings->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    ik_settings->data.rest_rotation = capture_ik_rest_rotation(node);
+    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(ik_settings, node.shared_node_from_this()));
+    return ik_settings;
 }
 
 void Scene_commands::remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment)

@@ -110,7 +110,28 @@ public:
     // back to plain FK translation. Authored + serialized (by name; see
     // gltf_item_flags.cpp). See doc/fabrik-ik-requirements.md.
     static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
-    static constexpr uint64_t count                     = 38;
+    // Per-component transform channel locks (Blender protectflag
+    // equivalent): a locked component of the LOCAL (parent-from-node)
+    // transform is not changed by interactive editing - the Transform
+    // tool, numeric transform fields, and IK (a locked rotation axis acts
+    // as an IK DOF lock). Not enforced against animation, physics, or
+    // programmatic set_* calls. Authored + serialized by name (see
+    // gltf_item_flags.cpp). See doc/ik-settings-requirements.md.
+    static constexpr uint64_t lock_translation_x        = (uint64_t{1} << 38);
+    static constexpr uint64_t lock_translation_y        = (uint64_t{1} << 39);
+    static constexpr uint64_t lock_translation_z        = (uint64_t{1} << 40);
+    static constexpr uint64_t lock_rotation_x           = (uint64_t{1} << 41);
+    static constexpr uint64_t lock_rotation_y           = (uint64_t{1} << 42);
+    static constexpr uint64_t lock_rotation_z           = (uint64_t{1} << 43);
+    static constexpr uint64_t lock_scale_x              = (uint64_t{1} << 44);
+    static constexpr uint64_t lock_scale_y              = (uint64_t{1} << 45);
+    static constexpr uint64_t lock_scale_z              = (uint64_t{1} << 46);
+    static constexpr uint64_t count                     = 47;
+
+    static constexpr uint64_t lock_translation_mask     = lock_translation_x | lock_translation_y | lock_translation_z;
+    static constexpr uint64_t lock_rotation_mask        = lock_rotation_x    | lock_rotation_y    | lock_rotation_z;
+    static constexpr uint64_t lock_scale_mask           = lock_scale_x       | lock_scale_y       | lock_scale_z;
+    static constexpr uint64_t lock_channel_mask         = lock_translation_mask | lock_rotation_mask | lock_scale_mask;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -161,6 +182,15 @@ public:
         "Child Hovered in Graph",
         "Ancestor Hovered in Graph",
         "IK Lock",
+        "Lock Translation X",
+        "Lock Translation Y",
+        "Lock Translation Z",
+        "Lock Rotation X",
+        "Lock Rotation Y",
+        "Lock Rotation Z",
+        "Lock Scale X",
+        "Lock Scale Y",
+        "Lock Scale Z",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
@@ -214,7 +244,8 @@ public:
     static constexpr uint64_t index_graph_mesh             = 43;
     static constexpr uint64_t index_geometry_graph_mesh    = 44;
     static constexpr uint64_t index_prefab_instance        = 45;
-    static constexpr uint64_t count                        = 46;
+    static constexpr uint64_t index_ik_settings            = 46;
+    static constexpr uint64_t count                        = 47;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -262,6 +293,7 @@ public:
     static constexpr uint64_t graph_mesh             = (uint64_t{1} << index_graph_mesh            );
     static constexpr uint64_t geometry_graph_mesh    = (uint64_t{1} << index_geometry_graph_mesh   );
     static constexpr uint64_t prefab_instance        = (uint64_t{1} << index_prefab_instance       );
+    static constexpr uint64_t ik_settings            = (uint64_t{1} << index_ik_settings           );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -310,7 +342,8 @@ public:
         "Graph_texture",
         "Graph_mesh",
         "Geometry_graph_mesh",
-        "Prefab_instance"
+        "Prefab_instance",
+        "Ik_settings"
     };
 };
 

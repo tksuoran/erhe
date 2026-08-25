@@ -1155,6 +1155,9 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     } else {
         node->set_parent_from_node(trs);
     }
+    // Channel locks hold for programmatic edits too; the enforced transform
+    // is what the operation below records, so redo replays the masked pose.
+    enforce_channel_locks(*node, parent_from_node_before);
 
     // Applied immediately (so chained set_node_transform calls compose), then
     // recorded for undo: Node_transform_operation's execute is an idempotent

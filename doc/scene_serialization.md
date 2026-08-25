@@ -35,7 +35,7 @@ JSON, erhe state attaches at three levels:
 
 | Level | Extensions |
 |---|---|
-| per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry`, `ERHE_physics`, `ERHE_layout` |
+| per object (node / camera / material / mesh primitive) | `ERHE_node`, `ERHE_camera`, `ERHE_light`, `ERHE_material`, `ERHE_geometry`, `ERHE_physics`, `ERHE_layout`, `ERHE_rig` |
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
@@ -92,7 +92,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    extension payloads and `extensionsUsed` entries:
    - per node: `ERHE_physics` (erhe rigid-body state the Khronos extension
      cannot express), `ERHE_layout` (Layout / Layout_item attachments),
-     node bindings for graph meshes;
+     `ERHE_rig` (Ik_settings attachments), node bindings for graph meshes;
    - scene level: `ERHE_scene` - ambient light, `enable_physics`, and the
      per-scene `Scene_settings` overrides (issue #239), serialized through
      the codegen struct (`scene/definitions/scene_settings.py`);
@@ -177,8 +177,9 @@ JSON-only, no buffer decode) and branches on
      materials / skins / animations), `import_gltf_physics()` (Khronos
      payload -> `Node_physics` / `Node_joint`, compound folding, carrier
      node removal) and `import_gltf_editor_state()`
-     (`parsers/gltf_extensions_import.cpp`: flags, layouts, tags, brushes,
-     node graphs + their bindings; graph meshes re-bake).
+     (`parsers/gltf_extensions_import.cpp`: flags, layouts, rigs (IK
+     settings), tags, brushes, node graphs + their bindings; graph meshes
+     re-bake).
   7. Reparent the parsed top-level nodes directly under the new scene's
      root - no `import_root` wrapper, no injected default camera / lights
      (an erhe-authored scene has exactly what it was saved with).
