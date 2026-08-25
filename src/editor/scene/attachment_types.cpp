@@ -3,10 +3,12 @@
 #include "grid/grid.hpp"
 #include "scene/draw_mode.hpp"
 #include "scene/frame_controller.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 
 #include "erhe_item/hierarchy.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/light.hpp"
@@ -34,12 +36,22 @@ auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_
 auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
 auto draw_mode_gate       (const Node& node) -> bool { return !erhe::scene::get_attachment<Draw_mode               >(&node); }
 
+// IK settings are meaningful only on bone nodes (Item_flags::bone), one per
+// bone (doc/ik-settings-requirements.md).
+auto ik_settings_gate(const Node& node) -> bool
+{
+    return
+        ((node.get_flag_bits() & erhe::Item_flags::bone) != 0) &&
+        !erhe::scene::get_attachment<Ik_settings>(&node);
+}
+
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
 void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layout           (node); }
 void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
 void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame_controller (node); }
 void make_draw_mode       (Scene_commands& sc, Node& node) { sc.attach_new_draw_mode        (node); }
+void make_ik_settings     (Scene_commands& sc, Node& node) { sc.attach_new_ik_settings      (node); }
 
 } // anonymous namespace
 
@@ -61,7 +73,8 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
         {"layout",           "Layout",           layout_gate,           make_layout          },
         {"grid",             "Grid",             grid_gate,             make_grid            },
         {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller},
-        {"draw_mode",        "Draw Mode",        draw_mode_gate,        make_draw_mode       }
+        {"draw_mode",        "Draw Mode",        draw_mode_gate,        make_draw_mode       },
+        {"ik_settings",      "IK Settings",      ik_settings_gate,      make_ik_settings     }
     };
     return catalog;
 }

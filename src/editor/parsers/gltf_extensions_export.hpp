@@ -29,6 +29,8 @@ class Scene_root;
 //   KHR_physics_rigid_bodies has no carrier for these.
 // - ERHE_layout node payloads: Layout attachment fields (a child's layout hints are Layout.* attached properties in ERHE_node)
 //   with their Item flags.
+// - ERHE_rig node payloads: Ik_settings attachment fields (per-bone IK
+//   locks / limits / rest orientation) with their Item flags.
 // - ERHE_scene scene payload: per-scene settings (#239), ambient light
 //   (#237), enable_physics.
 // - extra_meshes: brush geometry as unreferenced glTF meshes, plus an

@@ -160,7 +160,28 @@ public:
     // is independent of the selected bit - an item can be active while
     // unselected. Transient session state, never serialized.
     static constexpr uint64_t active_item               = (uint64_t{1} << 41);
-    static constexpr uint64_t count                     = 42;
+    // Per-component transform channel locks (Blender protectflag
+    // equivalent): a locked component of the LOCAL (parent-from-node)
+    // transform is not changed by interactive editing - the Transform
+    // tool, numeric transform fields, and IK (a locked rotation axis acts
+    // as an IK DOF lock). Not enforced against animation, physics, or
+    // programmatic set_* calls. Authored + serialized by name (see
+    // gltf_item_flags.cpp). See doc/ik-settings-requirements.md.
+    static constexpr uint64_t lock_translation_x        = (uint64_t{1} << 42);
+    static constexpr uint64_t lock_translation_y        = (uint64_t{1} << 43);
+    static constexpr uint64_t lock_translation_z        = (uint64_t{1} << 44);
+    static constexpr uint64_t lock_rotation_x           = (uint64_t{1} << 45);
+    static constexpr uint64_t lock_rotation_y           = (uint64_t{1} << 46);
+    static constexpr uint64_t lock_rotation_z           = (uint64_t{1} << 47);
+    static constexpr uint64_t lock_scale_x              = (uint64_t{1} << 48);
+    static constexpr uint64_t lock_scale_y              = (uint64_t{1} << 49);
+    static constexpr uint64_t lock_scale_z              = (uint64_t{1} << 50);
+    static constexpr uint64_t count                     = 51;
+
+    static constexpr uint64_t lock_translation_mask     = lock_translation_x | lock_translation_y | lock_translation_z;
+    static constexpr uint64_t lock_rotation_mask        = lock_rotation_x    | lock_rotation_y    | lock_rotation_z;
+    static constexpr uint64_t lock_scale_mask           = lock_scale_x       | lock_scale_y       | lock_scale_z;
+    static constexpr uint64_t lock_channel_mask         = lock_translation_mask | lock_rotation_mask | lock_scale_mask;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -232,6 +253,15 @@ public:
         "Session Only",
         "Draw Mode Proxy",
         "Active Item",
+        "Lock Translation X",
+        "Lock Translation Y",
+        "Lock Translation Z",
+        "Lock Rotation X",
+        "Lock Rotation Y",
+        "Lock Rotation Z",
+        "Lock Scale X",
+        "Lock Scale Y",
+        "Lock Scale Z",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
@@ -300,7 +330,8 @@ public:
     static constexpr uint64_t index_gprim                  = 54;
     static constexpr uint64_t index_point_instancer        = 55;
     static constexpr uint64_t index_draw_mode              = 56;
-    static constexpr uint64_t count                        = 57;
+    static constexpr uint64_t index_ik_settings            = 57;
+    static constexpr uint64_t count                        = 58;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -359,6 +390,7 @@ public:
     static constexpr uint64_t gprim                  = (uint64_t{1} << index_gprim                 );
     static constexpr uint64_t point_instancer        = (uint64_t{1} << index_point_instancer       );
     static constexpr uint64_t draw_mode              = (uint64_t{1} << index_draw_mode             );
+    static constexpr uint64_t ik_settings            = (uint64_t{1} << index_ik_settings           );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -418,7 +450,8 @@ public:
         "Boundable",
         "Gprim",
         "Point_instancer",
-        "Draw_mode"
+        "Draw_mode",
+        "Ik_settings"
     };
 };
 

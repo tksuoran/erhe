@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_message.hpp"
+#include "scene/node_ik_settings.hpp"
 #include "windows/property_editor.hpp"
 #include "windows/dependency_property_rows.hpp"
 
@@ -127,12 +128,16 @@ private:
     // Generic rows for the item's registered properties
     // (doc/erhe/property_system.md D12), inside the item's group.
     void dependency_properties        (const std::shared_ptr<erhe::Item_base>& item);
+    void ik_settings_properties       (const std::shared_ptr<Ik_settings>& ik_settings);
     void collision_filter_properties  (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter);
     void physics_joint_settings_properties(const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings);
     void item_flags                   (const std::shared_ptr<erhe::Item_base>& item);
     void item_properties              (const std::shared_ptr<erhe::Item_base>& item);
     void item_diagnostics             (const std::shared_ptr<erhe::Item_base>& item);
 
+    // Queues one Ik_settings_change_operation (before -> current data);
+    // no-op when nothing changed.
+    void queue_ik_settings_change(const std::shared_ptr<Ik_settings>& ik_settings, const Ik_settings_data& before);
 
     // Scene-hosted references (see AGENTS.md "Scene-hosted references in
     // editor parts"): drop the pinned target and the material-edit latch
@@ -171,6 +176,15 @@ private:
     // The material whose preview the window renders (the MCP
     // get_editor_references query reports it).
     std::shared_ptr<erhe::primitive::Material> m_inspected_material;
+
+    // Ik_settings edits queue one operation per completed edit, with the
+    // before-copy captured at interaction start (NOT the material latch
+    // pattern - a single-slot latch flaps and loses records when several
+    // Ik_settings attachments render at once). These two members carry the
+    // before-state of an in-progress drag on a limit-range widget from
+    // activation to deactivation.
+    std::shared_ptr<Ik_settings>               m_ik_settings_drag_target;
+    Ik_settings_data                           m_ik_settings_drag_before;
 
     std::vector<std::string> m_vertex_stream_labels;
     std::vector<std::string> m_primitive_labels;

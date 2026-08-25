@@ -525,6 +525,10 @@ erhe_target_sources_grouped(
     scene/draw_mode_renderer.hpp
     scene/node_joint.cpp
     scene/node_joint.hpp
+    operations/ik_settings_change_operation.cpp
+    operations/ik_settings_change_operation.hpp
+    scene/node_ik_settings.cpp
+    scene/node_ik_settings.hpp
     scene/node_physics.cpp
     scene/node_physics.hpp
     scene/node_raytrace.cpp
@@ -641,6 +645,8 @@ erhe_target_sources_grouped(
     transform/mesh_component_extrude.hpp
     transform/ik_drag.cpp
     transform/ik_drag.hpp
+    transform/ik_solver.cpp
+    transform/ik_solver.hpp
     transform/lattice_point_transform.cpp
     transform/lattice_point_transform.hpp
     transform/mesh_component_transform.cpp
@@ -1224,4 +1230,5 @@ endif ()
 if (${ERHE_BUILD_TESTS})
     add_subdirectory(assets/test)
     add_subdirectory(mcp/test)
+    add_subdirectory(transform/test)
 endif ()
