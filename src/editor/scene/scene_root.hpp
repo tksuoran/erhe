@@ -153,7 +153,7 @@ public:
     auto get_host_name() const -> const char* override;
     // Scene nodes and attachments (Scene_host) plus the content library's
     // materials (expression references, D22).
-    auto find_hosted_item(std::string_view name) -> erhe::Item_base* override;
+    auto find_hosted_item(std::string_view name_or_path) -> erhe::Item_base* override;
 
     // Public API
     auto make_browser_window(

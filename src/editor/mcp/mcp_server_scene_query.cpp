@@ -24,12 +24,14 @@
 #include "windows/frame_pacing_window.hpp"
 #include "erhe_frame_pacing/frame_pacing_observer.hpp"
 #include "erhe_graphics/device.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
 #include "scene/node_joint.hpp"
 #include "erhe_scene/layout.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/shadow_fit_debug.hpp"
@@ -431,13 +433,26 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
 
     const auto& scene = sr->get_scene();
     std::shared_ptr<erhe::scene::Node> found_node;
-    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        if (node->get_name() == node_name) {
-            found_node = node;
-            return false;
+    // A node path (doc/usd-compatibility-plan.md M1) names one node from the
+    // root node down; a text without '/' is a node name.
+    if (node_name.find('/') != std::string::npos) {
+        const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+        if (root_node) {
+            erhe::Hierarchy* const hierarchy = erhe::find_by_path(*root_node, node_name);
+            found_node = std::dynamic_pointer_cast<erhe::scene::Node>(
+                (hierarchy != nullptr) ? hierarchy->shared_from_this() : std::shared_ptr<erhe::Item_base>{}
+            );
         }
-        return true;
-    });
+    }
+    if (!found_node) {
+        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            if (node->get_name() == node_name) {
+                found_node = node;
+                return false;
+            }
+            return true;
+        });
+    }
     if (!found_node) {
         json r = make_text_content("Node not found: " + node_name);
         r["isError"] = true;

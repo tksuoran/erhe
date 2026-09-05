@@ -18,11 +18,15 @@ public:
 
     [[nodiscard]] virtual auto get_host_name() const -> const char* = 0;
 
-    // The hosted item named `name`, for expression references
-    // (doc/property-system.md D22); nullptr when the host has no item
-    // of that name or does no lookup. Scene_host walks the scene's nodes
-    // and attachments; the editor's Scene_root adds the content library.
-    [[nodiscard]] virtual auto find_hosted_item(std::string_view name) -> Item_base* { static_cast<void>(name); return nullptr; }
+    // The hosted item a path or a name addresses, for expression
+    // references (doc/property-system.md D22) and object references (D28);
+    // nullptr when the host has no such item or does no lookup. A text
+    // holding '/' is a path (Hierarchy::get_path()) and a text without one
+    // is a name, so both the current and the older stored form resolve.
+    // Scene_host walks the scene's node tree, then its nodes and
+    // attachments by name; the editor's Scene_root adds the content
+    // library, whose folder paths use the same form.
+    [[nodiscard]] virtual auto find_hosted_item(std::string_view name_or_path) -> Item_base* { static_cast<void>(name_or_path); return nullptr; }
 
     ERHE_PROFILE_MUTEX(std::mutex, item_host_mutex);
     static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, orphan_item_host_mutex);

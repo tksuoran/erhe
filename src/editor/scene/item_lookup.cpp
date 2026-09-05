@@ -12,6 +12,7 @@
 #include "texture_graph/texture_graph_node.hpp"
 
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/physics_material.hpp"
@@ -197,13 +198,37 @@ auto find_item_in_scene_by_name(Scene_root& scene_root, const std::string_view n
     return find_item_in_scene(scene_root, [name](const erhe::Item_base& item) { return item.get_name() == name; });
 }
 
-auto resolve_reference_by_name(App_context& context, const erhe::Item_base& from, const std::string_view name) -> std::shared_ptr<erhe::Item_base>
+auto find_item_in_scene_by_reference(Scene_root& scene_root, const std::string_view name_or_path) -> std::shared_ptr<erhe::Item_base>
+{
+    if (name_or_path.find('/') != std::string_view::npos) {
+        const std::shared_ptr<erhe::scene::Node> root_node = scene_root.get_scene().get_root_node();
+        if (root_node) {
+            erhe::Hierarchy* const node = erhe::find_by_path(*root_node, name_or_path);
+            if (node != nullptr) {
+                return node->shared_from_this();
+            }
+        }
+        const std::shared_ptr<Content_library>& library = scene_root.get_content_library();
+        if (library && library->root) {
+            erhe::Hierarchy* const found = erhe::find_by_path(*library->root, name_or_path);
+            Content_library_node* const library_node = dynamic_cast<Content_library_node*>(found);
+            if (library_node != nullptr) {
+                // An entry node carries the item the path names; a folder
+                // node is itself the addressed item.
+                return library_node->item ? library_node->item : library_node->shared_from_this();
+            }
+        }
+    }
+    return find_item_in_scene_by_name(scene_root, name_or_path);
+}
+
+auto resolve_reference_by_name(App_context& context, const erhe::Item_base& from, const std::string_view name_or_path) -> std::shared_ptr<erhe::Item_base>
 {
     Scene_root* const scene_root = find_scene_root_for_item(context, from);
     if (scene_root == nullptr) {
         return {};
     }
-    return find_item_in_scene_by_name(*scene_root, name);
+    return find_item_in_scene_by_reference(*scene_root, name_or_path);
 }
 
 auto find_scene_root_for_item(App_context& context, const erhe::Item_base& item) -> Scene_root*

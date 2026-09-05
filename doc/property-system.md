@@ -993,12 +993,13 @@ table, see D2a), and references to other objects (D28).
     opaque to the library) and `show_clear_button`.
   - Text form. `to_string` is the pointee's `get_reference_path()`, a
     `Dependency_object` virtual that is the inverse of
-    `resolve_expression_object` (`Item_base`: the item name; empty for a
-    null reference), and the pointer an `Object_reference` stores comes
+    `resolve_expression_object` (`Hierarchy`: the item's path,
+    `doc/usd-compatibility-plan.md` M1; `Item_base`: the item name; empty
+    for a null reference), and the pointer an `Object_reference` stores comes
     from `get_shared_reference()` (`Item_base`: `shared_from_this`, null
     for an item no `shared_ptr` owns, which no reference can then hold).
     The library's context parse (D16) walks from the referencing object's
-    `Item_host`; the editor resolves names itself through
+    `Item_host`; the editor resolves the text itself through
     `resolve_reference_by_name` (`scene/item_lookup`), the lookup in the
     scene `find_scene_root_for_item` finds for the item - its host, else
     the content library that lists it, else the asset manager's defining
@@ -1008,10 +1009,13 @@ table, see D2a), and references to other objects (D28).
     reference may name, so `erhe::gltf` records such a value in
     `Gltf_data::unresolved_object_properties` instead of applying it, and
     the editor's `import_gltf_editor_state` appends one undoable operation
-    per entry, after every item-creating operation, that resolves the name
-    with `find_item_in_scene_by_name` and sets the local value (a
+    per entry, after every item-creating operation, that resolves the text
+    with `find_item_in_scene_by_reference` and sets the local value (a
     node-held `Node_physics.physics_material` survives a reload this way).
-    Names are not unique, exactly as for D22 references; MCP disambiguates
+    Both forms resolve everywhere a stored reference is read: a text
+    holding `/` is a path and every other text is a name, so a file
+    written before paths existed keeps loading. A name is not unique,
+    exactly as for D22 references; a path is, and MCP also disambiguates
     with `reference_id`.
   - Editor write funnel. `apply_item_property` applies an object value
     only when the referenced item belongs to the target's scene, or is a

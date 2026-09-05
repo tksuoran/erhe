@@ -19,6 +19,7 @@ add_executable(${_target}
     test_item_base.cpp
     test_item_crtp.cpp
     test_hierarchy.cpp
+    test_hierarchy_path.cpp
     test_hierarchy_smoke.cpp
     test_item_host.cpp
     test_properties.cpp

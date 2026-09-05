@@ -23,7 +23,7 @@ public:
 
     // Implements erhe::Item_host: the hosted scene's root node, nodes and
     // their attachments by name (expression references, D22).
-    [[nodiscard]] auto find_hosted_item(std::string_view name) -> erhe::Item_base* override;
+    [[nodiscard]] auto find_hosted_item(std::string_view name_or_path) -> erhe::Item_base* override;
 
     [[nodiscard]] virtual auto get_hosted_scene() -> Scene* = 0;
     virtual void register_node    (const std::shared_ptr<Node>&   node)   = 0;

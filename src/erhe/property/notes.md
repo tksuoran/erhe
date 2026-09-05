@@ -126,7 +126,7 @@ inventory (and the owner's design section when the design changed).
   `Value_source::expression` reports it, `Local_state` (value or
   `Expression_text`) is the exact local layer for undo. References resolve
   lazily through `resolve_expression_object` (Item_base: `""` self, `..`
-  parent, a name via `Item_host::find_hosted_item`); a resolved source keeps
+  parent, a path or a name via `Item_host::find_hosted_item`); a resolved source keeps
   a dependent list and re-evaluates its targets from `deliver`, or from
   `invalidate_dependents` when its storage changed outside `set_value`
   (`Node::handle_transform_update`). Beyond tinyexpr's own functions:

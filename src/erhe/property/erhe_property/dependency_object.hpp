@@ -96,9 +96,10 @@ public:
     virtual void for_each_inheritance_child(const std::function<void(Dependency_object&)>& callback) { static_cast<void>(callback); }
 
     // The object an expression reference path names (D22): "" is this
-    // object; Item_base adds ".." (the inheritance parent) and item names
-    // through its Item_host. nullptr = unresolved (retried on every read
-    // and evaluation).
+    // object; Item_base adds ".." (the inheritance parent) and, through its
+    // Item_host, an item named by a slash-separated path
+    // (Hierarchy::get_path()) or by a bare name. nullptr = unresolved
+    // (retried on every read and evaluation).
     [[nodiscard]] virtual auto resolve_expression_object(std::string_view path) const -> Dependency_object*
     {
         return path.empty() ? const_cast<Dependency_object*>(this) : nullptr;
@@ -106,8 +107,8 @@ public:
 
     // Object references (D28). get_reference_path() is the text form of a
     // reference to this object, the inverse of resolve_expression_object
-    // on the referencing object (Item_base: the item name; the library
-    // default is empty, "no path"). get_shared_reference() is the owning
+    // on the referencing object (Hierarchy: the item's path; Item_base:
+    // the item name; the library default is empty, "no path"). get_shared_reference() is the owning
     // pointer an Object_reference stores (Item_base: shared_from_this;
     // the default is null, "not shareable").
     [[nodiscard]] virtual auto get_reference_path  () const -> std::string                        { return {}; }

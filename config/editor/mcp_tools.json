@@ -66,11 +66,11 @@
     "name": "get_composition_passes"
   },
   {
-    "description": "Get detailed info for a node (transform, attachments). A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
+    "description": "Get detailed info for a node (transform, attachments). The node is named by name or by path. A Mesh attachment reports world_aabb (world-space min/max) and skinned; for a skinned mesh the AABB is the POSED bounds derived from the joint transforms, unaffected by the mesh node's own transform (glTF requires skinning to ignore it). Also reports subtree_world_aabb: the merged world AABB of every mesh in the node's subtree (null when the subtree has no meshes) - use it for camera auto-fit on a whole object.",
     "inputSchema": {
       "properties": {
         "node_name": {
-          "description": "Name of the node",
+          "description": "Name of the node, or its path: slash-separated node names from the scene root node down, root's own name excluded (e.g. 'Parent/Child')",
           "type": "string"
         },
         "scene_name": {
@@ -507,7 +507,7 @@
     "name": "geometry_query"
   },
   {
-    "description": "Select items by ID (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] clears the target scene only) and makes the target scene the active scene.",
+    "description": "Select items by ID or by name / path (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] with no paths clears the target scene only) and makes the target scene the active scene.",
     "inputSchema": {
       "properties": {
         "ids": {
@@ -517,14 +517,20 @@
           },
           "type": "array"
         },
+        "paths": {
+          "description": "Array of item names or item paths to select, alongside or instead of ids (a path is slash-separated names from the scene root node, or a content-library folder path such as 'Materials/Metals/Copper')",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "scene_name": {
           "description": "Name of the scene to search for items",
           "type": "string"
         }
       },
       "required": [
-        "scene_name",
-        "ids"
+        "scene_name"
       ],
       "type": "object"
     },
@@ -6444,7 +6450,7 @@
     "name": "free_undone_loads"
   },
   {
-    "description": "List the registered properties of one item (doc/property-system.md): for each, its name, type (bool, int, float, vec2, vec3, vec4, quat, string, enum, object), effective value, value source (default, inherited, local), local value (null when the item has no local value), default, read_only, inherits, coerced, consequence flags, and enum_labels for enumerations. Values are strings: 'true'/'false', numbers, space-separated vector components, quaternions as 'x y z w', enumeration labels. Also lists attached properties that have a local value on the item. Identify the item by item_id (unique item id, any scene) or item_name (in scene_name, or the first scene); nodes, node attachments (meshes, lights, cameras, ...) and content-library materials are found. The item carries 'sealed' (lock_edit, writes refused) and 'style' (the name of its style layer or null, see set_item_style); a property's 'source' is one of default, inherited, style, local, expression. An 'object' property references another item: its value is the item name, with reference_id (session item id), reference_type and reference_item_types (the accepted Item_type mask) alongside; a material's texture slots are object properties. 'sub_objects' lists the item's property sub-objects (a mesh's primitives: index, label and their properties, e.g. a primitive's 'material'); write them with set_item_property's sub_object.",
+    "description": "List the registered properties of one item (doc/property-system.md): for each, its name, type (bool, int, float, vec2, vec3, vec4, quat, string, enum, object), effective value, value source (default, inherited, local), local value (null when the item has no local value), default, read_only, inherits, coerced, consequence flags, and enum_labels for enumerations. Values are strings: 'true'/'false', numbers, space-separated vector components, quaternions as 'x y z w', enumeration labels. Also lists attached properties that have a local value on the item. Identify the item by item_id (unique item id, any scene) or item_name - a name or a path (doc/usd-compatibility-plan.md M1) - in scene_name, or the first scene; nodes, node attachments (meshes, lights, cameras, ...) and content-library materials are found. The item carries 'sealed' (lock_edit, writes refused) and 'style' (the name of its style layer or null, see set_item_style); a property's 'source' is one of default, inherited, style, local, expression. An 'object' property references another item: its value is the referenced item's reference text (its path when it is in a hierarchy, its name otherwise), with reference_id (session item id), reference_type and reference_item_types (the accepted Item_type mask) alongside; a material's texture slots are object properties. 'sub_objects' lists the item's property sub-objects (a mesh's primitives: index, label and their properties, e.g. a primitive's 'material'); write them with set_item_property's sub_object.",
     "inputSchema": {
       "properties": {
         "item_id": {
@@ -6452,7 +6458,7 @@
           "type": "integer"
         },
         "item_name": {
-          "description": "Item name, looked up in scene_name (or the first scene)",
+          "description": "Item name or item path (slash-separated names from the scene root node, or a content-library folder path), looked up in scene_name (or the first scene)",
           "type": "string"
         },
         "scene_name": {

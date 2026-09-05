@@ -1218,9 +1218,9 @@ void Scene_root::detach_from_editor_scenes(App_scenes& app_scenes)
     m_is_registered = false;
 }
 
-auto Scene_root::find_hosted_item(const std::string_view name) -> erhe::Item_base*
+auto Scene_root::find_hosted_item(const std::string_view name_or_path) -> erhe::Item_base*
 {
-    return find_item_in_scene_by_name(*this, name).get();
+    return find_item_in_scene_by_reference(*this, name_or_path).get();
 }
 
 auto Scene_root::get_host_name() const -> const char*

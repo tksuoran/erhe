@@ -22,7 +22,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `get_flag_bits()`, `set_flag_bits()`, `enable_flag_bits()`, `disable_flag_bits()`
 - `is_visible()`, `is_selected()`, `is_hovered()`, `show()`, `hide()`, `set_visible()`, `set_selected()` - `show` / `hide` / `set_visible` write a local `visible_property` value; `clear_value(visible_property)` returns to the inherited / default value
 - `visible_property`, `shadow_cast_property`, `lightmapped_property` - owner type 0 (listed for every item type), default true / false / false, `inherits`
-- `get_reference_path()` / `get_shared_reference()` - the name and `shared_from_this` an object reference (`doc/property-system.md` D28) uses to name and hold this item
+- `get_reference_path()` / `get_shared_reference()` - the text and `shared_from_this` an object reference (`doc/property-system.md` D28) uses to name and hold this item. `Item_base` names an item by its name; `Hierarchy` overrides it with the item's path (see "Item paths")
 - `get_property_sub_object_count()` / `get_property_sub_object(index)` / `get_property_sub_object_label(index)` - property sub-objects (D29): Dependency_objects the item owns by value that the editor addresses as (item, index); the defaults report none (`Mesh` overrides them with its primitives)
 - `is_lock_edit()` / `set_lock_edit()` - the `lock_edit` flag is the property-store seal (`Dependency_object::seal`, D24): while set, every local property write is refused (`set_value` returns false, logged); `is_sealed()` agrees with the flag, including after a copy
 - `add_tag()`, `remove_tag()`, `has_tag()`, `get_tags()`, `clear_tags()`
@@ -34,6 +34,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 ### Hierarchy
 - `set_parent(shared_ptr)`, `set_parent(shared_ptr, position)` - reparent with depth update
 - `get_parent()`, `get_children()`, `get_depth()`, `get_root()`
+- `get_path()`, `get_reference_path()` - the item's path, see "Item paths"
 - `get_child_count()`, `get_child_count(filter)`, `get_index_in_parent()`, `get_index_of_child()`
 - `is_ancestor()`
 - `remove()` - splice out node, reparent children to parent
@@ -43,8 +44,35 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `hierarchy_sanity_check()` - validates parent/child consistency and detects cycles
 
 ### Free functions
+- `erhe::find_by_path(root, path)` - the item a path names below `root`, see "Item paths"
 - `erhe::is<T>(item)` - bitmask-based type check (raw pointer and shared_ptr overloads)
 - `resolve_item_host()`, `resolve_item_host_mutex()` - find the first non-null host among items
+
+## Item paths
+
+An item in a hierarchy has a namespace path (`doc/usd-compatibility-plan.md`
+M1): the names of the item and of its ancestors below the root, outermost
+first, separated by `/`. The root's own name is not part of the path, so a
+child of the root is named by its name alone, a deeper item by
+`Parent/Child`, and the root itself has an empty path. This is the form the
+`ERHE_scene` `library_folders` entries store for content-library folders, so
+one form addresses scene nodes and library folders alike, and a path is the
+unambiguous identifier a name is not.
+
+- `Hierarchy::get_path()` builds it on demand and `erhe::find_by_path(root,
+  path)` inverts it: an empty path is the root, and every other path is a
+  sequence of child names, each naming a child of the item the previous name
+  reached. Both are cold-path (references, lookups, diagnostics) - never per
+  frame.
+- `Hierarchy::get_reference_path()` returns the path, falling back to the
+  name when the path is empty (a root, an item outside a hierarchy), which is
+  what `Item_base::get_reference_path()` returns for every non-hierarchy item.
+- A stored reference text holding `/` is a path and every other text is a
+  name, so a file written before paths existed keeps resolving:
+  `Item_host::find_hosted_item` takes either form
+  (`erhe::scene::Scene_host` walks the node tree, then names; the editor's
+  `Scene_root` adds the content library through
+  `find_item_in_scene_by_reference`).
 
 ## Dependencies
 
@@ -65,7 +93,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 
 ## Testing
 
-115 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
+143 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
 
 | File | Tests | Coverage |
 |------|-------|----------|
@@ -75,6 +103,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 | `test_item_base.cpp` | 25 | Construction, flags, copy, source path, describe, tags |
 | `test_item_crtp.cpp` | 8 | Type/name, clone modes, `is<T>()` |
 | `test_hierarchy.cpp` | 35 | Construction, reparent, traversal, removal, copy/assign depth + parent correctness |
+| `test_hierarchy_path.cpp` | 14 | Path build (root, child, deep, orphan), rename and reparent, `find_by_path` lookup and misses, bare-name fallback |
 | `test_hierarchy_smoke.cpp` | 1 | Randomized stress test (create/reparent/remove/clone/iterate) with deterministic seed |
 | `test_item_host.cpp` | 6 | Host resolution, lock guard with/without host |
 | `test_properties.cpp` | 4 | Metadata by item type, inheritance through `Hierarchy`, reparent / remove re-reads, clone keeps local values |

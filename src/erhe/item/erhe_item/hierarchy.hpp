@@ -45,6 +45,21 @@ public:
     // to expressions from handle_add_child / handle_remove_child.
     static const erhe::property::Property<int> child_count_property;
 
+    // Overrides Item_base: an item in a hierarchy is named by its path
+    // (get_path()); a root with no parent has an empty path and is named
+    // by its name, as items outside a hierarchy are.
+    [[nodiscard]] auto get_reference_path() const -> std::string override;
+
+    // Namespace path (doc/usd-compatibility-plan.md M1): the names of this
+    // item and of its ancestors below the root, outermost first, separated
+    // by '/'. The root's own name is not part of the path, so a child of
+    // the root is named by its name alone and a deeper item by
+    // "Parent/Child"; the root itself has an empty path. This is the form
+    // the ERHE_scene library_folders entries store for content-library
+    // folders, so one form addresses scene nodes and library folders
+    // alike. Built on demand - never call it per frame.
+    [[nodiscard]] auto get_path() const -> std::string;
+
     [[nodiscard]] auto get_parent          () const -> std::weak_ptr<Hierarchy>;
     [[nodiscard]] auto get_depth           () const -> size_t;
     [[nodiscard]] auto get_children        () const -> const std::vector<std::shared_ptr<Hierarchy>>&;
@@ -141,5 +156,11 @@ protected:
     std::vector<std::shared_ptr<Hierarchy>> m_children;
     std::size_t                             m_depth {0};
 };
+
+// The item `path` names below `root`, in the form get_path() returns: an
+// empty path is the root itself, and every other path is a sequence of
+// child names separated by '/', each naming a child of the item the
+// previous name reached. nullptr when a name matches no child.
+[[nodiscard]] auto find_by_path(Hierarchy& root, std::string_view path) -> Hierarchy*;
 
 } // namespace erhe

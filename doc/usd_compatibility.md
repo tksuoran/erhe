@@ -35,8 +35,8 @@ an exporter writes and an importer converts to.
 
 | erhe | USD | notes |
 |---|---|---|
-| `Item_base` name (`get_reference_path()` returns the name) | prim name (one path component) | USD requires sibling-unique valid identifiers; erhe does not enforce sibling uniqueness (plan step M1) |
-| node tree position | prim path (`/Root/Child/Leaf`) | erhe has no path type or path lookup yet (plan step M1) |
+| `Item_base` name (`get_reference_path()` returns the name for an item outside a hierarchy) | prim name (one path component) | USD requires sibling-unique valid identifiers; erhe does not enforce sibling uniqueness (plan step M2) |
+| item path (`Hierarchy::get_path()`, `erhe::find_by_path`; `get_reference_path()` returns it, and stored references, expressions and MCP take it) | prim path (`/Root/Child/Leaf`) | an erhe path is relative to the root, whose own name it excludes (`Child/Leaf`); the same form addresses content-library folders |
 | `Item_base::m_gltf_uid` (glTF 2.1 uid) | none; identity is the path | a uid can ride as `customData` |
 | `Item_type` bit / `get_type_name()` | prim `typeName` | one erhe class per USD schema, see "Object model" |
 | owner type chain (`Owner_type`, D27) | schema inheritance (`Xformable` > `Gprim` > `Mesh`) | |

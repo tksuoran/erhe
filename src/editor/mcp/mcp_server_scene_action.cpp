@@ -36,6 +36,7 @@
 #include "scene/generated/scene_settings_serialization.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
@@ -198,15 +199,39 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
         }
     }
 
+    // Item paths (doc/usd-compatibility-plan.md M1) name the same items ids
+    // do; a text without '/' is taken as a name, as it is everywhere else.
+    const json paths_json = args.value("paths", json::array());
+    std::vector<std::shared_ptr<erhe::Item_base>> items_by_path;
+    for (const json& path_value : paths_json) {
+        if (!path_value.is_string()) {
+            continue;
+        }
+        const std::string path = path_value.get<std::string>();
+        const std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_reference(*sr, path);
+        if (!item) {
+            json r = make_text_content("Item not found with name or path: " + path);
+            r["isError"] = true;
+            return r.dump();
+        }
+        items_by_path.push_back(item);
+    }
+
     // Mirrors the UI's scoped selection semantics: selecting (or clearing)
     // in one scene leaves other scenes' selections untouched, and the
     // selection change makes the target scene the active scene.
-    if (target_ids.empty()) {
+    if (target_ids.empty() && items_by_path.empty()) {
         m_context.selection->clear_selection(static_cast<erhe::Item_host*>(sr));
         return make_text_content("Selection cleared in scene: " + sr->get_name()).dump();
     }
 
-    auto items_to_select = find_items_by_ids(*sr, target_ids);
+    std::vector<std::shared_ptr<erhe::Item_base>> items_to_select = find_items_by_ids(*sr, target_ids);
+    for (const std::shared_ptr<erhe::Item_base>& item : items_by_path) {
+        const bool already_listed = std::find(items_to_select.begin(), items_to_select.end(), item) != items_to_select.end();
+        if (!already_listed) {
+            items_to_select.push_back(item);
+        }
+    }
     {
         Scoped_selection_change selection_change{*m_context.selection};
         m_context.selection->clear_selection(static_cast<erhe::Item_host*>(sr));

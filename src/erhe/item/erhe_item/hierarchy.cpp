@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 
 #include <sstream>
+#include <string>
 
 namespace erhe {
 
@@ -329,6 +330,66 @@ auto Hierarchy::get_root() -> std::weak_ptr<Hierarchy>
         return shared_hierarchy_from_this();
     }
     return current_parent->get_root();
+}
+
+auto Hierarchy::get_path() const -> std::string
+{
+    // Cold path: object references, expression paths, lookups and
+    // diagnostics. Names are collected leaf first and joined in reverse.
+    std::vector<const std::string*> names;
+    const Hierarchy* node = this;
+    for (;;) {
+        const std::shared_ptr<Hierarchy> parent = node->m_parent.lock();
+        if (!parent) {
+            break; // node is the root: its name is not part of the path
+        }
+        names.push_back(&node->get_name());
+        node = parent.get();
+    }
+    std::string path;
+    std::size_t length = 0;
+    for (const std::string* const name : names) {
+        length += name->size() + 1;
+    }
+    path.reserve(length);
+    for (std::size_t i = names.size(); i > 0; --i) {
+        if (!path.empty()) {
+            path.push_back('/');
+        }
+        path.append(*names[i - 1]);
+    }
+    return path;
+}
+
+auto Hierarchy::get_reference_path() const -> std::string
+{
+    std::string path = get_path();
+    return path.empty() ? get_name() : path;
+}
+
+auto find_by_path(Hierarchy& root, const std::string_view path) -> Hierarchy*
+{
+    Hierarchy* node  = &root;
+    std::size_t start = 0;
+    while (start < path.size()) {
+        const std::size_t slash = path.find('/', start);
+        const std::string_view name = (slash == std::string_view::npos)
+            ? path.substr(start)
+            : path.substr(start, slash - start);
+        start = (slash == std::string_view::npos) ? path.size() : slash + 1;
+        Hierarchy* next = nullptr;
+        for (const std::shared_ptr<Hierarchy>& child : node->get_children()) {
+            if (child && (child->get_name() == name)) {
+                next = child.get();
+                break;
+            }
+        }
+        if (next == nullptr) {
+            return nullptr;
+        }
+        node = next;
+    }
+    return node;
 }
 
 auto Hierarchy::get_parent() const -> std::weak_ptr<Hierarchy>

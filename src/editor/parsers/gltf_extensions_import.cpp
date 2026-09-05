@@ -1029,7 +1029,7 @@ public:
         }
         m_property = property;
         m_before   = m_entry.item->read_local_state(*property);
-        const std::shared_ptr<erhe::Item_base> referenced = find_item_in_scene_by_name(*m_scene_root, m_entry.text);
+        const std::shared_ptr<erhe::Item_base> referenced = find_item_in_scene_by_reference(*m_scene_root, m_entry.text);
         if (!referenced) {
             log_parsers->warn("glTF: {} '{}' property '{}' names '{}', which the scene does not hold", m_entry.item->get_type_name(), m_entry.item->get_name(), m_entry.property_name, m_entry.text);
             return;

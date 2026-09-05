@@ -420,13 +420,14 @@ public:
     // the item's class (Item<> overrides it per class; this is the id every
     // item class descends from), and an expression reference path (D22) is
     // this item (""), its inheritance parent ("..") or an item of the same
-    // host by name (Item_host::find_hosted_item).
+    // host by path or by name (Item_host::find_hosted_item).
     [[nodiscard]] static auto property_owner_type() -> erhe::property::Owner_type;
     [[nodiscard]] auto get_property_owner_type () const -> erhe::property::Owner_type override { return property_owner_type(); }
     [[nodiscard]] auto resolve_expression_object(std::string_view path) const -> erhe::property::Dependency_object* override;
-    // Object references (D28): the item name is the path, and the owning
-    // pointer is shared_from_this (null for an item not owned by a
-    // shared_ptr, which no reference can then hold).
+    // Object references (D28): the item name is the reference text, and
+    // the owning pointer is shared_from_this (null for an item not owned by
+    // a shared_ptr, which no reference can then hold). Hierarchy overrides
+    // the text with the item's path (Hierarchy::get_path()).
     [[nodiscard]] auto get_reference_path  () const -> std::string override;
     [[nodiscard]] auto get_shared_reference() const -> std::shared_ptr<erhe::property::Dependency_object> override;
 

@@ -40,8 +40,9 @@ using namespace mcp_server_detail;
 
 namespace {
 
-// Resolves args.item_id (any scene) or args.item_name (args.scene_name, or
-// the first scene when absent).
+// Resolves args.item_id (any scene) or args.item_name - an item name or an
+// item path (doc/usd-compatibility-plan.md M1) - in args.scene_name, or in
+// the first scene when absent.
 auto resolve_item(App_context& context, const json& args, std::string& out_error) -> std::shared_ptr<erhe::Item_base>
 {
     if (context.app_scenes == nullptr) {
@@ -88,9 +89,9 @@ auto resolve_item(App_context& context, const json& args, std::string& out_error
         out_error = "No scene";
         return {};
     }
-    std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_name(*scene_root, item_name);
+    std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_reference(*scene_root, item_name);
     if (!item) {
-        out_error = "Item not found with name: " + item_name;
+        out_error = "Item not found with name or path: " + item_name;
     }
     return item;
 }
