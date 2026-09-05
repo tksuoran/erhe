@@ -39,8 +39,9 @@
 ✓roundtrip-baseline{70abffecd..4f7a7a45e;scene_roundtrip_verify.py-93/93;Khronos-validator-not-installed→section-skipped}
 ✓M3-purpose-vocabulary{5fe65f45d+7eb07c8c2;163-item+93-property-tests;screenshot-identical-except-status-bar-digits;roundtrip-93/93}
 ✓L1-LightUSD-optional-CPM{6f8739fea..bfbdc6ff8;MSVC+clang-cl+headless-green;describe_usd_file-on-usda/usdc/usdz}
-⚡I1-import-USD-asset{commit-1-a3aa83732-lib+7-usd-tests;commit-2-87ee48935-editor-import{headless:suzanne-pbr+parity-subset-textured;undo+close-clean;roundtrip-93/93};commit-3-running}
-?M4->I2->E1->E3->Q1{plan-section-3}
+✓I1-import-USD-asset{commit-1-a3aa83732-lib+7-usd-tests;commit-2-87ee48935-editor-import{headless:suzanne-pbr+parity-subset-textured;undo+close-clean;roundtrip-93/93};commit-3-import-failures+prim-filter+smoke-test-USD-leg}
+⚡M4-local=authored{opus-coder-next}
+?I2->E1->E3->Q1{plan-section-3}
 
 [NOTES]
 !headless-recipe::build_vs2026_vulkan_headless-editor→ERHE_AI_DRIVER=1-launch-hidden→mcp_call.py-b64-args{get_item_properties/set_item_property/get_addable_item_properties/undo;ids-reshuffle-per-launch;scene_name-required-for-create_node/select_items/get_node_details}
