@@ -528,6 +528,21 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
         key=lambda m: m["name"],
     )
 
+    # A local value is an authored value (doc/property-system.md D32): a
+    # material field nothing authored reports Value_source::default_value,
+    # and a round trip must not turn it into a local one. Only the default
+    # set is compared: a value a material's STYLE supplies still imports as
+    # local, because the native glTF fields carry the styled material's
+    # effective value (doc/gltf-properties-extension-plan.md).
+    snap["material_default_sources"] = {}
+    for material in materials:
+        if material.get("name") not in material_names:
+            continue
+        properties = call("get_item_properties", {"item_id": material["id"]}).get("properties", [])
+        snap["material_default_sources"][material["name"]] = sorted(
+            p["name"] for p in properties if p.get("source") == "default"
+        )
+
     animations = call("get_scene_animations", {"scene_name": scene_name}).get("animations", [])
     snap["animations"] = sorted((norm_animation(a) for a in animations), key=lambda a: a["name"])
 
@@ -1022,7 +1037,7 @@ def section_reload_and_diff():
     check(S, "graph mesh re-baked on load", wait_for_node_attachment(loaded_scene, "P6 GM Node", "Mesh", tries=300))
 
     loaded = snapshot_scene(loaded_scene, exported_materials, detail_nodes)
-    for key in ["nodes", "materials", "animations", "brushes", "graph_meshes", "graph_textures", "node_details"]:
+    for key in ["nodes", "materials", "material_default_sources", "animations", "brushes", "graph_meshes", "graph_textures", "node_details"]:
         mismatches = []
         diff_json(loaded[key], original[key], key, mismatches)
         check(S, f"round-trip diff: {key} identical", not mismatches, f"{len(mismatches)} mismatches")

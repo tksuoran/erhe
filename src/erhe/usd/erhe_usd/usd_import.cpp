@@ -10,6 +10,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_property/dependency_object.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -218,6 +219,7 @@ public:
         convert_cameras();
         convert_lights();
         convert_nodes();
+        elide_default_local_values();
 
         log_usd->info(
             "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights",
@@ -232,6 +234,29 @@ public:
     }
 
 private:
+    // A local value is an authored value (doc/property-system.md D32,
+    // doc/usd-compatibility-plan.md M4). The conversions above fill each
+    // item field by field from the Tydra render scene, which reports a
+    // schema fallback the same way it reports an authored opinion, so
+    // every field is a local value here; this pass takes back the ones
+    // that merely repeat the item's default. Reading USD's own authored /
+    // fallback distinction instead is step I2 - the same rule, from a
+    // better source.
+    void elide_default_local_values()
+    {
+        ERHE_PROFILE_FUNCTION();
+        const auto elide = [](const std::shared_ptr<erhe::Item_base>& item) {
+            if (item) {
+                erhe::property::clear_default_valued_local_properties(*item);
+            }
+        };
+        for (const std::shared_ptr<erhe::scene::Node>&         node     : m_result.data.nodes)     { elide(node);     }
+        for (const std::shared_ptr<erhe::scene::Mesh>&         mesh     : m_result.data.meshes)    { elide(mesh);     }
+        for (const std::shared_ptr<erhe::scene::Light>&        light    : m_result.data.lights)    { elide(light);    }
+        for (const std::shared_ptr<erhe::scene::Camera>&       camera   : m_result.data.cameras)   { elide(camera);   }
+        for (const std::shared_ptr<erhe::primitive::Material>& material : m_result.data.materials) { elide(material); }
+    }
+
     // UsdPhysics is future work (doc/usd-compatibility-plan.md section 5).
     // Say so once per file rather than silently dropping the schemas.
     void report_skipped_physics(const lightusd::Stage& stage)

@@ -23,6 +23,7 @@
 #include "erhe_primitive/primitive_builder.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_property/dependency_object.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/projection.hpp"
@@ -3787,6 +3788,29 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         }
     }
 
+    // A local value is an authored value (doc/property-system.md D32,
+    // doc/usd-compatibility-plan.md M4). Everything above filled the parsed
+    // items field by field from the core glTF fields and the legacy extras,
+    // so every one of those fields is a local value now; this pass takes
+    // back the ones that merely repeat the item's default.
+    const auto elide_default_valued_local_properties = [](const std::shared_ptr<erhe::Item_base>& item) {
+        if (item) {
+            erhe::property::clear_default_valued_local_properties(*item);
+        }
+    };
+    // Nodes, meshes, lights and cameras are elided BEFORE the ERHE_*
+    // extension pass below: their "properties" map is the authored local
+    // set of an erhe-written file and must not be elided, and the typed
+    // ERHE_light / ERHE_camera fields the pass writes are followed by
+    // clear_local_properties_not_listed, which enforces that same map.
+    {
+        ERHE_PROFILE_SCOPE("elide default local values");
+        for (const std::shared_ptr<erhe::scene::Node>&   node   : result.nodes)   { elide_default_valued_local_properties(node);   }
+        for (const std::shared_ptr<erhe::scene::Mesh>&   mesh   : result.meshes)  { elide_default_valued_local_properties(mesh);   }
+        for (const std::shared_ptr<erhe::scene::Light>&  light  : result.lights)  { elide_default_valued_local_properties(light);  }
+        for (const std::shared_ptr<erhe::scene::Camera>& camera : result.cameras) { elide_default_valued_local_properties(camera); }
+    }
+
     // Apply library-domain ERHE_* extensions to the parsed objects:
     // ERHE_node / ERHE_light on nodes, ERHE_camera on cameras and
     // ERHE_material on materials (doc/gltf-scene-roundtrip-plan.md
@@ -3982,6 +4006,22 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 read_sampler_texgen("normal_texgen_mode",             material->data.texture_samplers.normal);
                 read_sampler_texgen("occlusion_texgen_mode",          material->data.texture_samplers.occlusion);
                 read_sampler_texgen("emissive_texgen_mode",           material->data.texture_samplers.emissive);
+            }
+        }
+
+        // Materials are elided AFTER their extension, not before it: a
+        // material carries no "properties" map, and every ERHE_material
+        // field is a native carrier (Property_flags::native_gltf), so a
+        // value it writes that equals the default is not an authored one
+        // either. What a styled material's native fields carry is its
+        // EFFECTIVE value, so a value its style supplies still imports as
+        // local; only an ERHE_material that carries the material's
+        // complete local set can fix that
+        // (doc/gltf-properties-extension-plan.md).
+        {
+            ERHE_PROFILE_SCOPE("elide default local material values");
+            for (const std::shared_ptr<erhe::primitive::Material>& material : result.materials) {
+                elide_default_valued_local_properties(material);
             }
         }
     }
