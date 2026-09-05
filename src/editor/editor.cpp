@@ -213,6 +213,9 @@
 #include "erhe_window/window_event_handler.hpp"
 #include "erhe_ui/glyph_outlines.hpp"
 #include "erhe_ui/ui_log.hpp"
+#if defined(ERHE_USD_LIBRARY_LIGHTUSD)
+#include "erhe_usd/usd_log.hpp"
+#endif
 #include "erhe_utility/clipboard.hpp"
 
 #if defined(ERHE_WINDOW_LIBRARY_SDL)
@@ -4274,6 +4277,9 @@ void run_editor(const std::string& startup_commands_path, const std::string& sta
         erhe::scene_renderer::initialize_logging();
         erhe::window::initialize_logging();
         erhe::ui::initialize_logging();
+#if defined(ERHE_USD_LIBRARY_LIGHTUSD)
+        erhe::usd::initialize_logging();
+#endif
 #if defined(ERHE_XR_LIBRARY_OPENXR)
         erhe::xr::initialize_logging();
 #endif

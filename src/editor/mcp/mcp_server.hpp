@@ -247,6 +247,7 @@ private:
     auto action_export_gltf     (const nlohmann::json& args) -> std::string;
     auto action_import_gltf     (const nlohmann::json& args) -> std::string;
     auto query_scan_gltf        (const nlohmann::json& args) -> std::string;
+    auto query_describe_usd_file(const nlohmann::json& args) -> std::string;
     auto query_asset_manager    (const nlohmann::json& args) -> std::string;
     auto action_acquire_asset   (const nlohmann::json& args) -> std::string;
     auto action_release_asset   (const nlohmann::json& args) -> std::string;

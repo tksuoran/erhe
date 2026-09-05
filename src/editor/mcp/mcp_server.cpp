@@ -567,6 +567,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "export_gltf",                    &Mcp_server::action_export_gltf                   },
         { "import_gltf",                    &Mcp_server::action_import_gltf                   },
         { "scan_gltf",                      &Mcp_server::query_scan_gltf                      },
+        { "describe_usd_file",              &Mcp_server::query_describe_usd_file              },
         { "query_asset_manager",            &Mcp_server::query_asset_manager                  },
         { "acquire_asset",                  &Mcp_server::action_acquire_asset                 },
         { "release_asset",                  &Mcp_server::action_release_asset                 },

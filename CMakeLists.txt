@@ -61,6 +61,7 @@ set_option(ERHE_TEXT_LAYOUT_LIBRARY        "Text layout library. Either freetype
 set_option(ERHE_WINDOW_LIBRARY             "Window library to use with erhe. Either glfw, sdl or none"                  "sdl"      "sdl;glfw;none")
 set_option(ERHE_XR_LIBRARY                 "XR library to use with erhe. Either openxr, or none"                        "none"     "openxr;none")
 set_option(ERHE_TERMINAL_LIBRARY           "Terminal use with erhe. Either cpp-terminal, or none"                       "none"     "cpp-terminal;none")
+set_option(ERHE_USD_LIBRARY                "USD library to use with erhe. Either lightusd or none"                     "none"     "lightusd;none")
 set_option(ERHE_VOXEL_LIBRARY              "Voxel/SDF library to use with erhe. Either openvdb or none"                 "none"     "openvdb;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
@@ -732,18 +733,116 @@ CPMAddPackage(
     GITHUB_REPOSITORY google/wuffs
 )
 
-CPMAddPackage(
-    NAME              LightUSD
-    GIT_TAG           fix-vs2026
-    GIT_SHALLOW       TRUE
-    #GITHUB_REPOSITORY lighttransport/LightUSD
-    GITHUB_REPOSITORY tksuoran/LightUSD
+# USD library. LightUSD is the in-editor USD reader/writer (see
+# doc/usd-compatibility-plan.md, step L1); erhe::usd is the only erhe library
+# that includes its headers. OpenUSD stays a schema and validation reference,
+# never a build dependency. With ERHE_USD_LIBRARY=none nothing below is
+# fetched, configured, built or linked.
+if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
+    # Added through add_subdirectory, LightUSD sets no standard of its own:
+    # its `set(CMAKE_CXX_STANDARD ...)` runs only when it is the top-level
+    # project, and it documents that the parent project names the standard.
+    # The erhe root scope names none (src/CMakeLists.txt sets C++20 for the
+    # erhe tree only), so without this LightUSD compiles at the compiler
+    # default -- C++14 for clang-cl, where <variant> is then missing and
+    # core/property.hh does not compile. C++20 is the erhe standard, and
+    # naming the same one on both sides of the link keeps the vendored
+    # nonstd:: types (which pick their implementation from __cplusplus) at one
+    # definition across erhe::usd and LightUSD.
+    set(ERHE_SAVED_CXX_STANDARD          "${CMAKE_CXX_STANDARD}")
+    set(ERHE_SAVED_CXX_STANDARD_REQUIRED "${CMAKE_CXX_STANDARD_REQUIRED}")
+    set(ERHE_SAVED_CXX_EXTENSIONS        "${CMAKE_CXX_EXTENSIONS}")
+    set(CMAKE_CXX_STANDARD          20)
+    set(CMAKE_CXX_STANDARD_REQUIRED YES)
+    set(CMAKE_CXX_EXTENSIONS        NO)
+    CPMAddPackage(
+        NAME              LightUSD
+        # erhe fork of lighttransport/LightUSD, carrying MSVC / Visual Studio
+        # 2026 build fixes that upstream does not have yet (branch
+        # fix-vs2026). Pinned to the commit that branch points at rather than
+        # to the branch name, so the build does not move when the branch does;
+        # GIT_SHALLOW is off because a shallow clone cannot fetch a raw commit
+        # id. Drop the fork once an upstream release carries the same fixes.
+        GIT_TAG           3012dd53631335980fd052f34b5b194802d33476
+        GIT_SHALLOW       FALSE
+        #GITHUB_REPOSITORY lighttransport/LightUSD
+        GITHUB_REPOSITORY tksuoran/LightUSD
         OPTIONS
-                 "LIGHTUSD_WITH_GEOGRAM Off"
-                 "LIGHTUSD_WITH_MESHOPT Off"
-       "LIGHTUSD_USE_WUFFS_IMAGE_LOADER Off"
-               "LIGHTUSD_CXX_EXCEPTIONS On"
-)
+            # Tydra (the renderer-friendly scene converter) and the
+            # composition cache are what erhe wants; every other optional
+            # module is off. The image, audio, texture-tool and file-format
+            # modules pull in vendored copies of libraries erhe already
+            # compiles (fpng, meshoptimizer, zstd), which would collide at
+            # link time, and none of them is on the path from a USD file to
+            # an erhe scene.
+            "LIGHTUSD_WITH_TYDRA ON"
+            "LIGHTUSD_WITH_PCP ON"
+            "LIGHTUSD_WITH_BUILTIN_IMAGE_LOADER OFF"
+            "LIGHTUSD_USE_WUFFS_IMAGE_LOADER OFF"
+            "LIGHTUSD_WITH_NANOIMAGE OFF"
+            "LIGHTUSD_WITH_FPNGE OFF"
+            "LIGHTUSD_WITH_TIFF OFF"
+            "LIGHTUSD_WITH_EXR OFF"
+            "LIGHTUSD_WITH_COLORIO OFF"
+            "LIGHTUSD_WITH_TEXTOOLS OFF"
+            "LIGHTUSD_WITH_AUDIO OFF"
+            "LIGHTUSD_WITH_USDMTLX OFF"
+            "LIGHTUSD_WITH_USDOBJ OFF"
+            "LIGHTUSD_WITH_USDFBX OFF"
+            "LIGHTUSD_WITH_USDVOX OFF"
+            "LIGHTUSD_WITH_USDVOL OFF"
+            "LIGHTUSD_WITH_USD_TO_GLTF OFF"
+            "LIGHTUSD_WITH_MESHOPT OFF"
+            "LIGHTUSD_WITH_GEOGRAM OFF"
+            "LIGHTUSD_WITH_ZSTD_COMPRESSION OFF"
+            "LIGHTUSD_WITH_MCP_SERVER OFF"
+            "LIGHTUSD_WITH_QJS OFF"
+            "LIGHTUSD_WITH_WAMR OFF"
+            "LIGHTUSD_WITH_REMOTERY OFF"
+            "LIGHTUSD_WITH_C_API OFF"
+            "LIGHTUSD_WITH_PXR_COMPAT_API OFF"
+            "LIGHTUSD_ENABLE_NLOHMANN_JSON_COMPAT OFF"
+            "LIGHTUSD_BUILD_TESTS OFF"
+            "LIGHTUSD_BUILD_EXAMPLES OFF"
+            "LIGHTUSD_BUILD_TOOLS OFF"
+            "LIGHTUSD_BUILD_BENCHMARKS OFF"
+            "LIGHTUSD_USE_CCACHE OFF"
+            # erhe is an exceptions build, and LightUSD compiles either way.
+            "LIGHTUSD_CXX_EXCEPTIONS ON"
+            # RTTI stays on: LightUSD uses none either way, and turning it off
+            # appends /GR- over the /GR that CMake's default MSVC flags
+            # already carry, which cl reports as D9025 once per TU.
+            "LIGHTUSD_CXX_RTTI ON"
+            # LightUSD selects -Weverything for itself on any clang (clang-cl
+            # included) and is not clean under it; erhe does not fix warnings
+            # in a dependency, so its -Werror is off here for the same reason
+            # the other CPM dependencies keep erhe's /W4 /WX out of their
+            # sources.
+            "LIGHTUSD_NO_WERROR ON"
+    )
+    # Restore, leaving each variable unset when it was unset before: an empty
+    # CMAKE_CXX_STANDARD is not the same as no CMAKE_CXX_STANDARD, and the
+    # dependencies configured after this one reject it (target_compile_features).
+    foreach (ERHE_SAVED_VARIABLE CXX_STANDARD CXX_STANDARD_REQUIRED CXX_EXTENSIONS)
+        if (ERHE_SAVED_${ERHE_SAVED_VARIABLE} STREQUAL "")
+            unset(CMAKE_${ERHE_SAVED_VARIABLE})
+        else ()
+            set(CMAKE_${ERHE_SAVED_VARIABLE} "${ERHE_SAVED_${ERHE_SAVED_VARIABLE}}")
+        endif ()
+        unset(ERHE_SAVED_${ERHE_SAVED_VARIABLE})
+    endforeach ()
+    unset(ERHE_SAVED_VARIABLE)
+    add_definitions(-DERHE_USD_LIBRARY_LIGHTUSD)
+    # LightUSD keeps its include directory PRIVATE to its own targets, so the
+    # one erhe library that includes its headers names the directory itself
+    # (as a SYSTEM include, since those headers are not clean at erhe's
+    # warning level). See src/erhe/usd/CMakeLists.txt.
+    set(ERHE_LIGHTUSD_INCLUDE_DIR "${LightUSD_SOURCE_DIR}/src")
+    message(STATUS "Erhe configured to use LightUSD for USD.")
+else ()
+    add_definitions(-DERHE_USD_LIBRARY_NONE)
+    message(STATUS "Erhe configured to disable USD.")
+endif ()
 
 # CPMAddPackage(
 #     NAME              reflect-cpp

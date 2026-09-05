@@ -27,6 +27,9 @@
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#if defined(ERHE_USD_LIBRARY_LIGHTUSD)
+#include "erhe_usd/usd.hpp"
+#endif
 
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
@@ -332,6 +335,51 @@ auto Mcp_server::query_scan_gltf(const json& args) -> std::string
         {"errors",          scan.errors}
     }).dump();
 }
+
+auto Mcp_server::query_describe_usd_file(const json& args) -> std::string
+{
+#if defined(ERHE_USD_LIBRARY_LIGHTUSD)
+    const std::string path_str = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("Missing required argument: path");
+    }
+    const std::filesystem::path path{path_str};
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        return make_error_content("File not found: " + path_str);
+    }
+
+    erhe::usd::Load_stage_result load_result = erhe::usd::load_stage(path);
+    if (load_result.stage == nullptr) {
+        return make_error_content("USD load failed: " + load_result.error);
+    }
+
+    const erhe::usd::Stage_description description = erhe::usd::describe_stage(*load_result.stage.get());
+
+    json prim_types = json::array();
+    for (const erhe::usd::Prim_type_count& entry : description.prim_types) {
+        prim_types.push_back(json{{"type_name", entry.type_name}, {"count", entry.count}});
+    }
+    json layers = json::array();
+    for (const erhe::usd::Layer_reference& layer : description.layers) {
+        layers.push_back(json{{"kind", layer.kind}, {"asset_path", layer.asset_path}});
+    }
+    return make_json_content({
+        {"path",            path_str},
+        {"prim_count",      description.prim_count},
+        {"prim_types",      prim_types},
+        {"layers",          layers},
+        {"up_axis",         description.up_axis},
+        {"default_prim",    description.default_prim},
+        {"meters_per_unit", description.meters_per_unit},
+        {"warning",         load_result.warning}
+    }).dump();
+#else
+    static_cast<void>(args);
+    return make_error_content("USD support not built (ERHE_USD_LIBRARY=none)");
+#endif
+}
+
 
 namespace {
 

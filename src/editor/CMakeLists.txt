@@ -718,6 +718,10 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     target_link_libraries(${_target} PRIVATE erhe::voxel)
 endif ()
 
+if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
+    target_link_libraries(${_target} PRIVATE erhe::usd)
+endif ()
+
 if (ERHE_USE_MIMALLOC)
     target_link_libraries(${_target} PUBLIC mimalloc-static)
 endif ()

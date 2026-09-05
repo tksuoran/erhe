@@ -2608,6 +2608,22 @@
     "name": "scan_gltf"
   },
   {
+    "description": "Describe a USD file (.usd/.usda/.usdc/.usdz) without importing it: total prim count, per-schema-type prim counts, the layers the stage names (root layer, subLayers, reference and payload asset paths), up axis, default prim and metersPerUnit. Requires a build with ERHE_USD_LIBRARY=lightusd.",
+    "inputSchema": {
+      "properties": {
+        "path": {
+          "description": "Source .usd/.usda/.usdc/.usdz file path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "name": "describe_usd_file"
+  },
+  {
     "description": "Inspect the asset manager (Phase R1): registered assets (builtins, loaded container assets, scene-local userships) with their declared users, container records - loaded container files with per-type asset counts and identifiability errors, plus every open scene's identity record (R5.3: open_as_scene true; session true until the scene's first save binds it to a path, save-as re-homes it) - and the named debug holds.",
     "inputSchema": {
       "properties": {},
