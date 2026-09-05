@@ -244,6 +244,28 @@ unknown-tool reply.
 and `scripts\configure_vs2026_vulkan_headless.bat` pass
 `-DERHE_USD_LIBRARY=lightusd`.
 
+The Android build passes it too, from the `externalNativeBuild` CMake
+argument list of `defaultConfig` in `android-project/app/build.gradle`, so
+both the `mobile` and the `quest` flavor carry USD. It is a build argument
+there rather than a forced value in the root `CMakeLists.txt` Android block,
+which keeps the option selectable the way the Windows wrappers keep it.
+LightUSD compiles on the NDK toolchain (clang, arm64-v8a, `c++_static`)
+without a change on either side.
+
+What the option costs the Quest Debug APK, measured as two clean native
+builds of the `quest` flavor on one machine:
+
+| `ERHE_USD_LIBRARY` | Build | APK | `lib/arm64-v8a/libmain.so` |
+|---|---|---|---|
+| `none` | 6 m 5 s | 145 279 989 B | 102 339 416 B |
+| `lightusd` | 7 m 7 s | 182 340 597 B | 139 405 592 B |
+
+So USD adds about 37 MB to the stripped native library and the same to the
+APK, and about a minute to a from-scratch build. Compare APK sizes only
+against a freshly packaged APK: AGP packages incrementally and leaves the
+previous `libmain.so` bytes orphaned in the file, which inflates the size on
+disk well past the sum of the archive's entries.
+
 ## Tests
 
 `src/erhe/usd/test/` builds `erhe_usd_tests` behind `-DERHE_BUILD_TESTS=ON`
@@ -306,5 +328,7 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   written and one warning says so.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
-- The Quest / Android build with the option on (build, size, launch) is
-  verified once at the end of the USD plan, not per step.
+- The Quest launch with the option on - the editor coming up on the headset
+  and answering `describe_usd_file` over the forwarded MCP port - is still
+  pending; only the Android build and its size and build-time cost are
+  measured (see "Configurations").

@@ -56,6 +56,12 @@ android {
                 if (pythonExe) {
                     cmakeArgs << "-DPython3_EXECUTABLE=${pythonExe}"
                 }
+                // USD support (LightUSD) is on for Android the same way the
+                // Windows configure wrappers turn it on: the option is passed
+                // to CMake here rather than forced in the root CMakeLists.txt
+                // Android block, so the value stays a build argument. See
+                // src/erhe/usd/notes.md, "Configurations".
+                cmakeArgs << "-DERHE_USD_LIBRARY=lightusd"
                 arguments cmakeArgs as String[]
                 abiFilters 'arm64-v8a'
             }
