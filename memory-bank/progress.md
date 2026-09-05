@@ -44,7 +44,7 @@
 ✓I2-authored-opinions{14-usd-tests;headless:authored.usda-visible/purpose/base_color-only/temperature-custom-attr;suzanne-local-set=base_color+metallic;roundtrip-94/94;smoke-52/52}=G1
 ✓E1-save-USDA{1d51c13a5-writer+29-tests;c1a32c475-editor{headless:suzanne-open/edit/save-51-lines/close-clean/reopen-edits-back;gltf-still-gltf;roundtrip-94/94}}=G2
 ✓E3-roundtrip-USD-leg{53d54294d;148/148;usdchecker-SKIP-not-installed}
-⚡Q1-Quest{android-build-coder-running;launch-needs-user}
+⚡Q1-Quest{build✓593691fb5;launch-pending-user-confirmation}
 
 
 [NOTES]
