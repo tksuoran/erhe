@@ -182,6 +182,7 @@ KNOWN_KEYWORDS = {
     "$schema", "$id", "$defs", "$ref", "title", "description",
     "type", "properties", "required", "enum", "items",
     "minItems", "maxItems", "minimum", "anyOf",
+    "additionalProperties", "default",
 }
 
 TYPE_CHECKS = {
@@ -234,6 +235,19 @@ def schema_validate(instance, schema, root_schema, path, errors):
         for key, sub_schema in schema.get("properties", {}).items():
             if key in instance:
                 schema_validate(instance[key], sub_schema, root_schema, f"{path}.{key}", errors)
+        # additionalProperties: false forbids unlisted keys; a subschema
+        # constrains their values (the property bags write string values
+        # under names the schema cannot enumerate).
+        if "additionalProperties" in schema:
+            additional = schema["additionalProperties"]
+            named = set(schema.get("properties", {}))
+            for key, value in instance.items():
+                if key in named:
+                    continue
+                if additional is False:
+                    errors.append(f"{path}: unexpected property '{key}' (additionalProperties: false)")
+                elif isinstance(additional, dict):
+                    schema_validate(value, additional, root_schema, f"{path}.{key}", errors)
 
     if isinstance(instance, list):
         if "minItems" in schema and len(instance) < schema["minItems"]:
@@ -363,6 +377,18 @@ def wait_for_node_attachment(scene_name, node_name, attachment_type, tries=100):
     return False
 
 
+def wait_for_async_idle(tries=600):
+    """Async asset loads (glTF prefab templates) publish on a later frame:
+    poll get_async_status until every counter is zero."""
+    keys = ["pending", "running", "queued_operations", "pending_scene_commits", "asset_loads"]
+    for _ in range(tries):
+        status = call("get_async_status")
+        if all(int(status.get(key, 0)) == 0 for key in keys):
+            return True
+        time.sleep(0.2)
+    return False
+
+
 def round_vec(values, digits=4):
     return [round(float(v), digits) for v in values]
 
@@ -416,7 +442,13 @@ def normalize_import_roots(raw_nodes):
 
 
 def node_sort_key(record):
-    return (record["name"], record["parent"], json.dumps(record["position"]))
+    # The whole normalized record, so the order is total: the scene holds an
+    # imported copy AND a prefab instance of the same asset, whose nodes
+    # share name, parent name and local transform and differ only in the
+    # remaining fields. A key over a subset of the fields leaves those
+    # siblings tied, and the tie is broken by the (differing) query order of
+    # the two snapshots - a spurious diff.
+    return json.dumps(record, sort_keys=True)
 
 
 NODE_PHYSICS_FIELDS = ["motion_mode", "friction", "restitution", "mass", "gravity_factor", "is_trigger", "collision_shape"]
@@ -841,8 +873,24 @@ def section_save_and_validate():
               foreign_doc.get("asset", {}).get("version") == "2.0", str(foreign_doc.get("asset")))
 
     # External-asset prefab instance (glTF 2.1 files/externalAssets on save).
+    # The prefab template loads asynchronously (async glTF asset loading,
+    # commit 768113501): a first load of a file defers, so the tool reports
+    # loading and the instance appears once the template lands. Both answers
+    # are correct; wait for the instance either way.
+    before_ids = {n.get("id") for n in call("get_scene_nodes", {"scene_name": scene}).get("nodes", [])}
     instantiated = mutate("instantiate_prefab", {"scene_name": scene, "path": DECCER_GLB, "position": [0.0, 0.0, -4.0]})
-    check(S, "instantiate_prefab", bool(instantiated) and instantiated.get("instantiated"), str(instantiated))
+    check(S, "instantiate_prefab accepted", bool(instantiated) and instantiated.get("queued"), str(instantiated))
+    check(S, "async prefab load drained", wait_for_async_idle())
+    added = []
+    for _ in range(100):
+        added = [
+            n for n in call("get_scene_nodes", {"scene_name": scene}).get("nodes", [])
+            if n.get("id") not in before_ids
+        ]
+        if added:
+            break
+        time.sleep(0.2)
+    check(S, "prefab instance node present", bool(added), str(instantiated))
 
     saved = mutate("save_scene", {"scene_name": scene, "path": str(E2E_GLB)})
     check(S, "save_scene", bool(saved) and saved.get("saved"), str(saved))
