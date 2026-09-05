@@ -43,8 +43,9 @@
 ✓M4-local=authored{100-property+67-scene+39-primitive-tests;headless-default-material-78-defaults;fresh-session-reload-source-diffs-none;roundtrip-94/94}
 ✓I2-authored-opinions{14-usd-tests;headless:authored.usda-visible/purpose/base_color-only/temperature-custom-attr;suzanne-local-set=base_color+metallic;roundtrip-94/94;smoke-52/52}=G1
 ✓E1-save-USDA{1d51c13a5-writer+29-tests;c1a32c475-editor{headless:suzanne-open/edit/save-51-lines/close-clean/reopen-edits-back;gltf-still-gltf;roundtrip-94/94}}=G2
-⚡E3-roundtrip-USD-leg{opus-coder-running}
-?Q1{plan-section-3;after-E1+E3}
+✓E3-roundtrip-USD-leg{53d54294d;148/148;usdchecker-SKIP-not-installed}
+⚡Q1-Quest{android-build-coder-running;launch-needs-user}
+
 
 [NOTES]
 !headless-recipe::build_vs2026_vulkan_headless-editor→ERHE_AI_DRIVER=1-launch-hidden→mcp_call.py-b64-args{get_item_properties/set_item_property/get_addable_item_properties/undo;ids-reshuffle-per-launch;scene_name-required-for-create_node/select_items/get_node_details}

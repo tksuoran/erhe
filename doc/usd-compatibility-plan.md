@@ -1,6 +1,6 @@
 # USD compatibility plan
 
-Status: M1 to M4, L1, I1 and I2 have landed, which is G1 for the schemas I1 covers; E1 is the next step. The concept and naming mapping every step
+Status: steps 1 to 9 of section 3 have landed (G1 and G2 for the schemas I1 covers); Q1 is the remaining step. The editor state a USD-backed scene does not carry yet is listed in `doc/scene_serialization.md`, "USD-backed scenes". The concept and naming mapping every step
 relies on is `doc/usd_compatibility.md` (referred to below as "the mapping");
 this document holds the steps, their order and their verification.
 
