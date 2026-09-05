@@ -22,6 +22,8 @@ erhe-authored glTF scene persistence entry points
 
 - **`gltf_extensions_export/import`** -- Editor-domain `ERHE_*` extension payload builders / appliers (phase 3).
 
+- **`import_usd()`** (`usd.{hpp,cpp}`) -- Imports a USD file (`.usd` / `.usda` / `.usdc` / `.usdz`, see `is_usd_file_extension()`) into a `Scene_root` as an undoable compound operation, through `erhe::usd` (`src/erhe/usd/notes.md`). Synchronous, unlike `import_gltf()`: there is no asynchronous asset-load path for USD yet, so `make_import_usd_operation()` loads, builds and returns the compound in one call and `import_usd()` queues it. The compound holds the content-library attaches for the textures and materials, the `Item_insert_remove_operation` that inserts the import_root node, and the raytrace kickoff - the same undo behavior glTF import has, including the removal announcements (doc/import-undo-reference-clearing.md). It also owns the GPU side of USD textures: `erhe::usd` reports image FILES, and this loads them with `erhe::graphics::Image_loader` (PNG / JPEG / KTX2 / DDS) through a blocking-drain `Image_transfer` and fills the material slots the loader recorded. The whole file compiles to the two "USD support not built" stubs when `ERHE_USD_LIBRARY=none`, so no call site needs a conditional.
+
 - **`import_geogram()`** -- Imports Geogram mesh files.
 
 - **`import_wavefront_obj()`** -- Imports Wavefront OBJ files.

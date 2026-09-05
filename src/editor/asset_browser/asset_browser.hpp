@@ -130,6 +130,23 @@ public:
     std::vector<std::string> contents;
 };
 
+// A USD file (.usd / .usda / .usdc / .usdz - see is_usd_file_extension). Its
+// own item type so the browser can offer Import on it and so a drag payload
+// can be recognized by type name, the way Asset_file_gltf is.
+class Asset_file_usd : public erhe::Item<erhe::Item_base, Asset_node, Asset_file_usd>
+{
+public:
+    explicit Asset_file_usd(const Asset_file_usd& src);
+    Asset_file_usd& operator=(const Asset_file_usd& src);
+    ~Asset_file_usd() noexcept override;
+
+    explicit Asset_file_usd(const std::filesystem::path& path);
+
+    // Implements Item_base
+    static constexpr std::string_view static_type_name{"Asset_file_usd"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_usd; }
+};
+
 // An image file the editor can decode (PNG / JPEG / KTX2 / DDS - see
 // is_texture_file_extension). Its own item type so the browser can offer the
 // texture verbs on it and so a drag payload can be recognized by type name.
@@ -214,6 +231,8 @@ private:
     auto try_load       (const std::shared_ptr<Asset_file_gltf>& gltf) -> bool;
 
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
+
+    auto try_import(const std::shared_ptr<Asset_file_usd>& usd) -> bool;
 
     // "Import to content library texture": one menu item when a single scene
     // is open, a submenu of scenes to choose the target content library from

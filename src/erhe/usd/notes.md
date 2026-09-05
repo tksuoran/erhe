@@ -160,12 +160,20 @@ cube with a materialBind `GeomSubset`, two `UsdPreviewSurface` materials, a
 camera and a distant light - and checks the node names, the geometry-normative
 split by subset, the material values, the camera projection and the light.
 
+The editor side of the import - the undoable operation, the texture creation
+and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
+- lives in `src/editor/parsers/usd.{hpp,cpp}`; see `src/editor/parsers/notes.md`.
+
 ## Future work
 
-- The rest of I1 in `doc/usd-compatibility-plan.md`: the editor's `Import USD`
-  operation (File menu, drag-drop by extension, MCP `import_usd`) through the
-  undoable `Item_insert_remove_operation` path, and the undo / round-trip
-  verification that goes with it.
+- No asynchronous load path: `load_usd` runs on the calling thread and the
+  editor's import is synchronous, where a glTF import goes through the asset
+  manager's `Asset_load_request` and the droppable-payload
+  `Import_gltf_operation` (doc/reloadable-asset-loads.md). The conversion
+  itself creates no GPU object, so it is ready to move onto a worker when the
+  asset manager learns a second format.
+- A USD file cannot be opened as a scene or instantiated as a prefab yet, only
+  imported as an asset; the prefab library parses glTF only.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
 - The Quest / Android build with the option on (build, size, launch) is

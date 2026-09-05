@@ -418,6 +418,8 @@ erhe_target_sources_grouped(
     parsers/gltf_physics_import.hpp
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
+    parsers/usd.cpp
+    parsers/usd.hpp
     parsers/wavefront_obj.cpp
     parsers/wavefront_obj.hpp
     prefabs/prefab_instance.cpp

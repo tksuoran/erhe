@@ -15,6 +15,7 @@
 #include "operations/scene_open_operation.hpp"
 #include "parsers/geogram.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/usd.hpp"
 #include "prefabs/prefab_library.hpp"
 #include <taskflow/taskflow.hpp>
 
@@ -65,6 +66,11 @@ Asset_file_geogram& Asset_file_geogram::operator=(const Asset_file_geogram&) = d
 Asset_file_geogram::~Asset_file_geogram() noexcept                        = default;
 Asset_file_geogram::Asset_file_geogram(const std::filesystem::path& path) : Item{path} {}
 
+Asset_file_usd::Asset_file_usd(const Asset_file_usd&)            = default;
+Asset_file_usd& Asset_file_usd::operator=(const Asset_file_usd&) = default;
+Asset_file_usd::~Asset_file_usd() noexcept                       = default;
+Asset_file_usd::Asset_file_usd(const std::filesystem::path& path) : Item{path} {}
+
 Asset_file_texture::Asset_file_texture(const Asset_file_texture&)            = default;
 Asset_file_texture& Asset_file_texture::operator=(const Asset_file_texture&) = default;
 Asset_file_texture::~Asset_file_texture() noexcept                           = default;
@@ -97,6 +103,8 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
         new_node = std::make_shared<Asset_file_gltf>(path);
     } else if (is_geogram) {
         new_node = std::make_shared<Asset_file_geogram>(path);
+    } else if (is_usd_file_extension(path)) {
+        new_node = std::make_shared<Asset_file_usd>(path);
     } else if (is_texture_file_extension(path)) {
         new_node = std::make_shared<Asset_file_texture>(path);
     } else {
@@ -206,6 +214,12 @@ Asset_browser::Asset_browser(
                     close = true;
                 }
                 add_reference_material_menu_items(*gltf, deferred_operations, close);
+                }
+            }
+            const std::shared_ptr<Asset_file_usd> usd = std::dynamic_pointer_cast<Asset_file_usd>(item);
+            if (usd) {
+                if (try_import(usd)) {
+                    close = true;
                 }
             }
             const std::shared_ptr<Asset_file_texture> texture = std::dynamic_pointer_cast<Asset_file_texture>(item);
@@ -380,6 +394,17 @@ auto Asset_browser::try_import(const std::shared_ptr<Asset_file_gltf>& gltf) -> 
     std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*gltf->get_source_path()));
     if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
         import_gltf(m_context, make_import_build_info(m_context), scene_root, *gltf->get_source_path());
+        return true;
+    }
+    return false;
+}
+
+auto Asset_browser::try_import(const std::shared_ptr<Asset_file_usd>& usd) -> bool
+{
+    const std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
+    std::string import_label = fmt::format("Import '{}'", erhe::file::to_string(*usd->get_source_path()));
+    if (ImGui::MenuItem(import_label.c_str(), nullptr, false, static_cast<bool>(scene_root))) {
+        import_usd(m_context, make_import_build_info(m_context), scene_root, *usd->get_source_path());
         return true;
     }
     return false;

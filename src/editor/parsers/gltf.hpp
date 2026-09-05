@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -134,6 +135,15 @@ void build_imported_buffer_meshes(
     const erhe::primitive::Build_info& build_info,
     const erhe::primitive::Build_info& skinned_build_info,
     const erhe::gltf::Gltf_data&       gltf_data
+);
+
+// The nodes overload is the implementation and is format-neutral: the USD
+// import (parsers/usd.cpp) hands it its own node list.
+void finalize_imported_meshes(
+    App_context&                                       context,
+    const erhe::primitive::Build_info&                 build_info,
+    std::span<const std::shared_ptr<erhe::scene::Node>> nodes,
+    std::vector<std::shared_ptr<erhe::Item_base>>*     out_mesh_node_items
 );
 
 void finalize_imported_meshes(

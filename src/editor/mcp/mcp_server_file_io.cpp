@@ -11,6 +11,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/usd.hpp"
 #include "parsers/gltf_extensions_export.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
@@ -333,6 +334,43 @@ auto Mcp_server::query_scan_gltf(const json& args) -> std::string
         {"external_assets", entries(scan.external_assets, scan.external_asset_uids)},
         {"extensions_used", scan.extensions_used},
         {"errors",          scan.errors}
+    }).dump();
+}
+
+auto Mcp_server::action_import_usd(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path_str   = args.value("path", "");
+    if (path_str.empty()) {
+        return make_error_content("Missing required argument: path");
+    }
+
+    std::shared_ptr<Scene_root> scene_root;
+    if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& candidate : m_context.app_scenes->get_scene_roots()) {
+            if (candidate->get_name() == scene_name) {
+                scene_root = candidate;
+                break;
+            }
+        }
+    }
+    if (!scene_root) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+
+    const std::filesystem::path path{path_str};
+    std::error_code error_code;
+    if (!std::filesystem::exists(path, error_code)) {
+        return make_error_content("File not found: " + path_str);
+    }
+    if (!editor::is_usd_file_extension(path)) {
+        return make_error_content("Not a USD file (.usd/.usda/.usdc/.usdz): " + path_str);
+    }
+
+    editor::import_usd(m_context, make_import_build_info(m_context), scene_root, path);
+    return make_json_content({
+        {"imported", true},
+        {"path",     path_str}
     }).dump();
 }
 

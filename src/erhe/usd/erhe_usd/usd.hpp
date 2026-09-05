@@ -155,9 +155,9 @@ public:
 class Usd_load_arguments final
 {
 public:
-    std::filesystem::path                     path;
-    const std::shared_ptr<erhe::scene::Node>& root_node;
-    erhe::scene::Layer_id                     mesh_layer_id{0};
+    std::filesystem::path                    path;
+    std::shared_ptr<erhe::scene::Node>       root_node;
+    erhe::scene::Layer_id                    mesh_layer_id{0};
 };
 
 // Result of load_usd(). `error` is non-empty exactly when the load failed,

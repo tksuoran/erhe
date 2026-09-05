@@ -662,7 +662,7 @@ void attach_optimized_render_shape(
 void finalize_imported_meshes(
     App_context&                                   context,
     const erhe::primitive::Build_info&             build_info,
-    const erhe::gltf::Gltf_data&                   gltf_data,
+    std::span<const std::shared_ptr<erhe::scene::Node>> nodes,
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
@@ -700,7 +700,7 @@ void finalize_imported_meshes(
         .autocolor       = build_info.autocolor
     };
 
-    for (const std::shared_ptr<erhe::scene::Node>& node : gltf_data.nodes) {
+    for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
         if (!node) {
             continue;
         }
@@ -797,6 +797,21 @@ void finalize_imported_meshes(
     // which they are all in. Ask get_memory_usage for the figure after a load
     // has settled.
     erhe::primitive::log_mesh_optimize_totals();
+}
+
+void finalize_imported_meshes(
+    App_context&                                   context,
+    const erhe::primitive::Build_info&             build_info,
+    const erhe::gltf::Gltf_data&                   gltf_data,
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+)
+{
+    finalize_imported_meshes(
+        context,
+        build_info,
+        std::span<const std::shared_ptr<erhe::scene::Node>>{gltf_data.nodes},
+        out_mesh_node_items
+    );
 }
 
 auto make_import_gltf_operation(

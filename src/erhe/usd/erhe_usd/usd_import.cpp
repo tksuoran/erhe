@@ -334,9 +334,18 @@ private:
     void convert_images()
     {
         m_result.data.images.reserve(m_scene->images.size());
+        const std::filesystem::path directory = m_arguments.path.parent_path();
         for (const lightusd::tydra::TextureImage& image : m_scene->images) {
             Usd_image usd_image{};
-            usd_image.path = std::filesystem::path{image.asset_identifier};
+            // The asset identifier is the authored one: LightUSD resolves an
+            // asset path only when it opens the asset, and its image loaders
+            // are off. A relative path is resolved here, against the stage
+            // file's own directory, so the caller receives a path it can open.
+            std::filesystem::path image_path{image.asset_identifier};
+            if (image_path.is_relative() && !directory.empty()) {
+                image_path = (directory / image_path).lexically_normal();
+            }
+            usd_image.path = image_path;
             usd_image.name = usd_image.path.filename().generic_string();
             usd_image.srgb = is_srgb_color_space(image.usdColorSpace);
             m_result.data.images.push_back(usd_image);

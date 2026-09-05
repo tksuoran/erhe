@@ -3,6 +3,8 @@
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "asset_browser/asset_browser.hpp"
+#include "parsers/gltf.hpp"
+#include "parsers/usd.hpp"
 #include "brushes/brush.hpp"
 #include "brushes/brush_tool.hpp"
 #include "content_library/content_library.hpp"
@@ -335,6 +337,28 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
                 Asset_file_gltf* gltf = dynamic_cast<Asset_file_gltf*>(item_base);
                 if (gltf != nullptr) {
                     gltf_drag_preview_and_drop(*gltf, gltf_payload->Preview, gltf_payload->Delivery);
+                }
+            }
+            // USD assets dragged from the Asset browser: imported into the
+            // viewport's scene on drop. There is no hover preview - a USD
+            // stage has no cheap scan giving bounds the way a glTF has - and
+            // no prefab instantiation, which erhe::usd does not reach yet.
+            const ImGuiPayload* usd_payload = ImGui::AcceptDragDropPayload(
+                Asset_file_usd::static_type_name.data(),
+                ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+            );
+            if (usd_payload != nullptr) {
+                erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(usd_payload->Data));
+                Asset_file_usd*  usd       = dynamic_cast<Asset_file_usd*>(item_base);
+                const std::shared_ptr<Viewport_scene_view> usd_scene_view = m_viewport_scene_view.lock();
+                const std::shared_ptr<Scene_root> usd_scene_root = usd_scene_view ? usd_scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
+                if ((usd != nullptr) && usd_scene_root && (usd->get_source_path() != nullptr)) {
+                    import_usd(
+                        m_app_context,
+                        make_import_build_info(m_app_context),
+                        usd_scene_root,
+                        *usd->get_source_path()
+                    );
                 }
             }
             cancel_brush_drag_and_drop();
