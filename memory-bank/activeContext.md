@@ -1,7 +1,8 @@
 §MBEL:5.0
 
 [FOCUS]
-@usd-compatibility::doc/usd-compatibility-plan.md{plan-only,no-step-started,2026-09-05;d25e505e4+489f2c7a6+46ce31a3c}
+@harness::doc/agent-orchestration-harness.md{e2605f494,2026-09-05;©User-asked-token-saving:orchestrator-writes-brief-per-commit→fresh-opus-coder-edits+builds+verifies+leaves-uncommitted→orchestrator-reviews-diff+commits;coders-strictly-sequential{shared-build-trees+MCP-port};fixes-via-SendMessage-same-agent;Explore-scouts-for-pre-brief-questions}
+@usd-compatibility::doc/usd-compatibility-plan.md{M1-in-progress-via-harness,2026-09-05;d25e505e4+489f2c7a6+46ce31a3c}
   goals::G1-load+edit-USD{no-save}->G2-save-USD->G3-glTF-or-USD-independent{never-converted/mixed};C1=each-format-carries-own-features{no-glTF-ext-for-USD-features}
   order::M1-item-paths->M2-sibling-unique-names->M3-purpose-enum->L1-LightUSD-optional-CPM{ERHE_USD_LIBRARY}->I1-import-USD-asset{Tydra}->M4-local=authored->I2->E1-save-USDA->E3-roundtrip
   mapping::doc/usd_compatibility.md{property-layers<->USD-opinions;per-domain-tables;plan-never-restates-rows}
@@ -60,7 +61,7 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 
 [STATE]
-@branch::main{#4-commits-unpushed;user-pushes-themselves}
+@branch::main{#5-commits-unpushed;user-pushes-themselves}
 prompt_queue.txt::item-0=USD-compatibility-plan{only-item;GL-slot-scope-narrowing->doc/gl-worker-context-enforcement.md-Follow-ups-F}
 
 [OPEN]
