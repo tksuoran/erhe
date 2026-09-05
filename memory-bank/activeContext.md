@@ -67,6 +67,8 @@ prompt_queue.txt::item-0=USD-compatibility-plan{only-item;GL-slot-scope-narrowin
 [OPEN]
 !scene_roundtrip_verify.py-RED-on-main{total=56-pass=50-fail=6+editor-segfault-in-prefab/reload-section;pre-M2-baseline-confirmed-by-revert;C1-requires-green;investigating-via-coder}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
+!scene_roundtrip_verify.py-RED-on-main{total=56-pass=50-fail=6+editor-segfault-in-prefab/reload-section;pre-M2-baseline-confirmed-by-revert;C1-requires-green;investigating-via-coder}
+?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?user-interactive-check{folders+category-props+texture-slots+styles+node-attachment-values+camera+physics-materials}→expect-fixes;then-migrations{Node_physics-first}
 ?material-reload-limitation-still-open::ERHE_material-bakes-effective→local{lights-fixed-via-ERHE_light.properties-rule;same-rule-for-materials=candidate}
 ?startup-log-error::"property 'lightmapped': object is sealed"{pre-existing,at-startup,unrelated}
