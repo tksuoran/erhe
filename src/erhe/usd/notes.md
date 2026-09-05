@@ -121,6 +121,52 @@ Not yet imported: skeletons and skinning, blend shapes, animation clips,
 volumes, MaterialX / OpenPBR shading networks, texture wrap and filter
 state, and `UsdTransform2d` UV transforms.
 
+## Export
+
+`usd_export.cpp` writes one `.usda` layer through LightUSD's `SaveAsUSDA`.
+`save_usda(const Usd_save_arguments&) -> Usd_save_result` takes erhe content
+rather than a `Usd_data` - the caller hands the writer the scene it holds -
+and reports failures as values. `sanitize_usd_identifier(name)` is public
+because the same spelling rule decides what an item is called on a stage.
+
+- Prim layout. The root node is not a prim: an erhe item path excludes the
+  root's own name (M1), so the root's children are the stage's top-level
+  prims. A node's own attachment types the prim that carries its transform -
+  `Xform`, `Mesh`, `Camera`, `DistantLight` or `SphereLight` - which is what
+  the importer inverts, so a file round-trips without gaining a level. A mesh
+  with one primitive binds its material directly; several primitives become
+  one `materialBind` `GeomSubset` each, over the concatenated `points` /
+  `faceVertexCounts` / `faceVertexIndices` of every primitive, with the
+  primvars written `faceVarying`. `subdivisionScheme` is always `none`: the
+  authored polygons are the mesh. Materials live in a `/Materials` `Scope` as
+  `Material` + `UsdPreviewSurface` `Shader`, with one `UsdUVTexture` shader
+  per bound slot and one `UsdPrimvarReader_float2` for their UVs. The stage
+  names one `defaultPrim`: the single top-level prim, or a `World` `Xform`
+  gathering them when the scene has several.
+- Values. Only a local value is written (D32). A property the mapping gives a
+  USD attribute goes into that attribute (the closed list is
+  `is_native_usd_property`, the exact inverse of what the import reads);
+  every other serializable local value becomes an `erhe:Owner:name` custom
+  attribute whose USD type follows the erhe property type and whose value is
+  the D16 `to_string` form. A quaternion travels as a `float4` in erhe's
+  `x y z w` order, because that is what the import's parse expects. Bridged
+  properties are skipped: the node transform, the item name and the tags have
+  a USD form that owns them. `visible` and `purpose` are read from the node,
+  which is where the import puts them.
+- Name sanitizing. `sanitize_usd_identifier` replaces every character outside
+  `[A-Za-z0-9_]` with `_` and prefixes `_` to a name starting with a digit.
+  Sanitizing can map two distinct item names onto one spelling, so the writer
+  then applies erhe's own sibling-unique suffix rule (M2, `<base>_<n>` from
+  1). The prim name is the item name: an item whose name needed sanitizing
+  comes back under the sanitized spelling.
+- Item tags become `UsdCollectionAPI` collections on the default prim, one
+  per tag, whose `includes` names every prim carrying it.
+- Textures. `erhe::usd` decodes nothing and creates no GPU object, so the
+  caller resolves each bound slot to a file (`Usd_save_texture`); the path is
+  written relative to the `.usda`. A slot with a local texture value the
+  caller could not resolve - a generated texture - is left out of the
+  network with one warning.
+
 ## Dependency
 
 LightUSD (Apache 2.0, C++17, dependency-free) through `CPMAddPackage` in the
@@ -206,6 +252,13 @@ split by subset, the material values, the camera projection and the light.
 a light with an `erhe:Light:temperature` custom attribute next to a bogus
 `erhe:Light:nope`, asserted through `get_value_source`.
 
+`test_usd_export.cpp` round-trips both data files through `save_usda` and
+`load_usd` and asserts that the node names, the mesh topology, the subset
+material bindings, the material local sets, the camera and light values,
+`visibility` / `purpose` and an `erhe:`-carried value all survive, plus the
+identifier sanitizing and the suffix rule for two names that collapse onto
+one spelling.
+
 The editor side of the import - the undoable operation, the texture creation
 and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 - lives in `src/editor/parsers/usd.{hpp,cpp}`; see `src/editor/parsers/notes.md`.
@@ -220,6 +273,20 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   asset manager learns a second format.
 - A USD file cannot be opened as a scene or instantiated as a prefab yet, only
   imported as an asset; the prefab library parses glTF only.
+- The writer carries no editor state yet: the `Scene_root` settings, brushes,
+  node graphs, library folders and styles that `ERHE_scene` and the asset-root
+  extensions hold in glTF have no `customLayerData` and no custom prims of
+  their own (C1). Neither does it write `.usdc` or `.usdz`, MaterialX, or the
+  composition structure of the file it loaded - the first version flattens
+  what it read (plan steps X1 and X2).
+- A node-held secondary value (D30, `Light.color` on a plain Xform) is written
+  as `erhe:Light:color` but the import resolves neither the qualified nor the
+  bare name against a node, so such a value does not come back.
+- An erhe material with both a texture and a factor in one slot writes the
+  connection alone: `UsdPreviewSurface` has no multiplier, and the factor
+  would have to ride on the texture's `scale`.
+- A camera's `infinite_z_far` has no USD form; the finite `clippingRange` is
+  written and one warning says so.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
 - The Quest / Android build with the option on (build, size, launch) is

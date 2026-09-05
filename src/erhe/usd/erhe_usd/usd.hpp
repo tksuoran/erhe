@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe::primitive {
@@ -178,5 +179,65 @@ public:
 
 // Convert an already loaded stage. load_usd() is this plus load_stage().
 [[nodiscard]] auto convert_stage(const Stage& stage, const Usd_load_arguments& arguments) -> Usd_load_result;
+
+// ---------------------------------------------------------------------------
+// Export (doc/usd-compatibility-plan.md E1)
+// ---------------------------------------------------------------------------
+
+// A USD identifier: the C identifier grammar, no other characters. Every
+// character outside [A-Za-z0-9_] becomes '_', and a name that starts with a
+// digit gets a leading '_'. An empty name becomes "_". The writer applies
+// this to every prim name and then makes the result sibling-unique with the
+// same suffix rule erhe uses for item names (M2), so two names that sanitize
+// onto one spelling still yield two prims.
+[[nodiscard]] auto sanitize_usd_identifier(std::string_view name) -> std::string;
+
+// One image the writer binds into a material's shading network. The caller
+// resolves the image to a file: erhe::usd creates no GPU object and decodes
+// nothing, so a texture without a source file (a generated one) has no entry
+// here and the writer warns for that slot.
+class Usd_save_texture final
+{
+public:
+    std::size_t               material_index{0};
+    Usd_material_texture_slot slot          {Usd_material_texture_slot::base_color};
+    std::filesystem::path     path          {};
+    // The USD color space of the source asset; a normal / occlusion map is raw.
+    bool                      srgb          {true};
+};
+
+// What save_usda() writes. The content is erhe's own - the writer is handed
+// the scene it is to write, not a Usd_data - and the stage constants are the
+// caller's choice (the defaults are what erhe means: Y up, metres).
+class Usd_save_arguments final
+{
+public:
+    std::filesystem::path                                   path;
+    // The node whose children are written. The root node itself is not a
+    // prim: an erhe item path excludes the root's own name (M1), so the
+    // root's children are the stage's top-level prims.
+    std::shared_ptr<const erhe::scene::Node>                root_node;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    std::vector<Usd_save_texture>                           textures;
+    std::string                                             up_axis        {"Y"};
+    double                                                  meters_per_unit{1.0};
+};
+
+// Result of save_usda(). `error` is non-empty exactly when the save failed;
+// `warning` collects everything the writer had to leave out.
+class Usd_save_result final
+{
+public:
+    std::string error;
+    std::string warning;
+};
+
+// Write one `.usda` layer holding the scene under Usd_save_arguments::root_node:
+// Xform / Mesh / GeomSubset / Camera / UsdLux prims per doc/usd_compatibility.md,
+// a `/Materials` scope holding Material + Shader networks, local property
+// values only (D32), erhe-only properties as `erhe:Owner:name` custom
+// attributes and item tags as UsdCollectionAPI collections on the default
+// prim. Failures are values, not exceptions.
+[[nodiscard]] auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result;
 
 } // namespace erhe::usd

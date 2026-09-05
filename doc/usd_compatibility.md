@@ -30,7 +30,7 @@ an exporter writes and an importer converts to.
 | `upAxis` | `Y` | glTF is Y-up; the importer rotates a `Z`-up stage by -90 degrees about X, as part of the one transform it applies to the top-level imported nodes. An `X`-up stage is imported unrotated with a warning |
 | `metersPerUnit` | `1` | glTF is metres; the importer scales by it in the same top-level transform as `upAxis` |
 | `timeCodesPerSecond` | `1` (or the animation's sample rate) | glTF animation time is seconds |
-| `defaultPrim` | the scene root | erhe scenes have one root node |
+| `defaultPrim` | the scene root | erhe scenes have one root node, and the root itself is not a prim (its name is outside every item path), so the exporter names the single top-level prim; a scene with several gets one `World` `Xform` gathering them, which is then the default prim |
 
 ## Identity and addressing
 
@@ -60,7 +60,7 @@ mapping an exporter applies and an importer inverts:
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | |
 | `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
 | prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` composition arc on an `Xform` | USD references are stronger: any target prim, list-edited |
-| item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) | |
+| item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) on the default prim, one collection per tag | |
 | per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
 | `EXT_mesh_gpu_instancing` (import expands into child nodes) | `PointInstancer` / `instanceable` | erhe has no render-level instancing; an importer expands the same way |
 
@@ -138,7 +138,7 @@ The names are erhe / geogram's own:
 
 | erhe `Light` property | USD (`UsdLux`) | notes |
 |---|---|---|
-| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | the presence of `ShapingAPI` on the prim is what makes an imported sphere / point light a spot light; area lights (`Rect`, `Disk`, `Cylinder`) import as point lights with a log line, and `DomeLight` and the remaining types are skipped |
+| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | the presence of `ShapingAPI` on the prim is what makes an imported sphere / point light a spot light, and the exporter applies that schema for exactly a spot light and authors `inputs:radius = 0` for both sphere forms; area lights (`Rect`, `Disk`, `Cylinder`) import as point lights with a log line, and `DomeLight` and the remaining types are skipped |
 | `color` | `inputs:color` | |
 | `intensity` | `inputs:intensity` (and `inputs:exposure` = 0) | unit conventions differ; a conversion factor per light type. erhe has no exposure on a light, so the importer folds the two into `intensity * 2^exposure` and applies no unit conversion of its own |
 | `temperature` | `inputs:colorTemperature` + `inputs:enableColorTemperature` | exact match of the erhe property |
@@ -153,7 +153,7 @@ The names are erhe / geogram's own:
 | erhe `Camera` property | USD `Camera` | notes |
 |---|---|---|
 | `projection_type` | `projection` (`perspective` / `orthographic`) | erhe's asymmetric frustum and per-edge FOV forms map to `horizontalApertureOffset` / `verticalApertureOffset` |
-| `fov_y` / `fov_x` | `focalLength` + `horizontalAperture` / `verticalAperture` | USD is physical-camera-first |
+| `fov_y` / `fov_x` | `focalLength` + `horizontalAperture` / `verticalAperture` | USD is physical-camera-first: three values carry two angles, so the exporter fixes `focalLength` at 50 and puts each angle in its aperture, `aperture = 2 * focalLength * tan(fov / 2)`, which the importer's `2 * atan(0.5 * aperture / focalLength)` reads back exactly |
 | `ortho_*` | `horizontalAperture` / `verticalAperture` in orthographic mode | USD apertures are in tenths of a scene unit, so `ortho_width` = `horizontalAperture` / 10 and `ortho_height` = `verticalAperture` / 10 |
 | `z_near`, `z_far`, `infinite_z_far` | `clippingRange` | infinite far has no USD form |
 | `exposure` | `exposure` | exact match |

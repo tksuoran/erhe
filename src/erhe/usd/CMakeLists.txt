@@ -7,6 +7,7 @@ erhe_target_sources_grouped(
     erhe_usd/usd.cpp
     erhe_usd/usd.hpp
     erhe_usd/usd_impl.hpp
+    erhe_usd/usd_export.cpp
     erhe_usd/usd_import.cpp
     erhe_usd/usd_log.cpp
     erhe_usd/usd_log.hpp
