@@ -15,8 +15,9 @@ the translation between the two vocabularies lives here.
 
 References: OpenUSD `pxr/usd/<domain>/schema.usda` in an OpenUSD checkout
 (`<OpenUSD>`) is the normative attribute list per schema; LightUSD
-(`<LightUSD>`, its `doc/api-status.md`) is the candidate in-editor USD
-library (plan step L1). Per-machine clone locations are recorded in
+(`<LightUSD>`, its `doc/api-status.md`) is the in-editor USD library, built
+when `ERHE_USD_LIBRARY=lightusd` and reached through `erhe::usd`
+(`src/erhe/usd/notes.md`). Per-machine clone locations are recorded in
 `memory-bank/local/`.
 
 ## Stage-level constants
