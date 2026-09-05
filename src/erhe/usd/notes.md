@@ -78,6 +78,14 @@ translation units.
 - Values are read at the stage's default time code, and `UsdPhysics` prims
   and API schemas are counted and reported in one log line rather than
   imported (`doc/usd-compatibility-plan.md` section 5).
+- Tydra reports a schema fallback the same way it reports an authored
+  opinion, so the conversion writes every field of every item and the
+  conversion ends with
+  `erhe::property::clear_default_valued_local_properties` over the
+  converted nodes, meshes, lights, cameras and materials: a field the
+  layer left at its fallback reports `Value_source::default_value`
+  (`doc/property-system.md` D32). Reading USD's own authored / fallback
+  distinction instead is `doc/usd-compatibility-plan.md` I2.
 
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,

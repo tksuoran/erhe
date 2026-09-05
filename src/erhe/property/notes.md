@@ -243,6 +243,20 @@ for the nearest id on the object's owner type chain (its own id first, then
 each parent up to the root), else the default metadata. Override lists are
 short so each level is a linear scan, no cache.
 
+## Authored values and default elision
+
+A local value is an authored value (`doc/property-system.md` D32).
+`clear_default_valued_local_properties(object)` is the free function that
+enforces it for a caller that had to write every field to load one: it
+clears each stored, serializable, non-driven local value that equals the
+object's own default layer (D31), leaving bridged, computed, attached,
+read-only and write-sealed properties alone, and keeping a local value
+that shadows an inherited or style layer so no effective value moves. The
+rule is format independent - the glTF and USD importers both run it -
+which is why the function lives here and not in an importer.
+`Property_flags::native_gltf` is the companion registration flag: data
+only, read by serializers, listed in `doc/property-inventory.md`.
+
 ## Copy semantics
 
 Copying a `Dependency_object` copies its entries (local and coerced values).

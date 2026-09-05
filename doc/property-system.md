@@ -1113,6 +1113,37 @@ table, see D2a), and references to other objects (D28).
   whose default is derived from the item's editor-only flag bits and
   refreshed by `Item_base::set_flag_bits`.
 
+- D32 A local value is an authored value. `Value_source::local` means
+  the value was authored - by a user edit, or by a file that carried an
+  opinion for it - and `Value_source::default_value` means nothing
+  authored it; the two states are the same distinction a USD layer draws
+  between an authored opinion and a schema fallback
+  (`doc/usd-compatibility-plan.md` M4). An importer that fills an item
+  field by field cannot say "the file left this alone", so every field it
+  writes becomes a local value;
+  `erhe::property::clear_default_valued_local_properties(object)` restores
+  the distinction afterwards. It clears every stored local value that
+  equals the object's own default layer (D31, `get_default_value`),
+  skipping bridged (D18), computed (D26), attached (R7), read-only,
+  write-sealed (D24), non-`serialize` and expression-driven (D22)
+  properties, and it leaves a local value that shadows an inherited (R8)
+  or style (D25) layer alone so no effective value moves. The pass is
+  format independent: `parse_gltf` runs it over every parsed node, mesh,
+  light, camera and material after the native glTF fields and before the
+  `ERHE_*` extension pass whose `properties` maps carry the authored local
+  set, and `erhe::usd`'s importer runs it at the end of its conversion
+  (reading USD's own authored / fallback distinction instead is that
+  plan's step I2). A whole-value snapshot applies the same rule at its
+  source rather than relying on the pass: `Material::set_values` and
+  `Material::set_data` clear the local value of a field equal to the
+  default, because a snapshot cannot say "inherit".
+  `Property_flags::native_gltf` marks the registrations whose value the
+  glTF exporter writes through a native glTF field or a typed `ERHE_*`
+  field whenever it differs from the default, so a property serializer
+  writes no value entry of its own for them; the flag is data only, and
+  `doc/property-inventory.md` owns the list of registrations that carry
+  it.
+
 ## 4. Implementation
 
 Each subsection is the design of one owner's migration; the per-field
@@ -1910,19 +1941,17 @@ style layer is D25.
   authored pose. No prerequisites; the keyframing plan and non-destructive
   playback of generalized animation channels (below) both wait on it.
 - Property serialization to glTF: expression text of driven properties
-  (D22), material local values (today materials export field by field and
-  a round trip bakes effective values into local ones; `ERHE_light` and
-  `ERHE_camera` already avoid this by treating their `properties` map as
-  the item's complete local set, the rule `ERHE_material` should adopt),
-  and one carrier
-  per item type in place of the `properties` / `mesh_properties` members
-  scattered across `ERHE_node`, `ERHE_light` and `ERHE_camera` (D14,
-  D23); the object properties of D28 keep riding their native carriers
-  and get that plan's `native_gltf` flag. Future work that is not yet
-  fully planned:
+  (D22), material local values (materials export field by field, and
+  default elision plus `Material::set_values` keep a round trip from
+  turning effective values into local ones - D32 - but a local value that
+  no native field carries, such as `reflectance`, is still lost), and one
+  carrier per item type in place of the `properties` / `mesh_properties`
+  members scattered across `ERHE_node`, `ERHE_light` and `ERHE_camera`
+  (D14, D23). Future work that is not yet fully planned:
   `doc/gltf-properties-extension-plan.md` is the draft, explicitly
   incomplete and not ready to implement; the decisions it records so far
-  live there and nowhere else.
+  live there and nowhere else. Its `native_gltf` flag and its elision pass
+  are implemented (D32); the `ERHE_*_properties` extensions are not.
 - Style users beyond the content library's style items (D25): the graphics presets once
   `Graphics_settings` is an item with registered properties, and
   per-instance prefab overrides once `doc/gltf-prefabs-plan.md` phase 6

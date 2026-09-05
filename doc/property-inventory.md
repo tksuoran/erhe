@@ -37,6 +37,30 @@ record's "Document roles" paragraph states the split.
   window's Add Property picker and drop it again with Remove Property
   (D12). Layout's per-child hints (section 4.14).
 
+## Registration flags
+
+`Property_flags::native_gltf` (D32) marks a registration whose value the
+glTF exporter writes through a native glTF field or a typed `ERHE_*`
+extension field whenever it differs from the property's default, so a
+property serializer writes no value entry of its own for it. It carries no
+behavior; these are the registrations that have it:
+
+- `Light`: light_type, color, intensity, range, inner_spot_angle,
+  outer_spot_angle, cast_shadow (temperature has no glTF carrier).
+- `Camera`: every projection field, infinite_z_far, exposure, shadow_range
+  - `ERHE_camera` writes the complete projection on every export.
+- `Material`: base_color, opacity, roughness, metallic, emissive, ior,
+  transmission, normalmap_encoding, bxdf_model, blending_mode,
+  double_sided, use_circular_brushed_metal, use_aniso_control and the five
+  texture slots. The fields whose carrier is conditional on something
+  other than the value itself are deliberately absent: alpha_cutoff (only
+  in the MASK alpha mode), normal_texture_scale and
+  occlusion_texture_strength (only with that slot's texture bound),
+  circular_brushed_metal_texgen_mode (only with the brushed metal block
+  on), the per-slot texgen / UV transform / sampler fields (only with the
+  slot bound), and reflectance (no glTF carrier at all).
+- `Mesh_primitive`: material (the glTF primitive's material index).
+
 The Properties window tints a row's label by its value source (D12):
 member and bridge rows are blue, entry rows green / gray / cyan / orange /
 purple by layer, computed rows dim gray. Untinted rows are hand-written.

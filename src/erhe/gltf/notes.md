@@ -59,6 +59,17 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   not stamped. Lights are extension-hosted and cannot carry uids. All uid
   read/write stays behind erhe::gltf so the pre-ratification surface can drift
   without touching clients.
+- Import restores the authored / default distinction: after the core glTF
+  fields and the legacy extras have been replayed - which makes every field
+  a local value - `parse_gltf` runs
+  `erhe::property::clear_default_valued_local_properties` over every parsed
+  node, mesh, light, camera and material, so a field the file left at its
+  default reports `Value_source::default_value`
+  (`doc/property-system.md` D32). The pass runs BEFORE the `ERHE_*`
+  extension pass, whose `properties` maps are the item's authored local
+  set and must not be elided. `Property_flags::native_gltf` marks the
+  registrations this file format carries natively, for the property
+  serializer of `doc/gltf-properties-extension-plan.md`.
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,

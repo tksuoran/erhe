@@ -1,7 +1,9 @@
 # `ERHE_*_properties` glTF extensions - implementation plan
 
-Status: INCOMPLETE DRAFT. Nothing is implemented, and the plan is not
-ready to implement: it needs more work before any step below is started
+Status: INCOMPLETE DRAFT. Steps 0 and 1 are implemented (they are what
+`doc/usd-compatibility-plan.md` M4 needed); steps 2 to 5 - the
+`ERHE_*_properties` extensions themselves - are not, and the plan is not
+ready to implement them: it needs more work before any of them is started
 (the open points are in the sections that raise them; a reader must expect
 gaps). The design record's future-work item for property serialization
 (`doc/property-system.md` section 6) points here and carries no content of
@@ -72,25 +74,23 @@ old members so existing files load.
 
 ## Steps (each: edit -> build primary tree -> self-review diff -> commit)
 
-### 0. `native_gltf` flag - `src/erhe/property/` + registrations
+### 0. `native_gltf` flag - `src/erhe/property/` + registrations (implemented)
 
-- Add `Property_flags::native_gltf` (`property_metadata.hpp`, the R15 flag
-  block around line 64; data only, the library never reads it, like the
-  other R15 flags).
-- Set it on the registrations whose values the exporter writes natively -
-  audit `process_light`, `record_camera_extensions`, `process_material` /
-  `record_material_extensions` and mark exactly those fields: `Light`
-  `light_type` / `color` / `intensity` / `range` / `inner_spot_angle` /
-  `outer_spot_angle` / `cast_shadow` (NOT `temperature`); `Camera`
-  `exposure` / `shadow_range` (projection fields are bridged, already
-  excluded); `Material` fields carried by native PBR fields or
-  `ERHE_material` (`src/erhe/primitive/erhe_primitive/material.cpp:62-123`);
-  the object properties of doc/property-system.md D28 - the five
-  `Material` texture slots (`textureInfo`) and `Mesh_primitive::material`
-  (the primitive's material index) - which are member-backed and so
-  already excluded from the value pass, but are flagged for the record.
+`Property_flags::native_gltf` (`property_metadata.hpp`) is data only, like
+the other R15 flags. It marks a registration whose value the exporter
+writes through a native glTF field or a typed `ERHE_*` field whenever it
+differs from the property's default; `doc/property-inventory.md`
+("Registration flags") owns the list of registrations that carry it and
+the reason each conditionally carried field is left out.
 
-### 1. Shared helpers - `src/erhe/gltf/erhe_gltf/gltf_item_flags.{hpp,cpp}`
+### 1. Shared helpers
+
+`clear_default_valued_local_properties` is implemented, in
+`erhe::property` rather than in `erhe_gltf`: the rule is format
+independent and the USD importer runs the same pass
+(doc/property-system.md D32 owns its definition and its ordering against
+the `ERHE_*` extension pass). The helpers below are what the extensions of
+step 2 still need:
 
 - `item_properties_extension_to_json(const Item_base&) -> std::string` -
   returns the `{...}` object (`{}` when nothing to write; callers skip
@@ -108,13 +108,6 @@ old members so existing files load.
 - `apply_item_local_expression(Item_base&, name, text) -> bool` - mirror
   of `apply_item_local_property` (gltf_item_flags.cpp:151) calling
   `set_expression`; warn + false on unknown name / rejected formula.
-- `clear_default_valued_local_properties(Item_base&)` - the elision pass:
-  for each registered property of (owner_type, subtype): skip bridged,
-  read-only / computed, attached, non-`serialize`, expression-driven; if
-  `read_local_value` equals the resolved metadata default
-  (`Property_value` variant `operator==`; verify glm comparability - if
-  the variant lacks `==`, compare via `to_string` round trip),
-  `clear_value`.
 - Delete `item_local_properties_to_json` once its export call sites are
   gone (step 2); `apply_item_local_property` stays (legacy import + new
   value entries).
@@ -155,9 +148,9 @@ fields, flags, legacy `properties` members and the `ERHE_camera` /
 For every imported item (each node, its Mesh / Light attachments, each
 camera, each material):
 
-1. `clear_default_valued_local_properties(item)` - unconditionally (all
-   files). Legacy-file caveat, acceptable: an old file's local value equal
-   to the default imports as default (same effective value).
+1. The elision pass already runs before this point (D32). Legacy-file
+   caveat, acceptable: an old file's local value equal to the default
+   imports as default (same effective value).
 2. If the glTF object carries the item's `ERHE_*_properties` extension:
    iterate its members; string member -> `apply_item_local_property`;
    object member -> apply `"value"` first (if present) via
