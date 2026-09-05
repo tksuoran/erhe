@@ -7,21 +7,37 @@ this document holds the steps, their order and their verification.
 ## 1. Goal
 
 Make erhe's scene model and property system general enough that a USD
-stage can be imported, exported and eventually composed inside the editor,
+stage can be loaded, edited and eventually composed inside the editor,
 one small step at a time. Each step is useful on its own, without USD
 code, or it is a thin USD adapter over a model that already fits. The
-end state this plan aims at, without committing to a date or a full
-route: the editor opens a `.usd` / `.usda` / `.usdc` / `.usdz` file,
-composes it (references, class inheritance, variants) with LightUSD, shows
-the result as an erhe scene whose property values report where they came
-from, and writes the erhe scene back as USD.
+goal has three stages:
+
+- G1 Load and edit USD. The editor opens a `.usd` / `.usda` / `.usdc` /
+  `.usdz` file (some files, some schemas: the mapping's tables say
+  which), shows it as an erhe scene and edits it with the normal tools.
+  Saving that scene is not part of G1. glTF scenes keep loading, editing
+  and saving as they do today.
+- G2 Save USD. A scene loaded from USD saves back as USD, with the
+  editor's own state carried as USD custom attributes and schemas, the
+  way `ERHE_*` extensions carry it in glTF.
+- G3 glTF or USD. A scene is either glTF-backed or USD-backed for its
+  whole life: loaded, edited, saved and reloaded in the format it came
+  from, with the full editor feature set in both. Mixing the two - a
+  glTF scene saving as USD, a USD scene saving as glTF, a prefab of one
+  format inside a scene of the other - is not a goal at any stage; an
+  export that happens to work is a convenience, never a requirement.
 
 Constraints every step respects:
 
-- C1 glTF stays the persistence format. A step changes the in-memory model
-  or adds a USD adapter; it never moves erhe's own scene files off glTF,
-  and every existing `ERHE_*` round trip keeps passing
-  (`scripts/scene_roundtrip_verify.py`).
+- C1 Each format carries its own features. glTF and USD each have
+  features the other cannot express, and neither format gets an
+  extension written to carry the other's: a USD-only feature (a
+  composition arc, a variant set, a time-sampled attribute) lives in the
+  in-memory model and in USD files; an erhe feature that a USD file must
+  keep is expressed with USD's own means (custom attributes, applied API
+  schemas, `customData`), as `ERHE_*` extensions do it in glTF. The
+  in-memory model is the shared ground, and the glTF round trip
+  (`scripts/scene_roundtrip_verify.py`) keeps passing after every step.
 - C2 A step lands in one commit series that a headless run can verify
   (`erhe-headless-verify`), with the same self-review-per-step discipline
   as the property migrations (`doc/property-system.md` section 4.18).
@@ -95,21 +111,29 @@ form both a USD importer and the Properties window want.
 Verification: `get_item_properties` on a tool node reports
 `purpose = guide`; a viewport screenshot is unchanged before and after.
 
-### M4 Property serialization completeness (M)
+### M4 Local values are the authored set (S)
 
-What: implement `doc/gltf-properties-extension-plan.md` (the
-`ERHE_*_properties` extensions, the `native_gltf` flag and
-default-elision on import) after finishing that plan's open points.
+What: make "has a local value" mean "authored" for every item type in
+the in-memory model, independent of any file format: an importer sets a
+local value only for a field the file authored, and a field left at its
+default stays default. For glTF this is the default-elision pass of
+`doc/gltf-properties-extension-plan.md` (its `native_gltf` flag and the
+one generic post-import pass; whether the rest of that plan - the
+`ERHE_*_properties` extensions - is implemented is a glTF-side decision
+under C1, not a prerequisite of anything here). The USD importer (I2)
+applies the same rule with USD's own authored / fallback distinction.
 
-Why: after it, a saved erhe file distinguishes an authored local value
-from a default exactly the way a USD layer distinguishes an authored
-opinion from a fallback, for every property of every item type. The USD
-exporter (E1) then writes local values and nothing else, and the importer
-(I2) has one rule for what becomes local. Materials are the case that
-matters most: today a round trip bakes their effective values into local
-ones.
+Why: a USD layer distinguishes an authored opinion from a schema
+fallback, and the property system already has the same two states
+(`Value_source::local` / `default`). Keeping them honest in memory is
+what lets a loaded USD scene show only the values its author set, and
+lets G2 write local values and nothing else. Materials are the case that
+matters most: today a glTF round trip bakes their effective values into
+local ones.
 
-Verification: that plan's section 5.
+Verification: import a glTF and (after I1) a USD file with a material at
+defaults; `get_item_properties` reports `default` for every untouched
+field.
 
 ### M5 Animated value layer (M)
 
@@ -243,23 +267,29 @@ through `Gltf_physics_data`'s sibling carrier for USD (the physics import
 operations already take a plain-data carrier; a USD reader fills the same
 carrier).
 
-### E1 Export as USDA (M, after M1, M2, L1)
+### E1 Save as USDA (M, after M1, M2, I1; the G2 step)
 
-What: `Export USD` (File menu, MCP `export_usd`) writes the scene as one
-`.usda` layer through `erhe::usd` and LightUSD's `SaveAsUSDA`: stage
-constants, `Xform` / `Mesh` / `GeomSubset` / `Material` / `Camera` /
-`UsdLux` prims per the mapping, local property values only, erhe-only
-properties as `erhe:` custom attributes, tags as collections. Prefab
-instances export as `references` to a sibling `.usda` produced by
-exporting the prefab source (E3 makes that recursive). `.usdc` follows
-once the `.usda` output validates; `.usdz` last.
+What: a scene loaded from a USD file saves back to it (File > Save
+Scene follows the scene's source path and format; MCP `save_scene`),
+written as one `.usda` layer through `erhe::usd` and LightUSD's
+`SaveAsUSDA`: stage constants, `Xform` / `Mesh` / `GeomSubset` /
+`Material` / `Camera` / `UsdLux` prims per the mapping, local property
+values only, erhe-only properties as `erhe:` custom attributes, tags as
+collections, editor state (`Scene_root` settings, brushes, node graphs,
+library folders, styles) as `customLayerData` and custom prims mirroring
+what `ERHE_scene` and the asset-root extensions hold in glTF (C1). The
+first version flattens what it loaded; keeping the source file's
+composition structure on save is X1 and X2. `.usdc` follows once the
+`.usda` output validates; `.usdz` last. Whether a glTF-loaded scene may
+also save as USD is left to whoever wants it: nothing in the plan needs
+it (G3).
 
 Why: `.usda` is diffable, so a round trip is verifiable by eye and by
 text diff, and the OpenUSD tools validate it independently of LightUSD.
 
 Verification: `usdchecker` from an OpenUSD build passes; `usdview` or
 LightUSD `lusdview` renders the file; import the export (I1) and diff
-against the source scene with the same MCP diff
+against the scene before the save with the same MCP diff
 `scene_roundtrip_verify.py` uses for glTF.
 
 ### E2 Material fidelity (M, after E1)
@@ -272,9 +302,11 @@ both are present.
 
 ### E3 Round-trip script (S, after E1)
 
-What: extend `scripts/scene_roundtrip_verify.py` with a USD leg: save
-glTF, export USDA, import USDA into a fresh scene, MCP-diff against the
-glTF-loaded scene, run `usdchecker` when an OpenUSD build is available.
+What: extend `scripts/scene_roundtrip_verify.py` with a USD leg that
+mirrors the glTF leg on USD content: load a USD file, save it as USDA,
+reload the save into a fresh scene, MCP-diff the two scenes, and run
+`usdchecker` when an OpenUSD build is available. The two legs share the
+diff code and nothing else (G3).
 
 ### X1 References as prefab instances (M, after I1, M1)
 
@@ -291,8 +323,9 @@ lists it as out of scope for the sealed-instance phase): unseal
 instance subtrees for property edits; a local value on an item inside
 an instance is an override, stored by (path inside the instance,
 property, value) and re-applied after the instance is re-cloned on
-reload. glTF carries the list on the carrier node; USD export writes
-each as an `over` prim. This step retires the last remaining reason the
+reload. In a glTF-backed scene the list rides the carrier node in an
+`ERHE_*` extension; in a USD-backed scene each is an `over` prim on the
+referencing prim, the file's native form (C1). This step retires the last remaining reason the
 old `ERHE_overrides` design existed: the property system's local layer
 is the override, and M1 paths are the addressing.
 
@@ -328,22 +361,30 @@ Recommended first sequence, each step independently landable:
 3. M3 visibility and purpose
 4. L1 LightUSD optional dependency
 5. I1 import a USD file as an asset
-6. M4 property serialization completeness
+6. M4 local values are the authored set
 7. I2 authored opinions become local values
-8. E1 export as USDA
+
+Steps 1 to 7 reach G1 for the schemas I1 covers; I3 and I4 widen it.
+
+8. E1 save as USDA (G2)
 9. E3 round-trip script
 
 M5, M6, M7 land when the step that needs them is next (I3, any importer
 hitting a missing type, X3). Everything in X waits for I1 and E1 to have
-shown the mapping holds on real content.
+shown the mapping holds on real content; X1 and X2 are what turns E1's
+flattened save into one that keeps the source file's structure (G3).
 
 Dependencies: I1 needs L1; I2 needs M4 and I1; I3 needs M5 and I1; I4
-needs I1; E1 needs M1, M2 and L1; E2 and E3 need E1; X1 needs I1 and M1;
+needs I1; E1 needs M1, M2 and I1; E2 and E3 need E1; X1 needs I1 and M1;
 X2 needs X1, M1 and M4; X3 needs I1 and M7; X4 and X5 need I1.
 
 ## 4. Out of scope
 
-- Replacing glTF as the persistence format (C1).
+- Converting between the formats: a glTF scene saved as USD or a USD
+  scene saved as glTF, and prefabs of one format inside a scene of the
+  other (G3).
+- glTF extensions that carry USD-only features, and USD schemas that
+  exist only to carry glTF-only encodings (C1).
 - OpenUSD as a build dependency (L1 says how it is used instead).
 - Live re-composition of an edited stage (X5 names it as the step after
   provenance).

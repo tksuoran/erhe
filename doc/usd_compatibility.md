@@ -1,7 +1,8 @@
 # USD compatibility notes
 
-erhe persists scenes as glTF (2.1 + `ERHE_*` extensions; see
-`doc/scene_serialization.md`). This document is the erhe <-> OpenUSD
+erhe saves scenes as glTF (2.1 + `ERHE_*` extensions; see
+`doc/scene_serialization.md`) and is growing USD into a second,
+independent scene format. This document is the erhe <-> OpenUSD
 **concept and naming mapping**: for every erhe mechanism the USD concept it
 corresponds to, so that a USD importer / exporter / composition step is a
 table lookup, not a redesign. The steps that make erhe more USD-compatible,

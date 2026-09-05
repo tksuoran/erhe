@@ -498,11 +498,10 @@ overs / variants / animate-anything are steps of
 `doc/usd-compatibility-plan.md`. `ERHE_geometry` keeps erhe/geogram
 element naming; the primvar mapping is documented, not adopted.
 
-Revisit trigger: if Android support lands upstream (or write-capable
-tinyusdz matures) AND erhe starts needing composition features glTF cannot
-express (variants, non-destructive layering, collaborative workflows), USD
-export could first be added as an *interchange target* without changing the
-persistence format.
+The route that supersedes this trigger is `doc/usd-compatibility-plan.md`:
+USD (through LightUSD, which does build for Android) becomes a second,
+independent scene format - loaded, edited and saved on its own, with glTF
+scenes untouched and no conversion between the two.
 
 ## Risks / open items
 
