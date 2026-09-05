@@ -1,129 +1,206 @@
 # USD compatibility notes
 
-Companion to `doc/gltf-scene-roundtrip-plan.md`. erhe persists scenes as
-glTF (2.1 + extensions); OpenUSD was reviewed and rejected as the
-persistence format (see the plan's Alternative-considered section). This
-document keeps the door to USD interchange open and cheap:
+erhe persists scenes as glTF (2.1 + `ERHE_*` extensions; see
+`doc/scene_serialization.md`). This document is the erhe <-> OpenUSD
+**concept and naming mapping**: for every erhe mechanism the USD concept it
+corresponds to, so that a USD importer / exporter / composition step is a
+table lookup, not a redesign. The steps that make erhe more USD-compatible,
+and the order to take them in, are the subject of
+`doc/usd-compatibility-plan.md`; this document holds the mapping only.
 
-1. it records the **naming mapping** between erhe's glTF extension
-   vocabulary and the equivalent USD concepts, so a future USD
-   exporter/importer is a table lookup, not a redesign;
-2. it documents **planned future features** (`ERHE_overrides` and friends)
-   whose designs are informed by USD but expressed in glTF terms.
+erhe's glTF extensions keep erhe / glTF-context naming, not USD vocabulary
+(a `faceVarying` primvar term would be confusing inside a Khronos file);
+the translation between the two vocabularies lives here.
 
-erhe's extensions deliberately use erhe/glTF-context naming, NOT USD
-vocabulary - USD terms like "primvar interpolation: faceVarying" would be
-confusing inside a Khronos/glTF file. The mapping lives here instead.
+References: OpenUSD `pxr/usd/<domain>/schema.usda` in an OpenUSD checkout
+(`<OpenUSD>`) is the normative attribute list per schema; LightUSD
+(`<LightUSD>`, its `doc/api-status.md`) is the candidate in-editor USD
+library (plan step L1). Per-machine clone locations are recorded in
+`memory-bank/local/`.
 
-## Geometry attribute element naming
+## Stage-level constants
 
-`ERHE_geometry` (see the plan, phase 2) dumps every geogram attribute with
-an `element` field naming what the attribute is attached to. The names are
-erhe/geogram's own:
+erhe has no stage metadata of its own; the glTF constants are the values
+an exporter writes and an importer converts to.
+
+| USD stage metadata | erhe value | notes |
+|---|---|---|
+| `upAxis` | `Y` | glTF is Y-up; a `Z`-up stage is rotated on import |
+| `metersPerUnit` | `1` | glTF is metres |
+| `timeCodesPerSecond` | `1` (or the animation's sample rate) | glTF animation time is seconds |
+| `defaultPrim` | the scene root | erhe scenes have one root node |
+
+## Identity and addressing
+
+| erhe | USD | notes |
+|---|---|---|
+| `Item_base` name (`get_reference_path()` returns the name) | prim name (one path component) | USD requires sibling-unique valid identifiers; erhe does not enforce sibling uniqueness (plan step M1) |
+| node tree position | prim path (`/Root/Child/Leaf`) | erhe has no path type or path lookup yet (plan step M1) |
+| `Item_base::m_gltf_uid` (glTF 2.1 uid) | none; identity is the path | a uid can ride as `customData` |
+| `Item_type` bit / `get_type_name()` | prim `typeName` | one erhe class per USD schema, see "Object model" |
+| owner type chain (`Owner_type`, D27) | schema inheritance (`Xformable` > `Gprim` > `Mesh`) | |
+| content library (per-scene, categories + folders) | `Scope` prims under the stage (`/Materials`, `/Looks`, ...) | folder tree = scope hierarchy |
+
+## Object model
+
+USD has one typed prim per object; erhe has a `Node` with attachments. The
+mapping an exporter applies and an importer inverts:
+
+| erhe | USD | notes |
+|---|---|---|
+| `Node` (transform + children) | `Xform` (`UsdGeomXformable`) | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks, imported as composed then decomposed |
+| `Node` whose only attachment is one `Mesh` | `Mesh` prim (Xformable itself) | the natural form; an importer creates node + mesh attachment |
+| `Node` with several attachments | `Xform` with one typed child prim per attachment | child prims carry no transform of their own |
+| `Mesh` attachment + `Mesh_primitive` list | `Mesh` prim + `GeomSubset` per primitive (`familyName = materialBind`) | one material per subset via `MaterialBindingAPI` |
+| `Light` attachment | `UsdLux` prim, see "Lights" | |
+| `Camera` attachment | `Camera` prim, see "Cameras" | |
+| `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |
+| `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | |
+| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart |
+| prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` composition arc on an `Xform` | USD references are stronger: any target prim, list-edited |
+| item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) | |
+| per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
+| `EXT_mesh_gpu_instancing` (import expands into child nodes) | `PointInstancer` / `instanceable` | erhe has no render-level instancing; an importer expands the same way |
+
+## Property system
+
+erhe's property system (`doc/property-system.md`) is the part of erhe
+that is closest to USD's value-resolution model; the mapping is the basis
+for import (USD opinions -> erhe layers) and export (erhe layers -> USD
+opinions).
+
+| erhe (`erhe::property`) | USD | notes |
+|---|---|---|
+| registered property (name, type, owner type, default) | schema attribute (name, type, fallback) | registration order has no USD meaning |
+| local value (`Value_source::local`) | authored opinion in the layer | export writes local values only |
+| default (`Value_source::default`) | schema fallback | never written |
+| `inherits` flag + closest-ancestor read (R8, D8) | primvar namespace inheritance; `visibility` and `purpose` inheritance | USD inherits only primvars and a few tokens; erhe inherits any flagged property |
+| style layer (D25) and `Style` items (`doc/style-library.md`) | `class` prim + `inherits` arc | style values = the class prim's opinions; the item's local values are stronger, as in LIVRPS |
+| folder-held category values (D30, `Material.roughness` on a Materials folder) | opinions on an ancestor `Scope`, read through primvar-style inheritance | no standard USD mechanism inherits material inputs; carry as custom attributes on the scope |
+| node-held attachment values (D30, `Light.color` on an empty node) | same as folder-held values | |
+| attached property (R7, `Layout.align_y` on a child node) | applied API schema attribute (`layout:alignY`) | |
+| secondary / attached qualified name `Owner.name` | namespaced attribute `owner:name` | `.` in erhe, `:` in USD |
+| enumeration (D2a) | `token` attribute with `allowedTokens` | labels travel as tokens |
+| object reference (D28, material of a primitive, texture of a slot) | relationship (`material:binding`) or connection (`inputs:file`) | |
+| bridged property (D18, node TRS) | attribute whose value the schema computes from another representation (`xformOp:*`) | always local, never inherited: same as xformOps |
+| computed property (D26, `world_translation`, `Light.flux`) | computed value (`ComputeLocalToWorldTransform`, `extent`) | not authored; a writable computed (D26 `writes`) authors its source |
+| expression / binding (D22) | none (closest: `UsdShade` connections) | erhe-only; carried as custom string metadata if exported at all |
+| `Property_set` (D17) | a `PrimSpec`'s property dictionary | |
+| sealing (D24, `lock_edit`) | none (layer permission / `instanceable` are the nearest) | |
+| item flags as bool properties (`visible`, `show_in_ui`, `tool`, ...) | `visibility` (`inherited` / `invisible`), `purpose` (`default` / `render` / `proxy` / `guide`) | `visible` -> `visibility`; editor-only content -> `purpose = guide` |
+| animated layer (future, property-system section 6) | time samples (stronger than `default`) | prerequisite for importing time samples without clobbering local values |
+| `Value_source` of an effective value | opinion provenance (`PcpPrimIndex` node / LightUSD `ArcOrigin`) | erhe already answers "where does this value come from" |
+| text form `to_string` / `from_string` (D16, `1 0.9 0.8`) | USDA literal (`(1, 0.9, 0.8)`) | a converter pair, not a change of erhe's form |
+
+## Geometry attributes
+
+`ERHE_geometry` dumps every geogram attribute with an `element` field.
+The names are erhe / geogram's own:
 
 | ERHE_geometry `element` | geogram element | USD primvar interpolation | meaning |
 |---|---|---|---|
-| `mesh`   | mesh (attribute on the whole mesh) | `constant`    | one value for the whole mesh |
-| `facet`  | facet                              | `uniform`     | one value per polygon |
-| `vertex` | vertex                             | `vertex`      | one value per vertex (glTF vertex i == geogram vertex i) |
-| `corner` | corner                             | `faceVarying` | one value per polygon-corner, in the flat facet_vertex_indices order of ERHE_geometry's polygon encoding |
-| `edge`   | edge                               | (none)        | one value per edge; the edge index list is serialized alongside. USD has no edge element - a USD exporter would carry these as namespaced constant arrays plus the edge index list |
+| `mesh`   | mesh    | `constant`    | one value for the whole mesh |
+| `facet`  | facet   | `uniform`     | one value per polygon |
+| `vertex` | vertex  | `vertex`      | one value per vertex (glTF vertex i == geogram vertex i) |
+| `corner` | corner  | `faceVarying` | one value per polygon-corner, in the flat facet_vertex_indices order of ERHE_geometry's polygon encoding |
+| `edge`   | edge    | (none)        | one value per edge; the edge index list is serialized alongside. A USD writer carries these as namespaced `constant` arrays plus the edge index list |
 
-## Concept mapping (glTF-side <-> USD-side)
-
-| erhe / glTF mechanism | USD equivalent | notes |
+| erhe attribute (`geometry.hpp` constants) | USD | notes |
 |---|---|---|
-| node tree, TRS | prim hierarchy, UsdGeomXformable | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks |
-| mesh primitive + `ERHE_geometry` polygons (facet_vertex_counts / facet_vertex_indices) | UsdGeomMesh faceVertexCounts/faceVertexIndices | deliberately the same encoding shape; EXT_mesh_polygon (draft, KhronosGroup/glTF#2570) is adopted only once ratified |
-| `ERHE_geometry` attributes | UsdGeomPrimvar | see table above |
-| materials + `ERHE_material` | UsdShade / UsdPreviewSurface | PBR metallic-roughness maps to UsdPreviewSurface inputs |
-| KHR_lights_punctual | UsdLux | directional/point/spot map to DistantLight/SphereLight/spot cone |
-| cameras + `ERHE_camera` | UsdGeomCamera | exposure exists natively in UsdGeomCamera |
-| animations (samplers/channels) | time samples / Ts splines | glTF is keyframe-sampler-first, USD time-sample-first; cubic tangents need re-encoding either direction |
-| skins | UsdSkel | |
-| KHR_physics_rigid_bodies + KHR_implicit_shapes | UsdPhysics | closest semantic match of all; both cover bodies, colliders, joints, materials, filtering/groups |
-| glTF 2.1 externalAssets (prefab instances) | references (composition arc) | USD references are strictly stronger (can target any prim, compose lists) |
-| `ERHE_collections` | UsdCollectionAPI | named membership sets |
-| `ERHE_scene` (per-scene settings) | stage/root-layer metadata + custom API schema | |
-| `ERHE_layout` / `ERHE_brushes` / `ERHE_node_graphs` | custom (codeless) schemas | no USD counterpart; these are erhe editor domain |
-| planned `ERHE_overrides` | "overs" / sparse opinions on a reference | see below |
-| KHR_materials_variants (planned adoption) | variantSets (material-only slice) | |
-| EXT_mesh_gpu_instancing (possible future) | UsdGeomPointInstancer / instanceable | |
-| (no equivalent; load policy flags possible on ERHE_scene) | payloads (deferred loading) | |
-| (non-goal) | sublayers / layer stacks | one scene = one asset + external references remains erhe's model |
+| vertex positions | `points` | |
+| `ERHE_geometry` facet_vertex_counts / facet_vertex_indices | `faceVertexCounts` / `faceVertexIndices` | deliberately the same encoding shape |
+| `normal` (corner) | `normals` (`faceVarying`) or `primvars:normals` | |
+| `texcoord_0..2` | `primvars:st`, `primvars:st1`, `primvars:st2` (`texCoord2f[]`) | `texcoord_2` is the lightmap UV set |
+| `color_0..1` | `primvars:displayColor` (+ `displayOpacity`), `primvars:color1` | |
+| `tangent`, `bitangent` | `primvars:tangents`, `primvars:bitangents` | USD has no schema slot; primvar by convention |
+| `joint_indices_n` / `joint_weights_n` | `primvars:skel:jointIndices` / `primvars:skel:jointWeights` (`elementSize`) | |
+| `edge_sharpness` (edge) | `creaseIndices` / `creaseLengths` / `creaseSharpnesses` | the one edge attribute with a USD form |
+| (geometry-normative polygon mesh) | `subdivisionScheme = none` | Catmull-Clark is an erhe operation, not a render-time scheme |
 
-## Planned future features
+## Materials
 
-These are informed by USD but specified in glTF terms. None are on the
-switchover critical path (plan phases 0-6); they land after `.erhescene`
-is gone.
+| erhe `Material` property | USD `UsdPreviewSurface` input / other | notes |
+|---|---|---|
+| `base_color`, `base_color_texture` | `diffuseColor` | |
+| `opacity`, `alpha_cutoff`, `blending_mode` | `opacity`, `opacityThreshold` | blend vs mask is a threshold in USD |
+| `roughness` (x), `metallic`, `emissive`, `ior` | `roughness`, `metallic`, `emissiveColor`, `ior` | erhe's anisotropic `roughness.y` has no PreviewSurface input |
+| `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | |
+| `occlusion_texture`, `occlusion_texture_strength` | `occlusion` | |
+| `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | |
+| `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes |
+| `<slot>_texture_uv_*` | `UsdTransform2d` | |
+| `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | |
+| `double_sided` | `doubleSided` on the `Mesh` prim | a mesh flag in USD, a material flag in erhe |
 
-### ERHE_overrides (near-term, highest value)
+## Lights
 
-USD inspiration: composing sparse "over" opinions on top of a reference.
+| erhe `Light` property | USD (`UsdLux`) | notes |
+|---|---|---|
+| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | |
+| `color` | `inputs:color` | |
+| `intensity` | `inputs:intensity` (and `inputs:exposure` = 0) | unit conventions differ; a conversion factor per light type |
+| `temperature` | `inputs:colorTemperature` + `inputs:enableColorTemperature` | exact match of the erhe property |
+| `range` | none (USD lights have no range cutoff) | erhe-only |
+| `inner_spot_angle`, `outer_spot_angle` | `ShapingAPI` `inputs:shaping:cone:angle` + `inputs:shaping:cone:softness` | |
+| `cast_shadow` | `ShadowAPI` `inputs:shadow:enable` | |
+| `flux`, `blackbody` (computed) | not authored | |
+| scene ambient light (`ERHE_scene`) | `DomeLight` with a constant color | |
 
-Problem it solves: today, edits made inside a prefab instance subtree are
-silently lost on save - the subtree is not serialized and is re-created
-verbatim from the referenced glTF on load.
+## Cameras
 
-Shape: an extension on the prefab-instance node carrying a list of sparse
-overrides applied after the externalAsset subtree is instantiated:
+| erhe `Camera` property | USD `Camera` | notes |
+|---|---|---|
+| `projection_type` | `projection` (`perspective` / `orthographic`) | erhe's asymmetric frustum and per-edge FOV forms map to `horizontalApertureOffset` / `verticalApertureOffset` |
+| `fov_y` / `fov_x` | `focalLength` + `horizontalAperture` / `verticalAperture` | USD is physical-camera-first |
+| `ortho_*` | `horizontalAperture` / `verticalAperture` in orthographic mode | |
+| `z_near`, `z_far`, `infinite_z_far` | `clippingRange` | infinite far has no USD form |
+| `exposure` | `exposure` | exact match |
+| `shadow_range` | none | erhe-only |
 
-- **Addressing**: each override targets a node inside the referenced asset
-  by a stable intra-asset path (name path from the asset root, with an
-  index-based disambiguator for duplicate names). Record the node's glTF
-  index at authoring time as a secondary consistency check: resolution
-  goes by name path, and an index mismatch downgrades to a warning (the
-  source was re-exported) while a name-path miss marks the override
-  unresolved. This addressing scheme is the hard design problem and the
-  reason the feature is not in the switchover critical path: it must
-  survive re-exports of the source asset as long as names/structure are
-  unchanged, and must fail loudly (keep the override, mark unresolved)
-  when the source changed shape. Scope: overrides address nodes of the
-  directly referenced asset only - content inside a nested prefab
-  instance is out of scope initially (an override of the nested instance
-  node itself is fine; reaching through it is not).
-- **Override kinds** (initial set): node transform (full TRS replace),
-  node Item flags (e.g. hide a subtree member), material rebind
-  (primitive -> material index in the *outer* asset), removal (prune a
-  member). Extendable per-kind.
-- **Application order**: instantiate subtree -> apply overrides in file
-  order -> attach Prefab_instance marker. Save regenerates the override
-  list by diffing the live subtree against a pristine instantiation.
+## Physics
 
-### KHR_materials_variants adoption (near-term)
+`UsdPhysics` is the closest semantic match of all the domains: bodies,
+colliders, joints, materials, filtering and groups all exist on both
+sides.
 
-Ratified glTF extension; fastgltf already parses it. Gives per-primitive
-material alternatives (USD: material-binding variantSets). Requires editor
-UI for authoring and switching the active variant, and MCP tools for both.
+| erhe | USD (`UsdPhysics`) | notes |
+|---|---|---|
+| `Node_physics` on a node | `RigidBodyAPI` + `CollisionAPI` applied to the prim | |
+| `motion_mode` static / kinematic / dynamic | no `RigidBodyAPI` / `physics:kinematicEnabled` / `physics:rigidBodyEnabled` | |
+| `mass`, `center_of_mass_offset` | `MassAPI` `physics:mass`, `physics:centerOfMass` | erhe's density-derived default mass = `physics:mass = 0` |
+| `initial_linear_velocity`, `initial_angular_velocity` | `physics:velocity`, `physics:angularVelocity` | |
+| `is_trigger` | `PhysicsTriggerAPI` | |
+| `gravity_factor` | none in core (`PhysxRigidBodyAPI:disableGravity` is vendor) | erhe-only |
+| collision shapes (`KHR_implicit_shapes`) | `Cube` / `Sphere` / `Capsule` / `Cylinder` / `Mesh` with `CollisionAPI`, `MeshCollisionAPI` approximation | |
+| `Physics_material` `static_friction`, `dynamic_friction`, `restitution`, `density` | `MaterialAPI` `physics:staticFriction`, `physics:dynamicFriction`, `physics:restitution`, `physics:density` | exact match |
+| `friction_combine`, `restitution_combine` | none in core (PhysX vendor schema has them) | |
+| `linear_damping`, `angular_damping`, `wind_receptivity` | none in core (PhysX vendor schema has damping) | erhe-only |
+| `Collision_filter` (systems, collide-with lists) | `CollisionGroup` prims + `FilteredPairsAPI` | |
+| `Node_joint` + `Physics_joint_settings` | `PhysicsJoint` subclasses (`Fixed`, `Revolute`, `Prismatic`, `Spherical`, `Distance`) + `LimitAPI` / `DriveAPI` | the erhe six-dof settings-less joint = `PhysicsJoint` with no limits |
+| `enable_physics` (`ERHE_scene`), gravity | `PhysicsScene` prim (`physics:gravityDirection`, `physics:gravityMagnitude`) | |
 
-### KHR_animation_pointer adoption (near-term)
+## Animation
 
-Ratified glTF extension: animation channels target arbitrary properties via
-JSON pointer (USD: time samples on any attribute). Growth path for the
-animation editor (#243) beyond node TRS - lights, material factors, camera
-parameters. Needs Animation_player property-binding support.
+| erhe | USD | notes |
+|---|---|---|
+| animation samplers / channels targeting node TRS (glTF model) | time samples on `xformOp:*` attributes | glTF is keyframe-sampler-first, USD time-sample-first; cubic tangents re-encode as `Ts` splines |
+| `Animation_player` playback writing the transform | time-sampled value resolution (stronger than `default`) | erhe overwrites the local value today; the animated layer (property-system section 6) restores the USD distinction |
+| channels on arbitrary properties (future) | time samples on any attribute | |
+| skins | `UsdSkel` `SkelAnimation` | |
 
-### ERHE_variants (deferred)
+## Composition
 
-Node-level variant sets (subtree alternatives: LODs, configuration
-options). USD: variantSets beyond materials. No current editor feature
-needs it; design when one does.
+erhe has no composition engine; the entries below name what each erhe
+mechanism composes as, and what has no erhe counterpart yet.
 
-### Instancing (deferred)
-
-Adopt EXT_mesh_gpu_instancing (ratified) if/when erhe grows mass-placement
-(scatter) tooling. Do not invent an ERHE extension for this.
-
-### Payload-style load policy (deferred)
-
-externalAssets + Prefab_library caching already give lazy structure;
-explicit per-instance load/unload policy flags can ride `ERHE_scene` later
-if scenes grow big enough to need it.
-
-### USD interchange target (revisit trigger)
-
-If Android/Quest support lands in OpenUSD (or write-capable tinyusdz
-matures) AND erhe needs composition features glTF cannot express, add USD
-as an *export/import interchange target* using the mappings above - without
-changing the persistence format.
+| erhe | USD composition | notes |
+|---|---|---|
+| a scene file | a root layer | one scene = one layer stack of one layer |
+| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | |
+| edits inside an instance (not possible today: sealed) | `over` prims with sparse local opinions (`L`) | the property system's local layer is the natural carrier once instances are editable and items have paths |
+| `Style` items | `class` prims + `inherits` (`I`) | |
+| none | variant sets (`V`) | material variants (KHR_materials_variants) would be the first slice |
+| none | payloads (`P`) | deferred loading; erhe's prefab library loads eagerly |
+| none | `specializes` (`S`) | |
+| none | sublayers, session layer | an undo stack is not a layer |
+| `Value_source` | opinion provenance | |

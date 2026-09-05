@@ -303,10 +303,11 @@ Names remain only inside graph JSON references (same as today).
 
 USD was reviewed (see Alternative-considered section) for concepts worth
 carrying into glTF. First preference is always an existing **ratified**
-glTF extension; only where none exists do we define `ERHE_*`. Full detail -
-the erhe <-> USD naming/concept mapping and the specifications of the
-planned future features - lives in **`doc/usd_compatibility.md`**; erhe
-extensions use erhe/glTF-context naming, never USD vocabulary.
+glTF extension; only where none exists do we define `ERHE_*`. The erhe
+<-> USD naming/concept mapping lives in **`doc/usd_compatibility.md`**
+and the steps toward USD interchange and composition in
+`doc/usd-compatibility-plan.md`; erhe extensions use erhe/glTF-context
+naming, never USD vocabulary.
 
 In scope for this plan:
 
@@ -314,17 +315,11 @@ In scope for this plan:
   Named sets of node references express item tags today and selection sets /
   render-layer-like groupings later, without inventing per-node tag strings.
 
-Documented in `doc/usd_compatibility.md`, implemented after the switchover:
-
-- **`ERHE_overrides`** (USD: sparse "overs" on a reference) - persist edits
-  made inside prefab instances, which are silently lost on save today.
-  Highest-value USD idea; off the critical path because its intra-asset
-  addressing scheme needs careful design.
-- **KHR_materials_variants** and **KHR_animation_pointer** adoption (both
-  ratified) - USD's variants and animate-anything, respectively.
-- Deferred: `ERHE_variants` (node-level variant sets),
-  EXT_mesh_gpu_instancing, payload-style load policies. Non-goal:
-  sublayering.
+Outside this plan: per-instance prefab overrides (USD: sparse "overs" on
+a reference) are carried by the property system's local value layer plus
+item paths, `doc/usd-compatibility-plan.md` step X2, in place of the
+`ERHE_overrides` extension once considered here; material and node
+variants are that plan's step X4.
 
 ## Phase 4 - Save / Open switchover
 
@@ -498,11 +493,10 @@ Rejected on operational grounds:
 
 The 2026-07-12 revision harvests USD's transferable ideas into glTF
 extensions instead (see "USD-inspired features" above and
-`doc/usd_compatibility.md`): collections shape `ERHE_collections`, overs
-shape the planned `ERHE_overrides`, and variants / animate-anything /
-instancing arrive via the ratified KHR_materials_variants /
-KHR_animation_pointer / EXT_mesh_gpu_instancing. `ERHE_geometry` keeps
-erhe/geogram element naming; the primvar mapping is documented, not adopted.
+`doc/usd_compatibility.md`): collections shape `ERHE_collections`, and
+overs / variants / animate-anything are steps of
+`doc/usd-compatibility-plan.md`. `ERHE_geometry` keeps erhe/geogram
+element naming; the primvar mapping is documented, not adopted.
 
 Revisit trigger: if Android support lands upstream (or write-capable
 tinyusdz matures) AND erhe starts needing composition features glTF cannot
@@ -535,7 +529,7 @@ persistence format.
   records follow the flat facet_vertex_indices order, which must equal
   geogram's facet-corner iteration order); the gtest is written first
   (bit-exact dump round-trip) to pin it down.
-- `ERHE_overrides` intra-asset addressing (stable node paths inside a
-  referenced glTF) is the hardest USD-inspired design; kept out of the
-  switchover critical path deliberately (design notes in
-  `doc/usd_compatibility.md`).
+- Per-instance override addressing (stable item paths inside a referenced
+  glTF) is the hardest USD-inspired design; kept out of the switchover
+  critical path deliberately (`doc/usd-compatibility-plan.md` steps M1
+  and X2).
