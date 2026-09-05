@@ -51,7 +51,8 @@ Constraints every step respects:
 ## 2. Step catalogue
 
 Steps are grouped by what they touch: M = model generalization (no USD
-code), L = library integration, I = import, E = export, X = composition.
+code), L = library integration, I = import, E = export, X = composition;
+animation and physics are section 5, future work outside every stage.
 Within a group the order is the recommended one; across groups the
 dependencies are in section 3. Sizes are relative: S = an afternoon,
 M = a few days, L = a week or more.
@@ -135,24 +136,6 @@ Verification: import a glTF and (after I1) a USD file with a material at
 defaults; `get_item_properties` reports `default` for every untouched
 field.
 
-### M5 Animated value layer (M)
-
-What: the property-system section 6 item: an animated value between
-coerced and local in R3, set by `Animation_sampler::apply` and cleared
-when playback stops, so playback never overwrites the authored local
-value.
-
-Why: USD resolves time samples above `default`; importing a time-sampled
-attribute (I3) into erhe without this layer would clobber the authored
-pose, and exporting would write the current playback pose as `default`.
-It is also the prerequisite of the keyframing plan
-(`doc/animation-keyframing-plan.md`) and of animation channels on
-arbitrary properties, so it pays for itself without USD.
-
-Verification: play an animation, `get_item_properties` reports
-`Value_source::animated` for the transform and the local value is the
-authored one; stop, the transform returns to the local value.
-
 ### M6 Value types USD needs (S each, as needed)
 
 What: add `Property_type` alternatives only when an import or export step
@@ -222,7 +205,9 @@ What: `Import USD` next to `Import glTF` (File menu, drag-drop by
 extension, MCP `import_usd`), through `erhe::usd`: LightUSD Tydra
 `RenderScene` for meshes (positions, normals, texcoords, colours,
 subsets), materials (`UsdPreviewSurface` per the mapping), nodes and
-transforms, cameras and lights. The import goes through the same
+transforms, cameras and lights. Time samples are read at the stage's
+default time code and `UsdPhysics` schemas are skipped with a log line
+(section 5). The import goes through the same
 `Item_insert_remove_operation` path as glTF import so it is undoable and
 announces removals on undo (`doc/import-undo-reference-clearing.md`).
 Polygon meshes with `subdivisionScheme = none` arrive as geometry-normative
@@ -252,20 +237,6 @@ land on `visible` and `purpose` (M3).
 Why: makes an imported stage look, in the Properties window, exactly as
 an erhe author would have made it: only authored values carry the local
 marker. Without M4 there is no such distinction to preserve.
-
-### I3 Time samples (M, after M5 and I1)
-
-What: time-sampled `xformOp:*` attributes import as erhe animation
-channels (linear samples; `Ts` splines re-encoded to cubic samplers);
-`UsdSkel` `SkelAnimation` imports through the existing skin path.
-
-### I4 Physics (M, after I1)
-
-What: `UsdPhysics` API schemas import as `Node_physics`, `Node_joint`,
-`Physics_material`, `Collision_filter` per the mapping's physics table,
-through `Gltf_physics_data`'s sibling carrier for USD (the physics import
-operations already take a plain-data carrier; a USD reader fills the same
-carrier).
 
 ### E1 Save as USDA (M, after M1, M2, I1; the G2 step)
 
@@ -364,18 +335,17 @@ Recommended first sequence, each step independently landable:
 6. M4 local values are the authored set
 7. I2 authored opinions become local values
 
-Steps 1 to 7 reach G1 for the schemas I1 covers; I3 and I4 widen it.
+Steps 1 to 7 reach G1 for the schemas I1 covers.
 
 8. E1 save as USDA (G2)
 9. E3 round-trip script
 
-M5, M6, M7 land when the step that needs them is next (I3, any importer
+M6 and M7 land when the step that needs them is next (any importer
 hitting a missing type, X3). Everything in X waits for I1 and E1 to have
 shown the mapping holds on real content; X1 and X2 are what turns E1's
 flattened save into one that keeps the source file's structure (G3).
 
-Dependencies: I1 needs L1; I2 needs M4 and I1; I3 needs M5 and I1; I4
-needs I1; E1 needs M1, M2 and I1; E2 and E3 need E1; X1 needs I1 and M1;
+Dependencies: I1 needs L1; I2 needs M4 and I1; E1 needs M1, M2 and I1; E2 and E3 need E1; X1 needs I1 and M1;
 X2 needs X1, M1 and M4; X3 needs I1 and M7; X4 and X5 need I1.
 
 ## 4. Out of scope
@@ -391,3 +361,33 @@ X2 needs X1, M1 and M4; X3 needs I1 and M7; X4 and X5 need I1.
 - `specializes`, payload load policies, sublayer stacks and the session
   layer: no erhe feature maps onto them yet; the mapping lists them as
   having no erhe counterpart.
+
+## 5. Future work
+
+Animation and physics are outside G1, G2 and G3: a USD scene loads,
+edits and saves without them until the items below are taken up, and E1
+writes neither time samples nor `UsdPhysics` schemas. Each item is
+independent of the others and of every step in section 2 except where
+named.
+
+- Animated value layer: the property-system section 6 item, an animated
+  value between coerced and local in R3, set by `Animation_sampler::apply`
+  and cleared when playback stops, so playback never overwrites the
+  authored local value. USD resolves time samples above `default`;
+  importing a time-sampled attribute without this layer would clobber
+  the authored pose, and saving would write the playback pose as
+  `default`. It is also the prerequisite of the keyframing plan
+  (`doc/animation-keyframing-plan.md`) and of animation channels on
+  arbitrary properties, so it pays for itself without USD.
+- Time samples on load (after the animated value layer and I1):
+  time-sampled `xformOp:*` attributes become erhe animation channels
+  (linear samples; `Ts` splines re-encoded to cubic samplers);
+  `UsdSkel` `SkelAnimation` goes through the existing skin path. The
+  matching save writes the channels back as time samples.
+- Physics on load (after I1): `UsdPhysics` API schemas become
+  `Node_physics`, `Node_joint`, `Physics_material` and `Collision_filter`
+  per the mapping's physics table, through a USD-filled sibling of
+  `Gltf_physics_data` (the physics import operations already take a
+  plain-data carrier). The matching save applies the API schemas per the
+  same table; erhe-only physics properties (damping, wind receptivity,
+  gravity factor, combine modes) ride `erhe:` custom attributes under C1.
