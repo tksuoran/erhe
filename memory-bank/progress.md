@@ -35,7 +35,8 @@
 [TASK::usd-compatibility]{IN-PROGRESS-2026-09-05,via-doc/agent-orchestration-harness.md}
 ✓mapping-doc-rewrite+plan-doc{d25e505e4}+three-stage-goal{489f2c7a6}+anim/physics->future-work{46ce31a3c}
 ✓M1-item-paths{4d400211e;143-item-tests;headless-MCP-by-path-verified}
-⚡M2-sibling-unique-names{opus-coder-running}
+✓M2-sibling-unique-names{156-item-tests;headless:create_node-dup→Marker_1;hintze-hall-import-7-dups→suffixed;undo-restores;rename-refused}
+⚡roundtrip-baseline{scene_roundtrip_verify.py-6-fails-on-main;fix-before-M3}
 ?M3->L1->I1->M4->I2->E1->E3{plan-section-3}
 
 [NOTES]

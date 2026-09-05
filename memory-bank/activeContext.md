@@ -2,7 +2,7 @@
 
 [FOCUS]
 @harness::doc/agent-orchestration-harness.md{e2605f494,2026-09-05;©User-asked-token-saving:orchestrator-writes-brief-per-commit→fresh-opus-coder-edits+builds+verifies+leaves-uncommitted→orchestrator-reviews-diff+commits;coders-strictly-sequential{shared-build-trees+MCP-port};fixes-via-SendMessage-same-agent;Explore-scouts-for-pre-brief-questions}
-@usd-compatibility::doc/usd-compatibility-plan.md{M1✓4d400211e{path=names-below-root,root-excluded,'/'-sep;find_by_path;get_reference_path=path|name;resolvers-accept-both-forms;MCP-paths}+M2-in-progress-via-harness,2026-09-05}
+@usd-compatibility::doc/usd-compatibility-plan.md{M1✓4d400211e{path=names-below-root,root-excluded,'/'-sep;find_by_path;get_reference_path=path|name;resolvers-accept-both-forms;MCP-paths}+M2✓{sibling-unique:make_sibling_unique_name<base>_<n>-from-1;choke-point=handle_add_child;refusal=name-bridge-validate{Property_bridge::validate+Dependency_object::validate_value}};next=roundtrip-baseline-fix→M3,2026-09-05}
   goals::G1-load+edit-USD{no-save}->G2-save-USD->G3-glTF-or-USD-independent{never-converted/mixed};C1=each-format-carries-own-features{no-glTF-ext-for-USD-features}
   order::M1-item-paths->M2-sibling-unique-names->M3-purpose-enum->L1-LightUSD-optional-CPM{ERHE_USD_LIBRARY}->I1-import-USD-asset{Tydra}->M4-local=authored->I2->E1-save-USDA->E3-roundtrip
   mapping::doc/usd_compatibility.md{property-layers<->USD-opinions;per-domain-tables;plan-never-restates-rows}
@@ -61,10 +61,12 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 
 [STATE]
-@branch::main{#7-commits-unpushed;user-pushes-themselves}
+@branch::main{#9-commits-unpushed;user-pushes-themselves}
 prompt_queue.txt::item-0=USD-compatibility-plan{only-item;GL-slot-scope-narrowing->doc/gl-worker-context-enforcement.md-Follow-ups-F}
 
 [OPEN]
+!scene_roundtrip_verify.py-RED-on-main{total=56-pass=50-fail=6+editor-segfault-in-prefab/reload-section;pre-M2-baseline-confirmed-by-revert;C1-requires-green;investigating-via-coder}
+?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?user-interactive-check{folders+category-props+texture-slots+styles+node-attachment-values+camera+physics-materials}→expect-fixes;then-migrations{Node_physics-first}
 ?material-reload-limitation-still-open::ERHE_material-bakes-effective→local{lights-fixed-via-ERHE_light.properties-rule;same-rule-for-materials=candidate}
 ?startup-log-error::"property 'lightmapped': object is sealed"{pre-existing,at-startup,unrelated}
