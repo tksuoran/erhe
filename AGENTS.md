@@ -152,7 +152,8 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 
 Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
 (circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
-primitive, raytrace), plus `mcp_server_tests` for the editor's MCP server. Each
+primitive, raytrace, usd), plus `mcp_server_tests` for the editor's MCP server.
+`erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`. Each
 builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
 (default OFF).
 

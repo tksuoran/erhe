@@ -27,8 +27,8 @@ an exporter writes and an importer converts to.
 
 | USD stage metadata | erhe value | notes |
 |---|---|---|
-| `upAxis` | `Y` | glTF is Y-up; a `Z`-up stage is rotated on import |
-| `metersPerUnit` | `1` | glTF is metres |
+| `upAxis` | `Y` | glTF is Y-up; the importer rotates a `Z`-up stage by -90 degrees about X, as part of the one transform it applies to the top-level imported nodes. An `X`-up stage is imported unrotated with a warning |
+| `metersPerUnit` | `1` | glTF is metres; the importer scales by it in the same top-level transform as `upAxis` |
 | `timeCodesPerSecond` | `1` (or the animation's sample rate) | glTF animation time is seconds |
 | `defaultPrim` | the scene root | erhe scenes have one root node |
 
@@ -117,7 +117,7 @@ The names are erhe / geogram's own:
 | `tangent`, `bitangent` | `primvars:tangents`, `primvars:bitangents` | USD has no schema slot; primvar by convention |
 | `joint_indices_n` / `joint_weights_n` | `primvars:skel:jointIndices` / `primvars:skel:jointWeights` (`elementSize`) | |
 | `edge_sharpness` (edge) | `creaseIndices` / `creaseLengths` / `creaseSharpnesses` | the one edge attribute with a USD form |
-| (geometry-normative polygon mesh) | `subdivisionScheme = none` | Catmull-Clark is an erhe operation, not a render-time scheme |
+| (geometry-normative polygon mesh) | `subdivisionScheme = none` | Catmull-Clark is an erhe operation, not a render-time scheme. The importer builds erhe geometry for exactly this value; every other scheme (including USD's `catmullClark` fallback) imports as a triangle soup |
 
 ## Materials
 
@@ -128,7 +128,7 @@ The names are erhe / geogram's own:
 | `roughness` (x), `metallic`, `emissive`, `ior` | `roughness`, `metallic`, `emissiveColor`, `ior` | erhe's anisotropic `roughness.y` has no PreviewSurface input |
 | `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | |
 | `occlusion_texture`, `occlusion_texture_strength` | `occlusion` | |
-| `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | |
+| `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | erhe has one slot for the pair, so the importer takes the image the `roughness` input names and falls back to the `metallic` one |
 | `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes |
 | `<slot>_texture_uv_*` | `UsdTransform2d` | |
 | `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | |
@@ -138,9 +138,9 @@ The names are erhe / geogram's own:
 
 | erhe `Light` property | USD (`UsdLux`) | notes |
 |---|---|---|
-| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | |
+| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | the presence of `ShapingAPI` on the prim is what makes an imported sphere / point light a spot light; area lights (`Rect`, `Disk`, `Cylinder`) import as point lights with a log line, and `DomeLight` and the remaining types are skipped |
 | `color` | `inputs:color` | |
-| `intensity` | `inputs:intensity` (and `inputs:exposure` = 0) | unit conventions differ; a conversion factor per light type |
+| `intensity` | `inputs:intensity` (and `inputs:exposure` = 0) | unit conventions differ; a conversion factor per light type. erhe has no exposure on a light, so the importer folds the two into `intensity * 2^exposure` and applies no unit conversion of its own |
 | `temperature` | `inputs:colorTemperature` + `inputs:enableColorTemperature` | exact match of the erhe property |
 | `range` | none (USD lights have no range cutoff) | erhe-only |
 | `inner_spot_angle`, `outer_spot_angle` | `ShapingAPI` `inputs:shaping:cone:angle` + `inputs:shaping:cone:softness` | |
@@ -154,7 +154,7 @@ The names are erhe / geogram's own:
 |---|---|---|
 | `projection_type` | `projection` (`perspective` / `orthographic`) | erhe's asymmetric frustum and per-edge FOV forms map to `horizontalApertureOffset` / `verticalApertureOffset` |
 | `fov_y` / `fov_x` | `focalLength` + `horizontalAperture` / `verticalAperture` | USD is physical-camera-first |
-| `ortho_*` | `horizontalAperture` / `verticalAperture` in orthographic mode | |
+| `ortho_*` | `horizontalAperture` / `verticalAperture` in orthographic mode | USD apertures are in tenths of a scene unit, so `ortho_width` = `horizontalAperture` / 10 and `ortho_height` = `verticalAperture` / 10 |
 | `z_near`, `z_far`, `infinite_z_far` | `clippingRange` | infinite far has no USD form |
 | `exposure` | `exposure` | exact match |
 | `shadow_range` | none | erhe-only |

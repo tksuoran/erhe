@@ -30,8 +30,54 @@ code that uses the library is compiled under
   root-layer `subLayers` entry, `reference` and `payload` for the arcs a prim
   authored), plus up axis, default prim and metersPerUnit.
 
+- `load_usd(Usd_load_arguments) -> Usd_load_result` - load a file and convert
+  its composed stage into erhe scene content. `convert_stage(stage, arguments)`
+  is the same conversion over a stage the caller already loaded.
+- `Usd_data` - what one USD file contributes: `nodes`, `meshes`, `cameras`,
+  `lights`, `materials`, `images`, `material_texture_bindings`, plus the
+  stage's `up_axis` and `meters_per_unit`. It is deliberately the shape of
+  `erhe::gltf::Gltf_data` where the two formats overlap, so the editor's
+  import path is the same one glTF import takes.
+
 `erhe_usd/usd_log.hpp` declares `log_usd` (`erhe.usd`) and
 `initialize_logging()`, called from the editor's logging init.
+`erhe_usd/usd_impl.hpp` is the internal header holding `Stage::Impl`; it
+includes LightUSD headers and is included only by this library's own
+translation units.
+
+## Import
+
+`usd_import.cpp` converts a composed stage through LightUSD's Tydra
+`RenderSceneConverter`. The decisions the conversion rests on:
+
+- The converter runs with triangulation and vertex-index building off. That
+  keeps the authored `faceVertexCounts` / `faceVertexIndices` and the
+  authored primvar variability, which is what the geometry-normative path
+  needs; the element table of `doc/usd_compatibility.md` maps the
+  variability onto erhe's element domains.
+- A `Mesh` prim whose `subdivisionScheme` is `none` becomes an
+  `erhe::geometry::Geometry` built straight from those arrays, processed
+  with connect + build edges + smooth vertex normals (the processing the
+  editor's glTF finalize pass runs for imported geometry without edges).
+  Every other mesh becomes an `erhe::primitive::Triangle_soup` with one
+  vertex per polygon corner and polygons fanned into triangles, the carrier
+  glTF primitives use.
+- Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
+  with the facets no subset claims forming one more - the same shape a glTF
+  mesh's primitive list has. A vertex is emitted for a group only if one of
+  its facets uses it.
+- LightUSD's image loaders are off, so an image arrives as a resolved file
+  path (`Usd_image`) and the caller decodes it with erhe's own image
+  loading. `erhe::usd` creates no GPU object at all, which is what lets the
+  conversion run off the main thread.
+- Values are read at the stage's default time code, and `UsdPhysics` prims
+  and API schemas are counted and reported in one log line rather than
+  imported (`doc/usd-compatibility-plan.md` section 5).
+
+Not yet imported: skeletons and skinning, blend shapes, animation clips,
+`PointInstancer` / instanceable prototypes beyond what Tydra flattens,
+volumes, MaterialX / OpenPBR shading networks, texture wrap and filter
+state, and `UsdTransform2d` UV transforms.
 
 ## Dependency
 
@@ -42,10 +88,18 @@ carries MSVC / Visual Studio 2026 build fixes upstream does not have yet; the
 comment on the pin says when the fork can be dropped. `GIT_SHALLOW` is off
 because a shallow clone cannot fetch a raw commit id.
 
-Only Tydra and the composition cache (`LIGHTUSD_WITH_PCP`) are enabled. Every
-other optional module is off, for two reasons: none of them is on the path
-from a USD file to an erhe scene, and several vendor copies of libraries erhe
-already compiles.
+Tydra, the composition cache (`LIGHTUSD_WITH_PCP`) and the OpenVDB reader
+(`LIGHTUSD_WITH_USDVOL`) are enabled. Every other optional module is off, for
+two reasons: none of them is on the path from a USD file to an erhe scene, and
+several vendor copies of libraries erhe already compiles.
+
+`LIGHTUSD_WITH_USDVOL` is on only because Tydra's `RenderSceneConverter`
+calls `usdVol::ReadVDBFromMemory` unconditionally (`ConvertVolume` in
+`tydra/render-data.cc`), so any link that pulls that translation unit needs
+the module even though erhe imports no volumes. Without it the link fails with
+one `LNK2019` for that symbol - and only for a target that actually calls the
+converter, which is why the option can look unnecessary until the first such
+link. Turn it off again when upstream guards the call.
 
 ### Duplicate symbols
 
@@ -98,11 +152,20 @@ unknown-tool reply.
 and `scripts\configure_vs2026_vulkan_headless.bat` pass
 `-DERHE_USD_LIBRARY=lightusd`.
 
+## Tests
+
+`src/erhe/usd/test/` builds `erhe_usd_tests` behind `-DERHE_BUILD_TESTS=ON`
+(and `-DERHE_USD_LIBRARY=lightusd`). It imports `test/data/cube.usda` - a
+cube with a materialBind `GeomSubset`, two `UsdPreviewSurface` materials, a
+camera and a distant light - and checks the node names, the geometry-normative
+split by subset, the material values, the camera projection and the light.
+
 ## Future work
 
-- I1 of `doc/usd-compatibility-plan.md`: import a USD file as an asset,
-  through LightUSD Tydra `RenderScene`. That is what grows this library past
-  `load_stage` / `describe_stage`.
+- The rest of I1 in `doc/usd-compatibility-plan.md`: the editor's `Import USD`
+  operation (File menu, drag-drop by extension, MCP `import_usd`) through the
+  undoable `Item_insert_remove_operation` path, and the undo / round-trip
+  verification that goes with it.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
 - The Quest / Android build with the option on (build, size, launch) is

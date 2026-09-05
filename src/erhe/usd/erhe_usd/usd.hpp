@@ -1,10 +1,22 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
+
+namespace erhe::primitive {
+    class Material;
+}
+namespace erhe::scene {
+    class Camera;
+    class Light;
+    class Mesh;
+    class Node;
+    using Layer_id = uint64_t;
+}
 
 namespace erhe::usd {
 
@@ -80,5 +92,91 @@ public:
 // Summarize a loaded stage: prim count, per-schema-type prim counts sorted by
 // type name, and the layers the stage names.
 [[nodiscard]] auto describe_stage(const Stage& stage) -> Stage_description;
+
+// One image the stage's materials reference. LightUSD's built-in image
+// loaders are off in erhe's build (they duplicate what erhe::graphics
+// already decodes), so an image arrives as a resolved file path and the
+// caller loads the pixels with erhe's own image loading.
+class Usd_image final
+{
+public:
+    std::string           name;
+    std::filesystem::path path;
+    // The USD color space of the source asset says whether the texels are
+    // sRGB-encoded; a normal / occlusion map is raw.
+    bool                  srgb{true};
+};
+
+// The five texture slots of erhe::primitive::Material_texture_samplers, in
+// the same order as the glTF importer's Gltf_material_texture_slot.
+enum class Usd_material_texture_slot : unsigned int {
+    base_color         = 0,
+    metallic_roughness = 1,
+    normal             = 2,
+    occlusion          = 3,
+    emissive           = 4
+};
+
+// Which image belongs in which texture slot of which material. erhe::usd
+// creates no GPU object, so the slots themselves stay empty and the caller
+// fills them once it has created the textures.
+class Usd_material_texture_binding final
+{
+public:
+    std::size_t               material_index{0};
+    Usd_material_texture_slot slot{Usd_material_texture_slot::base_color};
+    std::size_t               image_index{0};
+};
+
+// Everything one USD file contributes to a scene, in erhe types - the USD
+// counterpart of erhe::gltf::Gltf_data, and deliberately the same shape
+// where the two formats overlap. `nodes` holds every imported node (the
+// top-level ones parented to Usd_load_arguments::root_node); meshes,
+// cameras and lights are attached to the nodes that carry them and are
+// listed here as well, the way the glTF importer lists them.
+class Usd_data final
+{
+public:
+    std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
+    std::vector<std::shared_ptr<erhe::scene::Camera>>       cameras;
+    std::vector<std::shared_ptr<erhe::scene::Light>>        lights;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    std::vector<Usd_image>                                  images;
+    std::vector<Usd_material_texture_binding>               material_texture_bindings;
+
+    // Stage constants the import consumed (see load_usd): the up axis and
+    // metersPerUnit are applied to the top-level nodes as a root transform,
+    // and reported here for the caller's log / UI.
+    std::string up_axis{"Y"};
+    double      meters_per_unit{1.0};
+};
+
+class Usd_load_arguments final
+{
+public:
+    std::filesystem::path                     path;
+    const std::shared_ptr<erhe::scene::Node>& root_node;
+    erhe::scene::Layer_id                     mesh_layer_id{0};
+};
+
+// Result of load_usd(). `error` is non-empty exactly when the load failed,
+// in which case `data` is empty; `warning` can be non-empty either way.
+class Usd_load_result final
+{
+public:
+    Usd_data    data;
+    std::string error;
+    std::string warning;
+};
+
+// Load a USD file (through load_stage) and convert its composed stage into
+// erhe scene content: nodes and transforms, meshes, materials, image
+// references, cameras and lights. Values are read at the stage's default
+// time code; UsdPhysics API schemas are logged once per file and skipped.
+[[nodiscard]] auto load_usd(const Usd_load_arguments& arguments) -> Usd_load_result;
+
+// Convert an already loaded stage. load_usd() is this plus load_stage().
+[[nodiscard]] auto convert_stage(const Stage& stage, const Usd_load_arguments& arguments) -> Usd_load_result;
 
 } // namespace erhe::usd

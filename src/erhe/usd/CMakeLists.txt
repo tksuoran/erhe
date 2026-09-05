@@ -6,6 +6,8 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_usd/usd.cpp
     erhe_usd/usd.hpp
+    erhe_usd/usd_impl.hpp
+    erhe_usd/usd_import.cpp
     erhe_usd/usd_log.cpp
     erhe_usd/usd_log.hpp
 )
@@ -20,11 +22,20 @@ target_include_directories(${_target} SYSTEM PRIVATE ${ERHE_LIGHTUSD_INCLUDE_DIR
 
 target_link_libraries(${_target}
     PRIVATE
+        erhe::dataformat
+        erhe::geometry
+        erhe::item
         erhe::log
+        erhe::primitive
         erhe::profile
+        erhe::scene
         erhe::verify
         fmt::fmt
         lightusd::lightusd_static
 )
 
 erhe_target_settings(${_target} "erhe")
+
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_subdirectory(test)
+endif ()

@@ -1,10 +1,12 @@
 #include "erhe_usd/usd.hpp"
+#include "erhe_usd/usd_impl.hpp"
 #include "erhe_usd/usd_log.hpp"
 
 #include "erhe_profile/profile.hpp"
 
-// LightUSD headers. This translation unit is the only place in erhe that
-// includes them; everything the rest of erhe sees is declared in usd.hpp.
+// LightUSD headers. Together with usd_import.cpp this is the only place in
+// erhe that includes them; everything the rest of erhe sees is declared in
+// usd.hpp.
 #include "lightusd.hh"
 #include "core/prim.hh"
 #include "core/prim-metas.hh"
@@ -15,13 +17,6 @@
 #include <utility>
 
 namespace erhe::usd {
-
-class Stage::Impl final
-{
-public:
-    lightusd::Stage       stage;
-    std::filesystem::path source_path;
-};
 
 Stage::Stage(std::unique_ptr<Impl>&& impl)
     : m_impl{std::move(impl)}

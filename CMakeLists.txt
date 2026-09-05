@@ -790,7 +790,12 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
             "LIGHTUSD_WITH_USDOBJ OFF"
             "LIGHTUSD_WITH_USDFBX OFF"
             "LIGHTUSD_WITH_USDVOX OFF"
-            "LIGHTUSD_WITH_USDVOL OFF"
+            # Tydra's RenderSceneConverter calls usdVol::ReadVDBFromMemory
+            # unconditionally (ConvertVolume in tydra/render-data.cc), so a
+            # link that pulls that translation unit needs the usdVol module
+            # even though erhe imports no volumes. It is on for that reason
+            # alone; drop it when upstream guards the call.
+            "LIGHTUSD_WITH_USDVOL ON"
             "LIGHTUSD_WITH_USD_TO_GLTF OFF"
             "LIGHTUSD_WITH_MESHOPT OFF"
             "LIGHTUSD_WITH_GEOGRAM OFF"
