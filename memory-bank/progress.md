@@ -42,7 +42,7 @@
 ✓I1-import-USD-asset{commit-1-a3aa83732-lib+7-usd-tests;commit-2-87ee48935-editor-import{headless:suzanne-pbr+parity-subset-textured;undo+close-clean;roundtrip-93/93};commit-3-import-failures+prim-filter+smoke-test-USD-leg}
 ✓M4-local=authored{100-property+67-scene+39-primitive-tests;headless-default-material-78-defaults;fresh-session-reload-source-diffs-none;roundtrip-94/94}
 ✓I2-authored-opinions{14-usd-tests;headless:authored.usda-visible/purpose/base_color-only/temperature-custom-attr;suzanne-local-set=base_color+metallic;roundtrip-94/94;smoke-52/52}=G1
-⚡E1-save-USDA{opus-coder-running;E3-folded-in-as-last-commit}
+⚡E1-save-USDA{commit-1-1d51c13a5-writer+29-tests;commit-2-editor-running;E3-folded-in-as-commit-3}
 ?Q1{plan-section-3;after-E1+E3}
 
 [NOTES]
