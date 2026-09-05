@@ -1,6 +1,12 @@
 §MBEL:5.0
 
 [FOCUS]
+@usd-compatibility::doc/usd-compatibility-plan.md{plan-only,no-step-started,2026-09-05;d25e505e4+489f2c7a6+46ce31a3c}
+  goals::G1-load+edit-USD{no-save}->G2-save-USD->G3-glTF-or-USD-independent{never-converted/mixed};C1=each-format-carries-own-features{no-glTF-ext-for-USD-features}
+  order::M1-item-paths->M2-sibling-unique-names->M3-purpose-enum->L1-LightUSD-optional-CPM{ERHE_USD_LIBRARY}->I1-import-USD-asset{Tydra}->M4-local=authored->I2->E1-save-USDA->E3-roundtrip
+  mapping::doc/usd_compatibility.md{property-layers<->USD-opinions;per-domain-tables;plan-never-restates-rows}
+  future-work::animation+physics{plan-section-5};clones::memory-bank/local/context.md{<LightUSD>,<OpenUSD>}
+  L1-traps::LightUSD-bundles-meshoptimizer/fpng/miniz/libjpeg-turbo{dup-symbol-check};LIGHTUSD_WITH_GEOGRAM-off;not-/WX-clean
 @style-library::doc/style-library.md{R1-R6,D1-D5}✓2026-09-04{9132674f2+a88dd405c+persistence+docs}
   D1::style-source=any-Dependency_object{local-values=style;m_style_users-registry;deliver()->propagate_to_style_users;Property_style=Dependency_object-subclass}
   D2::editor::Style-item{content_library/style.{hpp,cpp};secondary-owner=target-class;Item_type::style=bit47;Styles-category-folder;icon}
@@ -54,8 +60,8 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 
 [STATE]
-@branch::main{#43-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=GL-worker-context-scope-narrowing{only-item}
+@branch::main{#47-commits-unpushed;user-pushes-themselves}
+prompt_queue.txt::item-0=USD-compatibility-plan{only-item;GL-slot-scope-narrowing->doc/gl-worker-context-enforcement.md-Follow-ups-F}
 
 [OPEN]
 ?user-interactive-check{folders+category-props+texture-slots+styles+node-attachment-values+camera+physics-materials}→expect-fixes;then-migrations{Node_physics-first}

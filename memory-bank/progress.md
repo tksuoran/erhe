@@ -32,6 +32,11 @@
 ?graph-node-parameters::future-work{doc/property-system.md-section-6;only-when-user-asks}
 ?user-interactive-verify{Light-flux-slider-undo;Layout/Grid/Brush_placement-holders;joint-rows}
 
+[TASK::usd-compatibility]{PLAN-2026-09-05,next-after-context-reset}
+✓mapping-doc-rewrite+plan-doc{d25e505e4}+three-stage-goal{489f2c7a6}+anim/physics->future-work{46ce31a3c}
+?M1-item-paths{Hierarchy::get_path/find_by_path;get_reference_path=path;erhe_item_tests;MCP-by-path}
+?M2->M3->L1->I1->M4->I2->E1->E3{plan-section-3}
+
 [NOTES]
 !headless-recipe::build_vs2026_vulkan_headless-editor→ERHE_AI_DRIVER=1-launch-hidden→mcp_call.py-b64-args{get_item_properties/set_item_property/get_addable_item_properties/undo;ids-reshuffle-per-launch;scene_name-required-for-create_node/select_items/get_node_details}
 !default-scene::floor-mesh-sealed{lock_edit}→use-cube-attachment-for-attachment-tests

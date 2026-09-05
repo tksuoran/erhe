@@ -378,7 +378,7 @@ coverage. Only `Node::MODULE` and `Node::ADOPTED_MODULE` are unobserved
 (`_invoke_module_task_impl`, `executor.hpp:2071-2091`), and neither can be the
 outer frame B needs: that path schedules the subgraph and returns `true` to
 preempt, so the worker frame unwinds rather than parking in-frame, and it can
-never co-run a nested task onto itself. A future `emplace([](tf::Runtime&){…})`
+never co-run a nested task onto itself. A future `emplace([](tf::Runtime&){...})`
 is therefore observed, and the two unobserved kinds - `Node::MODULE` from
 `composed_of` (`flow_builder.hpp:1621`) and `Node::ADOPTED_MODULE` from
 `adopt(Graph&&)` (`flow_builder.hpp:1627`) - cannot park. Preemption paths fire the prologue only on first entry, and
@@ -500,6 +500,24 @@ non-taskflow blocking - and converts the wedge into a report that names the four
 matters more given the signature above: the co-running threads look busy, so
 without E there is nothing pointing at the context pool at all.
 
+### F. Narrow the slot scopes
+
+Two `Scoped_worker_context` scopes hold one of the four GL slots across a
+whole mesh operation - raytrace build and geogram work included - at
+`items.cpp:207` and `geometry_graph_window.cpp:733`. Narrow them to the
+GPU-mesh build only, the shape `async_raytrace_kickoff_operation.cpp` and
+`lightmap_partitioner.cpp` already have. `Operations::make_raytrace`
+(`operations_window.cpp:2183`) takes the default
+`op_builds_gpu_meshes = true` yet builds no GPU meshes; pass `false` (as
+the deferred finalize does) so its scope disappears. This is a
+throughput fix independent of enforcement: while the wide scope is held,
+three slots serve every other worker. Verify with a geometry-graph
+evaluation and a mesh operation on a large mesh under the acquire
+watchdog (E) - no wait report - and with `logs/log.txt` showing no
+`Scoped_worker_context` held longer than the GPU upload. Line numbers are
+as of the enforcement landing; re-locate by the `Scoped_worker_context`
+constructor calls.
+
 ### Lock ordering
 
 Held-while-holding-a-slot today: `geogram_lock()`, the mesh-memory allocation
@@ -540,17 +558,10 @@ the WORKER pool rather than the GL pool, and none of A, B or E covers it -
 (`gltf_fastgltf.hpp:329`), so the main-thread parse callers that never set it
 run them too and park the main thread.
 
-## Before landing (resolved 2026-09-01 except item 1; see Implementation)
+## Before landing (resolved 2026-09-01; see Implementation)
 
-1. Decide whether the scopes at `items.cpp:207` and
-   `geometry_graph_window.cpp:733` should be narrowed to match
-   `async_raytrace_kickoff_operation.cpp` and `lightmap_partitioner.cpp`,
-   which keep raytrace and geogram work outside the slot. This is a real
-   throughput bug independent of enforcement. The same decision covers
-   `Operations::make_raytrace` (`operations_window.cpp:2183`), which takes
-   the default `op_builds_gpu_meshes = true` yet builds no GPU meshes;
-   passing `false` (as the deferred finalize already does) removes its
-   scope entirely.
+1. Scope narrowing: decided as a follow-up rather than a precondition,
+   Follow-ups F.
 2. Add the backend-neutral context-index accessor; neither A nor B compiles
    without it.
 3. Run the lightmap parallel path, a glTF load and a geometry-graph evaluation
