@@ -1,6 +1,6 @@
 # USD compatibility plan
 
-Status: M1, M2, M3, L1 and I1 have landed; M4 is the next step. The concept and naming mapping every step
+Status: M1, M2, M3, L1, I1 and M4 have landed; I2 is the next step. The concept and naming mapping every step
 relies on is `doc/usd_compatibility.md` (referred to below as "the mapping");
 this document holds the steps, their order and their verification.
 
