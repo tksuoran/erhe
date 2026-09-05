@@ -227,7 +227,7 @@ auto Dependency_object::get_effective_value_below_style(const Dependency_propert
         }
     }
     out_source = Value_source::default_value;
-    value = metadata.default_value.value();
+    value = metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
     return metadata.coerce ? metadata.coerce(*this, value) : value;
 }
 
@@ -330,7 +330,9 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
         }
     }
     out_source = Value_source::default_value;
-    return metadata.default_value.value();
+    // D31: a per-object default is the bottom layer, so an inherited, style
+    // or local value still overrides it.
+    return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
 }
 
 auto Dependency_object::get_effective_value(const Dependency_property& property, Value_source& out_source) const -> Property_value
@@ -563,6 +565,19 @@ void Dependency_object::coerce_value(const Dependency_property& property)
     Value_source   new_source{};
     Property_value new_value = get_effective_value(property, new_source);
     notify(property, old_value, old_source, new_value, new_source);
+}
+
+auto Dependency_object::get_default_value(const Dependency_property& property) const -> Property_value
+{
+    const Property_metadata& metadata = get_metadata(property);
+    return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
+}
+
+void Dependency_object::refresh_computed_default(const Dependency_property& property, const Property_value& old_value, const Value_source old_source)
+{
+    Value_source   new_source{};
+    Property_value new_value = get_effective_value(property, new_source);
+    notify_self(property, old_value, old_source, new_value, new_source);
 }
 
 void Dependency_object::for_each_local_value(const std::function<void(const Dependency_property&, const Property_value&)>& callback) const
@@ -942,6 +957,22 @@ void Dependency_object::notify(
 )
 {
     const bool inherits = get_metadata(property).inherits;
+    notify_self(property, old_value, old_source, new_value, new_source);
+    // Descendants are outside this object's batch; they learn about the
+    // change immediately so their own observers see it.
+    if (inherits && !(old_value == new_value)) {
+        propagate_to_descendants(property, old_value, new_value);
+    }
+}
+
+void Dependency_object::notify_self(
+    const Dependency_property& property,
+    const Property_value&      old_value,
+    const Value_source         old_source,
+    const Property_value&      new_value,
+    const Value_source         new_source
+)
+{
     if (m_batch_depth > 0) {
         const uint16_t index = property.get_index();
         const auto i = std::find_if(m_pending.begin(), m_pending.end(), [index](const Pending_change& pending) { return pending.index == index; });
@@ -959,11 +990,6 @@ void Dependency_object::notify(
                 }
             );
         }
-        // Descendants are outside this object's batch; they learn about the
-        // change immediately so their own observers see it.
-        if (inherits && !(old_value == new_value)) {
-            propagate_to_descendants(property, old_value, new_value);
-        }
         return;
     }
 
@@ -979,9 +1005,6 @@ void Dependency_object::notify(
             .new_source = new_source
         }
     );
-    if (inherits && !(old_value == new_value)) {
-        propagate_to_descendants(property, old_value, new_value);
-    }
 }
 
 void Dependency_object::deliver(const Property_changed_args& args)

@@ -120,7 +120,7 @@ auto property_json(const erhe::property::Dependency_object& object, const erhe::
             {"source",     erhe::property::c_str(object.get_value_source(property))},
             {"local",      local.has_value() ? value_json(property, local.value()) : json(nullptr)},
             {"expression", expression.has_value() ? json(std::string{expression.value()}) : json(nullptr)},
-            {"default",    value_json(property, metadata.default_value.value())},
+            {"default",    value_json(property, object.get_default_value(property))}, // D31: per-object default layer
             {"read_only",  property.is_read_only()},
             {"inherits",   metadata.inherits},
             {"coerced",    object.is_coerced(property)},

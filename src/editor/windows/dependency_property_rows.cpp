@@ -485,7 +485,7 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     // value that differs from the default, "=" a property driven by an
     // expression (D22).
     const std::optional<std::string_view> expression = first.get_expression(property);
-    const bool             differs_from_default = first.has_local_value(property) && !(first.get_value(property) == metadata.default_value.value());
+    const bool             differs_from_default = first.has_local_value(property) && !(first.get_value(property) == first.get_default_value(property));
     const std::string      qualified            = erhe::property::Property_registry::get().qualified_name(first, property);
     const std::string_view label_text           = metadata.ui.label.empty() ? std::string_view{qualified} : metadata.ui.label;
     std::string label = expression.has_value()
@@ -522,7 +522,7 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
     }
     if (!metadata.is_computed()) { // D26: a computed property has no default layer
         tooltip += "\nDefault: ";
-        tooltip += erhe::property::to_string(property, metadata.default_value.value());
+        tooltip += erhe::property::to_string(property, first.get_default_value(property)); // D31: the inspected object's own default
     } else if (metadata.is_computed_writable()) {
         tooltip += "\nWrites: ";
         tooltip += metadata.compute_writes->get_name();

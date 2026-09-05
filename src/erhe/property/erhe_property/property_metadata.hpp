@@ -56,6 +56,12 @@ using Compute_callback          = std::function<Property_value(const Dependency_
 // to it, and it writes the underlying stored property the provider derives
 // its value from (a light's flux setter writes the intensity).
 using Compute_set_callback      = std::function<void(Dependency_object&, const Property_value&)>;
+// Per-object default of a property (doc/property-system.md D31): the
+// default layer - below inherited, style and local - is whatever it
+// returns for the object, so an item derives its own default from state
+// it already holds (Item_base::purpose_property from the editor-only
+// flag bits) and an authored value still overrides it.
+using Compute_default_callback  = std::function<Property_value(const Dependency_object&)>;
 
 // What a change of the property affects. Data only: the library never acts
 // on these, the editor reads them (App_context::on_item_property_changed).
@@ -152,9 +158,15 @@ public:
     // records. Clearing and expressions stay rejected (no local layer).
     Compute_set_callback          compute_set     {};
     const Dependency_property*    compute_writes  {nullptr};
+    // D31: bound when the default layer is per-object. `default_value`
+    // stays the registration-time default (it carries the type check and
+    // is what a reader without an object shows); `compute_default` is what
+    // an object reads.
+    Compute_default_callback      compute_default {};
 
     [[nodiscard]] auto is_computed         () const -> bool { return static_cast<bool>(compute); }
     [[nodiscard]] auto is_computed_writable() const -> bool { return static_cast<bool>(compute_set); }
+    [[nodiscard]] auto has_computed_default() const -> bool { return static_cast<bool>(compute_default); }
 };
 
 } // namespace erhe::property

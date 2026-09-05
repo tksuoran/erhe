@@ -204,6 +204,11 @@ public:
     // the value its descendants inherit.
     [[nodiscard]] auto has_own_value   (const Dependency_property& property) const -> bool;
     [[nodiscard]] auto get_value_source(const Dependency_property& property) const -> Value_source;
+    // The default layer of the property for THIS object (D31): the
+    // metadata default, or Property_metadata::compute_default when the
+    // property has a per-object default. Every reader that shows or
+    // compares against "the default" of an inspected object asks here.
+    [[nodiscard]] auto get_default_value(const Dependency_property& property) const -> Property_value;
     [[nodiscard]] auto is_coerced      (const Dependency_property& property) const -> bool;
 
     // Expressions (D22). set_expression compiles `text` and installs it as
@@ -270,6 +275,15 @@ public:
 
 protected:
     virtual void on_property_changed(const Property_changed_args& args) { static_cast<void>(args); }
+
+    // D31: the inputs of a per-object default changed outside the property
+    // system, so the default layer of `property` on this object moved.
+    // `old_value` and `old_source` are what get_value / get_value_source
+    // returned before the inputs changed - the caller reads them first
+    // (Item_base::set_flag_bits does, around the purpose flag bits). The
+    // notification stays on this object: a default is below every inherited
+    // layer, so no descendant's effective value moves with it.
+    void refresh_computed_default(const Dependency_property& property, const Property_value& old_value, Value_source old_source);
 
 private:
     struct Effective_value_entry
@@ -343,6 +357,15 @@ private:
     void               on_source_destroyed         (const Dependency_object& source);
 
     void notify(
+        const Dependency_property& property,
+        const Property_value&      old_value,
+        Value_source               old_source,
+        const Property_value&      new_value,
+        Value_source               new_source
+    );
+    // notify without the inheritance propagation: queues the change while a
+    // Change_batch is open, delivers it otherwise.
+    void notify_self(
         const Dependency_property& property,
         const Property_value&      old_value,
         Value_source               old_source,

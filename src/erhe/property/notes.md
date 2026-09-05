@@ -109,6 +109,18 @@ inventory (and the owner's design section when the design changed).
   `erhe::Hierarchy::child_count_property`, `erhe::scene::Node`'s
   `world_translation` / `world_rotation` / `world_scale`,
   `erhe::scene::Mesh`'s `world_bounds_min` / `world_bounds_max`.
+- **Per-object default** (`Property_metadata::compute_default`, D31) - an
+  ordinary entry-stored property whose DEFAULT layer is computed for the
+  object instead of taken from `default_value`. Every layer above it still
+  applies, an object with no authored value reports
+  `Value_source::default_value` and has no entry, and
+  `Dependency_object::get_default_value(property)` is what a reader asks
+  for "the default of this object". When the inputs move, the owner reads
+  the effective value and its source, changes the inputs, and calls the
+  protected `refresh_computed_default`, which notifies that object alone
+  (a default is below every inherited layer, so no descendant moves with
+  it). User: `erhe::Item_base::purpose_property`, whose default follows the
+  item's editor-only flag bits.
 - **`Dependency_object`** - the per-object store: sparse vector of entries
   sorted by property index, binary-searched; an entry exists only for a
   property with a local value and holds that value plus its coerced value
@@ -144,8 +156,10 @@ inventory (and the owner's design section when the design changed).
 
 ## Value precedence and callbacks
 
-Effective value = coerced(base), base = local > style > inherited > default;
-a computed property (D26) bypasses all of it and reads its provider.
+Effective value = coerced(base), base = local > style > inherited > default
+(the default being `Property_metadata::compute_default` for the object when
+that is bound, D31); a computed property (D26) bypasses all of it and reads
+its provider.
 The
 coerced value of a local value is stored in the entry and refreshed by
 `set_value` and `coerce_value`; a property without a local value is coerced

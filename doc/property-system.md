@@ -1091,6 +1091,27 @@ table, see D2a), and references to other objects (D28).
   which is why every `Light` property of section 4.3 is registered
   `inherits`. Section 6 records the registration-time check this makes
   wanted.
+- D31 Per-object default. `Property_metadata::compute_default`, when
+  bound, is the property's DEFAULT layer for an object: the value it
+  returns for that object replaces `default_value` wherever the default
+  layer is read (`Dependency_object::get_base_value`,
+  `get_effective_value_below_style`, and the public
+  `get_default_value(property)` that the Properties window tooltip, its
+  "*" marker and the MCP `default` field ask). `default_value` stays the
+  registration-time default, so the type check and the enumeration
+  fallback are unchanged. Every layer above the default - inherited,
+  style, expression, local - still wins, `Value_source::default_value` is
+  what an object without one of those reports, and the object gets no
+  entry, so an unauthored value is not a local value and is not
+  serialized. A per-object default is below every inherited layer, so it
+  never changes a descendant's effective value: when its inputs move, the
+  owner reads the effective value and its source first and then calls the
+  protected `refresh_computed_default(property, old_value, old_source)`,
+  which notifies THIS object only (`notify_self`, the queue-or-deliver
+  half of `notify` without the inheritance propagation). The user is
+  `Item_base::purpose_property` (`doc/usd-compatibility-plan.md` M3),
+  whose default is derived from the item's editor-only flag bits and
+  refreshed by `Item_base::set_flag_bits`.
 
 ## 4. Implementation
 

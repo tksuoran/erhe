@@ -24,6 +24,7 @@ add_executable(${_target}
     test_property_set.cpp
     test_bridge.cpp
     test_computed.cpp
+    test_computed_default.cpp
     test_expressions.cpp
     test_object_reference.cpp
 )
