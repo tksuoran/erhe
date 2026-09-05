@@ -392,4 +392,19 @@ private:
     bool                                            m_sealed{false};
 };
 
+// A local value is an AUTHORED value (doc/property-system.md D32,
+// doc/usd-compatibility-plan.md M4). An importer that fills an object
+// field by field cannot say "the file did not author this", so it writes
+// every field and every one of them becomes a local value; this pass takes
+// the unauthored ones back out. For each stored, serializable, non-driven
+// local value of `object` whose value equals the object's own default
+// layer (D31, get_default_value), the local value is cleared - unless
+// clearing would let an inherited or style layer through, in which case the
+// value stays local so the effective value never moves. Bridged (D18),
+// computed (D26), attached (R7), read-only and write-sealed (D24)
+// properties are left alone. Format independent: the glTF and USD
+// importers both run it, and it is what makes an item report
+// Value_source::default_value for a field its file left at the default.
+void clear_default_valued_local_properties(Dependency_object& object);
+
 } // namespace erhe::property

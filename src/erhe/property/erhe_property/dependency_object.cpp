@@ -1211,4 +1211,51 @@ void Dependency_object::apply_inheritance_snapshot(const Inheritance_snapshot& s
     }
 }
 
+void clear_default_valued_local_properties(Dependency_object& object)
+{
+    const Owner_type owner_type = object.get_property_owner_type();
+    // The entries are collected first: clearing mutates the entry store the
+    // enumeration walks.
+    std::vector<const Dependency_property*> candidates;
+    object.for_each_local_value(
+        [&candidates, &object, owner_type](const Dependency_property& property, const Property_value& value) {
+            if (property.is_read_only() || property.is_attached() || object.is_write_sealed(property)) {
+                return;
+            }
+            const Property_metadata& metadata = property.get_metadata(owner_type);
+            if (metadata.bridge.is_bound() || metadata.is_computed()) {
+                return;
+            }
+            if ((metadata.flags & Property_flags::serialize) == 0u) {
+                return;
+            }
+            if (object.get_expression(property).has_value()) {
+                return; // a formula is the authored layer (D22)
+            }
+            if (!(value == object.get_default_value(property))) {
+                return;
+            }
+            candidates.push_back(&property);
+        }
+    );
+    if (candidates.empty()) {
+        return;
+    }
+    const Dependency_object::Change_batch batch{object};
+    for (const Dependency_property* property : candidates) {
+        const std::optional<Property_value> local = object.read_local_value(*property);
+        if (!local.has_value()) {
+            continue;
+        }
+        if (!object.clear_value(*property)) {
+            continue;
+        }
+        if (object.get_value_source(*property) != Value_source::default_value) {
+            // An inherited (R8) or style (D25) layer stands below the local
+            // one: the value is the object's own opinion after all.
+            static_cast<void>(object.set_value(*property, local.value()));
+        }
+    }
+}
+
 } // namespace erhe::property

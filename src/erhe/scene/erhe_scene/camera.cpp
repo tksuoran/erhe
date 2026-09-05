@@ -12,12 +12,18 @@ namespace {
 
 using erhe::property::Dependency_object;
 using erhe::property::Property;
+using erhe::property::Property_flags;
 using erhe::property::Property_metadata;
 using erhe::property::Property_ui;
 using erhe::property::Property_value;
 using Type = Projection::Type;
 
 const erhe::property::Owner_type c_owner = Camera::property_owner_type();
+
+// ERHE_camera writes the complete projection, exposure and shadow_range as
+// typed fields on every export, so none of them needs a property value
+// entry of its own (Property_flags::native_gltf).
+constexpr uint32_t c_native = Property_flags::serialize | Property_flags::native_gltf;
 constexpr std::string_view c_group = "Projection";
 
 // The visible_when callbacks read the camera's projection mirror; they are
@@ -48,6 +54,7 @@ auto angle(const std::string_view name, float Projection::*member, const float m
         Property_metadata{
             .default_value = Projection{}.*member,
             .inherits      = true,
+            .flags         = c_native,
             .ui            = Property_ui{.min = min, .max = max, .presentation = Property_ui::Presentation::angle_degrees, .group = c_group, .label = label, .visible_when = visible_when}
         }
     );
@@ -60,6 +67,7 @@ auto extent(const std::string_view name, float Projection::*member, const std::s
         Property_metadata{
             .default_value = Projection{}.*member,
             .inherits      = true,
+            .flags         = c_native,
             .ui            = Property_ui{.min = 0.0f, .max = 1000.0f, .presentation = Property_ui::Presentation::slider, .logarithmic = true, .group = c_group, .tooltip = tooltip, .label = label, .visible_when = visible_when}
         }
     );
@@ -80,6 +88,7 @@ const Property<Type> Camera::projection_type_property = Property<Type>::register
     Property_metadata{
         .default_value = erhe::property::make_value(Projection{}.projection_type),
         .inherits      = true,
+        .flags         = c_native,
         .ui            = Property_ui{.group = c_group, .label = "Type"}
     }
 );
@@ -104,14 +113,15 @@ const Property<bool> Camera::infinite_z_far_property = Property<bool>::register_
     Property_metadata{
         .default_value = false,
         .inherits      = true,
+        .flags         = c_native,
         .ui            = Property_ui{.group = c_group, .tooltip = "Far plane at infinity (perspective projections only)", .label = "Infinite Z Far", .visible_when = is_perspective}
     }
 );
 const Property<float> Camera::exposure_property = Property<float>::register_property(
-    "exposure", c_owner, Property_metadata{.default_value = 1.0f, .inherits = true, .ui = log_slider(0.0f, 800000.0f, "Exposure")}
+    "exposure", c_owner, Property_metadata{.default_value = 1.0f, .inherits = true, .flags = c_native, .ui = log_slider(0.0f, 800000.0f, "Exposure")}
 );
 const Property<float> Camera::shadow_range_property = Property<float>::register_property(
-    "shadow_range", c_owner, Property_metadata{.default_value = 22.0f, .inherits = true, .ui = log_slider(1.0f, 1000.0f, "Shadow Range", "Radius of the bounding sphere the directional shadow fit covers around the camera")}
+    "shadow_range", c_owner, Property_metadata{.default_value = 22.0f, .inherits = true, .flags = c_native, .ui = log_slider(1.0f, 1000.0f, "Shadow Range", "Radius of the bounding sphere the directional shadow fit covers around the camera")}
 );
 
 Camera::Camera()                         = default;

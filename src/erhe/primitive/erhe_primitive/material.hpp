@@ -153,7 +153,9 @@ public:
     Material& operator=(const Material&);
     ~Material() noexcept override;
 
-    // Every Material_values field becomes a local value (a full snapshot).
+    // A full snapshot: every Material_values field that differs from the
+    // property's default becomes a local value, a field equal to the default
+    // clears it (see set_values).
     explicit Material(const Material_create_info& create_info);
     // No local values: the defaults, or a style (D25), supply every field.
     explicit Material(std::string_view name);
@@ -318,7 +320,9 @@ public:
     [[nodiscard]] auto get_slot_texture_property(const Material_texture_sampler& slot) const -> const erhe::property::Property<erhe::property::Object_reference>*;
 
     // Whole-set snapshot in and out of the property store. set_values()
-    // writes every field as a local value in one change batch.
+    // writes the fields that differ from the property's default as local
+    // values in one change batch and clears the local value of the rest
+    // (doc/property-system.md D32: a local value is an authored value).
     [[nodiscard]] auto get_values() const -> Material_values;
     void               set_values(const Material_values& values);
 

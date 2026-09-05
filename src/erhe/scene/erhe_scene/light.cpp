@@ -22,10 +22,16 @@ namespace {
 using erhe::property::Dependency_object;
 using erhe::property::Property;
 using erhe::property::Property_changed_args;
+using erhe::property::Property_flags;
 using erhe::property::Property_metadata;
 using erhe::property::Property_ui;
 
 const erhe::property::Owner_type c_owner = Light::property_owner_type();
+
+// Every field of KHR_lights_punctual plus ERHE_light's typed cast_shadow /
+// infinite_range: the glTF exporter writes these natively (temperature has
+// no glTF carrier and is not one of them).
+constexpr uint32_t c_native = Property_flags::serialize | Property_flags::native_gltf;
 
 constexpr erhe::property::Enum_entry c_light_type_entries[] = {
     { "Directional", static_cast<int32_t>(Light_type::directional) },
@@ -59,15 +65,15 @@ const erhe::property::Enum_info c_light_type_enum_info{"Light_type", c_light_typ
 
 const Property<Light_type> Light::light_type_property = Property<Light_type>::register_property(
     "light_type", c_owner, c_light_type_enum_info,
-    Property_metadata{.default_value = erhe::property::make_value(Light_type::directional), .property_changed = Light::on_light_property_changed, .inherits = true, .ui = Property_ui{.label = "Light Type"}}
+    Property_metadata{.default_value = erhe::property::make_value(Light_type::directional), .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = Property_ui{.label = "Light Type"}}
 );
 const Property<glm::vec3> Light::color_property = Property<glm::vec3>::register_property(
     "color", c_owner,
-    Property_metadata{.default_value = glm::vec3{1.0f, 1.0f, 1.0f}, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = Property_ui{.presentation = Property_ui::Presentation::color, .tooltip = "Tint; modulated by the blackbody color while Temperature is positive", .label = "Color"}}
+    Property_metadata{.default_value = glm::vec3{1.0f, 1.0f, 1.0f}, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = Property_ui{.presentation = Property_ui::Presentation::color, .tooltip = "Tint; modulated by the blackbody color while Temperature is positive", .label = "Color"}}
 );
 const Property<float> Light::intensity_property = Property<float>::register_property(
     "intensity", c_owner,
-    Property_metadata{.default_value = 1.0f, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = log_slider(0.01f, 20000.0f, "Intensity", "KHR_lights_punctual units: lux for directional lights, candela for point and spot lights")}
+    Property_metadata{.default_value = 1.0f, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = log_slider(0.01f, 20000.0f, "Intensity", "KHR_lights_punctual units: lux for directional lights, candela for point and spot lights")}
 );
 const Property<float> Light::flux_property = Property<float>::register_computed(
     "flux", c_owner,
@@ -87,19 +93,19 @@ const Property<glm::vec3> Light::blackbody_property = Property<glm::vec3>::regis
 );
 const Property<float> Light::range_property = Property<float>::register_property(
     "range", c_owner,
-    Property_metadata{.default_value = 100.0f, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = log_slider(1.0f, 20000.0f, "Range", "Distance the light reaches; a point light with range 0 emits no light")}
+    Property_metadata{.default_value = 100.0f, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = log_slider(1.0f, 20000.0f, "Range", "Distance the light reaches; a point light with range 0 emits no light")}
 );
 const Property<float> Light::inner_spot_angle_property = Property<float>::register_property(
     "inner_spot_angle", c_owner,
-    Property_metadata{.default_value = glm::pi<float>() * 0.4f, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = Property_ui{.min = 0.0f, .max = glm::pi<float>(), .presentation = Property_ui::Presentation::angle_degrees, .label = "Inner Spot", .visible_when = is_spot}}
+    Property_metadata{.default_value = glm::pi<float>() * 0.4f, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = Property_ui{.min = 0.0f, .max = glm::pi<float>(), .presentation = Property_ui::Presentation::angle_degrees, .label = "Inner Spot", .visible_when = is_spot}}
 );
 const Property<float> Light::outer_spot_angle_property = Property<float>::register_property(
     "outer_spot_angle", c_owner,
-    Property_metadata{.default_value = glm::pi<float>() * 0.5f, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = Property_ui{.min = 0.0f, .max = glm::pi<float>(), .presentation = Property_ui::Presentation::angle_degrees, .tooltip = "0 makes the spot light inactive", .label = "Outer Spot", .visible_when = is_spot}}
+    Property_metadata{.default_value = glm::pi<float>() * 0.5f, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = Property_ui{.min = 0.0f, .max = glm::pi<float>(), .presentation = Property_ui::Presentation::angle_degrees, .tooltip = "0 makes the spot light inactive", .label = "Outer Spot", .visible_when = is_spot}}
 );
 const Property<bool> Light::cast_shadow_property = Property<bool>::register_property(
     "cast_shadow", c_owner,
-    Property_metadata{.default_value = true, .property_changed = Light::on_light_property_changed, .inherits = true, .ui = Property_ui{.label = "Cast Shadow"}}
+    Property_metadata{.default_value = true, .property_changed = Light::on_light_property_changed, .inherits = true, .flags = c_native, .ui = Property_ui{.label = "Cast Shadow"}}
 );
 
 auto Light::get_texture_from_clip(const erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions) -> glm::mat4

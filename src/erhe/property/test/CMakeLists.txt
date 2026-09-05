@@ -25,6 +25,7 @@ add_executable(${_target}
     test_bridge.cpp
     test_computed.cpp
     test_computed_default.cpp
+    test_default_elision.cpp
     test_expressions.cpp
     test_object_reference.cpp
 )

@@ -70,6 +70,9 @@ const erhe::property::Property<erhe::property::Object_reference> Mesh_primitive:
     erhe::property::Property<erhe::property::Object_reference>::register_member(
         "material", Mesh_primitive::property_owner_type(), &Mesh_primitive::material,
         erhe::property::Property_metadata{
+            // The glTF primitive's material index carries this (D28); a
+            // member-backed property is excluded from a value pass anyway.
+            .flags = erhe::property::Property_flags::serialize | erhe::property::Property_flags::native_gltf,
             .ui = erhe::property::Property_ui{
                 .label                = "Material",
                 .reference_item_types = erhe::Item_type::material,

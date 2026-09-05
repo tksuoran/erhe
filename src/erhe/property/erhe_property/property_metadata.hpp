@@ -77,6 +77,14 @@ public:
     // owns the seal (Item_base::lock_edit_property), which must stay
     // writable so the seal can be lifted through it.
     static constexpr uint32_t writable_when_sealed         = (1u << 4);
+    // The glTF exporter writes this property's value through a native glTF
+    // field or a typed ERHE_* extension field whenever it differs from the
+    // property's default, so a property serializer must not write a value
+    // entry of its own for it: the native field plus the default elision of
+    // clear_default_valued_local_properties reconstructs the local layer,
+    // and an external tool's edit of the native field always wins. Data
+    // only, like the flags above: the library never reads it.
+    static constexpr uint32_t native_gltf                  = (1u << 5);
 };
 
 // What the Properties window needs to draw the row. Data only.
