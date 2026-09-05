@@ -724,6 +724,18 @@ void Asset_manager::register_builtin(const Asset_type type, const std::shared_pt
     log_asset->trace("registered builtin {} '{}'", c_str(type), item->get_name());
 }
 
+auto Asset_manager::is_builtin_asset(const erhe::Item_base& item) const -> bool
+{
+    for (const auto& [type, by_name] : m_builtins) {
+        for (const auto& [name, builtin_item] : by_name) {
+            if (builtin_item.get() == &item) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 auto Asset_manager::find_loaded(const Asset_key& key) const -> std::shared_ptr<erhe::Item_base>
 {
     std::string ignored_error;
@@ -1665,6 +1677,17 @@ void Asset_manager::on_library_node_attached(erhe::Item_host* const owner, Conte
     if (!record) {
         return;
     }
+    // Builtin-scope assets (the bone-visualization materials, the default
+    // brushes) are editor-owned and shared by every scene's library. They
+    // belong to the builtin registry, not to the container of whichever
+    // scene lists them: registering them as a scene record's assets makes
+    // the record's unload visit them, find the OTHER scenes' library
+    // entries as users, and refuse - so a saved scene's container could
+    // never unload once a second scene listed the same builtin. They are
+    // never unloaded, so no usership is needed either.
+    if (is_builtin_asset(*node.item)) {
+        return;
+    }
     if (!node.is_reference) {
         Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
         ERHE_VERIFY(entries != nullptr);
@@ -1913,12 +1936,8 @@ auto Asset_manager::is_pinned(const erhe::Item_base* item) const -> bool
     if ((user_it != m_users.end()) && !user_it->second.empty()) {
         return true;
     }
-    for (const auto& [type, by_name] : m_builtins) {
-        for (const auto& [name, builtin_item] : by_name) {
-            if (builtin_item.get() == item) {
-                return true;
-            }
-        }
+    if (is_builtin_asset(*item)) {
+        return true;
     }
     bool pinned = false;
     for (const auto& [container_id, record] : m_containers) {

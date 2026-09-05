@@ -301,6 +301,10 @@ public:
     // palette brushes). Builtin names are a persistence contract.
     void register_builtin(Asset_type type, const std::shared_ptr<erhe::Item_base>& item);
 
+    // True when the item is registered in builtin scope: editor-owned,
+    // shared by every scene's content library, and never unloaded.
+    [[nodiscard]] auto is_builtin_asset(const erhe::Item_base& item) const -> bool;
+
     // The in-editor asset creation funnel (R5 sub-plan step R5.5): every
     // in-editor site that brings a new managed asset into existence
     // constructs it through the manager, naming the scene whose container
