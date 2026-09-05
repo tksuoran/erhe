@@ -5,6 +5,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -615,7 +616,13 @@ auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        item->set_name(args["new_name"].get<std::string>());
+        // Sibling-unique names (doc/usd-compatibility-plan.md M2).
+        const std::string new_name = args["new_name"].get<std::string>();
+        if (!item->is_name_available(new_name)) {
+            log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
+            return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
+        }
+        item->set_name(new_name);
         applied.push_back("new_name");
     }
     if (args.contains("static_friction"))  { item->set_static_friction (args["static_friction"].get<float>());  applied.push_back("static_friction"); }
@@ -710,7 +717,13 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        item->set_name(args["new_name"].get<std::string>());
+        // Sibling-unique names (doc/usd-compatibility-plan.md M2).
+        const std::string new_name = args["new_name"].get<std::string>();
+        if (!item->is_name_available(new_name)) {
+            log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
+            return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
+        }
+        item->set_name(new_name);
         applied.push_back("new_name");
     }
     if (args.contains("collision_systems")) {
@@ -798,7 +811,13 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
 
     json applied = json::array();
     if (args.contains("new_name")) {
-        item->set_name(args["new_name"].get<std::string>());
+        // Sibling-unique names (doc/usd-compatibility-plan.md M2).
+        const std::string new_name = args["new_name"].get<std::string>();
+        if (!item->is_name_available(new_name)) {
+            log_mcp->warn("rename of '{}' to '{}' refused: a sibling already has that name", item->get_name(), new_name);
+            return make_error_content("'" + new_name + "' is already the name of a sibling of '" + item->get_name() + "'");
+        }
+        item->set_name(new_name);
         applied.push_back("new_name");
     }
     if (args.contains("limits")) {

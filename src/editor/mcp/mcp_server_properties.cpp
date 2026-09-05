@@ -8,6 +8,7 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "app_context.hpp"
+#include "editor_log.hpp"
 #include "app_scenes.hpp"
 #include "content_library/content_library.hpp"
 #include "content_library/style.hpp"
@@ -352,8 +353,9 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
             return make_error_content("reference_id: " + error);
         }
         after = erhe::property::Object_reference{referenced};
-        if (!property->validate(after.value())) {
-            return make_error_content("'" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + ") was rejected by property '" + property_name + "' validation");
+        std::string validation_error;
+        if (!target->validate_value(*property, after.value(), validation_error)) {
+            return make_error_content("'" + referenced->get_name() + "' (" + std::string{referenced->get_type_name()} + ") was rejected by property '" + property_name + "': " + validation_error);
         }
     } else if (!clear) {
         // Accept a string in property_string form, or a JSON number / bool /
@@ -395,8 +397,10 @@ auto Mcp_server::action_set_item_property(const json& args) -> std::string
         if (!after.has_value()) {
             return make_error_content("'" + text + "' is not a valid " + erhe::property::c_str(property->get_type()) + " for property '" + property_name + "'");
         }
-        if (!property->validate(after.value())) {
-            return make_error_content("'" + text + "' was rejected by property '" + property_name + "' validation");
+        std::string validation_error;
+        if (!target->validate_value(*property, after.value(), validation_error)) {
+            log_mcp->warn("set_item_property '{}': {}", property_name, validation_error);
+            return make_error_content("'" + text + "' was rejected by property '" + property_name + "': " + validation_error);
         }
     }
 

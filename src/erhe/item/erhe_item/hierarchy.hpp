@@ -60,6 +60,31 @@ public:
     // alike. Built on demand - never call it per frame.
     [[nodiscard]] auto get_path() const -> std::string;
 
+    // Sibling-unique names (doc/usd-compatibility-plan.md M2): the name
+    // `wanted_name` can be attached to `parent` with, which is `wanted_name`
+    // itself when no child of `parent` other than `exclude` holds it, and
+    // otherwise the first free `<base>_<number>` counting from 1. The base is
+    // `wanted_name` without a trailing `_<digits>`, so a colliding `Cube_1`
+    // yields `Cube_2` rather than `Cube_1_1`; a name that is nothing but
+    // `_<digits>` is its own base. A null `parent` imposes no namespace, so
+    // `wanted_name` comes back unchanged.
+    [[nodiscard]] static auto make_sibling_unique_name(
+        const Hierarchy* parent,
+        std::string_view wanted_name,
+        const Hierarchy* exclude
+    ) -> std::string;
+
+    // Overrides Item_base: an item in a hierarchy shares one namespace with
+    // its siblings, so a name held by another child of the same parent is
+    // refused.
+    [[nodiscard]] auto is_name_available(std::string_view name) const -> bool override;
+
+    // Sibling-unique names: called by handle_add_child when the name this
+    // item is attached with is already held by a sibling. The base renames
+    // this item; Content_library_node also renames the item an owning entry
+    // wraps, because that item's name is the one the user sees.
+    virtual void handle_sibling_unique_rename(const std::string& unique_name);
+
     [[nodiscard]] auto get_parent          () const -> std::weak_ptr<Hierarchy>;
     [[nodiscard]] auto get_depth           () const -> size_t;
     [[nodiscard]] auto get_children        () const -> const std::vector<std::shared_ptr<Hierarchy>>&;

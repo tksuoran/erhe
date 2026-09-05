@@ -190,6 +190,13 @@ public:
     // the expression with the value.
     [[nodiscard]] auto get_value       (const Dependency_property& property) const -> Property_value;
     auto               set_value       (const Dependency_property& property, const Property_value& value) -> bool;
+    // Dependency_property::validate (the value alone) followed by the
+    // property's optional bridge validation (the value on this object, e.g. a
+    // name that must be unique among siblings). set_value runs it before it
+    // writes anything; a caller that wants the reason ahead of the write - the
+    // MCP set_item_property, which queues an undoable operation - runs it
+    // itself and reports out_error.
+    [[nodiscard]] auto validate_value  (const Dependency_property& property, const Property_value& value, std::string& out_error) const -> bool;
     auto               clear_value     (const Dependency_property& property) -> bool;
     [[nodiscard]] auto read_local_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto has_local_value (const Dependency_property& property) const -> bool;

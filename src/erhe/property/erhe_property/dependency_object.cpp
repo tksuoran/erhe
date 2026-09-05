@@ -444,10 +444,17 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
         return false;
     }
     if (!property.validate(value)) {
-        return false;
+        return false; // Dependency_property::validate logs the reason itself
     }
 
     const Property_metadata& metadata = get_metadata(property);
+    if (metadata.bridge.validate) {
+        std::string validation_error;
+        if (!metadata.bridge.validate(*this, value, validation_error)) {
+            log->warn("property '{}' rejected the value: {}", property.get_name(), validation_error);
+            return false;
+        }
+    }
     if (metadata.is_computed()) {
         // D26: a writable computed property hands the value to its setter,
         // which writes the stored property the value derives from; that
@@ -485,6 +492,23 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
     Value_source   new_source{};
     Property_value new_value = get_effective_value(property, new_source);
     notify(property, old_value, old_source, new_value, new_source);
+    return true;
+}
+
+auto Dependency_object::validate_value(
+    const Dependency_property& property,
+    const Property_value&      value,
+    std::string&               out_error
+) const -> bool
+{
+    if (!property.validate(value)) {
+        out_error = "value rejected by property validation";
+        return false;
+    }
+    const Property_metadata& metadata = get_metadata(property);
+    if (metadata.bridge.validate && !metadata.bridge.validate(*this, value, out_error)) {
+        return false;
+    }
     return true;
 }
 

@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <string>
 #include <optional>
 #include <string_view>
 
@@ -117,6 +118,13 @@ class Property_bridge
 public:
     std::function<Property_value(const Dependency_object&)>        get{};
     std::function<void(Dependency_object&, const Property_value&)> set{};
+    // Optional object-level validation, run by Dependency_object::set_value
+    // before anything is written and by callers that want the reason ahead of
+    // the write (Dependency_object::validate_value). Unlike
+    // Dependency_property::validate, which sees the value alone, this sees the
+    // object, which is what a name that must be unique among siblings needs
+    // (doc/usd-compatibility-plan.md M2).
+    std::function<bool(const Dependency_object&, const Property_value&, std::string&)> validate{};
 
     [[nodiscard]] auto is_bound() const -> bool { return static_cast<bool>(get); }
 };

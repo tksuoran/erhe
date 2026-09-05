@@ -276,6 +276,17 @@ void Hierarchy::handle_add_child(const std::shared_ptr<Hierarchy>& child, std::s
     }
 #endif
 
+    // Sibling-unique names (doc/usd-compatibility-plan.md M2): every producer
+    // - node creation, paste, duplicate, glTF import, prefab instantiation -
+    // reaches a parent through here, so the numeric suffix is applied once,
+    // here, and no producer needs code of its own. A site that needs the name
+    // the item was created with looks the item up by path or id, not by name.
+    const std::string unique_name = make_sibling_unique_name(this, child->get_name(), child.get());
+    if (unique_name != child->get_name()) {
+        log->info("renaming '{}' to '{}': a child of '{}' already has that name", child->get_name(), unique_name, describe());
+        child->handle_sibling_unique_rename(unique_name);
+    }
+
     log->trace("Adding child '{}' to '{}'", child->describe(), describe());
 
     position = std::min(m_children.size(), position);
@@ -359,6 +370,68 @@ auto Hierarchy::get_path() const -> std::string
         path.append(*names[i - 1]);
     }
     return path;
+}
+
+auto Hierarchy::make_sibling_unique_name(
+    const Hierarchy* const parent,
+    const std::string_view wanted_name,
+    const Hierarchy* const exclude
+) -> std::string
+{
+    if (parent == nullptr) {
+        return std::string{wanted_name};
+    }
+
+    const auto is_taken = [parent, exclude](const std::string_view candidate) -> bool {
+        for (const std::shared_ptr<Hierarchy>& child : parent->m_children) {
+            if (child && (child.get() != exclude) && (child->get_name() == candidate)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (!is_taken(wanted_name)) {
+        return std::string{wanted_name};
+    }
+
+    // The base is the wanted name without a trailing '_<digits>', so a
+    // colliding 'Cube_1' continues the 'Cube' series. A name that is nothing
+    // but '_<digits>' has no base of its own and is used whole.
+    std::string_view base = wanted_name;
+    std::size_t digits_begin = base.size();
+    while ((digits_begin > 0) && (base[digits_begin - 1] >= '0') && (base[digits_begin - 1] <= '9')) {
+        --digits_begin;
+    }
+    if ((digits_begin < base.size()) && (digits_begin >= 2) && (base[digits_begin - 1] == '_')) {
+        base = base.substr(0, digits_begin - 1);
+    }
+
+    for (std::size_t number = 1; ; ++number) {
+        std::string candidate = std::string{base} + "_" + std::to_string(number);
+        if (!is_taken(candidate)) {
+            return candidate;
+        }
+    }
+}
+
+auto Hierarchy::is_name_available(const std::string_view name) const -> bool
+{
+    const std::shared_ptr<Hierarchy> parent = m_parent.lock();
+    if (!parent) {
+        return true;
+    }
+    for (const std::shared_ptr<Hierarchy>& sibling : parent->m_children) {
+        if (sibling && (sibling.get() != this) && (sibling->get_name() == name)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void Hierarchy::handle_sibling_unique_rename(const std::string& unique_name)
+{
+    set_name(unique_name);
 }
 
 auto Hierarchy::get_reference_path() const -> std::string

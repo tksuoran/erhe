@@ -483,6 +483,15 @@ public:
     [[nodiscard]] auto has_tag                     (std::string_view tag) const -> bool;
     [[nodiscard]] auto get_name                    () const -> const std::string&;
     [[nodiscard]] auto get_debug_label             () const -> erhe::utility::Debug_label;
+
+    // Sibling-unique names (doc/usd-compatibility-plan.md M2): true when this
+    // item may be renamed to `name`. An item that is not itself in a hierarchy
+    // still shares one namespace when a content-library entry node wraps it
+    // (the item's inheritance container, doc/content-library-folders.md D1):
+    // the entry node's siblings are the item's. Every other item has no
+    // namespace of its own, so every name is available. Hierarchy overrides
+    // this with its own siblings.
+    [[nodiscard]] virtual auto is_name_available(std::string_view name) const -> bool;
     [[nodiscard]] auto describe                    (int level = 0) const -> std::string;
 
     // Inherited flag (D23): the closest ancestor with a local value wins;

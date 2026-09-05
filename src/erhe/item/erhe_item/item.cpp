@@ -1,4 +1,5 @@
 #include "erhe_item/item.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item_host.hpp"
 #include "erhe_item/item_log.hpp"
 #include "erhe_utility/bit_helpers.hpp"
@@ -156,6 +157,23 @@ const erhe::property::Property<std::string> Item_base::name_property = erhe::pro
                 if (name != item.get_name()) {
                     item.set_name(name);
                 }
+            },
+            // Sibling-unique names (doc/usd-compatibility-plan.md M2): every
+            // writer of the name - the Properties window row, the MCP
+            // set_item_property - goes through set_value, so the refusal of a
+            // name a sibling already holds lives here alone.
+            .validate = [](
+                const erhe::property::Dependency_object& object,
+                const erhe::property::Property_value&    value,
+                std::string&                             out_error
+            ) -> bool {
+                const Item_base&   item = static_cast<const Item_base&>(object);
+                const std::string& name = std::get<std::string>(value);
+                if ((name == item.get_name()) || item.is_name_available(name)) {
+                    return true;
+                }
+                out_error = fmt::format("'{}' is already the name of a sibling of '{}'", name, item.get_name());
+                return false;
             }
         }
     }
@@ -560,6 +578,25 @@ void Item_base::set_name(const std::string_view name)
     m_name = name;
     m_debug_label = erhe::utility::Debug_label{fmt::format("{}##{}", name, get_id())};
     bump_item_mutation_serial();
+
+    // Sibling-unique names (doc/usd-compatibility-plan.md M2): a
+    // content-library entry node's name mirrors the name of the item it
+    // wraps, so renaming the item renames the entry node with it. The item's
+    // name is the one the user sees, and the entry node's name is the one the
+    // path is built from, so the two must not drift apart.
+    Hierarchy* const container = dynamic_cast<Hierarchy*>(m_inheritance_container);
+    if ((container != nullptr) && (container->get_name() != m_name)) {
+        container->set_name(m_name);
+    }
+}
+
+auto Item_base::is_name_available(const std::string_view name) const -> bool
+{
+    const Hierarchy* const container = dynamic_cast<const Hierarchy*>(m_inheritance_container);
+    if (container == nullptr) {
+        return true;
+    }
+    return container->is_name_available(name);
 }
 
 auto Item_base::describe(int level) const -> std::string

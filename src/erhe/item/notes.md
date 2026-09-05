@@ -35,6 +35,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `set_parent(shared_ptr)`, `set_parent(shared_ptr, position)` - reparent with depth update
 - `get_parent()`, `get_children()`, `get_depth()`, `get_root()`
 - `get_path()`, `get_reference_path()` - the item's path, see "Item paths"
+- `make_sibling_unique_name(parent, wanted_name, exclude)` (static), `is_name_available(name)`, `handle_sibling_unique_rename(unique_name)` - see "Sibling-unique names"
 - `get_child_count()`, `get_child_count(filter)`, `get_index_in_parent()`, `get_index_of_child()`
 - `is_ancestor()`
 - `remove()` - splice out node, reparent children to parent
@@ -73,6 +74,41 @@ unambiguous identifier a name is not.
   (`erhe::scene::Scene_host` walks the node tree, then names; the editor's
   `Scene_root` adds the content library through
   `find_item_in_scene_by_reference`).
+
+## Sibling-unique names
+
+The children of one parent hold distinct names
+(`doc/usd-compatibility-plan.md` M2), so an item path names exactly one item
+and is the identifier a USD prim path is.
+
+- `Hierarchy::make_sibling_unique_name(parent, wanted_name, exclude)` is the
+  rule: `wanted_name` when no child of `parent` other than `exclude` holds it,
+  otherwise the first free `<base>_<number>` counting from 1, where the base is
+  `wanted_name` without a trailing `_<digits>`. So a colliding `Cube` becomes
+  `Cube_1`, a colliding `Cube_1` becomes `Cube_2` (not `Cube_1_1`), a gap in
+  the series is filled, and a name that is nothing but `_<digits>` is its own
+  base. A null `parent` imposes no namespace.
+- `Hierarchy::handle_add_child` applies it, which is the one place a child
+  reaches a parent: node creation, paste, duplicate, glTF import and prefab
+  instantiation all attach through it, so none of them carries naming code. A
+  site that names an item it has already attached calls
+  `make_sibling_unique_name` itself. A site that needs the name an item was
+  created with looks the item up by path or id, not by name.
+- `handle_sibling_unique_rename(unique_name)` is the rename the attach
+  performs. The base renames the item; the editor's `Content_library_node`
+  also renames the item an owning entry wraps, because the item's name is the
+  one the user sees and the entry node's name is the one the path is built
+  from. `Item_base::set_name` mirrors the other way, renaming the entry node
+  that wraps the item, so the two never drift apart. A reference entry lists
+  an item owned by another scene and never renames it.
+- `Item_base::is_name_available(name)` is the refusal side: a rename to a name
+  a sibling holds is refused rather than suffixed, because the name is the
+  one the user typed. `Hierarchy` answers from its siblings; an item wrapped
+  by a content-library entry node answers from the entry node's siblings; every
+  other item has no namespace and accepts every name. The `name` property's
+  bridge validation calls it, so the Properties window row and the MCP
+  `set_item_property` inherit the refusal, and the MCP `new_name` arguments
+  check it directly.
 
 ## Dependencies
 

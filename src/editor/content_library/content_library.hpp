@@ -62,6 +62,12 @@ public:
     // Overrides Hierarchy
     void handle_add_child   (const std::shared_ptr<erhe::Hierarchy>& child_node, std::size_t position) override;
     void handle_remove_child(erhe::Hierarchy* child_node) override;
+    // Sibling-unique names (doc/usd-compatibility-plan.md M2): an owning
+    // entry's wrapped item is renamed with the entry node, because the item's
+    // name is the one the user sees and the entry node's name is the one the
+    // path is built from. A reference entry lists an item owned by another
+    // scene, which this library never renames.
+    void handle_sibling_unique_rename(const std::string& unique_name) override;
 
     // Overrides Dependency_object (doc/content-library-folders.md D1): the
     // hierarchy children, then the owning entry's wrapped item, so a folder's

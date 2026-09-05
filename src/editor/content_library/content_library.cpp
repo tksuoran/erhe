@@ -188,6 +188,14 @@ void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarch
     }
 }
 
+void Content_library_node::handle_sibling_unique_rename(const std::string& unique_name)
+{
+    erhe::Hierarchy::handle_sibling_unique_rename(unique_name);
+    if (item && !is_reference) {
+        item->set_name(unique_name);
+    }
+}
+
 void Content_library_node::for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback)
 {
     Hierarchy::for_each_inheritance_child(callback);
@@ -424,22 +432,9 @@ auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, 
         return {};
     }
 
-    std::set<std::string> used_names;
-    folder->for_each<Content_library_node>(
-        [&used_names](Content_library_node& node) -> bool {
-            if (node.item) {
-                used_names.insert(node.item->get_name());
-            }
-            return true;
-        }
-    );
-    const std::string base_name  = item->get_name();
-    std::string       final_name = base_name;
-    for (std::size_t number = 2; used_names.contains(final_name); ++number) {
-        final_name = base_name + " (" + std::to_string(number) + ")";
-    }
-    copy->set_name(final_name);
-
+    // The copy keeps the source name; attaching the entry node below gives it
+    // the numeric suffix when the target folder already lists that name
+    // (doc/usd-compatibility-plan.md M2), renaming the copy with it.
     std::shared_ptr<Content_library_node> node = std::make_shared<Content_library_node>(copy);
     node->set_parent(folder.get());
 
