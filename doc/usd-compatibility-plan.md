@@ -47,8 +47,9 @@ Constraints every step respects:
   owning subsystem's record; the mapping gains or updates the row that
   connects it to USD. The plan never restates a mapping row.
 - C4 USD library code is optional at build time (`ERHE_USD_LIBRARY=none`
-  keeps every current configuration byte-identical) and builds on every
-  erhe platform including Quest before any editor feature depends on it.
+  keeps every current configuration byte-identical). Every step is built
+  and verified on desktop Windows; the Quest build and launch are verified
+  once, as step Q1, after every other step has landed.
 
 ## 2. Step catalogue
 
@@ -194,12 +195,10 @@ symbols, so the step verifies the link on every configuration and
 prefers LightUSD options that drop the duplicate before any rename or
 fork. erhe compiles with `/W4 /WX` and LightUSD does not; wrap its
 targets in the same warning suppression the other CPM dependencies get.
-Debug build size and link time on Quest are measured before the option
-is left on in the Quest build (`scripts/build_android.bat`).
 
-Verification: every configure script builds with the option on and off;
-`describe_usd_file` on a file from `<LightUSD>/models/` returns its prim
-list; Quest APK builds and launches with the option on.
+Verification: the Windows configure scripts build with the option on and
+off; `describe_usd_file` on a file from `<LightUSD>/models/` returns its
+prim list. The Quest build is Q1.
 
 ### I1 Import a USD file as an asset (L)
 
@@ -341,6 +340,12 @@ Steps 1 to 7 reach G1 for the schemas I1 covers.
 
 8. E1 save as USDA (G2)
 9. E3 round-trip script
+10. Q1 Quest build and launch (S): the Android build passes
+    `ERHE_USD_LIBRARY=lightusd`, Debug APK size and link time are measured
+    against the option off, and the editor launches on the headset and
+    answers `describe_usd_file` over the forwarded MCP port
+    (`erhe-quest-launch`). Q1 is the last step: every other step is
+    verified on desktop Windows only until then.
 
 M6 and M7 land when the step that needs them is next (any importer
 hitting a missing type, X3). Everything in X waits for I1 and E1 to have
