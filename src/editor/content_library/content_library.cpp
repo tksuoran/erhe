@@ -3,6 +3,7 @@
 
 #include "assets/asset_manager.hpp"
 #include "assets/asset_reference.hpp"
+#include "editor_log.hpp"
 #include "brushes/brush.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -167,10 +168,39 @@ auto Content_library_node::get_library() const -> Content_library*
 
 void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarchy>& child_node, std::size_t position)
 {
+    const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_node);
+
+    // Owning entries win the name over reference entries: an owning entry
+    // wraps an item this library owns and the user authored, a reference
+    // entry lists an item owned by another container. When both want one
+    // name, the reference ENTRY NODE takes the numeric suffix (its item is
+    // owned elsewhere and handle_sibling_unique_rename leaves it alone), so
+    // a scene's authored names survive a reload whatever order the entries
+    // attach in - the file's own materials before, or after, the materials
+    // of an external asset it instances. Between two owning entries, or two
+    // reference entries, the first-come rule of Hierarchy::handle_add_child
+    // decides.
+    if (child && !child->is_reference) {
+        const std::string wanted_name = child->get_name();
+        for (const std::shared_ptr<erhe::Hierarchy>& sibling : get_children()) {
+            Content_library_node* const entry = dynamic_cast<Content_library_node*>(sibling.get());
+            if ((entry == nullptr) || !entry->is_reference || (entry->get_name() != wanted_name)) {
+                continue;
+            }
+            // exclude = nullptr, so the reference entry's own name counts as
+            // taken and the first free '<base>_<number>' comes back.
+            const std::string free_name = make_sibling_unique_name(this, wanted_name, nullptr);
+            log_scene->info(
+                "renaming reference entry '{}' to '{}': an owning entry of '{}' takes that name",
+                wanted_name, free_name, describe()
+            );
+            entry->handle_sibling_unique_rename(free_name);
+            break;
+        }
+    }
+
     Hierarchy::handle_add_child(child_node, position);
     invalidate_caches_up_to_root();
-
-    const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_node);
 
     // D1: an owning entry's item inherits from the entry node. Set here,
     // between Hierarchy::set_parent's snapshot capture and apply, so the

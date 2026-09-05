@@ -101,6 +101,12 @@ and is the identifier a USD prim path is.
   from. `Item_base::set_name` mirrors the other way, renaming the entry node
   that wraps the item, so the two never drift apart. A reference entry lists
   an item owned by another scene and never renames it.
+- Owning entries win the name over reference entries: when an owning
+  content-library entry attaches to a folder where a reference entry holds the
+  wanted name, `Content_library_node::handle_add_child` gives the suffix to the
+  reference ENTRY NODE instead, so a scene's authored names survive a reload
+  whatever order the entries attach in; between two owning entries, or two
+  reference entries, the first-come rule above decides.
 - `Item_base::is_name_available(name)` is the refusal side: a rename to a name
   a sibling holds is refused rather than suffixed, because the name is the
   one the user typed. `Hierarchy` answers from its siblings; an item wrapped

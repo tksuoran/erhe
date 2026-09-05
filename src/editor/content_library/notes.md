@@ -30,7 +30,12 @@ folder's `handle_add_child` makes an owning entry node the inheritance
 container of its item (`erhe::Item_base::set_inheritance_container`), the
 node's destructor clears it, and `for_each_inheritance_child` visits the
 item after the hierarchy children. A reference entry never becomes a
-container - its item is owned by another scene. The editor creates folders
+container - its item is owned by another scene. Entry names are
+sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") and an
+owning entry wins the name over a reference entry: `handle_add_child`
+renames the colliding reference ENTRY NODE instead, so a scene's authored
+names survive a reload whatever order the entries attach in. The editor
+creates folders
 ("Create Folder", `create_library_folder`), moves entries between them
 (drag onto a folder, `move_library_item`; `Content_library_move_operation`)
 and persists them through `ERHE_scene` `library_folders`. A folder also

@@ -66,6 +66,13 @@ the wire format is `doc/gltf_extensions/ERHE_scene.md`.
   `handle_add_child` is what makes the snapshot correct: `Hierarchy::
   set_parent` captures before the attach and applies after it, so an entry
   attached under a folder with a local value is notified of the change.
+- D1b Entry names. Sibling-unique naming (`src/erhe/item/notes.md`
+  "Sibling-unique names") applies to entry nodes, and an owning entry wins
+  the name over a reference entry: when an owning entry attaches to a folder
+  where a reference entry holds the wanted name,
+  `Content_library_node::handle_add_child` renames the reference ENTRY NODE
+  (never the item it lists, which another container owns), so a scene's
+  authored names survive a reload whatever order the entries attach in.
 - D2 Folder creation. "Create Folder" queues an `Item_insert_remove_
   operation` inserting a folder node made from the parent's category (the
   `make_folder` constructor form) named "New Folder"; the root is not a
