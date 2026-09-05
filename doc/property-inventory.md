@@ -28,6 +28,9 @@ record's "Document roles" paragraph states the split.
   effect the member write does not cover. Does its own no-op check.
 - **computed** - `register_computed` (D26): read-only, or writable
   through a setter that writes a stored property (the `writes` note).
+  An entry-stored property may instead take a per-object DEFAULT layer
+  (`Property_metadata::compute_default`, D31) and keep every layer above
+  it.
 - **attached** - `register_attached` (D3): registered by one type, set on
   objects of another, listed by the D12 rule under its qualified
   `<owner>.<name>`; any item can take one through the Properties
@@ -45,6 +48,7 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | Property | Storage | Notes |
 |---|---|---|
 | visible | entry | flag mirror |
+| purpose | entry | USD purpose enumeration, `inherits`; its default layer is per-object (D31), derived from the editor-only flag bits (`src/erhe/item/notes.md` "Purpose") |
 | style | bridge | object reference to the item's style source (doc/style-library.md D3), style items only |
 | name | bridge | over `get_name` / `set_name` |
 | tags | bridge | the tag set as one comma-separated string (`tags_to_string` / `tags_from_string`) |

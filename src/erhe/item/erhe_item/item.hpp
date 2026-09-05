@@ -14,6 +14,24 @@ namespace erhe {
 
 class Item_host;
 
+// USD purpose token (doc/usd-compatibility-plan.md M3): what an item is
+// drawn for. `default_` is ordinary content; `render` is the high-quality
+// stand-in of a pair; `proxy` is reserved for the low-cost stand-in a
+// future proxy mesh provides; `guide` is editor-only content the user
+// works WITH rather than ON - a tool, a brush preview, a controller, a
+// rendertarget panel. An item that authors none of it gets the value its
+// editor-only flag bits imply (Item_base::derive_purpose_from_flags),
+// which is the property's per-object default (D31).
+enum class Purpose : unsigned int {
+    default_ = 0,
+    render,
+    proxy,
+    guide
+};
+
+// Enumerator table for Purpose properties.
+extern const erhe::property::Enum_info c_purpose_enum_info;
+
 class Item_flags
 {
 public:
@@ -128,6 +146,14 @@ public:
     // property changed callbacks. set_flag_bits rejects them; write the
     // property instead (set_visible, set_value(Mesh::shadow_cast_property, ...)).
     static constexpr uint64_t derived = visible | shadow_cast | lightmapped;
+
+    // The flag bits an item's default Purpose is derived from
+    // (Item_base::derive_purpose_from_flags): any of these set, or
+    // show_in_ui clear, means editor-only content (Purpose::guide). A
+    // change of one of them refreshes the purpose property's default layer.
+    static constexpr uint64_t purpose_guide_when_set   = tool | brush | controller | rendertarget;
+    static constexpr uint64_t purpose_guide_when_clear = show_in_ui;
+    static constexpr uint64_t purpose_inputs           = purpose_guide_when_set | purpose_guide_when_clear;
 
     static constexpr const char* c_bit_labels[] =
     {
@@ -499,6 +525,27 @@ public:
     // so filters and readers stay bit tests. shadow_cast and lightmapped
     // are erhe::scene::Mesh properties mirrored the same way.
     static const erhe::property::Property<bool> visible_property;
+    // USD purpose vocabulary (doc/usd-compatibility-plan.md M3): an
+    // inherited enumeration whose default layer is derived from the
+    // editor-only flag bits (D31), so an item that authors nothing reports
+    // the purpose its flags imply and an authored value - local, from a
+    // style, or inherited from an ancestor - overrides it.
+    static const erhe::property::Property<Purpose> purpose_property;
+    // The Purpose the flag bits imply: guide when any of
+    // Item_flags::purpose_guide_when_set is set or show_in_ui is clear,
+    // default_ otherwise. A pure function of the bits - no state, no
+    // allocation.
+    [[nodiscard]] static constexpr auto derive_purpose_from_flags(const uint64_t flag_bits) -> Purpose
+    {
+        const bool guide =
+            ((flag_bits & Item_flags::purpose_guide_when_set) != 0u) ||
+            ((flag_bits & Item_flags::purpose_guide_when_clear) == 0u);
+        return guide ? Purpose::guide : Purpose::default_;
+    }
+    // The item's effective purpose. Non-allocating: an enumeration value
+    // through the property layers, so an authored value wins and an
+    // unauthored item answers from its own flag bits.
+    [[nodiscard]] auto get_purpose() const -> Purpose;
     // The item's style source (doc/style-library.md D3): a bridged object
     // reference over Dependency_object::set_style / get_style, so the
     // Properties window shows a "Style" row with the picker; style_applies

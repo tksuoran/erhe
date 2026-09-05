@@ -105,6 +105,35 @@ const erhe::property::Property<bool> Item_base::visible_property = erhe::propert
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .inherits = true, .ui = erhe::property::Property_ui{.label = "Visible"}}
 );
 
+namespace {
+
+constexpr erhe::property::Enum_entry c_purpose_entries[] = {
+    { "Default", static_cast<int32_t>(Purpose::default_) },
+    { "Render",  static_cast<int32_t>(Purpose::render)   },
+    { "Proxy",   static_cast<int32_t>(Purpose::proxy)    },
+    { "Guide",   static_cast<int32_t>(Purpose::guide)    }
+};
+
+} // anonymous namespace
+
+const erhe::property::Enum_info c_purpose_enum_info{"Purpose", c_purpose_entries};
+
+// USD purpose (doc/usd-compatibility-plan.md M3). The default layer is the
+// value the editor-only flag bits imply (D31), so no item needs a local
+// value to report the purpose it already has, and nothing is written to a
+// file for an item that authored none.
+const erhe::property::Property<Purpose> Item_base::purpose_property = erhe::property::Property<Purpose>::register_property(
+    "purpose", Item_base::property_owner_type(), c_purpose_enum_info,
+    erhe::property::Property_metadata{
+        .default_value   = erhe::property::make_value(Purpose::default_),
+        .inherits        = true,
+        .ui              = erhe::property::Property_ui{.tooltip = "What the item is drawn for; guide is editor-only content", .label = "Purpose"},
+        .compute_default = [](const erhe::property::Dependency_object& object) -> erhe::property::Property_value {
+            return erhe::property::make_value(Item_base::derive_purpose_from_flags(static_cast<const Item_base&>(object).get_flag_bits()));
+        }
+    }
+);
+
 const erhe::property::Property<erhe::property::Object_reference> Item_base::style_property = erhe::property::Property<erhe::property::Object_reference>::register_property(
     "style", Item_base::property_owner_type(),
     erhe::property::Property_metadata{
@@ -421,10 +450,22 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
         mask &= ~Item_flags::derived;
     }
     const auto old_flag_bits = m_flag_bits;
+    // M3: the purpose property's default layer is derived from these bits
+    // (D31), so its effective value has to be read before they move.
+    const bool purpose_inputs_change = ((mask & Item_flags::purpose_inputs) != 0u);
+    erhe::property::Value_source   old_purpose_source{};
+    erhe::property::Property_value old_purpose{};
+    if (purpose_inputs_change) {
+        old_purpose_source = get_value_source(purpose_property.get());
+        old_purpose        = get_value(purpose_property.get());
+    }
     if (value) {
         m_flag_bits = m_flag_bits | mask;
     } else {
         m_flag_bits = m_flag_bits & ~mask;
+    }
+    if (purpose_inputs_change && (((old_flag_bits ^ m_flag_bits) & Item_flags::purpose_inputs) != 0u)) {
+        refresh_computed_default(purpose_property.get(), old_purpose, old_purpose_source);
     }
 
     if (m_flag_bits != old_flag_bits) {
@@ -491,6 +532,11 @@ void Item_base::hide()
 auto Item_base::is_visible() const -> bool
 {
     return erhe::utility::test_bit_set(m_flag_bits, Item_flags::visible);
+}
+
+auto Item_base::get_purpose() const -> Purpose
+{
+    return get_value(purpose_property);
 }
 
 auto Item_base::is_shown_in_ui() const -> bool

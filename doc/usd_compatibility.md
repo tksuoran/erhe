@@ -88,7 +88,7 @@ opinions).
 | expression / binding (D22) | none (closest: `UsdShade` connections) | erhe-only; carried as custom string metadata if exported at all |
 | `Property_set` (D17) | a `PrimSpec`'s property dictionary | |
 | sealing (D24, `lock_edit`) | none (layer permission / `instanceable` are the nearest) | |
-| item flags as bool properties (`visible`, `show_in_ui`, `tool`, ...) | `visibility` (`inherited` / `invisible`), `purpose` (`default` / `render` / `proxy` / `guide`) | `visible` -> `visibility`; editor-only content -> `purpose = guide` |
+| `Item_base::visible` (bool, `inherits`) and `Item_base::purpose` (`Purpose` enumeration, `inherits`) | `visibility` (`inherited` / `invisible`), `purpose` (`default` / `render` / `proxy` / `guide`) | `visible` <-> `visibility`; `purpose` maps token for token, and the value of an item that authors none is derived from its editor-only flag bits (`tool`, `brush`, `controller`, `rendertarget`, `show_in_ui` off), so editor-only content reads `guide`. The remaining item flags have no USD counterpart |
 | animated layer (future, property-system section 6) | time samples (stronger than `default`) | prerequisite for importing time samples without clobbering local values |
 | `Value_source` of an effective value | opinion provenance (`PcpPrimIndex` node / LightUSD `ArcOrigin`) | erhe already answers "where does this value come from" |
 | text form `to_string` / `from_string` (D16, `1 0.9 0.8`) | USDA literal (`(1, 0.9, 0.8)`) | a converter pair, not a change of erhe's form |

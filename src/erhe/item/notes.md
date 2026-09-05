@@ -9,6 +9,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - **`Unique_id<T>`** - Thread-safe atomic ID generator. Non-copyable, movable. Each template instantiation has an independent counter.
 - **`Item_base`** - Base class for all items. Provides ID, name, flags, tags, source path, debug label. Inherits `enable_shared_from_this` - all instances must be created via `std::make_shared`. Also derives from `erhe::property::Dependency_object` (see `src/erhe/property/notes.md`): every item carries a property store, and `get_property_owner_type()` returns `get_type()` so property metadata resolves by item type.
 - **`Item_flags`** - Bitmask constants for item state (visible, selected, hovered, opaque, etc.) with `to_string()`. `visible`, `shadow_cast` and `lightmapped` (`Item_flags::derived`) are mirrors of the `Item_base::visible_property` / `shadow_cast_property` / `lightmapped_property` effective values (inherits-flagged bool properties, `doc/property-system.md` D23): `set_flag_bits` rejects them (logged, dropped); write the property (`set_visible`, `show`, `hide`, `set_value`). The bit is written by the property changed callback, so an inherited change and a tree move keep it current and every `Item_filter` / `is_visible()` reader stays a bit test.
+- **`Purpose`** - USD purpose token (`default_` / `render` / `proxy` / `guide`, see "Purpose") with `c_purpose_enum_info`, the enumerator table `Item_base::purpose_property` is registered with.
 - **`Item_type`** - Bitmask constants for item types (mesh, camera, light, node, etc.) used by the `is<T>()` template.
 - **`Item_filter`** - Four-criteria bitmask filter (all-set, any-set, all-clear, any-clear) with AND semantics.
 - **`Item<Base, Intermediate, Self, Kind>`** - CRTP template providing `clone()`, `get_type()`, `get_type_name()`. Three clone modes: copy constructor, custom clone constructor, not clonable.
@@ -22,6 +23,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `get_flag_bits()`, `set_flag_bits()`, `enable_flag_bits()`, `disable_flag_bits()`
 - `is_visible()`, `is_selected()`, `is_hovered()`, `show()`, `hide()`, `set_visible()`, `set_selected()` - `show` / `hide` / `set_visible` write a local `visible_property` value; `clear_value(visible_property)` returns to the inherited / default value
 - `visible_property`, `shadow_cast_property`, `lightmapped_property` - owner type 0 (listed for every item type), default true / false / false, `inherits`
+- `purpose_property`, `get_purpose()`, `derive_purpose_from_flags(flag_bits)` (static, `constexpr`) - owner type 0, `inherits`, per-object default derived from the flag bits, see "Purpose"
 - `get_reference_path()` / `get_shared_reference()` - the text and `shared_from_this` an object reference (`doc/property-system.md` D28) uses to name and hold this item. `Item_base` names an item by its name; `Hierarchy` overrides it with the item's path (see "Item paths")
 - `get_property_sub_object_count()` / `get_property_sub_object(index)` / `get_property_sub_object_label(index)` - property sub-objects (D29): Dependency_objects the item owns by value that the editor addresses as (item, index); the defaults report none (`Mesh` overrides them with its primitives)
 - `is_lock_edit()` / `set_lock_edit()` - the `lock_edit` flag is the property-store seal (`Dependency_object::seal`, D24): while set, every local property write is refused (`set_value` returns false, logged); `is_sealed()` agrees with the flag, including after a copy
@@ -48,6 +50,37 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `erhe::find_by_path(root, path)` - the item a path names below `root`, see "Item paths"
 - `erhe::is<T>(item)` - bitmask-based type check (raw pointer and shared_ptr overloads)
 - `resolve_item_host()`, `resolve_item_host_mutex()` - find the first non-null host among items
+
+## Purpose
+
+`Purpose` is the USD purpose vocabulary (`doc/usd-compatibility-plan.md`
+M3): `default_` for ordinary content, `render` for the high-quality member
+of a pair, `proxy` reserved for the low-cost stand-in a future proxy mesh
+provides, and `guide` for editor-only content the user works WITH rather
+than ON - a tool, a brush preview, a controller, a rendertarget panel.
+
+`Item_base::purpose_property` is an `inherits`-flagged enumeration whose
+DEFAULT layer is per-object (`doc/property-system.md` D31): it is
+`derive_purpose_from_flags(get_flag_bits())`, which answers `guide` when any
+of `Item_flags::purpose_guide_when_set` (`tool`, `brush`, `controller`,
+`rendertarget`) is set or `show_in_ui` is clear, and `default_` otherwise.
+So an item reports the purpose its flags already imply without authoring
+anything, a local value (or one from a style, or one inherited from an
+ancestor) overrides it, and clearing that value returns to the derived
+value. `set_flag_bits` reads the effective value before it moves one of
+`Item_flags::purpose_inputs` and refreshes the property's default layer
+after, so observers, expressions and the Properties window row see the
+change.
+
+Only an authored value is a local value, so glTF writes `purpose` for an
+item that authored one and nothing for every other item (the generic local
+property list of `erhe::gltf::item_local_properties_to_json`).
+
+`get_purpose()` reads the effective value; it allocates nothing and is a
+pure function of the item's own flag bits whenever nothing is authored.
+The editor's draw-list filters still test the individual flag bits: each of
+them separates one KIND of editor-only content (the tool pass, the brush
+pass, the rendertarget overlay pass), which `purpose` cannot express.
 
 ## Item paths
 
