@@ -204,14 +204,18 @@ TEST(Light_properties, clone_copies_values_and_bag_round_trips)
     EXPECT_EQ(clone->layer_id, 3u);
     EXPECT_EQ(clone->get_value_source(Light::intensity_property), Value_source::default_value);
 
-    // The three local values plus the bridged Item_base style property
-    // (a bridge is always a local value).
-    const Property_set bag = Property_set::read_local_values(*light);
-    EXPECT_EQ(bag.size(), 4u);
+    // The three local values on top of the bridged Item_base properties
+    // (name, tags, the flags, style): a bridge is always a local value, so
+    // a freshly constructed light carries exactly those and nothing else.
+    const Property_set bridges_only = Property_set::read_local_values(*std::make_shared<Light>("fresh"));
+    const Property_set bag          = Property_set::read_local_values(*light);
+    EXPECT_EQ(bag.size(), bridges_only.size() + 3u);
     EXPECT_TRUE(bag.contains(Light::light_type_property));
     EXPECT_TRUE(bag.contains(Light::color_property));
     EXPECT_TRUE(bag.contains(Light::range_property));
     EXPECT_TRUE(bag.contains(erhe::Item_base::style_property));
+    EXPECT_TRUE(bag.contains(erhe::Item_base::name_property));
+    EXPECT_TRUE(bag.contains(erhe::Item_base::tags_property));
     auto other = std::make_shared<Light>("o");
     bag.apply(*other);
     EXPECT_EQ(Property_set::read_local_values(*other), bag);
