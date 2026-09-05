@@ -364,7 +364,11 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
             {"camera_count",        static_cast<int>(scene.get_cameras().size())},
             {"light_count",         light_count},
             {"material_count",      material_count},
-            {"trigger_event_count", sr->get_trigger_event_count()}
+            {"trigger_event_count", sr->get_trigger_event_count()},
+            // The file the scene is bound to and the format Save Scene
+            // writes it in (doc/usd-compatibility-plan.md E1).
+            {"source_format",       c_str(sr->get_source_format())},
+            {"source_path",         sr->get_source_path().string()}
         });
     }
 

@@ -1982,9 +1982,25 @@ auto Scene_root::get_source_path() const -> const std::filesystem::path&
     return m_source_path;
 }
 
-void Scene_root::set_source_path(const std::filesystem::path& path)
+auto c_str(const Scene_source_format format) -> const char*
 {
-    m_source_path = path;
+    switch (format) {
+        case Scene_source_format::none: return "none";
+        case Scene_source_format::gltf: return "gltf";
+        case Scene_source_format::usd:  return "usd";
+        default:                        return "none";
+    }
+}
+
+auto Scene_root::get_source_format() const -> Scene_source_format
+{
+    return m_source_format;
+}
+
+void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_source_format format)
+{
+    m_source_path   = path;
+    m_source_format = format;
     // R5.3: the scene's container record follows the source path (first
     // save binds it, save-as re-homes it). The open paths call this before
     // register_to_editor_scenes(); the record then picks the path up at

@@ -27,7 +27,12 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #if defined(ERHE_USD_LIBRARY_LIGHTUSD)
 
 #include "app_context.hpp"
+#include "assets/asset_manager.hpp"
+#include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
+#include "content_library/style.hpp"
+#include "geometry_graph/graph_mesh.hpp"
+#include "texture_graph/graph_texture.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/content_library_attach_operation.hpp"
@@ -35,6 +40,12 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
+
+#include "app_message_bus.hpp"
+#include "app_scenes.hpp"
+#include "app_settings.hpp"
+#include "scene/draw_list_scene_dependencies.hpp"
+#include "scene/generated/scene_settings_serialization.hpp"
 
 #include "scene/generated/gltf_source_reference.hpp"
 
@@ -55,6 +66,9 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 
 #include "editor_log.hpp"
 #include "items.hpp"
+
+#include <nlohmann/json.hpp>
+#include <simdjson.h>
 
 #include <fmt/format.h>
 
@@ -177,6 +191,131 @@ namespace {
     }
 }
 
+// The image files the stage names, decoded into textures, with every
+// material slot the loader recorded filled in. Shared by the import and the
+// open path: neither can reach a texture through erhe::usd, which creates no
+// GPU object at all.
+[[nodiscard]] auto create_usd_textures(
+    App_context&         context,
+    erhe::usd::Usd_data& usd_data
+) -> std::vector<std::shared_ptr<erhe::graphics::Texture>>
+{
+    std::vector<std::shared_ptr<erhe::graphics::Texture>> textures;
+    textures.resize(usd_data.images.size());
+    {
+        erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
+        for (std::size_t i = 0, end = usd_data.images.size(); i < end; ++i) {
+            textures[i] = load_usd_image(*context.graphics_device, image_transfer, usd_data.images[i]);
+        }
+        image_transfer.flush();
+    }
+    for (const erhe::usd::Usd_material_texture_binding& binding : usd_data.material_texture_bindings) {
+        if ((binding.material_index >= usd_data.materials.size()) || (binding.image_index >= textures.size())) {
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Material>& material = usd_data.materials[binding.material_index];
+        const std::shared_ptr<erhe::graphics::Texture>&   texture  = textures[binding.image_index];
+        if (!material || !texture) {
+            continue;
+        }
+        material->set_slot_texture(get_material_texture_slot(material->data.texture_samplers, binding.slot), texture);
+    }
+    return textures;
+}
+
+// The content-library attaches for the textures and materials one USD file
+// contributed, in the order the glTF import builds them.
+void append_usd_content_library_operations(
+    const std::shared_ptr<Content_library>&                      content_library,
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>>& textures,
+    const erhe::usd::Usd_data&                                   usd_data,
+    const std::string&                                           path_string,
+    std::vector<std::shared_ptr<Operation>>&                     operations
+)
+{
+    for (std::size_t i = 0, end = textures.size(); i < end; ++i) {
+        if (!textures[i]) {
+            continue;
+        }
+        operations.push_back(
+            std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+                content_library,
+                content_library->textures,
+                textures[i],
+                Gltf_source_reference{
+                    .gltf_path  = path_string,
+                    .item_name  = textures[i]->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "texture",
+                }
+            )
+        );
+    }
+    for (std::size_t i = 0, end = usd_data.materials.size(); i < end; ++i) {
+        if (!usd_data.materials[i]) {
+            continue;
+        }
+        operations.push_back(
+            std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+                content_library,
+                content_library->materials,
+                usd_data.materials[i],
+                Gltf_source_reference{
+                    .gltf_path  = path_string,
+                    .item_name  = usd_data.materials[i]->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "material",
+                }
+            )
+        );
+    }
+}
+
+// The `customLayerData` key the editor's scene state travels under, and the
+// key naming the writer's format revision. The value of `erhe:scene` is the
+// JSON object the glTF ERHE_scene block carries, verbatim as a string:
+// ambient_light, enable_physics and the codegen-serialized per-scene
+// settings (doc/scene_serialization.md, USD-backed scenes).
+constexpr const char* c_usd_scene_state_key = "erhe:scene";
+constexpr const char* c_usd_version_key     = "erhe:version";
+constexpr const char* c_usd_version_value   = "1";
+
+// What `erhe:scene` carries, with editor defaults for everything the file
+// leaves out.
+class Usd_scene_state
+{
+public:
+    glm::vec4   ambient_light {0.0f, 0.0f, 0.0f, 0.0f};
+    bool        enable_physics{true};
+    std::string settings_json;
+};
+
+[[nodiscard]] auto parse_usd_scene_state(const erhe::usd::Usd_data& usd_data) -> Usd_scene_state
+{
+    Usd_scene_state state{};
+    const std::map<std::string, std::string>::const_iterator i = usd_data.custom_layer_data.find(c_usd_scene_state_key);
+    if (i == usd_data.custom_layer_data.end()) {
+        return state;
+    }
+    const nlohmann::json payload = nlohmann::json::parse(i->second, nullptr, false);
+    if (!payload.is_object()) {
+        log_parsers->error("open_scene_usd: customLayerData '{}' is not a JSON object - editor defaults are used", c_usd_scene_state_key);
+        return state;
+    }
+    if (payload.contains("ambient_light") && payload["ambient_light"].is_array() && (payload["ambient_light"].size() == 4)) {
+        for (int component = 0; component < 4; ++component) {
+            state.ambient_light[component] = payload["ambient_light"][static_cast<std::size_t>(component)].get<float>();
+        }
+    }
+    if (payload.contains("enable_physics") && payload["enable_physics"].is_boolean()) {
+        state.enable_physics = payload["enable_physics"].get<bool>();
+    }
+    if (payload.contains("settings") && payload["settings"].is_object()) {
+        state.settings_json = payload["settings"].dump();
+    }
+    return state;
+}
+
 } // anonymous namespace
 
 auto make_import_usd_operation(
@@ -240,26 +379,7 @@ auto make_import_usd_operation(
     // Textures. erhe::usd names image FILES (it creates no GPU object at
     // all), so this is where they become erhe::graphics::Texture objects and
     // where the material slots the loader recorded are filled.
-    std::vector<std::shared_ptr<erhe::graphics::Texture>> textures;
-    textures.resize(usd_data.images.size());
-    {
-        erhe::gltf::Image_transfer image_transfer{*context.graphics_device};
-        for (std::size_t i = 0, end = usd_data.images.size(); i < end; ++i) {
-            textures[i] = load_usd_image(*context.graphics_device, image_transfer, usd_data.images[i]);
-        }
-        image_transfer.flush();
-    }
-    for (const erhe::usd::Usd_material_texture_binding& binding : usd_data.material_texture_bindings) {
-        if ((binding.material_index >= usd_data.materials.size()) || (binding.image_index >= textures.size())) {
-            continue;
-        }
-        const std::shared_ptr<erhe::primitive::Material>& material = usd_data.materials[binding.material_index];
-        const std::shared_ptr<erhe::graphics::Texture>&   texture  = textures[binding.image_index];
-        if (!material || !texture) {
-            continue;
-        }
-        material->set_slot_texture(get_material_texture_slot(material->data.texture_samplers, binding.slot), texture);
-    }
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>> textures = create_usd_textures(context, usd_data);
 
     log_parsers->info(
         "USD import '{}': {} nodes, {} meshes, {} materials, {} textures",
@@ -281,42 +401,7 @@ auto make_import_usd_operation(
     const std::string                      path_string     = path.generic_string();
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
-    for (std::size_t i = 0, end = textures.size(); i < end; ++i) {
-        if (!textures[i]) {
-            continue;
-        }
-        operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
-                content_library,
-                content_library->textures,
-                textures[i],
-                Gltf_source_reference{
-                    .gltf_path  = path_string,
-                    .item_name  = textures[i]->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "texture",
-                }
-            )
-        );
-    }
-    for (std::size_t i = 0, end = usd_data.materials.size(); i < end; ++i) {
-        if (!usd_data.materials[i]) {
-            continue;
-        }
-        operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
-                content_library,
-                content_library->materials,
-                usd_data.materials[i],
-                Gltf_source_reference{
-                    .gltf_path  = path_string,
-                    .item_name  = usd_data.materials[i]->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "material",
-                }
-            )
-        );
-    }
+    append_usd_content_library_operations(content_library, textures, usd_data, path_string, operations);
 
     erhe::scene::Scene* scene = scene_root->get_hosted_scene();
     operations.push_back(
@@ -348,6 +433,281 @@ auto make_import_usd_operation(
     import_result.material_count = usd_data.materials.size();
     import_result.texture_count  = usd_data.images.size();
     return import_result;
+}
+
+auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> std::shared_ptr<Scene_root>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    if (context.graphics_device == nullptr) {
+        log_parsers->error("open_scene_usd '{}': no graphics device", path.generic_string());
+        return {};
+    }
+
+    // The prims are built under a container node parented to a temporary
+    // scene (a node needs a host to attach to) and moved under the new
+    // scene's root below. Unlike the import path this container is NOT an
+    // import_root wrapper: the file IS the scene, so its top-level prims are
+    // the scene's top-level nodes.
+    erhe::scene::Scene temp_scene{"temp usd scene", nullptr};
+    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Node>(
+        erhe::file::to_string(path.filename())
+    );
+    container_node->set_parent(temp_scene.get_root_node());
+
+    erhe::usd::Usd_load_result result = erhe::usd::load_usd(
+        erhe::usd::Usd_load_arguments{
+            .path          = path,
+            .root_node     = container_node,
+            .mesh_layer_id = Mesh_layer_id::content
+        }
+    );
+    if (!result.error.empty()) {
+        log_parsers->error("open_scene_usd '{}' failed: {}", path.generic_string(), result.error);
+        container_node->set_parent({});
+        return {};
+    }
+    erhe::usd::Usd_data& usd_data = result.data;
+
+    const Usd_scene_state scene_state = parse_usd_scene_state(usd_data);
+
+    // Fresh, EMPTY content library: the file carries the scene's own
+    // materials and textures, the way an erhe-authored glTF scene does.
+    std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
+    const Draw_list_scene_dependencies draw_list_dependencies = make_draw_list_scene_dependencies(context);
+    std::shared_ptr<Scene_root> scene_root = std::make_shared<Scene_root>(
+        context.app_message_bus,
+        content_library,
+        erhe::file::to_string(path.stem()),
+        scene_state.enable_physics,
+        &draw_list_dependencies,
+        make_scene_root_material_set_create_info(context, "Scene forward material set")
+    );
+    {
+        std::error_code error_code;
+        const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+        scene_root->set_source_path(error_code ? path : canonical_path, Scene_source_format::usd);
+    }
+
+    erhe::scene::Scene& scene = scene_root->get_scene();
+    scene.ambient_light = scene_state.ambient_light;
+    if (!scene_state.settings_json.empty()) {
+        simdjson::ondemand::parser   settings_parser;
+        simdjson::padded_string      settings_padded{scene_state.settings_json};
+        simdjson::ondemand::document settings_document;
+        simdjson::ondemand::object   settings_object;
+        if (
+            (settings_parser.iterate(settings_padded).get(settings_document) == simdjson::SUCCESS) &&
+            (settings_document.get_object().get(settings_object) == simdjson::SUCCESS) &&
+            (deserialize(settings_object, scene_root->get_scene_settings()) == simdjson::SUCCESS)
+        ) {
+            log_parsers->info("open_scene_usd: applied per-scene setting overrides");
+        } else {
+            log_parsers->error("open_scene_usd: failed to deserialize the customLayerData settings payload");
+        }
+    }
+
+    scene_root->register_to_editor_scenes(*context.app_scenes);
+
+    const std::vector<std::shared_ptr<erhe::graphics::Texture>> textures = create_usd_textures(context, usd_data);
+
+    std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
+    finalize_imported_meshes(
+        context,
+        make_import_build_info(context),
+        std::span<const std::shared_ptr<erhe::scene::Node>>{usd_data.nodes},
+        &mesh_node_items
+    );
+
+    // The content-library attaches are undoable operations on the import
+    // path; opening a scene is not undoable, so they are executed inline and
+    // dropped - the same shape finish_open_scene_gltf uses.
+    std::vector<std::shared_ptr<Operation>> operations;
+    append_usd_content_library_operations(content_library, textures, usd_data, path.generic_string(), operations);
+    for (const std::shared_ptr<Operation>& operation : operations) {
+        operation->execute(context);
+    }
+
+    // The file's top-level prims become the scene's top-level nodes: no
+    // wrapper is added, so a save writes back exactly the shape that was
+    // read. Copy the child list - reparenting mutates it.
+    const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
+    const std::vector<std::shared_ptr<erhe::Hierarchy>> children = container_node->get_children();
+    for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
+        child->set_parent(scene_root_node);
+    }
+    container_node->set_parent({});
+
+    Async_raytrace_kickoff_operation raytrace_kickoff{scene_root, std::move(mesh_node_items)};
+    raytrace_kickoff.execute(context);
+
+    log_parsers->info(
+        "open_scene_usd: opened scene '{}' from '{}': {} nodes, {} meshes, {} materials, {} textures",
+        scene_root->get_name(),
+        erhe::file::to_string(path),
+        usd_data.nodes.size(),
+        usd_data.meshes.size(),
+        usd_data.materials.size(),
+        usd_data.images.size()
+    );
+    return scene_root;
+}
+
+namespace {
+
+// The five erhe texture slots in the order erhe::usd names them, so the save
+// can walk a material's slots and the writer's slot enumeration together.
+class Usd_save_slot
+{
+public:
+    const erhe::primitive::Material_texture_sampler erhe::primitive::Material_texture_samplers::* member;
+    erhe::usd::Usd_material_texture_slot                                                          slot;
+    const char*                                                                                   name;
+};
+
+constexpr Usd_save_slot c_usd_save_slots[] = {
+    {&erhe::primitive::Material_texture_samplers::base_color,         erhe::usd::Usd_material_texture_slot::base_color,         "base_color"},
+    {&erhe::primitive::Material_texture_samplers::metallic_roughness, erhe::usd::Usd_material_texture_slot::metallic_roughness, "metallic_roughness"},
+    {&erhe::primitive::Material_texture_samplers::normal,             erhe::usd::Usd_material_texture_slot::normal,             "normal"},
+    {&erhe::primitive::Material_texture_samplers::occlusion,          erhe::usd::Usd_material_texture_slot::occlusion,          "occlusion"},
+    {&erhe::primitive::Material_texture_samplers::emissive,           erhe::usd::Usd_material_texture_slot::emissive,           "emissive"}
+};
+
+// The editor-state kinds a USD file does not carry yet. Each is reported
+// once per save, so a scene that holds any of them says what the written
+// file leaves behind (src/erhe/usd/notes.md future work).
+template <typename T>
+void log_uncarried_editor_state_kind(
+    const std::shared_ptr<Content_library_node>& node,
+    const char*                                  kind,
+    const std::filesystem::path&                 path
+)
+{
+    if (!node) {
+        return;
+    }
+    const std::size_t count = node->get_all<T>().size();
+    if (count > 0) {
+        log_parsers->info(
+            "save_scene_usd '{}': {} {}(s) are not carried by a USD file yet",
+            erhe::file::to_string(path), count, kind
+        );
+    }
+}
+
+void log_uncarried_editor_state(const Content_library& content_library, const std::filesystem::path& path)
+{
+    log_uncarried_editor_state_kind<Brush>        (content_library.brushes,        "brush",              path);
+    log_uncarried_editor_state_kind<Graph_mesh>   (content_library.graph_meshes,   "node graph mesh",    path);
+    log_uncarried_editor_state_kind<Graph_texture>(content_library.graph_textures, "node graph texture", path);
+    log_uncarried_editor_state_kind<Style>        (content_library.styles,         "style",              path);
+    // Library folders have no USD form yet either; they are part of the
+    // content library's node tree rather than a category of their own.
+    log_parsers->info(
+        "save_scene_usd '{}': content-library folders are not carried by a USD file yet",
+        erhe::file::to_string(path)
+    );
+}
+
+} // anonymous namespace
+
+auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const erhe::scene::Scene&                scene     = scene_root.get_scene();
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    if (!root_node) {
+        log_parsers->error("save_scene_usd: scene '{}' has no root node", scene_root.get_name());
+        return false;
+    }
+
+    erhe::usd::Usd_save_arguments save_arguments{
+        .path      = path,
+        .root_node = root_node
+    };
+
+    const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
+    if (content_library && content_library->materials) {
+        save_arguments.materials = content_library->materials->get_all<erhe::primitive::Material>();
+    }
+    for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {
+        const std::shared_ptr<erhe::primitive::Material>& material = save_arguments.materials[material_index];
+        if (!material) {
+            continue;
+        }
+        for (const Usd_save_slot& slot : c_usd_save_slots) {
+            const erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            if (!sampler.texture_reference) {
+                continue;
+            }
+            const erhe::graphics::Texture* texture = sampler.texture_reference->get_referenced_texture();
+            const std::filesystem::path*   source  = (texture != nullptr) ? texture->get_source_path() : nullptr;
+            if ((source == nullptr) || source->empty()) {
+                // A generated texture has no bytes on disk, so USD has no
+                // asset path to name (src/erhe/usd/notes.md).
+                log_parsers->warn(
+                    "save_scene_usd '{}': material '{}' slot '{}' has no source image file - the slot is not written",
+                    erhe::file::to_string(path), material->get_name(), slot.name
+                );
+                continue;
+            }
+            save_arguments.textures.push_back(
+                erhe::usd::Usd_save_texture{
+                    .material_index = material_index,
+                    .slot           = slot.slot,
+                    .path           = *source,
+                    // A normal or occlusion map carries data, everything else
+                    // carries sRGB color - the same rule the load applies.
+                    .srgb           =
+                        (slot.slot != erhe::usd::Usd_material_texture_slot::normal) &&
+                        (slot.slot != erhe::usd::Usd_material_texture_slot::occlusion)
+                }
+            );
+        }
+    }
+
+    // The editor's scene state, in the JSON shape the glTF ERHE_scene block
+    // carries, as one `customLayerData` string.
+    {
+        nlohmann::json scene_json{
+            {"ambient_light",  {scene.ambient_light.x, scene.ambient_light.y, scene.ambient_light.z, scene.ambient_light.w}},
+            {"enable_physics", scene_root.has_physics_world()}
+        };
+        const Scene_settings& scene_settings = scene_root.get_scene_settings();
+        if (!is_default(scene_settings)) {
+            const nlohmann::json settings_json = nlohmann::json::parse(serialize(scene_settings, 0), nullptr, false);
+            if (!settings_json.is_discarded()) {
+                scene_json["settings"] = settings_json;
+            } else {
+                log_parsers->error("save_scene_usd: Scene_settings serialization did not parse - settings not written");
+            }
+        }
+        save_arguments.custom_layer_data[c_usd_scene_state_key] = scene_json.dump();
+        save_arguments.custom_layer_data[c_usd_version_key]     = c_usd_version_value;
+    }
+
+    if (content_library) {
+        log_uncarried_editor_state(*content_library.get(), path);
+    }
+
+    const erhe::usd::Usd_save_result result = erhe::usd::save_usda(save_arguments);
+    if (!result.warning.empty()) {
+        log_parsers->warn("save_scene_usd '{}': {}", erhe::file::to_string(path), result.warning);
+    }
+    if (!result.error.empty()) {
+        log_parsers->error("save_scene_usd '{}' failed: {}", erhe::file::to_string(path), result.error);
+        return false;
+    }
+
+    // Same post-save bookkeeping the glTF save does, minus the prefab reload
+    // (a USD file is not a prefab source).
+    if (context.asset_manager != nullptr) {
+        context.asset_manager->on_scene_saved(scene_root);
+    }
+    context.app_message_bus->scene_saved.send_message(Scene_saved_message{.path = path});
+    log_parsers->info("save_scene_usd: scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(path));
+    return true;
 }
 
 void import_usd(
@@ -396,6 +756,18 @@ void import_usd(
 )
 {
     log_parsers->error("USD import '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
+}
+
+auto open_scene_usd(App_context&, const std::filesystem::path& path) -> std::shared_ptr<Scene_root>
+{
+    log_parsers->error("open_scene_usd '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
+    return {};
+}
+
+auto save_scene_usd(App_context&, Scene_root&, const std::filesystem::path& path) -> bool
+{
+    log_parsers->error("save_scene_usd '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
+    return false;
 }
 
 } // namespace editor

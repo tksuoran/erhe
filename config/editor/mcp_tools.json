@@ -2458,11 +2458,11 @@
     "name": "set_scene_settings"
   },
   {
-    "description": "Save a scene as a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file), without a file dialog. Without 'path' the scene saves back to its own source file when it was opened/loaded from one, else to res/editor/scenes/<scene name>.glb. When the written file is a loaded prefab source, the prefab is reloaded so every instance in every scene reflects the edit (this subsumed the former save_prefab tool). This is the scene persistence path; export_gltf without editor_state is the plain interchange export.",
+    "description": "Save a scene in its own source format, without a file dialog. A scene opened from a USD file (source_format 'usd' in list_scenes) writes a .usda layer carrying the scene graph, the content library's materials with their image files, and the scene-level editor state in customLayerData; every other scene writes a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file). The reply reports the format written. Without 'path' the scene saves back to its own source file when it was opened/loaded from one, else to res/editor/scenes/<scene name> with that format's extension. When the written file is a loaded prefab source, the prefab is reloaded so every instance in every scene reflects the edit (this subsumed the former save_prefab tool). This is the scene persistence path; export_gltf without editor_state is the plain interchange export.",
     "inputSchema": {
       "properties": {
         "path": {
-          "description": "Destination file path (default: the scene's source file, else res/editor/scenes/<scene name>.glb); .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form)",
+          "description": "Destination file path (default: the scene's source file, else res/editor/scenes/<scene name> with the scene format's extension). For a glTF scene, .glb is appended when the extension is neither .glb nor .gltf (.gltf selects the text form); for a USD scene, .usda is appended unless the path already carries a USD extension",
           "type": "string"
         },
         "scene_name": {
@@ -2482,7 +2482,7 @@
     "name": "save_scene"
   },
   {
-    "description": "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a foreign glTF opens as a new scene via the same path as open_scene. The load is queued and completes on a following frame; discover the scene via list_scenes.",
+    "description": "Load a saved scene, without a file dialog: an erhe-authored glTF file (saved by save_scene) opens as a full scene with its saved editor state (fresh content library, browser + viewport windows; not undoable); a .usd / .usda / .usdc / .usdz file opens as a USD-backed scene, whose top-level prims are the scene's top-level nodes and which saves back as USDA; a foreign glTF opens as a new scene via the same path as open_scene. The load is queued and completes on a following frame; discover the scene via list_scenes.",
     "inputSchema": {
       "properties": {
         "path": {
@@ -2498,7 +2498,7 @@
     "name": "load_scene"
   },
   {
-    "description": "Open a FOREIGN glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window + a new viewport window showing the scene, and imports the file, all as a single undoable operation. Existing viewport windows are not modified. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name). For an erhe-authored scene file, prefer load_scene, which also applies the saved editor state.",
+    "description": "Open a FOREIGN glTF file as a new scene (same as the Asset Browser's Open context menu entry): creates a scene root + content library + browser window + a new viewport window showing the scene, and imports the file, all as a single undoable operation. Existing viewport windows are not modified. The open is queued and completes on a following frame; discover the scene via list_scenes (named after the file name). A .usd / .usda / .usdc / .usdz path is routed to the load_scene path instead, which opens it as a USD-backed scene. For an erhe-authored scene file, prefer load_scene, which also applies the saved editor state.",
     "inputSchema": {
       "properties": {
         "path": {

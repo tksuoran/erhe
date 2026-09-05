@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -151,6 +152,11 @@ public:
     // and reported here for the caller's log / UI.
     std::string up_axis{"Y"};
     double      meters_per_unit{1.0};
+
+    // The root layer's `customLayerData`, string entries only: what an erhe
+    // save put there (the editor's scene state) and what another writer left
+    // for a reader that understands it. Non-string entries are not reported.
+    std::map<std::string, std::string> custom_layer_data;
 };
 
 class Usd_load_arguments final
@@ -219,6 +225,10 @@ public:
     std::shared_ptr<const erhe::scene::Node>                root_node;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<Usd_save_texture>                           textures;
+    // Written verbatim as the root layer's `customLayerData`, one string
+    // entry per pair: how the editor carries its own scene state in a USD
+    // file (doc/scene_serialization.md, USD-backed scenes).
+    std::map<std::string, std::string>                      custom_layer_data;
     std::string                                             up_axis        {"Y"};
     double                                                  meters_per_unit{1.0};
 };

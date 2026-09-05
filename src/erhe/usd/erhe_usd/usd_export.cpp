@@ -316,6 +316,12 @@ public:
             (m_arguments.up_axis == "X") ? lightusd::Axis::X : lightusd::Axis::Y
         );
         stage.metas().metersPerUnit.set_value(m_arguments.meters_per_unit);
+        for (const std::pair<const std::string, std::string>& entry : m_arguments.custom_layer_data) {
+            stage.metas().customLayerData[entry.first] = lightusd::MetaVariable{entry.second};
+        }
+        if (!m_arguments.custom_layer_data.empty()) {
+            stage.metas().customLayerDataAuthored = true;
+        }
         stage.commit();
 
         const std::string filename = m_arguments.path.generic_string();

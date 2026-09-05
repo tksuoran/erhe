@@ -21,6 +21,7 @@
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/usd.hpp"
 #include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -919,6 +920,17 @@ Operations::Operations(
     m_load_scene_file_subscription = app_message_bus.load_scene_file.subscribe(
         [&](Load_scene_file_message& message) {
             try {
+                // A USD file opens as a USD-backed scene: the file's prims
+                // become the scene's nodes and Save Scene writes USDA back
+                // (doc/usd-compatibility-plan.md E1). No conversion between
+                // the formats happens in either direction (G3).
+                if (is_usd_file_extension(message.path)) {
+                    std::shared_ptr<Scene_root> usd_scene_root = editor::open_scene_usd(m_context, message.path);
+                    if (usd_scene_root) {
+                        on_scene_opened(usd_scene_root);
+                    }
+                    return;
+                }
                 // glTF file: an erhe-authored scene (ERHE_scene in
                 // extensionsUsed) opens as a full scene with its saved
                 // editor state; any other glTF opens as a foreign scene
@@ -2590,11 +2602,20 @@ void Operations::save_scene()
 void Operations::save_scene_to_file(Scene_root& scene_root, const std::filesystem::path& path)
 {
     try {
-        if (editor::save_scene_gltf(m_context, scene_root, path)) {
+        // Save follows the scene's own format (doc/usd-compatibility-plan.md
+        // E1, G3): a USD-backed scene writes a USDA layer, everything else
+        // writes the erhe-authored glTF. Neither format is ever converted
+        // into the other.
+        const bool                usd = (scene_root.get_source_format() == Scene_source_format::usd);
+        const Scene_source_format format = usd ? Scene_source_format::usd : Scene_source_format::gltf;
+        const bool saved = usd
+            ? editor::save_scene_usd (m_context, scene_root, path)
+            : editor::save_scene_gltf(m_context, scene_root, path);
+        if (saved) {
             if (scene_root.get_source_path().empty()) {
                 // The scene now lives in this file: further saves write back
                 // to it without confirmation.
-                scene_root.set_source_path(path);
+                scene_root.set_source_path(path, format);
             }
             log_operations->info("Scene '{}' saved to '{}'", scene_root.get_name(), erhe::file::to_string(path));
         }

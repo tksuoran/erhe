@@ -161,6 +161,10 @@ because the same spelling rule decides what an item is called on a stage.
   comes back under the sanitized spelling.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
+- `Usd_save_arguments::custom_layer_data` is written verbatim as the root
+  layer's `customLayerData`, one string entry per pair, and `Usd_data`
+  reports the string entries of a loaded layer back. That pair is how the
+  editor carries its own scene state in a USD file.
 - Textures. `erhe::usd` decodes nothing and creates no GPU object, so the
   caller resolves each bound slot to a file (`Usd_save_texture`); the path is
   written relative to the `.usda`. A slot with a local texture value the
@@ -273,12 +277,15 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   asset manager learns a second format.
 - A USD file cannot be opened as a scene or instantiated as a prefab yet, only
   imported as an asset; the prefab library parses glTF only.
-- The writer carries no editor state yet: the `Scene_root` settings, brushes,
-  node graphs, library folders and styles that `ERHE_scene` and the asset-root
-  extensions hold in glTF have no `customLayerData` and no custom prims of
-  their own (C1). Neither does it write `.usdc` or `.usdz`, MaterialX, or the
-  composition structure of the file it loaded - the first version flattens
-  what it read (plan steps X1 and X2).
+- Of the editor state `ERHE_scene` and the asset-root extensions hold in
+  glTF, only the scene-level block travels: the editor writes it as the
+  `erhe:scene` string of `customLayerData` (doc/scene_serialization.md,
+  USD-backed scenes). The brush library, the geometry and texture node
+  graphs, the content-library folder tree and the style library have no USD
+  form yet and no custom prims of their own (C1); a save logs one line per
+  kind the scene holds. The writer also emits no `.usdc` or `.usdz`, no
+  MaterialX, and none of the composition structure of the file it loaded -
+  the first version flattens what it read (plan steps X1 and X2).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written
   as `erhe:Light:color` but the import resolves neither the qualified nor the
   bare name against a node, so such a value does not come back.

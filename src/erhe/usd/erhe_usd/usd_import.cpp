@@ -278,6 +278,7 @@ public:
 
         m_result.data.up_axis         = scene.meta.upAxis;
         m_result.data.meters_per_unit = scene.meta.metersPerUnit;
+        read_custom_layer_data(stage);
 
         convert_images();
         convert_materials();
@@ -321,6 +322,20 @@ private:
         for (const std::shared_ptr<erhe::scene::Light>&        light    : m_result.data.lights)    { elide(light);    }
         for (const std::shared_ptr<erhe::scene::Camera>&       camera   : m_result.data.cameras)   { elide(camera);   }
         for (const std::shared_ptr<erhe::primitive::Material>& material : m_result.data.materials) { elide(material); }
+    }
+
+    // The root layer's `customLayerData`, string entries only: an erhe save
+    // puts the editor's scene state there (doc/scene_serialization.md, USD-
+    // backed scenes), and a value of any other type belongs to a writer this
+    // conversion does not read.
+    void read_custom_layer_data(const lightusd::Stage& stage)
+    {
+        for (const std::pair<const std::string, lightusd::MetaVariable>& entry : stage.metas().customLayerData) {
+            const nonstd::optional<std::string> text = entry.second.get_value<std::string>();
+            if (text.has_value()) {
+                m_result.data.custom_layer_data.emplace(entry.first, text.value());
+            }
+        }
     }
 
     // UsdPhysics is future work (doc/usd-compatibility-plan.md section 5).

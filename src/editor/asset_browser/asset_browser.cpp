@@ -218,7 +218,7 @@ Asset_browser::Asset_browser(
             }
             const std::shared_ptr<Asset_file_usd> usd = std::dynamic_pointer_cast<Asset_file_usd>(item);
             if (usd) {
-                if (try_import(usd)) {
+                if (try_load(usd) || try_import(usd)) {
                     close = true;
                 }
             }
@@ -464,6 +464,24 @@ auto Asset_browser::try_open(const std::shared_ptr<Asset_file_gltf>& gltf) -> bo
     if (ImGui::MenuItem(open_label.c_str())) {
         m_context.operation_stack->queue(
             std::make_shared<Scene_open_operation>(*gltf->get_source_path())
+        );
+        return true;
+    }
+    return false;
+}
+
+auto Asset_browser::try_load(const std::shared_ptr<Asset_file_usd>& usd) -> bool
+{
+    std::string load_label = fmt::format("Load scene '{}'", erhe::file::to_string(*usd->get_source_path()));
+    if (ImGui::MenuItem(load_label.c_str())) {
+        // Same File > Load Scene path a glTF scene takes; the handler routes
+        // a USD file to open_scene_usd (new scene root + content library +
+        // browser and viewport windows, the file's prims as the scene's
+        // nodes, Save Scene writing USDA back).
+        m_context.app_message_bus->load_scene_file.queue_message(
+            Load_scene_file_message{
+                .path = *usd->get_source_path()
+            }
         );
         return true;
     }

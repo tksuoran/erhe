@@ -52,6 +52,37 @@ void import_usd(
     const std::filesystem::path&       path
 );
 
+// Opens the USD file at `path` as a NEW scene: a fresh Scene_root with its
+// own content library, the file's top-level prims as the scene's top-level
+// nodes (no import_root wrapper - the file is the scene) and the file's
+// materials and textures as the scene's own library items. Editor state
+// comes from the root layer's `customLayerData` (`erhe:scene`), written by
+// save_scene_usd(); when it is absent the scene keeps editor defaults. The
+// scene's source format is Scene_source_format::usd, so Save Scene writes
+// USDA back to `path`.
+//
+// Not undoable, the way opening an erhe-authored glTF scene is not: the
+// caller (the Load Scene message handler, MCP open_scene / load_scene) shows
+// the scene through Operations::on_scene_opened. Returns null on failure,
+// which is logged.
+[[nodiscard]] auto open_scene_usd(
+    App_context&                 context,
+    const std::filesystem::path& path
+) -> std::shared_ptr<Scene_root>;
+
+// Writes `scene_root` to `path` as one USDA layer through erhe::usd:
+// the scene graph, the content library's materials with the image files
+// their texture slots name, and the editor's scene state (ambient light,
+// enable_physics and the per-scene setting overrides) as the `erhe:scene`
+// entry of `customLayerData`, in the same JSON shape the glTF ERHE_scene
+// block carries. Editor-state kinds a USD file does not carry yet - brushes,
+// node graphs, library folders, styles - are logged, one line per kind.
+[[nodiscard]] auto save_scene_usd(
+    App_context&                 context,
+    Scene_root&                  scene_root,
+    const std::filesystem::path& path
+) -> bool;
+
 // True for the file extensions the USD importer accepts (.usd / .usda /
 // .usdc / .usdz), case-insensitive. Answers the same in a build without USD
 // support, so the asset browser classifies files the same way everywhere.

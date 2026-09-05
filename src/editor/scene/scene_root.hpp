@@ -78,6 +78,19 @@ class Node_physics;
 class Raytrace_primitive;
 class Rendertarget_mesh;
 class Scene_root;
+
+// The file format a scene is bound to. It decides what Save Scene writes:
+// `gltf` writes the erhe-authored glTF of doc/scene_serialization.md, `usd`
+// writes a USDA layer through erhe::usd, and `none` is a scene that has no
+// file yet - it saves as glTF, the editor's default. A scene never converts
+// between the two formats (doc/usd-compatibility-plan.md G3).
+enum class Scene_source_format : unsigned int {
+    none = 0,
+    gltf = 1,
+    usd  = 2
+};
+
+[[nodiscard]] auto c_str(Scene_source_format format) -> const char*;
 class Scene_view;
 class Viewport_scene_view;
 
@@ -275,7 +288,10 @@ public:
     // without confirmation and reloads every prefab instance when the file
     // is a loaded prefab source.
     [[nodiscard]] auto get_source_path   () const -> const std::filesystem::path&;
-    void set_source_path(const std::filesystem::path& path);
+    // The format is given with the path because the two always change
+    // together: whatever opened or saved the scene knows both.
+    void set_source_path(const std::filesystem::path& path, Scene_source_format format);
+    [[nodiscard]] auto get_source_format () const -> Scene_source_format;
 
     // Definition-vs-reference classification for an asset-typed item
     // entering this scene's content library (asset-manager plan, R5
@@ -335,6 +351,7 @@ private:
     App_scenes*                                     m_app_scenes{nullptr};
     std::shared_ptr<Content_library>                m_content_library;
     std::filesystem::path                           m_source_path;
+    Scene_source_format                             m_source_format{Scene_source_format::none};
     bool                                            m_is_registered{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per

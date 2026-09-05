@@ -54,7 +54,7 @@ void Scene_open_operation::execute(App_context& context)
         // prefab edits to instances when the file is a loaded prefab.
         std::error_code error_code;
         const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(m_path, error_code);
-        m_scene_root->set_source_path(error_code ? m_path : canonical_path);
+        m_scene_root->set_source_path(error_code ? m_path : canonical_path, Scene_source_format::gltf);
     }
     m_scene_root->register_to_editor_scenes(*context.app_scenes);
 

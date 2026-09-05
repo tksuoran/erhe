@@ -244,6 +244,45 @@ keep their state on import.
   from the graph on scene load) and prefab instances do not rebuild it, so
   graph-baked products are missing from instances of such a prefab.
 
+## USD-backed scenes
+
+glTF is the editor's own format and the one a scene saves in by default. A
+scene opened from a `.usd` / `.usda` / `.usdc` / `.usdz` file is USD-backed
+instead: `Scene_root::get_source_format()` reports `usd`, and Save Scene
+(the menu command, the Asset Browser's "Load scene", MCP `save_scene`)
+writes a `.usda` layer back through `erhe::usd` (`save_scene_usd`,
+`src/erhe/usd/notes.md`). A scene never converts between the two formats -
+neither direction is offered anywhere
+([`usd-compatibility-plan.md`](usd-compatibility-plan.md) G3).
+
+Opening a USD file as a scene (`open_scene_usd`) builds a fresh `Scene_root`
+with its own empty content library, puts the file's top-level prims directly
+under the scene root - a USD file *is* the scene, so no `import_root`
+wrapper is added - and attaches the file's materials and the textures its
+image files decode to as the scene's own library items. Importing the same
+file as an asset (the Asset Browser's "Import", MCP `import_usd`) keeps
+using the wrapper and the target scene's library, unchanged.
+
+What the written layer carries beyond the USD mapping
+([`usd_compatibility.md`](usd_compatibility.md)) is the editor's scene state,
+as string entries of the root layer's `customLayerData`:
+
+| key | value |
+|---|---|
+| `erhe:scene` | the same JSON object the glTF `ERHE_scene` block carries, as one string: `ambient_light`, `enable_physics` and the codegen-serialized per-scene `settings` |
+| `erhe:version` | the writer's revision, `"1"` |
+
+An opened file that has no `erhe:scene` entry keeps the editor defaults, so a
+USD file written by any other tool opens as a scene without complaint.
+
+The editor-state kinds a USD file does not carry yet are the brush library,
+the geometry and texture node graphs, the content-library folder tree, and
+the style library. A save logs one line per kind the scene actually holds,
+so nothing disappears silently; carrying them is future work recorded in
+`src/erhe/usd/notes.md`. Textures are named by their source image file: a
+generated texture has no bytes on disk, so its slot is left out of the
+material's shading network with a warning.
+
 ## Verifying round-trips
 
 **`scripts/scene_roundtrip_verify.py`** is the standing verification

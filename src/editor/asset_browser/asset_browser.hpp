@@ -233,6 +233,7 @@ private:
     auto try_import(const std::shared_ptr<Asset_file_geogram>& geogram) -> bool;
 
     auto try_import(const std::shared_ptr<Asset_file_usd>& usd) -> bool;
+    auto try_load  (const std::shared_ptr<Asset_file_usd>& usd) -> bool;
 
     // "Import to content library texture": one menu item when a single scene
     // is open, a submenu of scenes to choose the target content library from

@@ -56,18 +56,26 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // Scenes are saved as single erhe-authored glTF files
-    // (doc/gltf-scene-roundtrip-plan.md phase 4), matching File > Save Scene:
-    // without 'path' the scene saves to its own source file when it was
-    // opened/loaded from one, else to res/editor/scenes/<scene name>.glb.
-    // An explicit path is normalized to carry a glTF extension (.glb
-    // appended when missing; .gltf is honored and selects the text form).
+    // Save follows the scene's own format, the way File > Save Scene does
+    // (doc/usd-compatibility-plan.md E1): a USD-backed scene writes a USDA
+    // layer, every other scene writes a single erhe-authored glTF file
+    // (doc/gltf-scene-roundtrip-plan.md phase 4). Without 'path' the scene
+    // saves to its own source file when it was opened/loaded from one, else
+    // to res/editor/scenes/<scene name> with the format's extension. An
+    // explicit path is normalized to carry an extension of the scene's
+    // format (.glb appended when missing; .gltf selects the text form,
+    // .usda / .usd / .usdc / .usdz are honored for a USD scene).
+    const bool usd = (sr->get_source_format() == Scene_source_format::usd);
     std::filesystem::path path;
     if (path_str.empty()) {
         path = resolve_scene_save_path(*sr);
     } else {
         path = std::filesystem::path{path_str};
-        if (
+        if (usd) {
+            if (!editor::is_usd_file_extension(path)) {
+                path = std::filesystem::path{path.string() + ".usda"};
+            }
+        } else if (
             (path.extension() != std::filesystem::path{".glb"}) &&
             (path.extension() != std::filesystem::path{".gltf"})
         ) {
@@ -77,7 +85,9 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     // save_scene_gltf also reloads the prefab when 'path' is a loaded prefab
     // source, refreshing every instance in every scene (this subsumed the
     // former save_prefab tool).
-    const bool ok = editor::save_scene_gltf(m_context, *sr, path);
+    const bool ok = usd
+        ? editor::save_scene_usd (m_context, *sr, path)
+        : editor::save_scene_gltf(m_context, *sr, path);
     if (!ok) {
         json r = make_text_content("save_scene failed: " + path.string());
         r["isError"] = true;
@@ -90,11 +100,12 @@ auto Mcp_server::action_save_scene(const json& args) -> std::string
     // back like File > Save Scene always has.
     const bool set_as_source = args.value("set_as_source", false);
     if (set_as_source || (path_str.empty() && sr->get_source_path().empty())) {
-        sr->set_source_path(path);
+        sr->set_source_path(path, usd ? Scene_source_format::usd : Scene_source_format::gltf);
     }
     return make_json_content({
-        {"saved", true},
-        {"path",  path.string()}
+        {"saved",  true},
+        {"path",   path.string()},
+        {"format", c_str(sr->get_source_format())}
     }).dump();
 }
 
@@ -151,9 +162,10 @@ auto Mcp_server::action_load_scene(const json& args) -> std::string
     }
     // Queue the exact File > Load Scene path: the message handler opens an
     // erhe-authored glTF file as a full scene (fresh content library, browser
-    // + viewport windows, ERHE_scene state applied; not undoable) and routes
-    // a foreign glTF to Scene_open_operation. Queued so the window setup runs
-    // from the message pump on a following frame, outside ImGui iteration.
+    // + viewport windows, ERHE_scene state applied; not undoable), a USD file
+    // as a USD-backed scene, and routes a foreign glTF to
+    // Scene_open_operation. Queued so the window setup runs from the message
+    // pump on a following frame, outside ImGui iteration.
     m_context.app_message_bus->load_scene_file.queue_message(
         Load_scene_file_message{
             .path = path
@@ -180,6 +192,22 @@ auto Mcp_server::action_open_scene(const json& args) -> std::string
         json r = make_text_content("File not found: " + path_str);
         r["isError"] = true;
         return r.dump();
+    }
+    // A USD file has no undoable open path of its own: it takes the same
+    // route File > Load Scene takes, which builds the USD-backed scene
+    // (doc/usd-compatibility-plan.md E1).
+    if (editor::is_usd_file_extension(path)) {
+        m_context.app_message_bus->load_scene_file.queue_message(
+            Load_scene_file_message{
+                .path = path
+            }
+        );
+        return make_json_content({
+            {"queued",     true},
+            {"path",       path_str},
+            {"scene_name", erhe::file::to_string(path.stem())},
+            {"format",     "usd"}
+        }).dump();
     }
     // Same path as the Asset Browser's "Open" context menu entry: queue a
     // Scene_open_operation (new scene root + content library + browser

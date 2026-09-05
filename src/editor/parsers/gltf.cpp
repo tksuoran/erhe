@@ -1469,7 +1469,10 @@ auto resolve_scene_save_path(const Scene_root& scene_root) -> std::filesystem::p
     if (!source_path.empty()) {
         return source_path;
     }
-    return default_scene_dir() / (scene_root.get_name() + ".glb");
+    // A scene with no file yet saves as glTF, the editor's own format; a
+    // USD-backed scene always has the file it was opened from.
+    const char* const extension = (scene_root.get_source_format() == Scene_source_format::usd) ? ".usda" : ".glb";
+    return default_scene_dir() / (scene_root.get_name() + extension);
 }
 
 auto finish_open_scene_gltf(
@@ -1507,7 +1510,7 @@ auto finish_open_scene_gltf(
     {
         std::error_code error_code;
         const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
-        scene_root->set_source_path(error_code ? path : canonical_path);
+        scene_root->set_source_path(error_code ? path : canonical_path, Scene_source_format::gltf);
     }
 
     // Apply the ERHE_scene payload - the one thing the import path
