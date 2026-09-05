@@ -917,12 +917,56 @@ private:
         }
     }
 
+    // Prim types that hold no place in the scene graph: none of them is
+    // Xformable, and Tydra still lists each as a transform node. Scope,
+    // Material, Shader and NodeGraph are the shading network; a GeomSubset's
+    // facets are already carried by a primitive of its mesh.
+    [[nodiscard]] static auto is_non_scene_prim_type(const std::string& type_name) -> bool
+    {
+        return
+            (type_name == "Scope")     ||
+            (type_name == "Material")  ||
+            (type_name == "Shader")    ||
+            (type_name == "NodeGraph") ||
+            (type_name == "GeomSubset");
+    }
+
+    [[nodiscard]] auto subtree_has_scene_content(const Tydra_node& usd_node) const -> bool
+    {
+        if (usd_node.nodeType != lightusd::tydra::NodeType::Xform) {
+            return true; // a mesh, camera, light, skeleton or volume
+        }
+        for (const Tydra_node& usd_child : usd_node.children) {
+            if (subtree_has_scene_content(usd_child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Such a prim contributes no erhe node when its subtree carries no scene
+    // content: a material scope is a namespace, not a place in the scene.
+    [[nodiscard]] auto is_non_scene_node(const Tydra_node& usd_node) const -> bool
+    {
+        const lightusd::Prim* prim = find_prim(usd_node.abs_path);
+        if (prim == nullptr) {
+            return false;
+        }
+        if (!is_non_scene_prim_type(prim->type_name())) {
+            return false;
+        }
+        return !subtree_has_scene_content(usd_node);
+    }
+
     void convert_node(
         const Tydra_node&                         usd_node,
         const std::shared_ptr<erhe::scene::Node>& parent,
         const glm::mat4&                          extra_transform
     )
     {
+        if (is_non_scene_node(usd_node)) {
+            return;
+        }
         const std::string node_name = usd_node.prim_name.empty()
             ? fmt::format("node_{}", m_result.data.nodes.size())
             : usd_node.prim_name;

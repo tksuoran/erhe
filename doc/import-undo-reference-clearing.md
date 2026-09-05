@@ -422,7 +422,12 @@ single uid-bearing source.
 Style of `scripts/geometry_nodes_smoke_test.py:35-52` / `scripts/test_editor_mcp.py:31-50`:
 JSON-RPC POST to `http://127.0.0.1:8080/mcp` against an **already-running** editor (neither
 script launches one). Test asset `res/editor/assets/RiggedFigure/RiggedFigure.glb` —
-tracked, 22 nodes, 1 skin, 1 animation with 13 channels. Cases:
+tracked, 22 nodes, 1 skin, 1 animation with 13 channels. The USD import
+(`import_usd`, `src/editor/parsers/usd.cpp`) builds the same
+`Item_insert_remove_operation` / `Content_library_attach_operation` compound and is
+therefore covered by the same mechanism; the script's "usd import" section asserts it
+against `src/erhe/usd/test/data/cube.usda` and skips itself in a build without USD
+support. Cases:
 
 1. **Reported repro, route 1.** `create_scene` → `import_gltf` → `set_animation_target`
    → `get_editor_references` shows the animation on window *and* player → `undo` →

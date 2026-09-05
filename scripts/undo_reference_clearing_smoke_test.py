@@ -23,6 +23,9 @@ import urllib.request
 
 PORT = 3743
 GLTF = "res/editor/assets/RiggedFigure/RiggedFigure.glb"
+# The erhe_usd test cube: repo-relative, tiny, and it carries a materialBind
+# GeomSubset, two materials, a camera and a light.
+USD = "src/erhe/usd/test/data/cube.usda"
 LOG_PATH = pathlib.Path("logs/log.txt")
 RESULTS = []
 
@@ -220,6 +223,66 @@ def section_route_1_import():
           after["animation_window"] is None, json.dumps(after["animation_window"]))
     check(section, "animation player cleared by undo",
           after["animation_player"] is None, json.dumps(after["animation_player"]))
+    return scene
+
+
+def usd_support_built():
+    """False in an ERHE_USD_LIBRARY=none build, which answers with an error."""
+    error = call_expect_error("describe_usd_file", {"path": USD})
+    return error is None
+
+
+def section_usd_import():
+    """The USD import takes the same undoable path: undo clears and announces."""
+    section = "usd import"
+    if not usd_support_built():
+        print(f"[SKIP] {section}: USD support not built (ERHE_USD_LIBRARY=none)")
+        return None
+
+    before_scenes = set(scene_names())
+    call("create_scene")
+    advance(6)
+    created = [name for name in scene_names() if name not in before_scenes]
+    scene = created[-1] if created else (scene_names() or [None])[-1]
+
+    nodes_before = {
+        entry.get("id")
+        for entry in call("get_scene_nodes", {"scene_name": scene}).get("nodes", [])
+    }
+    reply = call("import_usd", {"scene_name": scene, "path": USD})
+    advance(10)
+    check(section, "import_usd reports what it imported",
+          reply.get("imported") is True and reply.get("node_count", 0) > 0, json.dumps(reply))
+
+    imported_nodes = [
+        entry
+        for entry in call("get_scene_nodes", {"scene_name": scene}).get("nodes", [])
+        if entry.get("id") not in nodes_before and entry.get("name") not in (None, "")
+    ]
+    if not check(section, "import added selectable nodes", len(imported_nodes) > 0):
+        return scene
+
+    call("select_items", {"scene_name": scene, "ids": [entry["id"] for entry in imported_nodes[:2]]})
+    advance()
+    before = refs()
+    check(section, "nodes are selected", len(before.get("selection", [])) > 0)
+    count_before = before.get("items_removed_announcement_count", 0)
+
+    undo()
+    advance(4)
+    after = refs()
+    check(section, "undo announces the removals",
+          after.get("items_removed_announcement_count", 0) > count_before,
+          f"{count_before} -> {after.get('items_removed_announcement_count')}")
+    selected_uids = [uid_of(entry) for entry in after.get("selection", [])]
+    still = [entry["name"] for entry in imported_nodes if entry["id"] in selected_uids]
+    check(section, "removed items pruned from the selection", not still, json.dumps(still))
+    remaining = [
+        label
+        for label in ("animation_window", "animation_player", "material_paint_tool", "brdf_slice")
+        if after.get(label) is not None
+    ]
+    check(section, "no editor part holds imported content", not remaining, json.dumps(remaining))
     return scene
 
 
@@ -544,6 +607,8 @@ def main():
 
     scene = run("route 1 (import)", section_route_1_import)
     run("redo", section_redo_is_not_resurrection, scene)
+    usd_scene = run("usd import", section_usd_import)
+    drop_scene(usd_scene)
     run("route 2 (open scene)", section_route_2_open_scene)
     run("properties pin", section_properties_pin)
     run("announcement", section_announcement_content)

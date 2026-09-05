@@ -62,6 +62,11 @@ translation units.
   Every other mesh becomes an `erhe::primitive::Triangle_soup` with one
   vertex per polygon corner and polygons fanned into triangles, the carrier
   glTF primitives use.
+- A `Scope`, `Material`, `Shader`, `NodeGraph` or `GeomSubset` prim whose
+  subtree carries no mesh, camera, light, skeleton or volume contributes no
+  erhe node: none of them is Xformable - the shading network is namespace and
+  a subset's facets already ride a primitive of its mesh - yet Tydra lists
+  each as a transform node.
 - Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of

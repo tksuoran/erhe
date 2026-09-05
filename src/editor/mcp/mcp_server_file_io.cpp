@@ -367,10 +367,26 @@ auto Mcp_server::action_import_usd(const json& args) -> std::string
         return make_error_content("Not a USD file (.usd/.usda/.usdc/.usdz): " + path_str);
     }
 
-    editor::import_usd(m_context, make_import_build_info(m_context), scene_root, path);
+    // Built here rather than through import_usd() so a failure - no USD
+    // support, an unreadable file, a conversion error - reaches the caller as
+    // an isError reply instead of a cheerful "imported": true.
+    const Usd_import_result import_result = editor::make_import_usd_operation(
+        m_context,
+        make_import_build_info(m_context),
+        scene_root,
+        path
+    );
+    if (!import_result.operation) {
+        return make_error_content("USD import failed: " + import_result.error);
+    }
+    m_context.operation_stack->queue(import_result.operation);
     return make_json_content({
-        {"imported", true},
-        {"path",     path_str}
+        {"imported",       true},
+        {"path",           path_str},
+        {"node_count",     import_result.node_count},
+        {"mesh_count",     import_result.mesh_count},
+        {"material_count", import_result.material_count},
+        {"texture_count",  import_result.texture_count}
     }).dump();
 }
 

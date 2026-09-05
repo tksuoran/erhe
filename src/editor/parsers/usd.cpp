@@ -184,12 +184,18 @@ auto make_import_usd_operation(
     erhe::primitive::Build_info        build_info,
     const std::shared_ptr<Scene_root>& scene_root,
     const std::filesystem::path&       path
-) -> std::shared_ptr<Operation>
+) -> Usd_import_result
 {
     ERHE_PROFILE_FUNCTION();
 
-    if (!scene_root || (context.graphics_device == nullptr)) {
-        return {};
+    Usd_import_result import_result{};
+    if (!scene_root) {
+        import_result.error = "no target scene";
+        return import_result;
+    }
+    if (context.graphics_device == nullptr) {
+        import_result.error = "no graphics device";
+        return import_result;
     }
 
     // The imported content hangs from an import_root node, exactly as a glTF
@@ -225,7 +231,8 @@ auto make_import_usd_operation(
     if (!result.error.empty()) {
         log_parsers->error("USD import '{}' failed: {}", path.generic_string(), result.error);
         root_node->set_parent({});
-        return {};
+        import_result.error = result.error;
+        return import_result;
     }
     erhe::usd::Usd_data& usd_data = result.data;
     root_node->set_parent({});
@@ -335,7 +342,12 @@ auto make_import_usd_operation(
     compound->set_description(
         fmt::format("[{}] Import USD {}", compound->get_serial(), erhe::file::to_string(path.filename()))
     );
-    return compound;
+    import_result.operation      = compound;
+    import_result.node_count     = usd_data.nodes.size();
+    import_result.mesh_count     = usd_data.meshes.size();
+    import_result.material_count = usd_data.materials.size();
+    import_result.texture_count  = usd_data.images.size();
+    return import_result;
 }
 
 void import_usd(
@@ -348,11 +360,11 @@ void import_usd(
     if (context.operation_stack == nullptr) {
         return;
     }
-    std::shared_ptr<Operation> operation = make_import_usd_operation(context, build_info, scene_root, path);
-    if (!operation) {
-        return;
+    const Usd_import_result import_result = make_import_usd_operation(context, build_info, scene_root, path);
+    if (!import_result.operation) {
+        return; // make_import_usd_operation logged the reason
     }
-    context.operation_stack->queue(operation);
+    context.operation_stack->queue(import_result.operation);
 }
 
 } // namespace editor
@@ -368,10 +380,12 @@ auto make_import_usd_operation(
     erhe::primitive::Build_info,
     const std::shared_ptr<Scene_root>&,
     const std::filesystem::path& path
-) -> std::shared_ptr<Operation>
+) -> Usd_import_result
 {
     log_parsers->error("USD import '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
-    return {};
+    Usd_import_result import_result{};
+    import_result.error = "USD support not built (ERHE_USD_LIBRARY=none)";
+    return import_result;
 }
 
 void import_usd(

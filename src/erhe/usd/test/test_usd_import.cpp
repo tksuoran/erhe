@@ -70,6 +70,25 @@ TEST_F(Cube_import, node_names)
     EXPECT_TRUE(light_found);
 }
 
+TEST_F(Cube_import, non_scene_prims_contribute_no_nodes)
+{
+    // The Scope holding the materials, the Material prims, their Shader prims
+    // and the GeomSubset are namespace, not scene graph: none of them becomes
+    // a node. What is left is root + cube + cam + sun.
+    std::string names;
+    for (const std::shared_ptr<erhe::scene::Node>& node : result.data.nodes) {
+        ASSERT_TRUE(node.operator bool());
+        const std::string& name = node->get_name();
+        EXPECT_NE(name, "materials");
+        EXPECT_NE(name, "Red");
+        EXPECT_NE(name, "Blue");
+        EXPECT_NE(name, "surface");
+        EXPECT_NE(name, "top");
+        names += name + " ";
+    }
+    EXPECT_EQ(result.data.nodes.size(), 4u) << names;
+}
+
 TEST_F(Cube_import, mesh_is_geometry_normative_and_split_by_subset)
 {
     ASSERT_EQ(result.data.meshes.size(), 1u);

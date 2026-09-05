@@ -2592,7 +2592,7 @@
     "name": "import_gltf"
   },
   {
-    "description": "Import a USD file (.usd/.usda/.usdc/.usdz) into an existing scene as an undoable operation, through LightUSD Tydra: nodes and transforms, meshes, UsdPreviewSurface materials and their textures, cameras and lights. Values are read at the stage's default time code; UsdPhysics schemas are skipped. The import is SYNCHRONOUS (unlike import_gltf) and runs on the next frame's operation queue: poll get_async_status until queued_operations is 0 before reading the result. Answers with an error in a build without USD support (ERHE_USD_LIBRARY=none).",
+    "description": "Import a USD file (.usd/.usda/.usdc/.usdz) into an existing scene as an undoable operation, through LightUSD Tydra: nodes and transforms, meshes, UsdPreviewSurface materials and their textures, cameras and lights. Values are read at the stage's default time code; UsdPhysics schemas are skipped. The file is read and converted while this call runs (unlike import_gltf, which is asynchronous) and the undoable operation is queued: poll get_async_status until queued_operations is 0 before reading the result. The reply reports node_count, mesh_count, material_count and texture_count. A load or conversion failure - and a build without USD support (ERHE_USD_LIBRARY=none) - answers with an error carrying the reason.",
     "inputSchema": {
       "properties": {
         "path": {
