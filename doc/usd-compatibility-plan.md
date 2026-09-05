@@ -40,7 +40,9 @@ Constraints every step respects:
   (`scripts/scene_roundtrip_verify.py`) keeps passing after every step.
 - C2 A step lands in one commit series that a headless run can verify
   (`erhe-headless-verify`), with the same self-review-per-step discipline
-  as the property migrations (`doc/property-system.md` section 4.18).
+  as the property migrations (`doc/property-system.md` section 4.18),
+  worked through the roles and review gates of
+  `doc/agent-orchestration-harness.md`.
 - C3 A model change is expressed in erhe vocabulary and documented in the
   owning subsystem's record; the mapping gains or updates the row that
   connects it to USD. The plan never restates a mapping row.
