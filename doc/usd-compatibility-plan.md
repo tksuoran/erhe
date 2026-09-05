@@ -1,6 +1,6 @@
 # USD compatibility plan
 
-Status: plan. No step is started. The concept and naming mapping every step
+Status: M1, M2 and M3 have landed; L1 is the next step. The concept and naming mapping every step
 relies on is `doc/usd_compatibility.md` (referred to below as "the mapping");
 this document holds the steps, their order and their verification.
 

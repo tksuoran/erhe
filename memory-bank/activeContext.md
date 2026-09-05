@@ -2,7 +2,7 @@
 
 [FOCUS]
 @harness::doc/agent-orchestration-harness.md{e2605f494,2026-09-05;©User-asked-token-saving:orchestrator-writes-brief-per-commit→fresh-opus-coder-edits+builds+verifies+leaves-uncommitted→orchestrator-reviews-diff+commits;coders-strictly-sequential{shared-build-trees+MCP-port};fixes-via-SendMessage-same-agent;Explore-scouts-for-pre-brief-questions}
-@usd-compatibility::doc/usd-compatibility-plan.md{M1✓4d400211e{path=names-below-root,root-excluded,'/'-sep;find_by_path;get_reference_path=path|name;resolvers-accept-both-forms;MCP-paths}+M2✓{sibling-unique:make_sibling_unique_name<base>_<n>-from-1;choke-point=handle_add_child;refusal=name-bridge-validate{Property_bridge::validate+Dependency_object::validate_value}};roundtrip-baseline-green✓{70abffecd..4f7a7a45e:instantiate_prefab-dangling-stack-capture-segfault+builtin-assets-not-record-assets+owning-entries-win-name-over-reference-entries{D1b}+harness-async/additionalProperties/sort+light-bag-test;93/93};M3-in-progress,2026-09-05}
+@usd-compatibility::doc/usd-compatibility-plan.md{M1✓4d400211e{path=names-below-root,root-excluded,'/'-sep;find_by_path;get_reference_path=path|name;resolvers-accept-both-forms;MCP-paths}+M2✓{sibling-unique:make_sibling_unique_name<base>_<n>-from-1;choke-point=handle_add_child;refusal=name-bridge-validate{Property_bridge::validate+Dependency_object::validate_value}};roundtrip-baseline-green✓{70abffecd..4f7a7a45e:instantiate_prefab-dangling-stack-capture-segfault+builtin-assets-not-record-assets+owning-entries-win-name-over-reference-entries{D1b}+harness-async/additionalProperties/sort+light-bag-test;93/93};M3✓{5fe65f45d-D31-compute_default-per-object-default-layer+7eb07c8c2-Item_base::purpose_property{Purpose::default_/render/proxy/guide;default-derived-from-tool|brush|controller|rendertarget|!show_in_ui;draw-list-filters-keep-flag-tests}};L1-in-progress,2026-09-05}
   goals::G1-load+edit-USD{no-save}->G2-save-USD->G3-glTF-or-USD-independent{never-converted/mixed};C1=each-format-carries-own-features{no-glTF-ext-for-USD-features}
   order::M1-item-paths->M2-sibling-unique-names->M3-purpose-enum->L1-LightUSD-optional-CPM{ERHE_USD_LIBRARY}->I1-import-USD-asset{Tydra}->M4-local=authored->I2->E1-save-USDA->E3-roundtrip
   mapping::doc/usd_compatibility.md{property-layers<->USD-opinions;per-domain-tables;plan-never-restates-rows}
@@ -61,7 +61,7 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 
 [STATE]
-@branch::main{#14-commits-unpushed;user-pushes-themselves}
+@branch::main{#18-commits-unpushed;user-pushes-themselves}
 prompt_queue.txt::item-0=USD-compatibility-plan{only-item;GL-slot-scope-narrowing->doc/gl-worker-context-enforcement.md-Follow-ups-F}
 
 [OPEN]
