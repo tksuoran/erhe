@@ -333,6 +333,24 @@ auto Mcp_server::query_scan_gltf(const json& args) -> std::string
     }).dump();
 }
 
+namespace {
+
+// Result slot for an asynchronous prefab template load. The on_ready
+// callback runs inline when the template is already cached, and a later
+// frame otherwise - after action_instantiate_prefab has returned and its
+// stack frame is gone. The callback therefore writes into this shared
+// object, which both the handler and the callback own.
+class Prefab_instantiate_result
+{
+public:
+    bool                               ran_inline {false};
+    bool                               load_failed{false};
+    std::shared_ptr<Prefab>            prefab;
+    std::shared_ptr<erhe::scene::Node> node;
+};
+
+} // anonymous namespace
+
 auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -356,31 +374,28 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     // callback runs INLINE when the prefab is already cached, and only then
     // can this report the created node_id. A first load of a file defers, so
     // the response says so and the caller polls get_async_status.
-    bool                               ran_inline{false};
-    bool                               load_failed{false};
-    std::shared_ptr<erhe::scene::Node> node;
-    std::shared_ptr<Prefab>            loaded_prefab;
-    const std::weak_ptr<Scene_root>    weak_scene_root = sr->shared_from_this();
+    const std::shared_ptr<Prefab_instantiate_result> result = std::make_shared<Prefab_instantiate_result>();
+    const std::weak_ptr<Scene_root>                  weak_scene_root = sr->shared_from_this();
+    App_context&                                     context         = m_context;
     m_context.prefab_library->get_or_load_async(
         path,
-        [this, weak_scene_root, world_from_node, &ran_inline, &load_failed, &node, &loaded_prefab]
-        (const std::shared_ptr<Prefab>& prefab)
+        [&context, weak_scene_root, world_from_node, result](const std::shared_ptr<Prefab>& prefab)
         {
-            ran_inline = true; // only observed while still inside the call below
+            result->ran_inline = true; // only observed while still inside the call below
             if (!prefab) {
-                load_failed = true;
+                result->load_failed = true;
                 return;
             }
             const std::shared_ptr<Scene_root> target = weak_scene_root.lock();
             if (!target) {
-                load_failed = true;
+                result->load_failed = true;
                 return;
             }
-            loaded_prefab = prefab;
-            node = instantiate_prefab(m_context, prefab, *target, world_from_node);
+            result->prefab = prefab;
+            result->node   = instantiate_prefab(context, prefab, *target, world_from_node);
         }
     );
-    if (!ran_inline) {
+    if (!result->ran_inline) {
         // The template is loading on a worker; the instance is created when
         // it lands.
         return make_json_content({
@@ -391,10 +406,10 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
             {"message",      "prefab template is loading - poll get_async_status until asset_loads and queued_operations are 0, then find the node via get_scene_nodes"}
         }).dump();
     }
-    if (load_failed || !loaded_prefab) {
+    if (result->load_failed || !result->prefab) {
         return make_error_content("Failed to load prefab (missing file, no nodes, or reference cycle - see log): " + path_str);
     }
-    if (!node) {
+    if (!result->node) {
         return make_error_content("Failed to instantiate prefab: " + path_str);
     }
     // The insertion is queued as an undoable operation; the node enters the
@@ -402,9 +417,9 @@ auto Mcp_server::action_instantiate_prefab(const json& args) -> std::string
     return make_json_content({
         {"instantiated", true},
         {"queued",       true},
-        {"path",         loaded_prefab->source_path.generic_string()},
-        {"node_id",      node->get_id()},
-        {"node_name",    node->get_name()}
+        {"path",         result->prefab->source_path.generic_string()},
+        {"node_id",      result->node->get_id()},
+        {"node_name",    result->node->get_name()}
     }).dump();
 }
 
