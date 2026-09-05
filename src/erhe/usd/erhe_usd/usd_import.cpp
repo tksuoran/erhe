@@ -287,6 +287,7 @@ public:
         convert_lights();
         convert_nodes();
         elide_default_local_values();
+        apply_authored_opinions();
 
         log_usd->info(
             "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights",
@@ -301,6 +302,23 @@ public:
     }
 
 private:
+    // The authored opinions of every prim, applied once the elision pass
+    // below has run. An authored value that happens to equal the property's
+    // default is still authored (D32) - `visibility = "inherited"` and
+    // `custom bool erhe:Mesh:shadow_cast = 0` say something - so it must not
+    // meet the elision, which exists for the values the conversion writes
+    // unconditionally.
+    void apply_authored_opinions()
+    {
+        ERHE_PROFILE_FUNCTION();
+        for (const Authored_opinions& opinions : m_authored_opinions) {
+            if (opinions.visibility_target != nullptr) {
+                apply_visibility_and_purpose(opinions.absolute_path, *opinions.visibility_target);
+            }
+            apply_erhe_custom_attributes(opinions.absolute_path, opinions.primary, opinions.secondary);
+        }
+    }
+
     // A local value is an authored value (doc/property-system.md D32,
     // doc/usd-compatibility-plan.md M4). The conversions above ask the
     // composed prim which attributes carry an authored opinion and write
@@ -840,7 +858,14 @@ private:
                     create_info.name
                 );
             }
-            apply_erhe_custom_attributes(usd_material.abs_path, material.get(), nullptr);
+            m_authored_opinions.push_back(
+                Authored_opinions{
+                    .absolute_path     = usd_material.abs_path,
+                    .visibility_target = nullptr,
+                    .primary           = material.get(),
+                    .secondary         = nullptr
+                }
+            );
             m_result.data.materials.push_back(material);
         }
     }
@@ -859,13 +884,50 @@ private:
 
     // Split a mesh's facets into the groups that share a material: one per
     // materialBind GeomSubset, plus the facets no subset claims.
+    // The subset names of a mesh in the order the prims are authored in.
+    // Tydra keys its subset map by name, so the map alone would reorder a
+    // mesh's primitives by name on every load - and a save that writes them
+    // back in erhe's order would then not reproduce its own file.
+    [[nodiscard]] auto authored_subset_names(const std::string& mesh_absolute_path) const -> std::vector<std::string>
+    {
+        std::vector<std::string> names;
+        const lightusd::Prim* prim = find_prim(mesh_absolute_path);
+        if (prim == nullptr) {
+            return names;
+        }
+        for (const lightusd::Prim& child : prim->children()) {
+            if (child.type_name() == "GeomSubset") {
+                const lightusd::tstring_view element_name = child.element_name();
+                names.emplace_back(element_name.data(), element_name.size());
+            }
+        }
+        return names;
+    }
+
     [[nodiscard]] auto make_facet_groups(const Tydra_mesh& usd_mesh) const -> std::vector<Facet_group>
     {
         const std::size_t facet_count = usd_mesh.faceVertexCounts().size();
         std::vector<Facet_group> groups;
         std::vector<bool>        claimed(facet_count, false);
 
+        // Authored order first, then anything the map holds that no prim
+        // named (a subset Tydra synthesized).
+        std::vector<const std::pair<const std::string, Tydra_subset>*> ordered_subsets;
+        std::set<std::string>                                          visited_subsets;
+        for (const std::string& name : authored_subset_names(usd_mesh.abs_path)) {
+            const std::map<std::string, Tydra_subset>::const_iterator i = usd_mesh.material_subsetMap.find(name);
+            if ((i != usd_mesh.material_subsetMap.end()) && visited_subsets.insert(name).second) {
+                ordered_subsets.push_back(&*i);
+            }
+        }
         for (const std::pair<const std::string, Tydra_subset>& entry : usd_mesh.material_subsetMap) {
+            if (visited_subsets.insert(entry.first).second) {
+                ordered_subsets.push_back(&entry);
+            }
+        }
+
+        for (const std::pair<const std::string, Tydra_subset>* entry_pointer : ordered_subsets) {
+            const std::pair<const std::string, Tydra_subset>& entry = *entry_pointer;
             Facet_group group{};
             group.name        = entry.first;
             group.material_id = entry.second.material_id;
@@ -1409,9 +1471,16 @@ private:
 
         // The prim's own opinions: `visibility` and `purpose` on the node
         // that holds its place in the scene graph, and every `erhe:` custom
-        // attribute on the item the name resolves against.
-        apply_visibility_and_purpose(usd_node.abs_path, *node.get());
-        apply_erhe_custom_attributes(usd_node.abs_path, attachment.get(), node.get());
+        // attribute on the item the name resolves against. Recorded rather
+        // than applied here - see apply_authored_opinions().
+        m_authored_opinions.push_back(
+            Authored_opinions{
+                .absolute_path     = usd_node.abs_path,
+                .visibility_target = node.get(),
+                .primary           = attachment.get(),
+                .secondary         = node.get()
+            }
+        );
 
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
@@ -1468,8 +1537,21 @@ private:
         }
     }
 
-    const Usd_load_arguments&    m_arguments;
-    Usd_load_result&             m_result;
+    // One prim's authored opinions, and the items they resolve against.
+    // `visibility_target` is the node a scene-graph prim became, and is null
+    // for a prim that is not in the scene graph (a Material).
+    class Authored_opinions final
+    {
+    public:
+        std::string                        absolute_path;
+        erhe::Item_base*                   visibility_target{nullptr};
+        erhe::property::Dependency_object* primary          {nullptr};
+        erhe::property::Dependency_object* secondary        {nullptr};
+    };
+
+    const Usd_load_arguments&      m_arguments;
+    Usd_load_result&               m_result;
+    std::vector<Authored_opinions> m_authored_opinions;
     const lightusd::Stage*       m_stage{nullptr};
     const Tydra_scene*           m_scene{nullptr};
     std::map<std::size_t, bool>  m_mesh_attached;

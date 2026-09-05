@@ -28,6 +28,13 @@ verification of doc/gltf-scene-roundtrip-plan.md:
    (--gltf-validator or ERHE_GLTF_VALIDATOR) and a Blender headless
    import + render (--blender or ERHE_BLENDER; a Windows default install
    is probed automatically).
+6. Round-trips USD content on its own leg (doc/usd-compatibility-plan.md
+   E3): the .usda files under src/erhe/usd/test/data/ open as scenes, are
+   edited through MCP, saved as USDA, reloaded and diffed with the same
+   helpers the glTF leg uses, saved a second time and text-compared, and
+   handed to usdchecker when one is available (--usdchecker or
+   ERHE_USDCHECKER). The two legs share the diff helpers and nothing else:
+   neither format is ever converted into the other.
 
 Run each invocation against a FRESH headless editor session:
 
@@ -1385,6 +1392,256 @@ def section_foreign_tools(gltf_validator_arg, blender_arg):
 
 
 # --------------------------------------------------------------------------
+# Section 6: USD round trip (doc/usd-compatibility-plan.md E3)
+# --------------------------------------------------------------------------
+
+USD_DATA_DIR   = pathlib.Path("src/erhe/usd/test/data")
+USD_SAVE_DIR   = pathlib.Path("logs")
+USD_ARTIFACTS  = []
+
+
+def find_usdchecker(explicit):
+    for candidate in [explicit, os.environ.get("ERHE_USDCHECKER")]:
+        if candidate and pathlib.Path(candidate).is_file():
+            return candidate
+    return shutil.which("usdchecker")
+
+
+def usd_support_available():
+    """False when the editor was built with ERHE_USD_LIBRARY=none: the tool
+    is listed in every build and answers with that error."""
+    try:
+        answer = call("describe_usd_file", {"path": str(USD_DATA_DIR / "cube.usda")})
+    except RuntimeError as error:
+        return "USD support not built" not in str(error)
+    return "USD support not built" not in str(answer)
+
+
+def usd_snapshot(scene_name):
+    """The diffable MCP-visible state of a USD-backed scene. Shares the glTF
+    leg's normalization and sorting; the contents are what a USD file
+    carries (no brushes, node graphs or animations)."""
+    snap = {}
+    nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+    snap["nodes"] = sorted(normalize_import_roots(nodes), key=node_sort_key)
+
+    materials = call("get_scene_materials", {"scene_name": scene_name}).get("materials", [])
+    snap["materials"] = sorted(
+        (
+            {
+                "name":       m.get("name"),
+                "base_color": round_vec(m.get("base_color", [])),
+                "metallic":   round(float(m.get("metallic", 0.0)), 4),
+                "emissive":   round_vec(m.get("emissive", [])),
+            }
+            for m in materials
+        ),
+        key=lambda m: m["name"],
+    )
+
+    lights = call("get_scene_lights", {"scene_name": scene_name}).get("lights", [])
+    snap["lights"] = sorted(
+        (
+            {
+                "name":        l.get("name"),
+                "type":        l.get("type"),
+                "color":       round_vec(l.get("color", [])),
+                "intensity":   round(float(l.get("intensity", 0.0)), 4),
+                "cast_shadow": l.get("cast_shadow"),
+            }
+            for l in lights
+        ),
+        key=lambda l: l["name"],
+    )
+
+    cameras = call("get_scene_cameras", {"scene_name": scene_name}).get("cameras", [])
+    snap["cameras"] = sorted(
+        (
+            {
+                "name":     c.get("name"),
+                "node":     c.get("node"),
+                "fov_y":    round(float(c.get("fov_y", 0.0)), 4),
+                "exposure": round(float(c.get("exposure", 0.0)), 4),
+            }
+            for c in cameras
+        ),
+        key=lambda c: c["name"],
+    )
+
+    textures = call("get_scene_textures", {"scene_name": scene_name}).get("textures", [])
+    snap["textures"] = sorted(
+        ({"name": t.get("name"), "width": t.get("width"), "height": t.get("height")} for t in textures),
+        key=lambda t: t["name"],
+    )
+
+    # A local value is an authored value (doc/property-system.md D32): the
+    # names an item authors, per item, so an edit that survived the round
+    # trip is visible as such and an unauthored value stays unauthored.
+    snap["local_property_names"] = {}
+    for item in [{"name": n["name"], "id": n["id"]} for n in nodes] + [{"name": m["name"], "id": m["id"]} for m in materials]:
+        properties = call("get_item_properties", {"item_id": item["id"]}).get("properties", [])
+        snap["local_property_names"][item["name"]] = sorted(
+            p["name"] for p in properties if p.get("source") == "local"
+        )
+    return snap
+
+
+def usd_open_scene(section, path, scene_name):
+    queued = mutate("load_scene", {"path": str(path)})
+    check(section, f"load_scene queued: {path.name}", bool(queued) and queued.get("queued"), str(queued))
+    if not check(section, f"scene '{scene_name}' appears in list_scenes", wait_for_scene(scene_name)):
+        return False
+    scenes = call("list_scenes").get("scenes", [])
+    entry = next((sc for sc in scenes if sc.get("name") == scene_name), {})
+    return check(section, f"scene '{scene_name}' is USD-backed", entry.get("source_format") == "usd",
+                 str(entry.get("source_format")))
+
+
+def usd_save_scene(section, scene_name, out_path):
+    USD_ARTIFACTS.append(out_path)
+    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(out_path)})
+    written = out_path.is_file()
+    check(section, f"save_scene wrote {out_path.name} as USDA",
+          written and isinstance(answer, dict) and (answer.get("format") == "usd"), str(answer))
+    return written
+
+
+def usd_close_scene(section, scene_name):
+    mutate("close_scene", {"scene_name": scene_name})
+    check(section, f"scene '{scene_name}' closed", wait_for_scene_gone(scene_name))
+
+
+def usd_item_id(scene_name, kind, name):
+    if kind == "node":
+        for node in call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", []):
+            if node.get("name") == name:
+                return node["id"]
+    elif kind == "material":
+        for material in call("get_scene_materials", {"scene_name": scene_name}).get("materials", []):
+            if material.get("name") == name:
+                return material["id"]
+    elif kind == "light":
+        for light in call("get_scene_lights", {"scene_name": scene_name}).get("lights", []):
+            if light.get("name") == name:
+                return light["id"]
+    return None
+
+
+def usd_attachment_id(scene_name, node_name, attachment_type):
+    details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
+    for attachment in details.get("attachments", []):
+        if attachment.get("type") == attachment_type:
+            return attachment.get("id")
+    return None
+
+
+def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
+    """One file through open -> edit -> save -> close -> reload -> diff, plus
+    a second save whose text must match the first."""
+    source = USD_DATA_DIR / source_file
+    if not usd_open_scene(S, source, scene_name):
+        return
+
+    for kind, target, property_name, value in edits:
+        item_id = usd_attachment_id(scene_name, target, kind[len("attachment:"):]) if kind.startswith("attachment:") \
+            else usd_item_id(scene_name, kind, target)
+        if item_id is None:
+            check(S, f"{scene_name}: edit target '{target}' found", False, f"{kind} lookup failed")
+            continue
+        mutate("set_item_property", {"item_id": item_id, "property": property_name, "value": value})
+        check(S, f"{scene_name}: edited {target}.{property_name}", True)
+
+    original = usd_snapshot(scene_name)
+
+    first_save = USD_SAVE_DIR / f"usd_roundtrip_{scene_name}.usda"
+    if not usd_save_scene(S, scene_name, first_save):
+        return
+    usd_close_scene(S, scene_name)
+
+    reloaded_name = first_save.stem
+    if not usd_open_scene(S, first_save, reloaded_name):
+        return
+    reloaded = usd_snapshot(reloaded_name)
+
+    for key in ["nodes", "materials", "lights", "cameras", "local_property_names"] + extra_keys:
+        mismatches = []
+        diff_json(reloaded[key], original[key], key, mismatches)
+        check(S, f"{scene_name} round-trip diff: {key} identical", not mismatches, f"{len(mismatches)} mismatches")
+        for mismatch in mismatches[:10]:
+            print(f"       {mismatch}")
+
+    # A second save of the reloaded scene must reproduce the first file: the
+    # writer is a function of the scene, and the reload restored the scene.
+    second_save = USD_SAVE_DIR / f"usd_roundtrip_{scene_name}_2.usda"
+    if usd_save_scene(S, reloaded_name, second_save):
+        first_lines  = first_save.read_text(encoding="utf-8").splitlines()
+        second_lines = second_save.read_text(encoding="utf-8").splitlines()
+        identical = first_lines == second_lines
+        detail = ""
+        if not identical:
+            differing = [i for i, (a, b) in enumerate(zip(first_lines, second_lines), start=1) if a != b]
+            detail = (f"{len(first_lines)} vs {len(second_lines)} lines, "
+                      f"{len(differing)} differing (first at line {differing[0] if differing else '-'})")
+        check(S, f"{scene_name}: second save is textually identical", identical, detail)
+        if not identical:
+            for index, (a, b) in enumerate(zip(first_lines, second_lines), start=1):
+                if a != b:
+                    print(f"       line {index}: {a!r} != {b!r}")
+                    break
+    usd_close_scene(S, reloaded_name)
+    return first_save
+
+
+def run_usdchecker(section, usdchecker, usda_path):
+    result = subprocess.run([usdchecker, str(usda_path)], capture_output=True, text=True, timeout=300)
+    output = (result.stdout + result.stderr).strip()
+    check(section, f"usdchecker: {usda_path.name} passes", result.returncode == 0,
+          f"exit={result.returncode} output={output[-400:]}")
+    if output:
+        print(f"       usdchecker: {output[-300:]}")
+
+
+def section_usd_round_trip(usdchecker_arg):
+    S = "usd-roundtrip"
+    if not usd_support_available():
+        skip(S, "USD round trip", "editor built with ERHE_USD_LIBRARY=none")
+        return
+
+    # authored.usda carries what the property mapping needs proved: an
+    # authored visibility and purpose, a partially authored material, a light
+    # with an erhe-only custom attribute, and a mesh whose shadow_cast is an
+    # erhe-only property. One edit per item kind is applied before the save,
+    # so the diff shows authored edits surviving rather than only defaults.
+    authored_saved = usd_round_trip_leg(
+        S, "authored.usda", "authored",
+        edits=[
+            ("node",              "shown",    "name",        "shown_edited"),
+            ("material",          "OnlyDiffuse", "base_color", "0.9 0.1 0.2"),
+            ("light",             "lamp",     "intensity",   "7.5"),
+            ("node",              "helper",   "purpose",     "Proxy"),
+            ("attachment:Mesh",   "hidden",   "shadow_cast", "false"),
+        ],
+        extra_keys=[],
+    )
+
+    # cube.usda adds the shapes authored.usda has none of: a materialBind
+    # GeomSubset per material and a camera.
+    usd_round_trip_leg(S, "cube.usda", "cube", edits=[], extra_keys=[])
+
+    # textured.usda binds an image file through a UsdUVTexture network; the
+    # texture must come back as a scene texture of the reloaded scene, with
+    # the asset path rewritten relative to the written file.
+    usd_round_trip_leg(S, "textured.usda", "textured", edits=[], extra_keys=["textures"])
+
+    usdchecker = find_usdchecker(usdchecker_arg)
+    if usdchecker is None:
+        skip(S, "usdchecker", "not found (pass --usdchecker or set ERHE_USDCHECKER; "
+             "it ships with an OpenUSD build)")
+    elif authored_saved is not None and authored_saved.is_file():
+        run_usdchecker(S, usdchecker, authored_saved)
+
+
+# --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 
@@ -1393,6 +1650,7 @@ def main():
     parser.add_argument("--port", type=int, default=3743, help="MCP server port (default 3743)")
     parser.add_argument("--gltf-validator", help="path to the Khronos gltf_validator executable")
     parser.add_argument("--blender", help="path to the Blender executable")
+    parser.add_argument("--usdchecker", help="path to the OpenUSD usdchecker executable")
     parser.add_argument("--keep-files", action="store_true", help="keep the saved .glb test artifacts")
     arguments = parser.parse_args()
 
@@ -1407,9 +1665,10 @@ def main():
         section_asset_references,
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
+        lambda: section_usd_round_trip(arguments.usdchecker),
     ]
     for section in sections:
-        name = getattr(section, "__name__", "section_foreign_tools")
+        name = getattr(section, "__name__", "lambda section")
         print(f"\n=== {name} ===")
         try:
             section()
@@ -1423,7 +1682,7 @@ def main():
         print(f"  FAIL {section}: {name} -- {detail}")
 
     if not failed and not arguments.keep_files:
-        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF]:
+        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF] + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
         print(f"(kept {E2E_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")

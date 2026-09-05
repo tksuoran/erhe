@@ -979,6 +979,19 @@ private:
         }
     }
 
+    // The GeomSubset prim name a primitive gets. The importer names a
+    // primitive's geometry `<mesh name>.<subset name>`, so that prefix is
+    // dropped again here - otherwise every round trip would prepend the mesh
+    // name once more.
+    [[nodiscard]] static auto subset_name_of(const std::string& geometry_name, const std::string& prim_name) -> std::string
+    {
+        const std::string prefix = prim_name + ".";
+        if (geometry_name.compare(0, prefix.size(), prefix) == 0) {
+            return geometry_name.substr(prefix.size());
+        }
+        return geometry_name;
+    }
+
     // One primitive of an erhe mesh: the facets it contributed to the shared
     // arrays, and the material bound to them.
     class Facet_group final
@@ -1030,7 +1043,7 @@ private:
                 continue;
             }
             Facet_group group{};
-            group.name        = geometry ? geometry->get_name() : fmt::format("{}_{}", prim_name, groups.size());
+            group.name        = geometry ? subset_name_of(geometry->get_name(), prim_name) : fmt::format("{}_{}", prim_name, groups.size());
             group.first_facet = first_facet;
             group.facet_count = facet_count;
             group.material    = mesh_primitive.material.get();

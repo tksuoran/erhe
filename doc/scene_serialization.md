@@ -305,3 +305,20 @@ directly; run each suite in its own fresh editor session). Ad-hoc checks:
 save -> load -> compare via the in-editor MCP (`get_scene_nodes`,
 `get_scene_materials`, `get_physics_items`, `get_scene_brushes`, ...) and
 `capture_screenshot`. Design history: `gltf-scene-roundtrip-plan.md`.
+
+`scripts/scene_roundtrip_verify.py` also carries the **USD leg**
+(`usd-roundtrip`), which mirrors the glTF sections on USD content and shares
+their diff and normalization helpers and nothing else - neither format is
+converted into the other. Each `.usda` under `src/erhe/usd/test/data/` opens
+as a scene, `authored.usda` takes one MCP edit per item kind (a node name, a
+material value, a light value, a `purpose`, and the erhe-only
+`Mesh.shadow_cast`), and the scene is saved under `logs/`, closed, reloaded
+into a fresh scene and diffed: nodes, materials, lights, cameras, textures
+and the set of locally authored property names per item. The reloaded scene
+is then saved a second time and the two `.usda` files are compared line by
+line - the writer is a function of the scene, so a save of a reloaded scene
+reproduces its own input file, and any line that differs is reported as a
+failing check. `usdchecker` runs on the first saved file when it is on PATH
+or `--usdchecker` / `ERHE_USDCHECKER` names it, and prints SKIP otherwise;
+the whole section skips when the editor was built with
+`ERHE_USD_LIBRARY=none`.

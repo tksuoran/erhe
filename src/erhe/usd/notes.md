@@ -256,12 +256,22 @@ split by subset, the material values, the camera projection and the light.
 a light with an `erhe:Light:temperature` custom attribute next to a bogus
 `erhe:Light:nope`, asserted through `get_value_source`.
 
+`test/data/textured.usda` binds an image file through a `UsdUVTexture`
+network; it is the round-trip script's texture case rather than a unit-test
+input.
+
 `test_usd_export.cpp` round-trips both data files through `save_usda` and
 `load_usd` and asserts that the node names, the mesh topology, the subset
 material bindings, the material local sets, the camera and light values,
 `visibility` / `purpose` and an `erhe:`-carried value all survive, plus the
 identifier sanitizing and the suffix rule for two names that collapse onto
 one spelling.
+
+Live verification of the whole USD path - open a file as a scene, edit it
+through MCP, save, reload, diff, save again and compare the two files, plus
+`usdchecker` when an OpenUSD build is available - is the `usd-roundtrip`
+section of `scripts/scene_roundtrip_verify.py`
+(doc/scene_serialization.md, "Verifying round-trips").
 
 The editor side of the import - the undoable operation, the texture creation
 and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
