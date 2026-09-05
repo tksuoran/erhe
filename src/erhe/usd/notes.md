@@ -78,14 +78,43 @@ translation units.
 - Values are read at the stage's default time code, and `UsdPhysics` prims
   and API schemas are counted and reported in one log line rather than
   imported (`doc/usd-compatibility-plan.md` section 5).
-- Tydra reports a schema fallback the same way it reports an authored
-  opinion, so the conversion writes every field of every item and the
-  conversion ends with
-  `erhe::property::clear_default_valued_local_properties` over the
-  converted nodes, meshes, lights, cameras and materials: a field the
-  layer left at its fallback reports `Value_source::default_value`
-  (`doc/property-system.md` D32). Reading USD's own authored / fallback
-  distinction instead is `doc/usd-compatibility-plan.md` I2.
+- A local value is an authored value (`doc/property-system.md` D32). Tydra
+  reports a schema fallback the same way it reports an authored opinion, so
+  the conversion asks the composed prim instead: LightUSD's typed attribute
+  wrappers answer `authored()`, and Tydra's `GetPropertyNames` collects the
+  names that answer true plus every custom attribute the prim carries. An
+  opinion arriving over a reference or a sublayer is authored on the
+  composed prim, so it counts. `Importer::is_authored` gates every field the
+  conversion writes: `visibility` and `purpose` (M3, onto the node the prim
+  becomes); the `UsdPreviewSurface` inputs `diffuseColor`, `emissiveColor`,
+  `metallic`, `roughness`, `opacity`, `opacityThreshold`, `ior` and
+  `occlusion`, read from the Shader prim the material's `outputs:surface`
+  connects to; the camera's `clippingRange`, `focalLength`, the apertures
+  and `exposure`; and the light's `inputs:color`, `inputs:intensity`,
+  `inputs:exposure`, `inputs:colorTemperature`, `inputs:shaping:cone:*` and
+  `inputs:shadow:enable`. What a prim leaves at its fallback is not written,
+  so the erhe property keeps the ERHE default - which differs from the USD
+  fallback where the two schemas disagree (`base_color` stays white where
+  `diffuseColor` falls back to 0.18); `doc/usd_compatibility.md` states that
+  per row.
+- `erhe::property::clear_default_valued_local_properties` still runs over the
+  converted nodes, meshes, lights, cameras and materials at the end of the
+  conversion. It is the safety net for what is still written
+  unconditionally: the light type, which comes from the prim's schema type
+  rather than from an attribute, and the values an item's own constructor
+  seeds.
+- A namespaced custom attribute under the `erhe` namespace is an erhe
+  property value: `custom float erhe:Light:temperature = 5000`. USD reserves
+  `.` for the property separator of a path, so the erhe qualified name
+  `Owner.name` (D30) is spelled `erhe:Owner:name`, and `erhe:name` names a
+  property of the item's own class. The name is resolved against the
+  attachment the prim's type made and then against the node carrying it (a
+  `Material` prim resolves against the material alone), each of them both as
+  a holder addresses the name and as that class's own property. The USDA
+  literal is stripped of brackets, commas and quotes and parsed with the
+  property type's `from_string` (D16). A name that resolves to no property,
+  and a value that fails to parse or to validate, are skipped with one
+  warning each.
 
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
@@ -172,6 +201,10 @@ and `scripts\configure_vs2026_vulkan_headless.bat` pass
 cube with a materialBind `GeomSubset`, two `UsdPreviewSurface` materials, a
 camera and a distant light - and checks the node names, the geometry-normative
 split by subset, the material values, the camera projection and the light.
+`test/data/authored.usda` covers the authored / fallback rule: an authored
+`visibility` and `purpose`, a material with only `diffuseColor` authored, and
+a light with an `erhe:Light:temperature` custom attribute next to a bogus
+`erhe:Light:nope`, asserted through `get_value_source`.
 
 The editor side of the import - the undoable operation, the texture creation
 and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)

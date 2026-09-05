@@ -11,6 +11,10 @@
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_property/dependency_object.hpp"
+#include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_string.hpp"
+#include "erhe_property/property_value.hpp"
+#include "erhe_property/owner_type.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -25,8 +29,12 @@
 #include "core/prim-metas.hh"
 #include "stage.hh"
 #include "usdGeom.hh"
+#include "usdShade.hh"
+#include "usdLux.hh"
 #include "tydra/render-data.hh"
 #include "tydra/render-data-converter.hh"
+#include "tydra/scene-access.hh"
+#include "value-pprint.hh"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -37,6 +45,10 @@
 #include <cmath>
 #include <cstring>
 #include <map>
+#include <optional>
+#include <set>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -147,6 +159,60 @@ using Tydra_subset    = lightusd::tydra::MaterialSubset;
     }
 }
 
+// A USDA literal rewritten in erhe's property text form (D16): a tuple or
+// array becomes space-separated components, a quoted token or string loses
+// its quotes. `(1, 0.5, 0)` becomes `1 0.5 0`, `"guide"` becomes `guide`,
+// `5000` stays `5000`. A string value that carries a comma or a bracket of
+// its own is not representable this way and is left to fail parsing.
+[[nodiscard]] auto usd_literal_to_property_text(const std::string& literal) -> std::string
+{
+    std::string text;
+    text.reserve(literal.size());
+    bool pending_space = false;
+    for (const char character : literal) {
+        switch (character) {
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '"':
+            case '\'': {
+                break;
+            }
+            case ',':
+            case ' ':
+            case '\t':
+            case '\n':
+            case '\r': {
+                pending_space = !text.empty();
+                break;
+            }
+            default: {
+                if (pending_space) {
+                    text.push_back(' ');
+                    pending_space = false;
+                }
+                text.push_back(character);
+                break;
+            }
+        }
+    }
+    return text;
+}
+
+// The USD `purpose` vocabulary, which erhe's Purpose enumeration mirrors
+// token for token (doc/usd_compatibility.md, property system).
+[[nodiscard]] auto to_erhe_purpose(const lightusd::Purpose purpose) -> erhe::Purpose
+{
+    switch (purpose) {
+        case lightusd::Purpose::Default: return erhe::Purpose::default_;
+        case lightusd::Purpose::Render:  return erhe::Purpose::render;
+        case lightusd::Purpose::Proxy:   return erhe::Purpose::proxy;
+        case lightusd::Purpose::Guide:   return erhe::Purpose::guide;
+        default:                         return erhe::Purpose::default_;
+    }
+}
+
 // One group of facets that shares a material: a GeomSubset with
 // familyName = materialBind, or the facets no subset claims.
 class Facet_group final
@@ -235,13 +301,13 @@ public:
 
 private:
     // A local value is an authored value (doc/property-system.md D32,
-    // doc/usd-compatibility-plan.md M4). The conversions above fill each
-    // item field by field from the Tydra render scene, which reports a
-    // schema fallback the same way it reports an authored opinion, so
-    // every field is a local value here; this pass takes back the ones
-    // that merely repeat the item's default. Reading USD's own authored /
-    // fallback distinction instead is step I2 - the same rule, from a
-    // better source.
+    // doc/usd-compatibility-plan.md M4). The conversions above ask the
+    // composed prim which attributes carry an authored opinion and write
+    // only those, so this pass is the safety net for the few fields that
+    // are still filled unconditionally: the light type, which comes from
+    // the prim's schema type rather than from an attribute, and the erhe
+    // properties an item's constructor seeds. It takes back a local value
+    // that merely repeats the item's own default.
     void elide_default_local_values()
     {
         ERHE_PROFILE_FUNCTION();
@@ -339,6 +405,236 @@ private:
         return false;
     }
 
+    // The authored opinions of one prim (doc/usd-compatibility-plan.md I2).
+    // Tydra's render scene reports a schema fallback exactly the way it
+    // reports an authored opinion, so the composed prim is the only place
+    // the two can be told apart: LightUSD's typed attribute wrappers answer
+    // `authored()`, and Tydra's GetPropertyNames collects the names of the
+    // builtin attributes that answer true plus every custom attribute the
+    // prim carries. An opinion that arrives over a reference or a sublayer
+    // is authored on the composed prim, so it is in this set. The set is
+    // built once per prim: the conversion asks about several attributes of
+    // the same prim.
+    [[nodiscard]] auto authored_property_names(const std::string& absolute_path) -> const std::set<std::string>&
+    {
+        const std::map<std::string, std::set<std::string>>::iterator cached = m_authored_property_names.find(absolute_path);
+        if (cached != m_authored_property_names.end()) {
+            return cached->second;
+        }
+        std::set<std::string> names;
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim != nullptr) {
+            std::vector<std::string> name_list;
+            std::string              error;
+            if (lightusd::tydra::GetPropertyNames(*prim, &name_list, &error)) {
+                for (std::string& name : name_list) {
+                    names.insert(std::move(name));
+                }
+            } else if (!error.empty()) {
+                log_usd->warn("USD prim '{}': {}", absolute_path, error);
+            }
+        }
+        return m_authored_property_names.emplace(absolute_path, std::move(names)).first->second;
+    }
+
+    [[nodiscard]] auto is_authored(const std::string& absolute_path, const std::string& name) -> bool
+    {
+        const std::set<std::string>& names = authored_property_names(absolute_path);
+        return names.find(name) != names.end();
+    }
+
+    // `visibility` and `purpose` of the composed prim. Tydra's GetProperty
+    // reaches a prim's own schema attributes and its custom ones, but not
+    // the ones a prim inherits from GPrim or from LightAPI, so these two
+    // are read from the concrete prim class. Every prim type the conversion
+    // makes a node for is listed: the GPrim-derived geometry and camera
+    // types, and the UsdLux types, which carry their own copies of the two
+    // attributes rather than deriving from GPrim.
+    template <typename T>
+    [[nodiscard]] static auto read_visibility_and_purpose(
+        const lightusd::Prim&  prim,
+        lightusd::Visibility&  visibility,
+        lightusd::Purpose&     purpose
+    ) -> bool
+    {
+        const T* typed = prim.as<T>();
+        if (typed == nullptr) {
+            return false;
+        }
+        lightusd::Visibility           scalar_visibility = lightusd::Visibility::Inherited;
+        const lightusd::Animatable<lightusd::Visibility>& animatable = typed->visibility.get_value();
+        if (animatable.get_default(&scalar_visibility)) {
+            visibility = scalar_visibility;
+        }
+        purpose = typed->purpose.get_value();
+        return true;
+    }
+
+    [[nodiscard]] static auto get_visibility_and_purpose(
+        const lightusd::Prim& prim,
+        lightusd::Visibility& visibility,
+        lightusd::Purpose&    purpose
+    ) -> bool
+    {
+        return
+            read_visibility_and_purpose<lightusd::Xform        >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomMesh     >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCamera   >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::SphereLight  >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::DistantLight >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::RectLight    >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::DiskLight    >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::CylinderLight>(prim, visibility, purpose);
+    }
+
+    // `visibility` and `purpose` land on the erhe item properties that carry
+    // the same vocabulary (doc/usd-compatibility-plan.md M3). An unauthored
+    // attribute writes nothing, so `visible` keeps its default and `purpose`
+    // keeps the per-object default its flag bits derive (D31).
+    void apply_visibility_and_purpose(const std::string& absolute_path, erhe::Item_base& item)
+    {
+        const bool visibility_authored = is_authored(absolute_path, "visibility");
+        const bool purpose_authored    = is_authored(absolute_path, "purpose");
+        if (!visibility_authored && !purpose_authored) {
+            return;
+        }
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return;
+        }
+        lightusd::Visibility visibility = lightusd::Visibility::Inherited;
+        lightusd::Purpose    purpose    = lightusd::Purpose::Default;
+        if (!get_visibility_and_purpose(*prim, visibility, purpose)) {
+            log_usd->warn("USD prim '{}': visibility and purpose are not readable from a '{}' prim", absolute_path, prim->type_name());
+            return;
+        }
+        if (visibility_authored) {
+            item.set_value(erhe::Item_base::visible_property, visibility == lightusd::Visibility::Inherited);
+        }
+        if (purpose_authored) {
+            item.set_value(erhe::Item_base::purpose_property, to_erhe_purpose(purpose));
+        }
+    }
+
+    // A namespaced custom attribute `erhe:<Owner>:<name>` is an erhe property
+    // value addressed by its qualified name (doc/property-system.md D30). USD
+    // separates namespace components with `:` and reserves `.` for the
+    // property separator of a path, so the erhe qualified name `Owner.name`
+    // is spelled `erhe:Owner:name` on a prim (doc/usd_compatibility.md,
+    // property system); `erhe:<name>` without a namespace component names a
+    // property of the item's own class. The registry resolves the name
+    // against each item the prim maps to - the attachment the prim's type
+    // made first, then the node that carries it, which is what lets
+    // `erhe:Light:color` name either the light itself or a node-held
+    // attachment value. The USDA literal is converted to the property's text
+    // form and parsed with the D16 `from_string` of the property's type. A
+    // name that resolves to no property, and a value that fails to parse or
+    // to validate, cost one warning each and are skipped.
+    // The erhe property one `erhe:` attribute name addresses, and the object
+    // that holds it. Each candidate object is asked in turn - for a scene
+    // graph prim the attachment its type made, then the node that carries
+    // it; for a Material prim the material alone - and for each,
+    // `Owner.name` resolves either the way an editor holder addresses it (an
+    // attached property, R7, or a secondary property the object holds for
+    // another class, D30) or as `name` on an object of exactly the class
+    // `Owner` names. Asking one object both ways before moving on is what
+    // sends `Light.temperature` on a light prim to the light itself, and
+    // `Light.color` on a plain Xform prim to the node that holds it.
+    [[nodiscard]] static auto resolve_erhe_property(
+        erhe::property::Dependency_object*  primary,
+        erhe::property::Dependency_object*  secondary,
+        const std::string&                  qualified_name,
+        erhe::property::Dependency_object*& out_target
+    ) -> const erhe::property::Dependency_property*
+    {
+        const erhe::property::Property_registry&        registry    = erhe::property::Property_registry::get();
+        const std::size_t                               dot         = qualified_name.find('.');
+        const std::string                               bare_name   = (dot == std::string::npos) ? qualified_name : qualified_name.substr(dot + 1);
+        const std::optional<erhe::property::Owner_type> named_owner = (dot == std::string::npos)
+            ? std::optional<erhe::property::Owner_type>{}
+            : registry.find_owner_type(std::string_view{qualified_name}.substr(0, dot));
+        if ((dot != std::string::npos) && !named_owner.has_value()) {
+            return nullptr;
+        }
+        erhe::property::Dependency_object* const objects[2] = {primary, secondary};
+        for (erhe::property::Dependency_object* const object : objects) {
+            if (object == nullptr) {
+                continue;
+            }
+            const erhe::property::Dependency_property* property = registry.find_for_object(*object, qualified_name);
+            if (property == nullptr) {
+                property = registry.find_for_object(*object, bare_name);
+                if ((property != nullptr) && named_owner.has_value() && (property->get_owner_type() != named_owner.value())) {
+                    property = nullptr;
+                }
+            }
+            if (property != nullptr) {
+                out_target = object;
+                return property;
+            }
+        }
+        return nullptr;
+    }
+
+    void apply_erhe_custom_attributes(
+        const std::string&                 absolute_path,
+        erhe::property::Dependency_object* primary,
+        erhe::property::Dependency_object* secondary
+    )
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return;
+        }
+        static constexpr std::string_view prefix{"erhe:"};
+        const std::set<std::string>& names = authored_property_names(absolute_path);
+        for (const std::string& name : names) {
+            if (name.compare(0, prefix.size(), prefix) != 0) {
+                continue;
+            }
+            // USD namespace form to erhe qualified form: the first `:`
+            // after the `erhe` component separates owner from property.
+            std::string       qualified_name = name.substr(prefix.size());
+            const std::size_t separator      = qualified_name.find(':');
+            if (separator != std::string::npos) {
+                qualified_name[separator] = '.';
+            }
+            erhe::property::Dependency_object*         target   = nullptr;
+            const erhe::property::Dependency_property* property = resolve_erhe_property(primary, secondary, qualified_name, target);
+            if (property == nullptr) {
+                log_usd->warn("USD prim '{}': custom attribute '{}' names no erhe property", absolute_path, name);
+                continue;
+            }
+            if (property->is_read_only()) {
+                log_usd->warn("USD prim '{}': erhe property '{}' is read-only", absolute_path, qualified_name);
+                continue;
+            }
+            if (property->get_type() == erhe::property::Property_type::object) {
+                log_usd->warn("USD prim '{}': erhe property '{}' is an object reference, which a custom attribute cannot name", absolute_path, qualified_name);
+                continue;
+            }
+            lightusd::Attribute attribute;
+            std::string         error;
+            if (!lightusd::tydra::GetAttribute(*prim, name, &attribute, &error)) {
+                log_usd->warn("USD prim '{}': custom attribute '{}' has no value: {}", absolute_path, name, error);
+                continue;
+            }
+            const std::string literal = lightusd::value::pprint_value(attribute.get_var().value_raw());
+            const std::string text    = usd_literal_to_property_text(literal);
+            const std::optional<erhe::property::Property_value> value = erhe::property::parse_value(*property, text);
+            if (!value.has_value()) {
+                log_usd->warn("USD prim '{}': custom attribute '{}' value '{}' is not a valid {}", absolute_path, name, text, erhe::property::c_str(property->get_type()));
+                continue;
+            }
+            std::string validation_error;
+            if (!target->validate_value(*property, value.value(), validation_error)) {
+                log_usd->warn("USD prim '{}': custom attribute '{}' value '{}' was rejected: {}", absolute_path, name, text, validation_error);
+                continue;
+            }
+            target->set_value(*property, value.value());
+        }
+    }
+
     // A polygon mesh is geometry-normative when its subdivisionScheme is
     // `none`; USD's schema fallback is catmullClark, and a subdivision cage
     // is imported as a triangle soup the way glTF primitives are
@@ -412,65 +708,124 @@ private:
         );
     }
 
+    // The Shader prim the material's `outputs:surface` connects to: where
+    // the UsdPreviewSurface inputs Tydra reports are authored (or not).
+    [[nodiscard]] auto find_surface_shader_path(const std::string& material_absolute_path) -> std::string
+    {
+        const lightusd::Prim* prim = find_prim(material_absolute_path);
+        if (prim == nullptr) {
+            return {};
+        }
+        const lightusd::Material* usd_material = prim->as<lightusd::Material>();
+        if (usd_material == nullptr) {
+            return {};
+        }
+        const std::vector<lightusd::Path>& connections = usd_material->surface.get_connections();
+        if (connections.empty()) {
+            return {};
+        }
+        const lightusd::tstring_view prim_part = connections[0].prim_part();
+        return std::string{prim_part.data(), prim_part.size()};
+    }
+
+    // Only an authored UsdPreviewSurface input becomes a local value
+    // (doc/usd-compatibility-plan.md I2). An input the shader leaves at its
+    // fallback writes nothing, so the erhe property keeps the ERHE default -
+    // which is not the USD fallback for every input (`diffuseColor` 0.18 vs
+    // erhe's white `base_color` is the one that differs most).
+    void apply_preview_surface(
+        const lightusd::tydra::PreviewSurfaceShader& shader,
+        const std::string&                           shader_path,
+        const std::size_t                            material_index,
+        erhe::primitive::Material&                   material
+    )
+    {
+        using erhe::primitive::Material;
+        if (is_authored(shader_path, "inputs:diffuseColor")) {
+            material.set_value(
+                Material::base_color_property,
+                glm::vec3{shader.diffuseColor.value[0], shader.diffuseColor.value[1], shader.diffuseColor.value[2]}
+            );
+        }
+        if (is_authored(shader_path, "inputs:emissiveColor")) {
+            material.set_value(
+                Material::emissive_property,
+                glm::vec3{shader.emissiveColor.value[0], shader.emissiveColor.value[1], shader.emissiveColor.value[2]}
+            );
+        }
+        if (is_authored(shader_path, "inputs:metallic")) {
+            material.set_value(Material::metallic_property, shader.metallic.value);
+        }
+        if (is_authored(shader_path, "inputs:roughness")) {
+            // erhe's roughness is anisotropic; UsdPreviewSurface has one value.
+            material.set_value(Material::roughness_property, glm::vec2{shader.roughness.value, shader.roughness.value});
+        }
+        if (is_authored(shader_path, "inputs:opacity")) {
+            material.set_value(Material::opacity_property, shader.opacity.value);
+        }
+        if (is_authored(shader_path, "inputs:ior")) {
+            material.set_value(Material::ior_property, shader.ior.value);
+        }
+        if (is_authored(shader_path, "inputs:occlusion")) {
+            material.set_value(Material::occlusion_texture_strength_property, shader.occlusion.value);
+        }
+        // UsdPreviewSurface says opacityThreshold > 0 is a cutout and an
+        // opacity below one without a threshold is blended. Both erhe
+        // properties are derived, so they are written only when the input
+        // they derive from is authored.
+        if (is_authored(shader_path, "inputs:opacityThreshold") && (shader.opacityThreshold.value > 0.0f)) {
+            material.set_value(Material::blending_mode_property, erhe::primitive::Material_blending_mode::alpha_test);
+            material.set_value(Material::alpha_cutoff_property, shader.opacityThreshold.value);
+        } else if (is_authored(shader_path, "inputs:opacity") && ((shader.opacity.value < 1.0f) || shader.opacity.is_texture())) {
+            material.set_value(Material::blending_mode_property, erhe::primitive::Material_blending_mode::alpha_blend);
+        }
+
+        bind_texture(material_index, Usd_material_texture_slot::base_color, shader.diffuseColor.texture_id);
+        bind_texture(material_index, Usd_material_texture_slot::emissive,   shader.emissiveColor.texture_id);
+        bind_texture(material_index, Usd_material_texture_slot::normal,     shader.normal.texture_id);
+        bind_texture(material_index, Usd_material_texture_slot::occlusion,  shader.occlusion.texture_id);
+        // erhe has one metallic-roughness slot; UsdPreviewSurface reads the
+        // two channels through separate texture inputs that a glTF-derived
+        // file points at one image. The roughness input names it when both
+        // are textured.
+        const std::int32_t metallic_roughness_texture_id = (shader.roughness.texture_id >= 0)
+            ? shader.roughness.texture_id
+            : shader.metallic.texture_id;
+        bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, metallic_roughness_texture_id);
+    }
+
     void convert_materials()
     {
         m_result.data.materials.reserve(m_scene->materials.size());
         for (std::size_t material_index = 0, end = m_scene->materials.size(); material_index < end; ++material_index) {
             const Tydra_material& usd_material = m_scene->materials[material_index];
+            // The create info carries the name only: every value field of a
+            // default Material_values equals the erhe default, so the new
+            // material starts with no local value at all and the authored
+            // inputs below are the complete local set.
             erhe::primitive::Material_create_info create_info{};
             create_info.name = usd_material.name.empty()
                 ? fmt::format("material_{}", material_index)
                 : usd_material.name;
 
-            if (usd_material.surfaceShader.has_value()) {
-                const lightusd::tydra::PreviewSurfaceShader& shader = usd_material.surfaceShader.value();
-                create_info.values.base_color = glm::vec3{
-                    shader.diffuseColor.value[0],
-                    shader.diffuseColor.value[1],
-                    shader.diffuseColor.value[2]
-                };
-                create_info.values.emissive = glm::vec3{
-                    shader.emissiveColor.value[0],
-                    shader.emissiveColor.value[1],
-                    shader.emissiveColor.value[2]
-                };
-                create_info.values.metallic     = shader.metallic.value;
-                create_info.values.roughness    = glm::vec2{shader.roughness.value, shader.roughness.value};
-                create_info.values.opacity      = shader.opacity.value;
-                create_info.values.ior          = shader.ior.value;
-                create_info.values.normal_texture_scale       = 1.0f;
-                create_info.values.occlusion_texture_strength = shader.occlusion.value;
-                // UsdPreviewSurface says opacityThreshold > 0 is a cutout and
-                // an opacity below one without a threshold is blended.
-                if (shader.opacityThreshold.value > 0.0f) {
-                    create_info.values.blending_mode = erhe::primitive::Material_blending_mode::alpha_test;
-                    create_info.values.alpha_cutoff  = shader.opacityThreshold.value;
-                } else if ((shader.opacity.value < 1.0f) || shader.opacity.is_texture()) {
-                    create_info.values.blending_mode = erhe::primitive::Material_blending_mode::alpha_blend;
-                }
+            std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(create_info);
+            material->set_source_path(m_arguments.path);
+            material->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
-                bind_texture(material_index, Usd_material_texture_slot::base_color,         shader.diffuseColor.texture_id);
-                bind_texture(material_index, Usd_material_texture_slot::emissive,           shader.emissiveColor.texture_id);
-                bind_texture(material_index, Usd_material_texture_slot::normal,             shader.normal.texture_id);
-                bind_texture(material_index, Usd_material_texture_slot::occlusion,          shader.occlusion.texture_id);
-                // erhe has one metallic-roughness slot; UsdPreviewSurface
-                // reads the two channels through separate texture inputs
-                // that a glTF-derived file points at one image. The
-                // roughness input names it when both are textured.
-                const std::int32_t metallic_roughness_texture_id = (shader.roughness.texture_id >= 0)
-                    ? shader.roughness.texture_id
-                    : shader.metallic.texture_id;
-                bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, metallic_roughness_texture_id);
+            if (usd_material.surfaceShader.has_value()) {
+                apply_preview_surface(
+                    usd_material.surfaceShader.value(),
+                    find_surface_shader_path(usd_material.abs_path),
+                    material_index,
+                    *material.get()
+                );
             } else {
                 log_usd->warn(
                     "USD material '{}' has no UsdPreviewSurface shader - erhe material defaults are used",
                     create_info.name
                 );
             }
-
-            std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(create_info);
-            material->set_source_path(m_arguments.path);
-            material->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+            apply_erhe_custom_attributes(usd_material.abs_path, material.get(), nullptr);
             m_result.data.materials.push_back(material);
         }
     }
@@ -830,25 +1185,45 @@ private:
             camera->set_source_path(m_arguments.path);
             camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
-            erhe::scene::Projection projection = *camera->projection();
-            projection.z_near         = usd_camera.znear;
-            projection.z_far          = usd_camera.zfar;
-            projection.infinite_z_far = false;
-            if (usd_camera.projection == lightusd::GeomCamera::Projection::Orthographic) {
-                // USD apertures are in tenths of a scene unit, so the
-                // orthographic view spans aperture / 10 world units.
-                projection.projection_type = erhe::scene::Projection::Type::orthogonal;
-                projection.ortho_width     = usd_camera.horizontalAperture * 0.1f;
-                projection.ortho_height    = usd_camera.verticalAperture   * 0.1f;
-                projection.ortho_left      = -0.5f * projection.ortho_width;
-                projection.ortho_bottom    = -0.5f * projection.ortho_height;
-            } else {
-                projection.projection_type = erhe::scene::Projection::Type::perspective_vertical;
-                projection.fov_y           = usd_camera.yfov();
-                projection.fov_x           = usd_camera.xfov();
+            // Only an authored camera attribute becomes a local value
+            // (doc/usd-compatibility-plan.md I2); the field of view and the
+            // orthographic extents are derived from focalLength and the
+            // apertures, so they are written when any of those is authored.
+            const std::string& path             = usd_camera.abs_path;
+            const bool         lens_authored    =
+                is_authored(path, "focalLength")        ||
+                is_authored(path, "horizontalAperture") ||
+                is_authored(path, "verticalAperture");
+            const bool         range_authored   = is_authored(path, "clippingRange");
+            const bool         ortho            = usd_camera.projection == lightusd::GeomCamera::Projection::Orthographic;
+
+            if (range_authored) {
+                camera->set_value(erhe::scene::Camera::z_near_property,         usd_camera.znear);
+                camera->set_value(erhe::scene::Camera::z_far_property,          usd_camera.zfar);
+                camera->set_value(erhe::scene::Camera::infinite_z_far_property, false);
             }
-            camera->set_projection(projection);
-            camera->set_exposure(usd_camera.exposure);
+            if (ortho) {
+                // A USD aperture is in tenths of a scene unit, so the
+                // orthographic view spans aperture / 10 world units.
+                camera->set_value(erhe::scene::Camera::projection_type_property, erhe::scene::Projection::Type::orthogonal);
+                if (is_authored(path, "horizontalAperture")) {
+                    const float width = usd_camera.horizontalAperture * 0.1f;
+                    camera->set_value(erhe::scene::Camera::ortho_width_property, width);
+                    camera->set_value(erhe::scene::Camera::ortho_left_property, -0.5f * width);
+                }
+                if (is_authored(path, "verticalAperture")) {
+                    const float height = usd_camera.verticalAperture * 0.1f;
+                    camera->set_value(erhe::scene::Camera::ortho_height_property, height);
+                    camera->set_value(erhe::scene::Camera::ortho_bottom_property, -0.5f * height);
+                }
+            } else if (lens_authored) {
+                camera->set_value(erhe::scene::Camera::projection_type_property, erhe::scene::Projection::Type::perspective_vertical);
+                camera->set_value(erhe::scene::Camera::fov_y_property, usd_camera.yfov());
+                camera->set_value(erhe::scene::Camera::fov_x_property, usd_camera.xfov());
+            }
+            if (is_authored(path, "exposure")) {
+                camera->set_exposure(usd_camera.exposure);
+            }
             m_result.data.cameras.push_back(camera);
         }
     }
@@ -895,21 +1270,32 @@ private:
 
             std::shared_ptr<erhe::scene::Light> light = std::make_shared<erhe::scene::Light>(light_name);
             light->set_source_path(m_arguments.path);
+            // The prim's own type is always authored, so the light type is
+            // always a local value; every other field is written only when
+            // the UsdLux input it comes from carries an authored opinion
+            // (doc/usd-compatibility-plan.md I2).
             light->set_light_type(light_type);
-            light->set_color(glm::vec3{usd_light.color[0], usd_light.color[1], usd_light.color[2]});
+            const std::string& path = usd_light.abs_path;
+            if (is_authored(path, "inputs:color")) {
+                light->set_color(glm::vec3{usd_light.color[0], usd_light.color[1], usd_light.color[2]});
+            }
             // UsdLux intensity and exposure are one photometric quantity;
             // erhe has no exposure on a light, so the two combine. No unit
             // conversion is applied (see doc/usd_compatibility.md, Lights).
-            light->set_intensity(usd_light.intensity * std::pow(2.0f, usd_light.exposure));
-            if (usd_light.enableColorTemperature) {
+            if (is_authored(path, "inputs:intensity") || is_authored(path, "inputs:exposure")) {
+                light->set_intensity(usd_light.intensity * std::pow(2.0f, usd_light.exposure));
+            }
+            if (usd_light.enableColorTemperature && is_authored(path, "inputs:colorTemperature")) {
                 light->set_temperature(usd_light.colorTemperature);
             }
-            if (light_type == erhe::scene::Light_type::spot) {
+            if ((light_type == erhe::scene::Light_type::spot) && is_authored(path, "inputs:shaping:cone:angle")) {
                 const float outer = glm::radians(usd_light.shapingConeAngle);
                 light->set_outer_spot_angle(outer);
                 light->set_inner_spot_angle(outer * std::max(0.0f, 1.0f - usd_light.shapingConeSoftness));
             }
-            light->set_cast_shadow(usd_light.shadowEnable);
+            if (is_authored(path, "inputs:shadow:enable")) {
+                light->set_cast_shadow(usd_light.shadowEnable);
+            }
             light->layer_id = 0;
             light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
             m_result.data.lights[light_index] = light;
@@ -1004,7 +1390,13 @@ private:
         node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         m_result.data.nodes.push_back(node);
 
-        attach_node_content(usd_node, node);
+        const std::shared_ptr<erhe::Item_base> attachment = attach_node_content(usd_node, node);
+
+        // The prim's own opinions: `visibility` and `purpose` on the node
+        // that holds its place in the scene graph, and every `erhe:` custom
+        // attribute on the item the name resolves against.
+        apply_visibility_and_purpose(usd_node.abs_path, *node.get());
+        apply_erhe_custom_attributes(usd_node.abs_path, attachment.get(), node.get());
 
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
@@ -1012,16 +1404,18 @@ private:
         }
     }
 
-    void attach_node_content(const Tydra_node& usd_node, const std::shared_ptr<erhe::scene::Node>& node)
+    // The item the prim's own type contributes, attached to `node`; null for
+    // a plain Xform prim and for content the conversion skipped.
+    [[nodiscard]] auto attach_node_content(const Tydra_node& usd_node, const std::shared_ptr<erhe::scene::Node>& node) -> std::shared_ptr<erhe::Item_base>
     {
         if (usd_node.id < 0) {
-            return;
+            return {};
         }
         const std::size_t content_index = static_cast<std::size_t>(usd_node.id);
         switch (usd_node.nodeType) {
             case lightusd::tydra::NodeType::Mesh: {
                 if (content_index >= m_result.data.meshes.size()) {
-                    return;
+                    return {};
                 }
                 // A USD mesh several prims reference becomes one erhe mesh
                 // per prim, the way a glTF mesh shared by several nodes does.
@@ -1031,13 +1425,15 @@ private:
                     : m_result.data.meshes[content_index];
                 m_mesh_attached[content_index] = true;
                 node->attach(mesh);
-                break;
+                return mesh;
             }
             case lightusd::tydra::NodeType::Camera: {
                 if (content_index < m_result.data.cameras.size()) {
-                    node->attach(m_result.data.cameras[content_index]);
+                    const std::shared_ptr<erhe::scene::Camera>& camera = m_result.data.cameras[content_index];
+                    node->attach(camera);
+                    return camera;
                 }
-                break;
+                return {};
             }
             case lightusd::tydra::NodeType::PointLight:
             case lightusd::tydra::NodeType::DirectionalLight:
@@ -1045,12 +1441,14 @@ private:
             case lightusd::tydra::NodeType::DiskLight:
             case lightusd::tydra::NodeType::CylinderLight: {
                 if ((content_index < m_result.data.lights.size()) && m_result.data.lights[content_index]) {
-                    node->attach(m_result.data.lights[content_index]);
+                    const std::shared_ptr<erhe::scene::Light>& light = m_result.data.lights[content_index];
+                    node->attach(light);
+                    return light;
                 }
-                break;
+                return {};
             }
             default: {
-                break;
+                return {};
             }
         }
     }
@@ -1060,6 +1458,8 @@ private:
     const lightusd::Stage*       m_stage{nullptr};
     const Tydra_scene*           m_scene{nullptr};
     std::map<std::size_t, bool>  m_mesh_attached;
+    // Authored property names per prim path, see authored_property_names.
+    std::map<std::string, std::set<std::string>> m_authored_property_names;
 };
 
 } // anonymous namespace

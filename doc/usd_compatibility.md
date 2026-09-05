@@ -58,7 +58,7 @@ mapping an exporter applies and an importer inverts:
 | `Camera` attachment | `Camera` prim, see "Cameras" | |
 | `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | |
-| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart |
+| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
 | prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` composition arc on an `Xform` | USD references are stronger: any target prim, list-edited |
 | item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) | |
 | per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
@@ -74,14 +74,14 @@ opinions).
 | erhe (`erhe::property`) | USD | notes |
 |---|---|---|
 | registered property (name, type, owner type, default) | schema attribute (name, type, fallback) | registration order has no USD meaning |
-| local value (`Value_source::local`) | authored opinion in the layer | export writes local values only |
-| default (`Value_source::default`) | schema fallback | never written |
+| local value (`Value_source::local`) | authored opinion in the layer | export writes local values only; import writes one exactly for an attribute the composed prim reports as authored (LightUSD `authored()`, which counts an opinion arriving over a reference or a sublayer) |
+| default (`Value_source::default`) | schema fallback | never written. An unauthored USD attribute leaves the erhe property at the ERHE default, which is not the USD fallback for every attribute: `base_color` stays white where `diffuseColor` falls back to 0.18, and `visible` / `purpose` keep the value the item derives |
 | `inherits` flag + closest-ancestor read (R8, D8) | primvar namespace inheritance; `visibility` and `purpose` inheritance | USD inherits only primvars and a few tokens; erhe inherits any flagged property |
 | style layer (D25) and `Style` items (`doc/style-library.md`) | `class` prim + `inherits` arc | style values = the class prim's opinions; the item's local values are stronger, as in LIVRPS |
 | folder-held category values (D30, `Material.roughness` on a Materials folder) | opinions on an ancestor `Scope`, read through primvar-style inheritance | no standard USD mechanism inherits material inputs; carry as custom attributes on the scope |
 | node-held attachment values (D30, `Light.color` on an empty node) | same as folder-held values | |
 | attached property (R7, `Layout.align_y` on a child node) | applied API schema attribute (`layout:alignY`) | |
-| secondary / attached qualified name `Owner.name` | namespaced attribute `owner:name` | `.` in erhe, `:` in USD |
+| secondary / attached qualified name `Owner.name` | namespaced attribute `erhe:Owner:name` | `.` in erhe, `:` in USD, under the `erhe` namespace. This is the form every erhe-only property value takes on a prim: `custom float erhe:Light:temperature = 5000`, `custom color3f erhe:Material:emissive = (1, 0.5, 0)`, `custom bool erhe:Mesh:shadow_cast = true`, `custom token erhe:purpose_hint = "guide"` for a property of the prim's own class. The importer reads the USDA literal, drops brackets, commas and quotes, and parses the result with the property type's `from_string` (D16), so a tuple, an array, a token, a string, a number and a bool all travel. It resolves the name against the attachment the prim's type made and then against the node carrying it, taking `Owner.name` either as a holder addresses it (attached R7, secondary D30) or as `name` on an object of exactly that class. A name that resolves to no property, and a value that fails to parse or to validate, are skipped with one warning each |
 | enumeration (D2a) | `token` attribute with `allowedTokens` | labels travel as tokens |
 | object reference (D28, material of a primitive, texture of a slot) | relationship (`material:binding`) or connection (`inputs:file`) | |
 | bridged property (D18, node TRS) | attribute whose value the schema computes from another representation (`xformOp:*`) | always local, never inherited: same as xformOps |
@@ -89,7 +89,7 @@ opinions).
 | expression / binding (D22) | none (closest: `UsdShade` connections) | erhe-only; carried as custom string metadata if exported at all |
 | `Property_set` (D17) | a `PrimSpec`'s property dictionary | |
 | sealing (D24, `lock_edit`) | none (layer permission / `instanceable` are the nearest) | |
-| `Item_base::visible` (bool, `inherits`) and `Item_base::purpose` (`Purpose` enumeration, `inherits`) | `visibility` (`inherited` / `invisible`), `purpose` (`default` / `render` / `proxy` / `guide`) | `visible` <-> `visibility`; `purpose` maps token for token, and the value of an item that authors none is derived from its editor-only flag bits (`tool`, `brush`, `controller`, `rendertarget`, `show_in_ui` off), so editor-only content reads `guide`. The remaining item flags have no USD counterpart |
+| `Item_base::visible` (bool, `inherits`) and `Item_base::purpose` (`Purpose` enumeration, `inherits`) | `visibility` (`inherited` / `invisible`), `purpose` (`default` / `render` / `proxy` / `guide`) | `visible` <-> `visibility`; `purpose` maps token for token, and the value of an item that authors none is derived from its editor-only flag bits (`tool`, `brush`, `controller`, `rendertarget`, `show_in_ui` off), so editor-only content reads `guide`. Import puts both on the node that holds the prim's place in the scene graph, and only when the prim authors the attribute. The remaining item flags have no USD counterpart |
 | animated layer (future, property-system section 6) | time samples (stronger than `default`) | prerequisite for importing time samples without clobbering local values |
 | `Value_source` of an effective value | opinion provenance (`PcpPrimIndex` node / LightUSD `ArcOrigin`) | erhe already answers "where does this value come from" |
 | text form `to_string` / `from_string` (D16, `1 0.9 0.8`) | USDA literal (`(1, 0.9, 0.8)`) | a converter pair, not a change of erhe's form |
@@ -129,10 +129,10 @@ The names are erhe / geogram's own:
 | `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | |
 | `occlusion_texture`, `occlusion_texture_strength` | `occlusion` | |
 | `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | erhe has one slot for the pair, so the importer takes the image the `roughness` input names and falls back to the `metallic` one |
-| `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes |
+| `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes, in the form the qualified-name row of "Property system" gives |
 | `<slot>_texture_uv_*` | `UsdTransform2d` | |
 | `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | |
-| `double_sided` | `doubleSided` on the `Mesh` prim | a mesh flag in USD, a material flag in erhe |
+| `double_sided` | `doubleSided` on the `Mesh` prim | a mesh flag in USD, a material flag in erhe, and one material can be bound by several meshes, so an authored `doubleSided` does not reach the erhe material; `erhe:Material:double_sided` on the `Material` prim is what carries the erhe flag |
 
 ## Lights
 

@@ -1,0 +1,54 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "root"
+{
+    def Mesh "hidden"
+    {
+        uniform token subdivisionScheme = "none"
+        token visibility = "invisible"
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        rel material:binding = </root/materials/OnlyDiffuse>
+    }
+
+    def Mesh "shown"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+    }
+
+    def Xform "helper"
+    {
+        uniform token purpose = "guide"
+    }
+
+    def SphereLight "lamp"
+    {
+        color3f inputs:color = (1, 0.5, 0.25)
+        custom float erhe:Light:temperature = 5000
+        custom float erhe:Light:nope = 1
+    }
+
+    def Scope "materials"
+    {
+        def Material "OnlyDiffuse"
+        {
+            token outputs:surface.connect = </root/materials/OnlyDiffuse/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.2, 0.4, 0.6)
+                token outputs:surface
+            }
+        }
+    }
+}

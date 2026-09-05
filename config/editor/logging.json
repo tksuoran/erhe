@@ -140,6 +140,7 @@
     "erhe.scene_renderer.startup": "info",
     "erhe.ui.font": "info",
     "erhe.ui.text_buffer": "info",
+    "erhe.usd": "info",
     "erhe.window.renderdoc": "info",
     "erhe.window.space_mouse": "info",
     "erhe.window.window": "info",
