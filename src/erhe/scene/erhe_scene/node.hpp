@@ -109,9 +109,10 @@ public:
     void for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback) override;
     // A node holds the value properties of every other item class (Light,
     // Camera, Mesh, ...) for the prims and attachments below it to inherit
-    // (D30). Those classes no longer share one base - Mesh is a prim under
-    // Xformable while Light and Camera are attachments - so the secondary
-    // owner type is Item_base, the type every item class descends from.
+    // (D30). Those classes no longer share one base - Mesh, Camera and Light
+    // are prims under Xformable while the applied-API-schema attachments are
+    // not - so the secondary owner type is Item_base, the type every item
+    // class descends from.
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override;
 
     // Public API
@@ -196,6 +197,14 @@ public:
 // The name most of erhe spells `Xformable` with. It is retired when the
 // prim class hierarchy (doc/usd-compatibility-plan.md C5) is complete.
 using Node = Xformable;
+
+// Make `prim` a child prim of `parent` (a null parent detaches it), keeping
+// the prim's LOCAL transform. Xformable::set_parent preserves the WORLD
+// transform instead, which would give a prim created at the origin a local
+// transform that cancels its new parent's; a prim that carries no transform
+// of its own belongs at its parent's place. This is the call every site that
+// used to spell `parent->attach(prim)` makes.
+void set_prim_parent(const std::shared_ptr<Xformable>& prim, const std::shared_ptr<erhe::Hierarchy>& parent);
 
 template <typename T>
 auto get_attachment(const Xformable* node) -> std::shared_ptr<T>

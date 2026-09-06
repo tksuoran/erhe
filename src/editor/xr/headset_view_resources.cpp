@@ -117,12 +117,9 @@ Headset_view_resources::Headset_view_resources(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    m_node = std::make_shared<erhe::scene::Xform>(
-        fmt::format("Headset Camera node slot {}", slot)
-    );
-
-    m_node->attach(m_camera);
-    m_node->set_parent(headset_view.get_root_node());
+    // A Camera is a prim (doc/usd-compatibility-plan.md C5): the per-view
+    // pose is set on the camera itself.
+    m_camera->set_parent(headset_view.get_root_node());
 
     m_is_valid = true;
 }
@@ -193,7 +190,7 @@ void Headset_view_resources::update(erhe::xr::Render_view& render_view, erhe::sc
     const glm::mat4 orientation = glm::mat4_cast(render_view.view_pose.orientation);
     const glm::mat4 translation = glm::translate(glm::mat4{ 1 }, render_view.view_pose.position + offset);
     const glm::mat4 m           = translation * orientation;
-    m_node->set_parent_from_node(m);
+    m_camera->set_parent_from_node(m);
 }
 
 }

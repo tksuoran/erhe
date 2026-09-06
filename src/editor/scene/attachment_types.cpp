@@ -20,11 +20,12 @@ namespace {
 using erhe::scene::Node;
 
 // Single-instance gates: refuse a second attachment of the same kind (issue
-// #249 decision: at most one Camera / Light / Mesh / ... per node).
-auto camera_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Camera    >(&node); }
-auto light_gate           (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Light     >(&node); }
-// A Mesh is a prim, not an attachment, and a parent holds any number of Mesh
-// children (doc/usd-compatibility-plan.md C5), so this one never refuses.
+// #249 decision: at most one Node_physics / Layout / ... per node).
+// A Mesh, Camera or Light is a prim, not an attachment, and a parent holds
+// any number of prim children (doc/usd-compatibility-plan.md C5), so these
+// three never refuse.
+auto camera_gate          (const Node&     ) -> bool { return true; }
+auto light_gate           (const Node&     ) -> bool { return true; }
 auto mesh_gate            (const Node&     ) -> bool { return true; }
 auto rigid_body_gate      (const Node& node) -> bool { return !erhe::scene::get_attachment<Node_physics           >(&node); }
 auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal

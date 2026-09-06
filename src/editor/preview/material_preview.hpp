@@ -53,7 +53,6 @@ private:
 
     std::shared_ptr<erhe::scene::Node>         m_node;
     std::shared_ptr<erhe::scene::Mesh>         m_mesh;
-    std::shared_ptr<erhe::scene::Node>         m_key_light_node;
     std::shared_ptr<erhe::scene::Light>        m_key_light;
 
     int                                        m_slice_count{40};

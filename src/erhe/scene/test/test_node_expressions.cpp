@@ -99,11 +99,11 @@ TEST(Node_expressions, parent_path_and_attachment_targets)
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
     child->set_parent(parent);
-    child->attach(light);
+    erhe::scene::set_prim_parent(light, child);
     parent->set_value(erhe::scene::Node::scale_property, glm::vec3{2.0f, 3.0f, 4.0f});
 
-    // ".." is the inheritance parent (the parent node); an attachment
-    // resolves its node's host like the node does.
+    // ".." is the inheritance parent (the parent prim); a child prim
+    // resolves its host like its parent does.
     ASSERT_TRUE(child->set_expression(erhe::scene::Node::scale_property, "{../scale}"));
     EXPECT_TRUE(approx(child->get_value(erhe::scene::Node::scale_property), glm::vec3{2.0f, 3.0f, 4.0f}));
 

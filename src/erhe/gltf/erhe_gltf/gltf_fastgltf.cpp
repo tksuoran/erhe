@@ -1156,6 +1156,7 @@ public:
         const std::size_t camera_count = m_asset->cameras.size();
         log_gltf->trace("parsing {} cameras", camera_count);
         m_data_out.cameras.resize(camera_count);
+        m_camera_claimed.resize(camera_count);
         for (std::size_t i = 0; i < camera_count; ++i) {
             parse_camera(i);
         }
@@ -1163,6 +1164,7 @@ public:
         const std::size_t light_count = m_asset->lights.size();
         log_gltf->trace("parsing {} lights", light_count);
         m_data_out.lights.resize(light_count);
+        m_light_claimed.resize(light_count);
         for (std::size_t i = 0; i < light_count; ++i) {
             parse_light(i);
         }
@@ -1954,7 +1956,8 @@ private:
 
         auto erhe_camera = std::make_shared<erhe::scene::Camera>(camera_name);
         erhe_camera->set_source_path(m_arguments.path);
-        copy_uid(camera, *erhe_camera);
+        // The glTF camera entry is not uid-stamped: a Camera is a prim, so
+        // its identity is the node entry that carries it.
         m_data_out.cameras[camera_index] = erhe_camera;
         erhe_camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         // Built on a copy, then set as the camera's local values.
@@ -2763,6 +2766,10 @@ private:
     // Per glTF mesh: has a node clone already claimed the mesh's uid
     // (see the mesh instantiation in parse_node)?
     std::vector<bool> m_mesh_uid_claimed;
+    // Per glTF camera / light: has a node already taken the parsed prim
+    // itself (see instantiate_camera / instantiate_light)?
+    std::vector<bool> m_camera_claimed;
+    std::vector<bool> m_light_claimed;
 
     // EXT_mesh_gpu_instancing per-instance transforms of one node, decoded
     // from the extension's TRANSLATION / ROTATION / SCALE accessors. Empty
@@ -2839,6 +2846,41 @@ private:
         return instances;
     }
 
+    // A glTF camera / light is a resource a node references, while a Camera
+    // / Light prim belongs to one place in the tree. The first reference
+    // takes the parsed prim itself, so the ERHE_camera pass reaches it; a
+    // further reference takes a clone. An erhe-written file writes one glTF
+    // camera / light per prim, so only a foreign file reaches the clone path.
+    [[nodiscard]] auto instantiate_camera(const std::size_t camera_index, const std::string& name) -> std::shared_ptr<erhe::scene::Camera>
+    {
+        const std::shared_ptr<erhe::scene::Camera>& parsed = m_data_out.cameras[camera_index];
+        if (!m_camera_claimed[camera_index]) {
+            m_camera_claimed[camera_index] = true;
+            parsed->set_name(name);
+            return parsed;
+        }
+        std::shared_ptr<erhe::scene::Camera> clone = std::make_shared<erhe::scene::Camera>(*parsed, erhe::for_clone{true});
+        clone->set_name(name);
+        clone->set_source_path(m_arguments.path);
+        clone->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        return clone;
+    }
+
+    [[nodiscard]] auto instantiate_light(const std::size_t light_index, const std::string& name) -> std::shared_ptr<erhe::scene::Light>
+    {
+        const std::shared_ptr<erhe::scene::Light>& parsed = m_data_out.lights[light_index];
+        if (!m_light_claimed[light_index]) {
+            m_light_claimed[light_index] = true;
+            parsed->set_name(name);
+            return parsed;
+        }
+        std::shared_ptr<erhe::scene::Light> clone = std::make_shared<erhe::scene::Light>(*parsed, erhe::for_clone{true});
+        clone->set_name(name);
+        clone->set_source_path(m_arguments.path);
+        clone->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        return clone;
+    }
+
     // A glTF node whose ERHE_node extension names a `prim_class` is a prim of
     // a class that carries no transform (doc/usd-compatibility-plan.md C5):
     // a `Scope`, or the `Typed` prim a `typeName` without an erhe class
@@ -2907,13 +2949,23 @@ private:
                 ? parse_instance_transforms(node)
                 : std::vector<erhe::scene::Trs_transform>{};
 
-        // A glTF node that carries a mesh IS the Mesh prim
+        // A glTF node that carries a mesh, a camera or a light IS that prim
         // (doc/usd-compatibility-plan.md C5): the glTF node's name,
-        // transform, children and remaining attachments are the prim's.
-        const bool node_is_mesh = node.meshIndex.has_value() && instances.empty();
-        std::shared_ptr<erhe::scene::Xformable> erhe_node = node_is_mesh
-            ? std::static_pointer_cast<erhe::scene::Xformable>(clone_mesh(node_name))
-            : std::static_pointer_cast<erhe::scene::Xformable>(std::make_shared<erhe::scene::Xform>(node_name));
+        // transform, children and remaining attachments are the prim's. A
+        // node carrying two of the three is the prim of the first in the
+        // order mesh > camera > light, and the others become its child prims
+        // with identity transforms (doc/scene_serialization.md).
+        const bool node_is_mesh   = node.meshIndex.has_value() && instances.empty();
+        const bool node_is_camera = !node_is_mesh && node.cameraIndex.has_value();
+        const bool node_is_light  = !node_is_mesh && !node_is_camera && node.lightIndex.has_value();
+        std::shared_ptr<erhe::scene::Xformable> erhe_node =
+            node_is_mesh
+                ? std::static_pointer_cast<erhe::scene::Xformable>(clone_mesh(node_name))
+                : node_is_camera
+                    ? std::static_pointer_cast<erhe::scene::Xformable>(instantiate_camera(node.cameraIndex.value(), node_name))
+                    : node_is_light
+                        ? std::static_pointer_cast<erhe::scene::Xformable>(instantiate_light(node.lightIndex.value(), node_name))
+                        : std::static_pointer_cast<erhe::scene::Xformable>(std::make_shared<erhe::scene::Xform>(node_name));
         erhe_node->set_source_path(m_arguments.path);
         copy_uid(node, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -2933,14 +2985,14 @@ private:
             erhe_child_prim->set_parent(erhe_node);
         }
 
-        if (node.cameraIndex.has_value()) {
-            const std::size_t camera_index = node.cameraIndex.value();
-            erhe_node->attach(m_data_out.cameras[camera_index]);
+        if (node.cameraIndex.has_value() && !node_is_camera) {
+            const std::shared_ptr<erhe::scene::Camera> camera = instantiate_camera(node.cameraIndex.value(), node_name);
+            erhe::scene::set_prim_parent(camera, erhe_node);
         }
 
-        if (node.lightIndex.has_value()) {
-            const std::size_t light_index = node.lightIndex.value();
-            erhe_node->attach(m_data_out.lights[light_index]);
+        if (node.lightIndex.has_value() && !node_is_light) {
+            const std::shared_ptr<erhe::scene::Light> light = instantiate_light(node.lightIndex.value(), node_name);
+            erhe::scene::set_prim_parent(light, erhe_node);
         }
         if (node.externalAssetIndex.has_value()) {
             // glTF 2.1: this node instantiates an external asset. Only the
@@ -3987,7 +4039,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                         }
                     }
                 } else if ((extension_name == "ERHE_light") && node) {
-                    const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_attachment<erhe::scene::Light>(node.get());
+                    const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_light(node.get());
                     if (light) {
                         bool bool_value{false};
                         if (extension_object.at_key("cast_shadow").get_bool().get(bool_value) == simdjson::SUCCESS) {
@@ -6138,12 +6190,19 @@ private:
             gltf_node.meshIndex = process_mesh(erhe_mesh.get());
         }
 
-        const std::shared_ptr<erhe::scene::Camera> erhe_camera = erhe::scene::get_attachment<erhe::scene::Camera>(&erhe_node);
+        // A Camera / Light prim is written as one glTF node with `camera` /
+        // `light` set (C5); a Camera or Light CHILD of this node is a prim of
+        // its own and is written by process_child_nodes below.
+        const std::shared_ptr<erhe::scene::Camera> erhe_camera = std::dynamic_pointer_cast<erhe::scene::Camera>(
+            const_cast<erhe::scene::Node&>(erhe_node).shared_from_this()
+        );
         if (erhe_camera) {
             gltf_node.cameraIndex = process_camera(erhe_camera.get());
         }
 
-        const std::shared_ptr<erhe::scene::Light> erhe_light = erhe::scene::get_attachment<erhe::scene::Light>(&erhe_node);
+        const std::shared_ptr<erhe::scene::Light> erhe_light = std::dynamic_pointer_cast<erhe::scene::Light>(
+            const_cast<erhe::scene::Node&>(erhe_node).shared_from_this()
+        );
         if (erhe_light) {
             gltf_node.lightIndex = process_light(erhe_light.get());
         }
@@ -6605,7 +6664,8 @@ private:
         // identity is the node entry stamped above, and the mesh entry is a
         // synthesized object of the serialization like an accessor or a
         // sampler.
-        add_targets(m_gltf_asset.cameras,    m_erhe_camera_to_gltf_camera_index);
+        // The glTF camera entries are not stamped either, for the same
+        // reason: a Camera is a prim whose identity is its node entry.
         // ERHE_asset_reference proxies are excluded: a proxy's identity
         // lives in its defining container, and stamping would write a
         // generated uid back onto the SHARED item - corrupting the identity

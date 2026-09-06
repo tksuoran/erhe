@@ -79,7 +79,7 @@ TEST(Camera_properties, node_held_values_are_inherited_into_the_mirror)
 {
     auto node   = std::make_shared<Xform>("n");
     auto camera = std::make_shared<Camera>("c");
-    node->attach(camera);
+    erhe::scene::set_prim_parent(camera, node);
     const Property_registry& registry = Property_registry::get();
     EXPECT_TRUE(registry.is_secondary_property(*node, Camera::fov_y_property.get()));
     EXPECT_EQ(registry.find_for_object(*node, "Camera.fov_y"), Camera::fov_y_property.get_ptr());

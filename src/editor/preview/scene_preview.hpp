@@ -109,7 +109,6 @@ protected:
     std::vector<erhe::graphics::Base_render_pipeline*> m_render_pipelines;
     Composer                                           m_composer;
     std::shared_ptr<Scene_root>                        m_scene_root_shared;
-    std::shared_ptr<erhe::scene::Node>                 m_camera_node;
     std::shared_ptr<erhe::scene::Camera>               m_camera;
     std::shared_ptr<Content_library>                   m_content_library;
     std::shared_ptr<erhe::graphics::Texture>           m_shadow_texture;

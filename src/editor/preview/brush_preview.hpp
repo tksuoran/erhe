@@ -65,9 +65,7 @@ private:
     std::shared_ptr<erhe::primitive::Material> m_headlight_material;
     std::shared_ptr<erhe::scene::Node>         m_node;
     std::shared_ptr<erhe::scene::Mesh>         m_mesh;
-    std::shared_ptr<erhe::scene::Node>         m_key_light_node;
     std::shared_ptr<erhe::scene::Light>        m_key_light;
-    std::shared_ptr<erhe::scene::Node>         m_fill_light_node;
     std::shared_ptr<erhe::scene::Light>        m_fill_light;
 };
 

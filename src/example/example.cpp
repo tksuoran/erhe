@@ -536,23 +536,22 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node   = std::make_shared<erhe::scene::Xform>(name);
+        // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries
+        // its own transform, so no node holds it.
         auto camera = std::make_shared<erhe::scene::Camera>(name);
         camera->set_fov_y          (glm::radians(45.0f));
         camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
         camera->set_z_near         (1.0f / 128.0f);
         camera->set_z_far          (512.0f);
         camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-        node->attach(camera);
-        node->set_parent(m_scene.get_root_node());
+        camera->set_parent(m_scene.get_root_node());
 
         const glm::mat4 m = erhe::math::create_look_at(
             position, // eye
             look_at,  // center
             glm::vec3{0.0f, 1.0f, 0.0f}  // up
         );
-        node->set_parent_from_node(m);
-        node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        camera->set_parent_from_node(m);
 
         return camera;
     }
@@ -566,7 +565,8 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Xform>(name);
+        // A Light is a prim (doc/usd-compatibility-plan.md C5): it carries
+        // its own transform, so no node holds it.
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(erhe::scene::Light::Type::directional);
         light->set_color(color);
@@ -574,16 +574,14 @@ private:
         light->set_range(0.0f);
         light->layer_id  = 0;
         light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-        node->attach          (light);
-        node->set_parent      (m_scene.get_root_node());
-        node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        light->set_parent(m_scene.get_root_node());
 
         const glm::mat4 m = erhe::math::create_look_at(
             position,                     // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
             glm::vec3{0.0f, 1.0f, 0.0f}   // up
         );
-        node->set_parent_from_node(m);
+        light->set_parent_from_node(m);
 
         return light;
     }
@@ -597,7 +595,6 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Xform>(name);
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(erhe::scene::Light::Type::point);
         light->set_color(color);
@@ -605,12 +602,10 @@ private:
         light->set_range(25.0f);
         light->layer_id  = 0;
         light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-        node->attach          (light);
-        node->set_parent      (m_scene.get_root_node());
-        node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        light->set_parent(m_scene.get_root_node());
 
         const glm::mat4 m = erhe::math::create_translation<float>(position);
-        node->set_parent_from_node(m);
+        light->set_parent_from_node(m);
 
         return light;
     }

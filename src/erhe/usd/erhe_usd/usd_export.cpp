@@ -806,10 +806,9 @@ private:
         return lightusd::Prim{model};
     }
 
-    // One erhe node as one prim. A Mesh prim writes a USD `Mesh` with its own
-    // xformOp; a node with a camera or light attachment writes the prim its
-    // attachment types (doc/usd_compatibility.md, object model), which is
-    // what the importer inverts.
+    // One erhe node as one prim: a `Mesh`, `Camera` or UsdLux prim for a prim
+    // of that class and an `Xform` for a plain one, each with its own xformOp
+    // (doc/usd_compatibility.md, object model). The importer inverts it.
     [[nodiscard]] auto write_node(const erhe::scene::Node& node, const glm::mat4& pre_transform, Name_scope& names) -> lightusd::Prim
     {
         ++m_node_count;
@@ -829,13 +828,12 @@ private:
             // has no serializable source image, so the node exports without it.
             mesh.reset();
         }
-        const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_attachment<erhe::scene::Camera>(&node);
-        const std::shared_ptr<erhe::scene::Light>  light  = erhe::scene::get_attachment<erhe::scene::Light>(&node);
-
-        const int attachment_count = (mesh ? 1 : 0) + (camera ? 1 : 0) + (light ? 1 : 0);
-        if (attachment_count > 1) {
-            add_warning(fmt::format("node '{}' has several attachments - only the mesh, camera or light in that order is written", node.get_name()));
-        }
+        const std::shared_ptr<erhe::scene::Camera> camera = std::dynamic_pointer_cast<erhe::scene::Camera>(
+            const_cast<erhe::scene::Node&>(node).shared_from_this()
+        );
+        const std::shared_ptr<erhe::scene::Light> light = std::dynamic_pointer_cast<erhe::scene::Light>(
+            const_cast<erhe::scene::Node&>(node).shared_from_this()
+        );
 
         lightusd::Prim prim =
             mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix) :

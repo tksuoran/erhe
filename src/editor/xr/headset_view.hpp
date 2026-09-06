@@ -299,7 +299,8 @@ private:
 #endif
     std::unique_ptr<erhe::graphics::Render_pass>         m_mirror_mode_window_render_pass;
     std::shared_ptr<erhe::scene::Node>                   m_root_node; // scene root node
-    std::shared_ptr<erhe::scene::Node>                   m_headset_node; // transform set by headset
+    // The headset's own prim: a Camera is an Xformable (C5), so the headset
+    // pose is set on the camera itself.
     std::shared_ptr<erhe::scene::Camera>                 m_root_camera;
     // Combined eye frustum cache (see cache_combined_eye_frustum). Filled from
     // the located per-eye Render_views during render, applied to m_root_camera
@@ -318,7 +319,6 @@ private:
     // update_id_render). Not flagged visible / show_in_ui -- it is never
     // composited, only used as a projection source.
     std::shared_ptr<erhe::scene::Camera>                 m_pointer_pick_camera;
-    std::shared_ptr<erhe::scene::Node>                   m_pointer_pick_node;
     std::vector<std::shared_ptr<Headset_view_resources>> m_view_resources;
     // Indexed by Render_view::slot; entries are created lazily on first
     // use. Disjoint from m_view_resources so the per-eye fallback path

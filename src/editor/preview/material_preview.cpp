@@ -117,14 +117,13 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
     const auto paremt = m_scene_root_shared->get_hosted_scene()->get_root_node();
     m_node->set_parent(paremt);
 
-    m_key_light_node = std::make_shared<erhe::scene::Xform>("Key Light Node");
-    m_key_light      = std::make_shared<erhe::scene::Light>("Key Light");
-    m_key_light_node->enable_flag_bits(erhe::Item_flags::content);
+    // A Light is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // own transform, so the preview needs no node to hold it.
+    m_key_light = std::make_shared<erhe::scene::Light>("Key Light");
     m_key_light->enable_flag_bits(erhe::Item_flags::content);
     m_key_light->layer_id = m_scene_root_shared->layers().light()->id;
-    m_key_light_node->attach(m_key_light);
-    m_key_light_node->set_parent(paremt);
-    m_key_light_node->set_parent_from_node(
+    m_key_light->set_parent(paremt);
+    m_key_light->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{-8.0f, 8.0f, 8.0f},  // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
@@ -132,22 +131,17 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
         )
     );
 
-    //// m_fill_light_node = std::make_shared<erhe::scene::Xform>("Fill Light Node");
-    //// m_fill_light      = std::make_shared<erhe::scene::Light>("Fill Light");
-    //// m_fill_light_node->enable_flag_bits(erhe::Item_flags::content);
-    //// m_fill_light     ->enable_flag_bits(erhe::Item_flags::content);
-    //// m_fill_light     ->layer_id = m_scene_root->layers().light()->id;
+    //// m_fill_light = std::make_shared<erhe::scene::Light>("Fill Light");
+    //// m_fill_light->enable_flag_bits(erhe::Item_flags::content);
+    //// m_fill_light->layer_id = m_scene_root->layers().light()->id;
 
-    m_camera_node = std::make_shared<erhe::scene::Xform>("Camera node");
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
-    m_camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
+    m_camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_camera->set_fov_y (0.3f);
     m_camera->set_z_near(4.0f);
     m_camera->set_z_far (12.0f);
-    m_camera_node->attach(m_camera);
-    m_camera_node->set_parent(paremt);
-    m_camera_node->set_parent_from_node(
+    m_camera->set_parent(paremt);
+    m_camera->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{0.0f, 0.0f, 8.0f},  // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center

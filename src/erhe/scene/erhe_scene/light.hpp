@@ -1,7 +1,7 @@
 #pragma once
 
 #include "erhe_scene/camera.hpp"
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_property/dependency_property.hpp"
@@ -149,7 +149,11 @@ public:
     Transform     texture_from_world{};
 };
 
-class Light : public erhe::Item<Item_base, Node_attachment, Light, erhe::Item_kind::clone_using_custom_clone_constructor>
+// A light prim (doc/usd-compatibility-plan.md C5, UsdLux): an `Xformable`
+// with its own transform, name and children, and a child prim of its parent.
+// The `light_type` enumeration picks the UsdLux schema the writer emits; a
+// light type that needs properties of its own gets a class of its own then.
+class Light : public erhe::Item<Item_base, Xformable, Light, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     using Type = Light_type;
@@ -169,10 +173,21 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Light"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::light; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Xformable::get_static_type() | erhe::Item_type::light; }
 
-    // Implements Node_attachment
+    // Overrides Typed: the class fixes the token. It is the erhe class token;
+    // the USD writer maps light_type to the UsdLux typeName.
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Light"; }
+
+    // Overrides Xformable: registers / unregisters the light with the scene's
+    // light layer on top of the node registration the base does.
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+
+    // The light itself: the transitional accessor every consumer that reads
+    // "the node of this light" still spells, kept while the U steps of
+    // doc/usd-compatibility-plan.md retire it.
+    [[nodiscard]] auto get_node()       -> Node*       { return this; }
+    [[nodiscard]] auto get_node() const -> const Node* { return this; }
 
     // Public API
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
@@ -234,8 +249,8 @@ public:
     [[nodiscard]] auto get_luminous_flux() const -> float;
     void set_luminous_flux(float lumens);
 
-    // Orthonormal world-space frame of the light; see Light_frame.
-    // Requires an attached node.
+    // Orthonormal world-space frame of the light; see Light_frame. Derived
+    // from the light prim's own world transform.
     [[nodiscard]] auto get_light_frame() const -> Light_frame;
 
     // Registered properties (erhe::property, doc/property-system.md
@@ -329,5 +344,10 @@ private:
     [[nodiscard]] static auto get_texture_from_clip(erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}) -> glm::mat4;
     [[nodiscard]] static auto get_clip_from_texture(erhe::math::Depth_range depth_range, const erhe::math::Coordinate_conventions& conventions = erhe::math::Coordinate_conventions{}) -> glm::mat4;
 };
+
+// The one light of a prim: the prim itself when it is a Light, else its first
+// Light child.
+[[nodiscard]] auto get_light(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Light>;
+[[nodiscard]] auto get_light(const erhe::Hierarchy* item) -> std::shared_ptr<Light>;
 
 } // namespace erhe::scene

@@ -190,12 +190,38 @@ TEST_F(Cube_round_trip, material_local_sets_survive)
     EXPECT_NE(blue->get_value_source(Material::ior_property.get()), erhe::property::Value_source::local);
 }
 
+// A `Camera` prim and a UsdLux prim of the stage are erhe Camera / Light
+// prims with their own xformOps, not Xforms carrying an attachment
+// (doc/usd-compatibility-plan.md C5).
+TEST_F(Cube_round_trip, camera_and_light_prims_round_trip_with_their_own_xform_ops)
+{
+    const std::shared_ptr<erhe::scene::Node> cam = find_node(trip->reloaded.data, "cam");
+    ASSERT_TRUE(cam.operator bool());
+    EXPECT_TRUE(erhe::is<erhe::scene::Camera>(cam.get()));
+    EXPECT_EQ(cam->get_class_type_name(), "Camera");
+    EXPECT_TRUE(cam->get_attachments().empty());
+    const glm::vec3 cam_translation = cam->parent_from_node_transform().get_translation();
+    EXPECT_NEAR(cam_translation.x, 0.0f, 1e-5f);
+    EXPECT_NEAR(cam_translation.y, 1.0f, 1e-5f);
+    EXPECT_NEAR(cam_translation.z, 7.0f, 1e-5f);
+
+    const std::shared_ptr<erhe::scene::Node> sun = find_node(trip->reloaded.data, "sun");
+    ASSERT_TRUE(sun.operator bool());
+    EXPECT_TRUE(erhe::is<erhe::scene::Light>(sun.get()));
+    EXPECT_EQ(sun->get_class_type_name(), "Light");
+    EXPECT_TRUE(sun->get_attachments().empty());
+    const glm::vec3 sun_translation = sun->parent_from_node_transform().get_translation();
+    EXPECT_NEAR(sun_translation.x, 3.0f, 1e-5f);
+    EXPECT_NEAR(sun_translation.y, 4.0f, 1e-5f);
+    EXPECT_NEAR(sun_translation.z, 5.0f, 1e-5f);
+}
+
 TEST_F(Cube_round_trip, camera_values_survive)
 {
     using erhe::scene::Camera;
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "cam");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<Camera> camera = erhe::scene::get_attachment<Camera>(node.get());
+    const std::shared_ptr<Camera> camera = erhe::scene::get_camera(node.get());
     ASSERT_TRUE(camera.operator bool());
 
     EXPECT_NEAR(camera->get_value(Camera::z_near_property), 0.1f, 1e-4f);
@@ -211,7 +237,7 @@ TEST_F(Cube_round_trip, light_values_survive)
     using erhe::scene::Light;
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "sun");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<Light> light = erhe::scene::get_attachment<Light>(node.get());
+    const std::shared_ptr<Light> light = erhe::scene::get_light(node.get());
     ASSERT_TRUE(light.operator bool());
 
     EXPECT_EQ(light->get_value(Light::light_type_property), erhe::scene::Light_type::directional);
@@ -233,7 +259,7 @@ protected:
         // come back through the `erhe:Owner:name` custom attribute form.
         const std::shared_ptr<erhe::scene::Node> lamp_node = find_node(trip->source.data, "lamp");
         ASSERT_TRUE(lamp_node.operator bool());
-        const std::shared_ptr<erhe::scene::Light> lamp = erhe::scene::get_attachment<erhe::scene::Light>(lamp_node.get());
+        const std::shared_ptr<erhe::scene::Light> lamp = erhe::scene::get_light(lamp_node.get());
         ASSERT_TRUE(lamp.operator bool());
         lamp->set_value(erhe::scene::Light::range_property, 12.5f);
 
@@ -270,7 +296,7 @@ TEST_F(Authored_round_trip, light_temperature_survives)
     using erhe::scene::Light;
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "lamp");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<Light> light = erhe::scene::get_attachment<Light>(node.get());
+    const std::shared_ptr<Light> light = erhe::scene::get_light(node.get());
     ASSERT_TRUE(light.operator bool());
 
     // The source file authors the temperature as `erhe:Light:temperature`;
@@ -286,7 +312,7 @@ TEST_F(Authored_round_trip, erhe_only_property_survives_as_custom_attribute)
     using erhe::scene::Light;
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "lamp");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<Light> light = erhe::scene::get_attachment<Light>(node.get());
+    const std::shared_ptr<Light> light = erhe::scene::get_light(node.get());
     ASSERT_TRUE(light.operator bool());
 
     EXPECT_EQ(light->get_value_source(Light::range_property.get()), erhe::property::Value_source::local);

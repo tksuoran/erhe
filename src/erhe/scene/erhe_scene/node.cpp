@@ -838,4 +838,13 @@ auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)-> unsigned
     return mask;
 }
 
+void set_prim_parent(const std::shared_ptr<Xformable>& prim, const std::shared_ptr<erhe::Hierarchy>& parent)
+{
+    ERHE_VERIFY(prim);
+    // The qualified call to the two-argument overload: the one-argument
+    // Hierarchy::set_parent forwards through the virtual, which lands back
+    // in Xformable's world-preserving override.
+    prim->Hierarchy::set_parent(parent, std::numeric_limits<std::size_t>::max());
+}
+
 } // namespace erhe::scene

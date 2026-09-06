@@ -124,9 +124,12 @@ const Property<float> Camera::shadow_range_property = Property<float>::register_
     "shadow_range", c_owner, Property_metadata{.default_value = 22.0f, .inherits = true, .flags = c_native, .ui = log_slider(1.0f, 1000.0f, "Shadow Range", "Radius of the bounding sphere the directional shadow fit covers around the camera")}
 );
 
-Camera::Camera()                         = default;
-Camera::Camera(const Camera&)            = default;
-Camera::~Camera() noexcept               = default;
+Camera::Camera()           = default;
+Camera::~Camera() noexcept = default;
+
+// See Xform: the transform level owns children and a scene host, so a plain
+// copy is not a clone; Camera(src, for_clone) is the clone path.
+Camera::Camera(const Camera&) { ERHE_FATAL("TODO"); }
 
 Camera::Camera(const std::string_view name)
     : Item{name}
@@ -194,8 +197,12 @@ void Camera::handle_item_host_update(Item_host* const old_item_host, Item_host* 
 {
     const auto shared_this = std::static_pointer_cast<Camera>(shared_from_this()); // keep alive
 
-    Scene_host* old_scene_host = static_cast<Scene_host*>(old_item_host);
-    Scene_host* new_scene_host = static_cast<Scene_host*>(new_item_host);
+    // The node registration first: the camera list below holds a camera the
+    // scene already knows as a node.
+    Xformable::handle_item_host_update(old_item_host, new_item_host);
+
+    Scene_host* old_scene_host = dynamic_cast<Scene_host*>(old_item_host);
+    Scene_host* new_scene_host = dynamic_cast<Scene_host*>(new_item_host);
 
     if (old_scene_host != nullptr) {
         old_scene_host->unregister_camera(shared_this);
@@ -213,13 +220,11 @@ auto Camera::projection_transforms(
 ) const -> Camera_projection_transforms
 {
     const auto clip_from_node = m_projection.clip_from_node_transform(viewport, reverse_depth, depth_range, conventions);
-    const Node* node = get_node();
-    ERHE_VERIFY(node != nullptr);
     return Camera_projection_transforms{
         .clip_from_camera = clip_from_node,
         .clip_from_world = Transform{
-            clip_from_node.get_matrix() * node->node_from_world(),
-            node->world_from_node()     * clip_from_node.get_inverse_matrix()
+            clip_from_node.get_matrix()  * Xformable::node_from_world(),
+            Xformable::world_from_node() * clip_from_node.get_inverse_matrix()
         }
     };
 }
@@ -232,6 +237,34 @@ auto Camera::projection() const -> const Projection*
 auto Camera::get_projection_scale() const -> float
 {
     return m_projection.get_scale();
+}
+
+auto get_camera(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Camera>
+{
+    std::shared_ptr<Camera> camera = std::dynamic_pointer_cast<Camera>(item);
+    if (camera) {
+        return camera;
+    }
+    const erhe::Hierarchy* hierarchy = dynamic_cast<const erhe::Hierarchy*>(item.get());
+    return get_camera(hierarchy);
+}
+
+auto get_camera(const erhe::Hierarchy* item) -> std::shared_ptr<Camera>
+{
+    if (item == nullptr) {
+        return {};
+    }
+    const Camera* camera = dynamic_cast<const Camera*>(item);
+    if (camera != nullptr) {
+        return std::static_pointer_cast<Camera>(const_cast<Camera*>(camera)->shared_from_this());
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        std::shared_ptr<Camera> child_camera = std::dynamic_pointer_cast<Camera>(child);
+        if (child_camera) {
+            return child_camera;
+        }
+    }
+    return {};
 }
 
 } // namespace erhe::scene

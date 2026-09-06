@@ -251,11 +251,8 @@ private:
 [[nodiscard]] auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>;
 [[nodiscard]] auto get_mesh(const erhe::Hierarchy* item) -> std::shared_ptr<Mesh>;
 
-// Make `mesh` a child prim of `parent` (a null parent detaches it), keeping
-// the mesh's LOCAL transform. Xformable::set_parent preserves the WORLD
-// transform instead, which would give a mesh created at the origin a local
-// transform that cancels its new parent's; a mesh that carries no transform
-// of its own belongs at its parent's place.
+// set_prim_parent (node.hpp) for a mesh: the name this call site family
+// already spells.
 void set_mesh_parent(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<erhe::Hierarchy>& parent);
 
 // Every Mesh child of a prim, in child order. Takes a callback and allocates

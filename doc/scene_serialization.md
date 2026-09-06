@@ -39,20 +39,28 @@ JSON, erhe state attaches at three levels:
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
-A glTF node with a `mesh` is an `erhe::scene::Mesh` prim
+A glTF node with a `mesh`, a `camera` or a `KHR_lights_punctual` light IS
+that prim - an `erhe::scene::Mesh`, `Camera` or `Light`
 (`usd-compatibility-plan.md` C5): the glTF node's name, transform, children
-and remaining attachments are the mesh prim's, and the writer inverts it -
-a `Mesh` prim is written as one glTF node with `mesh` set, a `Mesh` child of
-another prim as a child node of its own. The `ERHE_node` payload of such a
-node carries both halves, `flags` / `properties` for the prim and
-`mesh_flags` / `mesh_properties` for its mesh state.
+and remaining attachments are the prim's, and the writer inverts it - such a
+prim is written as one glTF node with `mesh` / `camera` / the light
+extension set, and a `Mesh`, `Camera` or `Light` child of another prim as a
+child node of its own. A node that carries two of the three is the prim of
+the first in the order mesh > camera > light, and the others become its
+child prims with identity transforms, which is the form the writer then
+round-trips. The `ERHE_node` payload of a mesh node carries both halves,
+`flags` / `properties` for the prim and `mesh_flags` / `mesh_properties` for
+its mesh state; the `ERHE_light` payload of a light node is the light prim's
+own. The glTF `mesh` and `camera` entries carry no `uid`: such a prim's
+identity is its node entry.
 
 A prim of a class that carries no transform - an `erhe::Scope`, or the
 `erhe::Typed` a USD `typeName` erhe has no class for becomes - is written as
 a glTF node with the identity transform whose `ERHE_node` extension names
 its `prim_class` (and, for a `Typed`, its `prim_type_name`); the reader
-creates that class and reads no transform for it. A node with neither a
-`mesh` nor the field is an `Xform`, the class every other glTF node has.
+creates that class and reads no transform for it. A node with none of a
+`mesh`, a `camera`, a light or the field is an `Xform`, the class every
+other glTF node has.
 
 Cross-references between payloads use glTF indices within the same asset
 (node index, material index, mesh index). Item flags serialize as name lists

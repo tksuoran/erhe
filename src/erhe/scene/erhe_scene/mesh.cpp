@@ -645,11 +645,7 @@ auto get_mesh(const erhe::Hierarchy* item) -> std::shared_ptr<Mesh>
 
 void set_mesh_parent(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<erhe::Hierarchy>& parent)
 {
-    ERHE_VERIFY(mesh);
-    // The qualified call to the two-argument overload: the one-argument
-    // Hierarchy::set_parent forwards through the virtual, which lands back
-    // in Xformable's world-preserving override.
-    mesh->Hierarchy::set_parent(parent, std::numeric_limits<std::size_t>::max());
+    set_prim_parent(mesh, parent);
 }
 
 void for_each_mesh_child(const erhe::Hierarchy& item, const std::function<void(const std::shared_ptr<Mesh>&)>& callback)

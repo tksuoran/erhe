@@ -157,9 +157,12 @@ auto Light::get_clip_from_texture(const erhe::math::Depth_range depth_range, con
     }
 }
 
-Light::Light(const Light&)            = default;
-Light& Light::operator=(const Light&) = default;
-Light::~Light() noexcept              = default;
+Light::~Light() noexcept = default;
+
+// See Xform: the transform level owns children and a scene host, so a plain
+// copy is not a clone; Light(src, for_clone) is the clone path.
+Light::Light(const Light&) { ERHE_FATAL("TODO"); }
+Light& Light::operator=(const Light&) { ERHE_FATAL("TODO"); }
 
 Light::Light(const std::string_view name)
     : Item{name}
@@ -230,9 +233,7 @@ void Light::set_luminous_flux(const float lumens)
 
 auto Light::get_light_frame() const -> Light_frame
 {
-    const Node* const node = get_node();
-    ERHE_VERIFY(node != nullptr);
-    const glm::mat4 world_from_node = node->world_from_node();
+    const glm::mat4 world_from_node = Xformable::world_from_node();
 
     // Node scale participates here: it is part of how the node axes end up
     // oriented in world space (non-uniform scale reorients them, negative scale
@@ -279,8 +280,12 @@ void Light::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::
 {
     const auto shared_this = std::static_pointer_cast<Light>(shared_from_this()); // keep alive
 
-    Scene_host* old_scene_host = static_cast<Scene_host*>(old_item_host);
-    Scene_host* new_scene_host = static_cast<Scene_host*>(new_item_host);
+    // The node registration first: the light layer below holds a light the
+    // scene already knows as a node.
+    Xformable::handle_item_host_update(old_item_host, new_item_host);
+
+    Scene_host* old_scene_host = dynamic_cast<Scene_host*>(old_item_host);
+    Scene_host* new_scene_host = dynamic_cast<Scene_host*>(new_item_host);
 
     if (old_scene_host) {
         old_scene_host->unregister_light(shared_this);
@@ -578,6 +583,34 @@ auto Light::point_light_projection_transforms(const Light_projection_parameters&
         .projection              = light_projection,
         .world_from_light_camera = Trs_transform{light_frame.world_from_light, light_frame.light_from_world}
     };
+}
+
+auto get_light(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Light>
+{
+    std::shared_ptr<Light> light = std::dynamic_pointer_cast<Light>(item);
+    if (light) {
+        return light;
+    }
+    const erhe::Hierarchy* hierarchy = dynamic_cast<const erhe::Hierarchy*>(item.get());
+    return get_light(hierarchy);
+}
+
+auto get_light(const erhe::Hierarchy* item) -> std::shared_ptr<Light>
+{
+    if (item == nullptr) {
+        return {};
+    }
+    const Light* light = dynamic_cast<const Light*>(item);
+    if (light != nullptr) {
+        return std::static_pointer_cast<Light>(const_cast<Light*>(light)->shared_from_this());
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        std::shared_ptr<Light> child_light = std::dynamic_pointer_cast<Light>(child);
+        if (child_light) {
+            return child_light;
+        }
+    }
+    return {};
 }
 
 } // namespace erhe::scene

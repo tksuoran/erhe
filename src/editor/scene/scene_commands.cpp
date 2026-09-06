@@ -532,8 +532,7 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     // defaults). Added before the scene is registered / has a viewport, so no
     // other part can observe the scene camera-less; not routed through the
     // Operation_stack because the scene creation itself is not undoable.
-    std::shared_ptr<erhe::scene::Node>   camera_node = std::make_shared<erhe::scene::Xform>("Camera");
-    std::shared_ptr<erhe::scene::Camera> camera      = std::make_shared<erhe::scene::Camera>("Camera");
+    std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>("Camera");
     camera->set_fov_y          (glm::radians(35.0f));
     camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
     camera->set_z_near         (0.03f);
@@ -541,16 +540,15 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     camera->set_exposure(1.0f);
     camera->set_shadow_range(22.0f);
-    camera_node->attach(camera);
-    camera_node->set_parent_from_node(
+    camera->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{0.0f, 1.6f,  3.0f}, // eye
             glm::vec3{0.0f, 0.25f, 0.0f}, // center
             glm::vec3{0.0f, 1.0f,  0.0f}  // up
         )
     );
-    camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    camera_node->set_parent(scene_root->get_hosted_scene()->get_root_node());
+    camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    camera->set_parent(scene_root->get_hosted_scene()->get_root_node());
 
     scene_root->register_to_editor_scenes(*m_context.app_scenes);
 
@@ -619,26 +617,19 @@ auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared
         return {};
     }
 
-    auto new_node   = std::make_shared<erhe::scene::Xform>("new camera node");
+    // A Camera is a prim (doc/usd-compatibility-plan.md C5): it enters the
+    // scene as a child of `parent`, carrying its own transform.
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
-    new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     new_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(
-            Compound_operation::Parameters{
-                .operations = {
-                    std::make_shared<Item_insert_remove_operation>(
-                        Item_insert_remove_operation::Parameters{
-                            .context = m_context,
-                            .item    = new_node,
-                            .parent  = (parent != nullptr)
-                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Item_insert_remove_operation::Mode::insert
-                        }
-                    ),
-                    std::make_shared<Node_attach_operation>(new_camera, new_node)
-                }
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_camera,
+                .parent  = (parent != nullptr)
+                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                    : scene_root->get_hosted_scene()->get_root_node(),
+                .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );
@@ -836,27 +827,20 @@ auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_
         return {};
     }
 
-    auto new_node  = std::make_shared<erhe::scene::Xform>("new light node");
+    // A Light is a prim (doc/usd-compatibility-plan.md C5): it enters the
+    // scene as a child of `parent`, carrying its own transform.
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
-    new_node ->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     new_light->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     new_light->layer_id = scene_root->layers().light()->id;
     m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(
-            Compound_operation::Parameters{
-                .operations = {
-                    std::make_shared<Item_insert_remove_operation>(
-                        Item_insert_remove_operation::Parameters{
-                            .context = m_context,
-                            .item    = new_node,
-                            .parent  = (parent != nullptr)
-                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Item_insert_remove_operation::Mode::insert
-                        }
-                    ),
-                    std::make_shared<Node_attach_operation>(new_light, new_node)
-                }
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_light,
+                .parent  = (parent != nullptr)
+                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                    : scene_root->get_hosted_scene()->get_root_node(),
+                .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );
@@ -1039,30 +1023,44 @@ auto Scene_commands::create_new_joint(
 
 auto Scene_commands::attach_new_camera(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Camera>
 {
-    if (erhe::scene::get_attachment<erhe::scene::Camera>(&node)) {
-        log_scene->warn("Node '{}' already has a camera attachment", node.get_name());
-        return {};
-    }
+    // A Camera is a prim (doc/usd-compatibility-plan.md C5), so it enters the
+    // scene as a child of the node; a parent holds any number of them.
     auto camera = std::make_shared<erhe::scene::Camera>("new camera");
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(camera, node.shared_node_from_this()));
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = camera,
+                .parent  = node.shared_node_from_this(),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
     return camera;
 }
 
 auto Scene_commands::attach_new_light(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Light>
 {
-    if (erhe::scene::get_attachment<erhe::scene::Light>(&node)) {
-        log_scene->warn("Node '{}' already has a light attachment", node.get_name());
-        return {};
-    }
     Scene_root* scene_root = get_scene_root(&node);
     if (scene_root == nullptr) {
         return {};
     }
+    // A Light is a prim (doc/usd-compatibility-plan.md C5), so it enters the
+    // scene as a child of the node; a parent holds any number of them.
     auto light = std::make_shared<erhe::scene::Light>("new light");
     light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     light->layer_id = scene_root->layers().light()->id;
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(light, node.shared_node_from_this()));
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = light,
+                .parent  = node.shared_node_from_this(),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
     return light;
 }
 

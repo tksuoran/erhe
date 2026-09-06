@@ -148,6 +148,9 @@ private:
     // the refusing command) when no target scene exists at all.
     [[nodiscard]] auto resolve_scene_target(const char* command_name) -> bool;
 
+    // A Camera and a Light are prims (doc/usd-compatibility-plan.md C5), so
+    // each maker returns the prim it made; it carries its own transform and
+    // enters the scene as a child of the scene root.
     auto make_camera(
         std::string_view name,
         glm::vec3        position,
@@ -156,7 +159,7 @@ private:
         float            z_far,
         float            exposure,
         float            shadow_range
-    ) -> std::shared_ptr<erhe::scene::Node>;
+    ) -> std::shared_ptr<erhe::scene::Camera>;
 
     auto make_directional_light(
         std::string_view name,
@@ -164,7 +167,7 @@ private:
         glm::vec3        color,
         float            intensity,
         bool             cast_shadow
-    ) -> std::shared_ptr<erhe::scene::Node>;
+    ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_spot_light(
         std::string_view name,
@@ -174,7 +177,7 @@ private:
         float            intensity,
         glm::vec2        spot_cone_angle,
         bool             cast_shadow
-    ) -> std::shared_ptr<erhe::scene::Node>;
+    ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_point_light(
         std::string_view name,
@@ -182,7 +185,7 @@ private:
         glm::vec3        color,
         float            intensity,
         bool             cast_shadow
-    ) -> std::shared_ptr<erhe::scene::Node>;
+    ) -> std::shared_ptr<erhe::scene::Light>;
 
     auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
 

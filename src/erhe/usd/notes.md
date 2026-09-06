@@ -65,9 +65,9 @@ translation units.
 - The erhe class of a prim is the class its `typeName` names
   (`doc/usd-compatibility-plan.md` C5, the object-model table of
   `doc/usd_compatibility.md`): a `Mesh` prim becomes an
-  `erhe::scene::Mesh` carrying its own transform, `Xform` and the prim types
-  whose content the conversion attaches to a node - `Camera` and the UsdLux
-  types - become an `erhe::scene::Xform`, `Scope` becomes an `erhe::Scope`, and
+  `erhe::scene::Mesh`, a `Camera` prim an `erhe::scene::Camera` and a UsdLux
+  prim an `erhe::scene::Light`, each carrying its own transform; `Xform`
+  becomes an `erhe::scene::Xform`, `Scope` becomes an `erhe::Scope`, and
   every other `typeName`, a typeless `def` included, becomes an
   `erhe::Typed` carrying that token. The `typeName` comes from the composed
   prim: a generic `Model` prim carries the authored token, every typed prim
@@ -125,10 +125,10 @@ translation units.
   property value: `custom float erhe:Light:temperature = 5000`. USD reserves
   `.` for the property separator of a path, so the erhe qualified name
   `Owner.name` (D30) is spelled `erhe:Owner:name`, and `erhe:name` names a
-  property of the item's own class. The name is resolved against the
-  attachment the prim's type made and then against the node carrying it (a
-  `Material` prim resolves against the material alone), each of them both as
-  a holder addresses the name and as that class's own property. The USDA
+  property of the item's own class. The name is resolved against the prim
+  the `typeName` made (a `Material` prim resolves against the material
+  alone), both as a holder addresses the name and as that class's own
+  property. The USDA
   literal is stripped of brackets, commas and quotes and parsed with the
   property type's `from_string` (D16). A name that resolves to no property,
   and a value that fails to parse or to validate, are skipped with one
@@ -153,9 +153,11 @@ because the same spelling rule decides what an item is called on a stage.
   `erhe::Scope` writes a `Scope` prim, an `erhe::Typed` writes
   `def <token> "name"` - a typeless `def` when the token is empty - with its
   children and none of its attributes, and a transformable prim writes the
-  prim its own class or its attachment types name: an `erhe::scene::Mesh`
-  writes a `Mesh` prim with its own `xformOp`s, and an `Xform` writes
-  `Xform`, `Camera`, `DistantLight` or `SphereLight`. That is what the importer inverts, so a file round-trips
+  prim its own class names, each with its own `xformOp`s: an
+  `erhe::scene::Mesh` writes `Mesh`, an `erhe::scene::Camera` writes
+  `Camera`, an `erhe::scene::Light` writes the UsdLux type its `light_type`
+  names (`DistantLight` or `SphereLight`), and an `erhe::scene::Xform`
+  writes `Xform`. That is what the importer inverts, so a file round-trips
   without gaining a level. A prim of a class that carries no transform gets
   none, and the transform that reached it composes with its children. A mesh
   with one primitive binds its material directly; several primitives become

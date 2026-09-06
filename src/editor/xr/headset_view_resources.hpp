@@ -51,7 +51,6 @@ private:
     erhe::graphics::Texture*                     m_color_texture        {nullptr};
     erhe::graphics::Texture*                     m_depth_stencil_texture{nullptr};
     std::shared_ptr<erhe::graphics::Render_pass> m_render_pass;
-    std::shared_ptr<erhe::scene::Node>           m_node;
     std::shared_ptr<erhe::scene::Camera>         m_camera;
     bool                                         m_is_valid{false};
 };

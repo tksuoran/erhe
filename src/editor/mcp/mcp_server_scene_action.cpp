@@ -2181,12 +2181,14 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
     const float       range       = args.value("range", (type == erhe::scene::Light_type::directional) ? 0.0f : 25.0f);
     const std::string name        = args.value("name", "MCP light");
 
+    // A Light is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // own transform, so the light IS the node the caller addresses.
     std::shared_ptr<erhe::scene::Node>  node;
     std::shared_ptr<erhe::scene::Light> light;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
-        node  = std::make_shared<erhe::scene::Xform>(name);
         light = std::make_shared<erhe::scene::Light>(name);
+        node  = light;
         light->set_light_type(type);
         light->set_color(color);
         light->set_intensity(intensity);
@@ -2196,8 +2198,6 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
         if (args.contains("inner_spot_angle")) { light->set_inner_spot_angle(args.value("inner_spot_angle", light->get_inner_spot_angle())); }
         if (args.contains("outer_spot_angle")) { light->set_outer_spot_angle(args.value("outer_spot_angle", light->get_outer_spot_angle())); }
         light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::show_debug_visualizations);
-        node->attach(light);
-        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         // The node is attached to the scene via the queued insert operation below;
         // set the world transform now (preserved by Node::set_parent).
         node->set_world_from_node(erhe::math::create_translation<float>(position));

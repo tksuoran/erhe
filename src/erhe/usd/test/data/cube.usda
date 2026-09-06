@@ -56,12 +56,16 @@ def Xform "root"
         float focalLength = 50
         float horizontalAperture = 36
         float verticalAperture = 24
+        double3 xformOp:translate = (0, 1, 7)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 
     def DistantLight "sun"
     {
         color3f inputs:color = (1, 0.9, 0.8)
         float inputs:intensity = 3
+        double3 xformOp:translate = (3, 4, 5)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 
     def Scope "materials"

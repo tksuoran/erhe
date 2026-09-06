@@ -84,7 +84,7 @@ TEST(Node_computed, world_transform_components_follow_the_propagation_pass)
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
     child->set_parent(parent);
-    child->attach(light);
+    erhe::scene::set_prim_parent(light, child);
 
     EXPECT_TRUE(Node::world_translation_property.get().is_read_only());
     EXPECT_EQ(child->get_value_source(Node::world_translation_property.get()), Value_source::computed);
@@ -135,7 +135,9 @@ TEST(Node_computed, child_count_follows_the_tree)
     auto b      = std::make_shared<Xform>("B");
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
-    parent->attach(light);
+    // The light is a prim of its own, kept OUT of `parent` so it does not
+    // count towards the child count the expression below reads.
+    erhe::scene::set_prim_parent(light, host.scene.get_root_node());
     EXPECT_EQ(parent->get_value(erhe::Hierarchy::child_count_property), 0);
     EXPECT_EQ(parent->get_value_source(erhe::Hierarchy::child_count_property.get()), Value_source::computed);
 
@@ -175,7 +177,7 @@ TEST(Node_computed, mesh_world_bounds_follow_the_node_and_the_primitives)
     auto light = std::make_shared<erhe::scene::Light>("Lamp");
     node->set_parent(host.scene.get_root_node());
     erhe::scene::set_mesh_parent(mesh, node);
-    node->attach(light);
+    erhe::scene::set_prim_parent(light, node);
 
     // No primitives: an invalid box reads as zero.
     EXPECT_TRUE(approx(mesh->get_value(Mesh::world_bounds_min_property), glm::vec3{0.0f}));

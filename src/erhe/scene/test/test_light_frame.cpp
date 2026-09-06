@@ -27,24 +27,22 @@ class Light_test_scene
 public:
     Light_test_scene(const erhe::scene::Light_type light_type, const glm::mat4& world_from_light_node)
     {
-        camera_node = std::make_shared<erhe::scene::Xform>("camera node");
-        camera      = std::make_shared<erhe::scene::Camera>("camera");
+        // A Camera and a Light are prims (doc/usd-compatibility-plan.md C5):
+        // each carries its own transform.
+        camera = std::make_shared<erhe::scene::Camera>("camera");
         camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
         camera->set_z_near(0.1f);
         camera->set_z_far (100.0f);
         camera->set_fov_y (glm::pi<float>() / 3.0f);
         camera->set_shadow_range(20.0f);
-        camera_node->attach(camera);
-        camera_node->set_parent_from_node(
+        camera->set_parent_from_node(
             glm::inverse(glm::lookAt(glm::vec3{3.0f, 4.0f, 5.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}))
         );
 
-        light_node = std::make_shared<erhe::scene::Xform>("light node");
-        light      = std::make_shared<erhe::scene::Light>("light");
+        light = std::make_shared<erhe::scene::Light>("light");
         light->set_light_type(light_type);
         light->set_range(30.0f);
-        light_node->attach(light);
-        light_node->set_parent_from_node(world_from_light_node);
+        light->set_parent_from_node(world_from_light_node);
     }
 
     [[nodiscard]] auto make_parameters(const erhe::scene::Shadow_frustum_fit_settings* fit_settings) const -> erhe::scene::Light_projection_parameters
@@ -59,9 +57,7 @@ public:
         return parameters;
     }
 
-    std::shared_ptr<erhe::scene::Node>   camera_node;
     std::shared_ptr<erhe::scene::Camera> camera;
-    std::shared_ptr<erhe::scene::Node>   light_node;
     std::shared_ptr<erhe::scene::Light>  light;
 };
 

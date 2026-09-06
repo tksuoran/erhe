@@ -116,15 +116,14 @@ void Brush_preview::make_preview_scene()
         content_library->materials->add(m_headlight_material);
     }
 
-    m_camera_node = std::make_shared<erhe::scene::Xform>("Camera node");
+    // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // own transform, so the preview needs no node to hold it.
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
-    //m_camera_node->enable_flag_bits(erhe::Item_flags::content);
     //m_camera->enable_flag_bits(erhe::Item_flags::content);
     m_camera->set_fov_y (0.3f);
     m_camera->set_z_near(4.0f);
     m_camera->set_z_far (12.0f);
-    m_camera_node->attach(m_camera);
-    m_camera_node->set_parent(paremt);
+    m_camera->set_parent(paremt);
 
     m_scene_root_shared->get_scene().ambient_light = glm::vec4{0.1f, 0.1f, 0.1f, 0.0f};
     
@@ -132,11 +131,8 @@ void Brush_preview::make_preview_scene()
     m_key_light->enable_flag_bits(erhe::Item_flags::content);
     m_key_light->layer_id  = m_scene_root_shared->layers().light()->id;
     m_key_light->set_intensity(2.0f);
-    m_key_light_node = std::make_shared<erhe::scene::Xform>("Key Light Node");
-    m_key_light_node->enable_flag_bits(erhe::Item_flags::content);
-    m_key_light_node->attach(m_key_light);
-    m_key_light_node->set_parent(paremt);
-    m_key_light_node->set_parent_from_node(
+    m_key_light->set_parent(paremt);
+    m_key_light->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{8.0f, 8.0f, 8.0f},  // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
@@ -148,11 +144,8 @@ void Brush_preview::make_preview_scene()
     m_fill_light->enable_flag_bits(erhe::Item_flags::content);
     m_fill_light->layer_id  = m_scene_root_shared->layers().light()->id;
     m_fill_light->set_intensity(0.5f);
-    m_fill_light_node = std::make_shared<erhe::scene::Xform>("Fill Light Node");
-    m_fill_light_node->enable_flag_bits(erhe::Item_flags::content);
-    m_fill_light_node->attach(m_key_light);
-    m_fill_light_node->set_parent(paremt);
-    m_fill_light_node->set_parent_from_node(
+    m_fill_light->set_parent(paremt);
+    m_fill_light->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{-8.0f, 8.0f, 8.0f},  // eye
             glm::vec3{ 0.0f, 0.0f, 0.0f},  // center
@@ -303,7 +296,7 @@ void Brush_preview::render_preview(
     const erhe::scene::Trs_transform node_transform{orientation};
     m_node->set_parent_from_node(node_transform);
 
-    m_camera_node->set_parent_from_node(
+    m_camera->set_parent_from_node(
         erhe::math::create_look_at(
             glm::vec3{0.0f, 4.0f, 8.0f},  // eye
             glm::vec3{0.0f, 0.0f, 0.0f},  // center
@@ -312,7 +305,7 @@ void Brush_preview::render_preview(
     );
 
     // Frame bounding volume into camera view
-    glm::vec3   camera_position      = glm::vec3{m_camera_node->position_in_world()};
+    glm::vec3   camera_position      = glm::vec3{m_camera->position_in_world()};
     glm::vec3   direction            = target_position - camera_position;
     glm::vec3   direction_normalized = glm::normalize(target_position - camera_position);
     const       erhe::scene::Projection::Fov_sides fov_sides = m_camera->projection()->get_fov_sides(viewport);
@@ -325,7 +318,7 @@ void Brush_preview::render_preview(
     const float     fit_distance        = size / tan_fov_side;
     const glm::vec3 new_position        = target_position - fit_distance * direction_normalized;
     const glm::mat4 new_world_from_node = erhe::math::create_look_at(new_position, target_position, glm::vec3{0.0f, 1.0f, 0.0});
-    m_camera_node->set_world_from_node(new_world_from_node);
+    m_camera->set_world_from_node(new_world_from_node);
 
     // Light setup is per-call state (the preview scene is shared by brush
     // thumbnails and headlight-shaded graph node previews), so both modes
@@ -335,11 +328,11 @@ void Brush_preview::render_preview(
         // then falls off with dot(N, V) (the N.V-dimmed look).
         m_key_light->set_intensity(2.5f);
         m_fill_light->set_intensity(0.0f);
-        m_key_light_node->set_world_from_node(new_world_from_node);
+        m_key_light->set_world_from_node(new_world_from_node);
     } else {
         m_key_light->set_intensity(2.0f);
         m_fill_light->set_intensity(0.5f);
-        m_key_light_node->set_world_from_node(
+        m_key_light->set_world_from_node(
             erhe::math::create_look_at(
                 glm::vec3{8.0f, 8.0f, 8.0f},  // eye
                 glm::vec3{0.0f, 0.0f, 0.0f},  // center
@@ -349,9 +342,9 @@ void Brush_preview::render_preview(
     }
 
     //const glm::mat4 clip_from_node  = m_camera->projection()->get_projection_matrix(1.0f);
-    //const glm::mat4 clip_from_world = clip_from_node * m_camera_node->node_from_world();
+    //const glm::mat4 clip_from_world = clip_from_node * m_camera->node_from_world();
     //const glm::mat4 node_from_clip  = inverse(clip_from_node);
-    //const glm::mat4 world_from_clip = m_camera_node->world_from_node() * node_from_clip;
+    //const glm::mat4 world_from_clip = m_camera->world_from_node() * node_from_clip;
     //
     // TODO Compute good near and far planes
     m_camera->set_z_near(0.1f);

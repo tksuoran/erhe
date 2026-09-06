@@ -127,11 +127,12 @@ auto Scene_builder::get_content_library() const -> std::shared_ptr<Content_libra
     return m_content_library;
 }
 
-auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at, float z_near, float z_far, float exposure, float shadow_range) -> std::shared_ptr<erhe::scene::Node>
+auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_at, float z_near, float z_far, float exposure, float shadow_range) -> std::shared_ptr<erhe::scene::Camera>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    std::shared_ptr<erhe::scene::Node>   node   = std::make_shared<erhe::scene::Xform>(name);
+    // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // own transform, so no node holds it.
     std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(name);
     camera->set_fov_y          (glm::radians(35.0f));
     camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -140,17 +141,15 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
     camera->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     camera->set_exposure(exposure);
     camera->set_shadow_range(shadow_range);
-    node->attach(camera);
 
     const mat4 m = erhe::math::create_look_at(
         position, // eye
         look_at,  // center
         vec3{0.0f, 1.0f,  0.0f}  // up
     );
-    node->set_parent_from_node(m);
-    node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    camera->set_parent_from_node(m);
 
-    return node;
+    return camera;
 }
 
 auto Scene_builder::resolve_scene_target(const char* command_name) -> bool
@@ -184,7 +183,7 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
     const float camera_distance  = args.camera_distance;
     const float camera_elevation = args.camera_elevation;
 
-    std::shared_ptr<erhe::scene::Node> camera_a_node = make_camera(
+    std::shared_ptr<erhe::scene::Camera> camera_a_node = make_camera(
         "Camera A",
         vec3{0.0f, camera_elevation, camera_distance},
         vec3{0.0f, 0.25f, 0.0f},
@@ -195,7 +194,7 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
     );
 
 #if defined(ERHE_ENABLE_SECOND_CAMERA)
-    std::shared_ptr<erhe::scene::Node> camera_b_node = make_camera(
+    std::shared_ptr<erhe::scene::Camera> camera_b_node = make_camera(
         "Camera B",
         vec3{-7.0f, 1.0f, 0.0f},
         vec3{ 0.0f, 0.5f, 0.0f},
@@ -241,13 +240,7 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
     // node together with the camera insertion.
     const bool create_default_viewport = !m_context.OpenXR && m_scene_config.imgui_window_scene_view;
     if (create_default_viewport) {
-        std::shared_ptr<erhe::scene::Camera> camera_a;
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : camera_a_node->get_attachments()) {
-            camera_a = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
-            if (camera_a) {
-                break;
-            }
-        }
+        const std::shared_ptr<erhe::scene::Camera>& camera_a = camera_a_node;
         ERHE_VERIFY(camera_a);
 
         operations.push_back(
@@ -1291,11 +1284,12 @@ auto Scene_builder::make_directional_light(
     const vec3             color,
     const float            intensity,
     const bool             cast_shadow
-) -> std::shared_ptr<erhe::scene::Node>
+) -> std::shared_ptr<erhe::scene::Light>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Xform>(name);
+    // A Light is a prim (doc/usd-compatibility-plan.md C5): it carries its
+    // own transform, so no node holds it.
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::directional);
     light->set_color(color);
@@ -1304,17 +1298,15 @@ auto Scene_builder::make_directional_light(
     light->set_cast_shadow(cast_shadow);
     light->layer_id    = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    node->attach          (light);
-    node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(
         position,                // eye
         vec3{0.0f, 0.0f, 0.0f},  // center
         vec3{0.0f, 1.0f, 0.0f}   // up
     );
-    node->set_parent_from_node(m);
+    light->set_parent_from_node(m);
 
-    return node;
+    return light;
 }
 
 auto Scene_builder::make_spot_light(
@@ -1325,11 +1317,10 @@ auto Scene_builder::make_spot_light(
     const float            intensity,
     const vec2             spot_cone_angle,
     const bool             cast_shadow
-) -> std::shared_ptr<erhe::scene::Node>
+) -> std::shared_ptr<erhe::scene::Light>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Xform>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::spot);
     light->set_color(color);
@@ -1340,13 +1331,11 @@ auto Scene_builder::make_spot_light(
     light->set_cast_shadow(cast_shadow);
     light->layer_id         = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
-    node->attach          (light);
-    node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_look_at(position, target, vec3{0.0f, 0.0f, 1.0f});
-    node->set_parent_from_node(m);
+    light->set_parent_from_node(m);
 
-    return node;
+    return light;
 }
 
 auto Scene_builder::make_point_light(
@@ -1355,11 +1344,10 @@ auto Scene_builder::make_point_light(
     const vec3             color,
     const float            intensity,
     const bool             cast_shadow
-) -> std::shared_ptr<erhe::scene::Node>
+) -> std::shared_ptr<erhe::scene::Light>
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Xform>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::point);
     light->set_color(color);
@@ -1368,13 +1356,11 @@ auto Scene_builder::make_point_light(
     light->set_cast_shadow(cast_shadow);
     light->layer_id    = m_scene_root->layers().light()->id;
     light->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
-    node->attach          (light);
-    node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
     const mat4 m = erhe::math::create_translation<float>(position);
-    node->set_parent_from_node(m);
+    light->set_parent_from_node(m);
 
-    return node;
+    return light;
 }
 
 auto Scene_builder::add_lights(const Add_lights_args& args) -> bool

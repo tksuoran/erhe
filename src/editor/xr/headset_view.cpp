@@ -723,7 +723,7 @@ void Headset_view::unregister_quad_view(Quad_view* quad_view)
 
 void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buffer)
 {
-    if ((m_context.id_renderer == nullptr) || !m_pointer_pick_camera || !m_pointer_pick_node) {
+    if ((m_context.id_renderer == nullptr) || !m_pointer_pick_camera) {
         return;
     }
     const std::optional<glm::mat4> world_from_control = get_world_from_control();
@@ -738,7 +738,7 @@ void Headset_view::update_id_render(erhe::graphics::Command_buffer& command_buff
     // already looks down -Z along the control ray (see
     // get_control_ray_direction_in_world), which matches the camera's own
     // -Z view direction, so it can be used directly as the node transform.
-    m_pointer_pick_node->set_parent_from_node(world_from_control.value());
+    m_pointer_pick_camera->set_parent_from_node(world_from_control.value());
 
     // Node world transforms (incl. the pick camera) and the joint matrices
     // the ID skinning variant samples must be current before the pass runs.
@@ -1585,17 +1585,13 @@ void Headset_view::setup_root_camera()
     );
 
     m_root_node = get_scene_root()->get_scene().get_root_node();
-    m_headset_node = std::make_shared<erhe::scene::Xform>("Headset Root Node");
-    m_headset_node->set_parent(m_root_node);
-    m_headset_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-
     m_root_camera = std::make_shared<erhe::scene::Camera>("Root Camera");
+    m_root_camera->set_parent(m_root_node);
     m_root_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     m_root_camera->set_fov_y          (glm::radians(35.0f));
     m_root_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
     m_root_camera->set_z_near         (0.03f);
     m_root_camera->set_z_far          (200.0f);
-    m_headset_node->attach(m_root_camera);
 
     setup_pointer_pick_camera();
 }
@@ -1608,15 +1604,13 @@ void Headset_view::setup_pointer_pick_camera()
     // (-Z). A narrow vertical fov concentrates angular resolution around the
     // ray so the centre texel samples the surface the controller points at.
     // No content flag and hidden: it must never be composited or listed.
-    m_pointer_pick_node   = std::make_shared<erhe::scene::Xform>("Pointer Pick Camera Node");
     m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
-    m_pointer_pick_node->hide();
+    m_pointer_pick_camera->hide();
     m_pointer_pick_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
     m_pointer_pick_camera->set_fov_y          (glm::radians(10.0f));
     m_pointer_pick_camera->set_z_near         (0.03f);
     m_pointer_pick_camera->set_z_far          (200.0f);
-    m_pointer_pick_node->attach(m_pointer_pick_camera);
-    m_pointer_pick_node->set_parent(m_root_node);
+    m_pointer_pick_camera->set_parent(m_root_node);
 }
 
 void Headset_view::update_camera_node()
@@ -1633,8 +1627,8 @@ void Headset_view::update_camera_node()
     const glm::mat4 m_orientation   = glm::mat4_cast(orientation);
     const glm::mat4 m_translation   = glm::translate(glm::mat4{1}, position + get_camera_offset());
     const glm::mat4 world_from_view = m_translation * m_orientation;
-    m_headset_node->set_world_from_node(world_from_view);
-    m_headset_node->update_transform(0); // TODO
+    m_root_camera->set_world_from_node(world_from_view);
+    m_root_camera->update_transform(0); // TODO
 
     // Drive the root camera's projection from a frustum that bounds both stereo
     // eyes, so the shadow fit (Shadow_render_node, run during the rendergraph
@@ -1960,14 +1954,14 @@ auto Headset_view::update_actions() -> bool
     // scene.create command, and a saved scene arrives via scene.load_scene -
     // both run after init (from the startup script or a file dialog), so the
     // first ticks can execute before on_scene_created() -> attach_to_scene()
-    // has built m_headset_node via setup_root_camera(). update_camera_node()
+    // has built m_root_camera via setup_root_camera(). update_camera_node()
     // and the scene-relative pointer/action handling below require it, so idle
     // until the headset has been attached to a scene. Returning false also
     // keeps m_update_actions_ok false, so render_headset() skips the frame too.
     // Mirrors Scene_view::update_transforms()'s no-scene-root guard. The XR
     // session stays healthy because poll_events()/begin_frame()/xrSyncActions
     // have already run for this frame above.
-    if (m_headset_node == nullptr) {
+    if (m_root_camera == nullptr) {
         return false;
     }
 

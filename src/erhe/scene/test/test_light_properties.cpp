@@ -99,10 +99,8 @@ TEST(Light_properties, typed_and_untyped_access)
 TEST(Light_properties, every_change_re_resolves_the_light_set)
 {
     Counting_scene_host host;
-    auto node  = std::make_shared<erhe::scene::Xform>("n");
     auto light = std::make_shared<Light>("l");
-    node->attach(light);
-    node->set_parent(host.scene.get_root_node());
+    light->set_parent(host.scene.get_root_node());
     host.light_changed_count = 0;
 
     light->set_intensity(2.0f);
@@ -133,10 +131,8 @@ TEST(Light_properties, every_change_re_resolves_the_light_set)
 TEST(Light_properties, flux_and_blackbody_are_computed_over_the_stored_values)
 {
     Counting_scene_host host;
-    auto node  = std::make_shared<erhe::scene::Xform>("n");
     auto light = std::make_shared<Light>("l");
-    node->attach(light);
-    node->set_parent(host.scene.get_root_node());
+    light->set_parent(host.scene.get_root_node());
     light->set_light_type(Light_type::point);
     light->set_intensity(2.0f);
     host.light_changed_count = 0;

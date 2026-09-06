@@ -169,11 +169,11 @@ auto Debug_visualizations::get_selected_camera(const Render_context& render_cont
             if (node->get_scene() != scene) {
                 continue;
             }
-            for (const auto& attachment : node->get_attachments()) {
-                const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
-                if (camera) {
-                    return camera;
-                }
+            // A Camera is a prim (doc/usd-compatibility-plan.md C5): the
+            // selected item itself, or a camera child of it.
+            const std::shared_ptr<erhe::scene::Camera> camera = erhe::scene::get_camera(node.get());
+            if (camera) {
+                return camera;
             }
         }
     }
@@ -1437,13 +1437,8 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                     mesh_visualization(context, mesh.get());
                 }
             }
-            for (const auto& attachment : node->get_attachments()) {
-                //const auto skin = as_skin(attachment);
-                //if (skin) {
-                //    skin_visualization(context, skin.get());
-                //}
-
-                const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(attachment);
+            {
+                const auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(node);
                 if (
                     camera &&
                     (viewport_config.debug_visualizations.camera == erhe::renderer::Visualization_mode::selected)
