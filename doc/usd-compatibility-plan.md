@@ -224,6 +224,14 @@ model.
 Verification: `erhe_usd_tests` round-trips a prim with a three-op stack
 byte for byte; a moved prim's edit lands in the designated op.
 
+### X1 References as prefab instances (M)
+
+What: an imported stage's `references` arcs that target a whole file
+become `Prefab_instance` carriers pointing at that file (imported through
+`erhe::usd` into the prefab library, which today parses only glTF), so
+the erhe scene keeps the instance structure instead of a flattened copy.
+LightUSD's `ArcOrigin` tagging says which prims came from which arc.
+
 ### E4 Editor state in a USD file (M; completes G2)
 
 What: the editor state a USD-backed scene does not carry yet
@@ -253,14 +261,6 @@ What: erhe-only material fields that `UsdPreviewSurface` cannot carry
 as an `OpenPBRSurface` / MaterialX network when
 `LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
 both are present.
-
-### X1 References as prefab instances (M)
-
-What: an imported stage's `references` arcs that target a whole file
-become `Prefab_instance` carriers pointing at that file (imported through
-`erhe::usd` into the prefab library, which today parses only glTF), so
-the erhe scene keeps the instance structure instead of a flattened copy.
-LightUSD's `ArcOrigin` tagging says which prims came from which arc.
 
 ### X2 Editable instances with sparse overrides (L, after X1)
 
@@ -305,12 +305,14 @@ Each step independently landable, in this order:
 
 1. M6 value types M8 needs (`double`, `glm::mat4`), then M7 style
    chains, then M8 xformOp stacks
-2. E4 editor state in a USD file (completes G2)
-3. X1 references as prefab instances, then X2 editable instances (G3)
+2. X1 references as prefab instances
+3. E4 editor state in a USD file (completes G2)
+4. X2 editable instances (G3)
 
 The rest of M6 (asset paths, arrays) lands when the step that needs it
-is next (an importer hitting a missing type). E2 and X3 to X5 have no
-fixed place: each waits for its dependencies and is taken when wanted.
+is next (an importer hitting a missing type). E2 follows E4; X3 to X5
+have no fixed place: each waits for its dependencies and is taken when
+wanted.
 
 Dependencies: M8 needs M6's `double` and `glm::mat4`; X2 needs X1; X3
 needs M7; M7, E4, X1, E2, X4 and X5 need nothing that has not landed.
