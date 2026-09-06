@@ -9,10 +9,15 @@ Prefab_instance::Prefab_instance()
 {
 }
 
-Prefab_instance::Prefab_instance(const std::filesystem::path& source_path, const std::string& prefab_name)
+Prefab_instance::Prefab_instance(
+    const std::filesystem::path& source_path,
+    const std::string&           prefab_name,
+    const std::string&           prim_path
+)
     : Item                 {prefab_name}
     , m_prefab_source_path {source_path}
     , m_prefab_name        {prefab_name}
+    , m_prefab_prim_path   {prim_path}
 {
 }
 
@@ -20,6 +25,7 @@ Prefab_instance::Prefab_instance(const Prefab_instance& src, erhe::for_clone)
     : Item                 {src, erhe::for_clone{}}
     , m_prefab_source_path {src.m_prefab_source_path}
     , m_prefab_name        {src.m_prefab_name}
+    , m_prefab_prim_path   {src.m_prefab_prim_path}
 {
 }
 
@@ -35,6 +41,11 @@ auto Prefab_instance::get_prefab_source_path() const -> const std::filesystem::p
 auto Prefab_instance::get_prefab_name() const -> const std::string&
 {
     return m_prefab_name;
+}
+
+auto Prefab_instance::get_prefab_prim_path() const -> const std::string&
+{
+    return m_prefab_prim_path;
 }
 
 auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene::Node*

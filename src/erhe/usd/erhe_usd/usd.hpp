@@ -10,6 +10,7 @@
 #include <vector>
 
 namespace erhe {
+    class Item_base;
     class Typed;
 }
 namespace erhe::primitive {
@@ -79,6 +80,37 @@ public:
     double                       meters_per_unit{1.0};
 };
 
+// Which composition arc a Usd_reference came from. A payload is read as a
+// reference: erhe loads every arc when the stage is read and has no deferred
+// loading (doc/usd-compatibility-plan.md section 5).
+enum class Usd_reference_kind : unsigned int {
+    reference = 0,
+    payload   = 1
+};
+
+// One `references` or `payload` arc a prim authors. An empty `asset_path` is
+// an internal reference - a prim of the same layer - and an empty `prim_path`
+// names the target layer's default prim.
+class Usd_reference final
+{
+public:
+    std::string        asset_path;
+    std::string        prim_path;
+    Usd_reference_kind kind{Usd_reference_kind::reference};
+};
+
+// The composition arcs one prim authors, and the erhe prim they were authored
+// on: the prim is the carrier of the instances the arcs name, in the order the
+// prim's list-edited `references` and `payload` ops resolve to
+// (doc/usd-compatibility-plan.md X1).
+class Usd_prim_references final
+{
+public:
+    std::shared_ptr<erhe::Item_base> item;
+    std::string                      stage_path;
+    std::vector<Usd_reference>       references;
+};
+
 // Result of load_stage(). `stage` is null exactly when `error` is non-empty;
 // `warning` can be non-empty either way. erhe::usd reports failures as values
 // rather than exceptions, the way LightUSD itself does.
@@ -90,8 +122,10 @@ public:
     std::string            warning;
 };
 
-// Load and compose a .usd / .usda / .usdc / .usdz file. The file format is
-// detected from its content.
+// Load a .usd / .usda / .usdc / .usdz file. The file format is detected from
+// its content. Composition arcs are not composed away: a referencing prim
+// arrives as it was authored, and the arcs it names are read from its metadata
+// (doc/usd-compatibility-plan.md X1).
 [[nodiscard]] auto load_stage(const std::filesystem::path& path) -> Load_stage_result;
 
 // Summarize a loaded stage: prim count, per-schema-type prim counts sorted by
@@ -161,12 +195,21 @@ public:
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<Usd_image>                                  images;
     std::vector<Usd_material_texture_binding>               material_texture_bindings;
+    // The composition arcs the file's prims author, one entry per prim that
+    // authors at least one, in the order the prims were visited
+    // (doc/usd-compatibility-plan.md X1). The prims a referencing prim's arcs
+    // name are NOT in the lists above: the caller instantiates each arc's
+    // target under the carrier.
+    std::vector<Usd_prim_references>                        references;
 
     // Stage constants the import consumed (see load_usd): the up axis and
     // metersPerUnit are applied to the top-level nodes as a root transform,
     // and reported here for the caller's log / UI.
     std::string up_axis{"Y"};
     double      meters_per_unit{1.0};
+    // The root layer's `defaultPrim`, empty when the file names none: the prim
+    // a reference without a prim path targets.
+    std::string default_prim;
 
     // The root layer's `customLayerData`, string entries only: what an erhe
     // save put there (the editor's scene state) and what another writer left

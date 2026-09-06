@@ -31,6 +31,8 @@
 #include "core/composition-types.hh"
 #include "core/prim.hh"
 #include "core/prim-metas.hh"
+#include "core/prim-spec.hh"
+#include "layer.hh"
 #include "stage.hh"
 #include "usdGeom.hh"
 #include "usdShade.hh"
@@ -555,6 +557,7 @@ public:
 
         m_result.data.up_axis         = scene.meta.upAxis;
         m_result.data.meters_per_unit = scene.meta.metersPerUnit;
+        m_result.data.default_prim    = stage.metas().defaultPrim.str();
         read_custom_layer_data(stage);
 
         convert_images();
@@ -1895,6 +1898,10 @@ private:
             }
         );
 
+        if (record_references(usd_node, node)) {
+            return; // the prims below came from the arcs; the targets supply them
+        }
+
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, node, child_transform);
@@ -1968,9 +1975,187 @@ private:
             }
         );
 
+        if (record_references(usd_node, prim)) {
+            return; // the prims below came from the arcs; the targets supply them
+        }
+
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, prim, extra_transform);
         }
+    }
+
+    // The `references` / `payload` arcs a prim authors, in the order USD
+    // composes the list-edited ops into: `references` first and `payload`
+    // after it, the arc order of LIVRPS. LightUSD keeps its own list-op
+    // resolution private (a static helper of composition.cc), so the rule is
+    // repeated here: an unqualified op replaces the list, `prepend` inserts at
+    // the front, `append` and the deprecated `add` at the back, `delete`
+    // removes every entry naming the same target, and `order` is ignored.
+    template <typename T>
+    static void resolve_reference_list_ops(
+        const std::vector<std::pair<lightusd::ListEditQual, std::vector<T>>>& list_ops,
+        const Usd_reference_kind                                              kind,
+        std::vector<Usd_reference>&                                           out_references
+    )
+    {
+        const auto key = [](const Usd_reference& reference) -> std::string {
+            return reference.asset_path + "|" + reference.prim_path;
+        };
+        std::vector<Usd_reference> resolved;
+        for (const std::pair<lightusd::ListEditQual, std::vector<T>>& list_op : list_ops) {
+            std::vector<Usd_reference> items;
+            items.reserve(list_op.second.size());
+            for (const T& entry : list_op.second) {
+                Usd_reference reference{};
+                reference.asset_path = entry.asset_path.GetAssetPath();
+                reference.prim_path  = entry.prim_path.is_valid() ? entry.prim_path.full_path_name() : std::string{};
+                reference.kind       = kind;
+                if (reference.asset_path.empty() && reference.prim_path.empty()) {
+                    continue; // `references = None` / `payload = None`
+                }
+                items.push_back(std::move(reference));
+            }
+            switch (list_op.first) {
+                case lightusd::ListEditQual::ResetToExplicit: {
+                    resolved = std::move(items);
+                    break;
+                }
+                case lightusd::ListEditQual::Prepend: {
+                    resolved.insert(resolved.begin(), items.begin(), items.end());
+                    break;
+                }
+                case lightusd::ListEditQual::Append:
+                case lightusd::ListEditQual::Add: {
+                    resolved.insert(resolved.end(), items.begin(), items.end());
+                    break;
+                }
+                case lightusd::ListEditQual::Delete: {
+                    std::set<std::string> deleted_keys;
+                    for (const Usd_reference& item : items) {
+                        deleted_keys.insert(key(item));
+                    }
+                    resolved.erase(
+                        std::remove_if(
+                            resolved.begin(),
+                            resolved.end(),
+                            [&deleted_keys, &key](const Usd_reference& candidate) {
+                                return deleted_keys.count(key(candidate)) != 0;
+                            }
+                        ),
+                        resolved.end()
+                    );
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+        }
+        out_references.insert(out_references.end(), resolved.begin(), resolved.end());
+    }
+
+    [[nodiscard]] auto read_prim_references(const std::string& absolute_path) -> std::vector<Usd_reference>
+    {
+        std::vector<Usd_reference> references;
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return references;
+        }
+        const lightusd::PrimMetas& metas = prim->metas();
+        if (metas.references.has_value()) {
+            resolve_reference_list_ops(metas.references.value(), Usd_reference_kind::reference, references);
+        }
+        if (metas.payload.has_value()) {
+            resolve_reference_list_ops(metas.payload.value(), Usd_reference_kind::payload, references);
+        }
+        return references;
+    }
+
+    // A prim that authors composition arcs is a carrier: the arcs are reported
+    // and the composed prims below the carrier are left out, because the
+    // targets are what supply them (doc/usd-compatibility-plan.md X1). True
+    // means the caller stops there. Only the arcs the prim itself authors
+    // count - an arc authored inside a referenced layer is composed into that
+    // target and stays flattened in the instance.
+    [[nodiscard]] auto record_references(
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Item_base>& item
+    ) -> bool
+    {
+        std::vector<Usd_reference> references = read_prim_references(usd_node.abs_path);
+        if (references.empty()) {
+            return false;
+        }
+        warn_about_uncarried_overrides(usd_node.abs_path);
+        m_result.data.references.push_back(
+            Usd_prim_references{
+                .item       = item,
+                .stage_path = usd_node.abs_path,
+                .references = std::move(references)
+            }
+        );
+        return true;
+    }
+
+    // The referencing layer may hold its own opinions over the prims a
+    // reference contributed - an `over` (or a `def`) below the referencing
+    // prim. Those are sparse overrides, which X2 carries; until then they are
+    // dropped, so say so once per prim naming what was authored. LightUSD does
+    // not report which layer an opinion on a composed prim came from, so the
+    // root layer's own prim specs are what is asked: a child spec authored
+    // there under a referencing prim is exactly such an override.
+    void warn_about_uncarried_overrides(const std::string& absolute_path)
+    {
+        const lightusd::PrimSpec* spec = find_root_layer_primspec(absolute_path);
+        if ((spec == nullptr) || spec->children().empty()) {
+            return;
+        }
+        std::string names;
+        for (const lightusd::PrimSpec& child : spec->children()) {
+            if (!names.empty()) {
+                names += ", ";
+            }
+            names += child.name();
+        }
+        log_usd->warn(
+            "USD prim '{}': the referencing layer authors opinions over the reference ({}) - sparse overrides are not carried yet",
+            absolute_path,
+            names
+        );
+    }
+
+    // The root layer's prim spec at the given path, or null. The layer is read
+    // once, and only when a referencing prim is met: a file without references
+    // never pays for it.
+    [[nodiscard]] auto find_root_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
+    {
+        if (!m_root_layer_read) {
+            m_root_layer_read = true;
+            std::string warning;
+            std::string error;
+            m_root_layer_ok = lightusd::LoadLayerFromFile(
+                m_arguments.path.generic_string(),
+                &m_root_layer,
+                &warning,
+                &error
+            );
+            if (!m_root_layer_ok) {
+                log_usd->info(
+                    "USD '{}': the root layer could not be re-read for override reporting: {}",
+                    m_arguments.path.generic_string(),
+                    error
+                );
+            }
+        }
+        if (!m_root_layer_ok) {
+            return nullptr;
+        }
+        const lightusd::PrimSpec* spec = nullptr;
+        std::string               error;
+        if (!m_root_layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error)) {
+            return nullptr;
+        }
+        return spec;
     }
 
     // The Mesh prim of a `Mesh` prim of the stage; null for every other prim
@@ -2052,6 +2237,10 @@ private:
     std::map<std::string, std::size_t> m_material_by_path;
     // Authored property names per prim path, see authored_property_names.
     std::map<std::string, std::set<std::string>> m_authored_property_names;
+    // The root layer, read lazily by find_root_layer_primspec.
+    lightusd::Layer                              m_root_layer;
+    bool                                         m_root_layer_read{false};
+    bool                                         m_root_layer_ok  {false};
 };
 
 } // anonymous namespace

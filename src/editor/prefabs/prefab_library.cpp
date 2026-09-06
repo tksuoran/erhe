@@ -13,6 +13,7 @@
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/usd.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 #include "scene/scene_root.hpp"
@@ -97,57 +98,84 @@ Prefab_library::Prefab_library(App_context& context)
 {
 }
 
-auto Prefab_library::get_prefabs() const -> const std::map<std::filesystem::path, std::shared_ptr<Prefab>>&
+auto Prefab_library::get_prefabs() const -> const std::map<Prefab_key, std::shared_ptr<Prefab>>&
 {
     return m_prefabs;
 }
 
-auto Prefab_library::get_or_load(const std::filesystem::path& path) -> std::shared_ptr<Prefab>
+namespace {
+
+[[nodiscard]] auto canonical_prefab_path(const std::filesystem::path& path) -> std::filesystem::path
 {
     std::error_code error_code;
-    std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
-    if (error_code) {
-        canonical_path = path;
-    }
+    const std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
+    return error_code ? path : canonical_path;
+}
 
-    const auto existing = m_prefabs.find(canonical_path);
+// What a Prefab_key names, for logs: the file, plus the prim inside it when
+// the template is one prim of a USD file.
+[[nodiscard]] auto to_string(const Prefab_key& key) -> std::string
+{
+    return key.prim_path.empty()
+        ? erhe::file::to_string(key.source_path)
+        : fmt::format("{}{}", erhe::file::to_string(key.source_path), key.prim_path);
+}
+
+// The display name of a template: the file name, and the prim path with it
+// when the template is one prim of a USD file.
+[[nodiscard]] auto make_prefab_name(const Prefab_key& key) -> std::string
+{
+    return key.prim_path.empty()
+        ? erhe::file::to_string(key.source_path.filename())
+        : fmt::format("{}{}", erhe::file::to_string(key.source_path.filename()), key.prim_path);
+}
+
+} // namespace
+
+auto Prefab_library::get_or_load(const std::filesystem::path& path, const std::string& prim_path) -> std::shared_ptr<Prefab>
+{
+    const Prefab_key key{canonical_prefab_path(path), prim_path};
+
+    const auto existing = m_prefabs.find(key);
     if (existing != m_prefabs.end()) {
-        record_reference(canonical_path);
+        record_reference(key);
         return existing->second;
     }
 
-    // glTF 2.1 strictly prohibits cyclical references between assets; a
-    // cycle here would otherwise recurse forever through external-asset
-    // resolution.
-    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), canonical_path);
+    // glTF 2.1 strictly prohibits cyclical references between assets, and a
+    // USD reference cycle is prohibited the same way; a cycle here would
+    // otherwise recurse forever through reference resolution.
+    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), key);
     if (cycle != m_active_load_stack.end()) {
         std::string cycle_description;
         for (auto i = cycle; i != m_active_load_stack.end(); ++i) {
-            cycle_description += erhe::file::to_string(*i);
+            cycle_description += to_string(*i);
             cycle_description += " -> ";
         }
-        cycle_description += erhe::file::to_string(canonical_path);
-        log_parsers->error("Prefab reference cycle detected (prohibited by glTF 2.1): {}", cycle_description);
+        cycle_description += to_string(key);
+        log_parsers->error("Prefab reference cycle detected: {}", cycle_description);
         return {};
     }
 
-    const bool exists = std::filesystem::exists(canonical_path, error_code);
+    std::error_code error_code;
+    const bool exists = std::filesystem::exists(key.source_path, error_code);
     if (!exists || error_code) {
-        log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(canonical_path));
+        log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(key.source_path));
         return {};
     }
 
     std::shared_ptr<Prefab> prefab = std::make_shared<Prefab>();
-    prefab->source_path = canonical_path;
-    prefab->name        = erhe::file::to_string(canonical_path.filename());
+    prefab->source_path = key.source_path;
+    prefab->prim_path   = key.prim_path;
+    prefab->name        = make_prefab_name(key);
     if (!load_template(*prefab)) {
-        log_parsers->error("Prefab '{}' produced no nodes - not caching", erhe::file::to_string(canonical_path));
+        log_parsers->error("Prefab '{}' produced no nodes - not caching", to_string(key));
         return {};
     }
 
-    m_prefabs.emplace(canonical_path, prefab);
-    record_reference(canonical_path);
-    log_parsers->info("Prefab loaded: {}", erhe::file::to_string(canonical_path));
+    m_prefabs.emplace(key, prefab);
+    record_reference(key);
+    log_parsers->info("Prefab loaded: {}", to_string(key));
     return prefab;
 }
 
@@ -156,16 +184,22 @@ void Prefab_library::get_or_load_async(
     std::function<void(const std::shared_ptr<Prefab>&)> on_ready
 )
 {
-    std::error_code error_code;
-    std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
-    if (error_code) {
-        canonical_path = path;
-    }
+    get_or_load_async(path, std::string{}, std::move(on_ready));
+}
+
+void Prefab_library::get_or_load_async(
+    const std::filesystem::path&                       path,
+    const std::string&                                 prim_path,
+    std::function<void(const std::shared_ptr<Prefab>&)> on_ready
+)
+{
+    const std::filesystem::path canonical_path = canonical_prefab_path(path);
+    const Prefab_key            key{canonical_path, prim_path};
 
     // Already loaded: no task, no frame of latency.
-    const auto existing = m_prefabs.find(canonical_path);
+    const auto existing = m_prefabs.find(key);
     if (existing != m_prefabs.end()) {
-        record_reference(canonical_path);
+        record_reference(key);
         on_ready(existing->second);
         return;
     }
@@ -173,19 +207,20 @@ void Prefab_library::get_or_load_async(
     // Cycle detection still works on the call stack here: a nested prefab
     // load runs synchronously inside finish_load_template, so anything that
     // reaches this while a template is being finished is on the stack.
-    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), canonical_path);
+    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), key);
     if (cycle != m_active_load_stack.end()) {
         std::string cycle_description;
         for (auto i = cycle; i != m_active_load_stack.end(); ++i) {
-            cycle_description += erhe::file::to_string(*i);
+            cycle_description += to_string(*i);
             cycle_description += " -> ";
         }
-        cycle_description += erhe::file::to_string(canonical_path);
-        log_parsers->error("Prefab reference cycle detected (prohibited by glTF 2.1): {}", cycle_description);
+        cycle_description += to_string(key);
+        log_parsers->error("Prefab reference cycle detected: {}", cycle_description);
         on_ready({});
         return;
     }
 
+    std::error_code error_code;
     const bool exists = std::filesystem::exists(canonical_path, error_code);
     if (!exists || error_code) {
         log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(canonical_path));
@@ -193,12 +228,14 @@ void Prefab_library::get_or_load_async(
         return;
     }
 
-    if (m_context.asset_manager == nullptr) {
-        on_ready(get_or_load(canonical_path));
+    // Only the glTF parse has an asynchronous path; a USD template is loaded
+    // inline (doc/usd-compatibility-plan.md X1).
+    if ((m_context.asset_manager == nullptr) || is_usd_file_extension(canonical_path)) {
+        on_ready(get_or_load(canonical_path, prim_path));
         return;
     }
 
-    const std::string prefab_name = erhe::file::to_string(canonical_path.filename());
+    const std::string prefab_name = make_prefab_name(key);
     Asset_load_request request{
         .path            = canonical_path,
         .prefab_template = true,
@@ -206,13 +243,13 @@ void Prefab_library::get_or_load_async(
     };
     std::shared_ptr<Asset_load_handle> handle = m_context.asset_manager->queue_load(
         std::move(request),
-        [this, canonical_path, prefab_name, on_ready](const Asset_load_result& result) {
+        [this, key, canonical_path, prefab_name, on_ready](const Asset_load_result& result) {
             // A second request for the same path may have completed while
             // this one was in flight (both were queued before either
             // finished): keep the cached one, drop this parse.
-            const auto already = m_prefabs.find(canonical_path);
+            const auto already = m_prefabs.find(key);
             if (already != m_prefabs.end()) {
-                record_reference(canonical_path);
+                record_reference(key);
                 on_ready(already->second);
                 return;
             }
@@ -233,19 +270,23 @@ void Prefab_library::get_or_load_async(
                 on_ready({});
                 return;
             }
-            m_prefabs.emplace(canonical_path, prefab);
-            record_reference(canonical_path);
+            m_prefabs.emplace(key, prefab);
+            record_reference(key);
             log_parsers->info("Prefab loaded (async): {}", erhe::file::to_string(canonical_path));
             on_ready(prefab);
         }
     );
     if (!handle) {
-        on_ready(get_or_load(canonical_path)); // async_gltf_load is off
+        on_ready(get_or_load(canonical_path, prim_path)); // async_gltf_load is off
     }
 }
 
 auto Prefab_library::load_template(Prefab& prefab) -> bool
 {
+    if (is_usd_file_extension(prefab.source_path)) {
+        return load_usd_template(prefab);
+    }
+
     ERHE_VERIFY(m_context.graphics_device != nullptr);
     ERHE_VERIFY(m_context.executor != nullptr);
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
@@ -270,6 +311,33 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
     return finish_load_template(prefab, std::move(gltf_data), template_root);
 }
 
+auto Prefab_library::load_usd_template(Prefab& prefab) -> bool
+{
+    ERHE_VERIFY(m_context.graphics_device != nullptr);
+
+    // On the stack while the template's own arcs are resolved, so a USD
+    // reference cycle is caught exactly as a glTF one is.
+    m_active_load_stack.push_back(prefab.get_key());
+    Usd_prefab_template usd_template = load_usd_prefab_template(m_context, *this, prefab.source_path, prefab.prim_path);
+    m_active_load_stack.pop_back();
+
+    if (!usd_template.error.empty()) {
+        log_parsers->error("Prefab '{}': {}", prefab.name, usd_template.error);
+        return false;
+    }
+    if (!usd_template.root || usd_template.root->get_children().empty()) {
+        return false;
+    }
+
+    // A fresh holding scene every time, as the glTF path does.
+    prefab.holding_scene = std::make_shared<erhe::scene::Scene>(fmt::format("prefab holding scene: {}", prefab.name), nullptr);
+    prefab.template_root = usd_template.root;
+    prefab.template_root->set_parent(prefab.holding_scene->get_root_node());
+    prefab.gltf_data     = erhe::gltf::Gltf_data{};
+    prefab.materials     = std::move(usd_template.materials);
+    return true;
+}
+
 auto Prefab_library::finish_load_template(
     Prefab&                                   prefab,
     erhe::gltf::Gltf_data&&                   gltf_data,
@@ -288,8 +356,9 @@ auto Prefab_library::finish_load_template(
     prefab.template_root = template_root;
     prefab.template_root->set_parent(prefab.holding_scene->get_root_node());
     prefab.gltf_data = std::move(gltf_data);
+    prefab.materials = prefab.gltf_data.materials;
 
-    m_active_load_stack.push_back(prefab.source_path);
+    m_active_load_stack.push_back(prefab.get_key());
 
     const bool has_nodes = std::any_of(
         prefab.gltf_data.nodes.begin(),
@@ -322,23 +391,23 @@ auto Prefab_library::finish_load_template(
     return true;
 }
 
-void Prefab_library::record_reference(const std::filesystem::path& referenced_path)
+void Prefab_library::record_reference(const Prefab_key& referenced_key)
 {
     if (m_active_load_stack.empty()) {
         return; // top-level load (scene import / instantiate), not a prefab template
     }
-    const std::filesystem::path& referencing_path = m_active_load_stack.back();
-    if (referencing_path == referenced_path) {
+    const Prefab_key& referencing_key = m_active_load_stack.back();
+    if (referencing_key == referenced_key) {
         return;
     }
-    m_references[referencing_path].insert(referenced_path);
+    m_references[referencing_key].insert(referenced_key);
 }
 
-auto Prefab_library::collect_affected_in_dependency_order(const std::filesystem::path& path) const -> std::vector<std::filesystem::path>
+auto Prefab_library::collect_affected_in_dependency_order(const std::vector<Prefab_key>& seeds) const -> std::vector<Prefab_key>
 {
     // Transitive closure over reverse references.
-    std::set<std::filesystem::path> affected;
-    affected.insert(path);
+    std::set<Prefab_key> affected;
+    affected.insert(seeds.begin(), seeds.end());
     bool grew = true;
     while (grew) {
         grew = false;
@@ -346,8 +415,8 @@ auto Prefab_library::collect_affected_in_dependency_order(const std::filesystem:
             if (affected.contains(referencing_path)) {
                 continue;
             }
-            for (const std::filesystem::path& referenced_path : referenced_paths) {
-                if (affected.contains(referenced_path)) {
+            for (const Prefab_key& referenced_key : referenced_paths) {
+                if (affected.contains(referenced_key)) {
                     affected.insert(referencing_path);
                     grew = true;
                     break;
@@ -358,19 +427,19 @@ auto Prefab_library::collect_affected_in_dependency_order(const std::filesystem:
 
     // Topological order: referenced before referencing, so rebuilding a
     // template always clones already-rebuilt nested templates.
-    std::vector<std::filesystem::path> order;
-    std::set<std::filesystem::path>    placed;
+    std::vector<Prefab_key> order;
+    std::set<Prefab_key>    placed;
     while (placed.size() < affected.size()) {
         bool progressed = false;
-        for (const std::filesystem::path& candidate : affected) {
+        for (const Prefab_key& candidate : affected) {
             if (placed.contains(candidate)) {
                 continue;
             }
             bool ready = true;
             const auto references = m_references.find(candidate);
             if (references != m_references.end()) {
-                for (const std::filesystem::path& referenced_path : references->second) {
-                    if (affected.contains(referenced_path) && !placed.contains(referenced_path)) {
+                for (const Prefab_key& referenced_key : references->second) {
+                    if (affected.contains(referenced_key) && !placed.contains(referenced_key)) {
                         ready = false;
                         break;
                     }
@@ -387,7 +456,7 @@ auto Prefab_library::collect_affected_in_dependency_order(const std::filesystem:
             // prohibits cycles and loading rejects them); guard against an
             // infinite loop anyway and surface the inconsistency.
             log_parsers->error("Prefab reference graph inconsistency: cycle among loaded prefabs");
-            for (const std::filesystem::path& candidate : affected) {
+            for (const Prefab_key& candidate : affected) {
                 if (!placed.contains(candidate)) {
                     order.push_back(candidate);
                     placed.insert(candidate);
@@ -400,46 +469,51 @@ auto Prefab_library::collect_affected_in_dependency_order(const std::filesystem:
 
 auto Prefab_library::reload(const std::filesystem::path& path) -> bool
 {
-    std::error_code error_code;
-    std::filesystem::path canonical_path = std::filesystem::weakly_canonical(path, error_code);
-    if (error_code) {
-        canonical_path = path;
-    }
+    const std::filesystem::path canonical_path = canonical_prefab_path(path);
 
-    if (!m_prefabs.contains(canonical_path)) {
+    // A file can hold several templates (one per referenced USD prim); a
+    // reload of the file rebuilds all of them.
+    std::vector<Prefab_key> seeds;
+    for (const std::pair<const Prefab_key, std::shared_ptr<Prefab>>& entry : m_prefabs) {
+        if (entry.first.source_path == canonical_path) {
+            seeds.push_back(entry.first);
+        }
+    }
+    if (seeds.empty()) {
         log_parsers->error("Prefab reload: '{}' is not a loaded prefab", erhe::file::to_string(canonical_path));
         return false;
     }
     ERHE_VERIFY(m_active_load_stack.empty()); // reload is a top-level operation, never re-entered from a load
 
-    const std::vector<std::filesystem::path> affected = collect_affected_in_dependency_order(canonical_path);
+    const std::vector<Prefab_key> affected = collect_affected_in_dependency_order(seeds);
 
-    bool all_ok = true;
-    std::vector<std::filesystem::path> rebuilt_paths;
-    for (const std::filesystem::path& affected_path : affected) {
-        const auto it = m_prefabs.find(affected_path);
+    std::error_code         error_code;
+    bool                    all_ok = true;
+    std::vector<Prefab_key> rebuilt_keys;
+    for (const Prefab_key& affected_key : affected) {
+        const auto it = m_prefabs.find(affected_key);
         if (it == m_prefabs.end()) {
             continue; // reference recorded for a load that later failed; nothing to rebuild
         }
-        const bool exists = std::filesystem::exists(affected_path, error_code);
+        const bool exists = std::filesystem::exists(affected_key.source_path, error_code);
         if (!exists || error_code) {
-            log_parsers->error("Prefab reload: source file missing: {}", erhe::file::to_string(affected_path));
+            log_parsers->error("Prefab reload: source file missing: {}", erhe::file::to_string(affected_key.source_path));
             all_ok = false;
             continue;
         }
         // Forward references are re-recorded by the nested get_or_load calls
         // during the template rebuild.
-        m_references.erase(affected_path);
+        m_references.erase(affected_key);
         if (!load_template(*it->second)) {
-            log_parsers->error("Prefab reload: '{}' produced no nodes; its instances keep the previous content", erhe::file::to_string(affected_path));
+            log_parsers->error("Prefab reload: '{}' produced no nodes; its instances keep the previous content", to_string(affected_key));
             all_ok = false;
             continue;
         }
-        rebuilt_paths.push_back(affected_path);
-        log_parsers->info("Prefab reloaded: {}", erhe::file::to_string(affected_path));
+        rebuilt_keys.push_back(affected_key);
+        log_parsers->info("Prefab reloaded: {}", to_string(affected_key));
     }
 
-    refresh_instances(rebuilt_paths);
+    refresh_instances(rebuilt_keys);
     return all_ok;
 }
 
@@ -638,7 +712,7 @@ void attach_prefab_instance(
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
-    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name);
+    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name, prefab->prim_path);
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 
@@ -677,19 +751,19 @@ void attach_prefab_instance(
 namespace {
 
 void refresh_instance_subtrees(
-    const std::shared_ptr<erhe::scene::Node>&                       node,
-    const std::map<std::filesystem::path, std::shared_ptr<Prefab>>& prefabs,
-    const std::set<std::filesystem::path>&                          rebuilt_paths,
-    const erhe::scene::Layer_id                                     content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>&                  mesh_node_items,
-    std::set<std::filesystem::path>&                                refreshed_paths
+    const std::shared_ptr<erhe::scene::Node>&            node,
+    const std::map<Prefab_key, std::shared_ptr<Prefab>>& prefabs,
+    const std::set<Prefab_key>&                          rebuilt_keys,
+    const erhe::scene::Layer_id                          content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>&       mesh_node_items,
+    std::set<Prefab_key>&                                refreshed_keys
 )
 {
     const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
     if (prefab_instance) {
-        const std::filesystem::path& source_path = prefab_instance->get_prefab_source_path();
-        if (rebuilt_paths.contains(source_path)) {
-            const auto it = prefabs.find(source_path);
+        const Prefab_key key{prefab_instance->get_prefab_source_path(), prefab_instance->get_prefab_prim_path()};
+        if (rebuilt_keys.contains(key)) {
+            const auto it = prefabs.find(key);
             if (it != prefabs.end()) {
                 // Everything under an instance carrier is prefab content
                 // (the same model save and export already use: instance
@@ -702,7 +776,7 @@ void refresh_instance_subtrees(
                     child->set_parent(std::shared_ptr<erhe::Hierarchy>{});
                 }
                 attach_prefab_instance(it->second, node, content_layer_id, &mesh_node_items);
-                refreshed_paths.insert(source_path);
+                refreshed_keys.insert(key);
             }
         }
         // Instance interiors are sealed; a nested instance is refreshed via
@@ -713,19 +787,19 @@ void refresh_instance_subtrees(
     for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
         const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
         if (child_node) {
-            refresh_instance_subtrees(child_node, prefabs, rebuilt_paths, content_layer_id, mesh_node_items, refreshed_paths);
+            refresh_instance_subtrees(child_node, prefabs, rebuilt_keys, content_layer_id, mesh_node_items, refreshed_keys);
         }
     }
 }
 
 } // namespace
 
-void Prefab_library::refresh_instances(const std::vector<std::filesystem::path>& rebuilt_paths)
+void Prefab_library::refresh_instances(const std::vector<Prefab_key>& rebuilt_keys)
 {
-    if (rebuilt_paths.empty() || (m_context.app_scenes == nullptr)) {
+    if (rebuilt_keys.empty() || (m_context.app_scenes == nullptr)) {
         return;
     }
-    const std::set<std::filesystem::path> rebuilt{rebuilt_paths.begin(), rebuilt_paths.end()};
+    const std::set<Prefab_key> rebuilt{rebuilt_keys.begin(), rebuilt_keys.end()};
 
     for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
         erhe::scene::Scene* scene = scene_root->get_hosted_scene();
@@ -738,15 +812,15 @@ void Prefab_library::refresh_instances(const std::vector<std::filesystem::path>&
         }
 
         std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
-        std::set<std::filesystem::path>               refreshed_paths;
+        std::set<Prefab_key>                          refreshed_keys;
         {
             erhe::Item_host_lock_guard scene_lock{root_node.get()};
-            refresh_instance_subtrees(root_node, m_prefabs, rebuilt, scene_root->layers().content()->id, mesh_node_items, refreshed_paths);
+            refresh_instance_subtrees(root_node, m_prefabs, rebuilt, scene_root->layers().content()->id, mesh_node_items, refreshed_keys);
         }
-        if (refreshed_paths.empty()) {
+        if (refreshed_keys.empty()) {
             continue;
         }
-        log_parsers->info("Prefab reload: refreshed {} prefab(s) in scene '{}'", refreshed_paths.size(), scene_root->get_name());
+        log_parsers->info("Prefab reload: refreshed {} prefab(s) in scene '{}'", refreshed_keys.size(), scene_root->get_name());
 
         // Build raytrace primitives for the fresh clones (outside the scene
         // lock: the kickoff's async tasks take it themselves).

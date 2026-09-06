@@ -123,16 +123,27 @@ data for one file; recursion, caching, and cycle detection live in the editor.
 
 Three new pieces, layered so each phase is independently useful:
 
-1. **`Prefab_library`** (editor part, app-wide): cache of parsed glTF
-   templates keyed by canonical absolute source path. Each entry (`Prefab`)
-   owns the parse result: a template root node living in a private, never
-   rendered holding scene, with meshes finalized into `Mesh_memory` once.
-   Handles recursive loading (a prefab source may itself reference external
-   assets) with an active-load-path stack for cycle detection.
+1. **`Prefab_library`** (editor part, app-wide): cache of parsed templates
+   keyed by `Prefab_key` - the canonical absolute source path plus, for a USD
+   source, the prim path the template is rooted at (empty for glTF and for a
+   USD arc naming the file's default prim), so one file can hold several
+   templates. Each entry (`Prefab`) owns the parse result: a template root
+   node living in a private, never rendered holding scene, with meshes
+   finalized into `Mesh_memory` once. A `.gltf` / `.glb` source parses through
+   `erhe::gltf::parse_gltf`; a `.usd` / `.usda` / `.usdc` / `.usdz` source goes
+   through `load_usd_prefab_template` (`src/editor/parsers/usd.hpp`), which
+   loads the file, takes the named prim and wraps it in a template root, so an
+   instance clones the prim itself - its class, transform and content - and its
+   subtree (doc/usd-compatibility-plan.md X1). Handles recursive loading (a
+   source may itself reference further assets) with an active-load stack of
+   keys for cycle detection.
 2. **`Prefab_instance`** (a `Node_attachment`): marks a node as the root of a
    prefab instance and records the source reference (canonical path + display
-   name). It is what import writes, export and `.erhescene` serialization
-   read, clipboard cloning preserves, and the UI styles.
+   name + USD prim path). It is what import writes, export and `.erhescene`
+   serialization read, clipboard cloning preserves, and the UI styles. A node
+   carries one attachment per USD composition arc, in the arcs' order; a
+   prefab reload refreshes the first of them and re-clones the whole carrier,
+   so a multi-arc carrier is refreshed from its first arc only.
 3. **Instantiation = `Node::clone()`** of the template root's children under
    the instance node, inserted through the operation stack (mirroring
    `place_brush_in_scene`). No per-instance GPU upload; primitives, materials

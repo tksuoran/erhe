@@ -28,6 +28,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 
 #include "app_context.hpp"
 #include "assets/asset_manager.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
 #include "content_library/style.hpp"
@@ -279,6 +280,118 @@ void append_usd_content_library_operations(
     }
 }
 
+// The node one USD prim path names, walked down from `root` by prim name.
+// Null when no such prim is in the imported tree.
+[[nodiscard]] auto find_prim_node(
+    const std::shared_ptr<erhe::scene::Node>& root,
+    const std::string&                        prim_path
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    std::shared_ptr<erhe::Hierarchy> current = root;
+    std::size_t                      position = 0;
+    while ((position < prim_path.size()) && (current)) {
+        while ((position < prim_path.size()) && (prim_path[position] == '/')) {
+            ++position;
+        }
+        if (position >= prim_path.size()) {
+            break;
+        }
+        const std::size_t separator = prim_path.find('/', position);
+        const std::string element   = (separator == std::string::npos)
+            ? prim_path.substr(position)
+            : prim_path.substr(position, separator - position);
+        position = (separator == std::string::npos) ? prim_path.size() : separator;
+
+        std::shared_ptr<erhe::Hierarchy> next;
+        for (const std::shared_ptr<erhe::Hierarchy>& child : current->get_children()) {
+            if (child && (child->get_name() == element)) {
+                next = child;
+                break;
+            }
+        }
+        current = next;
+    }
+    return std::dynamic_pointer_cast<erhe::scene::Node>(current);
+}
+
+// The file one arc names: the stage's own file for an internal reference, and
+// otherwise the asset path resolved against the referencing layer's directory.
+[[nodiscard]] auto resolve_reference_asset_path(
+    const std::filesystem::path& source_path,
+    const std::string&           asset_path
+) -> std::filesystem::path
+{
+    if (asset_path.empty()) {
+        return source_path; // internal reference: a prim of the same layer
+    }
+    const std::filesystem::path referenced{asset_path};
+    if (referenced.is_absolute()) {
+        return referenced;
+    }
+    return source_path.parent_path() / referenced;
+}
+
+// True when `stage_path` is `prefix` or a prim below it. An empty prefix
+// accepts every prim.
+[[nodiscard]] auto is_under_prim_path(const std::string& stage_path, const std::string& prefix) -> bool
+{
+    if (prefix.empty()) {
+        return true;
+    }
+    if (stage_path == prefix) {
+        return true;
+    }
+    return (stage_path.size() > prefix.size()) &&
+           (stage_path.compare(0, prefix.size(), prefix) == 0) &&
+           (stage_path[prefix.size()] == '/');
+}
+
+// Instantiate every composition arc the file's prims author
+// (doc/usd-compatibility-plan.md X1): one Prefab_instance attachment per arc,
+// in the order the arcs resolved to, each with a clone of the template the arc
+// names below the carrier prim. `prim_path_prefix` limits this to one subtree,
+// which is what a template load wants. Cloned meshes are pointed at
+// `content_layer_id` and appended to `out_mesh_node_items` when non-null.
+void resolve_usd_references(
+    App_context&                                   context,
+    Prefab_library&                                prefab_library,
+    const erhe::usd::Usd_data&                     usd_data,
+    const std::filesystem::path&                   source_path,
+    const erhe::scene::Layer_id                    content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
+    const std::string&                             prim_path_prefix
+)
+{
+    static_cast<void>(context);
+    for (const erhe::usd::Usd_prim_references& entry : usd_data.references) {
+        if (!is_under_prim_path(entry.stage_path, prim_path_prefix)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> carrier = std::dynamic_pointer_cast<erhe::scene::Node>(entry.item);
+        if (!carrier) {
+            log_parsers->warn(
+                "USD prim '{}' authors composition arcs but carries no transform - the arcs are not instantiated",
+                entry.stage_path
+            );
+            continue;
+        }
+        for (const erhe::usd::Usd_reference& reference : entry.references) {
+            const std::filesystem::path target_path = resolve_reference_asset_path(source_path, reference.asset_path);
+            const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(target_path, reference.prim_path);
+            if (!prefab) {
+                log_parsers->error(
+                    "USD prim '{}': failed to load reference target '{}'{} (missing file, no prims, or a reference cycle - see log)",
+                    entry.stage_path,
+                    erhe::file::to_string(target_path),
+                    reference.prim_path
+                );
+                continue;
+            }
+            attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
+        }
+    }
+}
+
 // The `customLayerData` key the editor's scene state travels under, and the
 // key naming the writer's format revision. The value of `erhe:scene` is the
 // JSON object the glTF ERHE_scene block carries, verbatim as a string:
@@ -406,6 +519,21 @@ auto make_import_usd_operation(
         &mesh_node_items
     );
 
+    // Composition arcs: each referencing prim gets one Prefab_instance per
+    // arc, with the arc's target cloned below it. The instances ride the
+    // import_root insert below, so an undo of the import removes them.
+    if (context.prefab_library != nullptr) {
+        resolve_usd_references(
+            context,
+            *context.prefab_library,
+            usd_data,
+            path,
+            scene_root->layers().content()->id,
+            &mesh_node_items,
+            std::string{}
+        );
+    }
+
     const std::string                      path_string     = path.generic_string();
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
@@ -441,6 +569,98 @@ auto make_import_usd_operation(
     import_result.material_count = usd_data.materials.size();
     import_result.texture_count  = usd_data.images.size();
     return import_result;
+}
+
+auto load_usd_prefab_template(
+    App_context&                 context,
+    Prefab_library&              prefab_library,
+    const std::filesystem::path& path,
+    const std::string&           prim_path
+) -> Usd_prefab_template
+{
+    ERHE_PROFILE_FUNCTION();
+
+    Usd_prefab_template usd_template{};
+    if (context.graphics_device == nullptr) {
+        usd_template.error = "no graphics device";
+        return usd_template;
+    }
+
+    // The prims are built under a container node parented to a temporary
+    // scene (a node needs a host to attach to); the template subtree is taken
+    // out of it below and the container is dropped.
+    erhe::scene::Scene temp_scene{"temp usd prefab scene", nullptr};
+    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Xform>(
+        erhe::file::to_string(path.filename())
+    );
+    container_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    container_node->set_parent(temp_scene.get_root_node());
+
+    erhe::usd::Usd_load_result result = erhe::usd::load_usd(
+        erhe::usd::Usd_load_arguments{
+            .path          = path,
+            .root_node     = container_node,
+            // Instances are retargeted to the destination scene's content
+            // layer when the template is cloned.
+            .mesh_layer_id = 0
+        }
+    );
+    if (!result.error.empty()) {
+        container_node->set_parent({});
+        usd_template.error = result.error;
+        return usd_template;
+    }
+    erhe::usd::Usd_data& usd_data = result.data;
+
+    static_cast<void>(create_usd_textures(context, usd_data));
+    finalize_imported_meshes(
+        context,
+        make_import_build_info(context),
+        std::span<const std::shared_ptr<erhe::scene::Node>>{usd_data.nodes},
+        nullptr
+    );
+
+    // Which prim the template is rooted at: the arc's prim path, else the
+    // file's default prim, else the whole file.
+    const std::string root_prim_path = !prim_path.empty()
+        ? prim_path
+        : (usd_data.default_prim.empty() ? std::string{} : ("/" + usd_data.default_prim));
+
+    // Arcs authored inside the template subtree are instantiated the same way
+    // the scene paths do it, so nested references reproduce.
+    resolve_usd_references(context, prefab_library, usd_data, path, 0, nullptr, root_prim_path);
+
+    if (root_prim_path.empty()) {
+        container_node->set_parent({});
+        usd_template.root      = container_node;
+        usd_template.materials = std::move(usd_data.materials);
+        return usd_template;
+    }
+
+    const std::shared_ptr<erhe::scene::Node> target = find_prim_node(container_node, root_prim_path);
+    if (!target) {
+        container_node->set_parent({});
+        usd_template.error = fmt::format("prim '{}' is not in '{}'", root_prim_path, path.generic_string());
+        return usd_template;
+    }
+
+    // The template root is a wrapper whose only child is the prim the arc
+    // named: an instance clones the wrapper's children, so the prim itself -
+    // its class, its transform and its content - rides the instance.
+    std::shared_ptr<erhe::scene::Node> template_root = std::make_shared<erhe::scene::Xform>(target->get_name());
+    template_root->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    template_root->set_parent(temp_scene.get_root_node());
+    // set_parent preserves the world transform by rewriting the local one; a
+    // template keeps the local transform it was authored with.
+    const erhe::scene::Trs_transform parent_from_node = target->parent_from_node_transform();
+    target->set_parent(template_root);
+    target->set_parent_from_node(parent_from_node);
+
+    template_root->set_parent({});
+    container_node->set_parent({});
+    usd_template.root      = template_root;
+    usd_template.materials = std::move(usd_data.materials);
+    return usd_template;
 }
 
 auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> std::shared_ptr<Scene_root>
@@ -526,6 +746,20 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         std::span<const std::shared_ptr<erhe::scene::Node>>{usd_data.nodes},
         &mesh_node_items
     );
+
+    // Composition arcs: one Prefab_instance per arc under its carrier prim,
+    // before the prims move under the scene root.
+    if (context.prefab_library != nullptr) {
+        resolve_usd_references(
+            context,
+            *context.prefab_library,
+            usd_data,
+            path,
+            scene_root->layers().content()->id,
+            &mesh_node_items,
+            std::string{}
+        );
+    }
 
     // The content-library attaches are undoable operations on the import
     // path; opening a scene is not undoable, so they are executed inline and
@@ -775,6 +1009,19 @@ auto save_scene_usd(App_context&, Scene_root&, const std::filesystem::path& path
 {
     log_parsers->error("save_scene_usd '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
     return false;
+}
+
+auto load_usd_prefab_template(
+    App_context&,
+    Prefab_library&,
+    const std::filesystem::path& path,
+    const std::string&
+) -> Usd_prefab_template
+{
+    log_parsers->error("USD prefab template '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());
+    Usd_prefab_template usd_template{};
+    usd_template.error = "USD support not built (ERHE_USD_LIBRARY=none)";
+    return usd_template;
 }
 
 } // namespace editor

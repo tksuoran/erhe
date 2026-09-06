@@ -1,0 +1,53 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Xform "DefaultRef" (
+        references = @cube.usda@
+    )
+    {
+        double3 xformOp:translate = (5, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "PathRef" (
+        references = @reftarget.usda@</Library/Gadget>
+    )
+    {
+    }
+
+    def Xform "Source"
+    {
+        def Mesh "quad"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        }
+    }
+
+    def Xform "InternalRef" (
+        references = </World/Source>
+    )
+    {
+    }
+
+    def Xform "MultiRef" (
+        prepend references = @reftarget.usda@</Library/Gadget>
+        append references = @reftarget.usda@
+    )
+    {
+    }
+
+    def Xform "PayloadRef" (
+        payload = @reftarget.usda@</Library/Gadget>
+    )
+    {
+    }
+}

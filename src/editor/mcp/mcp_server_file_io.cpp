@@ -579,7 +579,7 @@ auto Mcp_server::query_prefabs(const json& args) -> std::string
         return make_error_content("Prefab library not available");
     }
     json prefabs = json::array();
-    for (const auto& [path, prefab] : m_context.prefab_library->get_prefabs()) {
+    for (const auto& [key, prefab] : m_context.prefab_library->get_prefabs()) {
         std::size_t node_count = 0;
         for (const std::shared_ptr<erhe::scene::Node>& node : prefab->gltf_data.nodes) {
             if (node) {
@@ -587,11 +587,12 @@ auto Mcp_server::query_prefabs(const json& args) -> std::string
             }
         }
         prefabs.push_back({
-            {"path",            path.generic_string()},
+            {"path",            key.source_path.generic_string()},
+            {"prim_path",       key.prim_path},
             {"name",            prefab->name},
             {"nodes",           node_count},
             {"meshes",          prefab->gltf_data.meshes.size()},
-            {"materials",       prefab->gltf_data.materials.size()},
+            {"materials",       prefab->materials.size()},
             {"textures",        prefab->gltf_data.images.size()},
             {"skins",           prefab->gltf_data.skins.size()},
             {"animations",      prefab->gltf_data.animations.size()},

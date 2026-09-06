@@ -27,6 +27,7 @@
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "grid/grid.hpp"
+#include "prefabs/prefab_instance.hpp"
 #include "scene/node_joint.hpp"
 #include "erhe_scene/layout.hpp"
 #include "scene/node_physics.hpp"
@@ -657,6 +658,16 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["tertiary"]         = erhe::scene::Layout::c_axis_direction_strings[static_cast<std::size_t>(layout->get_tertiary())];
             att_json["gap"]              = {layout->get_gap().x, layout->get_gap().y, layout->get_gap().z};
             att_json["grid_track_count"] = {layout->get_grid_track_count().x, layout->get_grid_track_count().y, layout->get_grid_track_count().z};
+        }
+
+        // Prefab instance: what the carrier instantiates - the source file and,
+        // for a USD composition arc, the prim of it the arc named
+        // (doc/usd-compatibility-plan.md X1).
+        auto prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(att);
+        if (prefab_instance) {
+            att_json["prefab_source_path"] = prefab_instance->get_prefab_source_path().generic_string();
+            att_json["prefab_name"]        = prefab_instance->get_prefab_name();
+            att_json["prefab_prim_path"]   = prefab_instance->get_prefab_prim_path();
         }
 
         attachments.push_back(att_json);

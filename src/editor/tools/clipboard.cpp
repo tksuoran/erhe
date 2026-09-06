@@ -155,11 +155,11 @@ auto find_owning_prefab(
     if (context.prefab_library == nullptr) {
         return {};
     }
-    for (const auto& [path, prefab] : context.prefab_library->get_prefabs()) {
+    for (const auto& [key, prefab] : context.prefab_library->get_prefabs()) {
         if (!prefab) {
             continue;
         }
-        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = prefab->gltf_data.materials;
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = prefab->materials;
         if (std::find(materials.begin(), materials.end(), material) != materials.end()) {
             return prefab;
         }

@@ -161,6 +161,43 @@ translation units.
   and a value that fails to parse or to validate, are skipped with one
   warning each.
 
+### Composition arcs
+
+LightUSD composes nothing on load: `LoadUSDFromFile` reads the root layer and
+leaves every `references` / `payload` arc in the prim's metadata (its
+`do_composition` option is declared but not implemented). That is what the
+importer wants (doc/usd-compatibility-plan.md X1): a prim that authors arcs
+arrives as it was authored, and the arcs it names are reported in
+`Usd_data::references` as `Usd_prim_references` - the erhe prim the arcs were
+authored on, its stage path, and one `Usd_reference` per arc. The caller
+instantiates each arc's target under that prim, so the erhe scene keeps the
+instance structure instead of a flattened copy; in the editor an arc becomes a
+`Prefab_instance` attachment (`src/editor/prefabs/prefab_library.hpp`).
+
+- `asset_path` empty means an internal reference - a prim of the same layer -
+  and `prim_path` empty means the target layer's default prim, which
+  `Usd_data::default_prim` names.
+- A payload is reported with kind `payload` and is otherwise a reference: erhe
+  reads every arc when the file is read and has no deferred loading (plan
+  section 5). `references` arcs come before `payload` arcs, the arc order of
+  LIVRPS.
+- A list-edited op resolves the way USD composes it: an unqualified op
+  replaces the list, `prepend` inserts at the front, `append` and the
+  deprecated `add` at the back, `delete` removes every entry naming the same
+  target, and `order` is ignored. LightUSD keeps its own resolution private (a
+  static helper of `composition.cc`), so `usd_import.cpp` repeats the rule.
+- Only the arcs a prim itself authors count. An arc authored inside a
+  referenced layer is part of that target, and the target's own instantiation
+  is what reproduces it.
+- The prims the referencing layer authors below a referencing prim - an `over`
+  holding sparse opinions over what the reference supplied - are not imported.
+  LightUSD does not report which layer an opinion on a composed prim came
+  from, so the root layer is re-read once (only when a referencing prim is
+  met) and its prim spec below the referencing prim is what the warning names.
+  X2 carries these overrides; until then each such prim is reported once with
+  a warning naming what was dropped, and X2 is where the per-layer
+  distinction is needed.
+
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
 volumes, MaterialX / OpenPBR shading networks, texture wrap and filter
@@ -379,6 +416,14 @@ byte-identical and is a fixed point (a second load and save reproduces it),
 that every imported prim's stack composes to the transform the stage
 evaluates, and that a `set_parent_from_node` with a changed translation lands
 in the `translate` op while the other ops come back unchanged.
+
+`test/data/references.usda` and `test/data/reftarget.usda` are the composition
+arc case: a reference to another file's default prim, a reference naming a prim
+path in it, an internal reference to a prim of the same layer, a list-edited
+`prepend` / `append` pair and a payload. `test_usd_references.cpp` asserts the
+arcs are reported in the order they resolve to, with the right targets and
+kinds, that the carrier prims are imported with their own transforms, and that
+the prims the arcs name are not.
 
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test

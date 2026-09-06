@@ -12,11 +12,13 @@ namespace erhe::scene {
 namespace editor {
 
 // Marks a node as the root of a prefab instance: the node's subtree was
-// instantiated (cloned) from a glTF source file managed by Prefab_library.
-// The attachment is the durable record of that association -- glTF export
-// writes such nodes as glTF 2.1 externalAsset references instead of
-// flattening the subtree. Clonable so clipboard copy / paste of an instance
-// yields another instance of the same prefab.
+// instantiated (cloned) from a source file managed by Prefab_library - a glTF
+// file, or one prim of a USD file (doc/usd-compatibility-plan.md X1). The
+// attachment is the durable record of that association -- glTF export writes
+// such nodes as glTF 2.1 externalAsset references instead of flattening the
+// subtree, and a USD save writes the arc back. A node carries one attachment
+// per arc, in the order the arcs were authored. Clonable so clipboard copy /
+// paste of an instance yields another instance of the same prefab.
 class Prefab_instance : public erhe::Item<erhe::Item_base, erhe::scene::Node_attachment, Prefab_instance, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
@@ -26,7 +28,11 @@ public:
     Prefab_instance(const Prefab_instance& src, erhe::for_clone);
     ~Prefab_instance() noexcept override;
 
-    Prefab_instance(const std::filesystem::path& source_path, const std::string& prefab_name);
+    Prefab_instance(
+        const std::filesystem::path& source_path,
+        const std::string&           prefab_name,
+        const std::string&           prim_path = {}
+    );
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Prefab_instance"};
@@ -35,10 +41,15 @@ public:
     // Public API
     [[nodiscard]] auto get_prefab_source_path() const -> const std::filesystem::path&;
     [[nodiscard]] auto get_prefab_name       () const -> const std::string&;
+    // The prim of the source file the instance was cloned from, as authored in
+    // the `references` arc. Empty for a glTF prefab and for an arc that names
+    // the target layer's default prim.
+    [[nodiscard]] auto get_prefab_prim_path  () const -> const std::string&;
 
 private:
     std::filesystem::path m_prefab_source_path;
     std::string           m_prefab_name;
+    std::string           m_prefab_prim_path;
 };
 
 // Returns the outermost node, walking up from and including the given node,

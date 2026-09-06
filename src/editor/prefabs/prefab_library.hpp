@@ -15,6 +15,9 @@
 namespace erhe {
     class Item_base;
 }
+namespace erhe::primitive {
+    class Material;
+}
 namespace erhe::scene {
     class Xformable; using Node = Xformable;
     class Scene;
@@ -26,36 +29,66 @@ class App_context;
 class Content_library;
 class Scene_root;
 
-// A glTF file parsed once and kept as an instantiable template. The
+// What one loaded template is: the source file, and - for a USD source - the
+// prim of it the template was taken from (doc/usd-compatibility-plan.md X1).
+// An empty prim path is a glTF file, or a USD file taken at its default prim,
+// so the two formats share one key.
+class Prefab_key
+{
+public:
+    std::filesystem::path source_path; // canonical
+    std::string           prim_path;
+
+    [[nodiscard]] auto operator< (const Prefab_key& rhs) const -> bool
+    {
+        if (source_path != rhs.source_path) {
+            return source_path < rhs.source_path;
+        }
+        return prim_path < rhs.prim_path;
+    }
+    [[nodiscard]] auto operator==(const Prefab_key& rhs) const -> bool
+    {
+        return (source_path == rhs.source_path) && (prim_path == rhs.prim_path);
+    }
+};
+
+// A source file parsed once and kept as an instantiable template. The
 // template nodes live in a private holding scene (no Scene_host, never
-// rendered); gltf_data keeps the parsed resources (materials, textures,
-// primitives) alive. Instances are deep clones of the template subtree
+// rendered); gltf_data keeps a glTF parse's resources (materials, textures,
+// primitives) alive and `materials` names the template's materials whichever
+// format produced them. Instances are deep clones of the template subtree
 // whose Mesh clones share the template's Primitives, so instantiation
 // performs no GPU upload.
 class Prefab
 {
 public:
-    std::filesystem::path               source_path;   // canonical
-    std::string                         name;          // display name (source file name)
-    erhe::gltf::Gltf_data               gltf_data;
-    std::shared_ptr<erhe::scene::Scene> holding_scene;
-    std::shared_ptr<erhe::scene::Node>  template_root; // parent of the template's scene roots
+    std::filesystem::path                                   source_path;   // canonical
+    std::string                                             prim_path;     // USD source prim, empty for glTF
+    std::string                                             name;          // display name
+    erhe::gltf::Gltf_data                                   gltf_data;     // empty for a USD source
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    std::shared_ptr<erhe::scene::Scene>                     holding_scene;
+    std::shared_ptr<erhe::scene::Node>                      template_root; // parent of the template's scene roots
+
+    [[nodiscard]] auto get_key() const -> Prefab_key { return Prefab_key{source_path, prim_path}; }
 };
 
-// App-wide cache of glTF prefab templates, keyed by canonical source path.
-// Loading is main-thread only (it runs inside Editor::tick(), from the
-// asset browser or a dispatched MCP call, and needs
+// App-wide cache of prefab templates, keyed by canonical source path plus USD
+// prim path. Loading is main-thread only (it runs inside Editor::tick(), from
+// the asset browser or a dispatched MCP call, and needs
 // App_context::current_command_buffer for texture upload).
 class Prefab_library
 {
 public:
     explicit Prefab_library(App_context& context);
 
-    // Parse + mesh-finalize a glTF once; cached by canonical path. Returns
-    // nullptr (with a log_parsers error) when the file is missing, produces
-    // no nodes, or participates in a prefab reference cycle (prohibited by
-    // glTF 2.1).
-    auto get_or_load(const std::filesystem::path& path) -> std::shared_ptr<Prefab>;
+    // Parse + mesh-finalize a source file once; cached by Prefab_key. A USD
+    // source takes `prim_path` as the prim the template is rooted at (empty =
+    // the file's default prim); a glTF source ignores it. Returns nullptr
+    // (with a log_parsers error) when the file is missing, produces no nodes,
+    // or participates in a prefab reference cycle (prohibited by glTF 2.1, and
+    // rejected for USD the same way).
+    auto get_or_load(const std::filesystem::path& path, const std::string& prim_path = {}) -> std::shared_ptr<Prefab>;
 
     // Asynchronous form (doc/async-asset-loading-plan.md step 7): the file is
     // read, parsed and made GPU-resident off the tick, then the template is
@@ -68,6 +101,11 @@ public:
     // A null prefab means the load failed.
     void get_or_load_async(
         const std::filesystem::path&                       path,
+        std::function<void(const std::shared_ptr<Prefab>&)> on_ready
+    );
+    void get_or_load_async(
+        const std::filesystem::path&                       path,
+        const std::string&                                 prim_path,
         std::function<void(const std::shared_ptr<Prefab>&)> on_ready
     );
 
@@ -83,13 +121,18 @@ public:
     // have their instances refreshed.
     auto reload(const std::filesystem::path& path) -> bool;
 
-    [[nodiscard]] auto get_prefabs() const -> const std::map<std::filesystem::path, std::shared_ptr<Prefab>>&;
+    [[nodiscard]] auto get_prefabs() const -> const std::map<Prefab_key, std::shared_ptr<Prefab>>&;
 
 private:
     // Parse the prefab's source file into a fresh holding scene / template
     // root inside the (already constructed) Prefab, finalize meshes and
     // resolve nested external assets. Shared by get_or_load and reload.
     auto load_template(Prefab& prefab) -> bool;
+
+    // The USD branch of load_template (doc/usd-compatibility-plan.md X1): the
+    // template is the prim `Prefab::prim_path` names, and the arcs authored
+    // inside it are instantiated recursively through this library.
+    auto load_usd_template(Prefab& prefab) -> bool;
 
     // The MAIN-THREAD tail of load_template, shared with the asynchronous
     // path: hosts the parsed template under a fresh holding scene, finalizes
@@ -108,26 +151,26 @@ private:
     ) -> bool;
 
     // Record that the prefab currently being loaded (top of the active load
-    // stack, if any) directly references referenced_path. Feeds reload's
+    // stack, if any) directly references referenced_key. Feeds reload's
     // dependent propagation.
-    void record_reference(const std::filesystem::path& referenced_path);
+    void record_reference(const Prefab_key& referenced_key);
 
-    // The reloaded prefab plus every loaded prefab that transitively
-    // references it, ordered so a referenced prefab precedes every prefab
-    // whose template instantiates it (the reference graph is acyclic: glTF
-    // 2.1 prohibits cycles and loading rejects them).
-    [[nodiscard]] auto collect_affected_in_dependency_order(const std::filesystem::path& path) const -> std::vector<std::filesystem::path>;
+    // The seed prefabs plus every loaded prefab that transitively references
+    // one of them, ordered so a referenced prefab precedes every prefab whose
+    // template instantiates it (the reference graph is acyclic: glTF 2.1
+    // prohibits cycles and loading rejects them).
+    [[nodiscard]] auto collect_affected_in_dependency_order(const std::vector<Prefab_key>& seeds) const -> std::vector<Prefab_key>;
 
     // Re-clone every Prefab_instance node in every registered scene whose
-    // source path is in rebuilt_paths, and replace the affected scenes'
+    // source is in rebuilt_keys, and replace the affected scenes'
     // content-library texture / material entries (the re-parse produced new
     // objects).
-    void refresh_instances(const std::vector<std::filesystem::path>& rebuilt_paths);
+    void refresh_instances(const std::vector<Prefab_key>& rebuilt_keys);
 
-    App_context&                                                      m_context;
-    std::map<std::filesystem::path, std::shared_ptr<Prefab>>         m_prefabs;
-    std::vector<std::filesystem::path>                                m_active_load_stack; // cycle detection
-    std::map<std::filesystem::path, std::set<std::filesystem::path>> m_references;        // template -> prefabs it directly instantiates
+    App_context&                                      m_context;
+    std::map<Prefab_key, std::shared_ptr<Prefab>>     m_prefabs;
+    std::vector<Prefab_key>                           m_active_load_stack; // cycle detection
+    std::map<Prefab_key, std::set<Prefab_key>>        m_references;        // template -> prefabs it directly instantiates
 };
 
 // Instantiate a prefab into a scene: clone the template subtree under a new

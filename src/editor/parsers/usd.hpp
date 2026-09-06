@@ -4,13 +4,16 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
-namespace erhe::primitive { class Build_info; }
+namespace erhe::primitive { class Build_info; class Material; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 
 class App_context;
 class Operation;
+class Prefab_library;
 class Scene_root;
 
 // Result of make_import_usd_operation(). `operation` is null exactly when
@@ -82,6 +85,31 @@ void import_usd(
     Scene_root&                  scene_root,
     const std::filesystem::path& path
 ) -> bool;
+
+// What one USD file contributes as a prefab template
+// (doc/usd-compatibility-plan.md X1). `root` is an unhosted node whose
+// children are what an instance clones: the prim the arc named, wrapped so
+// that the prim's own class, transform and content ride the instance.
+class Usd_prefab_template
+{
+public:
+    std::shared_ptr<erhe::scene::Node>                      root;
+    std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    std::string                                             error;
+};
+
+// Loads the USD file at `path` as a prefab template rooted at `prim_path`
+// (empty = the file's default prim, and the whole file when it names none).
+// Meshes are finalized and textures created, and the composition arcs
+// authored inside the template subtree are instantiated recursively through
+// `prefab_library`, so a reference cycle is caught there. Failures are values
+// in `error`; a build without USD support answers with one.
+[[nodiscard]] auto load_usd_prefab_template(
+    App_context&                 context,
+    Prefab_library&              prefab_library,
+    const std::filesystem::path& path,
+    const std::string&           prim_path
+) -> Usd_prefab_template;
 
 // True for the file extensions the USD importer accepts (.usd / .usda /
 // .usdc / .usdz), case-insensitive. Answers the same in a build without USD
