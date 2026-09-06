@@ -54,7 +54,7 @@
   left-after-U1::collect_reference_candidates+Layout-do-not-reach-through-Scope;Create-menu-Scope-entry
 ✓U2-Mesh:Gprim{befec879f,2026-09-06:Mesh=Item<Item_base,Gprim,Mesh>;get_node()=this{transitional};get_mesh/for_each_mesh_child/set_mesh_parent{keeps-LOCAL-transform};Xformable::handle_transform_update-virtual;Xformable-secondary-owner=Item_base{D30};glTF-node+mesh<->Mesh-prim{mesh-entry-not-uid-stamped};3-latent-bugs-fixed{graph-mesh-release,excluded-mesh-export,lock_edit-seal-before-values};scene79/usd41/roundtrip164/smoke52;viewport-identical;UI-residue->U3}
 ✓asset-browser-refresh_file{af689d5c8;unblocks-roundtrip-script}
-?U3-Camera/Light:Xformable{NEXT;+editor-presentation-of-typed-prims}
+⚡U3-Camera/Light:Xformable{commit-1✓d5f0be1a8:Camera/Light=Item<Item_base,Xformable,X>;get_node()=this;set_prim_parent(Xformable,parent){keeps-LOCAL;set_mesh_parent-delegates};get_camera/get_light;glTF-rule=node-with-two-of-mesh/camera/light->prim-of-first(mesh>camera>light)+others-as-child-prims;camera-entry-not-uid-stamped;Brush_preview-fill-light-bug-fixed;scene82/usd42/roundtrip164/smoke52|commit-2⚡editor-presentation:item-tree-attachment-loops,properties,get_node_details-attachment_types,hover/selection,retire-get_node()-on-Mesh/Camera/Light}
 ?U4-resources-are-prims{L}
 
 
