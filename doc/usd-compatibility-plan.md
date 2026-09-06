@@ -173,13 +173,16 @@ record has the history.
   (`src/erhe/usd/notes.md`). `scene_roundtrip_verify.py` covers the
   placements (215 checks). Not carried in USD yet: the other resource
   kinds and an empty folder scope (E4).
-- M6 `double` and `glm::mat4` value types: `Property_type::double_floating`
-  and `Property_type::mat4` with their D16 text forms, expression rules
-  and Properties rows (`doc/property-system.md` D2, D16), written and
-  read as USD `double` and `matrix4d` attributes
-  (`doc/usd_compatibility.md` Property-system rows); `erhe_property_tests`
-  and `erhe_usd_tests` cover both. No shipped property is of either type
-  yet: the xformOp stack (M8) is not exposed as properties.
+- M6 The value types USD needs: `Property_type::double_floating`,
+  `mat4`, `asset_path`, `float_array` and `int_array`, each with its D16
+  text form, expression rule and Properties row
+  (`doc/property-system.md` D2, D16), written and read as USD `double`,
+  `matrix4d`, `asset`, `float[]` and `int[]` attributes
+  (`doc/usd_compatibility.md` Property-system rows);
+  `erhe_property_tests` and `erhe_usd_tests` cover all five. No shipped
+  property is of any of these types yet: the xformOp stack (M8) is not
+  exposed as properties, and a texture slot is still an object
+  reference.
 - M7 Style chains: a style has a style of its own; the style layer is
   the chain of the styles' local values, nearest first, and `set_style`
   refuses a cycle (`doc/property-system.md` D25, `doc/style-library.md`);
@@ -205,19 +208,6 @@ Steps are grouped by what they touch: M = model generalization (no USD
 code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### M6 Value types USD needs (S each, as needed)
-
-What: add the remaining `Property_type` alternatives when an import or
-export step hits them: an asset path (texture `inputs:file` today is an
-object reference to a loaded texture; the path is the USD form), and
-homogeneous arrays (`float[]`, `int[]`) for primvars that a node or
-material might want to carry as a property. Each comes with its
-`to_string` / `from_string` pair (D16) and Properties window row, the
-way `double` and `glm::mat4` (section 2) have.
-
-Why: listed so that a later step does not invent an ad hoc carrier.
-Nothing is added ahead of a demonstrated need.
 
 ### X1 References as prefab instances (M)
 
@@ -359,8 +349,7 @@ Each step independently landable, in this order:
 2. E4 editor state in a USD file (completes G2)
 3. X2 editable instances (G3)
 
-M6 (asset paths, arrays) lands when the step that needs it is next (an
-importer hitting a missing type). E2 follows E4; X3 to X5
+E2 follows E4; X3 to X5
 have no fixed place: each waits for its dependencies and is taken when
 wanted.
 

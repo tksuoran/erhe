@@ -428,6 +428,19 @@ public:
             var.set_value(to_usd(std::get<glm::mat4>(value)));
             break;
         }
+        case erhe::property::Property_type::asset_path: {
+            var.set_value(lightusd::value::AssetPath{std::get<erhe::property::Asset_path>(value).path});
+            break;
+        }
+        case erhe::property::Property_type::float_array: {
+            var.set_value(std::get<std::vector<float>>(value));
+            break;
+        }
+        case erhe::property::Property_type::int_array: {
+            const std::vector<int>& v = std::get<std::vector<int>>(value);
+            var.set_value(std::vector<int32_t>{v.begin(), v.end()});
+            break;
+        }
         case erhe::property::Property_type::enumeration: {
             var.set_value(lightusd::value::token{erhe::property::to_string(property, value)});
             break;

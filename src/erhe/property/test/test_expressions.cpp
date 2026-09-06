@@ -89,6 +89,9 @@ const Property<glm::ivec3>  ex_ivec3  = Property<glm::ivec3>::register_property(
 const Property<Mode>        ex_mode   = Property<Mode>::register_property("ex_mode", type_e(), c_mode_info);
 const Property<double>      ex_double = Property<double>::register_property("ex_double", type_e());
 const Property<glm::mat4>   ex_mat4   = Property<glm::mat4>::register_property("ex_mat4", type_e());
+const Property<Asset_path>  ex_asset  = Property<Asset_path>::register_property("ex_asset", type_e());
+const Property<std::vector<float>> ex_floats = Property<std::vector<float>>::register_property("ex_floats", type_e());
+const Property<std::vector<int>>   ex_ints   = Property<std::vector<int>>::register_property("ex_ints", type_e());
 const Property<float>       ex_clamped = Property<float>::register_property(
     "ex_clamped", type_e(),
     Property_metadata{
@@ -585,4 +588,35 @@ TEST(Expressions, mat4_is_refused_as_an_expression_target)
     Named_object o{"mat4_host"};
     EXPECT_FALSE(o.set_expression(ex_mat4.get(), "1"));
     EXPECT_FALSE(o.get_expression(ex_mat4.get()).has_value());
+}
+
+// M6 value types: an asset path and the array types are whole values, so
+// none of them is an expression target or an expression source.
+TEST(Expressions, asset_path_and_arrays_are_refused_as_expression_targets)
+{
+    EXPECT_EQ(Expression::component_count(Property_type::asset_path), 0);
+    EXPECT_EQ(Expression::component_count(Property_type::float_array), 0);
+    EXPECT_EQ(Expression::component_count(Property_type::int_array), 0);
+
+    const Property_type types[3] = {Property_type::asset_path, Property_type::float_array, Property_type::int_array};
+    const char* const  names[3] = {"asset", "float[]", "int[]"};
+    for (int index = 0; index < 3; ++index) {
+        std::string error;
+        EXPECT_EQ(Expression::compile("1", types[index], error), nullptr);
+        EXPECT_NE(error.find(names[index]), std::string::npos);
+        EXPECT_NE(error.find("cannot be driven by an expression"), std::string::npos);
+    }
+
+    Named_object o{"array_host"};
+    EXPECT_FALSE(o.set_expression(ex_asset.get(), "1"));
+    EXPECT_FALSE(o.set_expression(ex_floats.get(), "1"));
+    EXPECT_FALSE(o.set_expression(ex_ints.get(), "1"));
+    EXPECT_FALSE(o.get_expression(ex_asset.get()).has_value());
+    EXPECT_FALSE(o.get_expression(ex_floats.get()).has_value());
+    EXPECT_FALSE(o.get_expression(ex_ints.get()).has_value());
+
+    // Nor is one of them a source another formula can read a component of.
+    o.set_value(ex_floats, std::vector<float>{1.0f, 2.0f});
+    EXPECT_TRUE(o.set_expression(ex_float.get(), "{ex_floats}"));
+    EXPECT_NE(o.get_expression_error(ex_float.get()).find("is an array property"), std::string_view::npos);
 }

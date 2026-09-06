@@ -9,6 +9,7 @@
 #include <string_view>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 namespace erhe::property {
 
@@ -33,6 +34,16 @@ struct Object_reference
     [[nodiscard]] auto operator==(const Object_reference&) const -> bool = default;
 };
 
+// A path to an asset (doc/usd-compatibility-plan.md M6): the USD form of a
+// texture's `inputs:file`. Kept distinct from `string` so generic code can
+// tell a path from free text; its text form is the path verbatim.
+class Asset_path
+{
+public:
+    std::string path{};
+    [[nodiscard]] auto operator==(const Asset_path&) const -> bool = default;
+};
+
 using Property_value = std::variant<
     bool,
     int,
@@ -48,7 +59,16 @@ using Property_value = std::variant<
     glm::ivec4,
     Object_reference,
     double,
-    glm::mat4
+    glm::mat4,
+    Asset_path,
+    // Homogeneous arrays, for a USD primvar that a prim or a material
+    // carries as a property. These alternatives allocate when a
+    // Property_value is copied, as std::string already does; a
+    // Property_value is not on the per-frame hot path (AGENTS.md
+    // "Run-time Memory Allocation Discipline"): one is built at an edit, an
+    // import or an export.
+    std::vector<float>,
+    std::vector<int>
 >;
 
 // Enumerators are the Property_value variant indices.
@@ -68,9 +88,13 @@ enum class Property_type : uint8_t {
     object      = 12,
 
     // USD needs these (doc/usd-compatibility-plan.md M6): `double` carries
-    // USD `double` transforms and time codes, `mat4` an xformOp matrix.
+    // USD `double` transforms and time codes, `mat4` an xformOp matrix,
+    // `asset_path` an asset identifier and the array types a primvar.
     double_floating = 13,
-    mat4            = 14
+    mat4            = 14,
+    asset_path      = 15,
+    float_array     = 16,
+    int_array       = 17
 };
 
 [[nodiscard]] constexpr auto c_str(const Property_type type) -> const char*
@@ -91,6 +115,9 @@ enum class Property_type : uint8_t {
         case Property_type::object:      return "object";
         case Property_type::double_floating: return "double";
         case Property_type::mat4:            return "mat4";
+        case Property_type::asset_path:      return "asset";
+        case Property_type::float_array:     return "float[]";
+        case Property_type::int_array:       return "int[]";
     }
     return "?";
 }
@@ -116,7 +143,10 @@ concept Property_value_type =
     std::is_same_v<T, glm::ivec4>  ||
     std::is_same_v<T, Object_reference> ||
     std::is_same_v<T, double>      ||
-    std::is_same_v<T, glm::mat4>;
+    std::is_same_v<T, glm::mat4>   ||
+    std::is_same_v<T, Asset_path>  ||
+    std::is_same_v<T, std::vector<float>> ||
+    std::is_same_v<T, std::vector<int>>;
 
 template <typename T>
 concept Property_enum_type = std::is_enum_v<T>;
@@ -154,6 +184,9 @@ template <Property_storable T>
     if constexpr (std::is_same_v<S, Object_reference>) { return Property_type::object; }
     if constexpr (std::is_same_v<S, double>)      { return Property_type::double_floating; }
     if constexpr (std::is_same_v<S, glm::mat4>)   { return Property_type::mat4;            }
+    if constexpr (std::is_same_v<S, Asset_path>)  { return Property_type::asset_path;      }
+    if constexpr (std::is_same_v<S, std::vector<float>>) { return Property_type::float_array; }
+    if constexpr (std::is_same_v<S, std::vector<int>>)   { return Property_type::int_array;   }
 }
 
 // C++ value -> stored variant
@@ -187,7 +220,7 @@ template <Property_storable T>
 
 // The value a property of the given type has when its metadata names none:
 // false, 0, 0.0f, zero vectors, identity quaternion, "", enumeration 0,
-// null reference, identity matrix
+// null reference, identity matrix, empty path, empty array
 // (Property<E>::register_property replaces that with the table's first
 // entry).
 [[nodiscard]] inline auto zero_value(const Property_type type) -> Property_value
@@ -208,6 +241,9 @@ template <Property_storable T>
         case Property_type::object:      return Object_reference{};
         case Property_type::double_floating: return 0.0;
         case Property_type::mat4:            return glm::mat4{1.0f};
+        case Property_type::asset_path:      return Asset_path{};
+        case Property_type::float_array:     return std::vector<float>{};
+        case Property_type::int_array:       return std::vector<int>{};
     }
     return false;
 }

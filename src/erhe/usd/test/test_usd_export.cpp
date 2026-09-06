@@ -29,6 +29,12 @@ const erhe::property::Property<double> c_usd_test_double =
     erhe::property::Property<double>::register_property("usd_test_double", erhe::scene::Node::property_owner_type());
 const erhe::property::Property<glm::mat4> c_usd_test_matrix =
     erhe::property::Property<glm::mat4>::register_property("usd_test_matrix", erhe::scene::Node::property_owner_type());
+const erhe::property::Property<erhe::property::Asset_path> c_usd_test_asset =
+    erhe::property::Property<erhe::property::Asset_path>::register_property("usd_test_asset", erhe::scene::Node::property_owner_type());
+const erhe::property::Property<std::vector<float>> c_usd_test_floats =
+    erhe::property::Property<std::vector<float>>::register_property("usd_test_floats", erhe::scene::Node::property_owner_type());
+const erhe::property::Property<std::vector<int>> c_usd_test_ints =
+    erhe::property::Property<std::vector<int>>::register_property("usd_test_ints", erhe::scene::Node::property_owner_type());
 
 [[nodiscard]] auto test_data_path(const char* file_name) -> std::filesystem::path
 {
@@ -281,6 +287,12 @@ protected:
         matrix[3] = glm::vec4{1.5f, -2.25f, 3.75f, 1.0f};
         shown->set_value(c_usd_test_matrix, matrix);
 
+        // An asset path and the two array types, to be carried by the
+        // `asset`, `float[]` and `int[]` custom attributes (M6).
+        shown->set_value(c_usd_test_asset, erhe::property::Asset_path{"./textures/wood_base_color.png"});
+        shown->set_value(c_usd_test_floats, std::vector<float>{0.5f, -1.25f, 2.0f});
+        shown->set_value(c_usd_test_ints, std::vector<int>{-1, 0, 7});
+
         trip->save_and_reload("authored.usda");
         ASSERT_TRUE(trip->save.error.empty()) << trip->save.error;
         ASSERT_TRUE(trip->reloaded.error.empty()) << trip->reloaded.error;
@@ -415,4 +427,23 @@ TEST_F(Authored_round_trip, double_and_matrix_survive_as_custom_attributes)
     EXPECT_FLOAT_EQ(matrix[3][1], -2.25f);
     EXPECT_FLOAT_EQ(matrix[3][2],  3.75f);
     EXPECT_FLOAT_EQ(matrix[3][3],  1.0f);
+}
+
+TEST_F(Authored_round_trip, asset_path_and_arrays_survive_as_custom_attributes)
+{
+    const std::shared_ptr<erhe::scene::Node> shown = find_node(trip->reloaded.data, "shown");
+    ASSERT_TRUE(shown.operator bool());
+
+    EXPECT_EQ(shown->get_value_source(c_usd_test_asset.get()), erhe::property::Value_source::local);
+    EXPECT_EQ(shown->get_value(c_usd_test_asset).path, "./textures/wood_base_color.png");
+
+    EXPECT_EQ(shown->get_value_source(c_usd_test_floats.get()), erhe::property::Value_source::local);
+    const std::vector<float> floats = shown->get_value(c_usd_test_floats);
+    ASSERT_EQ(floats.size(), 3u);
+    EXPECT_FLOAT_EQ(floats[0],  0.5f);
+    EXPECT_FLOAT_EQ(floats[1], -1.25f);
+    EXPECT_FLOAT_EQ(floats[2],  2.0f);
+
+    EXPECT_EQ(shown->get_value_source(c_usd_test_ints.get()), erhe::property::Value_source::local);
+    EXPECT_EQ(shown->get_value(c_usd_test_ints), (std::vector<int>{-1, 0, 7}));
 }

@@ -18,6 +18,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/enum_info.hpp"
+#include "erhe_property/expression.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_style.hpp"
@@ -136,6 +137,40 @@ template <typename V>
         case Property_type::ivec4: return merge_vector_components(std::get<glm::ivec4>(item), std::get<glm::ivec4>(original), std::get<glm::ivec4>(edited));
         default:                   return edited;
     }
+}
+
+// What an array row shows (M6): how many values the array holds, then the
+// first few of them in the D16 text form, so a long primvar stays one line.
+[[nodiscard]] auto array_summary(const Property_value& value) -> std::string
+{
+    constexpr std::size_t max_shown = 4;
+    const bool        is_float = (erhe::property::type_of(value) == Property_type::float_array);
+    const std::size_t count    = is_float
+        ? std::get<std::vector<float>>(value).size()
+        : std::get<std::vector<int>>(value).size();
+    std::string text = std::to_string(count) + ((count == 1) ? " value" : " values");
+    if (count == 0) {
+        return text;
+    }
+    const std::size_t shown = std::min(count, max_shown);
+    const Property_value head = is_float
+        ? Property_value{
+            std::vector<float>{
+                std::get<std::vector<float>>(value).begin(),
+                std::get<std::vector<float>>(value).begin() + static_cast<std::ptrdiff_t>(shown)
+            }
+        }
+        : Property_value{
+            std::vector<int>{
+                std::get<std::vector<int>>(value).begin(),
+                std::get<std::vector<int>>(value).begin() + static_cast<std::ptrdiff_t>(shown)
+            }
+        };
+    text += ": " + erhe::property::to_string(head);
+    if (shown < count) {
+        text += " ...";
+    }
+    return text;
 }
 
 constexpr const char* c_mixed_format = "mixed"; // a format without a conversion: the drag prints it verbatim
@@ -898,6 +933,32 @@ auto Dependency_property_rows::draw_widget(
             }
             return changed;
         }
+        case Property_type::asset_path: {
+            // The path as text. An asset path is authored by an import or by
+            // the file it came from; there is no file dialog here.
+            if (any_mixed && (m_edit_property != &property)) {
+                m_text_scratch.clear();
+            } else if (!any_mixed) {
+                m_text_scratch = std::get<erhe::property::Asset_path>(value).path;
+            }
+            const bool changed = any_mixed
+                ? ImGui::InputTextWithHint("##", c_mixed_format, &m_text_scratch)
+                : ImGui::InputText("##", &m_text_scratch);
+            if (changed) {
+                value = erhe::property::Asset_path{m_text_scratch};
+            }
+            return changed;
+        }
+        case Property_type::float_array:
+        case Property_type::int_array: {
+            // Read-only: how many values the array holds and the first few of
+            // them. Per-element editing is not part of the row.
+            const std::string text = any_mixed
+                ? std::string{c_mixed_format}
+                : array_summary(value);
+            ImGui::TextUnformatted(text.c_str());
+            return false;
+        }
         case Property_type::enumeration: {
             immediate = true;
             const erhe::property::Enum_info* info = property.get_enum_info();
@@ -1067,7 +1128,9 @@ void Dependency_property_rows::context_menu(const Dependency_property& property,
         remove_property(property);
     }
     const bool driven      = target(0)->get_expression(property).has_value();
-    const bool can_drive   = !driven && writable && !metadata.is_computed() && (property.get_type() != Property_type::string) && (property.get_type() != Property_type::object) && (property.get_type() != Property_type::mat4);
+    // A type with no components (string, object, mat4, asset path, array)
+    // is the one Expression::compile refuses.
+    const bool can_drive   = !driven && writable && !metadata.is_computed() && (erhe::property::Expression::component_count(property.get_type()) > 0);
     if (ImGui::MenuItem("Edit as expression", nullptr, false, can_drive)) {
         edit_as_expression(property);
     }
@@ -1132,6 +1195,9 @@ void Dependency_property_rows::edit_as_expression(const Dependency_property& pro
         case Property_type::string:      return;
         case Property_type::object:      return;
         case Property_type::mat4:        return; // 16 components: not an expression target
+        case Property_type::asset_path:  return;
+        case Property_type::float_array: return; // any component count: not an expression target
+        case Property_type::int_array:   return;
     }
     begin_edit(property);
     queue_set(property, erhe::property::Local_state{erhe::property::Expression_text{std::move(text)}});

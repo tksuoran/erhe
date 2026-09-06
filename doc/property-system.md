@@ -52,7 +52,8 @@ mechanism instead of one hand-written path per field.
 
 Value types in scope: `bool`, `int`, `float`, `double`, `glm::vec2`, `glm::vec3`,
 `glm::vec4`, `glm::ivec2`, `glm::ivec3`, `glm::ivec4`, `glm::quat`,
-`glm::mat4`, `std::string`, C++ enumerations (any `enum class` with an enumerator
+`glm::mat4`, `std::string`, an asset path, homogeneous `float` and `int`
+arrays, C++ enumerations (any `enum class` with an enumerator
 table, see D2a), and references to other objects (D28).
 
 ## 2. Requirements
@@ -150,15 +151,24 @@ table, see D2a), and references to other objects (D28).
 - D2 Value representation.
   `Property_value = std::variant<bool, int, float, glm::vec2, glm::vec3,
   glm::vec4, glm::quat, std::string, Enum_value, glm::ivec2, glm::ivec3,
-  glm::ivec4, Object_reference, double, glm::mat4>` (each addition appended
+  glm::ivec4, Object_reference, double, glm::mat4, Asset_path,
+  std::vector<float>, std::vector<int>>` (each addition appended
   so the variant indices of the earlier types are stable;
-  `Object_reference` is D28, `double` and `glm::mat4` are the USD value
-  types of `doc/usd-compatibility-plan.md` M6 - `Property_type::double_floating`
-  and `Property_type::mat4`, spelled `double` and `mat4` in text. A `double`
+  `Object_reference` is D28, the five after it are the USD value
+  types of `doc/usd-compatibility-plan.md` M6 - `Property_type::double_floating`,
+  `mat4`, `asset_path`, `float_array` and `int_array`, spelled `double`,
+  `mat4`, `asset`, `float[]` and `int[]` in text. A `double`
   is a one-component numeric value wherever a `float` is one; a `glm::mat4`
   is a whole value: it is neither an expression target nor an expression
   source, and its row is four drag rows, one per column, in glm's column
-  order) with a matching
+  order; `Asset_path` is a class wrapping one `std::string path`, kept
+  distinct from `std::string` so a path is never taken for free text, not
+  expressible, and its row is the path as text; an array is not
+  expressible either and its row is read-only, showing how many values it
+  holds and the first few of them. The array alternatives allocate when a
+  `Property_value` is copied, as `std::string` already does; a
+  `Property_value` is built at an edit, an import or an export, never per
+  frame) with a matching
   `enum class Property_type : uint8_t` whose enumerators are the variant
   indices. `Property<T>` is valid for `T` in that list or for any C++
   enumeration type (constrained with a concept); an enumeration `T` maps to
@@ -438,9 +448,11 @@ table, see D2a), and references to other objects (D28).
   Enum_info*) -> std::optional<Property_value>` in
   `erhe_property/property_string.hpp`. Vectors and quaternions are
   space-separated components, a `glm::mat4` is its 16 components in glm's
-  storage order (column 0 first, each column `x y z w`), booleans are
-  `true` / `false`, enumerations are their `Enum_info` labels, strings are
-  verbatim. Both directions round-trip every value exactly for the
+  storage order (column 0 first, each column `x y z w`), an array is its
+  components in the same space-separated form and the empty array is the
+  empty text, booleans are
+  `true` / `false`, enumerations are their `Enum_info` labels, strings and
+  asset paths are verbatim. Both directions round-trip every value exactly for the
   non-floating-point types and to the shortest representation that
   round-trips for `float` and `double` (`std::to_chars`). An
   object reference (D28) needs the referencing object to parse, so a

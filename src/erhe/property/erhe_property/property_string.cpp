@@ -182,6 +182,31 @@ auto to_string(const Property_value& value, const Enum_info* enum_info) -> std::
             return reference.object ? reference.object->get_reference_path() : std::string{};
         }
         case Property_type::double_floating: return double_to_string(std::get<double>(value));
+        case Property_type::asset_path: return std::get<Asset_path>(value).path;
+        case Property_type::float_array: {
+            // Space-separated components, as the vectors are; an empty array
+            // is the empty string.
+            const std::vector<float>& v = std::get<std::vector<float>>(value);
+            std::string text;
+            for (std::size_t i = 0, end = v.size(); i < end; ++i) {
+                if (i > 0) {
+                    text += ' ';
+                }
+                text += float_to_string(v[i]);
+            }
+            return text;
+        }
+        case Property_type::int_array: {
+            const std::vector<int>& v = std::get<std::vector<int>>(value);
+            std::string text;
+            for (std::size_t i = 0, end = v.size(); i < end; ++i) {
+                if (i > 0) {
+                    text += ' ';
+                }
+                text += std::to_string(v[i]);
+            }
+            return text;
+        }
         case Property_type::mat4: {
             // 16 floats in glm's own storage order: column 0 first, each
             // column x y z w.
@@ -310,6 +335,37 @@ auto parse_value(const Property_type type, const std::string_view text_in, const
                 return std::nullopt;
             }
             return value.value();
+        }
+        case Property_type::asset_path: {
+            return Asset_path{std::string{text_in}};
+        }
+        case Property_type::float_array: {
+            // Any component count, separated by spaces or commas the way the
+            // vectors accept them; the empty text is the empty array.
+            const std::vector<std::string_view> parts = split_components(text);
+            std::vector<float> values;
+            values.reserve(parts.size());
+            for (const std::string_view part : parts) {
+                const std::optional<float> component = parse_float(part);
+                if (!component.has_value()) {
+                    return std::nullopt;
+                }
+                values.push_back(component.value());
+            }
+            return values;
+        }
+        case Property_type::int_array: {
+            const std::vector<std::string_view> parts = split_components(text);
+            std::vector<int> values;
+            values.reserve(parts.size());
+            for (const std::string_view part : parts) {
+                const std::optional<int> component = parse_int(part);
+                if (!component.has_value()) {
+                    return std::nullopt;
+                }
+                values.push_back(component.value());
+            }
+            return values;
         }
         case Property_type::mat4: {
             const std::optional<std::vector<float>> v = parse_floats(text, 16);

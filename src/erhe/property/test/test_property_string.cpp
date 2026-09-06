@@ -134,3 +134,44 @@ TEST(Property_string, mat4_is_sixteen_floats_in_column_order)
     EXPECT_FALSE(parse_value(Property_type::mat4, "1 0 0 0").has_value());
     EXPECT_FALSE(parse_value(Property_type::mat4, "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0").has_value());
 }
+
+TEST(Property_string, asset_path_is_verbatim)
+{
+    EXPECT_EQ(to_string(Property_value{Asset_path{"textures/wood.png"}}), "textures/wood.png");
+    EXPECT_EQ(parse_value(Property_type::asset_path, "  ./with space.png  ").value(), Property_value{Asset_path{"  ./with space.png  "}});
+    EXPECT_TRUE(round_trips(Property_value{Asset_path{}}));
+    EXPECT_TRUE(round_trips(Property_value{Asset_path{"../a b/c,d[e].usda"}}));
+}
+
+TEST(Property_string, float_array_is_space_separated)
+{
+    EXPECT_EQ(to_string(Property_value{std::vector<float>{}}), "");
+    EXPECT_EQ(to_string(Property_value{std::vector<float>{1.5f}}), "1.5");
+    EXPECT_EQ(to_string(Property_value{std::vector<float>{1.0f, -2.25f, 0.5f}}), "1 -2.25 0.5");
+
+    EXPECT_TRUE(round_trips(Property_value{std::vector<float>{}}));
+    EXPECT_TRUE(round_trips(Property_value{std::vector<float>{-0.0f}}));
+
+    // A float that needs the shortest round-trip text, not a fixed number of
+    // digits.
+    const float awkward = 0.1f;
+    EXPECT_TRUE(round_trips(Property_value{std::vector<float>{awkward, 1.0e-20f, 3.4028235e38f}}));
+
+    // Commas separate components, as they do for a vector.
+    EXPECT_EQ(parse_value(Property_type::float_array, "1, 2, 3").value(), (Property_value{std::vector<float>{1.0f, 2.0f, 3.0f}}));
+    EXPECT_EQ(parse_value(Property_type::float_array, "  ").value(), (Property_value{std::vector<float>{}}));
+    EXPECT_FALSE(parse_value(Property_type::float_array, "1 x 3").has_value());
+}
+
+TEST(Property_string, int_array_is_space_separated)
+{
+    EXPECT_EQ(to_string(Property_value{std::vector<int>{}}), "");
+    EXPECT_EQ(to_string(Property_value{std::vector<int>{7}}), "7");
+    EXPECT_EQ(to_string(Property_value{std::vector<int>{-1, 0, 2147483647}}), "-1 0 2147483647");
+
+    EXPECT_TRUE(round_trips(Property_value{std::vector<int>{}}));
+    EXPECT_TRUE(round_trips(Property_value{std::vector<int>{std::numeric_limits<int>::min(), -1, 0, 1, std::numeric_limits<int>::max()}}));
+
+    EXPECT_EQ(parse_value(Property_type::int_array, "1, -2, 3").value(), (Property_value{std::vector<int>{1, -2, 3}}));
+    EXPECT_FALSE(parse_value(Property_type::int_array, "1 2.5").has_value());
+}

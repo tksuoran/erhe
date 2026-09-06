@@ -23,12 +23,22 @@ inventory (and the owner's design section when the design changed).
 
 - **`Property_value`** - `std::variant<bool, int, float, glm::vec2, glm::vec3,
   glm::vec4, glm::quat, std::string, Enum_value, glm::ivec2, glm::ivec3,
-  glm::ivec4, Object_reference, double, glm::mat4>`; `Property_type`
+  glm::ivec4, Object_reference, double, glm::mat4, Asset_path,
+  std::vector<float>, std::vector<int>>`; `Property_type`
   enumerators are the variant indices. `double` (`Property_type::double_floating`,
-  text `double`) and `glm::mat4` (`Property_type::mat4`) are the USD value
-  types (`doc/usd-compatibility-plan.md` M6): a `double` behaves as `float`
-  does everywhere, a `mat4` is a whole value - not an expression target or
-  source, and its Properties row is four drag rows, one per column. `Enum_value` wraps the integer of a C++ enumeration so
+  text `double`), `glm::mat4` (`Property_type::mat4`), `Asset_path`
+  (`Property_type::asset_path`, text `asset`) and the two arrays
+  (`Property_type::float_array` / `int_array`, text `float[]` / `int[]`)
+  are the USD value types (`doc/usd-compatibility-plan.md` M6): a `double`
+  behaves as `float` does everywhere; a `mat4` is a whole value - not an
+  expression target or source, and its Properties row is four drag rows,
+  one per column; an `Asset_path` wraps one `std::string path` (a class of
+  its own so a path is never taken for free text), is not expressible, and
+  its row is the path as text; an array is not expressible either and its
+  row is read-only, showing the value count and the first few values. The
+  array alternatives allocate when a `Property_value` is copied, as
+  `std::string` already does - a `Property_value` is built at an edit, an
+  import or an export, never per frame. `Enum_value` wraps the integer of a C++ enumeration so
   generic code can tell an enumeration from an `int`. `Object_reference`
   (D28) is a strong `std::shared_ptr<Dependency_object>` compared by
   identity; its text form is the pointee's `get_reference_path()` and it

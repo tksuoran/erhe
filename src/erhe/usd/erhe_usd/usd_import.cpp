@@ -419,6 +419,23 @@ template <typename T>
     }
 }
 
+// The path an asset literal carries, or nothing when the literal is not an
+// asset literal. USDA delimits an asset path with `@ ... @`, and with
+// `@@@ ... @@@` when the path itself contains an `@`; the path between the
+// delimiters is the property text form (M6) verbatim, so it keeps the
+// spaces and brackets a path may contain.
+[[nodiscard]] auto usd_asset_literal_path(const std::string& literal) -> std::optional<std::string>
+{
+    static constexpr std::string_view triple{"@@@"};
+    if ((literal.size() >= 6) && (literal.compare(0, triple.size(), triple) == 0) && (literal.compare(literal.size() - triple.size(), triple.size(), triple) == 0)) {
+        return literal.substr(triple.size(), literal.size() - (2 * triple.size()));
+    }
+    if ((literal.size() >= 2) && (literal.front() == '@') && (literal.back() == '@')) {
+        return literal.substr(1, literal.size() - 2);
+    }
+    return std::nullopt;
+}
+
 // A USDA literal rewritten in erhe's property text form (D16): a tuple or
 // array becomes space-separated components, a quoted token or string loses
 // its quotes. `(1, 0.5, 0)` becomes `1 0.5 0`, `"guide"` becomes `guide`,
@@ -1010,8 +1027,9 @@ private:
                 log_usd->warn("USD prim '{}': custom attribute '{}' has no value: {}", absolute_path, name, error);
                 continue;
             }
-            const std::string literal = lightusd::value::pprint_value(attribute.get_var().value_raw());
-            const std::string text    = usd_literal_to_property_text(literal);
+            const std::string                literal    = lightusd::value::pprint_value(attribute.get_var().value_raw());
+            const std::optional<std::string> asset_path = usd_asset_literal_path(literal);
+            const std::string                text       = asset_path.has_value() ? asset_path.value() : usd_literal_to_property_text(literal);
             const std::optional<erhe::property::Property_value> value = erhe::property::parse_value(*property, text);
             if (!value.has_value()) {
                 log_usd->warn("USD prim '{}': custom attribute '{}' value '{}' is not a valid {}", absolute_path, name, text, erhe::property::c_str(property->get_type()));
