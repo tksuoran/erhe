@@ -1,6 +1,6 @@
 # USD compatibility plan
 
-Status: every step of section 3 has landed, including Q1 (the Quest editor answers `describe_usd_file` over the forwarded MCP port); G1 and G2 hold for the schemas I1 covers. The editor state a USD-backed scene does not carry yet is listed in `doc/scene_serialization.md`, "USD-backed scenes"; the X steps and section 5 remain future work. The concept and naming mapping every step
+Status: steps 1 to 10 of section 3 have landed (Q1 verified on the headset); G1 holds for the schemas I1 covers and G2 holds for scene content. E4 is the next step; the X steps and section 5 follow it. The concept and naming mapping every step
 relies on is `doc/usd_compatibility.md` (referred to below as "the mapping");
 this document holds the steps, their order and their verification.
 
@@ -280,6 +280,27 @@ reload the save into a fresh scene, MCP-diff the two scenes, and run
 `usdchecker` when an OpenUSD build is available. The two legs share the
 diff code and nothing else (G3).
 
+### E4 Editor state in a USD file (M, after E1; completes G2)
+
+What: the editor state a USD-backed scene does not carry yet
+(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
+the `customLayerData` keys already in use) rides USD's own means (C1):
+brushes, geometry and texture node graphs, content-library folders and
+styles as custom prims under an `/erhe` scope in the forms the
+`ERHE_scene` and asset-root glTF extensions hold today (one custom
+`typeName` per kind, attributes named as the glTF fields are, node
+graphs as a JSON string attribute until a prim form is wanted); physics
+per the mapping's physics table through the `Gltf_physics_data`-style
+carrier (section 5 names the shape); animations, skins and prefab
+references stay listed as not carried. A save no longer logs a kind it
+carries; the open side reads every kind it writes. `.usdc` output
+follows once the `.usda` output round-trips through E3 with all of it.
+
+Verification: the E3 leg extended with a scene that holds one of each
+kind (build it over MCP the way the glTF sections build theirs); a
+fresh-session reload shows the same folders, styles and brushes;
+`scene-close leak` clean.
+
 ### X1 References as prefab instances (M, after I1, M1)
 
 What: an imported stage's `references` arcs that target a whole file
@@ -344,15 +365,17 @@ Steps 1 to 7 reach G1 for the schemas I1 covers.
     `ERHE_USD_LIBRARY=lightusd`, Debug APK size and link time are measured
     against the option off, and the editor launches on the headset and
     answers `describe_usd_file` over the forwarded MCP port
-    (`erhe-quest-launch`). Q1 is the last step: every other step is
-    verified on desktop Windows only until then.
+    (`erhe-quest-launch`). Every other step is verified on desktop
+    Windows; Q1 is re-run only when a step changes the Android build.
+11. E4 editor state in a USD file (completes G2)
+12. X1 references as prefab instances, then X2 editable instances (G3)
 
 M6 and M7 land when the step that needs them is next (any importer
 hitting a missing type, X3). Everything in X waits for I1 and E1 to have
 shown the mapping holds on real content; X1 and X2 are what turns E1's
 flattened save into one that keeps the source file's structure (G3).
 
-Dependencies: I1 needs L1; I2 needs M4 and I1; E1 needs M1, M2 and I1; E2 and E3 need E1; X1 needs I1 and M1;
+Dependencies: I1 needs L1; I2 needs M4 and I1; E1 needs M1, M2 and I1; E2, E3 and E4 need E1; X1 needs I1 and M1;
 X2 needs X1, M1 and M4; X3 needs I1 and M7; X4 and X5 need I1.
 
 ## 4. Out of scope
