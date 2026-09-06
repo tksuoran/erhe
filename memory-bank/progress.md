@@ -49,7 +49,7 @@
 
 [TASK::usd-object-model]{U1-U4,NEXT}
 ✓plan-revised-2026-09-06{C5-unified-prim-tree;doc/usd-compatibility-plan.md-section-3-U1..U4;section-4-order}
-⚡U1-prim-class-hierarchy{commit-1✓7986a326f:erhe::item-Typed(type_name-bridged-property;get_class_type_name-fixes-token)+Scope(root_owner_type-secondary);169-item-tests|commit-2a⚡scene-levels+Node->Xformable-alias+Xform-at-every-creation-site|commit-2b?parent-walk+host-propagation-through-non-Node-prims|commit-3?USD/glTF-readers-writers}
+⚡U1-prim-class-hierarchy{commit-1✓7986a326f:erhe::item-Typed(type_name-bridged-property;get_class_type_name-fixes-token)+Scope(root_owner_type-secondary);169-item-tests|commit-2a✓e635b27b6:Imageable/Xformable(=Node-alias,static_type_name-Xformable,bit-index-20)/Xform/Boundable/Gprim;113-creation-sites->Xform;74-fwd-decls=class-Xformable+using-Node;levels-below-Xformable-clone-via-(src,for_clone);no-icons-for-level-bits{draw_icon-draws-per-set-bit};item169/scene71/property100;viewport-pixel-identical|commit-2b⚡nearest-Xformable-get_parent_node+host-propagation-through-Typed+Scene-walk-through-Scope+MCP-create_node.prim_type+icons|commit-3?USD/glTF-readers-writers}
 ?U2-Mesh:Gprim{L}
 ?U3-Camera/Light:Xformable
 ?U4-resources-are-prims{L}
