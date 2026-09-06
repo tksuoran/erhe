@@ -47,6 +47,9 @@
 ✓Q1-Quest{build-593691fb5;headset-launch+describe_usd_file-10-prims-verified-2026-09-06}
 ?user-interactive-verify{asset-browser-Import/Load-scene-on-USD;Save-Scene-on-USD-scene;Properties-purpose-row}
 
+[TASK::usd-prim-item-types]{U1,NEXT}
+?plan-revised-2026-09-06{doc/usd-compatibility-plan.md-section-3-U1;awaiting-user-review-of-class-list}
+
 
 [NOTES]
 !headless-recipe::build_vs2026_vulkan_headless-editor→ERHE_AI_DRIVER=1-launch-hidden→mcp_call.py-b64-args{get_item_properties/set_item_property/get_addable_item_properties/undo;ids-reshuffle-per-launch;scene_name-required-for-create_node/select_items/get_node_details}
