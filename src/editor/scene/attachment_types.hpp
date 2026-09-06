@@ -21,8 +21,8 @@ enum class Attachment_kind : unsigned int {
     api_schema
 };
 
-// One user-addable kind for the "Add Child Prim" / "Add Attachment" UI
-// (Properties window and Hierarchy context menu) and the
+// One user-addable kind for the Hierarchy context menu ("Create" lists the
+// child-prim entries, "Add Attachment" the API-schema entries) and the
 // add_node_attachment MCP tool.
 //
 // can_add / make are stateless free functions (function pointers, no heap):

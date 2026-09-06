@@ -150,8 +150,9 @@ record has the history.
   `get_camera()` and `get_light()` are the helpers and no typed prim has
   a `get_node()` (`src/erhe/scene/notes.md`); `Node_attachment` remains
   for `Node_physics`, `Node_joint`, `Layout`, `Brush_placement`,
-  `Prefab_instance`, `Frame_controller` and `Grid`; the editor offers
-  "Add Child Prim" beside "Add Attachment" (`Attachment_kind`), the
+  `Prefab_instance`, `Frame_controller` and `Grid`; the hierarchy
+  context menu's "Create" lists every prim kind (child of the clicked
+  prim) and "Add Attachment" the API-schema kinds (`Attachment_kind`), the
   hierarchy accepts a drag payload named for the prim's class, and MCP
   `get_node_details` carries `mesh` / `camera` / `light` on the node
   entry (`mcp_server_usage.md`). The interactive drag gesture has not

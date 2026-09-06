@@ -145,7 +145,7 @@ zero-argument; per-invocation args are pushed into the command beforehand via
 | `scene.add_chain`             | Adds a chain of interlocking toruses (alternating-axis pairs).          | yes      |
 | `scene.add_toruses`           | Adds a row of separate toruses.                                         | yes      |
 | `scene.create_new_camera`     | Adds a single new camera node. (Pre-existing.)                          | yes      |
-| `scene.create_new_empty_node` | Adds a single empty node. (Pre-existing.)                               | yes      |
+| `scene.create_new_xform` | Adds a single Xform prim. (Pre-existing.)                               | yes      |
 | `scene.create_new_light`      | Adds a single generic light. (Pre-existing.)                            | yes      |
 | `scene.create_new_rendertarget`| Adds a rendertarget mesh + viewport bound to the selected camera.      | partial (the queued node insert is undoable; the viewport / imgui-host wiring is not) |
 

@@ -1057,7 +1057,7 @@
     "inputSchema": {
       "properties": {
         "name": {
-          "description": "Name for the new node (default 'new empty node')",
+          "description": "Name for the new node (default 'new xform')",
           "type": "string"
         },
         "parent_node_id": {

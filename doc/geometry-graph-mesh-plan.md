@@ -55,7 +55,7 @@ Notes accumulated during implementation:
   remembers its controlled node (`m_controlled_node` weak_ptr) and releases
   via `handle_item_host_update` (detach from in-scene node), move handling in
   `handle_node_update`, reclaim-in-apply, and release-on-any-rebind.
-- B4 fixes: `create_new_empty_node` now sets `Item_flags::visible` (attachments
+- B4 fixes: `create_new_xform` now sets `Item_flags::visible` (attachments
   sync visibility from the node on attach; anything attached to an invisible
   empty node was invisibly stuck). Adjacent observation (NOT chased):
   `create_new_camera` / `create_new_light` also omit `visible` on their nodes.

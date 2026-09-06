@@ -83,10 +83,10 @@ private:
     App_context& m_context;
 };
 
-class Create_new_empty_node_command : public erhe::commands::Command
+class Create_new_xform_command : public erhe::commands::Command
 {
 public:
-    Create_new_empty_node_command(erhe::commands::Commands& commands, App_context& context);
+    Create_new_xform_command(erhe::commands::Commands& commands, App_context& context);
     auto try_call() -> bool override;
 
 private:
@@ -276,7 +276,7 @@ public:
     // Any prim may parent any other prim (doc/usd-compatibility-plan.md C5),
     // so the parent is taken as the Hierarchy it is: an Xform is created
     // under a Scope as readily as under another Xform.
-    auto create_new_empty_node  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+    auto create_new_xform  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
     // A Scope prim: children and no transform, the prim resources are
     // conventionally gathered under (C5). Undoable, like every other creation
     // here; inserted on the next editor frame.
@@ -352,7 +352,7 @@ private:
 
     Create_new_scene_command        m_create_new_scene_command;
     Create_new_camera_command       m_create_new_camera_command;
-    Create_new_empty_node_command   m_create_new_empty_node_command;
+    Create_new_xform_command   m_create_new_xform_command;
     Create_new_scope_command        m_create_new_scope_command;
     Create_new_light_command        m_create_new_light_command;
     Create_new_layout_command       m_create_new_layout_command;

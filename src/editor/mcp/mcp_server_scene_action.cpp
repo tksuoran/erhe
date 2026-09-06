@@ -1412,9 +1412,9 @@ auto Mcp_server::place_brush_instance(
     const bool pose_node = args.value("pose_node", false);
     std::shared_ptr<erhe::scene::Node> attach_node{};
     if (pose_node) {
-        // Built directly (not via Scene_commands::create_new_empty_node): the
+        // Built directly (not via Scene_commands::create_new_xform): the
         // requested parent may be a same-batch pose node whose insert is still
-        // queued - it has no item host yet, which create_new_empty_node's
+        // queued - it has no item host yet, which create_new_xform's
         // scene-root resolution requires. Ops execute in queue order, so the
         // chain attaches parent-first.
         attach_node = std::make_shared<erhe::scene::Xform>(instance_name.empty() ? std::string{brush.get_name()} : instance_name);
@@ -2115,7 +2115,7 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         }).dump();
     }
 
-    const std::shared_ptr<erhe::scene::Node> node = m_context.scene_commands->create_new_empty_node(parent.get());
+    const std::shared_ptr<erhe::scene::Node> node = m_context.scene_commands->create_new_xform(parent.get());
     if (!node) {
         json r = make_text_content("Failed to create node");
         r["isError"] = true;

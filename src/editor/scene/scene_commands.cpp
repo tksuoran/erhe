@@ -96,15 +96,15 @@ auto Create_new_camera_command::try_call() -> bool
     return m_context.scene_commands->create_new_camera().operator bool();
 }
 
-Create_new_empty_node_command::Create_new_empty_node_command(erhe::commands::Commands& commands, App_context& context)
-    : Command  {commands, "scene.create_new_empty_node"}
+Create_new_xform_command::Create_new_xform_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.create_new_xform"}
     , m_context{context}
 {
 }
 
-auto Create_new_empty_node_command::try_call() -> bool
+auto Create_new_xform_command::try_call() -> bool
 {
-    return m_context.scene_commands->create_new_empty_node().operator bool();
+    return m_context.scene_commands->create_new_xform().operator bool();
 }
 
 Create_new_scope_command::Create_new_scope_command(erhe::commands::Commands& commands, App_context& context)
@@ -360,7 +360,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     : m_context                        {context}
     , m_create_new_scene_command       {commands, context}
     , m_create_new_camera_command      {commands, context}
-    , m_create_new_empty_node_command  {commands, context}
+    , m_create_new_xform_command  {commands, context}
     , m_create_new_scope_command       {commands, context}
     , m_create_new_light_command       {commands, context}
     , m_create_new_layout_command      {commands, context}
@@ -378,7 +378,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
 {
     commands.register_command   (&m_create_new_scene_command);
     commands.register_command   (&m_create_new_camera_command);
-    commands.register_command   (&m_create_new_empty_node_command);
+    commands.register_command   (&m_create_new_xform_command);
     commands.register_command   (&m_create_new_scope_command);
     commands.register_command   (&m_create_new_light_command);
     commands.register_command   (&m_create_new_layout_command);
@@ -394,13 +394,13 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_add_chain_command);
     commands.register_command   (&m_add_toruses_command);
     commands.bind_command_to_key(&m_create_new_camera_command,       erhe::window::Key_f2, true);
-    commands.bind_command_to_key(&m_create_new_empty_node_command,   erhe::window::Key_f3, true);
+    commands.bind_command_to_key(&m_create_new_xform_command,   erhe::window::Key_f3, true);
     commands.bind_command_to_key(&m_create_new_light_command,        erhe::window::Key_f4, true);
     commands.bind_command_to_key(&m_create_new_rendertarget_command, erhe::window::Key_f5, true);
     commands.bind_command_to_key(&m_create_new_layout_command,       erhe::window::Key_f6, true);
     commands.bind_command_to_menu(&m_create_new_scene_command,        "Create.Scene");
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
-    commands.bind_command_to_menu(&m_create_new_empty_node_command,   "Create.Empty Node");
+    commands.bind_command_to_menu(&m_create_new_xform_command,   "Create.Xform");
     commands.bind_command_to_menu(&m_create_new_scope_command,        "Create.Scope");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
     commands.bind_command_to_menu(&m_create_new_layout_command,       "Create.Layout");
@@ -651,7 +651,7 @@ auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared
     return new_camera;
 }
 
-auto Scene_commands::create_new_empty_node(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Node>
+auto Scene_commands::create_new_xform(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Node>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -662,13 +662,13 @@ auto Scene_commands::create_new_empty_node(erhe::Hierarchy* parent) -> std::shar
     // (Mesh, Light, Geometry_graph_mesh, ...) sync their visibility from
     // the node - without it anything attached to an "empty" node would be
     // invisibly stuck.
-    auto new_empty_node = std::make_shared<erhe::scene::Xform>("new empty node");
-    new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    auto new_xform = std::make_shared<erhe::scene::Xform>("new xform");
+    new_xform->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = new_empty_node,
+                .item    = new_xform,
                 .parent  = (parent != nullptr)
                     ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this())
                     : std::static_pointer_cast<erhe::Hierarchy>(scene_root->get_hosted_scene()->get_root_node()),
@@ -677,7 +677,7 @@ auto Scene_commands::create_new_empty_node(erhe::Hierarchy* parent) -> std::shar
         )
     );
 
-    return new_empty_node;
+    return new_xform;
 }
 
 auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::Scope>
@@ -1082,7 +1082,7 @@ auto Scene_commands::attach_new_empty_mesh(erhe::scene::Node& node) -> std::shar
 {
     // An empty mesh (no primitives) renders nothing until the user adds
     // geometry, but it needs the visible flag so anything added later is not
-    // stuck invisible (same reasoning as create_new_empty_node). A Mesh is a
+    // stuck invisible (same reasoning as create_new_xform). A Mesh is a
     // prim (doc/usd-compatibility-plan.md C5), so it enters the scene as a
     // child of the node; a parent holds any number of them.
     auto mesh = std::make_shared<erhe::scene::Mesh>("new mesh");

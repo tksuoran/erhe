@@ -543,47 +543,57 @@ auto Scene_root::make_browser_window(
             if (!node) {
                 return;
             }
-            auto parent_node = node->get_parent_node();
+            // "Create": every prim kind the editor creates, each landing as a
+            // child of the clicked prim (any prim parents any prim,
+            // doc/usd-compatibility-plan.md C5). The catalog's child-prim
+            // entries (Mesh, Camera, Light) sit beside the kinds that only
+            // Scene_commands builds (Xform, Scope, Rendertarget, Layout).
             if (ImGui::BeginMenu("Create")) {
-                if (ImGui::MenuItem("Empty Node")) {
+                if (ImGui::MenuItem("Xform")) {
                     deferred_operations.push_back(
-                        [&context, parent_node]() {
-                            context.scene_commands->create_new_empty_node(parent_node.get());
+                        [&context, node]() {
+                            context.scene_commands->create_new_xform(node.get());
                         }
                     );
                     close = true;
                 }
-                // A Scope: children and nothing else
-                // (doc/usd-compatibility-plan.md C5); the entry the content
-                // library's "Create Folder" became.
+                // A Scope: children and nothing else (C5); the entry the
+                // content library's "Create Folder" became.
                 if (ImGui::MenuItem("Scope")) {
                     deferred_operations.push_back(
-                        [&context, parent_node]() {
-                            context.scene_commands->create_new_scope(parent_node.get());
+                        [&context, node]() {
+                            context.scene_commands->create_new_scope(node.get());
                         }
                     );
                     close = true;
                 }
-                if (ImGui::MenuItem("Camera")) {
+                for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    if (type_info.kind != Attachment_kind::child_prim) {
+                        continue;
+                    }
+                    const bool can_add = type_info.can_add(*node);
+                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
+                        deferred_operations.push_back(
+                            [&context, node, make = type_info.make]() {
+                                make(*context.scene_commands, *node);
+                            }
+                        );
+                        close = true;
+                    }
+                }
+                if (ImGui::MenuItem("Rendertarget")) {
                     deferred_operations.push_back(
-                        [&context, parent_node]() {
-                            context.scene_commands->create_new_camera(parent_node.get());
+                        [&context, node]() {
+                            context.scene_commands->create_new_rendertarget(node.get());
                         }
                     );
                     close = true;
                 }
-                if (ImGui::MenuItem("Light")) {
-                    deferred_operations.push_back(
-                        [&context, parent_node]() {
-                            context.scene_commands->create_new_light(parent_node.get());
-                        }
-                    );
-                    close = true;
-                }
+                // An Xform carrying a Layout attachment.
                 if (ImGui::MenuItem("Layout")) {
                     deferred_operations.push_back(
-                        [&context, parent_node]() {
-                            context.scene_commands->create_new_layout(parent_node.get());
+                        [&context, node]() {
+                            context.scene_commands->create_new_layout(node.get());
                         }
                     );
                     close = true;
@@ -608,27 +618,6 @@ auto Scene_root::make_browser_window(
                     );
                 }
             }
-            // "Add Child Prim": the catalog's child-prim entries (Mesh, Camera,
-            // Light), each of which lands as a child of this node
-            // (doc/usd-compatibility-plan.md C5).
-            if (ImGui::BeginMenu("Add Child Prim")) {
-                for (const Attachment_type_info& type_info : get_attachment_types()) {
-                    if (type_info.kind != Attachment_kind::child_prim) {
-                        continue;
-                    }
-                    const bool can_add = type_info.can_add(*node);
-                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
-                        deferred_operations.push_back(
-                            [&context, node, make = type_info.make]() {
-                                make(*context.scene_commands, *node);
-                            }
-                        );
-                        close = true;
-                    }
-                }
-                ImGui::EndMenu();
-            }
-
             // "Add Attachment": the catalog's applied-API-schema entries (issue
             // #249), each entry disabled when the node cannot take that kind.
             // Joint keeps its richer connect-to-selection behaviour instead of

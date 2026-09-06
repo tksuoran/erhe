@@ -140,8 +140,8 @@ void Create::window_imgui()
 
     ImGui::Text("Nodes");
     const auto button_size = get_button_size();
-    if (ImGui::Button("Empty Node", button_size)) {
-        m_context.scene_commands->create_new_empty_node(parent.get());
+    if (ImGui::Button("Xform", button_size)) {
+        m_context.scene_commands->create_new_xform(parent.get());
     }
     if (ImGui::Button("Camera", button_size)) {
         m_context.scene_commands->create_new_camera(parent.get());
