@@ -173,6 +173,13 @@ record has the history.
   (`src/erhe/usd/notes.md`). `scene_roundtrip_verify.py` covers the
   placements (215 checks). Not carried in USD yet: the other resource
   kinds and an empty folder scope (E4).
+- M6 `double` and `glm::mat4` value types: `Property_type::double_floating`
+  and `Property_type::mat4` with their D16 text forms, expression rules
+  and Properties rows (`doc/property-system.md` D2, D16), written and
+  read as USD `double` and `matrix4d` attributes
+  (`doc/usd_compatibility.md` Property-system rows); `erhe_property_tests`
+  and `erhe_usd_tests` cover both. No shipped property is of either type
+  until M8.
 
 ## 3. Remaining steps
 
@@ -184,13 +191,13 @@ week or more.
 
 ### M6 Value types USD needs (S each, as needed)
 
-What: add `Property_type` alternatives when a step needs them (M8 is the
-first, for `double` and `glm::mat4`): `double` (USD `double` transforms and time codes), `glm::mat4`
-(xformOp matrices), an asset path (texture `inputs:file` today is an
+What: add the remaining `Property_type` alternatives when an import or
+export step hits them: an asset path (texture `inputs:file` today is an
 object reference to a loaded texture; the path is the USD form), and
 homogeneous arrays (`float[]`, `int[]`) for primvars that a node or
 material might want to carry as a property. Each comes with its
-`to_string` / `from_string` pair (D16) and Properties window row.
+`to_string` / `from_string` pair (D16) and Properties window row, the
+way `double` and `glm::mat4` (section 2) have.
 
 Why: listed so that a later step does not invent an ad hoc carrier.
 Nothing is added ahead of a demonstrated need.
@@ -303,19 +310,18 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. M6 value types M8 needs (`double`, `glm::mat4`), then M7 style
-   chains, then M8 xformOp stacks
+1. M7 style chains, then M8 xformOp stacks
 2. X1 references as prefab instances
 3. E4 editor state in a USD file (completes G2)
 4. X2 editable instances (G3)
 
-The rest of M6 (asset paths, arrays) lands when the step that needs it
-is next (an importer hitting a missing type). E2 follows E4; X3 to X5
+M6 (asset paths, arrays) lands when the step that needs it is next (an
+importer hitting a missing type). E2 follows E4; X3 to X5
 have no fixed place: each waits for its dependencies and is taken when
 wanted.
 
-Dependencies: M8 needs M6's `double` and `glm::mat4`; X2 needs X1; X3
-needs M7; M7, E4, X1, E2, X4 and X5 need nothing that has not landed.
+Dependencies: X2 needs X1; X3 needs M7; M7, M8, E4, X1, E2, X4 and X5
+need nothing that has not landed.
 
 ## 5. Out of scope
 
