@@ -102,7 +102,14 @@ void Node_transform_operation::execute(App_context& context)
 {
     log_operations->trace("Op Execute {}", describe());
     if (m_parameters.time_duration == 0.0f) {
-        m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
+        if (m_xform_op_stack_after_recorded) {
+            // Redo: restore the recorded transform and stack verbatim.
+            m_parameters.node->restore_local_transform(m_parameters.parent_from_node_after, m_xform_op_stack_after);
+        } else {
+            m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_after);
+            m_xform_op_stack_after          = m_parameters.node->copy_xform_op_stack();
+            m_xform_op_stack_after_recorded = true;
+        }
         context.app_message_bus->node_touched.send_message(
             Node_touched_message{
                 .source = Node_touch_source::operation_stack,
@@ -129,7 +136,7 @@ void Node_transform_operation::execute(App_context& context)
 void Node_transform_operation::undo(App_context& context)
 {
     log_operations->trace("Op Undo {}", describe());
-    m_parameters.node->set_parent_from_node(m_parameters.parent_from_node_before);
+    m_parameters.node->restore_local_transform(m_parameters.parent_from_node_before, m_parameters.xform_op_stack_before);
     context.app_message_bus->node_touched.send_message(
         Node_touched_message{
             .source = Node_touch_source::operation_stack,

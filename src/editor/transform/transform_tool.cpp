@@ -601,6 +601,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
                 Transform_entry{
                     .node                    = node,
                     .parent_from_node_before = node->parent_from_node_transform(),
+                    .xform_op_stack_before   = node->copy_xform_op_stack(),
                     .world_from_node_before  = node->world_from_node_transform(),
                     .original_motion_mode    = {}
                 }
@@ -608,6 +609,7 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         } else {
             if (node.get() == node_filter) {
                 shared.entries.at(i).parent_from_node_before = node->parent_from_node_transform();
+                shared.entries.at(i).xform_op_stack_before   = node->copy_xform_op_stack();
                 shared.entries.at(i).world_from_node_before  = node->world_from_node_transform();
             }
             ++i;
@@ -736,6 +738,7 @@ auto Transform_tool::try_translate_ik(const glm::vec3 translation) -> bool
                         Transform_entry{
                             .node                    = joints[i],
                             .parent_from_node_before = joints[i]->parent_from_node_transform(),
+                            .xform_op_stack_before   = joints[i]->copy_xform_op_stack(),
                             .world_from_node_before  = joints[i]->world_from_node_transform(),
                             .original_motion_mode    = {}
                         }
@@ -2204,7 +2207,8 @@ void Transform_tool::record_transform_operation()
             Node_transform_operation::Parameters{
                 .node                    = entry.node,
                 .parent_from_node_before = entry.parent_from_node_before,
-                .parent_from_node_after  = entry.node->parent_from_node_transform()
+                .parent_from_node_after  = entry.node->parent_from_node_transform(),
+                .xform_op_stack_before   = entry.xform_op_stack_before
             }
         );
         compompound_parameters.operations.push_back(node_operation);

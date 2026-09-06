@@ -2,9 +2,11 @@
 
 #include "erhe_scene/imageable.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform_op.hpp"
 #include "erhe_property/dependency_property.hpp"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -62,6 +64,13 @@ public:
     static constexpr unsigned int bit_attachments{1u << 1};
 
     static auto diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int;
+};
+
+// Whether the world transform still matches the local one when a write
+// reaches Xformable::handle_local_transform_written().
+enum class World_transform_state {
+    up_to_date,
+    needs_update
 };
 
 // A transformable prim (doc/usd-compatibility-plan.md C5, USD
@@ -154,6 +163,31 @@ public:
     [[nodiscard]] auto transform_direction_from_local_to_world(glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto get_scene                              () const -> Scene*;
 
+    // The authored USD xformOp stack (doc/usd-compatibility-plan.md M8), when
+    // the prim has one. A prim without a stack is the common case and carries
+    // nothing but a null pointer. While a stack is present it is the
+    // authoritative form of the local transform: every write to
+    // parent_from_node is written back into the stack
+    // (write_trs_into_xform_op_stack) and parent_from_node is then set to the
+    // stack's composition.
+    [[nodiscard]] auto has_xform_op_stack () const -> bool;
+    [[nodiscard]] auto get_xform_op_stack () const -> const Xform_op_stack*;
+    // A copy of the stack, or no value when the prim has none.
+    [[nodiscard]] auto copy_xform_op_stack() const -> std::optional<Xform_op_stack>;
+    // Stores the stack and sets parent_from_node to its composition.
+    void set_xform_op_stack  (Xform_op_stack stack);
+    void clear_xform_op_stack();
+    // Restores a recorded local transform and its stack verbatim (undo /
+    // redo): no write-back runs, so a stack that a write-back collapsed stays
+    // collapsed on redo and comes back whole on undo.
+    void restore_local_transform(const Transform& parent_from_node, const std::optional<Xform_op_stack>& stack);
+
+    // The shared tail of every local transform write: the xformOp stack
+    // write-back, the world transform update and handle_transform_update.
+    // Called by the setters below and by the bridged TRS properties, which
+    // write the transform components in place.
+    void handle_local_transform_written(World_transform_state world_state);
+
     void node_sanity_check     (bool destruction_in_progress = false) const;
     void update_world_from_node();
     void update_transform      (uint64_t serial);
@@ -192,6 +226,15 @@ public:
     static bool s_check_no_transform_update_writes;
 
     Node_data node_data;
+
+private:
+    // Applies m_xform_op_stack's composition to parent_from_node without
+    // running the write-back.
+    void apply_xform_op_stack_composition();
+
+    std::unique_ptr<Xform_op_stack> m_xform_op_stack;
+    // The collapse of an unrepresentable edit is logged once per prim.
+    bool                            m_xform_op_stack_collapse_logged{false};
 };
 
 // The name most of erhe spells `Xformable` with. It is retired when the

@@ -99,6 +99,8 @@ class Transform_entry
 public:
     std::shared_ptr<erhe::scene::Node>        node;
     erhe::scene::Trs_transform                parent_from_node_before;
+    // The node's authored xformOp stack when the drag started (M8).
+    std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before;
     erhe::scene::Trs_transform                world_from_node_before;
     std::optional<erhe::physics::Motion_mode> original_motion_mode;
     erhe::physics::Motion_mode                motion_mode{erhe::physics::Motion_mode::e_invalid};

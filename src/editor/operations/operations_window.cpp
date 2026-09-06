@@ -229,6 +229,7 @@ void gather_components(Mesh_component_selection& selection, const Mesh_component
             .node                    = moved_node,
             .parent_from_node_before = node->parent_from_node_transform(),
             .parent_from_node_after  = erhe::scene::Transform{parent_from_node_after},
+            .xform_op_stack_before   = node->copy_xform_op_stack(),
             .time_duration           = 0.0f
         }
     );
@@ -1961,7 +1962,8 @@ void Operations::bake_transform()
                 Node_transform_operation::Parameters{
                     .node = node,
                     .parent_from_node_before = node->parent_from_node_transform(),
-                    .parent_from_node_after = {}
+                    .parent_from_node_after = {},
+                    .xform_op_stack_before = node->copy_xform_op_stack()
                 }
             )
         );
@@ -2015,7 +2017,8 @@ void Operations::center_transform()
                 Node_transform_operation::Parameters{
                     .node                    = node,
                     .parent_from_node_before = node->parent_from_node_transform(),
-                    .parent_from_node_after  = erhe::scene::Transform{node->parent_from_world() * world_from_node_after}
+                    .parent_from_node_after  = erhe::scene::Transform{node->parent_from_world() * world_from_node_after},
+                    .xform_op_stack_before   = node->copy_xform_op_stack()
                 }
             )
         );

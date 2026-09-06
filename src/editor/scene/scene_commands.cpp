@@ -819,7 +819,8 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
                 Node_transform_operation::Parameters{
                     .node                    = tip_node,
                     .parent_from_node_before = tip_transform,
-                    .parent_from_node_after  = tip_transform
+                    .parent_from_node_after  = tip_transform,
+                    .xform_op_stack_before   = tip_node->copy_xform_op_stack()
                 }
             )
         );

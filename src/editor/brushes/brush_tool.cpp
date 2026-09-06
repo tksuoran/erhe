@@ -390,6 +390,7 @@ auto Brush_tool::try_rotate(int direction) -> bool
             .node                    = node_shared,
             .parent_from_node_before = node_shared->parent_from_node_transform(),
             .parent_from_node_after  = erhe::scene::Transform{updated_node_transform},
+            .xform_op_stack_before   = node_shared->copy_xform_op_stack(),
             .time_duration           = 0.25f
         }
     );

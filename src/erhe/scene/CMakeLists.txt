@@ -43,6 +43,8 @@ erhe_target_sources_grouped(
     erhe_scene/trs_transform.hpp
     erhe_scene/xform.cpp
     erhe_scene/xform.hpp
+    erhe_scene/xform_op.cpp
+    erhe_scene/xform_op.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

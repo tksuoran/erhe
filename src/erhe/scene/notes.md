@@ -77,6 +77,59 @@ properties sit on `Xformable`, under `Imageable`, under `Typed`. A level below
 transform level owns attachments and a scene host that a plain copy does not
 reproduce.
 
+## Authored xformOp stacks
+
+A prim may carry the USD xformOp stack it was authored with next to the single
+`Trs_transform` it composes to (`doc/usd-compatibility-plan.md` M8), so an
+imported stack round-trips as authored instead of collapsing to one
+`xformOp:transform` matrix. `Xform_op` is one `xformOp:<type>[:<suffix>]` -
+its type from USD's vocabulary (`translate`, `scale`, the single-axis and
+three-angle rotates, `orient`, `transform`), the authored precision it is
+written back as, its suffix, its `!invert!` flag, and its value in double
+precision whatever the authored precision was. The value of a three-angle
+rotate holds the x, y and z angles in degrees; the type names the order they
+are applied to a point in. `Xform_op_stack` is the ordered `xformOpOrder` plus
+the `!resetXformStack!` flag, which is stored and round-tripped and nothing
+else: erhe's transform propagation always composes with the parent, so
+`compose()` ignores it.
+
+`Xform_op_stack::compose()` returns the glm column-vector matrix
+`M(op0) * M(op1) * ... * M(opN)`, so a point is transformed by the last op
+first and a `[translate, rotate, scale]` stack composes to `T * R * S`.
+
+A prim without a stack - the common case - carries a null pointer and nothing
+else. While a stack is present it is the authoritative form of the local
+transform: `Xformable::handle_local_transform_written`, the shared tail of
+every local transform write (the `set_parent_from_node` / `set_node_from_parent`
+/ `set_world_from_node` / `set_node_from_world` family and the bridged
+translation / rotation / scale properties), writes the new TRS back into the
+stack and then sets `parent_from_node` to the stack's composition, so a
+rotation that goes through an Euler op comes back as that op composes it. The
+write-back
+(`write_trs_into_xform_op_stack`) sends the translation to the last
+non-inverted `translate` op with no suffix, the rotation to the last
+non-inverted `orient` or `rotate_*` op with no suffix (converted to that op's
+form), and the scale to the last non-inverted `scale` op with no suffix; a
+stack that is one plain `transform` op takes the whole matrix; every other op
+keeps its value. Only components that changed are written, and the stack must
+compose to the requested transform after the write. A component that changed
+and has no designated op - no `scale` op and the scale changed, a `rotate_x`
+op and the new rotation is not about x - or a composition that the ops which
+were not written move away from the requested transform - a pivot pair around
+the rotate op takes a rotation edit somewhere else - makes the stack unable to
+carry the edit: the ops keep their authored values, and the whole stack is
+replaced by one `transform` op holding the matrix, logged once per prim at
+info level. So a prim always ends up exactly where the edit put it, whatever
+its authored stack looks like.
+
+Undo restores a recorded transform and its recorded stack verbatim through
+`Xformable::restore_local_transform`, which runs no write-back, so a stack a
+collapse replaced comes back whole; `Node_transform_operation` records the
+stack next to the matrices.
+
+glTF does not carry the stack (`doc/usd-compatibility-plan.md` C1): a glTF
+save writes the composed TRS, and a glTF scene has no stack to start with.
+
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.
 - Call `scene.update_node_transforms()` each frame to propagate world transforms.

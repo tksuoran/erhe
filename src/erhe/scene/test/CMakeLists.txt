@@ -29,6 +29,7 @@ add_executable(${_target}
     test_prim_levels.cpp
     test_resource_prim_tokens.cpp
     test_scope_prims.cpp
+    test_xform_op_stack.cpp
 )
 
 target_link_libraries(${_target}

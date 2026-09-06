@@ -1179,6 +1179,7 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
     // the requested space, in ONE call, without touching the selection (no
     // gizmo rebind, no kinematic hold on selected dynamic bodies).
     const erhe::scene::Trs_transform parent_from_node_before = node->parent_from_node_transform();
+    const std::optional<erhe::scene::Xform_op_stack> xform_op_stack_before = node->copy_xform_op_stack();
     erhe::scene::Trs_transform trs = world ? node->world_from_node_transform() : parent_from_node_before;
     if (translation.has_value()) { trs.set_translation(translation.value()); }
     if (rotation.has_value())    { trs.set_rotation   (rotation.value());    }
@@ -1198,7 +1199,8 @@ auto Mcp_server::action_set_node_transform(const json& args) -> std::string
             Node_transform_operation::Parameters{
                 .node                    = node,
                 .parent_from_node_before = parent_from_node_before,
-                .parent_from_node_after  = node->parent_from_node_transform()
+                .parent_from_node_after  = node->parent_from_node_transform(),
+                .xform_op_stack_before   = xform_op_stack_before
             }
         )
     );

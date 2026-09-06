@@ -66,8 +66,9 @@ auto make_transform_bridge(
         .set = [setter](Dependency_object& object, const Property_value& value) {
             Xformable& node = static_cast<Xformable&>(object);
             (node.node_data.transforms.parent_from_node.*setter)(std::get<T>(value));
-            node.update_world_from_node();
-            node.handle_transform_update(Node_transforms::get_next_serial());
+            // Same tail as the setters: an authored xformOp stack takes the
+            // write (M8) before the world transform is recomputed.
+            node.handle_local_transform_written(World_transform_state::needs_update);
         }
     };
 }
@@ -168,6 +169,9 @@ Xformable::Xformable(const Xformable& src, for_clone)
     : Item     {src, erhe::for_clone{}}
     , node_data{src.node_data, erhe::for_clone{}}
 {
+    if (src.m_xform_op_stack) {
+        m_xform_op_stack = std::make_unique<Xform_op_stack>(*src.m_xform_op_stack);
+    }
     for (const auto& src_attachment : src.get_attachments()) {
         auto attachment_clone_item = src_attachment->clone_attachment();
         auto attachment_clone = std::dynamic_pointer_cast<Node_attachment>(attachment_clone_item);
@@ -710,11 +714,104 @@ auto Xformable::transform_direction_from_local_to_world(const glm::vec3 directio
     return glm::vec3{world_from_node() * glm::vec4{direction, 0.0f}};
 }
 
+auto Xformable::has_xform_op_stack() const -> bool
+{
+    return m_xform_op_stack != nullptr;
+}
+
+auto Xformable::get_xform_op_stack() const -> const Xform_op_stack*
+{
+    return m_xform_op_stack.get();
+}
+
+auto Xformable::copy_xform_op_stack() const -> std::optional<Xform_op_stack>
+{
+    if (!m_xform_op_stack) {
+        return {};
+    }
+    return *m_xform_op_stack;
+}
+
+void Xformable::apply_xform_op_stack_composition()
+{
+    node_data.transforms.parent_from_node.set(glm::mat4{m_xform_op_stack->compose()});
+    update_world_from_node();
+}
+
+void Xformable::set_xform_op_stack(Xform_op_stack stack)
+{
+    m_xform_op_stack = std::make_unique<Xform_op_stack>(std::move(stack));
+    m_xform_op_stack_collapse_logged = false;
+    apply_xform_op_stack_composition();
+    handle_transform_update(Node_transforms::get_next_serial());
+}
+
+void Xformable::clear_xform_op_stack()
+{
+    m_xform_op_stack.reset();
+    m_xform_op_stack_collapse_logged = false;
+}
+
+void Xformable::restore_local_transform(const Transform& parent_from_node, const std::optional<Xform_op_stack>& stack)
+{
+    if (stack.has_value()) {
+        m_xform_op_stack = std::make_unique<Xform_op_stack>(stack.value());
+    } else {
+        m_xform_op_stack.reset();
+    }
+    node_data.transforms.parent_from_node.set(
+        parent_from_node.get_matrix(),
+        parent_from_node.get_inverse_matrix()
+    );
+    update_world_from_node();
+    handle_transform_update(Node_transforms::get_next_serial());
+}
+
+void Xformable::handle_local_transform_written(World_transform_state world_state)
+{
+    if (m_xform_op_stack) {
+        const Trs_transform& transform = node_data.transforms.parent_from_node;
+        const Xform_op_write_back_result result = write_trs_into_xform_op_stack(
+            *m_xform_op_stack,
+            transform.get_translation(),
+            transform.get_rotation(),
+            transform.get_scale()
+        );
+        if (result == Xform_op_write_back_result::not_representable) {
+            // No op of the stack can carry the edit: the authored stack is
+            // replaced by the one op that carries any transform.
+            Xform_op_stack collapsed;
+            collapsed.reset_xform_stack = m_xform_op_stack->reset_xform_stack;
+            collapsed.ops.push_back(
+                Xform_op{
+                    .type      = Xform_op_type::transform,
+                    .precision = Xform_op_precision::double_,
+                    .value     = glm::dmat4{transform.get_matrix()}
+                }
+            );
+            *m_xform_op_stack = std::move(collapsed);
+            if (!m_xform_op_stack_collapse_logged) {
+                m_xform_op_stack_collapse_logged = true;
+                log->info(
+                    "Prim '{}': the edit does not fit its authored xformOp stack; the stack is replaced by one xformOp:transform",
+                    get_name()
+                );
+            }
+        }
+        // The stack is the authoritative form of the local transform.
+        apply_xform_op_stack_composition();
+        world_state = World_transform_state::up_to_date;
+    }
+    if (world_state == World_transform_state::needs_update) {
+        update_world_from_node();
+    }
+    handle_transform_update(Node_transforms::get_next_serial());
+}
+
 void Xformable::set_parent_from_node(const glm::mat4 parent_from_node)
 {
     node_data.transforms.parent_from_node.set(parent_from_node);
-    update_world_from_node();
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::needs_update);
 }
 
 void Xformable::set_parent_from_node(const Transform& parent_from_node)
@@ -725,8 +822,7 @@ void Xformable::set_parent_from_node(const Transform& parent_from_node)
         parent_from_node.get_matrix(),
         parent_from_node.get_inverse_matrix()
     );
-    update_world_from_node();
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::needs_update);
 }
 
 void Xformable::set_parent_from_node(const Trs_transform& parent_from_node)
@@ -737,8 +833,7 @@ void Xformable::set_parent_from_node(const Trs_transform& parent_from_node)
     // a matrix would lose the rotation when the scale is (near) zero (a rank-deficient
     // matrix has no recoverable rotation); copying preserves it.
     node_data.transforms.parent_from_node = parent_from_node;
-    update_world_from_node();
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::needs_update);
 }
 
 void Xformable::set_node_from_parent(const glm::mat4 node_from_parent)
@@ -747,8 +842,7 @@ void Xformable::set_node_from_parent(const glm::mat4 node_from_parent)
         glm::inverse(node_from_parent),
         node_from_parent
     );
-    update_world_from_node();
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::needs_update);
 }
 
 void Xformable::set_node_from_parent(const Transform& node_from_parent)
@@ -757,8 +851,7 @@ void Xformable::set_node_from_parent(const Transform& node_from_parent)
         node_from_parent.get_inverse_matrix(),
         node_from_parent.get_matrix()
     );
-    update_world_from_node();
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::needs_update);
 }
 
 void Xformable::set_world_from_node(const glm::mat4 world_from_node)
@@ -812,7 +905,9 @@ void Xformable::set_node_from_world(const glm::mat4 node_from_world)
     } else {
         node_data.transforms.parent_from_node = node_data.transforms.world_from_node;
     }
-    handle_transform_update(Node_transforms::get_next_serial());
+    // The world transform was written first, so it is current unless an
+    // authored xformOp stack changes the local transform.
+    handle_local_transform_written(World_transform_state::up_to_date);
 }
 
 void Xformable::set_node_from_world(const Transform& node_from_world)
@@ -830,7 +925,7 @@ void Xformable::set_node_from_world(const Transform& node_from_world)
     } else {
         node_data.transforms.parent_from_node = node_data.transforms.world_from_node;
     }
-    handle_transform_update(Node_transforms::get_next_serial());
+    handle_local_transform_written(World_transform_state::up_to_date);
 }
 
 auto Node_data::diff_mask(const Node_data& lhs, const Node_data& rhs)-> unsigned int
