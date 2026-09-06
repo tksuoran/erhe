@@ -401,8 +401,12 @@ def round_vec(values, digits=4):
 
 
 def norm_quat(values, digits=4):
-    """q and -q are the same rotation: canonicalize the sign before rounding."""
+    """q and -q are the same rotation: canonicalize the sign before rounding.
+    A prim outside Xformable carries no transform (doc/usd-compatibility-plan.md
+    C5), so get_scene_nodes reports none for it and the record stays empty."""
     q = [float(v) for v in values]
+    if not q:
+        return q
     pivot = max(range(len(q)), key=lambda i: abs(q[i]))
     if q[pivot] < 0.0:
         q = [-v for v in q]
@@ -412,6 +416,9 @@ def norm_quat(values, digits=4):
 def norm_node(node, parent_name=None):
     return {
         "name":        node.get("name"),
+        # The prim's erhe class (doc/usd-compatibility-plan.md C5): a prim
+        # that comes back as another class is a round-trip failure.
+        "type":        node.get("type"),
         "parent":      parent_name if parent_name is not None else node.get("parent"),
         "position":    round_vec(node.get("position", [])),
         "rotation":    norm_quat(node.get("rotation_xyzw", [])),
@@ -1627,6 +1634,12 @@ def section_usd_round_trip(usdchecker_arg):
     # cube.usda adds the shapes authored.usda has none of: a materialBind
     # GeomSubset per material and a camera.
     usd_round_trip_leg(S, "cube.usda", "cube", edits=[], extra_keys=[])
+
+    # prims.usda holds one prim of each class the importer creates: an empty
+    # Xform, a Scope holding a mesh, a Cube prim and a typeless def with a
+    # child. Each must come back under its own class, with the transform of
+    # the Xform above the scope still composing through it.
+    usd_round_trip_leg(S, "prims.usda", "prims", edits=[], extra_keys=[])
 
     # textured.usda binds an image file through a UsdUVTexture network; the
     # texture must come back as a scene texture of the reloaded scene, with

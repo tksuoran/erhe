@@ -5,6 +5,8 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_item/scope.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
@@ -720,19 +722,20 @@ private:
     // without Item_flags::content is transient editor furniture - tool
     // visuals, controllers, rendertarget UI quads - recreated every session.
     void write_child_nodes(
-        const erhe::scene::Node&     node,
+        const erhe::Hierarchy&       prim,
         const glm::mat4&             pre_transform,
         Name_scope&                  names,
         std::vector<lightusd::Prim>& out_prims
     )
     {
-        for (const std::shared_ptr<erhe::Hierarchy>& child : node.get_children()) {
-            const erhe::scene::Node* child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
-            if (child_node == nullptr) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+            const erhe::Typed* child_prim = dynamic_cast<const erhe::Typed*>(child.get());
+            if (child_prim == nullptr) {
                 continue;
             }
-            const uint64_t flags = child_node->get_flag_bits();
-            if ((flags & erhe::Item_flags::import_root) != 0) {
+            const uint64_t           flags      = child_prim->get_flag_bits();
+            const erhe::scene::Node* child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
+            if ((child_node != nullptr) && ((flags & erhe::Item_flags::import_root) != 0)) {
                 write_child_nodes(
                     *child_node,
                     pre_transform * child_node->parent_from_node_transform().get_matrix(),
@@ -747,8 +750,60 @@ private:
             if ((flags & erhe::Item_flags::content) == 0) {
                 continue;
             }
-            out_prims.push_back(write_node(*child_node, pre_transform, names));
+            out_prims.push_back(
+                (child_node != nullptr)
+                    ? write_node(*child_node, pre_transform, names)
+                    : write_prim(*child_prim, pre_transform, names)
+            );
         }
+    }
+
+    // One prim of a class that carries no transform as one prim of the
+    // stage: the `typeName` is the class's (doc/usd-compatibility-plan.md
+    // C5). The transform that reached it composes with its children, which
+    // is what the importer inverts.
+    [[nodiscard]] auto write_prim(const erhe::Typed& item, const glm::mat4& pre_transform, Name_scope& names) -> lightusd::Prim
+    {
+        const std::string prim_name = names.make_unique(item.get_name());
+
+        m_prim_path_stack.push_back(prim_name);
+        record_tags(item);
+
+        lightusd::Prim prim = erhe::is<erhe::Scope>(&item)
+            ? write_scope_prim(item, prim_name)
+            : write_typed_prim(item, prim_name);
+
+        Name_scope                  child_names;
+        std::vector<lightusd::Prim> child_prims;
+        write_child_nodes(item, pre_transform, child_names, child_prims);
+        for (lightusd::Prim& child_prim : child_prims) {
+            std::string error;
+            if (!prim.add_child(std::move(child_prim), false, &error)) {
+                add_warning(fmt::format("a child of '{}' could not be added: {}", prim_name, error));
+            }
+        }
+        m_prim_path_stack.pop_back();
+        return prim;
+    }
+
+    [[nodiscard]] auto write_scope_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::Scope scope;
+        scope.name = prim_name;
+        write_visibility_and_purpose(item, scope);
+        write_erhe_properties(item, scope);
+        return lightusd::Prim{scope};
+    }
+
+    // A prim whose type erhe has no class for travels as its `typeName`, its
+    // name and its children - the schema attributes of such a prim are not
+    // carried (plan section 5). An empty token is the typeless `def` it was.
+    [[nodiscard]] auto write_typed_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name           = prim_name;
+        model.prim_type_name = std::string{item.get_prim_type_name()};
+        return lightusd::Prim{model};
     }
 
     // One erhe node as one prim. The node's attachment types the prim that
@@ -1258,9 +1313,9 @@ private:
     // `includes` names every prim carrying it. The paths are collected while
     // the prims are written, because a prim path is only known once the
     // sanitized, sibling-unique names of its ancestors are.
-    void record_tags(const erhe::scene::Node& node)
+    void record_tags(const erhe::Item_base& item)
     {
-        const std::set<std::string>& tags = node.get_tags();
+        const std::set<std::string>& tags = item.get_tags();
         if (tags.empty()) {
             return;
         }

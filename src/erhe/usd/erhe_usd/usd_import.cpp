@@ -5,6 +5,8 @@
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_item/scope.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -144,6 +146,21 @@ using Tydra_subset    = lightusd::tydra::MaterialSubset;
         }
     }
     return result;
+}
+
+// A prim whose class carries no transform must not silently swallow one, so
+// the conversion tests the matrix Tydra composed for it.
+[[nodiscard]] auto is_identity_matrix(const glm::mat4& matrix) -> bool
+{
+    for (int j = 0; j < 4; ++j) {
+        for (int i = 0; i < 4; ++i) {
+            const float expected = (i == j) ? 1.0f : 0.0f;
+            if (matrix[j][i] != expected) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 [[nodiscard]] auto is_srgb_color_space(const lightusd::tydra::ColorSpace color_space) -> bool
@@ -337,6 +354,7 @@ private:
             }
         };
         for (const std::shared_ptr<erhe::scene::Node>&         node     : m_result.data.nodes)     { elide(node);     }
+        for (const std::shared_ptr<erhe::Typed>&              prim     : m_result.data.prims)     { elide(prim);     }
         for (const std::shared_ptr<erhe::scene::Mesh>&         mesh     : m_result.data.meshes)    { elide(mesh);     }
         for (const std::shared_ptr<erhe::scene::Light>&        light    : m_result.data.lights)    { elide(light);    }
         for (const std::shared_ptr<erhe::scene::Camera>&       camera   : m_result.data.cameras)   { elide(camera);   }
@@ -512,6 +530,7 @@ private:
     {
         return
             read_visibility_and_purpose<lightusd::Xform        >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::Scope        >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomMesh     >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomCamera   >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::SphereLight  >(prim, visibility, purpose) ||
@@ -1406,18 +1425,66 @@ private:
         }
     }
 
-    // Prim types that hold no place in the scene graph: none of them is
-    // Xformable, and Tydra still lists each as a transform node. Scope,
-    // Material, Shader and NodeGraph are the shading network; a GeomSubset's
-    // facets are already carried by a primitive of its mesh.
-    [[nodiscard]] static auto is_non_scene_prim_type(const std::string& type_name) -> bool
+    // The prim's USD `typeName`: the token a generic `Model` prim carries -
+    // empty for a typeless `def` - and the schema class name of every typed
+    // prim. It is what decides the erhe class of the prim
+    // (doc/usd-compatibility-plan.md C5).
+    [[nodiscard]] static auto get_usd_type_name(const lightusd::Prim& prim) -> std::string
+    {
+        return (prim.type_name() == "Model") ? prim.prim_type_name() : prim.type_name();
+    }
+
+    // The shading network is namespace, and a GeomSubset's facets already
+    // ride a primitive of its mesh: such a prim contributes no erhe prim of
+    // its own. Tydra lists each as a transform node all the same.
+    [[nodiscard]] static auto is_shading_prim_type(const std::string& type_name) -> bool
     {
         return
-            (type_name == "Scope")     ||
             (type_name == "Material")  ||
             (type_name == "Shader")    ||
             (type_name == "NodeGraph") ||
             (type_name == "GeomSubset");
+    }
+
+    // The typeNames erhe has a transformable class for: the `Xform` prim
+    // itself, and the prim types whose content the conversion attaches to
+    // the node the prim becomes (U2 and U3 make those their own classes).
+    [[nodiscard]] static auto is_xformable_prim_type(const std::string& type_name) -> bool
+    {
+        return
+            (type_name == "Xform")         ||
+            (type_name == "Mesh")          ||
+            (type_name == "Camera")        ||
+            (type_name == "SphereLight")   ||
+            (type_name == "DistantLight")  ||
+            (type_name == "DomeLight")     ||
+            (type_name == "RectLight")     ||
+            (type_name == "DiskLight")     ||
+            (type_name == "CylinderLight") ||
+            (type_name == "GeometryLight");
+    }
+
+    // A Scope whose children are all shading prims is the namespace a
+    // material network lives in rather than a prim of the tree: erhe's
+    // materials are library items until U4 makes them prims, so such a
+    // scope contributes nothing and the writer re-creates one from the
+    // material library on export. Every other Scope - an empty one included
+    // - is an erhe::Scope.
+    [[nodiscard]] auto is_shading_scope(const Tydra_node& usd_node) const -> bool
+    {
+        if (usd_node.children.empty()) {
+            return false;
+        }
+        for (const Tydra_node& usd_child : usd_node.children) {
+            const lightusd::Prim* prim = find_prim(usd_child.abs_path);
+            if (prim == nullptr) {
+                return false;
+            }
+            if (!is_shading_prim_type(get_usd_type_name(*prim))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     [[nodiscard]] auto subtree_has_scene_content(const Tydra_node& usd_node) const -> bool
@@ -1433,27 +1500,26 @@ private:
         return false;
     }
 
-    // Such a prim contributes no erhe node when its subtree carries no scene
-    // content: a material scope is a namespace, not a place in the scene.
-    [[nodiscard]] auto is_non_scene_node(const Tydra_node& usd_node) const -> bool
-    {
-        const lightusd::Prim* prim = find_prim(usd_node.abs_path);
-        if (prim == nullptr) {
-            return false;
-        }
-        if (!is_non_scene_prim_type(prim->type_name())) {
-            return false;
-        }
-        return !subtree_has_scene_content(usd_node);
-    }
-
+    // One prim of the composed stage as one prim of the erhe tree: the class
+    // its `typeName` names (doc/usd-compatibility-plan.md C5). A prim the
+    // stage lookup does not answer for is a transform node - that is what
+    // Tydra reports it as.
     void convert_node(
-        const Tydra_node&                         usd_node,
-        const std::shared_ptr<erhe::scene::Node>& parent,
-        const glm::mat4&                          extra_transform
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
     )
     {
-        if (is_non_scene_node(usd_node)) {
+        const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
+        const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
+        if (is_shading_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
+            return;
+        }
+        if ((type_name == "Scope") && is_shading_scope(usd_node)) {
+            return;
+        }
+        if (!is_xformable_prim_type(type_name)) {
+            convert_prim(usd_node, type_name, parent, extra_transform);
             return;
         }
         const std::string node_name = usd_node.prim_name.empty()
@@ -1486,6 +1552,52 @@ private:
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, node, child_transform);
+        }
+    }
+
+    // A prim whose class carries no transform: a `Scope`, and the `Typed`
+    // prim every other `typeName` becomes so that its name, its place in the
+    // tree and its children survive the round trip. The transform that
+    // reached the prim composes with its children instead (C5), and an
+    // authored transform on such a prim has nowhere to go: it is dropped,
+    // with one warning naming the prim (plan section 5).
+    void convert_prim(
+        const Tydra_node&                       usd_node,
+        const std::string&                      type_name,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
+    )
+    {
+        const std::string prim_name = usd_node.prim_name.empty()
+            ? fmt::format("prim_{}", m_result.data.prims.size())
+            : usd_node.prim_name;
+        std::shared_ptr<erhe::Typed> prim = (type_name == "Scope")
+            ? std::static_pointer_cast<erhe::Typed>(std::make_shared<erhe::Scope>(prim_name))
+            : std::make_shared<erhe::Typed>(prim_name, type_name);
+        prim->set_source_path(m_arguments.path);
+        prim->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        prim->set_parent(parent);
+        m_result.data.prims.push_back(prim);
+
+        if (!is_identity_matrix(to_glm(usd_node.local_matrix))) {
+            log_usd->warn(
+                "USD prim '{}' of type '{}' authors a transform, which a prim of this class does not carry - the transform is dropped",
+                usd_node.abs_path,
+                type_name
+            );
+        }
+
+        m_authored_opinions.push_back(
+            Authored_opinions{
+                .absolute_path     = usd_node.abs_path,
+                .visibility_target = prim.get(),
+                .primary           = nullptr,
+                .secondary         = prim.get()
+            }
+        );
+
+        for (const Tydra_node& usd_child : usd_node.children) {
+            convert_node(usd_child, prim, extra_transform);
         }
     }
 

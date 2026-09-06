@@ -9,6 +9,9 @@
 #include <string_view>
 #include <vector>
 
+namespace erhe {
+    class Typed;
+}
 namespace erhe::primitive {
     class Material;
 }
@@ -140,6 +143,13 @@ class Usd_data final
 {
 public:
     std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
+    // The prims of the tree that carry no transform: the `Scope` prims and
+    // the `Typed` prims a `typeName` without an erhe class becomes
+    // (doc/usd-compatibility-plan.md C5). They are parented into the same
+    // tree `nodes` is parented into, so a caller that inserts the tree's
+    // root takes them with it; the list is here for the reason `nodes` is -
+    // so a caller can walk what one file contributed.
+    std::vector<std::shared_ptr<erhe::Typed>>               prims;
     std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
     std::vector<std::shared_ptr<erhe::scene::Camera>>       cameras;
     std::vector<std::shared_ptr<erhe::scene::Light>>        lights;

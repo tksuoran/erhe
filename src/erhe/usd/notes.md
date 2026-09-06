@@ -62,11 +62,28 @@ translation units.
   Every other mesh becomes an `erhe::primitive::Triangle_soup` with one
   vertex per polygon corner and polygons fanned into triangles, the carrier
   glTF primitives use.
-- A `Scope`, `Material`, `Shader`, `NodeGraph` or `GeomSubset` prim whose
-  subtree carries no mesh, camera, light, skeleton or volume contributes no
-  erhe node: none of them is Xformable - the shading network is namespace and
-  a subset's facets already ride a primitive of its mesh - yet Tydra lists
-  each as a transform node.
+- The erhe class of a prim is the class its `typeName` names
+  (`doc/usd-compatibility-plan.md` C5, the object-model table of
+  `doc/usd_compatibility.md`): `Xform` and the prim types whose content the
+  conversion attaches to a node - `Mesh`, `Camera` and the UsdLux types -
+  become an `erhe::scene::Xform`, `Scope` becomes an `erhe::Scope`, and
+  every other `typeName`, a typeless `def` included, becomes an
+  `erhe::Typed` carrying that token. The `typeName` comes from the composed
+  prim: a generic `Model` prim carries the authored token, every typed prim
+  is named by its schema class. A prim outside `Xformable` carries no
+  transform, so the transform that reached it composes with its children,
+  and a transform authored on such a prim is dropped with one warning
+  naming the prim.
+- A `Material`, `Shader`, `NodeGraph` or `GeomSubset` prim whose subtree
+  carries no mesh, camera, light, skeleton or volume contributes no erhe
+  prim: the shading network is namespace and a subset's facets already ride
+  a primitive of its mesh, yet Tydra lists each as a transform node. A
+  `Scope` whose children are all such prims - the form a stage's material
+  library takes - contributes none either: its materials become library
+  items, and the writer re-creates the scope from the material library, so
+  keeping it would add one empty scope to the file per save. U4 makes
+  materials prims of the tree and retires that rule; every other `Scope`,
+  an empty one included, is an `erhe::Scope`.
 - Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of
@@ -131,9 +148,14 @@ because the same spelling rule decides what an item is called on a stage.
 
 - Prim layout. The root node is not a prim: an erhe item path excludes the
   root's own name (M1), so the root's children are the stage's top-level
-  prims. A node's own attachment types the prim that carries its transform -
-  `Xform`, `Mesh`, `Camera`, `DistantLight` or `SphereLight` - which is what
-  the importer inverts, so a file round-trips without gaining a level. A mesh
+  prims. The prim's `typeName` is the one its erhe class names: an
+  `erhe::Scope` writes a `Scope` prim, an `erhe::Typed` writes
+  `def <token> "name"` - a typeless `def` when the token is empty - with its
+  children and none of its attributes, and a transformable prim writes the
+  prim its own attachment types: `Xform`, `Mesh`, `Camera`, `DistantLight`
+  or `SphereLight`. That is what the importer inverts, so a file round-trips
+  without gaining a level. A prim of a class that carries no transform gets
+  none, and the transform that reached it composes with its children. A mesh
   with one primitive binds its material directly; several primitives become
   one `materialBind` `GeomSubset` each, over the concatenated `points` /
   `faceVertexCounts` / `faceVertexIndices` of every primitive, with the

@@ -1,0 +1,55 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    double3 xformOp:translate = (0, 2, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+    def Xform "Empty"
+    {
+    }
+
+    def Scope "Group"
+    {
+        def Mesh "cube"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [
+                0, 3, 2, 1,
+                4, 5, 6, 7,
+                3, 7, 6, 2,
+                0, 1, 5, 4,
+                0, 4, 7, 3,
+                1, 2, 6, 5
+            ]
+            point3f[] points = [
+                (-1, -1, -1),
+                ( 1, -1, -1),
+                ( 1, -1,  1),
+                (-1, -1,  1),
+                (-1,  1, -1),
+                ( 1,  1, -1),
+                ( 1,  1,  1),
+                (-1,  1,  1)
+            ]
+        }
+    }
+
+    def Cube "Box"
+    {
+        double size = 2
+    }
+
+    def "Untyped"
+    {
+        def Xform "Child"
+        {
+        }
+    }
+}

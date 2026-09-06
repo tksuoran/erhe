@@ -39,6 +39,14 @@ JSON, erhe state attaches at three levels:
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
+A prim of a class that carries no transform - an `erhe::Scope`, or the
+`erhe::Typed` a USD `typeName` erhe has no class for becomes
+(`usd-compatibility-plan.md` C5) - is written as a glTF node with the
+identity transform whose `ERHE_node` extension names its `prim_class`
+(and, for a `Typed`, its `prim_type_name`); the reader creates that class
+and reads no transform for it. A node without the field is an `Xform`, the
+class every glTF node has.
+
 Cross-references between payloads use glTF indices within the same asset
 (node index, material index, mesh index). Item flags serialize as name lists
 (see [`gltf_extensions/flags.md`](gltf_extensions/flags.md)). Geometry-normative

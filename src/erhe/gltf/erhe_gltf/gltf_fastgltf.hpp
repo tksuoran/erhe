@@ -21,6 +21,9 @@
 #include <utility>
 #include <vector>
 
+namespace erhe {
+    class Typed;
+}
 namespace erhe::geometry {
     class Geometry;
 }
@@ -217,6 +220,13 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
     std::vector<std::shared_ptr<erhe::scene::Skin>>         skins;
     std::vector<std::shared_ptr<erhe::scene::Node>>         nodes;
+    // Parallel to nodes: every parsed prim, whatever its class
+    // (doc/usd-compatibility-plan.md C5). A glTF node whose ERHE_node
+    // extension names a `prim_class` is a prim of a class that carries no
+    // transform - a `Scope` or a `Typed` - so `nodes` holds null at its
+    // index and this vector holds the prim; for every other node both hold
+    // the same object.
+    std::vector<std::shared_ptr<erhe::Typed>>               prims;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     // Parallel to materials (sized on first use): the ERHE_material "style"
     // name of each material, empty for none. The editor assigns the style

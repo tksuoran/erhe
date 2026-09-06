@@ -50,9 +50,11 @@ mapping an exporter applies and an importer inverts:
 
 | erhe | USD | notes |
 |---|---|---|
-| `Node` (transform + children) | `Xform` (`UsdGeomXformable`) | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks, imported as composed then decomposed |
-| `Node` whose only attachment is one `Mesh` | `Mesh` prim (Xformable itself) | the natural form; an importer creates node + mesh attachment |
-| `Node` with several attachments | `Xform` with one typed child prim per attachment | child prims carry no transform of their own |
+| `Xform` (transform + children) | `Xform` (`UsdGeomXformable`) | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks, imported as composed then decomposed |
+| `Scope` (children only, no transform) | `Scope` | a transform composes through it to the nearest transformable ancestor. A content-library folder maps to one from U4 on; until then the folder tree is its own thing and a `Scope` is what a USD `Scope` prim becomes - except the scope that gathers a stage's `Material` prims, which is the namespace of a material library rather than a prim of the tree and is re-created from the library on export |
+| `Typed` (`typeName` token, children) | every other `typeName`, and a typeless `def` | the class a prim gets when erhe has none for its `typeName` (`Cube`, `PointInstancer`, `SkelRoot`): its name, its place in the tree and its children round-trip, its schema attributes do not. A transform authored on such a prim is dropped with one warning |
+| `Xform` whose only attachment is one `Mesh` | `Mesh` prim (Xformable itself) | the natural form; an importer creates node + mesh attachment |
+| `Xform` with several attachments | `Xform` with one typed child prim per attachment | child prims carry no transform of their own |
 | `Mesh` attachment + `Mesh_primitive` list | `Mesh` prim + `GeomSubset` per primitive (`familyName = materialBind`) | one material per subset via `MaterialBindingAPI` |
 | `Light` attachment | `UsdLux` prim, see "Lights" | |
 | `Camera` attachment | `Camera` prim, see "Cameras" | |

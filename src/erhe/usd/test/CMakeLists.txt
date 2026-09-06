@@ -13,6 +13,7 @@ add_executable(${_target}
     main.cpp
     test_usd_export.cpp
     test_usd_import.cpp
+    test_usd_prims.cpp
 )
 
 target_compile_definitions(${_target}

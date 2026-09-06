@@ -27,6 +27,16 @@ Carries the erhe Item state of a node that core glTF cannot express:
   (`doc/style-library.md` D4), one of the scene's `ERHE_scene` `styles`;
   emitted only when the node has a style. Assigned on load once the
   styles exist; an unknown name is logged and assigns nothing.
+- `prim_class` (optional): the erhe prim class of the node
+  (`doc/usd-compatibility-plan.md` C5), `"Scope"` or `"Typed"` - the two
+  classes that carry no transform. A node without the field is an `Xform`,
+  the class every glTF node has. The reader creates the named class and
+  reads no transform for it; the writer gives such a node the identity
+  transform and composes the transform that reached the prim into its
+  children.
+- `prim_type_name` (optional): the USD `typeName` token a `Typed` prim
+  carries, empty for a typeless `def`. Written for `"prim_class":
+  "Typed"` only - a `Scope` names its own token.
 - `mesh_flags` (optional): the persistent Item flags of the node's mesh
   attachment. They ride the node because core glTF meshes have no erhe
   payload of their own and erhe `Mesh` attachments are per node while glTF
@@ -38,6 +48,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
 {
     "flags": ["content", "visible", "show_in_ui"],
     "properties": {"Layout.align_y": "Stretch", "Light.color": "1 0.9 0.8"},
+    "prim_class": "Typed",
+    "prim_type_name": "Cube",
     "style": "Warm lights",
     "mesh_flags": ["content", "visible", "shadow_cast", "id", "show_in_ui"]
 }

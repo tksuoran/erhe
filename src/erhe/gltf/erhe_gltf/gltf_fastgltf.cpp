@@ -28,6 +28,8 @@
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_item/scope.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/light.hpp"
@@ -1025,6 +1027,17 @@ namespace {
 
 } // namespace
 
+// The erhe class of one glTF node, read out of its ERHE_node extension
+// (doc/scene_serialization.md, prim classes): `prim_class` is "Scope" or
+// "Typed" - a node without the field is the default class, an Xform - and
+// `prim_type_name` is the USD `typeName` token a `Typed` carries.
+class Gltf_node_prim_class
+{
+public:
+    std::string prim_class;
+    std::string prim_type_name;
+};
+
 class Gltf_parser
 {
 private:
@@ -1165,6 +1178,7 @@ public:
 
         log_gltf->trace("parsing nodes");
         m_data_out.nodes.resize(m_asset->nodes.size());
+        m_data_out.prims.resize(m_asset->nodes.size());
         m_data_out.node_external_assets.resize(m_asset->nodes.size());
         m_data_out.skins.resize(m_asset->skins.size()); // Skins are parsed just in time during node parsing
         if (!m_asset->scenes.empty()) {
@@ -2427,7 +2441,17 @@ private:
     // geometry-normative: the full erhe::geometry::Geometry is rebuilt
     // instead of the Triangle_soup path.
     std::map<std::pair<std::size_t, std::size_t>, std::string> m_primitive_geometry_extensions;
+    // The prim class of the glTF nodes that name one, see parse_prim_node.
+    std::map<std::size_t, Gltf_node_prim_class>               m_node_prim_classes;
 public:
+    // The prim class of each glTF node whose ERHE_node extension names one,
+    // read out of the captured extension payloads before the parse (see
+    // parse_prim_node). Handed in by parse_gltf().
+    void set_node_prim_classes(std::map<std::size_t, Gltf_node_prim_class>&& node_prim_classes)
+    {
+        m_node_prim_classes = std::move(node_prim_classes);
+    }
+
     void set_primitive_geometry_extensions(std::map<std::pair<std::size_t, std::size_t>, std::string>&& extensions)
     {
         m_primitive_geometry_extensions = std::move(extensions);
@@ -2794,7 +2818,35 @@ private:
         return instances;
     }
 
-    void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::scene::Node>& parent)
+    // A glTF node whose ERHE_node extension names a `prim_class` is a prim of
+    // a class that carries no transform (doc/usd-compatibility-plan.md C5):
+    // a `Scope`, or the `Typed` prim a `typeName` without an erhe class
+    // becomes. Its name, its place in the tree and its children are what the
+    // glTF node carries; the writer gives it the identity transform and this
+    // reads none.
+    void parse_prim_node(
+        const std::size_t                       node_index,
+        const fastgltf::Node&                   node,
+        const std::string&                      node_name,
+        const Gltf_node_prim_class&             prim_class,
+        const std::shared_ptr<erhe::Hierarchy>& parent
+    )
+    {
+        std::shared_ptr<erhe::Typed> prim = (prim_class.prim_class == "Scope")
+            ? std::static_pointer_cast<erhe::Typed>(std::make_shared<erhe::Scope>(node_name))
+            : std::make_shared<erhe::Typed>(node_name, prim_class.prim_type_name);
+        prim->set_source_path(m_arguments.path);
+        copy_uid(node, *prim);
+        prim->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+        m_data_out.prims[node_index] = prim;
+        prim->set_parent(parent);
+
+        for (std::size_t i = 0, end = node.children.size(); i < end; ++i) {
+            parse_node(node.children[i], prim);
+        }
+    }
+
+    void parse_node(const std::size_t node_index, const std::shared_ptr<erhe::Hierarchy>& parent)
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -2802,11 +2854,19 @@ private:
 
         const std::string node_name = safe_resource_name(node.name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node.name);
+
+        const std::map<std::size_t, Gltf_node_prim_class>::const_iterator prim_class = m_node_prim_classes.find(node_index);
+        if (prim_class != m_node_prim_classes.end()) {
+            parse_prim_node(node_index, node, node_name, prim_class->second, parent);
+            return;
+        }
+
         auto erhe_node = std::make_shared<erhe::scene::Xform>(node_name);
         erhe_node->set_source_path(m_arguments.path);
         copy_uid(node, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         m_data_out.nodes[node_index] = erhe_node;
+        m_data_out.prims[node_index] = erhe_node;
         erhe_node->Hierarchy::set_parent(parent);
         parse_node_transform(node, erhe_node);
 
@@ -2817,8 +2877,8 @@ private:
 
         for (std::size_t i = 0, end = node.children.size(); i < end; ++i) {
             std::size_t child_node_index = node.children[i];
-            auto& erhe_child_node = m_data_out.nodes.at(child_node_index);
-            erhe_child_node->set_parent(erhe_node);
+            const std::shared_ptr<erhe::Typed>& erhe_child_prim = m_data_out.prims.at(child_node_index);
+            erhe_child_prim->set_parent(erhe_node);
         }
 
         if (node.cameraIndex.has_value()) {
@@ -3695,6 +3755,41 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         erhe_parser.set_primitive_geometry_extensions(std::move(geometry_extensions));
     }
 
+    // Hand the prim classes the captured ERHE_node payloads name to the
+    // parser: a node listed here is created as that class instead of an
+    // Xform (see parse_prim_node).
+    {
+        std::map<std::size_t, Gltf_node_prim_class> node_prim_classes;
+        simdjson::dom::parser prim_class_parser;
+        for (const auto& [index, captured] : parse_extras_context.node_extensions) {
+            for (const auto& [extension_name, extension_value] : captured.entries) {
+                if (extension_name != "ERHE_node") {
+                    continue;
+                }
+                simdjson::dom::element root;
+                if (prim_class_parser.parse(simdjson::padded_string{extension_value}).get(root) != simdjson::SUCCESS) {
+                    continue;
+                }
+                simdjson::dom::object extension_object;
+                if (root.get_object().get(extension_object) != simdjson::SUCCESS) {
+                    continue;
+                }
+                std::string_view prim_class_name;
+                if (extension_object.at_key("prim_class").get_string().get(prim_class_name) != simdjson::SUCCESS) {
+                    continue;
+                }
+                Gltf_node_prim_class entry;
+                entry.prim_class = std::string{prim_class_name};
+                std::string_view prim_type_name;
+                if (extension_object.at_key("prim_type_name").get_string().get(prim_type_name) == simdjson::SUCCESS) {
+                    entry.prim_type_name = std::string{prim_type_name};
+                }
+                node_prim_classes.emplace(index, std::move(entry));
+            }
+        }
+        erhe_parser.set_node_prim_classes(std::move(node_prim_classes));
+    }
+
     erhe_parser.parse_and_build();
 
     // Apply serialized erhe Item flags to parsed nodes (Gltf_data::nodes is
@@ -3806,7 +3901,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
     // clear_local_properties_not_listed, which enforces that same map.
     {
         ERHE_PROFILE_SCOPE("elide default local values");
-        for (const std::shared_ptr<erhe::scene::Node>&   node   : result.nodes)   { elide_default_valued_local_properties(node);   }
+        for (const std::shared_ptr<erhe::Typed>&        prim   : result.prims)   { elide_default_valued_local_properties(prim);   }
         for (const std::shared_ptr<erhe::scene::Mesh>&   mesh   : result.meshes)  { elide_default_valued_local_properties(mesh);   }
         for (const std::shared_ptr<erhe::scene::Light>&  light  : result.lights)  { elide_default_valued_local_properties(light);  }
         for (const std::shared_ptr<erhe::scene::Camera>& camera : result.cameras) { elide_default_valued_local_properties(camera); }
@@ -3846,8 +3941,12 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         };
 
         for (std::size_t i = 0; i < result.node_extensions.size(); ++i) {
+            // The flags and the property map belong to the prim whatever its
+            // class; the mesh and light halves belong to the node a
+            // transformable prim is.
+            const std::shared_ptr<erhe::Typed>&       prim = result.prims[i];
             const std::shared_ptr<erhe::scene::Node>& node = result.nodes[i];
-            if (!node) {
+            if (!prim) {
                 continue;
             }
             for (const auto& [extension_name, extension_json] : result.node_extensions[i].entries) {
@@ -3856,12 +3955,12 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     continue;
                 }
                 if (extension_name == "ERHE_node") {
-                    apply_persistent_flags_and_properties(*node, extension_object, "flags", "properties", result.unresolved_object_properties);
-                    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                    apply_persistent_flags_and_properties(*prim, extension_object, "flags", "properties", result.unresolved_object_properties);
+                    const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_attachment<erhe::scene::Mesh>(node.get()) : nullptr;
                     if (mesh) {
                         apply_persistent_flags_and_properties(*mesh, extension_object, "mesh_flags", "mesh_properties", result.unresolved_object_properties);
                     }
-                } else if (extension_name == "ERHE_light") {
+                } else if ((extension_name == "ERHE_light") && node) {
                     const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_attachment<erhe::scene::Light>(node.get());
                     if (light) {
                         bool bool_value{false};
@@ -5804,7 +5903,7 @@ private:
     // extras writer; the extras are still parsed for older files.
     std::unordered_map<std::size_t, std::string> m_internal_node_extensions;
     void record_node_extensions(
-        const erhe::scene::Node&                   erhe_node,
+        const erhe::Typed&                         erhe_node,
         const std::size_t                          gltf_node_index,
         const std::shared_ptr<erhe::scene::Mesh>&  erhe_mesh,
         const std::shared_ptr<erhe::scene::Light>& erhe_light
@@ -5815,6 +5914,17 @@ private:
             persistent_item_flags_to_json(erhe_node.get_flag_bits()),
             item_local_properties_to_json(erhe_node)
         );
+        // The prim class of a prim that carries no transform
+        // (doc/usd-compatibility-plan.md C5): a node without the field is an
+        // Xform, the class every glTF node has had. A `Typed` also names the
+        // USD `typeName` token it carries.
+        if (!erhe::is<erhe::scene::Node>(&erhe_node)) {
+            const bool is_scope = erhe::is<erhe::Scope>(&erhe_node);
+            members += fmt::format(",\"prim_class\":\"{}\"", is_scope ? "Scope" : "Typed");
+            if (!is_scope) {
+                members += fmt::format(",\"prim_type_name\":\"{}\"", erhe_node.get_prim_type_name());
+            }
+        }
         if (erhe_node.get_style()) {
             // The style item's name (doc/style-library.md D4); quotes and
             // backslashes escaped, the only characters a JSON string needs.
@@ -5888,11 +5998,24 @@ private:
     // container. Without this every open/save cycle would nest the content
     // in one more wrapper node.
     template <typename Index_vector>
-    void process_child_nodes(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform, Index_vector& out_node_indices)
+    void process_child_nodes(const erhe::Hierarchy& erhe_node, const erhe::scene::Trs_transform& pre_transform, Index_vector& out_node_indices)
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : erhe_node.get_children()) {
+            const erhe::Typed* erhe_child_prim = dynamic_cast<const erhe::Typed*>(child.get());
+            if (erhe_child_prim == nullptr) {
+                continue;
+            }
             const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if (erhe_child_node == nullptr) {
+                // A prim of a class that carries no transform: the transform
+                // that reached it composes with its children instead (C5).
+                if ((erhe_child_prim->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
+                    continue;
+                }
+                if ((erhe_child_prim->get_flag_bits() & erhe::Item_flags::content) == 0) {
+                    continue;
+                }
+                out_node_indices.push_back(process_prim_node(*erhe_child_prim, pre_transform));
                 continue;
             }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
@@ -5916,6 +6039,22 @@ private:
             }
             out_node_indices.push_back(process_node(*erhe_child_node, pre_transform));
         }
+    }
+
+    // One prim of a class that carries no transform as one glTF node: the
+    // ERHE_node `prim_class` names the class, the glTF node carries the
+    // identity transform, and the transform that reached the prim passes
+    // through to its children (doc/usd-compatibility-plan.md C5).
+    auto process_prim_node(const erhe::Typed& erhe_prim, const erhe::scene::Trs_transform& pre_transform) -> std::size_t
+    {
+        fastgltf::Node gltf_node{};
+        gltf_node.name = erhe_prim.get_name();
+        process_child_nodes(erhe_prim, pre_transform, gltf_node.children);
+
+        const std::size_t gltf_node_index = m_gltf_asset.nodes.size();
+        m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
+        record_node_extensions(erhe_prim, gltf_node_index, {}, {});
+        return gltf_node_index;
     }
 
     auto process_node(const erhe::scene::Node& erhe_node, const erhe::scene::Trs_transform& pre_transform = {}) -> std::size_t
