@@ -122,6 +122,17 @@ record has the history.
   and answers `describe_usd_file` over the forwarded MCP port; the size
   and build-time cost are tabulated in `src/erhe/usd/notes.md`
   "Configurations".
+- U1 Prim class hierarchy: `erhe::Typed` and `erhe::Scope`
+  (`src/erhe/item/notes.md` "Prim classes"), `erhe::scene::Imageable`,
+  `Xformable` (today's `Node`, alias kept), `Xform`, `Boundable` and
+  `Gprim` (`src/erhe/scene/notes.md`); a transform composes with the
+  nearest `Xformable` ancestor and the item host is carried through every
+  prim; the USD reader and writer map class and `typeName` one to one and
+  glTF carries `Scope` / `Typed` on `ERHE_node` (`src/erhe/usd/notes.md`
+  "Import" / "Export", `doc/gltf_extensions/ERHE_node.md`); MCP
+  `create_node` takes `prim_type`. The Create menu has no `Scope` entry
+  yet, object-reference candidates and `Layout` do not reach through a
+  `Scope`, and a material `Scope` stays namespace until U4.
 
 ## 3. Remaining steps
 
@@ -131,45 +142,7 @@ composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
-### U1 Prim class hierarchy (M)
-
-What: the class skeleton of C5 and the parent walk it needs. Each level
-is a class with its own `Item_type` bit, `static_type_name` (the USD
-schema name in erhe spelling) and clone; a concrete class's static type
-is the OR of its chain, the pattern `Mesh` already uses
-(`node_attachment | mesh`), so `is<Xformable>(mesh)` holds by the
-existing subset test and the D27 owner-type chain follows the same
-levels:
-
-| erhe class (library) | base | USD schema | what it holds |
-|---|---|---|---|
-| `Typed` (`erhe::item`) | `erhe::Item<Item_base, Hierarchy, Typed>` | `UsdTyped` | `type_name` (string property, local): the `typeName` token. Instantiated as itself for a prim whose type has no erhe class (`Cube`, `PointInstancer`, `SkelRoot`, a typeless `def`), so name, place and children survive a round trip; the schema attributes of such a prim do not (section 5) |
-| `Scope` (`erhe::item`) | `Typed` | `Scope` | children only; no transform exists on it. Its secondary property owner type is the root owner type (as `Style`), so a `Scope` holds category values for its descendants (`Material.roughness` on a materials scope, the D30 folder rule) |
-| `Imageable` (`erhe::scene`) | `Typed` | `UsdGeomImageable` | the level `visible` and `purpose` belong to; they stay registered on `Item_base` until a step wants them moved |
-| `Xformable` (`erhe::scene`) | `Imageable` | `UsdGeomXformable` | the transform: today's `Node`, renamed. `using Node = Xformable` keeps every source compiling and is retired when the U steps are done; the `node` type bit and its label follow the rename |
-| `Xform` (`erhe::scene`) | `Xformable` | `Xform` | nothing: a transform with children. Every node-creation path (Create menu, MCP `create_node`, import of a transform-only node) makes an `Xform` |
-| `Boundable` (`erhe::scene`) | `Xformable` | `UsdGeomBoundable` | the level `extent` belongs to; a bounds accessor when a consumer wants one |
-| `Gprim` (`erhe::scene`) | `Boundable` | `UsdGeomGprim` | the level `doubleSided` and `displayColor` belong to; nothing until a step wants them |
-
-`Camera`, `Light` and `Mesh` move onto this tree in U2 and U3;
-`Material` in U4. `Xformable::get_parent_node()` returns the nearest
-`Xformable` ancestor rather than casting the parent, and every reader of
-a parent transform goes through it, so a transform composes with the
-first `Xformable` above it - the `Scope` rule of USD. The USD importer
-creates the class the `typeName` names and the exporter writes the
-`typeName` the class names; the glTF reader and writer treat an
-`Xformable` as the node it is and carry the other classes through
-`ERHE_scene` (C5, C1).
-
-Verification: `erhe_item_tests` for the parent walk through a non-
-Xformable prim (world transform of an `Xform` under a `Scope` under a
-moved `Xform`) and for the composed type bits at every level;
-`erhe_usd_tests` round-trips an empty `Xform`, a `Scope` holding a
-`Mesh`, a `Cube` prim and a typeless `def` under their own classes;
-headless, the glTF and USD round trips pass and a viewport screenshot of
-the default scene is unchanged.
-
-### U2 Mesh is a Gprim (L, after U1)
+### U2 Mesh is a Gprim (L)
 
 What: `erhe::scene::Mesh` becomes `erhe::Item<Item_base, Gprim, Mesh>`:
 an `Xformable` with its own transform, name and children, a child prim
@@ -216,7 +189,7 @@ stays for exactly them.
 Verification: as U2, plus a screenshot with a spot light and a second
 camera, and the OpenXR build still compiles.
 
-### U4 Resources are prims (L, after U1)
+### U4 Resources are prims (L)
 
 What: the content library's items - materials, textures, brushes,
 styles, physics materials, collision filters, joint settings, geometry
@@ -242,6 +215,10 @@ copies. In glTF, tree position of a resource rides `ERHE_scene` where
 Why: C5's "any resource under any prim", and what lets E4 write brushes,
 styles and folders as prims under a `Scope` instead of custom
 `customLayerData` forms.
+
+The Create menu gains a `Scope` entry beside the folder entry it
+replaces, and the object-reference candidate walk (`item_lookup.cpp`)
+walks the tree so a resource under any prim is offered.
 
 Verification: `scene_roundtrip_verify.py` (both legs) with a scene whose
 materials sit in nested scopes and under a mesh; drag a material under
@@ -294,7 +271,7 @@ hierarchy maps onto style chains without flattening.
 Verification: headless script: style B uses style A, an item uses B,
 values of A reach the item; assigning A to B's style is refused.
 
-### M8 xformOp stacks (M, after U1)
+### M8 xformOp stacks (M)
 
 What: `Xformable` holds an authored USD xformOp stack (ordered
 translate / rotate / scale / transform ops with their suffixes and
@@ -368,22 +345,20 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. U1 prim class hierarchy
-2. U2 mesh is a Gprim
-3. U3 camera and light are Xformables
-4. U4 resources are prims
-5. E4 editor state in a USD file (completes G2)
-6. X1 references as prefab instances, then X2 editable instances (G3)
+1. U2 mesh is a Gprim
+2. U3 camera and light are Xformables
+3. U4 resources are prims
+4. E4 editor state in a USD file (completes G2)
+5. X1 references as prefab instances, then X2 editable instances (G3)
 
-U4 depends on U1 only, so it may be taken before U2 when a smaller step
-is wanted first. M6, M7 and M8 land when the step that needs them is
+U4 has no dependency on U2, so it may be taken first when a smaller
+step is wanted. M6, M7 and M8 land when the step that needs them is
 next (any importer hitting a missing type, X3, a file whose xformOp
 stack must survive). E2 and X3 to X5 have no fixed place: each waits
 for its dependencies and is taken when wanted.
 
-Dependencies: U2, U3 (through U2), U4 and M8 need U1; E4 and X1 need
-U4; X2 needs X1; X3 needs M7; E2, X4 and X5 need nothing that has not
-landed.
+Dependencies: U3 needs U2; E4 and X1 need U4; X2 needs X1; X3 needs
+M7; U2, U4, M8, E2, X4 and X5 need nothing that has not landed.
 
 ## 5. Out of scope
 

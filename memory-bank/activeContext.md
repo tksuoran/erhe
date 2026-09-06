@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1⚡{commits-1+2a+2b✓;3-in-flight}→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2-NEXT→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
@@ -71,6 +71,9 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{U1⚡{commits-1+2a+2b✓;3-in-
 ?startup-log-error::"property 'lightmapped': object is sealed"{pre-existing,at-startup,unrelated}
 ?inherits-registration-check{doc/property-system.md-section-6}
 ?Light-derived-rows→Rendertarget_mesh→Animation{doc/property-inventory.md}
+
+?mcp-save-timeout::k_request_timeout=5s{mcp_server.hpp}vs-Debug-save≈5-6s{default-scene-glb-6.8MB;measured-6.4s-idle-ish-2026-09-06;roundtrip-12/164-timeouts;coder-stash-check=pre-existing-at-2b;E3-passed-148/148-earlier-same-day}→decide:profile-save|raise-timeout-for-long-ops
+?U1-follow-ups::Create-menu-Scope-entry+collect_reference_candidates-tree-walk{U4};Layout-through-Scope;transform_selection-Scope-message
 
 [BLOCKERS]
 none
