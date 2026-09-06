@@ -319,6 +319,13 @@ as string entries of the root layer's `customLayerData`:
 An opened file that has no `erhe:scene` entry keeps the editor defaults, so a
 USD file written by any other tool opens as a scene without complaint.
 
+A prefab instance is carried as the composition arc it came from: a node with
+`Prefab_instance` attachments is written as a referencing prim with one
+`references` (or `payload`) arc per attachment, in the attachments' order, and
+the instance content below it is not written - the arcs' targets hold it. An
+arc names the target file relative to the layer being written, or no file at
+all when it targets a prim of that same layer.
+
 The editor-state kinds a USD file does not carry yet are the brush library,
 the geometry and texture node graphs, the content-library folder tree, and
 the style library. A save logs one line per kind the scene actually holds,

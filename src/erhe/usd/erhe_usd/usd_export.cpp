@@ -29,6 +29,7 @@
 // only place in erhe that includes them; everything the rest of erhe sees is
 // declared in usd.hpp.
 #include "lightusd.hh"
+#include "core/composition-types.hh"
 #include "core/prim.hh"
 #include "core/model-scope.hh"
 #include "core/prim-metas.hh"
@@ -285,6 +286,36 @@ private:
     std::set<std::string> m_taken;
 };
 
+// The asset path an arc gets in the file being written: the target file
+// relative to that file's directory, and an empty string when the two are the
+// same file - USD spells an internal reference as a prim path alone. Both
+// paths are compared after weakly_canonical, so a differently spelled path to
+// the same file is still recognized as internal. A target on another volume,
+// which no relative path can name, is written absolute.
+[[nodiscard]] auto to_reference_asset_path(
+    const std::filesystem::path& source_path,
+    const std::filesystem::path& written_path
+) -> std::string
+{
+    if (source_path.empty()) {
+        return std::string{};
+    }
+    std::error_code             error_code{};
+    const std::filesystem::path canonical_source  = std::filesystem::weakly_canonical(source_path,  error_code);
+    const std::filesystem::path canonical_written = std::filesystem::weakly_canonical(written_path, error_code);
+    const std::filesystem::path source            = error_code ? source_path  : canonical_source;
+    const std::filesystem::path written           = error_code ? written_path : canonical_written;
+    if (source == written) {
+        return std::string{}; // internal reference: a prim of this same layer
+    }
+    std::error_code             relative_error{};
+    const std::filesystem::path relative = std::filesystem::relative(source, written.parent_path(), relative_error);
+    if (relative_error || relative.empty()) {
+        return source.generic_string();
+    }
+    return relative.generic_string();
+}
+
 // One prim of the stage, as the first pass decides it: which erhe prim it
 // is, the transform that reached it, its sanitized sibling-unique name and
 // the stage path that name gives it. The writer needs the paths before it
@@ -301,6 +332,11 @@ public:
     glm::mat4                        pre_transform{1.0f};
     std::string                      name;
     std::string                      path;
+    // The composition arcs this prim carries, null when it carries none. A
+    // prim that carries arcs is written as the referencing prim it is and
+    // `children` stays empty: the arcs' targets supply the prims below it
+    // (doc/usd-compatibility-plan.md X1).
+    const std::vector<Usd_save_reference>* references{nullptr};
     std::vector<Plan_prim>           children;
 };
 
@@ -477,6 +513,12 @@ public:
         for (std::size_t index = 0, end = m_arguments.materials.size(); index < end; ++index) {
             if (m_arguments.materials[index]) {
                 m_material_indices[m_arguments.materials[index].get()] = index;
+            }
+        }
+
+        for (const Usd_save_prim_references& entry : m_arguments.references) {
+            if (entry.item && !entry.references.empty()) {
+                m_prim_references[entry.item.get()] = &entry.references;
             }
         }
 
@@ -960,7 +1002,10 @@ private:
             plan_prim.material      = dynamic_cast<const erhe::primitive::Material*>(child.get());
             plan_prim.pre_transform = pre_transform;
             plan_prim.name          = names.make_unique(child_prim->get_name());
-            if (plan_prim.material == nullptr) {
+            plan_prim.references    = find_prim_references(*child_prim);
+            if (plan_prim.references != nullptr) {
+                warn_about_unwritten_carrier_children(*child_prim, plan_prim.name);
+            } else if (plan_prim.material == nullptr) {
                 // A prim that carries a transform writes it on itself, so its
                 // children start from identity; a prim without one passes the
                 // transform that reached it through to them.
@@ -973,6 +1018,47 @@ private:
                 );
             }
             out_prims.push_back(std::move(plan_prim));
+        }
+    }
+
+    // The arcs the caller named for this prim, null when it named none.
+    [[nodiscard]] auto find_prim_references(const erhe::Typed& prim) const -> const std::vector<Usd_save_reference>*
+    {
+        const std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*>::const_iterator i =
+            m_prim_references.find(&prim);
+        return (i != m_prim_references.end()) ? i->second : nullptr;
+    }
+
+    // A carrier's children are the instance content the arcs' targets supply,
+    // so none of them is written. Instantiation seals the prims it clones, so
+    // a child that is not sealed is one the user parented under the carrier:
+    // that prim is left out too, and saying so is the only notice the user
+    // gets until X2 decides what it becomes.
+    void warn_about_unwritten_carrier_children(const erhe::Typed& carrier, const std::string& carrier_name)
+    {
+        std::string names;
+        for (const std::shared_ptr<erhe::Hierarchy>& child : carrier.get_children()) {
+            const erhe::Typed* child_prim = dynamic_cast<const erhe::Typed*>(child.get());
+            if (child_prim == nullptr) {
+                continue;
+            }
+            const uint64_t flags = child_prim->get_flag_bits();
+            if ((flags & erhe::Item_flags::lock_edit) != 0) {
+                continue; // instance content: the arc's target supplies it
+            }
+            if (!names.empty()) {
+                names += ", ";
+            }
+            names += child_prim->get_name();
+        }
+        if (!names.empty()) {
+            add_warning(
+                fmt::format(
+                    "prim '{}' carries composition arcs and holds prims that are not instance content ({}) - they are not written",
+                    carrier_name,
+                    names
+                )
+            );
         }
     }
 
@@ -1042,6 +1128,10 @@ private:
             (plan_prim.node     != nullptr) ? write_node         (plan_prim) :
                                               write_prim         (plan_prim);
 
+        if (plan_prim.references != nullptr) {
+            write_references(prim, *plan_prim.references);
+        }
+
         std::vector<lightusd::Prim> child_prims;
         write_plan_prims(plan_prim.children, child_prims);
         for (lightusd::Prim& child_prim : child_prims) {
@@ -1051,6 +1141,49 @@ private:
             }
         }
         return prim;
+    }
+
+    // The composition arcs of a carrier prim, as the `references` and
+    // `payload` list ops USD reads them back from: one unqualified (explicit)
+    // op per arc kind, holding the arcs in the order the caller named them,
+    // which is the order USD composes them in
+    // (doc/usd-compatibility-plan.md X1).
+    void write_references(lightusd::Prim& prim, const std::vector<Usd_save_reference>& references)
+    {
+        std::vector<lightusd::Reference> usd_references;
+        std::vector<lightusd::Payload>   usd_payloads;
+        for (const Usd_save_reference& reference : references) {
+            const std::string asset_path = to_reference_asset_path(reference.source_path, m_arguments.path);
+            if (asset_path.empty() && reference.prim_path.empty()) {
+                add_warning("a composition arc names neither a file nor a prim - it is not written");
+                continue;
+            }
+            const lightusd::Path prim_path = reference.prim_path.empty()
+                ? lightusd::Path{}
+                : lightusd::Path{reference.prim_path, ""};
+            if (reference.kind == Usd_reference_kind::payload) {
+                lightusd::Payload payload;
+                payload.asset_path = lightusd::value::AssetPath{asset_path};
+                payload.prim_path  = prim_path;
+                usd_payloads.push_back(std::move(payload));
+            } else {
+                lightusd::Reference usd_reference;
+                usd_reference.asset_path = lightusd::value::AssetPath{asset_path};
+                usd_reference.prim_path  = prim_path;
+                usd_references.push_back(std::move(usd_reference));
+            }
+        }
+        lightusd::PrimMetas& metas = prim.metas();
+        if (!usd_references.empty()) {
+            metas.references = std::vector<std::pair<lightusd::ListEditQual, std::vector<lightusd::Reference>>>{
+                std::make_pair(lightusd::ListEditQual::ResetToExplicit, std::move(usd_references))
+            };
+        }
+        if (!usd_payloads.empty()) {
+            metas.payload = std::vector<std::pair<lightusd::ListEditQual, std::vector<lightusd::Payload>>>{
+                std::make_pair(lightusd::ListEditQual::ResetToExplicit, std::move(usd_payloads))
+            };
+        }
     }
 
     // One prim of a class that carries no transform as one prim of the
@@ -1672,6 +1805,7 @@ private:
     std::map<Texture_shader_key, std::string>                m_texture_shader_names;
     std::set<const erhe::primitive::Material*>               m_uv_reader_materials;
     std::map<std::string, std::vector<std::string>>          m_tag_members;
+    std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*> m_prim_references;
     std::size_t                                              m_node_count{0};
     std::size_t                                              m_mesh_count{0};
 };

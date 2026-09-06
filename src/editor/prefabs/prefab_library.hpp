@@ -1,5 +1,7 @@
 #pragma once
 
+#include "prefabs/prefab_instance.hpp"
+
 #include "erhe_gltf/gltf.hpp"
 
 #include <glm/glm.hpp>
@@ -193,12 +195,14 @@ auto instantiate_prefab(
 // under an existing node, retargeting cloned meshes to content_layer_id and
 // appending mesh-carrying nodes to out_mesh_node_items when non-null. The
 // building block shared by instantiate_prefab and glTF external-asset
-// import.
+// import. `arc_kind` is the composition arc the instance was authored as,
+// which a USD save writes back (X1); a glTF prefab is a reference.
 void attach_prefab_instance(
     const std::shared_ptr<Prefab>&                 prefab,
     const std::shared_ptr<erhe::scene::Node>&      node,
     erhe::scene::Layer_id                          content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
+    Prefab_arc_kind                                arc_kind = Prefab_arc_kind::reference
 );
 
 // Collect glTF 2.1 external-asset references for export: walks the subtree

@@ -11,6 +11,14 @@ namespace erhe::scene {
 
 namespace editor {
 
+// Which composition arc a prefab instance came from. USD spells the two
+// forms differently and a save must write back the one that was authored
+// (doc/usd-compatibility-plan.md X1); a glTF prefab instance is a reference.
+enum class Prefab_arc_kind : unsigned int {
+    reference = 0,
+    payload   = 1
+};
+
 // Marks a node as the root of a prefab instance: the node's subtree was
 // instantiated (cloned) from a source file managed by Prefab_library - a glTF
 // file, or one prim of a USD file (doc/usd-compatibility-plan.md X1). The
@@ -31,7 +39,8 @@ public:
     Prefab_instance(
         const std::filesystem::path& source_path,
         const std::string&           prefab_name,
-        const std::string&           prim_path = {}
+        const std::string&           prim_path = {},
+        Prefab_arc_kind              arc_kind = Prefab_arc_kind::reference
     );
 
     // Implements Item_base
@@ -45,11 +54,15 @@ public:
     // the `references` arc. Empty for a glTF prefab and for an arc that names
     // the target layer's default prim.
     [[nodiscard]] auto get_prefab_prim_path  () const -> const std::string&;
+    // The arc form this instance was authored as; a USD save writes it back
+    // as that form. Always a reference for a glTF prefab.
+    [[nodiscard]] auto get_prefab_arc_kind   () const -> Prefab_arc_kind;
 
 private:
     std::filesystem::path m_prefab_source_path;
     std::string           m_prefab_name;
     std::string           m_prefab_prim_path;
+    Prefab_arc_kind       m_prefab_arc_kind{Prefab_arc_kind::reference};
 };
 
 // Returns the outermost node, walking up from and including the given node,

@@ -709,10 +709,11 @@ void attach_prefab_instance(
     const std::shared_ptr<Prefab>&                 prefab,
     const std::shared_ptr<erhe::scene::Node>&      node,
     const erhe::scene::Layer_id                    content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
+    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
+    const Prefab_arc_kind                          arc_kind
 )
 {
-    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name, prefab->prim_path);
+    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name, prefab->prim_path, arc_kind);
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 

@@ -262,8 +262,8 @@ because the same spelling rule decides what an item is called on a stage.
   the caller's texture index, not a placement list: a material of that list
   which is not a prim of the tree is not written, and a material a mesh
   binds but the scene does not own has no prim, so its binding is dropped
-  with one warning naming it (plan step X1 gives a prefab template's
-  materials a prim of their own).
+  with one warning naming it (a prefab template's materials live in the
+  template's own file, which is what the arc names).
 - Values. Only a local value is written (D32). A property the mapping gives a
   USD attribute goes into that attribute (the closed list is
   `is_native_usd_property`, the exact inverse of what the import reads);
@@ -280,6 +280,23 @@ because the same spelling rule decides what an item is called on a stage.
   then applies erhe's own sibling-unique suffix rule (M2, `<base>_<n>` from
   1). The prim name is the item name: an item whose name needed sanitizing
   comes back under the sanitized spelling.
+- Composition arcs. A prim the caller names in
+  `Usd_save_arguments::references` is written as the referencing prim it is:
+  its own class, name, transform and authored values, plus one explicit
+  `references` list op holding its reference arcs and one `payload` list op
+  holding its payload arcs, each in the order the caller gave. The prims below
+  it are not written - the arcs' targets supply them - so the file keeps the
+  instance structure instead of the flattened subtree
+  (doc/usd-compatibility-plan.md X1). An arc's `asset_path` is
+  `Usd_save_reference::source_path` relative to the file being written, and
+  empty when the two are the same file (compared after `weakly_canonical`),
+  which is USD's spelling of an internal reference; its `prim_path` is empty
+  when the arc names the target's default prim. Instantiation seals the prims
+  it clones, so a child of a carrier that is not sealed (`Item_flags::lock_edit`)
+  is one the user parented there: it is left out too, and the writer names it
+  in a warning - X1 protects the structure inside a reference and X2 decides
+  what such a prim becomes. `erhe::usd` knows nothing of prefabs: the editor
+  fills the arcs from the carrier's `Prefab_instance` attachments.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
 - `Usd_save_arguments::custom_layer_data` is written verbatim as the root

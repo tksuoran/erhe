@@ -270,6 +270,33 @@ public:
     bool                      srgb          {true};
 };
 
+// One composition arc the writer authors on a prim. `source_path` names the
+// file the arc targets as a path of the local file system; the writer writes
+// it relative to the file it is saving, and writes no asset path at all when
+// the two are the same file - the USD spelling of an internal reference. An
+// empty `prim_path` names the target layer's default prim.
+class Usd_save_reference final
+{
+public:
+    std::filesystem::path source_path;
+    std::string           prim_path;
+    Usd_reference_kind    kind{Usd_reference_kind::reference};
+};
+
+// The composition arcs one prim of the scene carries. The prim is written as
+// the referencing prim it is - its own class, name, transform and authored
+// values, plus the `references` and `payload` list ops these arcs give it -
+// and the prims below it are not written, because the arcs' targets supply
+// them (doc/usd-compatibility-plan.md X1). The caller names the arcs: the
+// editor fills them from the carrier's Prefab_instance attachments, and
+// nothing in erhe::usd knows that type.
+class Usd_save_prim_references final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::vector<Usd_save_reference>        references;
+};
+
 // What save_usda() writes. The content is erhe's own - the writer is handed
 // the scene it is to write, not a Usd_data - and the stage constants are the
 // caller's choice (the defaults are what erhe means: Y up, metres).
@@ -289,6 +316,13 @@ public:
     // written without textures.
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<Usd_save_texture>                           textures;
+    // The prims that carry composition arcs, one entry per carrier prim. A
+    // carrier is written with its arcs and nothing below it; a child of a
+    // carrier that instantiation did not seal is a prim the user parented
+    // there, and the writer names it in a warning and leaves it out (X1
+    // protects the structure inside a reference; X2 decides what such a prim
+    // becomes).
+    std::vector<Usd_save_prim_references>                   references;
     // Written verbatim as the root layer's `customLayerData`, one string
     // entry per pair: how the editor carries its own scene state in a USD
     // file (doc/scene_serialization.md, USD-backed scenes).
@@ -311,7 +345,10 @@ public:
 // a `Material` prim with its Shader network where the erhe material sits in
 // the tree, local property values only (D32), erhe-only properties as
 // `erhe:Owner:name` custom attributes and item tags as UsdCollectionAPI
-// collections on the default prim. Failures are values, not exceptions.
+// collections on the default prim. A prim named in
+// Usd_save_arguments::references is written as a referencing prim - its arcs
+// as `references` and `payload` list ops, and nothing below it. Failures are
+// values, not exceptions.
 [[nodiscard]] auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result;
 
 } // namespace erhe::usd

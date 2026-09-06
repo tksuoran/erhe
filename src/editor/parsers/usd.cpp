@@ -387,7 +387,15 @@ void resolve_usd_references(
                 );
                 continue;
             }
-            attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
+            attach_prefab_instance(
+                prefab,
+                carrier,
+                content_layer_id,
+                out_mesh_node_items,
+                (reference.kind == erhe::usd::Usd_reference_kind::payload)
+                    ? Prefab_arc_kind::payload
+                    : Prefab_arc_kind::reference
+            );
         }
     }
 }
@@ -850,6 +858,45 @@ void log_uncarried_editor_state(const Content_library& content_library, const st
     );
 }
 
+// The composition arcs the scene carries, one entry per carrier prim: a node
+// with Prefab_instance attachments is a referencing prim, and each attachment
+// is one arc, in the order the attachments hold (doc/usd-compatibility-plan.md
+// X1). The writer needs no prefab library - the attachment already names the
+// target file, the target prim and the arc form.
+void collect_usd_references(
+    const std::shared_ptr<erhe::Hierarchy>&                 prim,
+    std::vector<erhe::usd::Usd_save_prim_references>&       out_references
+)
+{
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
+    if (node) {
+        erhe::usd::Usd_save_prim_references entry{};
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            const std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(attachment);
+            if (!prefab_instance) {
+                continue;
+            }
+            entry.references.push_back(
+                erhe::usd::Usd_save_reference{
+                    .source_path = prefab_instance->get_prefab_source_path(),
+                    .prim_path   = prefab_instance->get_prefab_prim_path(),
+                    .kind        = (prefab_instance->get_prefab_arc_kind() == Prefab_arc_kind::payload)
+                        ? erhe::usd::Usd_reference_kind::payload
+                        : erhe::usd::Usd_reference_kind::reference
+                }
+            );
+        }
+        if (!entry.references.empty()) {
+            entry.item = node;
+            out_references.push_back(std::move(entry));
+            return; // the prims below are instance content the arcs supply
+        }
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+        collect_usd_references(child, out_references);
+    }
+}
+
 } // anonymous namespace
 
 auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
@@ -867,6 +914,10 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         .path      = path,
         .root_node = root_node
     };
+
+    for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
+        collect_usd_references(child, save_arguments.references);
+    }
 
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library) {

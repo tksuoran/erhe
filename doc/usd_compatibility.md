@@ -63,7 +63,7 @@ node attachments. The mapping an exporter applies and an importer inverts:
 | `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | |
 | `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
-| prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` composition arc on an `Xform` | USD references are stronger: any target prim, list-edited |
+| prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` (or `payload`) composition arc | one attachment per arc, in the authored order; the arc's target file, prim path and form are what the attachment records, and a save writes them back |
 | item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) on the default prim, one collection per tag | |
 | per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
 | `EXT_mesh_gpu_instancing` (import expands into child nodes) | `PointInstancer` / `instanceable` | erhe has no render-level instancing; an importer expands the same way |
@@ -208,12 +208,12 @@ mechanism composes as, and what has no erhe counterpart yet.
 | erhe | USD composition | notes |
 |---|---|---|
 | a scene file | a root layer | one scene = one layer stack of one layer |
-| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | plan X1: any layer + prim path target, internal references, one carrier per arc |
+| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | any layer + prim path target, internal references, one carrier attachment per arc, read and written |
 | values a template supplies to an instance (today: cloned local values) | the referenced prims' opinions, weaker than the referencing layer | plan X2: a reference layer between style and inherited, read live from the template counterpart |
 | edits inside an instance (not possible today: sealed) | `over` prims with sparse local opinions (`L`) | plan X2: the property system's local layer is the override; an `over` reads and writes as local values |
 | `Style` items | `class` prims + `inherits` (`I`) | |
 | none | variant sets (`V`) | material variants (KHR_materials_variants) would be the first slice |
-| none | payloads (`P`) | deferred loading; erhe's prefab library loads eagerly |
+| prefab instance from a `payload` arc | payloads (`P`) | read and written as the arc form it is; erhe's prefab library loads eagerly, so a payload is never deferred |
 | none | `specializes` (`S`) | |
 | none | sublayers, session layer | an undo stack is not a layer |
 | `Value_source` | opinion provenance | |
