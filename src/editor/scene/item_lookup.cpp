@@ -262,9 +262,17 @@ void collect_reference_candidates(
         if (!item || ((item->get_type() & item_types) == 0)) {
             return;
         }
-        // A style is offered only where it applies (doc/style-library.md R3).
-        if (((item->get_type() & erhe::Item_type::style) != 0) && !erhe::Item_base::style_applies(*item, target)) {
-            return;
+        // A style is offered only where it applies (doc/style-library.md R3)
+        // and only when it would not form a style chain cycle - a style has a
+        // style of its own, so it is never a candidate for itself or for
+        // anything already on its chain (D25 style chain).
+        if ((item->get_type() & erhe::Item_type::style) != 0) {
+            if (!erhe::Item_base::style_applies(*item, target)) {
+                return;
+            }
+            if (item->style_chain_reaches(target)) {
+                return;
+            }
         }
         const bool shown =
             item->is_shown_in_ui() ||

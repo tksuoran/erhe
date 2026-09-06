@@ -22,8 +22,13 @@ plain interchange exports never do.
   (`doc/style-library.md` D4): `name` and `properties` (the style's local
   values as a name to text map, the form of `ERHE_node` `properties`,
   keyed by qualified name such as `Material.roughness` or `Light.color`;
-  omitted when empty). A `target` member of older files is ignored. Loaded before anything that names a style. Omitted when the
-  library has no styles.
+  omitted when empty), and `style` (optional), the name of the style that
+  style uses itself (`doc/property-system.md` D25 style chain; omitted
+  when it uses none). A `target` member of older files is ignored. The
+  styles are loaded before anything that names a style, and a `style`
+  member is assigned after every entry of the array exists, so the order
+  inside the array does not matter. Omitted when the library has no
+  styles.
 - `physics_materials` (optional): one entry per `KHR_physics_rigid_bodies`
   `physicsMaterials` entry, by index (the KHR entries carry no name):
   `name` and `properties` (the material's local property values as a
@@ -66,7 +71,8 @@ plain interchange exports never do.
         "clear_color": [0, 0, 0, 1]
     },
     "styles": [
-        {"name": "Brushed metal", "properties": {"Material.roughness": "0.34 0.2", "Material.metallic": "1"}}
+        {"name": "Metal", "properties": {"Material.metallic": "1"}},
+        {"name": "Brushed metal", "properties": {"Material.roughness": "0.34 0.2"}, "style": "Metal"}
     ],
     "physics_materials": [
         {"name": "Rubber", "properties": {"restitution": "0.8", "linear_damping": "0.1"}}

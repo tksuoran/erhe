@@ -185,3 +185,112 @@ TEST(Style, source_edit_reaches_users_live)
     style->set_value(st_a, 4.0f);
     EXPECT_EQ(a.changes.size(), std::size_t{3});
 }
+
+TEST(Style, chain_resolves_and_local_shadows)
+{
+    // D25 style chain: an object reads its style's local value, else that
+    // style's style's local value, and so on; a nearer local value shadows a
+    // farther one.
+    std::shared_ptr<Property_style> a = std::make_shared<Property_style>("a", Property_set{});
+    std::shared_ptr<Property_style> b = std::make_shared<Property_style>("b", Property_set{});
+    Test_object o;
+    a->set_value(st_a, 10.0f);
+    a->set_value(st_b, 20.0f);
+    b->set_value(st_b, 30.0f);
+    ASSERT_TRUE(b->set_style(a));
+    ASSERT_TRUE(o.set_style(b));
+
+    EXPECT_EQ(o.get_value(st_a), 10.0f); // two levels deep: from a, through b
+    EXPECT_EQ(o.get_value_source(st_a.get()), Value_source::style);
+    EXPECT_EQ(o.get_value(st_b), 30.0f); // b's own local shadows a's
+    EXPECT_EQ(o.get_value_source(st_b.get()), Value_source::style);
+
+    o.set_value(st_a, 5.0f); // the object's own local shadows the whole chain
+    EXPECT_EQ(o.get_value(st_a), 5.0f);
+    EXPECT_EQ(o.get_value_source(st_a.get()), Value_source::local);
+    o.clear_value(st_a);
+    EXPECT_EQ(o.get_value(st_a), 10.0f);
+
+}
+
+TEST(Style, style_inherited_value_is_not_style)
+{
+    // Only the LOCAL values of the styles on the chain are style: a value a
+    // style itself inherits from its own tree stays out of it.
+    Test_object parent;
+    std::shared_ptr<Test_object> style = std::make_shared<Test_object>();
+    parent.set_value(st_inh, 7.0f);
+    style->set_parent(&parent);
+    EXPECT_EQ(style->get_value(st_inh), 7.0f);
+
+    Test_object o;
+    ASSERT_TRUE(o.set_style(style));
+    EXPECT_EQ(o.get_value(st_inh), 0.0f); // st_inh's registered default
+    EXPECT_EQ(o.get_value_source(st_inh.get()), Value_source::default_value);
+    EXPECT_TRUE(o.set_style(nullptr));
+}
+
+TEST(Style, chain_edit_reaches_users_live)
+{
+    // A local edit on the far end of the chain reaches an object whose style
+    // is the near end, with the object's own old and new values.
+    std::shared_ptr<Property_style> a = std::make_shared<Property_style>("a", Property_set{});
+    std::shared_ptr<Property_style> b = std::make_shared<Property_style>("b", Property_set{});
+    ASSERT_TRUE(b->set_style(a));
+    Test_object o;
+    ASSERT_TRUE(o.set_style(b));
+
+    o.changes.clear();
+    a->set_value(st_a, 2.0f);
+    EXPECT_EQ(o.get_value(st_a), 2.0f);
+    ASSERT_EQ(o.changes.size(), std::size_t{1});
+    EXPECT_EQ(o.changes[0].old_source, Value_source::default_value);
+    EXPECT_EQ(std::get<float>(o.changes[0].old_value), 1.0f); // st_a's default
+    EXPECT_EQ(o.changes[0].new_source, Value_source::style);
+    EXPECT_EQ(std::get<float>(o.changes[0].new_value), 2.0f);
+
+    a->set_value(st_a, 3.0f);
+    ASSERT_EQ(o.changes.size(), std::size_t{2});
+    EXPECT_EQ(std::get<float>(o.changes[1].old_value), 2.0f);
+    EXPECT_EQ(std::get<float>(o.changes[1].new_value), 3.0f);
+
+    // b's own local shadows a for the object, and a's edits stop reaching it.
+    b->set_value(st_a, 4.0f);
+    EXPECT_EQ(o.get_value(st_a), 4.0f);
+    o.changes.clear();
+    a->set_value(st_a, 9.0f);
+    EXPECT_EQ(o.get_value(st_a), 4.0f);
+    EXPECT_TRUE(o.changes.empty());
+
+    // Clearing b's local lets a through again, live.
+    b->clear_value(st_a);
+    EXPECT_EQ(o.get_value(st_a), 9.0f);
+    ASSERT_EQ(o.changes.size(), std::size_t{1});
+    EXPECT_EQ(std::get<float>(o.changes[0].old_value), 4.0f);
+    EXPECT_EQ(std::get<float>(o.changes[0].new_value), 9.0f);
+}
+
+TEST(Style, cycle_is_refused)
+{
+    // set_style refuses a source whose chain reaches the object itself, so a
+    // style chain never cycles.
+    std::shared_ptr<Property_style> a = std::make_shared<Property_style>("a", Property_set{});
+    std::shared_ptr<Property_style> b = std::make_shared<Property_style>("b", Property_set{});
+    std::shared_ptr<Property_style> c = std::make_shared<Property_style>("c", Property_set{});
+    EXPECT_FALSE(a->set_style(a));  // itself
+    EXPECT_EQ(a->get_style(), nullptr);
+
+    ASSERT_TRUE(b->set_style(a));
+    EXPECT_FALSE(a->set_style(b));  // a -> b -> a
+    EXPECT_EQ(a->get_style(), nullptr);
+    EXPECT_EQ(b->get_style(), a);
+
+    ASSERT_TRUE(c->set_style(b));
+    EXPECT_FALSE(a->set_style(c));  // a -> c -> b -> a
+    EXPECT_EQ(a->get_style(), nullptr);
+
+    a->set_value(st_a, 8.0f);
+    Test_object o;
+    ASSERT_TRUE(o.set_style(c));
+    EXPECT_EQ(o.get_value(st_a), 8.0f); // three levels: c -> b -> a
+}

@@ -692,10 +692,14 @@ public:
 };
 
 // The style item of that name in the library's Styles folder, or null.
+// A saved style name is the style's reference path ("Styles/Brushed metal",
+// the form every object reference is written in since the styles became
+// prims of the library's Styles scope); a file written before that carries
+// the bare name, and both resolve here.
 [[nodiscard]] auto find_style_by_name(const Content_library& content_library, const std::string& name) -> std::shared_ptr<Style>
 {
     for (const std::shared_ptr<Style>& style : content_library.get_all<Style>()) {
-        if (style && (style->get_name() == name)) {
+        if (style && ((style->get_reference_path() == name) || (style->get_name() == name))) {
             return style;
         }
     }
@@ -951,61 +955,6 @@ void append_library_folders_operation(
 
 namespace {
 
-// ERHE_scene styles (doc/style-library.md D4): one attach operation per
-// style item, run before anything that names a style.
-void import_styles(
-    App_context&                             context,
-    const erhe::gltf::Gltf_data&             gltf_data,
-    const std::shared_ptr<Content_library>&  content_library,
-    const std::string&                       gltf_path_str,
-    std::vector<std::shared_ptr<Operation>>& operations
-)
-{
-    const std::string* extension_json = find_extension(gltf_data.scene_extensions, "ERHE_scene");
-    if ((extension_json == nullptr) || !content_library) {
-        return;
-    }
-    const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_scene", "scene");
-    if (payload.is_null()) {
-        return;
-    }
-    const auto styles_it = payload.find("styles");
-    if ((styles_it == payload.end()) || !styles_it->is_array()) {
-        return;
-    }
-    std::size_t style_index = 0;
-    for (const nlohmann::json& entry : *styles_it) {
-        ++style_index;
-        if (!entry.is_object() || !entry.contains("name") || !entry["name"].is_string()) {
-            log_parsers->warn("glTF editor state: styles entry {} without name - skipped", style_index);
-            continue;
-        }
-        const std::string name = entry["name"].get<std::string>();
-        std::shared_ptr<Style> style = std::make_shared<Style>(name);
-        const auto properties_it = entry.find("properties");
-        if ((properties_it != entry.end()) && properties_it->is_object()) {
-            for (const auto& [property_name, value] : properties_it->items()) {
-                if (value.is_string()) {
-                    erhe::gltf::apply_item_local_property(*style, property_name, value.get<std::string>());
-                }
-            }
-        }
-        operations.push_back(
-            make_library_attach_operation(
-                context,
-                content_library,
-                style,
-                Gltf_source_reference{
-                    .gltf_path  = gltf_path_str,
-                    .item_name  = name,
-                    .item_index = static_cast<int>(style_index - 1),
-                    .item_type  = "style",
-                }
-            )
-        );
-    }
-}
-
 // Assigns a material's ERHE_material style by name at execute time, when
 // the style items of the same import exist (doc/style-library.md D4).
 // Assigns the style item of the named style to an item (a material from
@@ -1045,6 +994,79 @@ private:
     std::string                                              m_style_name;
     std::shared_ptr<const erhe::property::Dependency_object> m_before;
 };
+
+// ERHE_scene styles (doc/style-library.md D4): one attach operation per
+// style item, run before anything that names a style, then one assignment
+// operation per style that uses a style itself.
+void import_styles(
+    App_context&                             context,
+    const erhe::gltf::Gltf_data&             gltf_data,
+    const std::shared_ptr<Content_library>&  content_library,
+    const std::string&                       gltf_path_str,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    const std::string* extension_json = find_extension(gltf_data.scene_extensions, "ERHE_scene");
+    if ((extension_json == nullptr) || !content_library) {
+        return;
+    }
+    const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_scene", "scene");
+    if (payload.is_null()) {
+        return;
+    }
+    const auto styles_it = payload.find("styles");
+    if ((styles_it == payload.end()) || !styles_it->is_array()) {
+        return;
+    }
+    class Style_assignment
+    {
+    public:
+        std::shared_ptr<Style> style;
+        std::string            style_name;
+    };
+    std::vector<Style_assignment> style_assignments;
+    std::size_t style_index = 0;
+    for (const nlohmann::json& entry : *styles_it) {
+        ++style_index;
+        if (!entry.is_object() || !entry.contains("name") || !entry["name"].is_string()) {
+            log_parsers->warn("glTF editor state: styles entry {} without name - skipped", style_index);
+            continue;
+        }
+        const std::string name = entry["name"].get<std::string>();
+        std::shared_ptr<Style> style = std::make_shared<Style>(name);
+        const auto properties_it = entry.find("properties");
+        if ((properties_it != entry.end()) && properties_it->is_object()) {
+            for (const auto& [property_name, value] : properties_it->items()) {
+                if (value.is_string()) {
+                    erhe::gltf::apply_item_local_property(*style, property_name, value.get<std::string>());
+                }
+            }
+        }
+        operations.push_back(
+            make_library_attach_operation(
+                context,
+                content_library,
+                style,
+                Gltf_source_reference{
+                    .gltf_path  = gltf_path_str,
+                    .item_name  = name,
+                    .item_index = static_cast<int>(style_index - 1),
+                    .item_type  = "style",
+                }
+            )
+        );
+        // A style entry may name the style that style uses itself (D25 style
+        // chain). The assignment is by name, after every style of the array
+        // exists, so the order inside the array does not matter.
+        if (const auto style_it = entry.find("style"); (style_it != entry.end()) && style_it->is_string()) {
+            style_assignments.push_back(Style_assignment{.style = style, .style_name = style_it->get<std::string>()});
+        }
+    }
+    for (const Style_assignment& assignment : style_assignments) {
+        operations.push_back(std::make_shared<Item_style_by_name_operation>(content_library, assignment.style, assignment.style_name));
+    }
+}
+
 
 // An object-reference local value of a "properties" map that named an
 // item the parse could not resolve (Gltf_data::unresolved_object_properties):

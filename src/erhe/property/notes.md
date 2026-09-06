@@ -182,7 +182,11 @@ and inherited layers (`Value_source::style`); a local value or an
 expression shadows them, a bridged property ignores them. `set_style`
 notifies every property either the old or the new source holds whose
 effective value or source changes, through the normal path, and leaves
-locals alone. A source keeps its users (`get_style_user_count`): when its
+locals alone. A style is itself an object with a style, so the layer
+resolves through the style chain: the nearest local value of the styles on
+it wins, a style's inherited values are not style, and `set_style` refuses
+a source whose chain reaches the object (`style_chain_reaches`, false and
+logged). A source keeps its users (`get_style_user_count`): when its
 local layer changes, `notify` forwards the change to every user without a
 local value of that property, so an edited style is live. A style value of
 an inherits-flagged property is what descendants inherit, and it stops an

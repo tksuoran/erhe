@@ -202,17 +202,43 @@ auto Dependency_object::entry_is_bridged_expression(const Effective_value_entry&
     return (entry.expression != nullptr) && metadata.bridge.is_bound();
 }
 
+// D25 style chain: the style layer of an object is the chain of LOCAL
+// values of its style, that style's style, and so on - the first local
+// value found wins. A style's inherited (or default) values are not part
+// of the chain: only what a style holds itself is style.
 auto Dependency_object::get_style_value(const Dependency_property& property) const -> std::optional<Property_value>
 {
-    if (!m_style) {
-        return std::nullopt;
+    for (const Dependency_object* style = m_style.get(); style != nullptr; style = style->m_style.get()) {
+        if (std::optional<Property_value> value = style->read_local_value(property); value.has_value()) {
+            return value;
+        }
     }
-    return m_style->read_local_value(property);
+    return std::nullopt;
+}
+
+auto Dependency_object::has_style_value(const Dependency_property& property) const -> bool
+{
+    for (const Dependency_object* style = m_style.get(); style != nullptr; style = style->m_style.get()) {
+        if (style->has_local_value(property)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Dependency_object::style_chain_reaches(const Dependency_object& object) const -> bool
+{
+    for (const Dependency_object* style = this; style != nullptr; style = style->m_style.get()) {
+        if (style == &object) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Dependency_object::has_own_value(const Dependency_property& property) const -> bool
 {
-    return has_local_value(property) || (m_style && m_style->has_local_value(property));
+    return has_local_value(property) || has_style_value(property);
 }
 
 auto Dependency_object::get_effective_value_below_style(const Dependency_property& property, Value_source& out_source) const -> Property_value
@@ -261,11 +287,17 @@ void Dependency_object::propagate_to_style_users(const Property_changed_args& ar
     if (!m_style_users || m_style_users->empty()) {
         return;
     }
-    const auto is_local = [](const Value_source source) { return (source == Value_source::local) || (source == Value_source::expression); };
-    const bool old_local = is_local(args.old_source);
-    const bool new_local = is_local(args.new_source);
+    // What a user reads is this object's local value or, when this object is
+    // itself a style user without a local value of its own, the value it
+    // reads through its own chain - so a style-sourced change cascades down
+    // the chain (D25 style chain).
+    const auto is_style_visible = [](const Value_source source) {
+        return (source == Value_source::local) || (source == Value_source::expression) || (source == Value_source::style);
+    };
+    const bool old_local = is_style_visible(args.old_source);
+    const bool new_local = is_style_visible(args.new_source);
     if (!old_local && !new_local) {
-        return; // the source's own inherited / default value moved; its local layer did not
+        return; // the source's own inherited / default value moved; its style layer did not
     }
     const std::vector<Dependency_object*> users = *m_style_users; // a notified user may change its style
     for (Dependency_object* user : users) {
@@ -1108,6 +1140,16 @@ auto Dependency_object::set_style(std::shared_ptr<const Dependency_object> style
     if (style == m_style) {
         return true;
     }
+    // D25 style chain: a style may have a style itself, so an assignment
+    // whose chain reaches this object (source == object included) would make
+    // the lookup walk forever; it is refused and the object keeps its style.
+    if (style && style->style_chain_reaches(*this)) {
+        log->error(
+            "set_style: '{}' is on the style chain of '{}' - the assignment would form a cycle",
+            get_reference_path(), style->get_reference_path()
+        );
+        return false;
+    }
     // Effective values before the switch for every property either style
     // names; locals shadow both styles and are left alone.
     struct Before
@@ -1117,11 +1159,8 @@ auto Dependency_object::set_style(std::shared_ptr<const Dependency_object> style
         Value_source               source;
     };
     std::vector<Before> before;
-    const auto collect = [&](const std::shared_ptr<const Dependency_object>& from) {
-        if (!from) {
-            return;
-        }
-        from->for_each_local_value(
+    const auto collect_one = [&](const Dependency_object& from) {
+        from.for_each_local_value(
             [&](const Dependency_property& property, const Property_value&) {
                 if (has_local_value(property)) {
                     return;
@@ -1135,6 +1174,12 @@ auto Dependency_object::set_style(std::shared_ptr<const Dependency_object> style
                 before.push_back(Before{.property = &property, .value = std::move(value), .source = source});
             }
         );
+    };
+    // Every property either chain names (D25 style chain).
+    const auto collect = [&](const std::shared_ptr<const Dependency_object>& from) {
+        for (const Dependency_object* source = from.get(); source != nullptr; source = source->m_style.get()) {
+            collect_one(*source);
+        }
     };
     collect(m_style);
     collect(style);

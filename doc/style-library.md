@@ -26,7 +26,9 @@ layer) and D30 (secondary owner types), the library reference is
 - R3 Assignment. Every item has a `style` property (a D28 object
   reference) shown as a row with the picker and the drag target; the
   candidates are the scene's styles, every one of which applies to every
-  item (D3). A value of a class the item is not (`Light.color` on an empty
+  item (D3). A style item has the row too and so uses a style of its own;
+  an assignment that would make the chain cycle is refused and the item
+  keeps its style. A value of a class the item is not (`Light.color` on an empty
   node, on a Materials folder) reaches the item's inheritance descendants
   of that class, so a style on a node styles the lights below it.
   Clearing the row
@@ -47,7 +49,12 @@ layer) and D30 (secondary owner types), the library reference is
 
 - D1 Style source. The style layer of a `Dependency_object` (D25) reads
   the LOCAL values of another `Dependency_object`, its style source:
-  `set_style(std::shared_ptr<const Dependency_object>)`. `Property_style`
+  `set_style(std::shared_ptr<const Dependency_object>)`. A style source is
+  an object like any other, so it takes a style itself and the layer
+  resolves through the chain of the styles' local values (the style chain
+  of D25, which also carries the cycle refusal): the erhe counterpart of
+  USD's `class` prims - an imported class hierarchy is a chain of style
+  items, not one flattened style. `Property_style`
   stays as the library's plain named source (a `Dependency_object` filled
   from a `Property_set`, for tests and non-item users). A source keeps the
   list of objects using it (registered by `set_style`, by the copy of a
@@ -75,15 +82,20 @@ layer) and D30 (secondary owner types), the library reference is
   `Property_style` or another item, used as a style source through the
   library API, honest. `reference_item_types` is the style bit, so the
   row's picker and drop target take styles only, and
-  `collect_reference_candidates` offers only the styles that apply. The
+  `collect_reference_candidates` offers only the styles that apply and
+  whose chain does not already reach the item (`style_chain_reaches`), so
+  a style's own row offers the other styles. The
   property carries the
   draw-list and shader-variant flags, so the D11 hook rebuilds the draw
   lists after an assignment through a `Property_set_operation`;
   `Style_set_operation` (the operation the paste and MCP paths queue)
   keeps its per-property consequence loop over both styles' values.
 - D4 Wire format. `ERHE_scene` gains `styles`: an array of `{"name",
-  "properties"}`, `properties` the D14 map of the style's local values by
-  qualified name (a `target` member of older files is ignored).
+  "properties", "style"}`, `properties` the D14 map of the style's local
+  values by qualified name and `style` the name of the style that style
+  uses itself (a `target` member of older files is ignored). A load
+  creates every style of the array first and then assigns the `style`
+  members by name, so the order inside the array does not matter.
   `ERHE_material` and `ERHE_node` gain `style`, the name of the item's
   style item; a `library_folders` entry gains `style` the same way. A
   load creates the styles first (one attach operation per style, before
@@ -116,7 +128,13 @@ Headless, over `scripts/mcp_call.py` on a fresh editor:
 5. `save_scene` and reopen: the style item, its values, `Copper`'s
    `style` and the folder's `style` are back; `close_scene` is clean.
 
-6. Lights through a node: `create_node` an empty node, `create_light` a
+6. A chain: `create_style` two styles, set a value on the first, set the
+   second's `style` to the first and an item's `style` to the second -
+   the item reads the first style's value with source `style`; setting
+   the first style's `style` to the second is refused and both keep their
+   styles; `save_scene` and reopen keeps the chain.
+
+7. Lights through a node: `create_node` an empty node, `create_light` a
    point light and `reparent_node` it below the node;
    `get_addable_item_properties` on the node lists `Light.color`;
    `set_item_property` `Light.color` `1 0 0` on the node and clear the

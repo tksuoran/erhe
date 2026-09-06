@@ -810,7 +810,19 @@ table, see D2a), and references to other objects (D28).
     plain named source, filled from a `Property_set` (D17); the editor's
     style items are their own sources (`doc/style-library.md` D2). R3 is
     coerced > local (a stored value or an expression) > style > inherited
-    > default, with `Value_source::style`. A bridged property (D18) is
+    > default, with `Value_source::style`.
+  - Style chain. A source is itself an object with a style, so the style
+    layer of an object is the chain of the LOCAL values of its style, that
+    style's style, and so on, nearest first: the first local value found on
+    the chain is the style value. A value a style inherits from its own
+    tree is not style - only what a style holds itself reaches its users -
+    so the chain is a chain of local layers. `set_style` refuses (false,
+    logged, nothing changes) a source whose chain reaches the object, the
+    source being the object included, so a chain never cycles;
+    `style_chain_reaches` is the same test for a picker leaving a candidate
+    out. A local edit anywhere on the chain reaches every user that reads
+    the chain past it, because the propagation forwards a style-sourced
+    change to the source's own users the way it forwards a local one. A bridged property (D18) is
     always local and ignores a style entry (the node transform). A style entry for an inherits-flagged property is the
     object's effective value and so flows to descendants exactly as a
     local value would: the inheritance walk, the descendant notification

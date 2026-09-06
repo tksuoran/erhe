@@ -52,6 +52,20 @@ const Property<int>   widget_count = Property<int>::register_property("count", W
 // The same property name registered for another type is a distinct property.
 const Property<float> gadget_tint = Property<float>::register_property("tint", Gadget::property_owner_type(), Property_metadata{.default_value = 9.0f});
 
+// A style-like item: its secondary owner type is the root type, so it holds
+// every class's value properties and applies to every item, the editor's
+// Style item's rule (doc/style-library.md D2).
+constexpr uint64_t c_type_look = uint64_t{1} << 57;
+class Look : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Look>
+{
+public:
+    explicit Look(const std::string_view name) : Item{name} {}
+    explicit Look(const Look& other) = default;
+    static constexpr std::string_view static_type_name{"Look"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return c_type_look; }
+    [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<Owner_type> override { return root_owner_type; }
+};
+
 } // anonymous namespace
 
 TEST(Item_properties, item_type_drives_metadata_and_lookup)
@@ -291,4 +305,29 @@ TEST(Item_properties, tags_bridge)
 
     EXPECT_TRUE(widget->clear_value(erhe::Item_base::tags_property.get()));
     EXPECT_TRUE(widget->get_tags().empty());
+}
+
+TEST(Item_properties, style_property_chain_and_cycle)
+{
+    // The style row (doc/style-library.md D3) over a chain of styles: the
+    // bridge assigns through set_style, so an assignment whose chain reaches
+    // the item is refused and the item keeps its style (D25 style chain).
+    auto a = std::make_shared<Look>("a");
+    auto b = std::make_shared<Look>("b");
+    auto widget = std::make_shared<Widget>("w");
+    const Dependency_property& style = erhe::Item_base::style_property.get();
+
+    a->set_value(widget_tint, 4.0f);
+    EXPECT_TRUE(b->set_value(style, Property_value{Object_reference{a}}));
+    EXPECT_TRUE(widget->set_value(style, Property_value{Object_reference{b}}));
+    EXPECT_EQ(widget->get_value(widget_tint), 4.0f);
+    EXPECT_EQ(widget->get_value_source(widget_tint.get()), Value_source::style);
+
+    // a -> b -> a, and a -> a: refused, nothing changes.
+    a->set_value(style, Property_value{Object_reference{b}});
+    EXPECT_EQ(a->get_style(), nullptr);
+    a->set_value(style, Property_value{Object_reference{a}});
+    EXPECT_EQ(a->get_style(), nullptr);
+    EXPECT_EQ(b->get_style(), a);
+    EXPECT_EQ(widget->get_value(widget_tint), 4.0f);
 }

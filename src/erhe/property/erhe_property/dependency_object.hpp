@@ -179,9 +179,16 @@ public:
     // False (logged) on a sealed object. The source keeps a list of its
     // users: a change of its local layer notifies every user without a
     // local value of that property, so an edited style is live.
+    // A style may have a style of its own: the style layer is the chain of
+    // the styles' LOCAL values, nearest first (a style's inherited values
+    // are not style). set_style refuses a source whose chain reaches this
+    // object, source == object included, so the chain never cycles.
     auto               set_style(std::shared_ptr<const Dependency_object> style) -> bool;
     [[nodiscard]] auto get_style() const -> const std::shared_ptr<const Dependency_object>& { return m_style; }
     [[nodiscard]] auto get_style_user_count() const -> std::size_t;
+    // True when object is this object or on this object's style chain: what
+    // set_style refuses, and what an editor asks to leave a candidate out.
+    [[nodiscard]] auto style_chain_reaches(const Dependency_object& object) const -> bool;
 
     // Untyped access (editor, undo, serialization, MCP). Writes to a
     // read-only property or a sealed object are rejected here (false);
@@ -330,6 +337,7 @@ private:
     [[nodiscard]] auto get_effective_value(const Dependency_property& property, Value_source& out_source) const -> Property_value;
     [[nodiscard]] auto get_inherited_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto get_style_value    (const Dependency_property& property) const -> std::optional<Property_value>;
+    [[nodiscard]] auto has_style_value    (const Dependency_property& property) const -> bool;
 
     [[nodiscard]] auto reject_if_sealed   (const Dependency_property& property) const -> bool;
 

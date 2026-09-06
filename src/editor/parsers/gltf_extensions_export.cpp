@@ -432,8 +432,9 @@ void add_gltf_editor_state(
                 log_parsers->error("add_gltf_editor_state: Scene_settings serialization did not parse - settings not exported");
             }
         }
-        // styles (doc/style-library.md D4): every style item with its target
-        // class and local values, before the folders that may name them.
+        // styles (doc/style-library.md D4): every style item with its local
+        // values and the style it uses itself, before the folders that may
+        // name them.
         if (content_library) {
             nlohmann::json styles = nlohmann::json::array();
             for (const std::shared_ptr<Style>& style : content_library->get_all<Style>()) {
@@ -444,6 +445,12 @@ void add_gltf_editor_state(
                 const nlohmann::json properties = json_properties(*style);
                 if (properties.is_object() && !properties.empty()) {
                     entry["properties"] = properties;
+                }
+                // A style may use a style itself (D25 style chain): the name
+                // of the style it uses, resolved on load once every style of
+                // the array exists.
+                if (style->get_style()) {
+                    entry["style"] = style->get_style()->get_reference_path();
                 }
                 styles.push_back(std::move(entry));
             }
