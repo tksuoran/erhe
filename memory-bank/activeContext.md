@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2-NEXT→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2⚡{commit-1-in-flight:Mesh:Gprim+all-attach-sites+pairing-helpers+glTF/USD-readers-writers;commit-2?selection/gizmo-semantics-several-meshes-per-parent}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
@@ -72,7 +72,7 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d849
 ?inherits-registration-check{doc/property-system.md-section-6}
 ?Light-derived-rows→Rendertarget_mesh→Animation{doc/property-inventory.md}
 
-?save-slow-root-cause::profiled-2026-09-06{glTF-write=0.4s;Asset_browser-scene_saved-handler-full-scan()=3.7s{2858-untracked-local-asset-entries;Asset_node::set_parent=1.15ms-each};not-U1{Asset_node-not-on-Typed-chain}}→fix-in-flight:refresh-only-saved-path{coder};k_request_timeout-stays-5s
+✓save-slow-fixed::af689d5c8{Asset_browser-scene_saved=refresh_file(path):m_nodes_by_path-map;replace/add/rescan-fallback;2-3ms-vs-3845ms;roundtrip-164/164;k_request_timeout-unchanged-5s}
 ?capture_inheritance_snapshot_recursive::iterates-ENTIRE-global-property-registry-per-reparented-object{dependency_object.cpp:1158;1.37s-capture+1.87s-apply-over-2858-nodes}→should-iterate-owner-type-chain-only;affects-glTF-import/prefab/undo-bulk-reparents;not-scheduled
 ?U1-follow-ups::Create-menu-Scope-entry+collect_reference_candidates-tree-walk{U4};Layout-through-Scope;transform_selection-Scope-message
 

@@ -52,7 +52,8 @@
 ✓U1-prim-class-hierarchy{commit-1✓7986a326f:erhe::item-Typed(type_name-bridged-property;get_class_type_name-fixes-token)+Scope(root_owner_type-secondary);169-item-tests|commit-2a✓e635b27b6:Imageable/Xformable(=Node-alias,static_type_name-Xformable,bit-index-20)/Xform/Boundable/Gprim;113-creation-sites->Xform;74-fwd-decls=class-Xformable+using-Node;levels-below-Xformable-clone-via-(src,for_clone);no-icons-for-level-bits{draw_icon-draws-per-set-bit};item169/scene71/property100;viewport-pixel-identical|commit-2b✓d84968ad3:get_parent_node=walk-to-nearest-Xformable{not-cached};Typed::handle_parent_update+virtual-handle_item_host_update{host-carried-down-subtree;Xformable-overrides-for-scene-registration};Scene::update_subtree_transforms(Hierarchy&)-recurses-through-Scope;editor-lookups-walk-tree{find_prim_in_scene,find_items_by_ids,get_scene_nodes};create_node.prim_type=Xform|Scope;index_scope=49<index_typed=50{icon-picks-lowest-bit};transform_selection-refuses-Scope{generic-msg};scene75|commit-3✓b7e902fb3:import-dispatch-on-typeName{Model-prim=authored-token;shading-Scope-stays-namespace-until-U4;Typed-with-authored-xform=dropped+warn};export-typeName-per-class;Usd_data.prims+Gltf_data.prims{index-parallel};ERHE_node.prim_class/prim_type_name;usd-tests-38;roundtrip-152/164{12=save>5s-MCP-k_request_timeout;content-checks-all-pass}}
   U1-DONE-2026-09-06
   left-after-U1::collect_reference_candidates+Layout-do-not-reach-through-Scope;Create-menu-Scope-entry
-?U2-Mesh:Gprim{L;NEXT}
+⚡U2-Mesh:Gprim{L;commit-1-in-flight}
+✓asset-browser-refresh_file{af689d5c8;unblocks-roundtrip-script}
 ?U3-Camera/Light:Xformable
 ?U4-resources-are-prims{L}
 
