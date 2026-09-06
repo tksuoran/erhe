@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3✓{d5f0be1a8+7fd9f447d}→U4✓{cf19e2608+8555253f1+b879c503b+21ba1a6f3+1b5722576+dd396b893+5792b7f02+21da9055c}→E4⚡{in-flight:brushes/styles/physics-resources/node-graphs/empty-folder-scopes-as-prims-in-USD}→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3✓{d5f0be1a8+7fd9f447d}→U4✓{cf19e2608+8555253f1+b879c503b+21ba1a6f3+1b5722576+dd396b893+5792b7f02+21da9055c}→E4✗stopped{©User-'stop E4'-2026-09-06;partial-unverified-edits-in-git-stash{7-files:usd export/import+usd.hpp+gltf_extensions_import+content_library};nothing-committed;plan-E4-text-still-current}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
