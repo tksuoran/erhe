@@ -56,7 +56,7 @@
 ✓asset-browser-refresh_file{af689d5c8;unblocks-roundtrip-script}
 ✓U3-Camera/Light:Xformable{commit-1✓d5f0be1a8:Camera/Light=Item<Item_base,Xformable,X>;get_node()=this;set_prim_parent(Xformable,parent){keeps-LOCAL;set_mesh_parent-delegates};get_camera/get_light;glTF-rule=node-with-two-of-mesh/camera/light->prim-of-first(mesh>camera>light)+others-as-child-prims;camera-entry-not-uid-stamped;Brush_preview-fill-light-bug-fixed;scene82/usd42/roundtrip164/smoke52|commit-2✓7fd9f447d:get_node()-removed-from-Mesh/Camera/Light{~165-sites-address-prim};Attachment_kind{child_prim|api_schema}='Add Child Prim'/'Add Attachment';DnD-payload=prim-class-name{U1-had-broken-DnD:literal-'Node';fixed;interactive-gesture-unverified};get_node_details.mesh/camera/light-on-node-entry;scene82/roundtrip164/smoke52;viewport-identical-99px-statusbar}
   U3-DONE-2026-09-06
-?U4-resources-are-prims{L;NEXT;commit-1=Typed-base-for-every-library-kind}
+⚡U4-resources-are-prims{L;commit-1✓cf19e2608:every-library-kind=Item<Item_base,Typed,X>{tokens=class-names;Material='Material'};Hierarchy::get_inheritance_parent/is_name_available-fall-back-to-Item_base-when-parentless{container-inheritance-kept};Selection-delete/duplicate-require-parent;Graph_asset-keeps-set_item_host-override{single-choke-point};item171/scene84/primitive42/roundtrip164/smoke52|commit-2⚡tree-move:Scopes-per-kind+Item_host-register_prim-hook+index+ops+reference-entries-retire+minimal-glTF-carrier|commit-3?USD-placement+docs}
 
 
 [NOTES]
