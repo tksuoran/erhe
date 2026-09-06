@@ -101,4 +101,15 @@ void import_gltf_editor_state(
     std::vector<std::shared_ptr<Operation>>& operations
 );
 
+// ERHE_scene library_folders: the tree position of every resource the file
+// places somewhere other than its kind scope (doc/content-library-folders.md
+// D5/D6). A saved path may name any prim of the scene tree (C5), so this runs
+// AFTER the imported nodes enter the scene - separately from
+// import_gltf_editor_state, whose operations all run before that.
+void append_library_folders_operation(
+    const erhe::gltf::Gltf_data&             gltf_data,
+    const std::shared_ptr<Scene_root>&       scene_root,
+    std::vector<std::shared_ptr<Operation>>& operations
+);
+
 }

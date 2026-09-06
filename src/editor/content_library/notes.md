@@ -88,8 +88,11 @@ without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
 The editor creates folders ("Create Scope", `create_library_folder`), moves
 resources between them and under any other prim (drag onto a prim row,
-`move_library_item`; `Item_parent_change_operation`) and persists them through
-`ERHE_scene` `library_folders`.
+`move_library_item`; `Item_parent_change_operation`) and persists where each
+resource sits through `ERHE_scene` `library_folders`, whose `path` names the
+prim that holds it - a folder scope, an `Xform`, the `Mesh` that binds it
+(`doc/gltf_extensions/ERHE_scene.md`). A resource directly under its kind
+scope needs no entry: that is where a load puts the ones no entry names.
 
 ## Styles
 

@@ -901,6 +901,69 @@ def section_build_scene():
         check(S, "create_light", bool(light) and light.get("node_id") is not None, str(light))
         check(S, "light node landed", wait_for_scene_node(scene, "P6 Light"))
 
+    def block_resource_placement():
+        # A resource is a prim of the scene tree and may sit under any prim
+        # (doc/usd-compatibility-plan.md C5); ERHE_scene library_folders
+        # carries where. Three placements, one per shape the carrier can take:
+        # a folder scope under the kind scope, a scope under an Xform, and a
+        # Mesh that binds the material directly.
+        folder = mutate("create_library_folder", {"scene_name": scene, "folder_path": "Materials/P6 Metals"})
+        check(S, "create_library_folder under the kind scope", bool(folder) and folder.get("folder"), str(folder))
+        for name in ("P6 Folder Material", "P6 Node Material", "P6 Mesh Material"):
+            created = mutate("create_material", {"scene_name": scene, "name": name})
+            check(S, f"create_material {name}", bool(created) and created.get("id") is not None, str(created))
+        moved = mutate("move_library_item", {
+            "scene_name": scene, "item_name": "P6 Folder Material", "folder_path": "Materials/P6 Metals",
+        })
+        check(S, "material moved into the folder scope", bool(moved) and moved.get("folder"), str(moved))
+        # Every one of the three must be USED: the exporter is lazy and never
+        # writes an unused library material (doc/asset_manager.md).
+        for shape_name, material_name in (
+            ("P6 Folder Box", "P6 Folder Material"),
+            ("P6 Node Box",   "P6 Node Material"),
+        ):
+            made = mutate("create_shape", {
+                "scene_name": scene, "shape": "box", "name": shape_name,
+                "position": [10.0, 0.5, 0.0], "motion_mode": "static",
+            })
+            check(S, f"create_shape {shape_name}", bool(made) and made.get("node_id") is not None, str(made))
+            assigned = mutate("assign_mesh_material", {
+                "scene_name": scene, "mesh_name": shape_name, "material_name": material_name,
+            })
+            check(S, f"{material_name} assigned to {shape_name}", bool(assigned), str(assigned))
+
+        # A scope under an Xform: the Create-menu scope, then the material
+        # under it.
+        mutate("create_node", {"scene_name": scene, "name": "P6 Holder", "position": [6.0, 0.5, 0.0]})
+        check(S, "resource holder node created", wait_for_scene_node(scene, "P6 Holder"))
+        scoped = mutate("create_node", {"scene_name": scene, "name": "P6 Holder Scope", "prim_type": "Scope", "parent_node_name": "P6 Holder"})
+        check(S, "scope under the holder created", bool(scoped) and scoped.get("node_id") is not None, str(scoped))
+        moved = mutate("move_library_item", {
+            "scene_name": scene, "item_name": "P6 Node Material", "folder_name": "P6 Holder Scope",
+        })
+        check(S, "material moved under the scope below an Xform", bool(moved) and moved.get("folder"), str(moved))
+
+        # Directly under the Mesh that binds it.
+        box = mutate("create_shape", {
+            "scene_name": scene, "shape": "box", "name": "P6 Bound Box",
+            "position": [8.0, 0.5, 0.0], "motion_mode": "static",
+        })
+        check(S, "create_shape for the bound material", bool(box) and box.get("node_id") is not None, str(box))
+        assigned = mutate("assign_mesh_material", {
+            "scene_name": scene, "mesh_name": "P6 Bound Box", "material_name": "P6 Mesh Material",
+        })
+        check(S, "material assigned to the mesh", bool(assigned), str(assigned))
+        moved = mutate("move_library_item", {
+            "scene_name": scene, "item_name": "P6 Mesh Material", "folder_name": "P6 Bound Box",
+        })
+        check(S, "material moved under the mesh that binds it", bool(moved) and moved.get("folder"), str(moved))
+
+        E2E_STATE["resource_placements"] = {
+            "P6 Folder Material": "P6 Metals",
+            "P6 Node Material":   "P6 Holder Scope",
+            "P6 Mesh Material":   "P6 Bound Box",
+        }
+
     guarded(S, "shapes block", block_shapes)
     guarded(S, "imports block", block_imports)
     guarded(S, "physics block", block_physics)
@@ -912,6 +975,7 @@ def section_build_scene():
     guarded(S, "material block", block_material)
     guarded(S, "graph mesh block", block_graph_mesh)
     guarded(S, "light block", block_light)
+    guarded(S, "resource placement block", block_resource_placement)
 
 
 def section_save_and_validate():
@@ -1088,6 +1152,22 @@ def section_reload_and_diff():
         check(S, f"round-trip diff: {key} identical", not mismatches, f"{len(mismatches)} mismatches")
         for mismatch in mismatches[:10]:
             print(f"       {mismatch}")
+
+    # Resource placement (C5): every resource is back under the prim it was
+    # saved under, and the mesh-bound one is still bound.
+    placements = E2E_STATE.get("resource_placements", {})
+    if placements:
+        loaded_nodes = call("get_scene_nodes", {"scene_name": loaded_scene}).get("nodes", [])
+        by_name = {n.get("name"): n for n in loaded_nodes}
+        for material_name, parent_name in placements.items():
+            entry = by_name.get(material_name)
+            check(S, f"resource '{material_name}' reloaded under '{parent_name}'",
+                  (entry is not None) and (entry.get("parent") == parent_name),
+                  str(entry))
+        bound_box = call("get_node_details", {"scene_name": loaded_scene, "node_name": "P6 Bound Box"})
+        bound_materials = json.dumps(bound_box)
+        check(S, "the mesh-bound resource is still bound after reload",
+              "P6 Mesh Material" in bound_materials, bound_materials[:200])
 
     screenshot("logs/phase6_after.png")
     compare_screenshots(S, "logs/phase6_before.png", "logs/phase6_after.png")

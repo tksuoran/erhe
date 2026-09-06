@@ -39,16 +39,21 @@ plain interchange exports never do.
   `KHR_physics_rigid_bodies` `collisionFilters` entries, by index, so the
   content library's collision filters keep their names across a save and
   reload. Omitted when the file has none.
-- `library_folders` (optional): the content library's folders below its
-  category folders (`doc/content-library-folders.md` D5), parents before
-  their subfolders. Each entry has `path` (slash-separated from the
-  library root, starting with the category folder's name), `properties`
-  (the folder's local property values as a name to text map, the form of
-  `ERHE_node` `properties`; omitted when empty) and `items` (the names of
-  the entries directly in the folder; omitted when empty) and `style`
-  (the name of the style item the folder uses; omitted when none). An entry no
-  folder names loads into its category folder. Omitted when the library
-  has no folders.
+- `library_folders` (optional): where the scene's content-library resources
+  sit in the scene tree (`doc/content-library-folders.md` D5), parents before
+  their children. Each entry has `path` (the prim's slash-separated path from
+  the scene root, `Hierarchy::get_path()`), `properties` (the prim's local
+  property values as a name to text map, the form of `ERHE_node`
+  `properties`; omitted when empty), `items` (the names of the resources
+  directly under the prim; omitted when empty) and `style` (the name of the
+  style item the prim uses; omitted when none). A `path` whose first component
+  names a resource kind's scope (`Materials`, `Brushes`, ...) is a scope path:
+  the load creates the scopes it names. Any other `path` names a prim of the
+  scene tree - an `Xform`, a `Mesh`, a `Scope` under one - and the load
+  resolves it against the tree after the nodes exist, never creating one. A
+  resource no entry names loads into its kind scope, which is why entries for
+  a bare kind scope are not written. Omitted when every resource sits under
+  its kind scope.
 
 ## JSON layout
 
@@ -69,7 +74,9 @@ plain interchange exports never do.
     "collision_filter_names": ["Debris"],
     "library_folders": [
         {"path": "Materials/Metals", "properties": {"visible": "false"}, "items": ["Gold", "Copper"], "style": "Brushed metal"},
-        {"path": "Brushes/Platonic Solids", "items": ["Cube", "Octahedron"]}
+        {"path": "Brushes/Platonic Solids", "items": ["Cube", "Octahedron"]},
+        {"path": "Panel/Looks", "items": ["Panel Paint"]},
+        {"path": "Bound Box", "items": ["Box Paint"]}
     ]
 }
 ```

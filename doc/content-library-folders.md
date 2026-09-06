@@ -103,9 +103,12 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   section (D12) lists the class chain and the Add Property row. No
   folder-specific rows exist.
 - D5 Wire format. `ERHE_scene` carries `library_folders`: an array of
-  `{"path", "properties", "items"}` objects, one per folder below a kind
-  scope, depth first. `path` is the folder's slash-separated scope path from
-  the scene root, starting with the kind scope's name (`"Materials/Metals"`);
+  `{"path", "properties", "items"}` objects, one per prim that holds a
+  resource or is a folder scope, parents first. `path` is that prim's
+  slash-separated path from the scene root: a scope path when its first
+  component names a kind scope (`"Materials/Metals"`, whose scopes the load
+  creates), any other prim of the tree otherwise (`"Panel/Looks"`, resolved
+  against the tree after the nodes exist, never created);
   `properties` is the folder's local property map in the D14 form
   (`item_local_properties_to_json`), omitted when empty; `items` lists the
   names of the resources directly in the folder, omitted when empty.
@@ -113,13 +116,16 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   a resource no folder names). `ERHE_brushes` `folder_path` is read for older
   files and no longer written; `library_folders` is the one carrier for every
   kind.
-- D6 Load order. `import_gltf_editor_state` appends one
-  `Content_library_folders_operation` after every attach operation of the
-  import: it creates each listed folder scope under its kind scope, applies
-  the properties (`apply_item_local_property`) and moves each named resource
-  from wherever the attach operations put it. A name that matches nothing
-  under the kind scope logs a warning; a name that matches several moves the
-  first and logs a warning. Undo of an import removes the scopes it created.
+- D6 Load order. `append_library_folders_operation` appends one
+  `Content_library_folders_operation` LAST - after every attach operation of
+  the import and after the node inserts, because a saved path may name any
+  prim of the tree (D5) and those prims only exist from there on. It creates
+  the folder scopes a scope path names, resolves any other path against the
+  tree, applies the properties (`apply_item_local_property`) and moves each
+  named resource from wherever the attach operations put it. A path the scene
+  does not hold logs a warning and is dropped; a resource name that matches
+  nothing logs a warning, one that matches several moves the first and logs a
+  warning. Undo of an import removes the scopes it created.
 - D7 MCP. `create_library_folder(scene_name, folder_path)` keeps its name and
   arguments and creates an `erhe::Scope`: it resolves the path from the kind
   scopes and queues the D2 insert for the last component.

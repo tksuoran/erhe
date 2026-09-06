@@ -57,12 +57,17 @@ identity is its node entry.
 A scene's content-library resources - materials, textures, brushes, styles,
 physics materials, collision filters, joint settings, animations, skins and
 node graphs - are prims of the same tree, under the kind `Scope`s the library
-keeps below the scene root (`doc/usd-compatibility-plan.md` U4). Those scopes
-and the resource prims below them carry no `Item_flags::content`, and the node
-writer emits a transform-less prim only when it carries that flag, so they are
-never written as nodes: a resource rides its own flat glTF list (materials,
-images, animations, skins) or its `ERHE_*` asset-root table (brushes, node
-graphs), and its place in the tree rides `ERHE_scene` `library_folders`.
+keeps below the scene root or under any other prim
+(`doc/usd-compatibility-plan.md` C5, U4). Those scopes and the resource prims
+carry no `Item_flags::content`, and the node writer emits a transform-less
+prim only when it carries that flag, so they are never written as nodes: a
+resource rides its own flat glTF list (materials, images, animations, skins)
+or its `ERHE_*` asset-root table (brushes, node graphs), and where it sits
+rides `ERHE_scene` `library_folders`, whose `path` names the prim that holds
+it - a folder `Scope`, an `Xform`, the `Mesh` that binds it
+(`doc/gltf_extensions/ERHE_scene.md`). The load resolves a node path after the
+imported nodes are in the scene, so the `library_folders` operation is the
+last of an import and of an open, after the node inserts.
 
 A prim of a class that carries no transform - an `erhe::Scope`, or the
 `erhe::Typed` a USD `typeName` erhe has no class for becomes - is written as

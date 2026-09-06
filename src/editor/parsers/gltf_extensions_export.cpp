@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <unordered_set>
 #include <map>
 
 namespace editor {
@@ -477,51 +478,63 @@ void add_gltf_editor_state(
                 scene_json["collision_filter_names"] = std::move(names);
             }
         }
-        // library_folders (doc/content-library-folders.md D5): every folder
-        // scope below a kind scope, depth first, with its local property
-        // values and the names of the resources directly in it. The path is
-        // the scope path from the kind scope, so a load places the resources
-        // back where they sat.
+        // library_folders (doc/content-library-folders.md D5): the tree
+        // position of every resource that does not sit directly under its
+        // kind scope, plus every folder scope (empty ones included). `path`
+        // is the prim's path from the scene root (Hierarchy::get_path()), so
+        // it names a folder scope ("Materials/Metals") or any other prim of
+        // the tree ("Holder/Panel"); a resource under its own kind scope
+        // needs no entry, which is where a load puts the ones no entry names.
         if (content_library) {
             nlohmann::json library_folders = nlohmann::json::array();
-            const std::function<void(const erhe::Scope&, const std::string&)> collect_folder =
-                [&](const erhe::Scope& scope, const std::string& scope_path) -> void
-                {
-                    // A kind scope is not listed: its resources are where a
-                    // load puts the ones no folder names.
-                    if (!scope_path.empty() && (scope_path.find('/') != std::string::npos)) {
-                        nlohmann::json items = nlohmann::json::array();
-                        for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
-                            if (std::dynamic_pointer_cast<erhe::Scope>(child)) {
-                                continue;
-                            }
-                            items.push_back(child->get_name());
-                        }
-                        nlohmann::json entry{{"path", scope_path}};
-                        const nlohmann::json properties = json_properties(scope);
-                        if (properties.is_object() && !properties.empty()) {
-                            entry["properties"] = properties;
-                        }
-                        if (scope.get_style()) {
-                            entry["style"] = scope.get_style()->get_reference_path();
-                        }
-                        if (!items.empty()) {
-                            entry["items"] = items;
-                        }
-                        library_folders.push_back(std::move(entry));
-                    }
-                    for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
-                        const std::shared_ptr<erhe::Scope> child_scope = std::dynamic_pointer_cast<erhe::Scope>(child);
-                        if (child_scope) {
-                            collect_folder(*child_scope, fmt::format("{}/{}", scope_path, child_scope->get_name()));
-                        }
-                    }
-                };
+            std::unordered_set<const erhe::Hierarchy*> kind_scopes;
             for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
                 const std::shared_ptr<erhe::Scope> kind_scope = content_library->find_scope(kind_type_bit);
                 if (kind_scope) {
-                    collect_folder(*kind_scope, kind_scope->get_name());
+                    kind_scopes.insert(kind_scope.get());
                 }
+            }
+            const std::function<void(const erhe::Hierarchy&)> collect_prim =
+                [&](const erhe::Hierarchy& prim) -> void
+                {
+                    const bool is_kind_scope = kind_scopes.contains(&prim);
+                    const bool is_scope      = (dynamic_cast<const erhe::Scope*>(&prim) != nullptr);
+                    if (!is_kind_scope) {
+                        nlohmann::json items = nlohmann::json::array();
+                        for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+                            if (content_library->has_item(*child)) {
+                                items.push_back(child->get_name());
+                            }
+                        }
+                        // A folder scope is listed even when empty (its local
+                        // values and its very existence are the payload); any
+                        // other prim only when it holds a resource.
+                        const bool is_folder_scope = is_scope && !prim.get_path().empty();
+                        if (is_folder_scope || !items.empty()) {
+                            nlohmann::json entry{{"path", prim.get_path()}};
+                            const nlohmann::json properties = json_properties(prim);
+                            if (properties.is_object() && !properties.empty()) {
+                                entry["properties"] = properties;
+                            }
+                            if (prim.get_style()) {
+                                entry["style"] = prim.get_style()->get_reference_path();
+                            }
+                            if (!items.empty()) {
+                                entry["items"] = items;
+                            }
+                            library_folders.push_back(std::move(entry));
+                        }
+                    }
+                    for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+                        // A resource prim holds no resources of its own.
+                        if (!content_library->has_item(*child)) {
+                            collect_prim(*child);
+                        }
+                    }
+                };
+            const std::shared_ptr<erhe::scene::Node> library_root_node = scene.get_root_node();
+            if (library_root_node) {
+                collect_prim(*library_root_node);
             }
             if (!library_folders.empty()) {
                 scene_json["library_folders"] = std::move(library_folders);

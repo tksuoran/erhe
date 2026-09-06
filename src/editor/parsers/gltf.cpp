@@ -1203,6 +1203,10 @@ auto make_import_gltf_operation(
         );
     }
 
+    // After the node inserts: a saved library_folders path may name any prim
+    // of the scene tree (C5), which only exists from here on.
+    append_library_folders_operation(gltf_data, scene_root, operations);
+
     operations.push_back(
         std::make_shared<Async_raytrace_kickoff_operation>(
             scene_root,
@@ -1577,6 +1581,16 @@ auto finish_open_scene_gltf(
     const std::vector<std::shared_ptr<erhe::Hierarchy>> children = container_node->get_children();
     for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
         child->set_parent(scene_root_node);
+    }
+
+    // After the nodes are in the scene: a saved library_folders path may name
+    // any prim of the tree (C5).
+    {
+        std::vector<std::shared_ptr<Operation>> folder_operations;
+        append_library_folders_operation(gltf_data, scene_root, folder_operations);
+        for (const std::shared_ptr<Operation>& operation : folder_operations) {
+            operation->execute(context);
+        }
     }
 
     // Raytrace kickoff, mirroring the import compound's final sub-operation.

@@ -29,6 +29,7 @@
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <fmt/format.h>
@@ -703,42 +704,49 @@ public:
 
 // Recreates the saved folder scopes, applies their local property values and
 // places the named resources under them (D6). Runs after every attach
-// operation of the same import, so the resources exist. Properties apply only
-// to scopes this operation creates: an existing scope of the same path (an
-// import into a scene that already has it) keeps its values. Undo moves the
-// resources back and removes the created scopes.
+// operation of the same import AND after the imported nodes enter the scene,
+// because a saved path may name any prim of the tree (C5). Properties apply
+// only to scopes this operation creates: an existing prim of the same path
+// (an import into a scene that already has it) keeps its values. Undo moves
+// the resources back and removes the created scopes.
 class Content_library_folders_operation : public Operation
 {
 public:
-    Content_library_folders_operation(std::shared_ptr<Content_library> content_library, std::vector<Library_folder_record> folders)
-        : m_content_library{std::move(content_library)}
-        , m_folders        {std::move(folders)}
+    Content_library_folders_operation(
+        std::shared_ptr<Scene_root>        scene_root,
+        std::vector<Library_folder_record> folders
+    )
+        : m_scene_root{std::move(scene_root)}
+        , m_folders   {std::move(folders)}
     {
         set_description(fmt::format("[{}] Content_library_folders ({} folders)", get_serial(), m_folders.size()));
     }
 
     void execute(App_context&) override
     {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
+        const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
+        if (!content_library) {
+            return;
+        }
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
         m_created_folders.clear();
         m_moves.clear();
         for (const Library_folder_record& record : m_folders) {
-            std::shared_ptr<erhe::Scope> kind_scope{};
-            std::shared_ptr<erhe::Scope> folder{};
+            std::shared_ptr<erhe::Hierarchy> destination{};
             bool created = false;
-            resolve_folder(record.path, kind_scope, folder, created);
-            if (!folder) {
-                log_parsers->warn("glTF editor state: library folder '{}' names no resource kind - folder dropped", record.path);
+            resolve_destination(*content_library, record.path, destination, created);
+            if (!destination) {
+                log_parsers->warn("glTF editor state: library folder '{}' names no prim of the scene - dropped", record.path);
                 continue;
             }
             if (created) {
                 for (const std::pair<std::string, std::string>& property : record.properties) {
-                    erhe::gltf::apply_item_local_property(*folder, property.first, property.second);
+                    erhe::gltf::apply_item_local_property(*destination, property.first, property.second);
                 }
                 if (!record.style.empty()) {
-                    const std::shared_ptr<Style> style = find_style_by_name(*m_content_library, record.style);
+                    const std::shared_ptr<Style> style = find_style_by_name(*content_library, record.style);
                     if (style) {
-                        folder->set_style(style);
+                        destination->set_style(style);
                     } else {
                         log_parsers->warn("glTF editor state: library folder '{}' names style '{}', which the scene does not hold", record.path, record.style);
                     }
@@ -747,14 +755,18 @@ public:
                 log_parsers->info("glTF editor state: library folder '{}' exists - its saved property values are not applied", record.path);
             }
             for (const std::string& item_name : record.items) {
-                place_item(*kind_scope, folder, record.path, item_name);
+                place_item(*content_library, destination, record.path, item_name);
             }
         }
     }
 
     void undo(App_context&) override
     {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
+        const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
+        if (!content_library) {
+            return;
+        }
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
         for (auto it = m_moves.rbegin(); it != m_moves.rend(); ++it) {
             it->node->set_parent(it->before_parent, it->before_index);
         }
@@ -774,24 +786,48 @@ private:
         std::size_t                      before_index;
     };
 
-    // Walks the kind-scope-rooted path; the first component names the kind
-    // scope (never created), every missing scope below it is created and
-    // recorded for undo. out_created is true when the last component was
+    // A path whose first component names a resource kind's scope is a scope
+    // path: the kind scope is taken (created when the scene has none yet) and
+    // every missing scope below it is created and recorded for undo. Any
+    // other path names a prim of the scene tree and is resolved against it -
+    // never created, because a node the file did not carry is not this
+    // operation's to invent. out_created is true when the last component was
     // created by this call.
-    void resolve_folder(
-        const std::string&            path,
-        std::shared_ptr<erhe::Scope>& out_kind_scope,
-        std::shared_ptr<erhe::Scope>& out_folder,
-        bool&                         out_created
+    void resolve_destination(
+        Content_library&                  content_library,
+        const std::string&                path,
+        std::shared_ptr<erhe::Hierarchy>& out_destination,
+        bool&                             out_created
     )
     {
-        out_kind_scope.reset();
-        out_folder.reset();
+        out_destination.reset();
         out_created = false;
-        std::shared_ptr<erhe::Scope> current{};
-        std::size_t start = 0;
-        bool first = true;
-        while (start < path.size()) {
+        const std::size_t first_slash = path.find('/');
+        const std::string first_name  = (first_slash == std::string::npos) ? path : path.substr(0, first_slash);
+        if (first_name.empty()) {
+            return;
+        }
+        uint64_t kind_type_bit = 0;
+        for (const uint64_t candidate : Content_library::get_kind_type_bits()) {
+            if (Content_library::get_kind_scope_name(candidate) == first_name) {
+                kind_type_bit = candidate;
+                break;
+            }
+        }
+        if (kind_type_bit == 0) {
+            const std::shared_ptr<erhe::scene::Node> root_node = m_scene_root->get_scene().get_root_node();
+            if (!root_node) {
+                return;
+            }
+            erhe::Hierarchy* const found = erhe::find_by_path(*root_node, path);
+            if (found != nullptr) {
+                out_destination = found->shared_hierarchy_from_this();
+            }
+            return;
+        }
+        std::shared_ptr<erhe::Hierarchy> current = content_library.get_scope(kind_type_bit);
+        std::size_t start = (first_slash == std::string::npos) ? path.size() : first_slash + 1;
+        while (current && (start < path.size())) {
             const std::size_t slash = path.find('/', start);
             const std::string name  = (slash == std::string::npos) ? path.substr(start) : path.substr(start, slash - start);
             start = (slash == std::string::npos) ? path.size() : slash + 1;
@@ -799,92 +835,78 @@ private:
                 continue;
             }
             std::shared_ptr<erhe::Scope> found{};
-            if (first) {
-                for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
-                    if (Content_library::get_kind_scope_name(kind_type_bit) == name) {
-                        found = m_content_library->get_scope(kind_type_bit);
-                        break;
-                    }
-                }
-                if (!found) {
-                    return; // no such kind
-                }
-                out_kind_scope = found;
-                out_created    = false;
-            } else {
-                for (const std::shared_ptr<erhe::Hierarchy>& child : current->get_children()) {
-                    const std::shared_ptr<erhe::Scope> child_scope = std::dynamic_pointer_cast<erhe::Scope>(child);
-                    if (child_scope && (child_scope->get_name() == name)) {
-                        found = child_scope;
-                        break;
-                    }
-                }
-                out_created = false;
-                if (!found) {
-                    found = std::make_shared<erhe::Scope>(name);
-                    found->enable_flag_bits(erhe::Item_flags::show_in_ui);
-                    found->set_parent(current);
-                    m_created_folders.push_back(found);
-                    out_created = true;
+            for (const std::shared_ptr<erhe::Hierarchy>& child : current->get_children()) {
+                const std::shared_ptr<erhe::Scope> child_scope = std::dynamic_pointer_cast<erhe::Scope>(child);
+                if (child_scope && (child_scope->get_name() == name)) {
+                    found = child_scope;
+                    break;
                 }
             }
-            first   = false;
+            out_created = false;
+            if (!found) {
+                found = std::make_shared<erhe::Scope>(name);
+                found->enable_flag_bits(erhe::Item_flags::show_in_ui);
+                found->set_parent(current);
+                m_created_folders.push_back(found);
+                out_created = true;
+            }
             current = found;
         }
-        if (out_kind_scope && (current != out_kind_scope)) {
-            out_folder = current;
-        }
+        // A bare kind-scope path names no folder: its resources are where the
+        // attach operations already put them.
+        out_destination = (current && (current->get_path() != first_name)) ? current : std::shared_ptr<erhe::Hierarchy>{};
     }
 
     void place_item(
-        const erhe::Scope&                  kind_scope,
-        const std::shared_ptr<erhe::Scope>& folder,
-        const std::string&                  folder_path,
-        const std::string&                  item_name
+        Content_library&                        content_library,
+        const std::shared_ptr<erhe::Hierarchy>& destination,
+        const std::string&                      folder_path,
+        const std::string&                      item_name
     )
     {
         std::shared_ptr<erhe::Hierarchy> found{};
         std::size_t                      match_count = 0;
-        const_cast<erhe::Scope&>(kind_scope).for_each<erhe::Hierarchy>(
-            [&found, &match_count, &item_name](erhe::Hierarchy& prim) -> bool {
-                if ((dynamic_cast<erhe::Scope*>(&prim) == nullptr) && (prim.get_name() == item_name)) {
+        for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+            for (const std::shared_ptr<erhe::Item_base>& item : content_library.get_all_of_kind(kind_type_bit)) {
+                if (item && (item->get_name() == item_name)) {
                     if (!found) {
-                        found = prim.shared_hierarchy_from_this();
+                        found = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
                     }
                     ++match_count;
                 }
-                return true;
             }
-        );
+        }
         if (!found) {
-            log_parsers->warn("glTF editor state: library folder '{}' lists '{}', which the resource kind does not hold - not placed", folder_path, item_name);
+            log_parsers->warn("glTF editor state: library folder '{}' lists '{}', which the scene does not hold - not placed", folder_path, item_name);
             return;
         }
         if (match_count > 1) {
             log_parsers->warn("glTF editor state: library folder '{}' lists '{}', which matches {} resources - the first is placed", folder_path, item_name, match_count);
         }
         const std::shared_ptr<erhe::Hierarchy> before_parent = found->get_parent().lock();
-        if (before_parent == folder) {
+        if (before_parent == destination) {
             return;
         }
         m_moves.push_back(Move{.node = found, .before_parent = before_parent, .before_index = found->get_index_in_parent()});
-        found->set_parent(folder);
+        found->set_parent(destination);
     }
 
-    std::shared_ptr<Content_library>          m_content_library;
+    std::shared_ptr<Scene_root>               m_scene_root;
     std::vector<Library_folder_record>        m_folders;
     std::vector<std::shared_ptr<erhe::Scope>> m_created_folders;
     std::vector<Move>                         m_moves;
 };
 
-void import_library_folders(
+} // anonymous namespace
+
+void append_library_folders_operation(
     const erhe::gltf::Gltf_data&             gltf_data,
-    const std::shared_ptr<Content_library>&  content_library,
+    const std::shared_ptr<Scene_root>&       scene_root,
     std::vector<std::shared_ptr<Operation>>& operations
 )
 {
     const std::string* extension_json = find_extension(gltf_data.scene_extensions, "ERHE_scene");
-    if ((extension_json == nullptr) || !content_library) {
+    if ((extension_json == nullptr) || !scene_root || !scene_root->get_content_library()) {
         return;
     }
     const nlohmann::json payload = parse_extension_object(*extension_json, "ERHE_scene", "scene");
@@ -924,8 +946,10 @@ void import_library_folders(
     if (records.empty()) {
         return;
     }
-    operations.push_back(std::make_shared<Content_library_folders_operation>(content_library, std::move(records)));
+    operations.push_back(std::make_shared<Content_library_folders_operation>(scene_root, std::move(records)));
 }
+
+namespace {
 
 // ERHE_scene styles (doc/style-library.md D4): one attach operation per
 // style item, run before anything that names a style.
@@ -1154,8 +1178,6 @@ void import_gltf_editor_state(
     // Object references by name (a node-held Node_physics.physics_material):
     // after every operation that creates the items they may name.
     import_unresolved_object_properties(gltf_data, scene_root, operations);
-    // Last: the folders operation places entries the operations above attach.
-    import_library_folders(gltf_data, content_library, operations);
 }
 
 }
