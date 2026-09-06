@@ -1805,12 +1805,18 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
 
         // R5.8 reference badge: a content-library REFERENCE entry (a listing
         // of an asset defined elsewhere) shows a link glyph and a dim suffix
-        // naming its defining container. The path comes from the entry's
-        // recorded asset_key / gltf_source; entries carrying neither fall
+        // naming its defining container. The path comes from the library's
+        // recorded asset_key / gltf_source; a resource carrying neither falls
         // back to the manager's key (file-scope for path-bound containers).
         const std::shared_ptr<Content_library> row_library = find_owning_library(m_context, item);
         const Resource_metadata* const row_metadata = row_library ? row_library->find_metadata(*item) : nullptr;
-        if ((row_metadata != nullptr) && row_metadata->is_reference) {
+        Scene_root* const row_scene_root = (row_library != nullptr) ? dynamic_cast<Scene_root*>(item->get_item_host()) : nullptr;
+        const bool row_is_external =
+            (row_metadata != nullptr) &&
+            (row_scene_root != nullptr) &&
+            (Content_library::get_kind_type_bit(*item) != 0) &&
+            !row_scene_root->is_asset_definition(*item);
+        if (row_is_external) {
             std::string container_path;
             if (row_metadata->asset_key.has_value() && !row_metadata->asset_key->path.empty()) {
                 container_path = row_metadata->asset_key->path;

@@ -113,21 +113,15 @@ auto make_material_external(
     if (!asset_manager.rehome_definition_to_container(material, path, out_error)) {
         return false;
     }
-    // Flip the scene's library entry: definition -> reference carrying the
-    // file key. The entry's declared usership stays (relabeled); the R6
-    // exporter now writes a proxy for it on the next scene save.
+    // The material stays a resource prim of this scene; what changed is where
+    // its DEFINITION lives, which rehome_definition_to_container recorded and
+    // Scene_root::is_asset_definition now answers. Record the file key on the
+    // library so the R6 exporter writes a proxy for it on the next scene save.
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
     if (library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         if (library->has_item(*material)) {
-            library->set_referenced(*material);
             library->set_asset_key(material, asset_manager.make_key(*material));
-            const Resource_metadata* const metadata = library->find_metadata(*material);
-            if ((metadata != nullptr) && metadata->asset_usership) {
-                metadata->asset_usership->set_user_label(
-                    fmt::format("scene '{}' library material '{}' (reference)", scene_root.get_name(), material->get_name())
-                );
-            }
         }
     }
     log_asset->info(
@@ -154,14 +148,14 @@ auto make_material_internal(
         out_error = fmt::format("scene '{}' has no material library", scene_root.get_name());
         return {};
     }
-    bool is_listed_reference = false;
+    bool is_external_definition = false;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        is_listed_reference = library->is_referenced(*material);
+        is_external_definition = library->has_item(*material) && !scene_root.is_asset_definition(*material);
     }
-    if (!is_listed_reference) {
+    if (!is_external_definition) {
         out_error = fmt::format(
-            "material '{}' is not a reference entry of scene '{}' - make-internal de-links references only",
+            "material '{}' is not defined by another container - make-internal de-links external definitions only",
             material->get_name(), scene_root.get_name()
         );
         return {};
@@ -254,12 +248,16 @@ auto reference_material_into_scene(
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         if (library->has_item(*material)) {
-            return material; // already listed (definition or reference)
+            return material; // already listed
         }
     }
     const Asset_key stored_key = asset_manager.make_key(*material); // authoritative: file scope + uid self-heal
+    // The material becomes a resource prim of this scene; its DEFINITION
+    // stays in the container the key names, which is what makes the next
+    // scene save write an R6 proxy for it (Scene_root::is_asset_definition).
     context.operation_stack->queue(
-        make_library_reference_operation(
+        make_library_attach_operation(
+            context,
             library,
             material,
             Gltf_source_reference{
@@ -268,11 +266,12 @@ auto reference_material_into_scene(
                 .item_index = -1, // referenced by identity, not by position
                 .item_type  = "material",
             },
+            std::shared_ptr<erhe::gltf::Gltf_image_source>{},
             stored_key
         )
     );
     log_asset->info(
-        "reference-into-scene: material '{}' ({}) listed in scene '{}' as a reference",
+        "reference-into-scene: material '{}' ({}) listed in scene '{}'; its definition stays in the container",
         material->get_name(), stored_key.describe(), scene_root.get_name()
     );
     return material;

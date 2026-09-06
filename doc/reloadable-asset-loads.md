@@ -213,35 +213,18 @@ finished / baking disabled with no resume intent) so the rest of the working set
 reachable too. The smoke test must include a bake, or it would assert an invariant that
 does not exist.
 
-### 5. Prefab reference entries — deliberately NOT made operation-consistent
+### 5. Prefab reference entries are gone
 
-This was investigated and rejected. Two reasons, both discovered in review:
-
-- **A redo does not duplicate them.** `add_prefab_reference_entries` adds the *template's*
-  objects (`prefab_library.cpp:759-805`), `Prefab_library::get_or_load` returns the cached
-  template on the second call (`prefab_library.cpp:112-116`), and templates are never
-  released. So the redo passes the **same pointers**, and
-  `Content_library_node::add`'s pointer-equality dedupe (`content_library.hpp:414-444`)
-  does catch them. Nothing accumulates, and the drop/redo cycle works with these entries
-  left exactly as they are.
-- **Converting them would introduce a shared-entry removal regression.** Because the
-  entries hold shared template objects, two imports referencing the same prefab produce one
-  deduped entry. With per-import `Content_library_attach_operation`s, undoing the second
-  import would call `m_sublibrary->remove(m_item)` and delete the entry the first import's
-  live instances still need. For a *plain* import that failure mode does not exist today,
-  because a second import re-parses into different material pointers — but with
-  `materials_as_references` it already does, since
-  `acquire_import_materials_as_references` substitutes manager-owned materials
-  (`gltf.cpp:273-283`), so two imports of one path already share pointers behind two
-  per-import attach operations. That strengthens the rejection rather than weakening it.
-  Avoiding the hazard would require refcounting the reference entries. (A secondary wrinkle: one prefab instantiated by N
-  carriers calls `add_prefab_reference_entries` N times, `prefab_library.cpp:627-679`, so a
-  collector would have to dedupe as well.)
-
-What remains real is only the other half: **undoing an import leaves the prefab's
-reference entries in the content library permanently**, because they were never part of
-the operation. That is a pre-existing bug, orthogonal to this work, and is left out of
-scope — fixing it properly means refcounted reference entries, not per-import operations.
+A prefab template's textures and materials are no longer listed in the
+instancing scene's content library at all
+(`doc/usd-compatibility-plan.md` U4): the template owns them, the instance's
+meshes bind them, and the scene's `Material_set` gives them slots through its
+per-object membership, which the mesh hooks feed
+(`Scene_root::enqueue_mesh_materials` from `register_mesh` / `unregister_mesh`
+/ `on_mesh_material_changed` / `on_mesh_primitives_changed`). Nothing to make
+operation-consistent, nothing an import undo can leave behind, and no
+refcounted entries to invent: the material set's own per-object refcount is
+the one source of truth for "this scene renders it".
 
 ## Pins that bound the win — state, and assert in tests
 
@@ -404,7 +387,7 @@ Redo re-reads the file in 18.5 ms, then 7.7 ms on the next cycle, with **zero**
   marked unloaded — the case a self-query gate would have got wrong. The smoke test
   asserts both outcomes and branches on which path ran, so it says something real either
   way.
-- **Prefab reference entries were left alone**, per the plan's own rejection.
+- **Prefab reference entries are gone**: a template's resources are never listed by the instancing scene (section 5).
 
 ## Coverage
 
@@ -427,8 +410,6 @@ Redo re-reads the file in 18.5 ms, then 7.7 ms on the next cycle, with **zero**
   manager, untouched by the drop.
 - **`Prefab_library` templates are never released**, so an import that pulled in prefabs
   keeps those regardless.
-- **Undoing an import still leaves prefab reference entries in the content library** —
-  pre-existing, out of scope, and documented above.
 - The BLAS eviction does **not** fix the recycled-range staleness bug described in
   section 4; that needs a generation counter on the cache key.
 
@@ -475,9 +456,5 @@ Expect the same identity consequences as the import phase - fresh ids, and
 - **The BLAS cache key can go stale over recycled buffer ranges** when
   `commit_geometry_buffer_mesh()` swaps a mesh in place; eviction does not catch
   it - doc/raytrace-plan.md, "Open lead: the BLAS cache key can go stale".
-- **Prefab reference entries are not undoable**, and fixing it properly needs
-  refcounted content-library reference entries rather than per-import operations -
-  doc/gltf-prefabs-plan.md, "Open lead: prefab reference entries are not
-  undoable".
 - **One empty scene costs ~688 MB of estimated texture memory** - doc/todo.md,
   "Investigate: one empty scene costs ~688 MB of estimated texture memory".

@@ -3,6 +3,7 @@
 #include "parsers/gltf_extensions_names.hpp"
 
 #include "assets/asset_key.hpp"
+#include "assets/asset_manager.hpp"
 #include "assets/asset_paths.hpp"
 #include "brushes/brush.hpp"
 #include "content_library/content_library.hpp"
@@ -201,6 +202,7 @@ namespace {
 // same way.
 void add_material_asset_references(
     erhe::gltf::Gltf_export_arguments&      arguments,
+    Scene_root&                             scene_root,
     const std::shared_ptr<Content_library>& content_library,
     const std::filesystem::path&            export_path
 )
@@ -210,14 +212,56 @@ void add_material_asset_references(
     }
     const std::filesystem::path export_directory = export_path.parent_path();
     const std::filesystem::path canonical_export_path = normalize_asset_path(export_path);
+    Asset_manager* const asset_manager = content_library->get_asset_manager();
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-    for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->get_all<erhe::primitive::Material>()) {
+
+    // The candidates are every material the written file can name: the
+    // resources this scene lists, plus the materials its meshes bind. A
+    // material another container defines need not be listed - the mesh
+    // binding is what puts it in the file (doc/usd-compatibility-plan.md U4).
+    std::vector<std::shared_ptr<erhe::primitive::Material>> candidates =
+        content_library->get_all<erhe::primitive::Material>();
+    const auto consider_material = [&candidates](const std::shared_ptr<erhe::primitive::Material>& material) {
+        if (!material) {
+            return;
+        }
+        if (std::find(candidates.begin(), candidates.end(), material) == candidates.end()) {
+            candidates.push_back(material);
+        }
+    };
+    scene_root.get_scene().for_each_node(
+        [&consider_material](const std::shared_ptr<erhe::scene::Node>& node) {
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+            if (mesh) {
+                for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+                    consider_material(primitive.material);
+                }
+            }
+            return true;
+        }
+    );
+
+    for (const std::shared_ptr<erhe::primitive::Material>& material : candidates) {
         {
-            const Resource_metadata* const metadata = content_library->find_metadata(*material);
-            if ((metadata == nullptr) || !metadata->is_reference) {
+            // An R6 asset reference: a material the file names but another
+            // container DEFINES (the manager's record is the authority,
+            // Scene_root::is_asset_definition).
+            if (scene_root.is_asset_definition(*material)) {
                 continue;
             }
-            const Resource_metadata& node = *metadata;
+            // The recorded key when the library has one, else the manager's
+            // live answer (file scope + uid self-heal).
+            const Resource_metadata* const metadata = content_library->find_metadata(*material);
+            Resource_metadata live{};
+            if ((metadata != nullptr) && metadata->asset_key.has_value()) {
+                live.asset_key = metadata->asset_key;
+            } else if (asset_manager != nullptr) {
+                Asset_key key = asset_manager->make_key(*material);
+                if (key.scope == Asset_scope::file) {
+                    live.asset_key = std::move(key);
+                }
+            }
+            const Resource_metadata& node = live;
             if (!node.asset_key.has_value() || (node.asset_key->scope != Asset_scope::file) || node.asset_key->path.empty()) {
                 log_parsers->warn(
                     "glTF export: reference material '{}' has no file-scope asset key - exporting full data (an independent definition)",
@@ -265,7 +309,7 @@ void add_gltf_editor_state(
     const std::vector<std::shared_ptr<erhe::physics::Physics_material>>& physics_material_items
 )
 {
-    add_material_asset_references(arguments, scene_root.get_content_library(), export_path);
+    add_material_asset_references(arguments, scene_root, scene_root.get_content_library(), export_path);
 
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();

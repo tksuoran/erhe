@@ -343,12 +343,16 @@ void append_content_library_attach_operations(
                 .item_index = static_cast<int>(i),
                 .item_type  = "material",
             };
-            // An R6 asset reference lists a material another container
-            // defines: a listing, not a prim of this scene's tree.
+            // An R6 asset reference is a material another container DEFINES:
+            // the scene lists it like any resource and records the key, and
+            // the manager's record is what says the definition is elsewhere
+            // (Scene_root::is_asset_definition).
             operations.push_back(
-                is_reference
-                    ? make_library_reference_operation(content_library, material, source, reference_it->second)
-                    : make_library_attach_operation(context, content_library, material, source)
+                make_library_attach_operation(
+                    context, content_library, material, source,
+                    std::shared_ptr<erhe::gltf::Gltf_image_source>{},
+                    is_reference ? std::optional<Asset_key>{reference_it->second} : std::optional<Asset_key>{}
+                )
             );
         }
     }

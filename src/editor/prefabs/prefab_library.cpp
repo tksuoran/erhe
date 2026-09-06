@@ -478,55 +478,12 @@ auto instantiate_prefab(
     std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     const std::string gltf_path_str = prefab->source_path.generic_string();
 
+    // The template's textures and materials belong to the template's own
+    // tree: the instance's meshes bind them, and the scene's Material_set
+    // gives them slots through its per-object membership
+    // (Scene_root::enqueue_mesh_materials), so the instancing scene lists
+    // nothing (doc/usd-compatibility-plan.md U4).
     std::vector<std::shared_ptr<Operation>> operations;
-
-    for (size_t i = 0; i < prefab->gltf_data.images.size(); ++i) {
-        const std::shared_ptr<erhe::graphics::Texture>& image = prefab->gltf_data.images[i];
-        if (image) {
-            operations.push_back(
-                make_library_reference_operation(
-                    content_library,
-                    image,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = image->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "texture",
-                    }
-                )
-            );
-        }
-    }
-
-    for (size_t i = 0; i < prefab->gltf_data.materials.size(); ++i) {
-        const std::shared_ptr<erhe::primitive::Material>& material = prefab->gltf_data.materials[i];
-        if (material) {
-            operations.push_back(
-                make_library_reference_operation(
-                    content_library,
-                    material,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = material->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "material",
-                    },
-                    // A referenced listing records its defining container
-                    // (asset-manager plan, R5 sub-plan step R5.2). Texture
-                    // listings above carry no asset_key yet: texture is not a
-                    // managed Asset_type in v1 (plan D6); their container is
-                    // already recorded in gltf_source.
-                    Asset_key{
-                        .scope = Asset_scope::file,
-                        .type  = Asset_type::material,
-                        .path  = gltf_path_str,
-                        .uid   = material->get_gltf_uid(),
-                        .name  = material->get_name(),
-                    }
-                )
-            );
-        }
-    }
 
     std::shared_ptr<erhe::scene::Node> insert_parent = parent;
     if (!insert_parent) {
@@ -660,16 +617,12 @@ void resolve_external_assets(
             );
             continue;
         }
-        // List the template's resources as reference entries BEFORE the
-        // instance subtree can register into the destination scene: without
-        // the listing, Scene_root::register_mesh would mis-adopt the
-        // unhosted template materials as scene-OWNED entries, and the
-        // scene-close watchdog would then report them as leaks (they stay
-        // alive with the template, correctly).
-        if (content_library != nullptr) {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-            add_prefab_reference_entries(*content_library, *prefab);
-        }
+        // The template owns its textures and materials: the instancing scene
+        // lists nothing (doc/usd-compatibility-plan.md U4). register_mesh
+        // adopts a material only when this scene's container record defines
+        // it (Scene_root::is_asset_definition), which a template material is
+        // not, and the instance's meshes are what give it a material slot.
+        static_cast<void>(content_library);
         attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
     }
 }
@@ -722,93 +675,6 @@ void attach_prefab_instance(
 }
 
 namespace {
-
-// Remove content-library entries recorded from a previous load of the given
-// glTF source; a reload produces new texture / material objects, so the old
-// entries would otherwise linger (and keep the previous GPU textures alive).
-template <typename T>
-void remove_gltf_source_entries(Content_library& content_library, const std::string& gltf_path)
-{
-    std::vector<std::shared_ptr<T>> stale_entries;
-    for (const std::shared_ptr<T>& item : content_library.get_all<T>()) {
-        const Resource_metadata* const metadata = content_library.find_metadata(*item);
-        if ((metadata == nullptr) || !metadata->gltf_source.has_value() || (metadata->gltf_source->gltf_path != gltf_path)) {
-            continue;
-        }
-        stale_entries.push_back(item);
-    }
-    for (const std::shared_ptr<T>& item : stale_entries) {
-        content_library.remove(item);
-    }
-}
-
-} // namespace
-
-// Declared in prefab_library.hpp (R5.2b: the clipboard paste site lists a
-// pasted prefab-template material's container the same way scene load /
-// instantiate do).
-void add_prefab_reference_entries(Content_library& content_library, const Prefab& prefab)
-{
-    const std::string gltf_path_str = prefab.source_path.generic_string();
-    for (std::size_t i = 0; i < prefab.gltf_data.images.size(); ++i) {
-        const std::shared_ptr<erhe::graphics::Texture>& image = prefab.gltf_data.images[i];
-        if (image) {
-            // The template's textures belong to the template's own tree; the
-            // instancing scene lists them so its material set gives them slots
-            // (2e retires the concept).
-            content_library.add_referenced(image);
-            content_library.set_gltf_source(
-                image,
-                Gltf_source_reference{
-                    .gltf_path  = gltf_path_str,
-                    .item_name  = image->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "texture",
-                }
-            );
-            if (i < prefab.gltf_data.image_sources.size()) {
-                content_library.set_image_source(image, prefab.gltf_data.image_sources[i]);
-            }
-        }
-    }
-    for (std::size_t i = 0; i < prefab.gltf_data.materials.size(); ++i) {
-        const std::shared_ptr<erhe::primitive::Material>& material = prefab.gltf_data.materials[i];
-        if (material) {
-            // See instantiate: a referenced listing records its defining
-            // container; texture listings carry no asset_key yet (no managed
-            // Asset_type for textures in v1).
-            content_library.add_referenced(
-                material,
-                Asset_key{
-                    .scope = Asset_scope::file,
-                    .type  = Asset_type::material,
-                    .path  = gltf_path_str,
-                    .uid   = material->get_gltf_uid(),
-                    .name  = material->get_name(),
-                }
-            );
-            content_library.set_gltf_source(
-                material,
-                Gltf_source_reference{
-                    .gltf_path  = gltf_path_str,
-                    .item_name  = material->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "material",
-                }
-            );
-        }
-    }
-}
-
-namespace {
-
-void replace_content_library_entries(Content_library& content_library, const Prefab& prefab)
-{
-    const std::string gltf_path_str = prefab.source_path.generic_string();
-    remove_gltf_source_entries<erhe::graphics::Texture  >(content_library, gltf_path_str);
-    remove_gltf_source_entries<erhe::primitive::Material>(content_library, gltf_path_str);
-    add_prefab_reference_entries(content_library, prefab);
-}
 
 void refresh_instance_subtrees(
     const std::shared_ptr<erhe::scene::Node>&                       node,
@@ -881,14 +747,6 @@ void Prefab_library::refresh_instances(const std::vector<std::filesystem::path>&
             continue;
         }
         log_parsers->info("Prefab reload: refreshed {} prefab(s) in scene '{}'", refreshed_paths.size(), scene_root->get_name());
-
-        const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-        if (content_library) {
-            std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-            for (const std::filesystem::path& refreshed_path : refreshed_paths) {
-                replace_content_library_entries(*content_library, *m_prefabs.at(refreshed_path));
-            }
-        }
 
         // Build raytrace primitives for the fresh clones (outside the scene
         // lock: the kickoff's async tasks take it themselves).

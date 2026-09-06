@@ -3349,10 +3349,10 @@ public:
             if (library) {
                 for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
                     for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
-                        // Referenced listings name resources owned by another
-                        // scene's library; only owned resources must die with
-                        // this scene.
-                        if (item && !library->is_referenced(*item)) {
+                        // Every listed resource is a prim this scene owns, so
+                        // every one of them must die with it
+                        // (doc/usd-compatibility-plan.md U4).
+                        if (item) {
                             watch.items.emplace_back(item);
                         }
                     }

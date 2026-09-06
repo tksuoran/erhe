@@ -22,10 +22,15 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   `Brush::make_shared_payload_copy` shares the expensive payload), and
   `copy_library_item_to_library` copies one resource across libraries (also
   exposed as the `copy_library_item` MCP tool and the "Copy to Scene" context
-  menu). Prefab template textures / materials are the exception: they belong
-  to the template's own tree, so the instancing scene lists them with
-  `add_referenced()` - an index entry with no prim placement - so its
-  material set gives them slots.
+  menu). A material the scene RENDERS but does not own - a prefab template's,
+  or one a mesh brought with it - is listed by nobody: the mesh binding is
+  what gives it a slot in the scene's `Material_set`, through that set's own
+  per-object membership, which `Scene_root::enqueue_mesh_materials` feeds
+  from `register_mesh` / `unregister_mesh` / `on_mesh_material_changed` /
+  `on_mesh_primitives_changed`. Which container DEFINES a listed resource is
+  recorded manager state (`Scene_root::is_asset_definition`), never derived
+  from the listing: a scene lists a material another container defines (an R6
+  asset reference), and the glTF exporter writes a proxy for it.
 
 - **Kind scopes** -- `get_scope(kind_type_bit)` answers the `erhe::Scope` a
   resource of that kind is placed under (`Materials`, `Textures`, `Brushes`,
@@ -40,7 +45,8 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
 
 ## The index
 
-The index answers the queries consumers ask without a tree walk. One list per
+The index lists what the scene OWNS and answers the queries consumers ask
+without a tree walk. One list per
 resource kind is filled and emptied by `register_prim()` / `unregister_prim()`
 - `erhe::Item_host`'s prim hook (`src/erhe/item/notes.md` "Prim classes"),
 which the owning `Scene_root` forwards here. Each kind's list carries a serial
@@ -55,10 +61,11 @@ scene keeps the prim's item host, so the hook does not fire and the index is
 untouched - a move is not a removal.
 
 `Resource_metadata` is what the library keeps beside a resource: where it came
-from (`gltf_source`, a texture's retained `image_source`), how its defining
-container addresses it (`asset_key`), its declared usership with the asset
-manager (`asset_usership`, R5.6), and whether it is a referenced listing
-rather than an owned prim (`is_reference`). It is bookkeeping of the LIBRARY,
+from (`gltf_source`, a texture's retained `image_source`) and how its defining
+container addresses it (`asset_key`) - which the asset manager reads at attach
+to decide whether this scene defines the resource or only lists it. The
+declared usership (R5.6) lives in the manager itself, keyed by the resource.
+It is bookkeeping of the LIBRARY,
 keyed by the resource and guarded by a `weak_ptr`, and it outlives the index
 entry: an undo takes a resource prim out of the tree and a redo puts it back,
 and the bookkeeping must survive that.
@@ -121,7 +128,6 @@ A standalone image file carries no usage information, so it is decoded as **sRGB
 - `Content_library::remove<T>()` -- take a resource out of the tree (or out of the referenced listings)
 - `Content_library::get_all<T>()` / `get_all_of_kind()` / `has_item()` -- the index
 - `Content_library::get_scope()` / `find_scope()` / `find_scope_kind()` -- the kind scopes
-- `Content_library::add_referenced()` / `remove_referenced()` / `is_referenced()` -- resources another container owns
 - `Content_library::combo<T>()` -- ImGui combo box for selecting a resource
 - Used by `Scene_root`, `Scene_builder`, `Properties`, `Brush_tool`
 

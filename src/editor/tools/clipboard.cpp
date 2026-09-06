@@ -322,7 +322,7 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     // - owned by a loaded prefab template (pasted prefab-instance subtree):
     //   list the template's resources as reference entries, exactly like
     //   scene load / instantiate do (direct, not undoable - matching
-    //   replace_content_library_entries semantics);
+    //   the prefab template keeps owning it);
     // - otherwise the source scene is gone AND its record was released: the
     //   target scene claims the definition, undoably with the paste itself
     //   and BEFORE the node insert, so register_mesh sees a definition.
@@ -341,7 +341,9 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
             }
             const std::shared_ptr<Prefab> owning_prefab = find_owning_prefab(m_context, material);
             if (owning_prefab) {
-                add_prefab_reference_entries(*content_library, *owning_prefab);
+                // The prefab template owns it; the pasted mesh binding is
+                // what gives it a material slot, so the target scene lists
+                // nothing (doc/usd-compatibility-plan.md U4).
                 continue;
             }
             log_scene->info(

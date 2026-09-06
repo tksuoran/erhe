@@ -47,10 +47,6 @@ public:
     // Guards the pointer key: the entry is this resource's only while the
     // weak pointer is unexpired.
     std::weak_ptr<erhe::Item_base>                 resource;
-    // The resource is listed but owned by another container (a prefab
-    // template's material or texture), so it is not a prim of this scene's
-    // tree. 2e retires the concept.
-    bool                                           is_reference{false};
     std::optional<Gltf_source_reference>           gltf_source;
     // Texture resources only: the retained compressed source image stream,
     // so glTF export can re-embed the image byte-exact
@@ -59,10 +55,6 @@ public:
     // Asset identity when the defining container is known (asset-manager
     // plan, R5 sub-plan resolution 2).
     std::optional<Asset_key>                       asset_key;
-    // Declared usership of an asset-typed resource (R5.6), filled by the
-    // asset manager's library hook when the owning scene is registered, so
-    // the listing is a named user in unload refusals.
-    std::unique_ptr<Asset_reference>               asset_usership;
 };
 
 // The per-scene index of the scene's resources (doc/usd-compatibility-plan.md
@@ -75,11 +67,10 @@ public:
 // maintained by the item-host hook (`erhe::Item_host::register_prim`), which
 // the owning `Scene_root` forwards here.
 //
-// A library also lists resources it does NOT own: a prefab template's
-// materials and textures, which the instancing scene's meshes reference and
-// its material set must therefore give slots. Those belong to another
-// scene's tree, so they are index entries with no prim placement of their
-// own; `add_referenced()` lists them and `is_referenced()` tells them apart.
+// The index lists what the scene OWNS. A material the scene renders but does
+// not own - a prefab template's - reaches the render through the material
+// set's own per-object membership, which the mesh hooks feed
+// (`Scene_root::enqueue_mesh_materials`), so it needs no listing here.
 class Content_library : public erhe::Item_host
 {
 public:
@@ -137,9 +128,9 @@ public:
     // scene open re-registers without re-importing). Idempotent.
     void announce_all_listed();
 
-    // Every listed resource that is a T, owned prims and referenced listings
-    // alike. The typed vector is derived from the kind's index list and
-    // rebuilt only when that list changed since the last call.
+    // Every listed resource that is a T. The typed vector is derived from the
+    // kind's index list and rebuilt only when that list changed since the
+    // last call.
     template <typename T>
     [[nodiscard]] auto get_all() const -> const std::vector<std::shared_ptr<T>>&;
 
@@ -176,17 +167,8 @@ public:
         const std::optional<Asset_key>&                       asset_key    = {}
     );
 
-    // Lists a resource ANOTHER container owns, so the scene's material set
-    // gives it a slot and the pickers offer it. Not a prim of this tree.
-    void add_referenced   (const std::shared_ptr<erhe::Item_base>& item, const std::optional<Asset_key>& asset_key = {});
-    void remove_referenced(const std::shared_ptr<erhe::Item_base>& item);
-    [[nodiscard]] auto is_referenced(const erhe::Item_base& item) const -> bool;
-    // Flips an owned listing to a referenced one in place (R7 make-external).
-    void set_referenced(const erhe::Item_base& item);
-
-    // Takes a resource out of the library: the prim leaves the tree, a
-    // referenced listing leaves the index. False when the library does not
-    // list it.
+    // Takes a resource out of the library: the prim leaves the tree. False
+    // when the library does not list it.
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
 
@@ -233,7 +215,6 @@ private:
     mutable std::unordered_map<uint64_t, Kind_index>                             m_by_kind;
     mutable std::unordered_map<uint64_t, Typed_view>                             m_typed_views;
     std::unordered_set<const erhe::Item_base*>                                   m_listed;
-    std::unordered_map<const erhe::Item_base*, std::shared_ptr<erhe::Item_base>> m_referenced;
     std::unordered_map<const erhe::Item_base*, Resource_metadata>                m_metadata;
 };
 
@@ -381,10 +362,6 @@ template <typename T>
 auto Content_library::remove(const std::shared_ptr<T>& entry) -> bool
 {
     ERHE_VERIFY(entry);
-    if (is_referenced(*entry)) {
-        remove_referenced(entry);
-        return true;
-    }
     if (!has_item(*entry)) {
         return false;
     }

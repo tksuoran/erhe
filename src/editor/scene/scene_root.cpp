@@ -1006,8 +1006,8 @@ auto Scene_root::make_browser_window(
                 const std::shared_ptr<erhe::primitive::Material> leaf_material =
                     std::dynamic_pointer_cast<erhe::primitive::Material>(item);
                 if (leaf_material && (context.asset_manager != nullptr)) {
-                    const bool is_reference = library->is_referenced(*leaf_material);
-                    if (!is_reference && is_asset_definition(*leaf_material)) {
+                    const bool is_external = library->has_item(*leaf_material) && !is_asset_definition(*leaf_material);
+                    if (!is_external && is_asset_definition(*leaf_material)) {
                         if (ImGui::MenuItem("Make External")) {
                             deferred_operations.push_back(
                                 [this, context_ptr, leaf_material]() {
@@ -1030,7 +1030,7 @@ auto Scene_root::make_browser_window(
                             close = true;
                         }
                     }
-                    if (is_reference) {
+                    if (is_external) {
                         if (ImGui::MenuItem("Make Internal")) {
                             deferred_operations.push_back(
                                 [this, context_ptr, leaf_material]() {
@@ -1357,18 +1357,20 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         m_rendertarget_meshes.push_back(std::dynamic_pointer_cast<Rendertarget_mesh>(mesh));
     }
 
-    // Make sure materials are in the material library. A material this scene
-    // defines (is_asset_definition: this scene's container record is its
-    // defining container) resolves to its existing owning entry; any other
+    // Make sure the materials this scene DEFINES are listed. A material this
+    // scene defines (is_asset_definition: this scene's container record is
+    // its defining container) is placed under the Materials scope; any other
     // material - a mesh migrating between scenes (e.g. the Hotbar
     // rendertarget following the active scene), a prefab template resource,
-    // another scene's definition, a loaded container's asset - is listed as
-    // a reference entry so membership stays with the owner. A material with
-    // NO live home at all (not managed, not listed anywhere) means a missing
-    // explicit registration at its creation site (R5.2b removed the implicit
-    // adoption): warn loudly and list it as a reference; rendering and the
-    // Materials panel keep working, but nothing claims ownership (a
-    // definition must never appear as a side effect of mesh registration).
+    // another scene's definition, a loaded container's asset - is listed by
+    // nobody here: it renders because the mesh binding gives it a slot in
+    // this scene's Material_set (enqueue_mesh_materials below), and its
+    // membership stays with its owner (doc/usd-compatibility-plan.md U4). A
+    // material with NO live home at all (not managed, not listed anywhere)
+    // means a missing explicit registration at its creation site (R5.2b
+    // removed the implicit adoption): warn loudly; rendering keeps working,
+    // but nothing claims ownership (a definition must never appear as a side
+    // effect of mesh registration).
     Asset_manager* const asset_manager = get_content_library()->get_asset_manager();
     Content_library& material_library = *get_content_library().get();
     for (const auto& primitive : mesh->get_primitives()) {
@@ -1389,17 +1391,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
                     get_name()
                 );
             }
-            // Stamp the defining container on the reference when it is
-            // durable (file scope: a loaded container or a saved scene) -
-            // inert metadata until the R6 wire format.
-            std::optional<Asset_key> reference_key{};
-            if (asset_manager != nullptr) {
-                Asset_key key = asset_manager->make_key(*primitive.material);
-                if (key.scope == Asset_scope::file) {
-                    reference_key = std::move(key);
-                }
-            }
-            material_library.add_referenced(primitive.material, reference_key);
+
         }
     }
 }

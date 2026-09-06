@@ -60,10 +60,14 @@ per asset identity. Ownership splits into two orthogonal notions:
 - **Definition site** (serialization): the container file whose save
   writes the asset's full data.
 
-A content-library entry does not mean "I own this object"; it records the
-relationship instead: a *definition entry* ("defined in my file - serialize
-fully on my save") or a *reference entry* ("defined elsewhere - serialize
-as stub + key"). Lifetime belongs to the manager in both cases.
+A content-library listing does not mean "I own this object": a scene lists
+the resources it holds, and which container DEFINES a listed resource is
+recorded manager state (`Scene_root::is_asset_definition`). A listed resource
+this scene defines serializes fully on its save; one another container
+defines serializes as a stub + key. Lifetime belongs to the manager in both
+cases, and a material the scene only RENDERS - a prefab template's - is
+listed by nobody: the mesh binding gives it a material slot, and nothing
+else needs it (doc/usd-compatibility-plan.md U4).
 
 ### Why the axiom (the two-loader failure mode)
 
@@ -280,23 +284,26 @@ Asset-typed items (brush, material, animation) **never claim an
 asset types, so "asset host is always null" replaced a family of
 host-comparison checks. Consequences and rules:
 
-- **Classification is recorded, never derived from hosting.** A library
-  entry is a definition when the manager records this scene's container
-  record as the asset's defining container
-  (`Scene_root::is_asset_definition`, backed by the manager); otherwise it
-  is a reference entry, and `Content_library_node::asset_key` records the
-  defining container when known. Deriving definition-vs-reference from
-  `get_item_host()` would misclassify everything after the flip - scene
-  saves would write stubs instead of data. A regression test (the
-  "definitions-full-data" tripwire in `scripts/scene_roundtrip_verify.py`)
-  guards exactly that cliff.
+- **Classification is recorded, never derived from listing or hosting.** A
+  listed resource is a definition when the manager records this scene's
+  container record as its defining container
+  (`Scene_root::is_asset_definition`, backed by the manager); otherwise
+  another container defines it, and the library's `Resource_metadata`
+  `asset_key` records which. `on_library_prim_attached` is where the record
+  is claimed, and it claims only what no container already defines and what
+  no recorded file-scope key names elsewhere (a stub kept while its
+  container is missing keeps its key, so a re-save still writes a proxy).
+  Deriving definition-vs-reference from `get_item_host()` would misclassify
+  everything - scene saves would write stubs instead of data. A regression
+  test (the "definitions-full-data" tripwire in
+  `scripts/scene_roundtrip_verify.py`) guards exactly that cliff.
 - **Ownership never comes from mesh registration.** When a mesh enters a
-  scene, materials the scene defines resolve to their existing owning
-  entries; any other material (another scene's definition, a container's
-  asset, a prefab template resource) is listed as a reference entry with
-  its file-scope key when one exists. An unhosted material that is managed
-  nowhere and listed nowhere is a missing explicit registration at its
-  creation site: a loud warning plus a non-owning reference listing -
+  scene, materials the scene defines are placed under its Materials scope;
+  any other material (another scene's definition, a container's asset, a
+  prefab template resource) is listed by nobody - it renders because the
+  mesh binding gives it a slot in the scene's `Material_set`. An unhosted
+  material that is managed nowhere and listed nowhere is a missing explicit
+  registration at its creation site: a loud warning -
   rendering keeps working, but a definition must never appear as a side
   effect.
 - **"The scene that owns this asset" is a manager lookup**
@@ -309,7 +316,7 @@ host-comparison checks. Consequences and rules:
 - **Scene close issues a courtesy unload** of the scene's own container
   record after every close subscriber has run: closing a scene frees its
   assets exactly when nothing else uses them, while a refusal (slots,
-  other scenes' reference entries, debug holds, undo history) is normal
+  other scenes' listings, debug holds, undo history) is normal
   and leaves the container loaded - the record survives the scene as a
   plain loaded container and keeps resolving.
 - **The scene-close leak watchdog splits by kind**: nodes and other
@@ -329,16 +336,16 @@ host-comparison checks. Consequences and rules:
 Cross-container references serialize per
 [`ERHE_asset_reference`](gltf_extensions/ERHE_asset_reference.md):
 
-- **Export**: a library material reference entry with a file-scope key
-  exports as a **name-only stub material** carrying
+- **Export**: a material the file names that another container defines,
+  with a file-scope key, exports as a **name-only stub material** carrying
   `ERHE_asset_reference {file, uid}`, where `file` indexes the glTF 2.1
   `files` array naming the container (URI relativized against the
   exported file's directory). The stub degrades to a legal default
   material in loaders without the extension. Proxies carry no
   `ERHE_material` payload and are excluded from uid stamping - stamping
   would write a generated uid back onto the *shared* item, corrupting the
-  identity every file key depends on. Definition entries keep exporting
-  full data; a reference entry without a durable file key falls back to
+  identity every file key depends on. A material this scene defines keeps
+  exporting full data; one without a durable file key falls back to
   full data with a warning (no data loss, but the re-import holds an
   independent definition). Self-references are prohibited and fall back
   the same way. Emitting any proxy (or prefab externalAsset) declares
@@ -349,8 +356,8 @@ Cross-container references serialize per
   the stub everywhere in the parse, including index-based consumers
   (brush and node-graph payloads reference materials by glTF index). On
   failure (missing container, ambiguity, type mismatch) the stub is
-  KEPT with a warning, and either way the library lists the material as a
-  reference entry carrying the key - **the key is re-emitted on every
+  KEPT with a warning, and either way the library lists the material with
+  the key recorded - **the key is re-emitted on every
   save, never silently dropped**, so a broken reference survives
   round-trips and resolves again once the container returns.
 - The exporter is otherwise **lazy**: only materials referenced by
@@ -367,23 +374,24 @@ and MCP tools:
   the scene into a fresh asset container file. The file is written first
   (the export stamps the uid the key needs), the manager re-homes THE live
   object into a path-bound authored record - meshes, slots and references
-  keep pointing at the same object - and the scene's library entry flips
-  to a reference carrying the file key. The next scene save writes a
-  proxy.
+  keep pointing at the same object - and the scene's library records the
+  file key. The scene still lists the material; what changed is that the
+  manager now records the new container as its definition, so the next
+  scene save writes a proxy.
 - **Make internal** (`make_material_internal`): the escape hatch when one
   scene wants a local tweak of a shared asset. Copies the referenced
   material's data into a manager-created scene-owned definition (no uid -
-  a new asset), swaps the scene's mesh primitives to the copy, and
-  replaces the reference entry with an owning one. Edits stop reaching
+  a new asset) and swaps the scene's mesh primitives to the copy. Edits stop reaching
   other users of the shared object; other holders (slots, tools, other
   scenes) deliberately keep the shared object. Brushes pointing at the
   shared object warn and keep sharing.
 - **Reference into scene** (`reference_material_into_scene`): acquires a
-  keyed material and lists it as a reference entry via an undoable library
-  attach. Gated by `is_cross_scene_referenceable`.
+  keyed material and lists it through an undoable library attach, recording
+  the file key so the manager keeps the definition where it is. Gated by
+  `is_cross_scene_referenceable`.
 - **Import-as-reference**: `import_gltf(..., materials_as_references)`
   acquires every parsed material from the source container instead of
-  keeping imported copies; the library lists reference entries.
+  keeping imported copies; the library lists them with their file keys.
   Import-as-copy stays the default.
 
 **Undo boundary**: make external and make internal are NOT undoable - they

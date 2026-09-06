@@ -1507,6 +1507,18 @@ void Asset_manager::on_scene_unregistered(Scene_root* scene_root)
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library) {
             library->set_asset_manager(nullptr);
+            // Drop the declared userships of this scene's resources here: the
+            // library's detach hook is disarmed from this point on, and a
+            // usership holds its resource strongly, so one left behind would
+            // pin the resource for the manager's lifetime and the
+            // scene-close watchdog would report it.
+            for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+                for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
+                    if (item) {
+                        m_library_userships.erase(item.get());
+                    }
+                }
+            }
         }
     }
     const std::shared_ptr<Asset_container_record> record = find_scene_record(scene_root);
@@ -1645,11 +1657,10 @@ auto Asset_manager::find_record_by_owner(const erhe::Item_host* owner) const -> 
     return {};
 }
 
-void Asset_manager::on_library_item_attached(
+void Asset_manager::on_library_prim_attached(
     erhe::Item_host* const                  owner,
     const std::shared_ptr<erhe::Item_base>& item,
-    const Library_listing                   listing,
-    std::unique_ptr<Asset_reference>&       usership
+    const std::optional<Asset_key>&         recorded_key
 )
 {
     verify_main_thread();
@@ -1675,33 +1686,53 @@ void Asset_manager::on_library_item_attached(
     if (is_builtin_asset(*item)) {
         return;
     }
-    if (listing == Library_listing::owned) {
-        Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
-        ERHE_VERIFY(entries != nullptr);
-        // Idempotent: the registration sweep can re-visit an already-listed
-        // resource; one object is one entry.
-        const auto i = std::find(entries->items.begin(), entries->items.end(), item);
-        if (i == entries->items.end()) {
+    Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
+    ERHE_VERIFY(entries != nullptr);
+    // Idempotent: the registration sweep can re-visit an already-listed
+    // resource; one object is one entry.
+    const auto listed = std::find(entries->items.begin(), entries->items.end(), item);
+    if (listed == entries->items.end()) {
+        // A scene DEFINES a resource only when no container already does: a
+        // resource this scene lists but another container defines - a
+        // material referenced into the scene (R6), a prefab template's - is
+        // not this scene's to define, and claiming it would make the R6
+        // exporter write its full data instead of a proxy. A recorded
+        // file-scope key naming another container says the same thing while
+        // that container is missing and the resource is a stub. Ownership is
+        // recorded manager state, never derived from listing.
+        const bool key_names_another_container =
+            recorded_key.has_value() &&
+            (recorded_key->scope == Asset_scope::file) &&
+            !recorded_key->path.empty() &&
+            (normalize_asset_path(std::filesystem::path{recorded_key->path}) != record->canonical_path);
+        if (is_managed(*item) || key_names_another_container) {
+            log_asset->trace(
+                "scene container record {}: {} '{}' is listed but defined by another container",
+                record->id, c_str(type), item->get_name()
+            );
+        } else {
             entries->items.push_back(item);
             log_asset->trace("scene container record {}: registered {} '{}'", record->id, c_str(type), item->get_name());
         }
     }
-    // Every asset-typed library resource is a declared user (R5.6): an owned
-    // resource pins its own scene's asset; a referenced one pins the listed
-    // asset of its defining container, converting the former undeclared
-    // library pin into a named unload refusal.
-    if (!usership) {
-        usership = std::make_unique<Asset_reference>();
+    // Every asset-typed library resource is a declared user (R5.6), so an
+    // unload refusal names the library that holds it. The usership lives here
+    // rather than beside the resource: a resource is listed by exactly one
+    // library, so one entry per resource, and the weak guard says whether a
+    // pointer key is still that resource's.
+    Library_usership& usership = m_library_userships[item.get()];
+    if (usership.resource.expired() || (usership.resource.lock() != item)) {
+        usership = Library_usership{};
+        usership.resource = item;
     }
-    if (usership->get() != item) {
-        usership->set_user_label(
-            fmt::format(
-                "scene '{}' library {} '{}'{}",
-                record->scene_name, c_str(type), item->get_name(),
-                (listing == Library_listing::referenced) ? " (reference)" : ""
-            )
+    if (!usership.reference) {
+        usership.reference = std::make_unique<Asset_reference>();
+    }
+    if (usership.reference->get() != item) {
+        usership.reference->set_user_label(
+            fmt::format("scene '{}' library {} '{}'", record->scene_name, c_str(type), item->get_name())
         );
-        usership->adopt(*this, item);
+        usership.reference->adopt(*this, item);
     }
 }
 
@@ -1747,12 +1778,7 @@ auto Asset_manager::get_last_announced_uids() const -> const std::vector<std::si
     return m_last_announced_uids;
 }
 
-void Asset_manager::on_library_item_detached(
-    erhe::Item_host* const                  owner,
-    const std::shared_ptr<erhe::Item_base>& item,
-    const Library_listing                   listing,
-    std::unique_ptr<Asset_reference>&       usership
-)
+void Asset_manager::on_library_prim_detached(erhe::Item_host* const owner, const std::shared_ptr<erhe::Item_base>& item)
 {
     verify_main_thread();
     if (!item) {
@@ -1762,19 +1788,16 @@ void Asset_manager::on_library_item_detached(
     if (!is_manager_owned_asset_type(type)) {
         return;
     }
-    usership.reset();
-    if (listing == Library_listing::referenced) {
-        return;
-    }
+    m_library_userships.erase(item.get());
     const std::shared_ptr<Asset_container_record> record = find_record_by_owner(owner);
     if (!record) {
         return;
     }
     Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
     ERHE_VERIFY(entries != nullptr);
-    const auto i = std::remove(entries->items.begin(), entries->items.end(), item);
-    if (i != entries->items.end()) {
-        entries->items.erase(i, entries->items.end());
+    const auto listed = std::remove(entries->items.begin(), entries->items.end(), item);
+    if (listed != entries->items.end()) {
+        entries->items.erase(listed, entries->items.end());
         log_asset->trace("scene container record {}: unregistered {} '{}'", record->id, c_str(type), item->get_name());
     }
 }

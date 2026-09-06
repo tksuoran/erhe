@@ -150,12 +150,11 @@ void Content_library::announce_attached(const std::shared_ptr<erhe::Item_base>& 
     if (m_asset_manager == nullptr) {
         return;
     }
-    erhe::Item_host* const owner    = (m_owner != nullptr) ? m_owner : static_cast<erhe::Item_host*>(this);
-    Resource_metadata&     metadata = metadata_entry(item);
-    m_asset_manager->on_library_item_attached(
+    erhe::Item_host* const         owner    = (m_owner != nullptr) ? m_owner : static_cast<erhe::Item_host*>(this);
+    const Resource_metadata* const metadata = find_metadata(*item);
+    m_asset_manager->on_library_prim_attached(
         owner, item,
-        metadata.is_reference ? Library_listing::referenced : Library_listing::owned,
-        metadata.asset_usership
+        (metadata != nullptr) ? metadata->asset_key : std::optional<Asset_key>{}
     );
     // Cancels a pending removal note: a move between scopes is a detach
     // immediately followed by this attach, and must not be announced as a
@@ -168,13 +167,8 @@ void Content_library::announce_detached(const std::shared_ptr<erhe::Item_base>& 
     if (m_asset_manager == nullptr) {
         return;
     }
-    erhe::Item_host* const owner    = (m_owner != nullptr) ? m_owner : static_cast<erhe::Item_host*>(this);
-    Resource_metadata&     metadata = metadata_entry(item);
-    m_asset_manager->on_library_item_detached(
-        owner, item,
-        metadata.is_reference ? Library_listing::referenced : Library_listing::owned,
-        metadata.asset_usership
-    );
+    erhe::Item_host* const owner = (m_owner != nullptr) ? m_owner : static_cast<erhe::Item_host*>(this);
+    m_asset_manager->on_library_prim_detached(owner, item);
     // EVERY kind, not just the manager-owned ones: the graph editor windows
     // hold Graph_mesh / Graph_texture resources, which the same undo removes
     // (doc/import-undo-reference-clearing.md).
@@ -283,50 +277,6 @@ auto Content_library::find_scope_kind(const erhe::Hierarchy& prim) const -> uint
         }
     }
     return 0;
-}
-
-void Content_library::add_referenced(const std::shared_ptr<erhe::Item_base>& item, const std::optional<Asset_key>& asset_key)
-{
-    ERHE_VERIFY(item);
-    if (get_kind_type_bit(*item) == 0) {
-        return;
-    }
-    Resource_metadata& metadata = metadata_entry(item);
-    if (asset_key.has_value() && !metadata.asset_key.has_value()) {
-        metadata.asset_key = asset_key;
-    }
-    if (has_item(*item)) {
-        return;
-    }
-    metadata.is_reference = true;
-    m_referenced.emplace(item.get(), item);
-    index_insert(item);
-    announce_attached(item);
-}
-
-void Content_library::remove_referenced(const std::shared_ptr<erhe::Item_base>& item)
-{
-    ERHE_VERIFY(item);
-    if (m_referenced.erase(item.get()) == 0) {
-        return;
-    }
-    index_erase(item);
-    announce_detached(item);
-    m_metadata.erase(item.get());
-}
-
-auto Content_library::is_referenced(const erhe::Item_base& item) const -> bool
-{
-    const Resource_metadata* const metadata = find_metadata(item);
-    return (metadata != nullptr) && metadata->is_reference;
-}
-
-void Content_library::set_referenced(const erhe::Item_base& item)
-{
-    const auto i = m_metadata.find(&item);
-    if (i != m_metadata.end()) {
-        i->second.is_reference = true;
-    }
 }
 
 auto Content_library::has_item(const erhe::Item_base& item) const -> bool

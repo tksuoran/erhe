@@ -326,18 +326,17 @@ public:
     // usership ("scene '<name>' library <type> '<item>'") in the library's
     // metadata slot passed here, so unload refusals name library resources.
     // No-ops for owners without a record (preview scenes, the tool scene).
-    void on_library_item_attached(
+    // recorded_key is the library's own record of where the resource is
+    // DEFINED, when it has one (an R6 asset reference carries a file-scope
+    // key naming its container, even while that container is missing and the
+    // resource is a stub). A scene never claims the definition of a resource
+    // whose key names another container.
+    void on_library_prim_attached(
         erhe::Item_host*                        owner,
         const std::shared_ptr<erhe::Item_base>& item,
-        Library_listing                         listing,
-        std::unique_ptr<Asset_reference>&       usership
+        const std::optional<Asset_key>&         recorded_key
     );
-    void on_library_item_detached(
-        erhe::Item_host*                        owner,
-        const std::shared_ptr<erhe::Item_base>& item,
-        Library_listing                         listing,
-        std::unique_ptr<Asset_reference>&       usership
-    );
+    void on_library_prim_detached(erhe::Item_host* owner, const std::shared_ptr<erhe::Item_base>& item);
 
     // Removal announcement (doc/import-undo-reference-clearing.md). The
     // library claim / release walks call these for EVERY entry type, not only
@@ -591,6 +590,17 @@ private:
     // one object). Entries are maintained by Asset_reference's special
     // members through register_user / unregister_user.
     std::unordered_map<const erhe::Item_base*, std::vector<Asset_reference*>>      m_users;
+    // Declared usership of every listed library resource of a manager-owned
+    // asset type (R5.6), keyed by the resource: a resource is listed by
+    // exactly one library, so one entry per resource. The weak guard says
+    // whether a pointer key is still that resource's.
+    class Library_usership
+    {
+    public:
+        std::weak_ptr<erhe::Item_base>   resource;
+        std::unique_ptr<Asset_reference> reference;
+    };
+    std::unordered_map<const erhe::Item_base*, Library_usership>                   m_library_userships;
     // Declared LAST so the holds (which unregister into m_users on
     // destruction) are destroyed while the maps above are still alive; the
     // destructor also clears them explicitly.

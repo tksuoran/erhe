@@ -37,14 +37,6 @@ enum class Asset_type : int {
     node      = 5  // scene_local-only (graph transform-driver references, e.g. Lattice_node)
 };
 
-// Whether a content library lists a resource as a prim of its own scene's
-// tree, or as a reference to one another container owns (2e retires the
-// second form).
-enum class Library_listing : int {
-    owned      = 0,
-    referenced = 1
-};
-
 [[nodiscard]] auto c_str(Asset_scope scope) -> const char*;
 [[nodiscard]] auto c_str(Asset_type type) -> const char*;
 [[nodiscard]] auto parse_asset_scope(std::string_view text) -> Asset_scope;

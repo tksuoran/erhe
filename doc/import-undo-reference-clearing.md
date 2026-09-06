@@ -82,8 +82,8 @@ Single call site, in `Editor::tick`.
 - **Content library entries** — `release_host_for_subtree`
   (`src/editor/content_library/content_library.cpp:96-112`) and its mirror
   `claim_host_for_subtree` (`:71-89`). These are the single choke point for every library
-  removal: `Content_library_node::remove()` (`content_library.hpp:459-480`) and
-  `remove_all_children_recursively` both reach `Content_library_node::handle_remove_child`
+  removal: a resource prim leaving the scene tree reaches
+  `Content_library::unregister_prim` through the item-host hook
   (`content_library.cpp:143-155`) → `release_host_for_subtree`. That is the undo path of
   all ten `Content_library_attach_operation` flavours the import compound builds
   (textures, materials, skins, animations, physics materials, collision filters, physics
@@ -635,13 +635,6 @@ reasoning stays readable.
   content-library item), and `Properties::m_inspected_material`'s dirty-edit
   warning, whose dirty flag is only set from the ImGui render path - both are
   documented above rather than asserted.
-- **Prefab reference entries added by an import are never removed by its undo**,
-  because they are written straight into the content library rather than through
-  an operation. Analysed and left out of scope here; the write-up and the reason
-  the obvious fix is unsafe (shared template objects, so per-import operations
-  would let one undo delete an entry another import still needs) are in
-  doc/gltf-prefabs-plan.md, "Open lead: prefab reference entries are not
-  undoable".
 - The full release criterion ("assets truly unloaded") needs undo **plus**
   Clear History, as the scope limit at the top states. A container unload can
   still be refused afterwards by legitimate declared users - other scenes'

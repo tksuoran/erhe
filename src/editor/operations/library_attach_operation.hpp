@@ -42,15 +42,4 @@ class Operation;
     const std::shared_ptr<erhe::Hierarchy>&               parent       = {}
 ) -> std::shared_ptr<Operation>;
 
-// The undoable listing of a resource ANOTHER container owns (a prefab
-// template's material or texture, a material referenced into a scene): it
-// belongs to the other container's tree, so the operation adds and removes
-// the library's reference listing rather than a prim. 2e retires the concept.
-[[nodiscard]] auto make_library_reference_operation(
-    const std::shared_ptr<Content_library>& content_library,
-    const std::shared_ptr<erhe::Item_base>& item,
-    const Gltf_source_reference&            gltf_source,
-    const std::optional<Asset_key>&         asset_key = {}
-) -> std::shared_ptr<Operation>;
-
 }
