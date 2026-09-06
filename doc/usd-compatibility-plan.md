@@ -291,19 +291,31 @@ the step changes that:
   reference layer. The instance holds no local value of its own for a
   value the template supplies; a template edit reaches every instance
   live, the way a style edit reaches its users (D25).
-- Instance subtrees are unsealed for property edits (the sealed
-  instance editing model of `doc/gltf-prefabs-plan.md` ends here); a
-  local value on an item inside an instance is an override. The
-  `Value_source` shows reference and local apart in the Properties
-  window, and clearing a local exposes the reference value.
+- What a reference protects is structure, not values: no prim is
+  added, removed or reparented under a referencing prim (section 5),
+  while every property of every item inside the instance is editable
+  and a local value there is an override. The `Value_source` shows
+  reference and local apart in the Properties window, and clearing a
+  local exposes the reference value. USD has no sealing of properties,
+  so a USD-backed instance never seals; the sealed instance editing
+  model of `doc/gltf-prefabs-plan.md` (`lock_edit` on the subtree)
+  remains available to glTF prefab instances only.
+- Deactivation is how a prim inside a reference is taken out: an
+  `Item_base::active` property (default true) whose false value
+  removes the item and its whole subtree from rendering, picking,
+  simulation and every consumer that walks content, and shows the
+  subtree dimmed in the hierarchy; it is an ordinary property, so
+  inside an instance it is an override like any other. USD carries it
+  as the prim's `active` metadata (`active = false` on the `over`),
+  glTF as an `ERHE_node` field. It applies to every prim, not only to
+  those inside a reference.
 - Persistence: in a USD-backed scene each item with local values inside
   an instance is an `over` prim under the referencing prim, holding the
-  local values only, the file's native form (C1); reading an `over` puts
-  its opinions in the item's local layer, exactly as authored opinions
-  land elsewhere (M4). In a glTF-backed scene the list rides the carrier
-  node in an `ERHE_*` extension as (path inside the instance, property,
-  value). Structural edits inside an instance (adding, removing or
-  reparenting a prim) are section 5.
+  local values and the `active` metadata only, the file's native form
+  (C1); reading an `over` puts its opinions in the item's local layer,
+  exactly as authored opinions land elsewhere (M4). In a glTF-backed
+  scene the list rides the carrier node in an `ERHE_*` extension as
+  (path inside the instance, property, value).
 
 This step retires the last remaining reason the old `ERHE_overrides`
 design existed: the property system's local layer is the override, and
@@ -311,10 +323,11 @@ M1 paths are the addressing.
 
 Verification: `erhe_property_tests` for the reference layer order and
 live template edits; `erhe_usd_tests` round-trips a reference with an
-`over` on one prim and reads the same local set back; headless: an
-instance property edit shows source local, clear shows source
-reference, a template edit reaches the instance, save and reload keep
-both.
+`over` on one prim (a local value and `active = false` on a child) and
+reads the same local set back; headless: an instance property edit
+shows source local, clear shows source reference, a template edit
+reaches the instance, a deactivated child disappears from the viewport
+and the pick, save and reload keep all of it.
 
 ### X3 Class inheritance (S)
 
@@ -358,9 +371,9 @@ has not landed.
 ## 5. Out of scope
 
 - Structural edits inside a reference (adding, removing or reparenting
-  a prim under a referencing prim): a USD `over` can carry them, erhe's
-  instance model does not; an instance is the template's structure with
-  value overrides (X2).
+  a prim under a referencing prim): an instance is the template's
+  structure with value overrides, and a prim that is not wanted is
+  deactivated (X2).
 - Converting between the formats: a glTF scene saved as USD or a USD
   scene saved as glTF, and prefabs of one format inside a scene of the
   other (G3).
