@@ -65,6 +65,8 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{E4→X2;via-harness;E4-fresh-s
 @session-2026-09-06-tally::hierarchy-Create-merge+rt-mask-fix+M6+M7+M8+X1-landed;user-verified:picking+Create-menu;?user-interactive-tomorrow{USD-file-with-references-in-Hierarchy;drag-USD-imported-prim;Style-item-style-picker;double/mat4/asset/array-rows-unreachable-until-a-shipped-property}
 
 [OPEN]
+!scene_roundtrip_verify.py-RED-on-main{total=56-pass=50-fail=6+editor-segfault-in-prefab/reload-section;pre-M2-baseline-confirmed-by-revert;C1-requires-green;investigating-via-coder}
+?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?user-interactive-check{folders+category-props+texture-slots+styles+node-attachment-values+camera+physics-materials}→expect-fixes;then-migrations{Node_physics-first}
