@@ -964,8 +964,8 @@ auto Scene_builder::add_torus_chain(const Make_mesh_config& config, bool connect
     // Scene content must reference materials from the scene's OWN content
     // library (each scene owns its library items), not from the template
     // library the brushes were built into.
-    auto&       material_library = m_scene_root->get_content_library()->materials;
-    const auto& materials        = material_library->get_all<erhe::primitive::Material>();
+    const Content_library& material_library = *m_scene_root->get_content_library().get();
+    const auto& materials        = material_library.get_all<erhe::primitive::Material>();
     std::size_t material_index   = 0;
 
     float x = 0.0f;
@@ -1106,8 +1106,8 @@ void Scene_builder::make_mesh_nodes(const Make_mesh_config& config, std::vector<
         ERHE_PROFILE_SCOPE("make instances");
 
         // See add_torus_chain: materials come from the scene's own library.
-        auto&       material_library = m_scene_root->get_content_library()->materials;
-        const auto& materials        = material_library->get_all<erhe::primitive::Material>();
+        const Content_library& material_library = *m_scene_root->get_content_library().get();
+        const auto& materials        = material_library.get_all<erhe::primitive::Material>();
         std::size_t material_index   = 0;
 
         std::size_t visible_material_count = 0;
@@ -1633,7 +1633,7 @@ void Scene_builder::register_floor_resources(
         const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-            content_library->materials->add(material);
+            content_library->add(material);
         }
     }
 }
@@ -1665,7 +1665,7 @@ void Scene_builder::unregister_floor_resources(
         const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
         if (content_library && content_library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-            content_library->materials->remove(material);
+            content_library->remove(material);
         }
     }
 }

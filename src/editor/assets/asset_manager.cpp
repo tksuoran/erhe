@@ -680,24 +680,15 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
             continue;
         }
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (!library || (info->library_folder == nullptr)) {
+        const uint64_t kind_type_bit = Content_library::get_kind_type_bit_of_type(info->item_type_bit);
+        if (!library || (kind_type_bit == 0)) {
             continue;
         }
-        const std::shared_ptr<Content_library_node>& folder = (*library).*(info->library_folder);
-        if (!folder) {
-            continue;
-        }
-        folder->for_each<Content_library_node>(
-            [&key, &info, &consider](const Content_library_node& node) -> bool {
-                if (node.item &&
-                    ((node.item->get_type() & info->item_type_bit) == info->item_type_bit) &&
-                    (node.item->get_name() == key.name))
-                {
-                    consider(node.item);
-                }
-                return true;
+        for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
+            if (item && (item->get_name() == key.name)) {
+                consider(item);
             }
-        );
+        }
     }
 
     if (!match) {

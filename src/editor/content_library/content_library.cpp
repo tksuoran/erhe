@@ -16,7 +16,57 @@
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/skin.hpp"
 
+#include <algorithm>
+#include <array>
+
 namespace editor {
+
+namespace {
+
+// The resource kinds the library indexes, one `erhe::Item_type` bit each.
+constexpr std::array<uint64_t, 11> c_kind_type_bits{
+    erhe::Item_type::material,
+    erhe::Item_type::texture,
+    erhe::Item_type::brush,
+    erhe::Item_type::style,
+    erhe::Item_type::physics_material,
+    erhe::Item_type::collision_filter,
+    erhe::Item_type::physics_joint_settings,
+    erhe::Item_type::animation,
+    erhe::Item_type::skin,
+    erhe::Item_type::graph_mesh,
+    erhe::Item_type::graph_texture
+};
+
+constexpr auto make_all_kind_bits() -> uint64_t
+{
+    uint64_t bits = 0;
+    for (const uint64_t type_bit : c_kind_type_bits) {
+        bits |= type_bit;
+    }
+    return bits;
+}
+
+constexpr uint64_t c_all_kind_bits = make_all_kind_bits();
+
+} // anonymous namespace
+
+auto Content_library::get_kind_type_bits() -> std::span<const uint64_t>
+{
+    return std::span<const uint64_t>{c_kind_type_bits};
+}
+
+auto Content_library::get_kind_type_bit_of_type(const uint64_t item_type) -> uint64_t
+{
+    const uint64_t kind = item_type & c_all_kind_bits;
+    // Exactly one kind bit names a kind; a mask carrying several names none.
+    return ((kind != 0) && ((kind & (kind - 1)) == 0)) ? kind : 0;
+}
+
+auto Content_library::get_kind_type_bit(const erhe::Item_base& item) -> uint64_t
+{
+    return get_kind_type_bit_of_type(item.get_type());
+}
 
 Content_library_node::Content_library_node(const Content_library_node& other)
     : Item               {other}
@@ -200,7 +250,6 @@ void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarch
     }
 
     Hierarchy::handle_add_child(child_node, position);
-    invalidate_caches_up_to_root();
 
     // D1: an owning entry's item inherits from the entry node. Set here,
     // between Hierarchy::set_parent's snapshot capture and apply, so the
@@ -212,7 +261,22 @@ void Content_library_node::handle_add_child(const std::shared_ptr<erhe::Hierarch
     }
 
     Content_library* const library = get_library();
-    erhe::Item_host* const owner   = (library != nullptr) ? library->get_owner() : nullptr;
+    if ((library != nullptr) && child) {
+        // The index lists every entry of the attached subtree, whether or not
+        // the library has an owner: a library with no scene (the
+        // Scene_builder template palette) answers the same queries.
+        child->for_each<Content_library_node>(
+            [library](Content_library_node& node) -> bool {
+                if (node.item) {
+                    library->index_insert(
+                        std::static_pointer_cast<Content_library_node>(node.shared_from_this())
+                    );
+                }
+                return true;
+            }
+        );
+    }
+    erhe::Item_host* const owner = (library != nullptr) ? library->get_owner() : nullptr;
     if ((owner != nullptr) && child) {
         claim_host_for_subtree(*child.get(), owner, library->get_asset_manager());
     }
@@ -252,56 +316,29 @@ auto Content_library_node::get_secondary_property_owner_type() const -> std::opt
 void Content_library_node::handle_remove_child(erhe::Hierarchy* child_node)
 {
     Hierarchy::handle_remove_child(child_node);
-    invalidate_caches_up_to_root();
 
+    Content_library* const      library = get_library();
+    Content_library_node* const child   = dynamic_cast<Content_library_node*>(child_node);
+    if ((library != nullptr) && (child != nullptr)) {
+        child->for_each<Content_library_node>(
+            [library](Content_library_node& node) -> bool {
+                if (node.item) {
+                    library->index_erase(node);
+                }
+                return true;
+            }
+        );
+    }
+    erhe::Item_host* const owner = (library != nullptr) ? library->get_owner() : nullptr;
+    if ((owner != nullptr) && (child != nullptr)) {
+        release_host_for_subtree(*child, owner, library->get_asset_manager());
+    }
+}
+
+auto Content_library_node::find_listed_entry(const erhe::Item_base& queried_item) const -> std::shared_ptr<Content_library_node>
+{
     Content_library* const library = get_library();
-    erhe::Item_host* const owner   = (library != nullptr) ? library->get_owner() : nullptr;
-    if (owner != nullptr) {
-        Content_library_node* const child = dynamic_cast<Content_library_node*>(child_node);
-        if (child != nullptr) {
-            release_host_for_subtree(*child, owner, library->get_asset_manager());
-        }
-    }
-}
-
-void Content_library_node::invalidate_caches_up_to_root()
-{
-    Content_library_node* node = this;
-    while (node != nullptr) {
-        node->m_cache.clear();
-        const std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
-        node = dynamic_cast<Content_library_node*>(parent.get());
-    }
-}
-
-auto Content_library_node::find_entry(const erhe::Item_base& queried_item) const -> std::shared_ptr<Content_library_node>
-{
-    std::shared_ptr<Content_library_node> found{};
-    for_each_const<Content_library_node>(
-        [&found, &queried_item](const Content_library_node& node) -> bool {
-            if (node.item.get() == &queried_item) {
-                found = std::dynamic_pointer_cast<Content_library_node>(const_cast<Content_library_node&>(node).shared_from_this());
-                return false; // in for_each() lambda - found, stop
-            }
-            return true; // in for_each() lambda - continue to children
-        }
-    );
-    return found;
-}
-
-auto Content_library_node::has_item(const erhe::Item_base& queried_item) const -> bool
-{
-    bool found = false;
-    for_each_const<Content_library_node>(
-        [&found, &queried_item](const Content_library_node& node) -> bool {
-            if (node.item.get() == &queried_item) {
-                found = true;
-                return false; // in for_each() lambda - found, stop
-            }
-            return true; // in for_each() lambda - continue to children
-        }
-    );
-    return found;
+    return (library != nullptr) ? library->find_entry(queried_item) : std::shared_ptr<Content_library_node>{};
 }
 
 auto Content_library_node::make_folder(const std::string_view folder_name) -> std::shared_ptr<Content_library_node>
@@ -378,6 +415,88 @@ void Content_library::set_owner(erhe::Item_host* const owner)
 auto Content_library::get_owner() const -> erhe::Item_host*
 {
     return m_owner;
+}
+
+auto Content_library::get_category_root(const uint64_t kind_type_bit) const -> std::shared_ptr<Content_library_node>
+{
+    switch (kind_type_bit) {
+        case erhe::Item_type::material:               return materials;
+        case erhe::Item_type::texture:                return textures;
+        case erhe::Item_type::brush:                  return brushes;
+        case erhe::Item_type::style:                  return styles;
+        case erhe::Item_type::physics_material:       return physics_materials;
+        case erhe::Item_type::collision_filter:       return collision_filters;
+        case erhe::Item_type::physics_joint_settings: return physics_joints;
+        case erhe::Item_type::animation:              return animations;
+        case erhe::Item_type::skin:                   return skins;
+        case erhe::Item_type::graph_mesh:             return graph_meshes;
+        case erhe::Item_type::graph_texture:          return graph_textures;
+        default:                                      return {};
+    }
+}
+
+void Content_library::index_insert(const std::shared_ptr<Content_library_node>& entry)
+{
+    if (!entry || !entry->item) {
+        return;
+    }
+    const auto [it, inserted] = m_entry_by_item.emplace(entry->item.get(), entry);
+    if (!inserted) {
+        // Already listed: the attach walk re-visited it, or the same item is
+        // wrapped by an entry that is still in the tree.
+        it->second = entry;
+        return;
+    }
+    const uint64_t kind_type_bit = get_kind_type_bit(*entry->item);
+    if (kind_type_bit == 0) {
+        return; // listed for find_entry(), but of no indexed kind
+    }
+    Kind_index& kind = m_by_kind[kind_type_bit];
+    kind.items.push_back(entry->item);
+    ++kind.serial;
+}
+
+void Content_library::index_erase(const Content_library_node& entry)
+{
+    if (!entry.item) {
+        return;
+    }
+    const auto i = m_entry_by_item.find(entry.item.get());
+    if (i == m_entry_by_item.end()) {
+        return;
+    }
+    const std::shared_ptr<Content_library_node> listed = i->second.lock();
+    if (listed && (listed.get() != &entry)) {
+        return; // another entry wraps the item now; that listing stands
+    }
+    m_entry_by_item.erase(i);
+    const uint64_t kind_type_bit = get_kind_type_bit(*entry.item);
+    if (kind_type_bit == 0) {
+        return;
+    }
+    Kind_index& kind = m_by_kind[kind_type_bit];
+    const auto j = std::find(kind.items.begin(), kind.items.end(), entry.item);
+    if (j != kind.items.end()) {
+        kind.items.erase(j);
+        ++kind.serial;
+    }
+}
+
+auto Content_library::get_all_of_kind(const uint64_t kind_type_bit) const -> const std::vector<std::shared_ptr<erhe::Item_base>>&
+{
+    return m_by_kind[kind_type_bit].items;
+}
+
+auto Content_library::has_item(const erhe::Item_base& item) const -> bool
+{
+    const auto i = m_entry_by_item.find(&item);
+    return (i != m_entry_by_item.end()) && !i->second.expired();
+}
+
+auto Content_library::find_entry(const erhe::Item_base& item) const -> std::shared_ptr<Content_library_node>
+{
+    const auto i = m_entry_by_item.find(&item);
+    return (i != m_entry_by_item.end()) ? i->second.lock() : std::shared_ptr<Content_library_node>{};
 }
 
 void Content_library::set_asset_manager(Asset_manager* const asset_manager)
@@ -475,7 +594,7 @@ auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, 
         const std::shared_ptr<const erhe::Item_base> source_style = std::dynamic_pointer_cast<const erhe::Item_base>(copy->get_style());
         std::shared_ptr<erhe::Item_base> target_style{};
         if (source_style) {
-            for (const std::shared_ptr<Style>& candidate : target_library.styles->get_all<Style>()) {
+            for (const std::shared_ptr<Style>& candidate : target_library.get_all<Style>()) {
                 if (candidate && (candidate->get_name() == source_style->get_name())) {
                     target_style = candidate;
                     break;

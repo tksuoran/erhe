@@ -78,7 +78,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
 
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
     if (library && library->materials) {
-        for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
             if (material && matches(*material)) {
                 return material;
             }
@@ -86,7 +86,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Styles: the targets of every item's style property (doc/style-library.md D3).
     if (library && library->styles) {
-        for (const std::shared_ptr<Style>& style : library->styles->get_all<Style>()) {
+        for (const std::shared_ptr<Style>& style : library->get_all<Style>()) {
             if (style && matches(*style)) {
                 return style;
             }
@@ -94,7 +94,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Textures: the targets of a material's texture slot properties (D28).
     if (library && library->textures) {
-        for (const std::shared_ptr<erhe::graphics::Texture>& texture : library->textures->get_all<erhe::graphics::Texture>()) {
+        for (const std::shared_ptr<erhe::graphics::Texture>& texture : library->get_all<erhe::graphics::Texture>()) {
             if (texture && matches(*texture)) {
                 return texture;
             }
@@ -103,7 +103,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // Physics joint settings: the targets of a Node_joint's joint_settings
     // property (section 4.17).
     if (library && library->physics_joints) {
-        for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+        for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->get_all<erhe::physics::Physics_joint_settings>()) {
             if (settings && matches(*settings)) {
                 return settings;
             }
@@ -112,7 +112,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // Animations: content-library items with computed properties
     // (section 4.16) the property tools address by id or name.
     if (library && library->animations) {
-        for (const std::shared_ptr<erhe::scene::Animation>& animation : library->animations->get_all<erhe::scene::Animation>()) {
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : library->get_all<erhe::scene::Animation>()) {
             if (animation && matches(*animation)) {
                 return animation;
             }
@@ -121,7 +121,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // Brushes: the targets of a Brush_placement's brush property
     // (section 4.11).
     if (library && library->brushes) {
-        for (const std::shared_ptr<Brush>& brush : library->brushes->get_all<Brush>()) {
+        for (const std::shared_ptr<Brush>& brush : library->get_all<Brush>()) {
             if (brush && matches(*brush)) {
                 return brush;
             }
@@ -130,14 +130,14 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // Physics materials and collision filters: the targets of a
     // Node_physics' reference properties (section 4.10).
     if (library && library->physics_materials) {
-        for (const std::shared_ptr<erhe::physics::Physics_material>& physics_material : library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+        for (const std::shared_ptr<erhe::physics::Physics_material>& physics_material : library->get_all<erhe::physics::Physics_material>()) {
             if (physics_material && matches(*physics_material)) {
                 return physics_material;
             }
         }
     }
     if (library && library->collision_filters) {
-        for (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter : library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+        for (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter : library->get_all<erhe::physics::Collision_filter>()) {
             if (collision_filter && matches(*collision_filter)) {
                 return collision_filter;
             }
@@ -147,7 +147,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // (Graph_asset::set_item_host), so a D22 expression or an MCP property
     // call reaches a graph node the way it reaches a scene item.
     if (library && library->graph_meshes) {
-        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->graph_meshes->get_all<Graph_mesh>()) {
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {
             if (!graph_mesh) {
                 continue;
             }
@@ -162,7 +162,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
         }
     }
     if (library && library->graph_textures) {
-        for (const std::shared_ptr<Graph_texture>& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
+        for (const std::shared_ptr<Graph_texture>& graph_texture : library->get_all<Graph_texture>()) {
             if (!graph_texture) {
                 continue;
             }
@@ -269,7 +269,7 @@ auto find_scene_root_for_item(App_context& context, const erhe::Item_base& item)
         if ((library_node != nullptr) && library && (library_node->get_library() == library.get())) {
             return scene_root.get();
         }
-        if (library && library->root && library->root->has_item(item)) {
+        if (library && library->has_item(item)) {
             return scene_root.get();
         }
         if ((context.asset_manager != nullptr) && context.asset_manager->is_defined_by(item, candidate)) {

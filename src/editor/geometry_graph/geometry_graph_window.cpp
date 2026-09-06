@@ -617,7 +617,7 @@ auto Geometry_graph_window::next_graph_needing_evaluation() -> std::shared_ptr<G
             if (!content_library || !content_library->graph_meshes) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                 if (graph_mesh->graph().is_evaluation_needed()) {
                     return graph_mesh;
                 }
@@ -843,7 +843,7 @@ void Geometry_graph_window::update_live_nodes()
         if (!content_library || !content_library->graph_meshes) {
             continue;
         }
-        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
             if (graph_mesh != m_graph_mesh) {
                 update_graph(graph_mesh);
             }
@@ -977,7 +977,7 @@ void Geometry_graph_window::set_node_previews_enabled(const bool enabled)
             if (!content_library || !content_library->graph_meshes) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                 if (graph_mesh != m_graph_mesh) {
                     mark_graph(graph_mesh);
                 }
@@ -1027,7 +1027,7 @@ void Geometry_graph_window::update_node_previews()
                         if (!content_library || !content_library->graph_meshes) {
                             continue;
                         }
-                        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+                        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                             if (graph_mesh != m_graph_mesh) {
                                 arm_graph(graph_mesh);
                             }
@@ -1100,7 +1100,7 @@ void Geometry_graph_window::update_node_previews()
             if (!content_library || !content_library->graph_meshes) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                 if (graph_mesh != m_graph_mesh) {
                     render_graph_previews(graph_mesh);
                 }
@@ -1125,7 +1125,7 @@ void Geometry_graph_window::process_attachment_push_requests()
             if (!content_library || !content_library->graph_meshes) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                 if (graph_mesh->consume_attachment_push_request()) {
                     apply_baked_products_to_attachments(graph_mesh);
                 }
@@ -1166,7 +1166,7 @@ void Geometry_graph_window::target_selector_imgui()
             if (!content_library || !content_library->graph_meshes) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
                 m_target_candidates.push_back(graph_mesh);
             }
         }

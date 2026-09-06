@@ -82,7 +82,7 @@ Rendertarget_mesh::~Rendertarget_mesh() noexcept
     const std::shared_ptr<Content_library> material_home = m_material_home.lock();
     if (material_home && m_material) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{material_home->mutex};
-        material_home->materials->remove(m_material);
+        material_home->remove(m_material);
     }
 }
 
@@ -175,7 +175,7 @@ void Rendertarget_mesh::resize_rendertarget(
         const std::shared_ptr<Content_library> material_home = m_material_home.lock();
         ERHE_VERIFY(material_home);
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{material_home->mutex};
-        material_home->materials->add(m_material);
+        material_home->add(m_material);
     }
     // Resize recreates the texture; the material identity is stable across
     // resizes, only its texture binding follows.

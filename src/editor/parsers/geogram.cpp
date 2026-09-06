@@ -36,16 +36,11 @@ void import_geogram(
 
     // Just pick one/any material for now
     std::shared_ptr<erhe::primitive::Material> material{};
-    content_library->materials->for_each<Content_library_node>(
-        [&material](const Content_library_node& node) {
-            auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
-            if (entry) {
-                material = entry;
-                return false;
-            }
-            return true;
-        }
-    );
+    const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
+        content_library->get_all<erhe::primitive::Material>();
+    if (!materials.empty()) {
+        material = materials.front();
+    }
 
     GEO::MeshIOFlags ioFlags{};
     ioFlags.set_dimension(3);

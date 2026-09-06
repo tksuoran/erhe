@@ -561,11 +561,9 @@ auto Inventory_window::find_or_create_brush_with_material(
         if (!content_library || !content_library->brushes) {
             continue;
         }
-        Content_library_node& brushes_node = *content_library->brushes;
-
         bool contains_original = false;
         std::shared_ptr<Brush> existing_fork;
-        const std::vector<std::shared_ptr<Brush>>& all_brushes = brushes_node.get_all<Brush>();
+        const std::vector<std::shared_ptr<Brush>>& all_brushes = content_library->get_all<Brush>();
         for (const std::shared_ptr<Brush>& b : all_brushes) {
             if (b.get() == original_brush.get()) {
                 contains_original = true;
@@ -582,7 +580,7 @@ auto Inventory_window::find_or_create_brush_with_material(
 
         if (contains_original) {
             std::shared_ptr<Brush> forked = original_brush->make_with_material(material);
-            brushes_node.add(forked);
+            content_library->add(forked);
             return forked;
         }
     }

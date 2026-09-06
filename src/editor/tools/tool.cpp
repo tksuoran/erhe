@@ -175,16 +175,11 @@ auto get_default_material(App_context& context, Scene_root& scene_root) -> std::
         }
     }
     if (!material) {
-        content_library->materials->for_each<Content_library_node>(
-            [&material](const Content_library_node& node) {
-                auto entry = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
-                if (entry) {
-                    material = entry;
-                    return false;
-                }
-                return true;
-            }
-        );
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
+            content_library->get_all<erhe::primitive::Material>();
+        if (!materials.empty()) {
+            material = materials.front();
+        }
     }
     return material;
 }

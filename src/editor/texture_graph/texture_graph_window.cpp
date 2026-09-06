@@ -165,7 +165,7 @@ void Texture_graph_window::update()
             if (!content_library) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->get_all<Graph_texture>()) {
                 evaluate_and_render(*graph_texture);
             }
         }
@@ -628,7 +628,7 @@ void Texture_graph_window::target_selector_imgui()
             if (!content_library || !content_library->graph_textures) {
                 continue;
             }
-            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+            for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->get_all<Graph_texture>()) {
                 m_target_candidates.push_back(graph_texture);
             }
         }

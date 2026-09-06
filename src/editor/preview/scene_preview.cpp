@@ -276,7 +276,7 @@ void Scene_preview::update_material_set(erhe::graphics::Command_buffer& command_
 {
     erhe::scene_renderer::Material_set& material_set = m_scene_root_shared->get_material_set();
     const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
-        m_content_library->materials->get_all<erhe::primitive::Material>();
+        m_content_library->get_all<erhe::primitive::Material>();
     material_set.sync_library(std::span<const std::shared_ptr<erhe::primitive::Material>>{materials});
     material_set.flush_pending();
     if (material_set.has_gpu()) {
@@ -316,7 +316,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
     // on the first preview frame.
     std::vector<std::shared_ptr<erhe::primitive::Material>> all_materials;
     if (m_content_library && m_content_library->materials) {
-        const std::vector<std::shared_ptr<erhe::primitive::Material>>& own = m_content_library->materials->get_all<erhe::primitive::Material>();
+        const std::vector<std::shared_ptr<erhe::primitive::Material>>& own = m_content_library->get_all<erhe::primitive::Material>();
         all_materials.insert(all_materials.end(), own.begin(), own.end());
     }
     if (m_context.app_scenes != nullptr) {
@@ -328,7 +328,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
             if (!main_library || !main_library->materials) {
                 continue;
             }
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& mats = main_library->materials->get_all<erhe::primitive::Material>();
+            const std::vector<std::shared_ptr<erhe::primitive::Material>>& mats = main_library->get_all<erhe::primitive::Material>();
             all_materials.insert(all_materials.end(), mats.begin(), mats.end());
         }
     }

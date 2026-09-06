@@ -579,15 +579,12 @@ constexpr Usd_save_slot c_usd_save_slots[] = {
 // file leaves behind (src/erhe/usd/notes.md future work).
 template <typename T>
 void log_uncarried_editor_state_kind(
-    const std::shared_ptr<Content_library_node>& node,
-    const char*                                  kind,
-    const std::filesystem::path&                 path
+    const Content_library&       content_library,
+    const char*                  kind,
+    const std::filesystem::path& path
 )
 {
-    if (!node) {
-        return;
-    }
-    const std::size_t count = node->get_all<T>().size();
+    const std::size_t count = content_library.get_all<T>().size();
     if (count > 0) {
         log_parsers->info(
             "save_scene_usd '{}': {} {}(s) are not carried by a USD file yet",
@@ -598,10 +595,10 @@ void log_uncarried_editor_state_kind(
 
 void log_uncarried_editor_state(const Content_library& content_library, const std::filesystem::path& path)
 {
-    log_uncarried_editor_state_kind<Brush>        (content_library.brushes,        "brush",              path);
-    log_uncarried_editor_state_kind<Graph_mesh>   (content_library.graph_meshes,   "node graph mesh",    path);
-    log_uncarried_editor_state_kind<Graph_texture>(content_library.graph_textures, "node graph texture", path);
-    log_uncarried_editor_state_kind<Style>        (content_library.styles,         "style",              path);
+    log_uncarried_editor_state_kind<Brush>        (content_library, "brush",              path);
+    log_uncarried_editor_state_kind<Graph_mesh>   (content_library, "node graph mesh",    path);
+    log_uncarried_editor_state_kind<Graph_texture>(content_library, "node graph texture", path);
+    log_uncarried_editor_state_kind<Style>        (content_library, "style",              path);
     // Library folders have no USD form yet either; they are part of the
     // content library's node tree rather than a category of their own.
     log_parsers->info(
@@ -630,7 +627,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
 
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library && content_library->materials) {
-        save_arguments.materials = content_library->materials->get_all<erhe::primitive::Material>();
+        save_arguments.materials = content_library->get_all<erhe::primitive::Material>();
     }
     for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {
         const std::shared_ptr<erhe::primitive::Material>& material = save_arguments.materials[material_index];

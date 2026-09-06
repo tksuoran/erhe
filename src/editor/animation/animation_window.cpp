@@ -326,7 +326,7 @@ void Animation_window::animation_combo()
             if (!content_library || !content_library->animations) {
                 continue;
             }
-            for (const std::shared_ptr<erhe::scene::Animation>& animation : content_library->animations->get_all<erhe::scene::Animation>()) {
+            for (const std::shared_ptr<erhe::scene::Animation>& animation : content_library->get_all<erhe::scene::Animation>()) {
                 ImGui::PushID(static_cast<int>(animation->get_id()));
                 const bool is_selected = animation == m_animation;
                 if (ImGui::Selectable(animation->get_name().c_str(), is_selected)) {

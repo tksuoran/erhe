@@ -700,9 +700,9 @@ void Bone_visualization::register_materials(Scene_root& scene_root)
     }
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        content_library->materials->add(m_material);
-        content_library->materials->add(m_selected_material);
-        content_library->materials->add(m_hover_material);
+        content_library->add(m_material);
+        content_library->add(m_selected_material);
+        content_library->add(m_hover_material);
     }
     m_material_scene_roots.insert(&scene_root);
 }

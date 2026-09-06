@@ -523,7 +523,7 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
         // shown in list it as a reference entry via register_mesh.
         const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        content_library->materials->add(disc_material);
+        content_library->add(disc_material);
     }
 
     GEO::Mesh disc_geo_mesh_shared;

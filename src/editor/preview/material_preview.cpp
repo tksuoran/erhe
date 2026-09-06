@@ -231,7 +231,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     // Reference entry: the inspected material is owned by its own scene's
     // content library; the preview library only lists it for rendering and
     // must not claim the item's host.
-    m_content_library->materials->add_reference(material);
+    m_content_library->add_reference(material);
     m_last_material = material;
 
     m_mesh->set_primitive_material(0, material);

@@ -330,7 +330,7 @@ auto Mcp_server::action_set_geometry_graph_target(const json& args) -> std::stri
         }
         const std::shared_ptr<Content_library> library = scene_root.get_content_library();
         if (library) {
-            found = find_library_item<Graph_mesh>(library->graph_meshes, name);
+            found = find_library_item<Graph_mesh>(library, name);
         }
     };
     if (!scene_name.empty()) {
@@ -915,14 +915,13 @@ namespace {
 }
 
 // Find a content-library asset by name across scenes (or one scene when
-// scene_name is non-empty). folder_member selects the folder (graph_meshes,
-// graph_textures, materials). Returns null when name is empty or no match.
+// scene_name is non-empty). The asset class names its kind. Returns null when
+// name is empty or no match.
 template <typename T>
 [[nodiscard]] auto find_content_library_asset(
-    App_context&                                        context,
-    const std::string&                                  scene_name,
-    std::shared_ptr<Content_library_node> Content_library::* folder_member,
-    const std::string&                                  name
+    App_context&       context,
+    const std::string& scene_name,
+    const std::string& name
 ) -> std::shared_ptr<T>
 {
     if ((context.app_scenes == nullptr) || name.empty()) {
@@ -934,7 +933,7 @@ template <typename T>
         }
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library) {
-            std::shared_ptr<T> found = find_library_item<T>(library.get()->*folder_member, name);
+            std::shared_ptr<T> found = find_library_item<T>(library, name);
             if (found) {
                 return found;
             }
@@ -960,7 +959,7 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
     if (name.empty()) {
         return make_error_content("name is required");
     }
-    if (find_library_item<Graph_texture>(library->graph_textures, name)) {
+    if (find_library_item<Graph_texture>(library, name)) {
         return make_error_content("Graph texture already exists: " + name);
     }
 
@@ -1004,7 +1003,7 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
         return make_error_content("Scene has no content library: " + scene_name);
     }
     const std::shared_ptr<erhe::primitive::Material> material =
-        find_library_item<erhe::primitive::Material>(library->materials, material_name);
+        find_library_item<erhe::primitive::Material>(library, material_name);
     if (!material) {
         return make_error_content("Material not found: " + material_name);
     }
@@ -1030,7 +1029,7 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
     }
 
     const std::shared_ptr<Graph_texture> graph_texture =
-        find_library_item<Graph_texture>(library->graph_textures, graph_texture_name);
+        find_library_item<Graph_texture>(library, graph_texture_name);
     if (!graph_texture) {
         return make_error_content("Graph texture not found: " + graph_texture_name);
     }
@@ -1055,7 +1054,7 @@ auto Mcp_server::query_graph_textures(const json& args) -> std::string
         if (!library || !library->graph_textures) {
             return;
         }
-        for (const std::shared_ptr<Graph_texture>& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
+        for (const std::shared_ptr<Graph_texture>& graph_texture : library->get_all<Graph_texture>()) {
             graph_textures.push_back({
                 {"name",       graph_texture->get_name()},
                 {"id",         graph_texture->get_id()},
@@ -1096,7 +1095,7 @@ auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
     if (name.empty()) {
         return make_error_content("name is required");
     }
-    if (find_library_item<Graph_mesh>(library->graph_meshes, name)) {
+    if (find_library_item<Graph_mesh>(library, name)) {
         return make_error_content("Graph mesh already exists: " + name);
     }
 
@@ -1165,7 +1164,7 @@ auto Mcp_server::action_set_node_graph_mesh(const json& args) -> std::string
     if (!library) {
         return make_error_content("Scene has no content library: " + scene_name);
     }
-    const std::shared_ptr<Graph_mesh> graph_mesh = find_library_item<Graph_mesh>(library->graph_meshes, graph_mesh_name);
+    const std::shared_ptr<Graph_mesh> graph_mesh = find_library_item<Graph_mesh>(library, graph_mesh_name);
     if (!graph_mesh) {
         return make_error_content("Graph mesh not found: " + graph_mesh_name);
     }
@@ -1197,7 +1196,7 @@ auto Mcp_server::query_graph_meshes(const json& args) -> std::string
         if (!library || !library->graph_meshes) {
             return;
         }
-        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->graph_meshes->get_all<Graph_mesh>()) {
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {
             graph_meshes.push_back({
                 {"name",           graph_mesh->get_name()},
                 {"id",             graph_mesh->get_id()},
@@ -1288,7 +1287,7 @@ auto Mcp_server::action_set_texture_graph_target(const json& args) -> std::strin
         }
         const std::shared_ptr<Content_library> library = scene_root.get_content_library();
         if (library) {
-            found = find_library_item<Graph_texture>(library->graph_textures, name);
+            found = find_library_item<Graph_texture>(library, name);
         }
     };
     if (!scene_name.empty()) {
@@ -1320,7 +1319,7 @@ auto Mcp_server::action_open_geometry_graph_window(const json& args) -> std::str
     const std::string name       = args.value("graph_mesh", "");
     const std::string scene_name = args.value("scene_name", "");
     std::shared_ptr<Graph_mesh> target = find_content_library_asset<Graph_mesh>(
-        m_context, scene_name, &Content_library::graph_meshes, name
+        m_context, scene_name, name
     );
     if (!name.empty() && !target) {
         return make_error_content("Graph mesh not found: " + name);
@@ -1339,7 +1338,7 @@ auto Mcp_server::action_open_texture_graph_window(const json& args) -> std::stri
     const std::string name       = args.value("graph_texture", "");
     const std::string scene_name = args.value("scene_name", "");
     std::shared_ptr<Graph_texture> target = find_content_library_asset<Graph_texture>(
-        m_context, scene_name, &Content_library::graph_textures, name
+        m_context, scene_name, name
     );
     if (!name.empty() && !target) {
         return make_error_content("Graph texture not found: " + name);
@@ -1358,7 +1357,7 @@ auto Mcp_server::action_open_properties_window(const json& args) -> std::string
     const std::string name       = args.value("material", "");
     const std::string scene_name = args.value("scene_name", "");
     std::shared_ptr<erhe::primitive::Material> target = find_content_library_asset<erhe::primitive::Material>(
-        m_context, scene_name, &Content_library::materials, name
+        m_context, scene_name, name
     );
     if (!name.empty() && !target) {
         return make_error_content("Material not found: " + name);

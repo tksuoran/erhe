@@ -729,10 +729,11 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                             std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
                             std::shared_ptr<erhe::Hierarchy> parent = target_cl_node->get_parent().lock();
                             Content_library_node* brushes_folder = dynamic_cast<Content_library_node*>(parent.get());
-                            if (brushes_folder != nullptr) {
+                            Content_library* const library = (brushes_folder != nullptr) ? brushes_folder->get_library() : nullptr;
+                            if (library != nullptr) {
                                 // Check for existing fork with same geometry and material
                                 bool found = false;
-                                const std::vector<std::shared_ptr<Brush>>& all_brushes = brushes_folder->get_all<Brush>();
+                                const std::vector<std::shared_ptr<Brush>>& all_brushes = library->get_all<Brush>();
                                 for (const std::shared_ptr<Brush>& b : all_brushes) {
                                     if ((b->get_geometry() == original_geometry) && (b->get_material() == dropped_material)) {
                                         found = true;
@@ -840,7 +841,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
         bool asset_in_library = false;
         if (library && library->graph_meshes) {
-            const std::vector<std::shared_ptr<Graph_mesh>>& library_graph_meshes = library->graph_meshes->get_all<Graph_mesh>();
+            const std::vector<std::shared_ptr<Graph_mesh>>& library_graph_meshes = library->get_all<Graph_mesh>();
             asset_in_library = std::find(library_graph_meshes.begin(), library_graph_meshes.end(), graph_mesh) != library_graph_meshes.end();
         }
         if (!asset_in_library) {
@@ -1966,7 +1967,7 @@ void Item_tree::imgui_tree(float ui_scale)
 #if 0 //// TODO
     if (ImGui::Button("Create Scene")) {
         auto content_library = std::make_shared<Content_library>();
-        content_library->materials.make("Default");
+        content_library->make<erhe::primitive::Material>("Default");
         const bool enable_physics = m_context.editor_settings->physics.static_enable;
         auto scene_root = std::make_shared<Scene_root>(
             nullptr,

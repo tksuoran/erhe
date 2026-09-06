@@ -139,7 +139,7 @@ void Brush_geometry_node::imgui()
     if (scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->brushes) {
-            const std::vector<std::shared_ptr<Brush>>& brushes = library->brushes->get_all<Brush>();
+            const std::vector<std::shared_ptr<Brush>>& brushes = library->get_all<Brush>();
             if (!brushes.empty()) {
                 int brush_index = 0;
                 for (std::size_t i = 0, end = brushes.size(); i < end; ++i) {

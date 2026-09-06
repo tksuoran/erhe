@@ -762,7 +762,7 @@ void add_prefab_reference_entries(Content_library& content_library, const Prefab
     for (std::size_t i = 0; i < prefab.gltf_data.images.size(); ++i) {
         const std::shared_ptr<erhe::graphics::Texture>& image = prefab.gltf_data.images[i];
         if (image) {
-            content_library.textures->add(
+            content_library.add(
                 image,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,
@@ -778,7 +778,7 @@ void add_prefab_reference_entries(Content_library& content_library, const Prefab
     for (std::size_t i = 0; i < prefab.gltf_data.materials.size(); ++i) {
         const std::shared_ptr<erhe::primitive::Material>& material = prefab.gltf_data.materials[i];
         if (material) {
-            content_library.materials->add(
+            content_library.add(
                 material,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,

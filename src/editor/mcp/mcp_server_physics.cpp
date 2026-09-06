@@ -190,7 +190,7 @@ auto Mcp_server::query_physics_items(const json& args) -> std::string
     }
 
     json materials = json::array();
-    for (const std::shared_ptr<erhe::physics::Physics_material>& material : library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+    for (const std::shared_ptr<erhe::physics::Physics_material>& material : library->get_all<erhe::physics::Physics_material>()) {
         materials.push_back({
             {"name",                material->get_name()},
             {"id",                  material->get_id()},
@@ -206,7 +206,7 @@ auto Mcp_server::query_physics_items(const json& args) -> std::string
         });
     }
     json filters = json::array();
-    for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+    for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : library->get_all<erhe::physics::Collision_filter>()) {
         filters.push_back({
             {"name",                      filter->get_name()},
             {"id",                        filter->get_id()},
@@ -216,7 +216,7 @@ auto Mcp_server::query_physics_items(const json& args) -> std::string
         });
     }
     json joint_settings = json::array();
-    for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+    for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->get_all<erhe::physics::Physics_joint_settings>()) {
         joint_settings.push_back(joint_settings_to_json(*settings));
     }
     return make_json_content({
@@ -270,14 +270,14 @@ auto Mcp_server::action_create_physics_body(const json& args) -> std::string
 
     const std::string material_name = args.value("material_name", "");
     if (!material_name.empty()) {
-        create_info.physics_material = find_library_item<erhe::physics::Physics_material>(library->physics_materials, material_name);
+        create_info.physics_material = find_library_item<erhe::physics::Physics_material>(library, material_name);
         if (!create_info.physics_material) {
             return make_error_content("Physics material not found: " + material_name);
         }
     }
     const std::string filter_name = args.value("filter_name", "");
     if (!filter_name.empty()) {
-        create_info.collision_filter = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, filter_name);
+        create_info.collision_filter = find_library_item<erhe::physics::Collision_filter>(library, filter_name);
         if (!create_info.collision_filter) {
             return make_error_content("Collision filter not found: " + filter_name);
         }
@@ -346,7 +346,7 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     if (args.contains("material_name")) {
         const std::string material_name = args["material_name"].get<std::string>();
         if (!material_name.empty()) {
-            material = find_library_item<erhe::physics::Physics_material>(library->physics_materials, material_name);
+            material = find_library_item<erhe::physics::Physics_material>(library, material_name);
             if (!material) {
                 return make_error_content("Physics material not found: " + material_name);
             }
@@ -356,7 +356,7 @@ auto Mcp_server::action_edit_physics_body(const json& args) -> std::string
     if (args.contains("filter_name")) {
         const std::string filter_name = args["filter_name"].get<std::string>();
         if (!filter_name.empty()) {
-            filter = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, filter_name);
+            filter = find_library_item<erhe::physics::Collision_filter>(library, filter_name);
             if (!filter) {
                 return make_error_content("Collision filter not found: " + filter_name);
             }
@@ -449,7 +449,7 @@ auto Mcp_server::action_create_physics_joint(const json& args) -> std::string
     const std::string settings_name = args.value("settings_name", "");
     if (!settings_name.empty()) {
         const std::shared_ptr<Content_library> library = sr->get_content_library();
-        settings = find_library_item<erhe::physics::Physics_joint_settings>(library ? library->physics_joints : std::shared_ptr<Content_library_node>{}, settings_name);
+        settings = find_library_item<erhe::physics::Physics_joint_settings>(library, settings_name);
         if (!settings) {
             return make_error_content("Joint settings not found: " + settings_name);
         }
@@ -520,7 +520,7 @@ auto Mcp_server::action_edit_physics_joint(const json& args) -> std::string
         } else {
             const std::shared_ptr<Content_library> library = sr->get_content_library();
             const std::shared_ptr<erhe::physics::Physics_joint_settings> settings =
-                find_library_item<erhe::physics::Physics_joint_settings>(library ? library->physics_joints : std::shared_ptr<Content_library_node>{}, settings_name);
+                find_library_item<erhe::physics::Physics_joint_settings>(library, settings_name);
             if (!settings) {
                 return make_error_content("Joint settings not found: " + settings_name);
             }
@@ -564,7 +564,7 @@ auto Mcp_server::action_create_physics_material(const json& args) -> std::string
     if (name.empty()) {
         return make_error_content("name is required");
     }
-    if (find_library_item<erhe::physics::Physics_material>(library->physics_materials, name)) {
+    if (find_library_item<erhe::physics::Physics_material>(library, name)) {
         return make_error_content("Physics material already exists: " + name);
     }
 
@@ -609,7 +609,7 @@ auto Mcp_server::action_edit_physics_material(const json& args) -> std::string
         return make_error_content("Scene has no content library: " + scene_name);
     }
     const std::string name = args.value("name", "");
-    const std::shared_ptr<erhe::physics::Physics_material> item = find_library_item<erhe::physics::Physics_material>(library->physics_materials, name);
+    const std::shared_ptr<erhe::physics::Physics_material> item = find_library_item<erhe::physics::Physics_material>(library, name);
     if (!item) {
         return make_error_content("Physics material not found: " + name);
     }
@@ -671,7 +671,7 @@ auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
     if (name.empty()) {
         return make_error_content("name is required");
     }
-    if (find_library_item<erhe::physics::Collision_filter>(library->collision_filters, name)) {
+    if (find_library_item<erhe::physics::Collision_filter>(library, name)) {
         return make_error_content("Collision filter already exists: " + name);
     }
 
@@ -710,7 +710,7 @@ auto Mcp_server::action_edit_collision_filter(const json& args) -> std::string
         return make_error_content("Scene has no content library: " + scene_name);
     }
     const std::string name = args.value("name", "");
-    const std::shared_ptr<erhe::physics::Collision_filter> item = find_library_item<erhe::physics::Collision_filter>(library->collision_filters, name);
+    const std::shared_ptr<erhe::physics::Collision_filter> item = find_library_item<erhe::physics::Collision_filter>(library, name);
     if (!item) {
         return make_error_content("Collision filter not found: " + name);
     }
@@ -764,7 +764,7 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
     if (name.empty()) {
         return make_error_content("name is required");
     }
-    if (find_library_item<erhe::physics::Physics_joint_settings>(library->physics_joints, name)) {
+    if (find_library_item<erhe::physics::Physics_joint_settings>(library, name)) {
         return make_error_content("Joint settings already exist: " + name);
     }
 
@@ -804,7 +804,7 @@ auto Mcp_server::action_edit_physics_joint_settings(const json& args) -> std::st
         return make_error_content("Scene has no content library: " + scene_name);
     }
     const std::string name = args.value("name", "");
-    const std::shared_ptr<erhe::physics::Physics_joint_settings> item = find_library_item<erhe::physics::Physics_joint_settings>(library->physics_joints, name);
+    const std::shared_ptr<erhe::physics::Physics_joint_settings> item = find_library_item<erhe::physics::Physics_joint_settings>(library, name);
     if (!item) {
         return make_error_content("Joint settings not found: " + name);
     }

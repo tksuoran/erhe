@@ -141,7 +141,7 @@ void prewarm_all(
         std::span<const std::shared_ptr<erhe::primitive::Material>> extra_materials{};
         const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
         if (content_library && content_library->materials) {
-            extra_materials = content_library->materials->get_all<erhe::primitive::Material>();
+            extra_materials = content_library->get_all<erhe::primitive::Material>();
         }
 
         for (const std::shared_ptr<Composition_pass>& pass : passes) {

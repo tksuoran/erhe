@@ -205,24 +205,25 @@ void add_material_asset_references(
     const std::filesystem::path&            export_path
 )
 {
-    if (!content_library || !content_library->materials) {
+    if (!content_library) {
         return;
     }
     const std::filesystem::path export_directory = export_path.parent_path();
     const std::filesystem::path canonical_export_path = normalize_asset_path(export_path);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-    content_library->materials->for_each_const<Content_library_node>(
-        [&arguments, &export_directory, &canonical_export_path](const Content_library_node& node) -> bool {
-            const std::shared_ptr<erhe::primitive::Material> material = std::dynamic_pointer_cast<erhe::primitive::Material>(node.item);
-            if (!material || !node.is_reference) {
-                return true;
+    for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->get_all<erhe::primitive::Material>()) {
+        const std::shared_ptr<Content_library_node> entry = content_library->find_entry(*material);
+        {
+            if (!entry || !entry->is_reference) {
+                continue;
             }
+            const Content_library_node& node = *entry.get();
             if (!node.asset_key.has_value() || (node.asset_key->scope != Asset_scope::file) || node.asset_key->path.empty()) {
                 log_parsers->warn(
                     "glTF export: reference material '{}' has no file-scope asset key - exporting full data (an independent definition)",
                     material->get_name()
                 );
-                return true;
+                continue;
             }
             const Asset_key& key = node.asset_key.value();
             const std::filesystem::path container_path{key.path};
@@ -231,7 +232,7 @@ void add_material_asset_references(
                     "glTF export: reference material '{}' points at the file being written ('{}') - self-reference prohibited, exporting full data",
                     material->get_name(), key.path
                 );
-                return true;
+                continue;
             }
             std::error_code error_code;
             const std::filesystem::path relative_path = std::filesystem::relative(container_path, export_directory, error_code);
@@ -251,9 +252,8 @@ void add_material_asset_references(
                     .uid       = uid,
                 }
             );
-            return true;
         }
-    );
+    }
 }
 
 } // anonymous namespace
@@ -391,7 +391,7 @@ void add_gltf_editor_state(
         // class and local values, before the folders that may name them.
         if (content_library && content_library->styles) {
             nlohmann::json styles = nlohmann::json::array();
-            for (const std::shared_ptr<Style>& style : content_library->styles->get_all<Style>()) {
+            for (const std::shared_ptr<Style>& style : content_library->get_all<Style>()) {
                 if (!style) {
                     continue;
                 }
@@ -540,7 +540,7 @@ void add_gltf_editor_state(
     // ERHE_node_graphs: graph assets embed their node-graph JSON natively
     // (no string-in-string escaping, unlike scene.json).
     if (content_library && content_library->graph_textures) {
-        for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->graph_textures->get_all<Graph_texture>()) {
+        for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->get_all<Graph_texture>()) {
             data->graph_textures.push_back(
                 nlohmann::json{
                     {"name",  graph_texture->get_name()},
@@ -550,7 +550,7 @@ void add_gltf_editor_state(
         }
     }
     if (content_library && content_library->graph_meshes) {
-        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->graph_meshes->get_all<Graph_mesh>()) {
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
             data->graph_meshes.push_back(
                 nlohmann::json{
                     {"name",  graph_mesh->get_name()},
@@ -591,7 +591,7 @@ void add_gltf_editor_state(
                 data->material_bindings.push_back(record);
             }
         };
-        for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->materials->get_all<erhe::primitive::Material>()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->get_all<erhe::primitive::Material>()) {
             const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
             const std::size_t bindings_before = data->material_bindings.size();
             add_binding(*material, "base_color",         samplers.base_color);
@@ -633,7 +633,7 @@ void add_gltf_editor_state(
                         continue;
                     }
                     std::shared_ptr<erhe::primitive::Material> material{};
-                    for (const std::shared_ptr<erhe::primitive::Material>& candidate : content_library->materials->get_all<erhe::primitive::Material>()) {
+                    for (const std::shared_ptr<erhe::primitive::Material>& candidate : content_library->get_all<erhe::primitive::Material>()) {
                         if (candidate->get_name() == material_name) {
                             material = candidate;
                             break;

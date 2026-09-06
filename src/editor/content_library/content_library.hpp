@@ -19,7 +19,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <span>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace erhe::gltf {
@@ -87,6 +89,11 @@ public:
 
     auto make_folder(std::string_view folder_name) -> std::shared_ptr<Content_library_node>;
 
+    // The entry of this node's library that wraps the item, from the
+    // library's index; null when the item is not listed or this node is not
+    // in a library yet.
+    [[nodiscard]] auto find_listed_entry(const erhe::Item_base& queried_item) const -> std::shared_ptr<Content_library_node>;
+
     template <typename T, typename ...Args>
     auto make(Args&& ...args) -> std::shared_ptr<T>;
 
@@ -117,60 +124,7 @@ public:
     template <typename T>
     auto remove(const std::shared_ptr<T>& entry) -> bool;
 
-    // True when an entry (owning or reference) anywhere in this subtree wraps
-    // the given item. Used by register-time classification to distinguish an
-    // already-listed reference (e.g. a prefab template resource) from an item
-    // that arrived with no registration at all (R5.2b: loud warning, never
-    // adopt).
-    [[nodiscard]] auto has_item(const erhe::Item_base& item) const -> bool;
 
-    // The entry node (owning or reference) anywhere in this subtree that
-    // wraps the given item, or null. An item is listed once per library
-    // (doc/content-library-folders.md R1: folders are subtrees of their
-    // category), so add() / remove() on a category folder find an entry
-    // that sits in one of its folders.
-    [[nodiscard]] auto find_entry(const erhe::Item_base& item) const -> std::shared_ptr<Content_library_node>;
-
-    // template <typename T>
-    // [[nodiscard]] auto get_all() -> std::vector<std::shared_ptr<T>> {
-    //     std::vector<std::shared_ptr<T>> result;
-    //     for_each<Content_library_node>(
-    //         [&result](const Content_library_node& node) {
-    //             auto entry = std::dynamic_pointer_cast<T>(node.item);
-    //             if (entry) {
-    //                 result.push_back(entry);
-    //             }
-    //             return true;
-    //         }
-    //     );
-    //     return result;
-    // }
-    template <typename T>
-    [[nodiscard]] auto get_all() -> const std::vector<std::shared_ptr<T>>&
-    {
-        const uint64_t key{T::get_static_type()};
-        auto it = m_cache.find(key);
-        if (it != m_cache.end()) {
-            return
-                std::any_cast<
-                    const std::vector<std::shared_ptr<T>>&
-                >(it->second);
-        }
-
-        // Build and store cache
-        std::vector<std::shared_ptr<T>> result;
-        for_each<Content_library_node>(
-            [&result](const Content_library_node& node) {
-                auto entry = std::dynamic_pointer_cast<T>(node.item);
-                if (entry) {
-                    result.push_back(entry);
-                }
-                return true;
-            }
-        );
-        auto [inserted_it, _] = m_cache.emplace(key, std::move(result));
-        return std::any_cast<const std::vector<std::shared_ptr<T>>&>(inserted_it->second);
-    }
     uint64_t                                  type_code{};
     std::string                               type_name{};
     std::optional<erhe::property::Owner_type> category_owner_type{};
@@ -201,22 +155,88 @@ public:
     std::shared_ptr<erhe::gltf::Gltf_image_source> image_source;
 
 private:
-    // Clears the get_all() caches of this node and every ancestor: a cache
-    // covers the whole subtree, so a change anywhere below a node stales it.
-    void invalidate_caches_up_to_root();
-
     friend class Content_library;
 
     // Set only on a library's root node, by the Content_library constructor.
-    Content_library*                       m_library{nullptr};
-    std::unordered_map<uint64_t, std::any> m_cache;
+    Content_library* m_library{nullptr};
 };
 
+// The per-scene index of the library's resources
+// (doc/usd-compatibility-plan.md U4). Every entry the library holds is
+// listed here, by kind, as it is attached and detached; the queries the
+// consumers ask - `get_all<T>()`, `has_item()`, `find_entry()` - are answered
+// from the index, so a per-frame consumer (the material set upload) walks
+// nothing.
 class Content_library
 {
 public:
     Content_library();
     ~Content_library() noexcept;
+
+    // The resource kinds the index keeps, as `erhe::Item_type` bits. One kind
+    // is one category folder.
+    [[nodiscard]] static auto get_kind_type_bits() -> std::span<const uint64_t>;
+    // The one kind bit of an item type mask, 0 when it names no kind.
+    [[nodiscard]] static auto get_kind_type_bit_of_type(uint64_t item_type) -> uint64_t;
+    // The kind of an item, 0 when the item is not a library resource kind.
+    [[nodiscard]] static auto get_kind_type_bit(const erhe::Item_base& item) -> uint64_t;
+
+    // The category folder of a kind, null for a type bit that names none.
+    [[nodiscard]] auto get_category_root(uint64_t kind_type_bit) const -> std::shared_ptr<Content_library_node>;
+
+    // Every listed resource that is a T, owning entries and reference entries
+    // alike. The typed vector is derived from the kind's index list and
+    // rebuilt only when that list changed since the last call.
+    template <typename T>
+    [[nodiscard]] auto get_all() const -> const std::vector<std::shared_ptr<T>>&;
+
+    // Every listed resource of one kind, without naming its class.
+    [[nodiscard]] auto get_all_of_kind(uint64_t kind_type_bit) const -> const std::vector<std::shared_ptr<erhe::Item_base>>&;
+
+    // True when this library lists the item. Used by register-time
+    // classification to distinguish an already-listed reference (e.g. a
+    // prefab template resource) from an item that arrived with no
+    // registration at all (R5.2b: loud warning, never adopt).
+    [[nodiscard]] auto has_item(const erhe::Item_base& item) const -> bool;
+
+    // The entry node (owning or reference) that wraps the item, or null. An
+    // item is listed once per library (doc/content-library-folders.md R1), so
+    // one entry answers wherever in the folder tree it sits.
+    [[nodiscard]] auto find_entry(const erhe::Item_base& item) const -> std::shared_ptr<Content_library_node>;
+
+    // Creates a resource and adds it to its kind's category folder.
+    template <typename T, typename ...Args>
+    auto make(Args&& ...args) -> std::shared_ptr<T>;
+
+    // Adds a resource to its kind's category folder. Does nothing when the
+    // library already lists it.
+    template <typename T>
+    void add(const std::shared_ptr<T>& entry);
+
+    template <typename T>
+    void add(
+        const std::shared_ptr<T>&                             entry,
+        const Gltf_source_reference&                          gltf_source,
+        const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source = {},
+        bool                                                  is_reference = false,
+        const std::optional<Asset_key>&                       asset_key    = {}
+    );
+
+    // Adds a REFERENCE entry: a listing of an item owned elsewhere. See
+    // Content_library_node::add_reference.
+    template <typename T>
+    void add_reference(const std::shared_ptr<T>& entry, const std::optional<Asset_key>& asset_key = {});
+
+    // Removes the entry that wraps the item. False when the library does not
+    // list it.
+    template <typename T>
+    auto remove(const std::shared_ptr<T>& entry) -> bool;
+
+    // Index maintenance, called by Content_library_node as entries are
+    // attached to and detached from this library's folder tree. Idempotent:
+    // an attach walk can re-visit an already-listed entry.
+    void index_insert(const std::shared_ptr<Content_library_node>& entry);
+    void index_erase (const Content_library_node& entry);
 
     // The owner is the erhe::Item_host - in practice the owning Scene_root -
     // that every wrapped library item reports from get_item_host(). Set once
@@ -251,8 +271,30 @@ public:
     ERHE_PROFILE_MUTEX(std::mutex, mutex);
 
 private:
+    // One kind's listed resources, with a serial that moves whenever the list
+    // does, so a typed view can tell whether it is still current.
+    class Kind_index
+    {
+    public:
+        std::vector<std::shared_ptr<erhe::Item_base>> items;
+        uint64_t                                      serial{0};
+    };
+
+    // One get_all<T>() result, valid while it carries its kind's serial.
+    class Typed_view
+    {
+    public:
+        std::any value;
+        uint64_t serial{0};
+        bool     valid {false};
+    };
+
     erhe::Item_host* m_owner        {nullptr};
     Asset_manager*   m_asset_manager{nullptr};
+
+    mutable std::unordered_map<uint64_t, Kind_index> m_by_kind;
+    mutable std::unordered_map<uint64_t, Typed_view> m_typed_views;
+    std::unordered_map<const erhe::Item_base*, std::weak_ptr<Content_library_node>> m_entry_by_item;
 };
 
 // Recursively copies a content-library subtree into another library so that
@@ -273,6 +315,87 @@ void copy_content_library_folder(const Content_library_node& src_folder, Content
 // assets are shared GPU / graph resources) or has no category folder. The
 // caller is responsible for holding the target library's mutex.
 auto copy_library_item_to_library(const std::shared_ptr<erhe::Item_base>& item, Content_library& target_library) -> std::shared_ptr<erhe::Item_base>;
+
+template <typename T>
+auto Content_library::get_all() const -> const std::vector<std::shared_ptr<T>>&
+{
+    const uint64_t    key   = T::get_static_type();
+    Typed_view&       view  = m_typed_views[key];
+    const Kind_index& kind  = m_by_kind[get_kind_type_bit_of_type(key)];
+    if (!view.valid || (view.serial != kind.serial)) {
+        std::vector<std::shared_ptr<T>> result;
+        result.reserve(kind.items.size());
+        for (const std::shared_ptr<erhe::Item_base>& item : kind.items) {
+            std::shared_ptr<T> typed = std::dynamic_pointer_cast<T>(item);
+            if (typed) {
+                result.push_back(std::move(typed));
+            }
+        }
+        view.value  = std::move(result);
+        view.serial = kind.serial;
+        view.valid  = true;
+    }
+    return std::any_cast<const std::vector<std::shared_ptr<T>>&>(view.value);
+}
+
+template <typename T, typename ...Args>
+auto Content_library::make(Args&& ...args) -> std::shared_ptr<T>
+{
+    std::shared_ptr<T> new_item = std::make_shared<T>(std::forward<Args>(args)...);
+    add(new_item);
+    return new_item;
+}
+
+template <typename T>
+void Content_library::add(const std::shared_ptr<T>& entry)
+{
+    ERHE_VERIFY(entry);
+    const std::shared_ptr<Content_library_node> category = get_category_root(get_kind_type_bit(*entry));
+    if (!category) {
+        return;
+    }
+    category->add(entry);
+}
+
+template <typename T>
+void Content_library::add(
+    const std::shared_ptr<T>&                             entry,
+    const Gltf_source_reference&                          gltf_source,
+    const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source,
+    const bool                                            is_reference,
+    const std::optional<Asset_key>&                       asset_key
+)
+{
+    ERHE_VERIFY(entry);
+    const std::shared_ptr<Content_library_node> category = get_category_root(get_kind_type_bit(*entry));
+    if (!category) {
+        return;
+    }
+    category->add(entry, gltf_source, image_source, is_reference, asset_key);
+}
+
+template <typename T>
+void Content_library::add_reference(const std::shared_ptr<T>& entry, const std::optional<Asset_key>& asset_key)
+{
+    ERHE_VERIFY(entry);
+    const std::shared_ptr<Content_library_node> category = get_category_root(get_kind_type_bit(*entry));
+    if (!category) {
+        return;
+    }
+    category->add_reference(entry, asset_key);
+}
+
+template <typename T>
+auto Content_library::remove(const std::shared_ptr<T>& entry) -> bool
+{
+    ERHE_VERIFY(entry);
+    const std::shared_ptr<Content_library_node> existing = find_entry(*entry);
+    if (!existing) {
+        return false;
+    }
+    existing->erhe::Hierarchy::remove();
+    return true;
+}
 
 template <typename T, typename ...Args>
 auto Content_library_node::make(Args&& ...args) -> std::shared_ptr<T>
@@ -371,8 +494,7 @@ template <typename T>
 void Content_library_node::add(const std::shared_ptr<T>& entry)
 {
     ERHE_VERIFY(entry);
-    const std::shared_ptr<Content_library_node> existing = find_entry(*entry);
-    if (existing) {
+    if (find_listed_entry(*entry)) {
         return;
     }
     auto node = std::make_shared<Content_library_node>(entry);
@@ -383,7 +505,7 @@ template <typename T>
 void Content_library_node::add_reference(const std::shared_ptr<T>& entry, const std::optional<Asset_key>& asset_key)
 {
     ERHE_VERIFY(entry);
-    const std::shared_ptr<Content_library_node> existing = find_entry(*entry);
+    const std::shared_ptr<Content_library_node> existing = find_listed_entry(*entry);
     if (existing) {
         if (asset_key.has_value() && !existing->asset_key.has_value()) {
             existing->asset_key = asset_key;
@@ -408,7 +530,7 @@ void Content_library_node::add(
 )
 {
     ERHE_VERIFY(entry);
-    const std::shared_ptr<Content_library_node> existing = find_entry(*entry);
+    const std::shared_ptr<Content_library_node> existing = find_listed_entry(*entry);
     if (existing) {
         existing->gltf_source = gltf_source;
         if (image_source) {
@@ -433,7 +555,7 @@ template <typename T>
 auto Content_library_node::remove(const std::shared_ptr<T>& entry) -> bool
 {
     ERHE_VERIFY(entry);
-    const std::shared_ptr<Content_library_node> existing = find_entry(*entry);
+    const std::shared_ptr<Content_library_node> existing = find_listed_entry(*entry);
     if (!existing) {
         return false;
     }

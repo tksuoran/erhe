@@ -54,7 +54,7 @@ namespace {
         if (!library || !library->animations) {
             continue;
         }
-        std::shared_ptr<erhe::scene::Animation> found = find_library_item<erhe::scene::Animation>(library->animations, name);
+        std::shared_ptr<erhe::scene::Animation> found = find_library_item<erhe::scene::Animation>(library, name);
         if (found) {
             return found;
         }
@@ -148,7 +148,7 @@ auto Mcp_server::query_scene_animations(const json& args) -> std::string
         if (!library || !library->animations) {
             return;
         }
-        for (const std::shared_ptr<erhe::scene::Animation>& animation : library->animations->get_all<erhe::scene::Animation>()) {
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : library->get_all<erhe::scene::Animation>()) {
             json channels = json::array();
             for (std::size_t channel_index = 0; channel_index < animation->channels.size(); ++channel_index) {
                 const erhe::scene::Animation_channel& channel = animation->channels[channel_index];

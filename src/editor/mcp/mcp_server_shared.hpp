@@ -83,12 +83,12 @@ auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* i
 auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type;
 
 template <typename T>
-inline auto find_library_item(const std::shared_ptr<Content_library_node>& folder, const std::string& name) -> std::shared_ptr<T>
+inline auto find_library_item(const std::shared_ptr<Content_library>& library, const std::string& name) -> std::shared_ptr<T>
 {
-    if (!folder || name.empty()) {
+    if (!library || name.empty()) {
         return {};
     }
-    for (const std::shared_ptr<T>& item : folder->get_all<T>()) {
+    for (const std::shared_ptr<T>& item : library->get_all<T>()) {
         if (item->get_name() == name) {
             return item;
         }

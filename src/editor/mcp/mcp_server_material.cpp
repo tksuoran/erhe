@@ -567,7 +567,7 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
         if (!library || !library->textures) {
             return "Content library has no textures node (texture-sampler edits need a scene-hosted material)";
         }
-        const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+        const auto& tex_list = library->get_all<erhe::graphics::Texture>();
 
         struct Named_slot
         {
@@ -621,7 +621,7 @@ auto Mcp_server::find_material_by_id(const std::size_t material_id) -> std::shar
             if (!library || !library->materials) {
                 continue;
             }
-            for (const std::shared_ptr<erhe::primitive::Material>& mat : library->materials->get_all<erhe::primitive::Material>()) {
+            for (const std::shared_ptr<erhe::primitive::Material>& mat : library->get_all<erhe::primitive::Material>()) {
                 if (mat->get_id() == material_id) {
                     return mat;
                 }
@@ -684,7 +684,7 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
             return r.dump();
         }
 
-        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        const auto& mat_list = library->get_all<erhe::primitive::Material>();
         std::vector<std::size_t> matching_ids;
         for (const auto& mat : mat_list) {
             if (mat->get_name() == material_name) {
@@ -807,7 +807,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
     // Refuse duplicate names: edit_material addresses materials by name, so
     // a second material with the same name would make both unaddressable.
     // The existing id is returned so the caller can reuse or rename.
-    for (const auto& mat : library->materials->get_all<erhe::primitive::Material>()) {
+    for (const auto& mat : library->get_all<erhe::primitive::Material>()) {
         if (mat->get_name() == name) {
             json r = make_text_content("Material name already exists: " + name);
             r["isError"]     = true;
@@ -829,7 +829,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
     std::shared_ptr<erhe::primitive::Material> material;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        material = library->materials->make<erhe::primitive::Material>(
+        material = library->make<erhe::primitive::Material>(
             erhe::primitive::Material_create_info{
                 .name   = name,
                 .values = values,
@@ -917,7 +917,7 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
             return make_error_content("Scene has no material library: " + scene_name);
         }
         std::vector<std::size_t> matching_ids;
-        for (const std::shared_ptr<erhe::primitive::Material>& mat : library->materials->get_all<erhe::primitive::Material>()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& mat : library->get_all<erhe::primitive::Material>()) {
             if (mat->get_name() == material_name) {
                 if (!material) {
                     material = mat;

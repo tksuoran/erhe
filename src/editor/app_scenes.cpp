@@ -184,7 +184,7 @@ void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_bu
             continue;
         }
         const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
-            content_library->materials->get_all<erhe::primitive::Material>();
+            content_library->get_all<erhe::primitive::Material>();
         const std::span<const std::shared_ptr<erhe::primitive::Material>> material_span{materials};
 
         // A root with a draw list carries TWO sets, and the two reconcile the

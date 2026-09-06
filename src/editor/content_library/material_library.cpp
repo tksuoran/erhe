@@ -29,13 +29,11 @@ void add_default_materials(Content_library& library)
     // D25): each material carries only its base color as a local value, so
     // an edited trait stays a local override when the style is swapped.
     const std::shared_ptr<Style> brushed_metal = make_brushed_metal_style();
-    library.styles->add(brushed_metal);
+    library.add(brushed_metal);
 
-    auto& materials = *library.materials.get();
-
-    auto make = [&materials, &brushed_metal](const char* name, float r, float g, float b)
+    auto make = [&library, &brushed_metal](const char* name, float r, float g, float b)
     {
-        const std::shared_ptr<Material> material = materials.make<Material>(std::string_view{name});
+        const std::shared_ptr<Material> material = library.make<Material>(std::string_view{name});
         material->set_style(brushed_metal);
         material->set_value(Material::base_color_property, glm::vec3{r, g, b});
     };
@@ -83,7 +81,7 @@ void add_default_materials(Content_library& library)
         float R, G, B;
         erhe::math::hsv_to_rgb(hue, saturation, value, R, G, B);
         //const std::string label = fmt::format("Hue {}", static_cast<int>(hue));
-        materials.make<erhe::primitive::Material>(
+        library.make<erhe::primitive::Material>(
             fmt::format("Hue {}", static_cast<int>(hue)),
             glm::vec3{R, G, B},
             glm::vec2{rel, rel}, // roughness
@@ -97,14 +95,12 @@ void add_default_physics_materials(Content_library& library)
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library.mutex};
 
-    auto& physics_materials = *library.physics_materials.get();
-
     // Spec-default KHR_physics_rigid_bodies material: static / dynamic
     // friction 0.6, restitution 0.0, average combine modes. These match the
     // Physics_material property defaults; set explicitly so the values stay
     // correct even if the property defaults change.
     std::shared_ptr<erhe::physics::Physics_material> default_material =
-        physics_materials.make<erhe::physics::Physics_material>("Default");
+        library.make<erhe::physics::Physics_material>("Default");
     default_material->set_static_friction    (0.6f);
     default_material->set_dynamic_friction   (0.6f);
     default_material->set_restitution        (0.0f);

@@ -2482,7 +2482,7 @@ public:
         {
             const std::shared_ptr<Content_library>& palette_library = m_scene_builder->get_content_library();
             if (palette_library && palette_library->brushes) {
-                for (const std::shared_ptr<Brush>& brush : palette_library->brushes->get_all<Brush>()) {
+                for (const std::shared_ptr<Brush>& brush : palette_library->get_all<Brush>()) {
                     m_asset_manager->register_builtin(Asset_type::brush, brush);
                 }
             }

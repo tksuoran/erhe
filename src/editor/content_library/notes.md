@@ -9,9 +9,8 @@ Provides a hierarchical container for reusable editor assets: materials, brushes
 - **`Content_library`** -- Top-level container with a root `Content_library_node` and category folders (brushes, animations, skins, materials, textures, graph textures/meshes, physics items). Each `Scene_root` has its own `Content_library` and OWNS it: `Scene_root` calls `set_owner(this)`, and every owning entry's wrapped item reports that `Scene_root` from `erhe::Item_base::get_item_host()` (see `doc/content-library-ownership-plan.md`). An item is an owning member of exactly one library; `ERHE_VERIFY` enforces this on add. `Scene_builder`'s template library is never owned - scenes seed their own libraries with copies (`copy_content_library_folder`, `Brush::make_shared_payload_copy` shares the expensive payload). Prefab template textures/materials are the exception: they enter instancing scenes' libraries as REFERENCE entries (`Content_library_node::is_reference`) that never claim the item's host, because GPU textures cannot be duplicated per scene. `copy_library_item_to_library` copies a single item across libraries (also exposed as the `copy_library_item` MCP tool and the "Copy to Scene" context menu).
 
 - **`Content_library_node`** -- Extends `erhe::Hierarchy`. Each node wraps an `erhe::Item_base` (e.g., a material or brush) or serves as a folder (no item, but has `type_code` and `type_name`). Features:
-  - Typed `get_all<T>()` with internal caching; a cache covers the node's whole subtree, so an add or remove anywhere below a node clears the caches of that node and every ancestor
   - `combo<T>()` for ImGui combo boxes with drag-and-drop support
-  - `add<T>()` / `remove<T>()` template methods; both find an existing entry anywhere in the subtree (`find_entry`), so an item is listed once per library no matter which folder holds it and a category folder removes an entry sitting in one of its folders
+  - `add<T>()` / `remove<T>()` template methods, which place an entry in THIS folder and take it out again; both ask the library's index whether the item is already listed (`find_listed_entry`), so an item is listed once per library no matter which folder holds it
   - `make<T>()` to create and add a new item in one step
   - `make_folder()` to create sub-folders
 
@@ -21,6 +20,28 @@ Provides a hierarchical container for reusable editor assets: materials, brushes
   token and can be parented in a prim tree. Nothing places one there yet: an item is still
   held by its `Content_library_node` entry, which is its inheritance container and its
   namespace.
+
+## The index
+
+`Content_library` keeps the library's own index of its entries
+(`doc/usd-compatibility-plan.md` U4), so the queries consumers ask are
+answered without a tree walk. One list per resource kind - material,
+texture, brush, style, physics material, collision filter, joint settings,
+animation, skin, graph mesh, graph texture - is filled and emptied by
+`Content_library_node::handle_add_child` / `handle_remove_child`, which walk
+the attached or detached subtree once and call `index_insert()` /
+`index_erase()`; the walks run whether or not the library has an owner, so a
+library with no scene (the `Scene_builder` template palette) answers the same
+queries. Each kind's list carries a serial that moves whenever the list does,
+and `get_all<T>()` returns a reference to a typed vector it rebuilds only when
+that serial moved - so a per-frame consumer (`App_scenes::update_material_sets`
+reconciling the scene's `Material_set`) walks nothing while the library is
+unchanged. `has_item()` and `find_entry()` answer from a by-item map, and
+`get_all_of_kind()` gives one kind's items without naming their class (the
+asset manager's `scene_local` resolution asks by kind bit,
+`Content_library::get_kind_type_bit_of_type`). Consumers ask
+`Content_library`, never a category folder: the folders are the placement and
+the tree rows, not the query surface.
 
 - **`Material_library`** (`material_library.hpp`) -- Helper functions for populating default materials in a content library.
 

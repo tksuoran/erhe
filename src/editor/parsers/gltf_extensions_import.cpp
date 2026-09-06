@@ -688,7 +688,7 @@ public:
     if (!content_library.styles) {
         return {};
     }
-    for (const std::shared_ptr<Style>& style : content_library.styles->get_all<Style>()) {
+    for (const std::shared_ptr<Style>& style : content_library.get_all<Style>()) {
         if (style && (style->get_name() == name)) {
             return style;
         }

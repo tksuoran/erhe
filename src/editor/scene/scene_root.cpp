@@ -1060,7 +1060,7 @@ auto Scene_root::make_browser_window(
                             std::shared_ptr<erhe::primitive::Material> material;
                             const std::shared_ptr<Content_library>& library = get_content_library();
                             if (library && library->materials) {
-                                const auto& materials = library->materials->get_all<erhe::primitive::Material>();
+                                const auto& materials = library->get_all<erhe::primitive::Material>();
                                 if (!materials.empty()) {
                                     material = materials.front();
                                 }
@@ -1372,16 +1372,16 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // Materials panel keep working, but nothing claims ownership (a
     // definition must never appear as a side effect of mesh registration).
     Asset_manager* const asset_manager = get_content_library()->get_asset_manager();
-    auto& material_library = get_content_library()->materials;
+    Content_library& material_library = *get_content_library().get();
     for (const auto& primitive : mesh->get_primitives()) {
         if (!primitive.material) {
             continue;
         }
         if (is_asset_definition(*primitive.material)) {
-            material_library->add(primitive.material);
+            material_library.add(primitive.material);
         } else {
             const bool has_live_home = (asset_manager != nullptr) && asset_manager->is_managed(*primitive.material);
-            if (!has_live_home && !material_library->has_item(*primitive.material)) {
+            if (!has_live_home && !material_library.has_item(*primitive.material)) {
                 log_scene->warn(
                     "Material '{}' on mesh '{}' entered scene '{}' unowned and unregistered;"
                     " listing it as a reference without ownership. Register the material explicitly"
@@ -1401,7 +1401,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
                     reference_key = std::move(key);
                 }
             }
-            material_library->add_reference(primitive.material, reference_key);
+            material_library.add_reference(primitive.material, reference_key);
         }
     }
 }

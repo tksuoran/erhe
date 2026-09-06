@@ -1324,7 +1324,7 @@ auto Mcp_server::place_brush_instance(
         }
     }
     if (!material && !material_name.empty() && library && library->materials) {
-        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        const auto& mat_list = library->get_all<erhe::primitive::Material>();
         for (const auto& mat : mat_list) {
             if (mat->get_name() == material_name) {
                 material = mat;
@@ -1333,7 +1333,7 @@ auto Mcp_server::place_brush_instance(
         }
     }
     if (!material && library && library->materials) {
-        const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+        const auto& mat_list = library->get_all<erhe::primitive::Material>();
         if (!mat_list.empty()) {
             material = mat_list.front();
         }
@@ -1522,7 +1522,7 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
     const std::size_t brush_id   = args.value("brush_id", std::size_t{0});
     const std::string brush_name = args.value("brush_name", "");
     std::shared_ptr<Brush> brush;
-    const auto& brush_list = library->brushes->get_all<Brush>();
+    const auto& brush_list = library->get_all<Brush>();
     for (const auto& b : brush_list) {
         if ((brush_id != 0) ? (b->get_id() == brush_id) : (b->get_name() == brush_name)) {
             brush = b;
@@ -1598,7 +1598,7 @@ auto Mcp_server::action_place_brush_instances(const json& args) -> std::string
         }
     }
 
-    const auto& brush_list = library->brushes->get_all<Brush>();
+    const auto& brush_list = library->get_all<Brush>();
     auto find_brush = [&brush_list](const json& p) -> std::shared_ptr<Brush> {
         const std::size_t brush_id   = p.value("brush_id", std::size_t{0});
         const std::string brush_name = p.value("brush_name", "");
@@ -2041,7 +2041,7 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
             return r.dump();
         }
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        library->brushes->add(brush);
+        library->add(brush);
         result["brush_id"] = brush->get_id();
     }
 

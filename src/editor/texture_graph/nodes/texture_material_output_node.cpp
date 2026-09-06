@@ -297,9 +297,9 @@ void Texture_material_output_node::register_texture(Baked_texture& slot, const s
         return; // same object, only its contents were re-rendered
     }
     if (slot.registered) {
-        library->textures->remove(slot.registered);
+        library->remove(slot.registered);
     }
-    library->textures->add(slot.target);
+    library->add(slot.target);
     slot.registered = slot.target;
 }
 
@@ -312,7 +312,7 @@ void Texture_material_output_node::unregister_texture(Baked_texture& slot)
     if (slot.registered && scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->textures) {
-            library->textures->remove(slot.registered);
+            library->remove(slot.registered);
         }
     }
     slot.registered.reset();
@@ -324,7 +324,7 @@ void Texture_material_output_node::unregister_orm()
     if (m_orm_registered && scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
         if (library && library->textures) {
-            library->textures->remove(m_orm_registered);
+            library->remove(m_orm_registered);
         }
     }
     m_orm_registered.reset();
@@ -446,9 +446,9 @@ void Texture_material_output_node::render_orm(
         if (library) {
             if (m_orm_registered != m_orm_target) {
                 if (m_orm_registered) {
-                    library->textures->remove(m_orm_registered);
+                    library->remove(m_orm_registered);
                 }
-                library->textures->add(m_orm_target);
+                library->add(m_orm_target);
                 m_orm_registered = m_orm_target;
             }
         }
@@ -590,7 +590,7 @@ void Texture_material_output_node::imgui()
     if (selection_root) {
         const std::shared_ptr<Content_library> library = selection_root->get_content_library();
         if (library && library->materials) {
-            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->materials->get_all<erhe::primitive::Material>();
+            const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
                 int material_index = 0;
                 for (std::size_t i = 0, end = materials.size(); i < end; ++i) {
@@ -621,7 +621,7 @@ void Texture_material_output_node::imgui()
                 *selection_root,
                 erhe::primitive::Material_create_info{.name = m_base_name}
             );
-            library->materials->add(new_material);
+            library->add(new_material);
             m_material_reference.adopt(*m_context.asset_manager, new_material);
             mark_dirty();
         }

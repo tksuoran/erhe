@@ -117,23 +117,18 @@ auto make_material_external(
     // file key. The entry's declared usership stays (relabeled); the R6
     // exporter now writes a proxy for it on the next scene save.
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-    if (library && library->materials) {
+    if (library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        library->materials->for_each<Content_library_node>(
-            [&](Content_library_node& node) -> bool {
-                if (node.item != material) {
-                    return true;
-                }
-                node.is_reference = true;
-                node.asset_key    = asset_manager.make_key(*material);
-                if (node.asset_usership) {
-                    node.asset_usership->set_user_label(
-                        fmt::format("scene '{}' library material '{}' (reference)", scene_root.get_name(), material->get_name())
-                    );
-                }
-                return false;
+        const std::shared_ptr<Content_library_node> entry = library->find_entry(*material);
+        if (entry) {
+            entry->is_reference = true;
+            entry->asset_key    = asset_manager.make_key(*material);
+            if (entry->asset_usership) {
+                entry->asset_usership->set_user_label(
+                    fmt::format("scene '{}' library material '{}' (reference)", scene_root.get_name(), material->get_name())
+                );
             }
-        );
+        }
     }
     log_asset->info(
         "make-external: material '{}' of scene '{}' now lives in '{}'; the scene references it (save the scene to persist the reference)",
@@ -155,22 +150,15 @@ auto make_material_internal(
     }
     ERHE_VERIFY(material);
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-    if (!library || !library->materials) {
+    if (!library) {
         out_error = fmt::format("scene '{}' has no material library", scene_root.get_name());
         return {};
     }
     bool is_listed_reference = false;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        library->materials->for_each_const<Content_library_node>(
-            [&](const Content_library_node& node) -> bool {
-                if (node.item == material) {
-                    is_listed_reference = node.is_reference;
-                    return false;
-                }
-                return true;
-            }
-        );
+        const std::shared_ptr<Content_library_node> entry = library->find_entry(*material);
+        is_listed_reference = entry && entry->is_reference;
     }
     if (!is_listed_reference) {
         out_error = fmt::format(
@@ -211,7 +199,7 @@ auto make_material_internal(
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         // Brushes hold their own material references; a brush pointing at
         // the shared object is left alone (placing it keeps sharing).
-        for (const std::shared_ptr<Brush>& brush : library->brushes->get_all<Brush>()) {
+        for (const std::shared_ptr<Brush>& brush : library->get_all<Brush>()) {
             if (brush && (brush->get_material() == material)) {
                 log_asset->warn(
                     "make-internal: brush '{}' still references the shared material '{}' (brush materials are not swapped)",
@@ -219,8 +207,8 @@ auto make_material_internal(
                 );
             }
         }
-        static_cast<void>(library->materials->remove(material));
-        library->materials->add(copy);
+        static_cast<void>(library->remove(material));
+        library->add(copy);
     }
     log_asset->info(
         "make-internal: scene '{}' now owns material '{}' (a copy; {} mesh primitives swapped); the shared object is de-linked",
@@ -266,7 +254,7 @@ auto reference_material_into_scene(
     }
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        if (library->materials->has_item(*material)) {
+        if (library->has_item(*material)) {
             return material; // already listed (definition or reference)
         }
     }

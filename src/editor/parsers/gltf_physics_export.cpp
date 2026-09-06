@@ -566,17 +566,17 @@ auto build_gltf_physics_data(
     // v3+). get_*_index() deduplicates against the referenced entries above.
     if (content_library != nullptr) {
         if (content_library->physics_materials) {
-            for (const std::shared_ptr<erhe::physics::Physics_material>& material : content_library->physics_materials->get_all<erhe::physics::Physics_material>()) {
+            for (const std::shared_ptr<erhe::physics::Physics_material>& material : content_library->get_all<erhe::physics::Physics_material>()) {
                 static_cast<void>(builder.get_material_index(material));
             }
         }
         if (content_library->collision_filters) {
-            for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : content_library->collision_filters->get_all<erhe::physics::Collision_filter>()) {
+            for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : content_library->get_all<erhe::physics::Collision_filter>()) {
                 static_cast<void>(builder.get_filter_index(filter));
             }
         }
         if (content_library->physics_joints) {
-            for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : content_library->physics_joints->get_all<erhe::physics::Physics_joint_settings>()) {
+            for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : content_library->get_all<erhe::physics::Physics_joint_settings>()) {
                 static_cast<void>(builder.get_joint_index(settings));
             }
         }

@@ -1340,17 +1340,14 @@ auto make_gltf_image_source_provider(const std::shared_ptr<Content_library>& con
     // provider then runs lock-free inside export_gltf().
     using Source_map = std::unordered_map<const erhe::graphics::Texture*, std::shared_ptr<const erhe::gltf::Gltf_image_source>>;
     std::shared_ptr<Source_map> sources = std::make_shared<Source_map>();
-    if (content_library && content_library->textures) {
+    if (content_library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        content_library->textures->for_each_const<Content_library_node>(
-            [&sources](const Content_library_node& node) -> bool {
-                const std::shared_ptr<erhe::graphics::Texture> texture = std::dynamic_pointer_cast<erhe::graphics::Texture>(node.item);
-                if (texture && node.image_source) {
-                    (*sources)[texture.get()] = node.image_source;
-                }
-                return true;
+        for (const std::shared_ptr<erhe::graphics::Texture>& texture : content_library->get_all<erhe::graphics::Texture>()) {
+            const std::shared_ptr<Content_library_node> entry = content_library->find_entry(*texture);
+            if (entry && entry->image_source) {
+                (*sources)[texture.get()] = entry->image_source;
             }
-        );
+        }
     }
     return [sources](const erhe::graphics::Texture* texture) -> std::shared_ptr<const erhe::gltf::Gltf_image_source> {
         if (texture == nullptr) {
@@ -1389,7 +1386,7 @@ auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& cont
         return {};
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-    return content_library->animations->get_all<erhe::scene::Animation>();
+    return content_library->get_all<erhe::scene::Animation>();
 }
 
 auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) -> bool

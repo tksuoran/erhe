@@ -112,8 +112,8 @@ void Brush_preview::make_preview_scene()
         // warning) instead of definitions.
         const std::shared_ptr<Content_library> content_library = m_scene_root_shared->get_content_library();
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        content_library->materials->add(m_material);
-        content_library->materials->add(m_headlight_material);
+        content_library->add(m_material);
+        content_library->add(m_headlight_material);
     }
 
     // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries its

@@ -349,7 +349,7 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
 
         int material_count = 0;
         if (library && library->materials) {
-            material_count = static_cast<int>(library->materials->get_all<erhe::primitive::Material>().size());
+            material_count = static_cast<int>(library->get_all<erhe::primitive::Material>().size());
         }
 
         int light_count = 0;
@@ -1347,7 +1347,7 @@ auto Mcp_server::query_scene_materials(const json& args) -> std::string
     }
 
     json materials = json::array();
-    const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+    const auto& mat_list = library->get_all<erhe::primitive::Material>();
     for (const auto& mat : mat_list) {
         materials.push_back({
             {"name",       mat->get_name()},
@@ -1441,7 +1441,7 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
         return r.dump();
     }
 
-    const auto& mat_list = library->materials->get_all<erhe::primitive::Material>();
+    const auto& mat_list = library->get_all<erhe::primitive::Material>();
     for (const auto& mat : mat_list) {
         if (mat->get_name() == material_name) {
             const erhe::primitive::Material_values d = mat->get_values();
@@ -1538,7 +1538,7 @@ auto Mcp_server::query_scene_textures(const json& args) -> std::string
     }
 
     json textures = json::array();
-    const auto& tex_list = library->textures->get_all<erhe::graphics::Texture>();
+    const auto& tex_list = library->get_all<erhe::graphics::Texture>();
     for (const auto& tex : tex_list) {
         textures.push_back({
             {"name",   tex->get_name()},
@@ -1896,28 +1896,28 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     auto library = sr.get_content_library();
     if (library) {
         if (library->materials) {
-            for (const auto& mat : library->materials->get_all<erhe::primitive::Material>()) {
+            for (const auto& mat : library->get_all<erhe::primitive::Material>()) {
                 if (target_ids.contains(mat->get_id())) {
                     result.push_back(mat);
                 }
             }
         }
         if (library->brushes) {
-            for (const auto& brush : library->brushes->get_all<Brush>()) {
+            for (const auto& brush : library->get_all<Brush>()) {
                 if (target_ids.contains(brush->get_id())) {
                     result.push_back(brush);
                 }
             }
         }
         if (library->graph_textures) {
-            for (const auto& graph_texture : library->graph_textures->get_all<Graph_texture>()) {
+            for (const auto& graph_texture : library->get_all<Graph_texture>()) {
                 if (target_ids.contains(graph_texture->get_id())) {
                     result.push_back(graph_texture);
                 }
             }
         }
         if (library->graph_meshes) {
-            for (const auto& graph_mesh : library->graph_meshes->get_all<Graph_mesh>()) {
+            for (const auto& graph_mesh : library->get_all<Graph_mesh>()) {
                 if (target_ids.contains(graph_mesh->get_id())) {
                     result.push_back(graph_mesh);
                 }

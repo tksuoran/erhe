@@ -251,7 +251,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
     if (is_brush_tool) {
         std::shared_ptr<Brush> brush;
         if (library && library->brushes) {
-            for (const std::shared_ptr<Brush>& b : library->brushes->get_all<Brush>()) {
+            for (const std::shared_ptr<Brush>& b : library->get_all<Brush>()) {
                 if (b->get_name() == name) {
                     brush = b;
                     break;
@@ -272,7 +272,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
 
     std::shared_ptr<erhe::primitive::Material> material;
     if (library && library->materials) {
-        for (const std::shared_ptr<erhe::primitive::Material>& m : library->materials->get_all<erhe::primitive::Material>()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& m : library->get_all<erhe::primitive::Material>()) {
             if (m->get_name() == name) {
                 material = m;
                 break;
@@ -428,7 +428,7 @@ auto find_verb_material(
         const std::size_t material_id = args.value("material_id", std::size_t{0});
         if (library && library->materials) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-            for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
+            for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
                 if (material && (material->get_id() == material_id)) {
                     return material;
                 }
@@ -451,7 +451,7 @@ auto find_verb_material(
     }
     if (library && library->materials) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        for (const std::shared_ptr<erhe::primitive::Material>& material : library->materials->get_all<erhe::primitive::Material>()) {
+        for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
             if (material && (material->get_name() == material_name)) {
                 return material;
             }

@@ -336,7 +336,7 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
         const std::shared_ptr<Content_library> content_library = target_scene_root->get_content_library();
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
         for (const std::shared_ptr<erhe::primitive::Material>& material : orphan_materials) {
-            if (content_library->materials->has_item(*material)) {
+            if (content_library->has_item(*material)) {
                 continue;
             }
             const std::shared_ptr<Prefab> owning_prefab = find_owning_prefab(m_context, material);

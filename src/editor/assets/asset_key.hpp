@@ -13,7 +13,6 @@ namespace erhe {
 namespace editor {
 
 class Content_library;
-class Content_library_node;
 
 // Asset identity (asset-manager plan D1). An asset is a thing defined in
 // exactly one container; its key carries where it lives (scope + path) and
@@ -64,16 +63,16 @@ public:
 };
 
 // Per-type traits (plan D1): adding a managed asset type is a one-row
-// change. library_folder is the Content_library category folder searched by
-// scene_local resolution; null for types not stored in content libraries
-// (mesh resolves against scene nodes' Mesh attachments instead).
+// change. item_type_bit is the type's erhe::Item_type bit; scene_local
+// resolution asks the scene's content library for the types whose bit names
+// a library resource kind (Content_library::get_kind_type_bit_of_type) and
+// walks the scene's nodes for the rest (mesh, node).
 class Asset_type_info
 {
 public:
-    Asset_type                                              type;
-    const char*                                             name;
-    uint64_t                                                item_type_bit;
-    std::shared_ptr<Content_library_node> Content_library::* library_folder;
+    Asset_type  type;
+    const char* name;
+    uint64_t    item_type_bit;
 };
 
 [[nodiscard]] auto get_asset_type_infos() -> std::span<const Asset_type_info>;

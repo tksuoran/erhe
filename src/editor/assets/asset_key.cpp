@@ -89,11 +89,11 @@ auto Asset_key_hash::operator()(const Asset_key& key) const -> std::size_t
 namespace {
 
 const std::array<Asset_type_info, 5> c_asset_type_infos{
-    Asset_type_info{Asset_type::brush,     "brush",     erhe::Item_type::brush,     &Content_library::brushes   },
-    Asset_type_info{Asset_type::material,  "material",  erhe::Item_type::material,  &Content_library::materials },
-    Asset_type_info{Asset_type::animation, "animation", erhe::Item_type::animation, &Content_library::animations},
-    Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh,      nullptr                     },
-    Asset_type_info{Asset_type::node,      "node",      erhe::Item_type::xformable,      nullptr                     }
+    Asset_type_info{Asset_type::brush,     "brush",     erhe::Item_type::brush     },
+    Asset_type_info{Asset_type::material,  "material",  erhe::Item_type::material  },
+    Asset_type_info{Asset_type::animation, "animation", erhe::Item_type::animation },
+    Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh      },
+    Asset_type_info{Asset_type::node,      "node",      erhe::Item_type::xformable }
 };
 
 }
