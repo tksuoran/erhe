@@ -156,6 +156,22 @@ record has the history.
   `get_node_details` carries `mesh` / `camera` / `light` on the node
   entry (`mcp_server_usage.md`). The interactive drag gesture has not
   been exercised since the payload fix.
+- U4 Resources are prims: every content-library kind is `erhe::Item<
+  Item_base, Typed, X>` and a prim of the scene tree, by default under
+  the kind `Scope` created on its first resource (`Materials`, `Brushes`,
+  ...) or under any prim; `Content_library` is an index fed by
+  `Item_host::register_prim` (`src/erhe/item/notes.md`,
+  `src/editor/content_library/notes.md`); a folder is a `Scope`
+  (`doc/content-library-folders.md`); resources enter and move through
+  `Item_insert_remove_operation` and `Item_parent_change_operation`;
+  there is no reference listing - a material a scene renders but does
+  not own reaches the material set through the mesh binding
+  (`doc/asset_manager.md`); glTF carries a resource's tree position in
+  `ERHE_scene` `library_folders` (`doc/gltf_extensions/ERHE_scene.md`)
+  and USD writes and reads a `Material` prim where it sits
+  (`src/erhe/usd/notes.md`). `scene_roundtrip_verify.py` covers the
+  placements (215 checks). Not carried in USD yet: the other resource
+  kinds and an empty folder scope (E4).
 
 ## 3. Remaining steps
 
@@ -165,81 +181,22 @@ composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
-### U4 Resources are prims (L)
-
-What: the content library's items - materials, textures, brushes,
-styles, physics materials, collision filters, joint settings, geometry
-and texture graphs, animations, skins - become `Typed` prims placed in
-the scene tree, and `Content_library_node` and the per-category root
-folders retire: a folder is a `Scope`, and a new scene's resources are
-created under `Scope`s named for their kind (`/Materials`, `/Brushes`,
-...) so the default layout reads like a stage. `Content_library` becomes
-the per-scene index the consumers keep asking - `Material_buffer`, the
-material and brush pickers, the hotbar and inventory slots'
-`Asset_reference` resolution, MCP `get_scene_materials` - maintained
-from the tree's add- and remove-child hooks rather than owning the
-items. In glTF, tree position of a resource rides `ERHE_scene` where
-`library_folders` rides today; in USD the tree is the file (C1).
-
-Decisions the commits follow:
-
-- Every library kind is `erhe::Item<Item_base, Typed, X>` directly
-  (each is an `erhe::Item` already; the change makes it a `Hierarchy`),
-  and `Material` gains a `UsdShadeNodeGraph`-like intermediate level
-  only when shader graphs become prims. A `Texture` becomes a prim only
-  when the loader registers it as content: a render target, shadow map
-  or other device-internal `Texture` is the same class and is never
-  placed in the tree. `Graph_asset`'s own item-host propagation to its
-  graph nodes yields to `Typed`'s hook.
-- Reference entries retire. A prim has one parent, so an item listed in
-  a second scene's tree is X1's reference arc; until X1 the index lists
-  the prims the scene owns, a prefab's resources stay in the template's
-  tree and are reached through the instance's meshes, and a new scene
-  gets its own copies, as the palette brushes are copied today.
-- A `Scope` keeps the root secondary owner type (U1) in place of the
-  folder's `category_owner_type`: it holds any class's values, and the
-  Add-Property list offers the classes of its descendant prims first.
-- The Create menu gains a `Scope` entry beside the folder entry it
-  replaces, and the object-reference candidate walk (`item_lookup.cpp`)
-  walks the tree so a resource under any prim is offered.
-
-Commits, each buildable: (1) the `Typed` base for every library kind,
-with the tree walks that now match them audited so nothing changes
-before a resource has a place in the tree; (2) the
-resources move into the tree under `Scope`s, `Content_library_node` and
-the category roots retire, the library becomes an index from the child
-hooks, the operations (`Content_library_move_operation`, create, import,
-prefab instantiation) place prims; (3) the glTF carrier (`ERHE_scene`
-`library_folders` becomes the tree position of each resource), the USD
-writer and reader place resources where they sit, the scripts and docs
-follow.
-
-Why: C5's "any resource under any prim", and what lets E4 write brushes,
-styles and folders as prims under a `Scope` instead of custom
-`customLayerData` forms.
-
-Verification: `scene_roundtrip_verify.py` (both legs) with a scene whose
-materials sit in nested scopes and under a mesh; drag a material under
-an `Xform`, save, reopen, it is still there and still bound; the asset
-manager's `get_editor_references` and `scene-close leak` stay clean;
-`undo_reference_clearing_smoke_test.py` passes with its shared-material
-assertions rewritten for owned prims.
-
-### E4 Editor state in a USD file (M, after U4; completes G2)
+### E4 Editor state in a USD file (M; completes G2)
 
 What: the editor state a USD-backed scene does not carry yet
 (`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
 the `customLayerData` keys already in use) rides USD's own means (C1).
-After U4 the resources are prims, so brushes, styles, folders and node
+The resources are prims (U4), so brushes, styles, physics materials,
+collision filters, joint settings and the geometry and texture node
 graphs are written and read as prims where they sit in the tree, one
-custom `typeName` per kind with attributes named as the glTF fields are
-(a node graph as a JSON string attribute until a prim form is wanted);
-physics goes per the mapping's physics table through the
-`Gltf_physics_data`-style carrier (section 6 names the shape);
-animations, skins and prefab references stay listed as not carried. A
-save no longer logs a kind it carries; the open side reads every kind it
-writes. `.usdc` output follows once the `.usda` output round-trips
-through E3 with all of it.
+custom `typeName` per kind (the class token `Typed` already fixes) with
+attributes named as the glTF fields are (a node graph as a JSON string
+attribute until a prim form is wanted), and an empty folder `Scope` is
+written as the `Scope` it is; animations, skins, prefab references and
+the physics API schemas on nodes (section 6) stay listed as not
+carried. A save no longer logs a kind it carries; the open side reads
+every kind it writes. `.usdc` output follows once the `.usda` output
+round-trips through E3 with all of it.
 
 Verification: the E3 leg extended with a scene that holds one of each
 kind (build it over MCP the way the glTF sections build theirs); a
@@ -296,7 +253,7 @@ as an `OpenPBRSurface` / MaterialX network when
 `LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
 both are present.
 
-### X1 References as prefab instances (M, after U4)
+### X1 References as prefab instances (M)
 
 What: an imported stage's `references` arcs that target a whole file
 become `Prefab_instance` carriers pointing at that file (imported through
@@ -345,17 +302,16 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. U4 resources are prims
-2. E4 editor state in a USD file (completes G2)
-3. X1 references as prefab instances, then X2 editable instances (G3)
+1. E4 editor state in a USD file (completes G2)
+2. X1 references as prefab instances, then X2 editable instances (G3)
 
 M6, M7 and M8 land when the step that needs them is
 next (any importer hitting a missing type, X3, a file whose xformOp
 stack must survive). E2 and X3 to X5 have no fixed place: each waits
 for its dependencies and is taken when wanted.
 
-Dependencies: E4 and X1 need U4; X2 needs X1; X3 needs M7; U4, M8,
-E2, X4 and X5 need nothing that has not landed.
+Dependencies: X2 needs X1; X3 needs M7; E4, X1, M8, E2, X4 and X5
+need nothing that has not landed.
 
 ## 5. Out of scope
 
