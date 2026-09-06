@@ -88,7 +88,7 @@ auto make_material_internal(
 
 // REFERENCE INTO SCENE: acquire the keyed material through the manager and
 // list it in the scene's library as a reference entry carrying its file
-// key (an undoable Content_library_attach_operation is queued). Acceptance
+// key (an undoable library reference listing is queued). Acceptance
 // per plan resolution 11: the defining container must be path-bound
 // (is_cross_scene_referenceable). Returns the material, or null with
 // out_error set. Idempotent: an already-listed material returns directly.
@@ -102,7 +102,7 @@ auto reference_material_into_scene(
 // IMPORT TEXTURE: load an image file (PNG / JPEG / KTX2 / DDS) into a fresh
 // GPU texture and list it in the scene's content library Textures folder as
 // an owning definition entry. The decode and the upload are asynchronous
-// (Texture_file_loader); the undoable Content_library_attach_operation is
+// (Texture_file_loader); the undoable library insert is
 // queued once the texture is resident, so nothing appears in the library for
 // a frame or two - and nothing at all if the file cannot be decoded (a
 // warning names it). Shared by the asset browser's context menu and the

@@ -6,7 +6,7 @@
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
 #include "graphics/texture_file_loader.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
@@ -259,7 +259,7 @@ auto reference_material_into_scene(
     }
     const Asset_key stored_key = asset_manager.make_key(*material); // authoritative: file scope + uid self-heal
     context.operation_stack->queue(
-        std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+        make_library_reference_operation(
             library,
             material,
             Gltf_source_reference{
@@ -268,8 +268,6 @@ auto reference_material_into_scene(
                 .item_index = -1, // referenced by identity, not by position
                 .item_type  = "material",
             },
-            std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-            true, // is_reference
             stored_key
         )
     );
@@ -314,7 +312,8 @@ void import_texture_into_scene(
                 return;
             }
             context_ptr->operation_stack->queue(
-                std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+                make_library_attach_operation(
+                    *context_ptr,
                     target_library,
                     texture,
                     Gltf_source_reference{

@@ -58,21 +58,28 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   "Sibling-unique names") applies to resource prims like to every other prim:
   two materials of one scope cannot share a name, and the second gets
   `<base>_<n>`.
-- D2 Folder creation. "Create Scope" queues an `Item_insert_remove_operation`
-  inserting an `erhe::Scope` named "New Scope" under the scope the menu was
-  opened on; only a kind scope and the scopes below one are targets. The same
-  operation in remove mode is what "Delete" runs through
+- D2 Folder creation. "Create Scope" on a kind scope or a folder below one
+  queues an `Item_insert_remove_operation` inserting an `erhe::Scope` named
+  "New Scope" under the scope the menu was opened on. The Create menu's
+  `Scope` entry (`Scene_commands::create_new_scope`) makes a scene-structure
+  scope under the selected node instead, which carries `Item_flags::content`
+  and so is written as a glTF node; a library folder carries none. The same
+  insert operation in remove mode is what "Delete" runs through
   `Selection::delete_items`, which collects the folder's subtree deepest
-  first.
-- D3 Moves. `Content_library_move_operation` (`src/editor/operations/`)
-  records the moved prim, its parent and index before and after; execute and
-  undo call `Hierarchy::set_parent(parent, index)` under the library mutex.
-  The tree accepts a resource prim or a folder scope on a scope row when both
-  sit under the same kind scope of the same library and the payload is
-  neither the target nor one of its ancestors; the drop appends to the scope.
-  A drop on a brush row keeps its existing meaning (fork the brush with the
-  dropped material). A move keeps the prim's item host, so the host is not
-  told and the library index is untouched - a move is not a removal.
+  first, and what "Duplicate" runs through
+  `Selection::duplicate_selection` - a duplicate of a resource is its clone
+  inserted next to it, and a kind that is `erhe::Item_kind::not_clonable`
+  (a `Brush`, a graph asset) is skipped with a log line.
+- D3 Moves. A move is `Item_parent_change_operation`, the same undoable
+  reparent the Hierarchy window runs for nodes: it records the moved prim, its
+  parent and index before and after, and execute and undo are one
+  `Hierarchy::set_parent(parent, index)` each. The tree accepts a resource
+  prim or a folder scope on ANY prim row of the same scene when the payload is
+  neither the target nor one of its ancestors, so a material can be dropped
+  under an `Xform` (C5); the drop appends to the target. A drop on a brush row
+  keeps its existing meaning (fork the brush with the dropped material). A
+  move keeps the prim's item host, so the host is not told and the library
+  index is untouched - a move is not a removal.
 - D8 Kind properties (R7). A `Scope`'s secondary owner type
   (`doc/property-system.md` D30) is the root owner type, as a `Style`'s is, so
   it holds any class's value properties by qualified name and its descendants
@@ -113,15 +120,21 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   from wherever the attach operations put it. A name that matches nothing
   under the kind scope logs a warning; a name that matches several moves the
   first and logs a warning. Undo of an import removes the scopes it created.
-- D7 MCP. `create_library_folder(scene_name, folder_path)` resolves the path
-  from the kind scopes and queues the D2 insert for the last component;
+- D7 MCP. `create_library_folder(scene_name, folder_path)` keeps its name and
+  arguments and creates an `erhe::Scope`: it resolves the path from the kind
+  scopes and queues the D2 insert for the last component.
   `move_library_item(scene_name, item_name, folder_name | folder_path)` keeps
   `folder_name` (a folder under the resource's own parent scope, created when
   missing) and adds `folder_path` (kind-scope-rooted, must exist), queuing the
-  D3 move. Resource prims and folder scopes are prims of the scene tree, so
-  `find_item_in_scene` reaches them with the scene's own walk and
-  `get_item_properties` / `set_item_property` / `get_addable_item_properties`
-  take a folder by `item_id`, `item_name` or path.
+  D3 reparent; a destination under another kind scope is refused, which is the
+  one place the same-kind rule still holds. Every `create_*` tool that makes a
+  resource - `create_material`, `create_style`, `create_physics_material`,
+  `create_collision_filter`, `create_joint_settings`, `create_graph_texture`,
+  `create_graph_mesh` - queues the D2 insert, so it is undoable. Resource
+  prims and folder scopes are prims of the scene tree, so `find_item_in_scene`
+  reaches them with the scene's own walk and `get_item_properties` /
+  `set_item_property` / `get_addable_item_properties` take a folder by
+  `item_id`, `item_name` or path.
 
 ## 3. Verification
 

@@ -107,6 +107,17 @@ auto Create_new_empty_node_command::try_call() -> bool
     return m_context.scene_commands->create_new_empty_node().operator bool();
 }
 
+Create_new_scope_command::Create_new_scope_command(erhe::commands::Commands& commands, App_context& context)
+    : Command  {commands, "scene.create_new_scope"}
+    , m_context{context}
+{
+}
+
+auto Create_new_scope_command::try_call() -> bool
+{
+    return m_context.scene_commands->create_new_scope().operator bool();
+}
+
 Create_new_light_command::Create_new_light_command(erhe::commands::Commands& commands, App_context& context)
     : Command  {commands, "scene.create_new_light"}
     , m_context{context}
@@ -350,6 +361,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     , m_create_new_scene_command       {commands, context}
     , m_create_new_camera_command      {commands, context}
     , m_create_new_empty_node_command  {commands, context}
+    , m_create_new_scope_command       {commands, context}
     , m_create_new_light_command       {commands, context}
     , m_create_new_layout_command      {commands, context}
     , m_create_new_rendertarget_command{commands, context}
@@ -367,6 +379,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.register_command   (&m_create_new_scene_command);
     commands.register_command   (&m_create_new_camera_command);
     commands.register_command   (&m_create_new_empty_node_command);
+    commands.register_command   (&m_create_new_scope_command);
     commands.register_command   (&m_create_new_light_command);
     commands.register_command   (&m_create_new_layout_command);
     commands.register_command   (&m_create_new_rendertarget_command);
@@ -388,6 +401,7 @@ Scene_commands::Scene_commands(erhe::commands::Commands& commands, App_context& 
     commands.bind_command_to_menu(&m_create_new_scene_command,        "Create.Scene");
     commands.bind_command_to_menu(&m_create_new_camera_command,       "Create.Camera");
     commands.bind_command_to_menu(&m_create_new_empty_node_command,   "Create.Empty Node");
+    commands.bind_command_to_menu(&m_create_new_scope_command,        "Create.Scope");
     commands.bind_command_to_menu(&m_create_new_light_command,        "Create.Light");
     commands.bind_command_to_menu(&m_create_new_layout_command,       "Create.Layout");
     commands.bind_command_to_menu(&m_create_new_rendertarget_command, "Create.Rendertarget");

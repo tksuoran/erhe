@@ -80,9 +80,9 @@ and its Add Property list offers the classes of the prims below it first
 without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
 The editor creates folders ("Create Scope", `create_library_folder`), moves
-resources between them (drag onto a scope, `move_library_item`;
-`Content_library_move_operation`) and persists them through `ERHE_scene`
-`library_folders`.
+resources between them and under any other prim (drag onto a prim row,
+`move_library_item`; `Item_parent_change_operation`) and persists them through
+`ERHE_scene` `library_folders`.
 
 ## Styles
 
@@ -109,7 +109,7 @@ Image files the editor can decode (`.png` / `.jpg` / `.jpeg` / `.ktx2` / `.dds`,
 - the browser's **"Import to content library texture"** context menu item - a plain item when one scene is open, a submenu of scene names when several are;
 - **dropping** the file onto the target scene's `Textures` scope (or a texture in it) in the Scene Hierarchy window.
 
-Both queue an undoable `Content_library_attach_operation<erhe::graphics::Texture>` once the texture is resident. Every import creates a FRESH texture: an owned resource is a prim of its scene's tree and reports that scene as its `Item_host`, so two libraries must never own the same object - importing the same file into two scenes gives each its own GPU texture.
+Both queue an undoable insert through `make_library_attach_operation` once the texture is resident. Every import creates a FRESH texture: an owned resource is a prim of its scene's tree and reports that scene as its `Item_host`, so two libraries must never own the same object - importing the same file into two scenes gives each its own GPU texture.
 
 Decoding and uploading go through `Texture_file_loader` (`graphics/texture_file_loader.hpp`): the decode runs on the executor, and `Editor::tick` creates the texture and records its upload against the frame's command buffer. The same loader keeps a bounded LRU cache of previews for the Asset Browser's file tooltip; the Hierarchy window's texture tooltip needs no cache, its texture is already resident. Both draw through `draw_texture_preview`.
 

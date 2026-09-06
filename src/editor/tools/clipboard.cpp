@@ -7,7 +7,7 @@
 #include "app_message_bus.hpp"
 #include "items.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -351,7 +351,8 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
                 target_scene_root->get_name()
             );
             compound_parameters.operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+                make_library_attach_operation(
+                    m_context,
                     content_library,
                     material,
                     Gltf_source_reference{

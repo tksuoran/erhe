@@ -31,7 +31,7 @@ public:
 // USD file at `path` into `scene_root`: content-library attaches for the
 // textures and materials the file names, and the insert of the imported node
 // tree under an import_root node. The same Item_insert_remove_operation /
-// Content_library_attach_operation path glTF import takes, so an undo
+// library attach path glTF import takes, so an undo
 // announces the removals (doc/import-undo-reference-clearing.md).
 //
 // Failures - USD support not built (ERHE_USD_LIBRARY=none), no target scene,

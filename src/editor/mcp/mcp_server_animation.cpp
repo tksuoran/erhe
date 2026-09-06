@@ -14,7 +14,7 @@
 #include "assets/asset_manager.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/animation_edit_operation.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
@@ -322,7 +322,8 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
         animation = m_context.asset_manager->create<erhe::scene::Animation>(*scene_root, "Animation");
         animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         m_context.operation_stack->execute_now(
-            std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
+            make_library_attach_operation(
+                m_context,
                 library,
                 animation,
                 Gltf_source_reference{

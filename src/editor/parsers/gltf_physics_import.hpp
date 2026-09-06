@@ -15,7 +15,7 @@ class Scene_root;
 // Maps KHR_physics_rigid_bodies / KHR_implicit_shapes data parsed into
 // Gltf_data::physics onto editor physics: shared Physics_material /
 // Collision_filter / Physics_joint_settings content-library items (attached
-// via Content_library_attach_operations appended to operations), Node_physics
+// via library attach operations appended to operations), Node_physics
 // attachments (rigid bodies / triggers, with compound folding of descendant
 // colliders) and Node_joint attachments. Must be called from import_gltf()
 // after mesh finalization (mesh-sourced collision shapes need the built

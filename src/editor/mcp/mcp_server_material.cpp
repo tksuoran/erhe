@@ -13,6 +13,7 @@
 #include "operations/property_set_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation.hpp"
+#include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/material_preview.hpp"
 #include "scene/scene_root.hpp"
@@ -826,28 +827,33 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
         return r.dump();
     }
 
-    std::shared_ptr<erhe::primitive::Material> material;
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        material = library->make<erhe::primitive::Material>(
-            erhe::primitive::Material_create_info{
-                .name   = name,
-                .values = values,
-                .data   = data
-            }
-        );
-    }
-    if (!material) {
-        json r = make_text_content("Material creation failed");
-        r["isError"] = true;
-        return r.dump();
-    }
+    const std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(
+        erhe::primitive::Material_create_info{
+            .name   = name,
+            .values = values,
+            .data   = data
+        }
+    );
 
-    // Like copy_library_item, library-item creation is not undoable.
+    // A material is a resource prim, so its creation is the ordinary
+    // undoable insert under the Materials scope
+    // (doc/usd-compatibility-plan.md U4).
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = material,
+                .parent  = library->get_scope(erhe::Item_type::material),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
     return make_json_content({
         {"name",    material->get_name()},
         {"id",      material->get_id()},
         {"scene",   scene_root->get_name()},
+        {"queued",  true}, // the insert operation executes on the next editor frame
         {"applied", applied}
     }).dump();
 }

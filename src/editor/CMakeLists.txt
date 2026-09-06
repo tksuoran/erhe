@@ -344,15 +344,14 @@ erhe_target_sources_grouped(
     operations/async_raytrace_kickoff_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
-    operations/content_library_attach_operation.hpp
+    operations/library_attach_operation.cpp
+    operations/library_attach_operation.hpp
     operations/geometry_operations.cpp
     operations/geometry_operations.hpp
     operations/operation.cpp
     operations/operation.hpp
     operations/import_gltf_operation.cpp
     operations/import_gltf_operation.hpp
-    operations/content_library_move_operation.cpp
-    operations/content_library_move_operation.hpp
     operations/item_insert_remove_operation.cpp
     operations/item_insert_remove_operation.hpp
     operations/item_parent_change_operation.cpp

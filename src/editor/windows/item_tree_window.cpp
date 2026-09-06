@@ -17,7 +17,6 @@
 #include "graphics/icon_set.hpp"
 #include "graphics/thumbnails.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_move_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/item_reposition_in_parent_operation.hpp"
@@ -702,21 +701,24 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     const std::shared_ptr<erhe::Item_base> payload_prim   = peek_prim_payload(payload_peek);
     const std::shared_ptr<Content_library> target_library = find_owning_library(m_context, item);
 
-    // A resource prim or a folder scope dropped on a scope of the same
-    // library moves there (doc/content-library-folders.md D3). The kind scope
-    // itself is a target but never a payload: it is where a kind lives.
+    // A resource prim or a folder scope dropped on any prim of the same scene
+    // moves there (doc/content-library-folders.md D3, doc/usd-compatibility-
+    // plan.md C5: a resource may sit under any prim). A kind scope is a target
+    // but never a payload: it is where a kind lives.
     {
-        const std::shared_ptr<erhe::Scope> target_scope = std::dynamic_pointer_cast<erhe::Scope>(item);
+        const std::shared_ptr<erhe::Hierarchy> target_hierarchy  = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         const std::shared_ptr<erhe::Hierarchy> payload_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(payload_prim);
-        const bool payload_movable =
-            target_scope && payload_hierarchy && target_library &&
-            (target_library->find_scope_kind(*target_scope) != 0) &&
+        const bool payload_is_resource =
+            target_library && payload_hierarchy &&
             (find_owning_library(m_context, payload_prim) == target_library) &&
             (target_library->find_scope_kind(*payload_hierarchy) != 0) &&
-            (payload_hierarchy != target_scope) &&
-            (payload_hierarchy->get_parent().lock() != target_scope) &&
-            !target_scope->is_ancestor(payload_hierarchy.get()) &&
             (target_library->find_scope(target_library->find_scope_kind(*payload_hierarchy)) != payload_hierarchy);
+        const bool payload_movable =
+            payload_is_resource && target_hierarchy &&
+            (find_owning_library(m_context, item) == target_library) &&
+            (payload_hierarchy != target_hierarchy) &&
+            (payload_hierarchy->get_parent().lock() != target_hierarchy) &&
+            !target_hierarchy->is_ancestor(payload_hierarchy.get());
         if (payload_movable) {
             const ImRect rect{rect_min, rect_max};
             if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
@@ -725,13 +727,14 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                     payload_prim->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
                 );
                 if (payload != nullptr) {
-                    auto op = std::make_shared<Content_library_move_operation>(
-                        target_library,
-                        payload_hierarchy,
-                        target_scope,
-                        target_scope->get_child_count()
+                    m_context.operation_stack->queue(
+                        std::make_shared<Item_parent_change_operation>(
+                            target_hierarchy,
+                            payload_hierarchy,
+                            std::shared_ptr<erhe::Hierarchy>{},
+                            std::shared_ptr<erhe::Hierarchy>{}
+                        )
                     );
-                    m_context.operation_stack->queue(op);
                 }
                 ImGui::EndDragDropTarget();
                 return true;

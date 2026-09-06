@@ -35,7 +35,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "texture_graph/graph_texture.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
@@ -227,6 +227,7 @@ namespace {
 // The content-library attaches for the textures and materials one USD file
 // contributed, in the order the glTF import builds them.
 void append_usd_content_library_operations(
+    App_context&                                                 context,
     const std::shared_ptr<Content_library>&                      content_library,
     const std::vector<std::shared_ptr<erhe::graphics::Texture>>& textures,
     const erhe::usd::Usd_data&                                   usd_data,
@@ -239,7 +240,8 @@ void append_usd_content_library_operations(
             continue;
         }
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 textures[i],
                 Gltf_source_reference{
@@ -256,7 +258,8 @@ void append_usd_content_library_operations(
             continue;
         }
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 usd_data.materials[i],
                 Gltf_source_reference{
@@ -400,7 +403,7 @@ auto make_import_usd_operation(
     const std::string                      path_string     = path.generic_string();
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
-    append_usd_content_library_operations(content_library, textures, usd_data, path_string, operations);
+    append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
 
     erhe::scene::Scene* scene = scene_root->get_hosted_scene();
     operations.push_back(
@@ -522,7 +525,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // path; opening a scene is not undoable, so they are executed inline and
     // dropped - the same shape finish_open_scene_gltf uses.
     std::vector<std::shared_ptr<Operation>> operations;
-    append_usd_content_library_operations(content_library, textures, usd_data, path.generic_string(), operations);
+    append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
     for (const std::shared_ptr<Operation>& operation : operations) {
         operation->execute(context);
     }

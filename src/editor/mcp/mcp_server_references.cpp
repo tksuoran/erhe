@@ -34,12 +34,13 @@
 #include "geometry_graph/geometry_graph_window.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_move_operation.hpp"
+#include "operations/item_parent_change_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
 #include "physics/physics_tool.hpp"
 #include "preview/material_preview.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -495,7 +496,7 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
 
     std::shared_ptr<erhe::Hierarchy> found_node{};
-    std::shared_ptr<erhe::Scope>     folder_node{};
+    std::shared_ptr<erhe::Hierarchy> folder_node{};
     std::size_t                      match_count{0};
     for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
         const std::shared_ptr<erhe::Scope> kind_scope = library->find_scope(kind_type_bit);
@@ -512,7 +513,7 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
                     ++match_count;
                 }
                 if (is_scope && !folder_name.empty() && (prim.get_name() == folder_name) && !folder_node) {
-                    folder_node = std::dynamic_pointer_cast<erhe::Scope>(prim.shared_hierarchy_from_this());
+                    folder_node = prim.shared_hierarchy_from_this();
                 }
                 return true;
             }
@@ -526,6 +527,12 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
             "Item name '" + item_name + "' matches " + std::to_string(match_count) + " library entries"
         );
     }
+    // A destination outside the kind scopes: any prim of the scene by name
+    // (doc/usd-compatibility-plan.md C5 - a resource may sit under any prim).
+    if (!folder_name.empty() && !folder_node) {
+        const std::shared_ptr<erhe::Item_base> named = find_item_in_scene_by_name(*scene_root, folder_name);
+        folder_node = std::dynamic_pointer_cast<erhe::Hierarchy>(named);
+    }
     const std::shared_ptr<erhe::Scope> parent_node = std::dynamic_pointer_cast<erhe::Scope>(found_node->get_parent().lock());
     if (!parent_node) {
         return make_error_content("Library item has no parent folder: " + item_name);
@@ -537,23 +544,26 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
     // kind of the scope it will be created under.
     std::shared_ptr<erhe::Scope> destination_kind_scope{};
     if (!folder_path.empty()) {
-        std::string missing{};
-        std::string rest{};
-        if (!walk_library_folder_path(*library, folder_path, folder_node, missing, rest) || !missing.empty() || !folder_node) {
+        std::string                  missing{};
+        std::string                  rest{};
+        std::shared_ptr<erhe::Scope> path_scope{};
+        if (!walk_library_folder_path(*library, folder_path, path_scope, missing, rest) || !missing.empty() || !path_scope) {
             return make_error_content("Folder path does not exist: " + folder_path);
         }
+        folder_node            = path_scope;
         destination_kind_scope = find_kind_scope_of(*library, *folder_node);
     } else if (!folder_node) {
         // Create the destination folder under the moved entry's own parent,
         // so a move never has to invent a type mapping; the insert and the
         // move undo together.
-        folder_node = std::make_shared<erhe::Scope>(folder_name);
-        folder_node->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        const std::shared_ptr<erhe::Scope> new_folder = std::make_shared<erhe::Scope>(folder_name);
+        new_folder->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        folder_node = new_folder;
         operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
                 Item_insert_remove_operation::Parameters{
                     .context = m_context,
-                    .item    = folder_node,
+                    .item    = new_folder,
                     .parent  = parent_node,
                     .mode    = Item_insert_remove_operation::Mode::insert
                 }
@@ -563,8 +573,10 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
     } else {
         destination_kind_scope = find_kind_scope_of(*library, *folder_node);
     }
-    // A resource stays under the kind scope it belongs to.
-    if (destination_kind_scope != find_kind_scope_of(*library, *found_node)) {
+    // Under a kind scope, a resource stays under the kind scope it belongs to;
+    // a destination outside every kind scope is any prim of the scene, which
+    // C5 allows.
+    if ((destination_kind_scope != nullptr) && (destination_kind_scope != find_kind_scope_of(*library, *found_node))) {
         return make_error_content("Destination folder is of another resource kind: " + folder_node->get_name());
     }
     if ((folder_node.get() == found_node.get()) || folder_node->is_ancestor(found_node.get())) {
@@ -575,7 +587,14 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
     // parent and attaches to the new one inside the call, so the removal
     // note the detach records is cancelled by the attach before the frame's
     // flush - a move must not read as a removal.
-    operations.push_back(std::make_shared<Content_library_move_operation>(library, found_node, folder_node, folder_node->get_child_count()));
+    operations.push_back(
+        std::make_shared<Item_parent_change_operation>(
+            folder_node,
+            found_node,
+            std::shared_ptr<erhe::Hierarchy>{},
+            std::shared_ptr<erhe::Hierarchy>{}
+        )
+    );
     if (operations.size() == 1) {
         m_context.operation_stack->queue(operations.front());
     } else {

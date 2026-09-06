@@ -23,8 +23,8 @@ Implements the undo/redo operation system and all concrete editor operations.
 - **Binary operations** (extend `Compound_operation`): `Union`, `Intersection`, `Difference` -- CSG operations.
 
 - **Scene operations**:
-  - `Item_insert_remove_operation` -- insert/remove items from scene hierarchy
-  - `Item_parent_change_operation` -- reparent nodes
+  - `Item_insert_remove_operation` -- insert/remove prims from the scene tree; also how a content-library resource enters and leaves a scene (`make_library_attach_operation`, `operations/library_attach_operation.hpp`, which places the resource prim under its kind `Scope` or an explicit prim and records the library's per-resource bookkeeping)
+  - `Item_parent_change_operation` -- reparent any `erhe::Hierarchy`: scene nodes, content-library resource prims and folder `Scope`s alike (the Hierarchy drag and MCP `move_library_item`)
   - `Item_reposition_in_parent_operation` -- reorder siblings
   - `Node_transform_operation` -- undo/redo node transforms
   - `Node_attach_operation` -- attach/detach node attachments

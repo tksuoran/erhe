@@ -17,7 +17,7 @@
 #include "scene/scene_root.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/import_gltf_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
@@ -302,6 +302,7 @@ void acquire_import_materials_as_references(
 // asset references, resolved or stub-fallback) attach as REFERENCE entries
 // carrying their asset key instead of owning definition entries.
 void append_content_library_attach_operations(
+    App_context&                             context,
     const std::shared_ptr<Content_library>&  content_library,
     const erhe::gltf::Gltf_data&             gltf_data,
     const std::string&                       gltf_path_str,
@@ -314,7 +315,8 @@ void append_content_library_attach_operations(
         const std::shared_ptr<erhe::graphics::Texture>& image = gltf_data.images[i];
         if (image) {
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+                make_library_attach_operation(
+                    context,
                     content_library,
                     image,
                     Gltf_source_reference{
@@ -335,20 +337,18 @@ void append_content_library_attach_operations(
         if (material) {
             const auto reference_it = material_reference_keys.find(material.get());
             const bool is_reference = (reference_it != material_reference_keys.end());
+            const Gltf_source_reference source{
+                .gltf_path  = gltf_path_str,
+                .item_name  = material->get_name(),
+                .item_index = static_cast<int>(i),
+                .item_type  = "material",
+            };
+            // An R6 asset reference lists a material another container
+            // defines: a listing, not a prim of this scene's tree.
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
-                    content_library,
-                    material,
-                    Gltf_source_reference{
-                        .gltf_path  = gltf_path_str,
-                        .item_name  = material->get_name(),
-                        .item_index = static_cast<int>(i),
-                        .item_type  = "material",
-                    },
-                    std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                    is_reference,
-                    is_reference ? std::optional<Asset_key>{reference_it->second} : std::optional<Asset_key>{}
-                )
+                is_reference
+                    ? make_library_reference_operation(content_library, material, source, reference_it->second)
+                    : make_library_attach_operation(context, content_library, material, source)
             );
         }
     }
@@ -358,7 +358,8 @@ void append_content_library_attach_operations(
         const std::shared_ptr<erhe::scene::Skin>& skin = gltf_data.skins[i];
         if (skin) {
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::scene::Skin>>(
+                make_library_attach_operation(
+                    context,
                     content_library,
                     skin,
                     Gltf_source_reference{
@@ -377,7 +378,8 @@ void append_content_library_attach_operations(
         const std::shared_ptr<erhe::scene::Animation>& animation = gltf_data.animations[i];
         if (animation) {
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
+                make_library_attach_operation(
+                    context,
                     content_library,
                     animation,
                     Gltf_source_reference{
@@ -1130,7 +1132,7 @@ auto make_import_gltf_operation(
     }
 
     std::vector<std::shared_ptr<Operation>> operations;
-    append_content_library_attach_operations(scene_root->get_content_library(), gltf_data, path.generic_string(), material_reference_keys, operations);
+    append_content_library_attach_operations(context, scene_root->get_content_library(), gltf_data, path.generic_string(), material_reference_keys, operations);
 
     // KHR_physics_rigid_bodies / KHR_implicit_shapes: shared physics items go
     // through content-library attach operations; Node_physics / Node_joint
@@ -1554,7 +1556,7 @@ auto finish_open_scene_gltf(
     // dropped - opening a scene is not undoable. Same ordering as the import
     // compound: everything executes before the nodes enter the scene.
     std::vector<std::shared_ptr<Operation>> operations;
-    append_content_library_attach_operations(content_library, gltf_data, path.generic_string(), material_reference_keys, operations);
+    append_content_library_attach_operations(context, content_library, gltf_data, path.generic_string(), material_reference_keys, operations);
     import_gltf_physics(context, gltf_data, scene_root, path, operations);
     import_gltf_editor_state(context, gltf_data, scene_root, path, operations);
     for (const std::shared_ptr<Operation>& operation : operations) {

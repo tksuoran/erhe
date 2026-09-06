@@ -550,10 +550,11 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
         }
         const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         // A delete removes the item from the parent it hangs off, so an item
-        // with no parent has nothing to be removed from. Content-library
-        // resources are prims (doc/usd-compatibility-plan.md U4) with no
-        // place in the tree yet, and they reach the selection; they are
-        // deleted through the content library, not here.
+        // with no parent has nothing to be removed from. A content-library
+        // resource is a prim of the scene's tree
+        // (doc/usd-compatibility-plan.md U4), so a selected material is
+        // deleted here like any other prim - through the same operation, with
+        // the same items_removed announcement.
         if (!hierarchy || !hierarchy->get_parent().lock()) {
             continue;
         }
@@ -640,15 +641,23 @@ auto Selection::duplicate_selection() -> bool
     for (const auto& item : target_selection) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
         // A duplicate is inserted next to the source, so a source with no
-        // parent has nowhere to put one - see delete_items() for the
-        // content-library resources this now skips.
+        // parent has nowhere to put one.
         if (hierarchy && hierarchy->get_parent().lock()) {
             // Clones keep the source name; a duplicate wants a
-            // distinguishing name, so rename the duplicate root here.
+            // distinguishing name, so rename the duplicate root here. The
+            // attach then makes it sibling-unique (M2).
             const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());
-            if (duplicate) {
-                duplicate->set_name(hierarchy->get_name() + " Copy");
+            if (!duplicate) {
+                // erhe::Item_kind::not_clonable: a Brush shares an immutable
+                // payload and a graph asset owns its node graph, so neither
+                // has a copy constructor to duplicate through.
+                log_selection->info(
+                    "duplicate: {} '{}' is not clonable - skipped",
+                    hierarchy->get_type_name(), hierarchy->get_name()
+                );
+                continue;
             }
+            duplicate->set_name(hierarchy->get_name() + " Copy");
             compound_parameters.operations.push_back(
                 std::make_shared<Item_insert_remove_operation>(
                     Item_insert_remove_operation::Parameters{
@@ -803,6 +812,18 @@ void Selection::end_selection_change()
         std::back_inserter(selection_change.newly_selected),
         item_set_sort_predicate
     );
+
+    // Nothing actually changed: no message. Every operation that snapshots
+    // and restores the selection around itself - which is every
+    // Item_insert_remove_operation, and so every content-library resource
+    // insert (doc/usd-compatibility-plan.md U4) - would otherwise dispatch a
+    // Selection_message with two empty diff lists, and an import undo would
+    // dispatch one per resource.
+    if (selection_change.no_longer_selected.empty() && selection_change.newly_selected.empty()) {
+        m_begin_selection_change_state.clear();
+        m_command_target_selection.clear();
+        return;
+    }
 
     // A selection change in a scene makes that scene the active scene
     // (deselect-only changes do not). Set before broadcasting so

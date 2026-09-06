@@ -553,6 +553,17 @@ auto Scene_root::make_browser_window(
                     );
                     close = true;
                 }
+                // A Scope: children and nothing else
+                // (doc/usd-compatibility-plan.md C5); the entry the content
+                // library's "Create Folder" became.
+                if (ImGui::MenuItem("Scope")) {
+                    deferred_operations.push_back(
+                        [&context, parent_node]() {
+                            context.scene_commands->create_new_scope(parent_node.get());
+                        }
+                    );
+                    close = true;
+                }
                 if (ImGui::MenuItem("Camera")) {
                     deferred_operations.push_back(
                         [&context, parent_node]() {

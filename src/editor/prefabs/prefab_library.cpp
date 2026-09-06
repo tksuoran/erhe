@@ -9,7 +9,7 @@
 #include "editor_log.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
@@ -484,7 +484,7 @@ auto instantiate_prefab(
         const std::shared_ptr<erhe::graphics::Texture>& image = prefab->gltf_data.images[i];
         if (image) {
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
+                make_library_reference_operation(
                     content_library,
                     image,
                     Gltf_source_reference{
@@ -492,9 +492,7 @@ auto instantiate_prefab(
                         .item_name  = image->get_name(),
                         .item_index = static_cast<int>(i),
                         .item_type  = "texture",
-                    },
-                    (i < prefab->gltf_data.image_sources.size()) ? prefab->gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                    true // is_reference
+                    }
                 )
             );
         }
@@ -504,7 +502,7 @@ auto instantiate_prefab(
         const std::shared_ptr<erhe::primitive::Material>& material = prefab->gltf_data.materials[i];
         if (material) {
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
+                make_library_reference_operation(
                     content_library,
                     material,
                     Gltf_source_reference{
@@ -513,11 +511,9 @@ auto instantiate_prefab(
                         .item_index = static_cast<int>(i),
                         .item_type  = "material",
                     },
-                    std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                    true, // is_reference
-                    // Reference entries record their defining container
+                    // A referenced listing records its defining container
                     // (asset-manager plan, R5 sub-plan step R5.2). Texture
-                    // entries above carry no asset_key yet: texture is not a
+                    // listings above carry no asset_key yet: texture is not a
                     // managed Asset_type in v1 (plan D6); their container is
                     // already recorded in gltf_source.
                     Asset_key{

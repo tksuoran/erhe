@@ -10,7 +10,8 @@
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
+#include "operations/operation.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -478,7 +479,8 @@ void import_brushes(
             ? std::shared_ptr<erhe::Scope>{}
             : resolve_library_folder(content_library->get_scope(erhe::Item_type::brush), folder_path);
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<Brush>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 brush,
                 Gltf_source_reference{
@@ -488,7 +490,6 @@ void import_brushes(
                     .item_type  = "brush",
                 },
                 std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                false,
                 std::optional<Asset_key>{},
                 folder
             )
@@ -534,7 +535,8 @@ void import_node_graphs(
             }
             graph_textures.push_back(graph_texture);
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<Graph_texture>>(
+                make_library_attach_operation(
+                    context,
                     content_library,
                     graph_texture,
                     Gltf_source_reference{
@@ -564,7 +566,8 @@ void import_node_graphs(
             }
             graph_meshes.push_back(graph_mesh);
             operations.push_back(
-                std::make_shared<Content_library_attach_operation<Graph_mesh>>(
+                make_library_attach_operation(
+                    context,
                     content_library,
                     graph_mesh,
                     Gltf_source_reference{
@@ -927,6 +930,7 @@ void import_library_folders(
 // ERHE_scene styles (doc/style-library.md D4): one attach operation per
 // style item, run before anything that names a style.
 void import_styles(
+    App_context&                             context,
     const erhe::gltf::Gltf_data&             gltf_data,
     const std::shared_ptr<Content_library>&  content_library,
     const std::string&                       gltf_path_str,
@@ -963,7 +967,8 @@ void import_styles(
             }
         }
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<Style>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 style,
                 Gltf_source_reference{
@@ -1141,7 +1146,7 @@ void import_gltf_editor_state(
     import_layouts(gltf_data);
     import_collections(gltf_data);
     // Styles first: the material and folder assignments below name them.
-    import_styles(gltf_data, content_library, gltf_path_str, operations);
+    import_styles(context, gltf_data, content_library, gltf_path_str, operations);
     import_brushes(context, gltf_data, content_library, gltf_path_str, operations);
     import_node_graphs(context, gltf_data, content_library, gltf_path_str, operations);
     import_material_styles(gltf_data, content_library, operations);

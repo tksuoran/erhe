@@ -197,11 +197,16 @@ void Item_insert_remove_operation::undo(App_context& context)
 
 namespace {
 
-void collect_subtree_mesh_materials(const std::shared_ptr<erhe::Hierarchy>& hierarchy, std::unordered_set<const erhe::Item_base*>& out_items)
+void collect_subtree_references(const std::shared_ptr<erhe::Hierarchy>& hierarchy, std::unordered_set<const erhe::Item_base*>& out_items)
 {
     if (!hierarchy) {
         return;
     }
+    // The retained prims themselves: a content-library resource is a prim
+    // (doc/usd-compatibility-plan.md U4), so a removed material kept for undo
+    // must make its container's unload refuse the same way a mesh's material
+    // does.
+    out_items.insert(hierarchy.get());
     const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(hierarchy);
     if (mesh) {
         for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
@@ -211,7 +216,7 @@ void collect_subtree_mesh_materials(const std::shared_ptr<erhe::Hierarchy>& hier
         }
     }
     for (const std::shared_ptr<erhe::Hierarchy>& child : hierarchy->get_children()) {
-        collect_subtree_mesh_materials(child, out_items);
+        collect_subtree_references(child, out_items);
     }
 }
 
@@ -219,7 +224,7 @@ void collect_subtree_mesh_materials(const std::shared_ptr<erhe::Hierarchy>& hier
 
 void Item_insert_remove_operation::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
 {
-    collect_subtree_mesh_materials(m_item, out_items);
+    collect_subtree_references(m_item, out_items);
 }
 
 }

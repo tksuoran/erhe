@@ -4,7 +4,7 @@
 
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
-#include "operations/content_library_attach_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -398,7 +398,8 @@ void import_gltf_physics(
         }
         importer.material_items.push_back(item);
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::physics::Physics_material>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 item,
                 Gltf_source_reference{
@@ -421,7 +422,8 @@ void import_gltf_physics(
         item->not_collide_with_systems = description.not_collide_with_systems;
         importer.filter_items.push_back(item);
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::physics::Collision_filter>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 item,
                 Gltf_source_reference{
@@ -477,7 +479,8 @@ void import_gltf_physics(
         }
         importer.joint_items.push_back(item);
         operations.push_back(
-            std::make_shared<Content_library_attach_operation<erhe::physics::Physics_joint_settings>>(
+            make_library_attach_operation(
+                context,
                 content_library,
                 item,
                 Gltf_source_reference{
