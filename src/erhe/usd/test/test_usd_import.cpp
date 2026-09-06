@@ -75,9 +75,10 @@ TEST_F(Cube_import, node_names)
 
 TEST_F(Cube_import, non_scene_prims_contribute_no_nodes)
 {
-    // The Scope holding the materials, the Material prims, their Shader prims
-    // and the GeomSubset are namespace, not scene graph: none of them becomes
-    // a node. What is left is root + cube + cam + sun.
+    // A Material prim is a resource prim of the tree and its Shader prims
+    // are its network; a GeomSubset's facets ride a primitive of its mesh.
+    // None of them is a node, and the Scope holding the materials is a Scope
+    // prim: the node list is root + cube + cam + sun.
     std::string names;
     for (const std::shared_ptr<erhe::scene::Node>& node : result.data.nodes) {
         ASSERT_TRUE(node.operator bool());

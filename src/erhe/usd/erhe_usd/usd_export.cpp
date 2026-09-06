@@ -56,12 +56,10 @@ namespace erhe::usd {
 
 namespace {
 
-// The scope holding every exported material, and the name of the wrapper
-// prim created when the scene has more than one top-level prim: a stage
-// names one `defaultPrim` and an erhe scene has one root
-// (doc/usd_compatibility.md, stage-level constants).
-constexpr const char* c_materials_scope_name = "Materials";
-constexpr const char* c_world_prim_name      = "World";
+// The name of the wrapper prim created when the scene has more than one
+// top-level prim: a stage names one `defaultPrim` and an erhe scene has one
+// root (doc/usd_compatibility.md, stage-level constants).
+constexpr const char* c_world_prim_name = "World";
 
 // The focal length every exported perspective camera gets. USD is
 // physical-camera-first and erhe stores the two field-of-view angles, so one
@@ -146,6 +144,44 @@ public:
 
 private:
     std::set<std::string> m_taken;
+};
+
+// One prim of the stage, as the first pass decides it: which erhe prim it
+// is, the transform that reached it, its sanitized sibling-unique name and
+// the stage path that name gives it. The writer needs the paths before it
+// writes anything, because a mesh binds a material by the path the material
+// prim ends up at (doc/usd-compatibility-plan.md U4).
+class Plan_prim final
+{
+public:
+    const erhe::Typed*               item         {nullptr};
+    // The same prim as `item` when its class carries a transform, and as
+    // `material` when it is a material; null otherwise.
+    const erhe::scene::Node*         node         {nullptr};
+    const erhe::primitive::Material* material     {nullptr};
+    glm::mat4                        pre_transform{1.0f};
+    std::string                      name;
+    std::string                      path;
+    std::vector<Plan_prim>           children;
+};
+
+// One texture shader of one material's shading network: the material and
+// the slot the shader reads. A material is identified by the object rather
+// than by its place in the caller's list, because the scene tree - not that
+// list - decides which materials are written.
+class Texture_shader_key final
+{
+public:
+    const erhe::primitive::Material* material{nullptr};
+    Usd_material_texture_slot        slot    {Usd_material_texture_slot::base_color};
+
+    [[nodiscard]] auto operator<(const Texture_shader_key& other) const -> bool
+    {
+        if (material != other.material) {
+            return material < other.material;
+        }
+        return slot < other.slot;
+    }
 };
 
 // The erhe properties this writer carries in a USD attribute of the schema -
@@ -278,22 +314,38 @@ public:
             return;
         }
 
-        lightusd::Stage stage;
-        write_materials();
+        for (std::size_t index = 0, end = m_arguments.materials.size(); index < end; ++index) {
+            if (m_arguments.materials[index]) {
+                m_material_indices[m_arguments.materials[index].get()] = index;
+            }
+        }
 
-        Name_scope                  top_level_names;
+        // Pass one: where every prim lands on the stage. A prim's path is
+        // only known once its ancestors have their sanitized, sibling-unique
+        // names and the wrapper decision below is made, and a mesh binds its
+        // material by that path, so the whole tree is planned before
+        // anything is written.
+        std::vector<Plan_prim> plan;
+        Name_scope             top_level_names;
+        plan_children(*m_arguments.root_node.get(), glm::mat4{1.0f}, top_level_names, plan);
+
+        // Several top-level prims are gathered under one Xform that plays the
+        // erhe root's part, so the stage still names one defaultPrim.
+        const bool        wrap              = (plan.size() != 1);
+        const std::string default_prim_name = wrap ? std::string{c_world_prim_name} : plan.front().name;
+        assign_paths(plan, wrap ? fmt::format("/{}", c_world_prim_name) : std::string{});
+        record_material_paths(plan);
+
+        // Pass two: the prims themselves.
+        lightusd::Stage             stage;
         std::vector<lightusd::Prim> content_prims;
-        write_child_nodes(*m_arguments.root_node.get(), glm::mat4{1.0f}, top_level_names, content_prims);
+        write_plan_prims(plan, content_prims);
 
-        std::string default_prim_name;
-        if (content_prims.size() == 1) {
+        if (!wrap) {
             lightusd::Prim& prim = content_prims.front();
-            default_prim_name = std::string{prim.element_name()};
             add_collections(prim);
             add_root_prim(stage, std::move(prim));
         } else {
-            // Several top-level prims are gathered under one Xform that plays
-            // the erhe root's part, so the stage still names one defaultPrim.
             lightusd::Xform world;
             world.name = c_world_prim_name;
             lightusd::Prim world_prim{world};
@@ -303,13 +355,8 @@ public:
                     add_warning(fmt::format("a top-level prim could not be added under '{}': {}", c_world_prim_name, error));
                 }
             }
-            prefix_tag_member_paths(fmt::format("/{}", c_world_prim_name));
-            default_prim_name = c_world_prim_name;
             add_collections(world_prim);
             add_root_prim(stage, std::move(world_prim));
-        }
-        if (m_materials_prim.has_value()) {
-            add_root_prim(stage, std::move(m_materials_prim.value()));
         }
 
         stage.metas().defaultPrim = lightusd::value::token{default_prim_name};
@@ -338,8 +385,8 @@ public:
             add_warning(warning);
         }
         log_usd->info(
-            "USD '{}': {} node(s), {} mesh prim(s), {} material(s)",
-            filename, m_node_count, m_mesh_count, m_arguments.materials.size()
+            "USD '{}': {} node(s), {} mesh prim(s), {} material prim(s)",
+            filename, m_node_count, m_mesh_count, m_material_paths.size()
         );
     }
 
@@ -436,10 +483,21 @@ private:
     // Materials
     // -------------------------------------------------------------------
 
-    [[nodiscard]] auto texture_of(const std::size_t material_index, const Usd_material_texture_slot slot) const -> const Usd_save_texture*
+    // The caller's texture list is indexed by the material's place in
+    // Usd_save_arguments::materials, which is the scene's own resource index;
+    // the tree decides where the material prim goes, so the index is looked
+    // up per material and a material the caller did not list has no texture.
+    [[nodiscard]] auto texture_of(
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot
+    ) const -> const Usd_save_texture*
     {
+        const std::map<const erhe::primitive::Material*, std::size_t>::const_iterator i = m_material_indices.find(&material);
+        if (i == m_material_indices.end()) {
+            return nullptr;
+        }
         for (const Usd_save_texture& texture : m_arguments.textures) {
-            if ((texture.material_index == material_index) && (texture.slot == slot) && !texture.path.empty()) {
+            if ((texture.material_index == i->second) && (texture.slot == slot) && !texture.path.empty()) {
                 return &texture;
             }
         }
@@ -477,26 +535,25 @@ private:
     // One UsdUVTexture shader prim under the material prim, created once per
     // slot; the surface inputs connect to its outputs.
     [[nodiscard]] auto get_texture_shader(
-        lightusd::Prim&                 material_prim,
-        const std::string&              material_path,
-        const std::size_t               material_index,
-        const Usd_material_texture_slot slot
+        lightusd::Prim&                  material_prim,
+        const std::string&               material_path,
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot
     ) -> std::string
     {
-        const std::pair<std::size_t, Usd_material_texture_slot>  key{material_index, slot};
-        const std::map<std::pair<std::size_t, Usd_material_texture_slot>, std::string>::const_iterator i =
-            m_texture_shader_names.find(key);
+        const Texture_shader_key key{&material, slot};
+        const std::map<Texture_shader_key, std::string>::const_iterator i = m_texture_shader_names.find(key);
         if (i != m_texture_shader_names.end()) {
             return i->second;
         }
-        const Usd_save_texture* texture = texture_of(material_index, slot);
+        const Usd_save_texture* texture = texture_of(material, slot);
         if (texture == nullptr) {
             return {};
         }
         // The primvar reader every texture of the material reads its UVs
         // from; a material without a texture gets no shading network beyond
         // its surface.
-        if (m_uv_reader_materials.insert(material_index).second) {
+        if (m_uv_reader_materials.insert(&material).second) {
             add_uv_reader(material_prim);
         }
 
@@ -548,7 +605,7 @@ private:
     // resolve to a file: a generated texture has no bytes on disk, so the
     // slot stays out of the shading network (commit 1, see
     // src/erhe/usd/notes.md).
-    void warn_about_unresolved_textures(const erhe::primitive::Material& material, const std::size_t material_index)
+    void warn_about_unresolved_textures(const erhe::primitive::Material& material)
     {
         using Slot_property = erhe::property::Property<erhe::property::Object_reference>;
         const std::pair<const Slot_property*, Usd_material_texture_slot> slots[] = {
@@ -565,7 +622,7 @@ private:
             if (material.get_value(*slot.first).object == nullptr) {
                 continue;
             }
-            if (texture_of(material_index, slot.second) == nullptr) {
+            if (texture_of(material, slot.second) == nullptr) {
                 add_warning(
                     fmt::format(
                         "material '{}' texture slot '{}' has no source file - the slot is not written",
@@ -576,47 +633,30 @@ private:
         }
     }
 
-    void write_materials()
+    // One `Material` prim where the material sits in the scene tree
+    // (doc/usd-compatibility-plan.md U4): the material's own name and place,
+    // its `UsdPreviewSurface` shader and the texture shaders that feed it.
+    // The shader prims occupy the material prim's namespace, so a prim the
+    // user parented to a material is not written.
+    [[nodiscard]] auto write_material_prim(const Plan_prim& plan_prim) -> lightusd::Prim
     {
-        if (m_arguments.materials.empty()) {
-            return;
-        }
-        lightusd::Scope scope;
-        scope.name = c_materials_scope_name;
-        lightusd::Prim scope_prim{scope};
+        const erhe::primitive::Material& material = *plan_prim.material;
 
-        Name_scope material_names;
-        for (std::size_t material_index = 0, end = m_arguments.materials.size(); material_index < end; ++material_index) {
-            const std::shared_ptr<erhe::primitive::Material>& material = m_arguments.materials[material_index];
-            if (!material) {
-                continue;
-            }
-            const std::string material_name = material_names.make_unique(material->get_name());
-            const std::string material_path = fmt::format("/{}/{}", c_materials_scope_name, material_name);
+        lightusd::Material usd_material;
+        usd_material.name = plan_prim.name;
+        usd_material.surface.set(lightusd::Path{plan_prim.path + "/surface", "outputs:surface"});
+        write_erhe_properties(material, usd_material);
 
-            lightusd::Material usd_material;
-            usd_material.name = material_name;
-            usd_material.surface.set(lightusd::Path{material_path + "/surface", "outputs:surface"});
-            write_erhe_properties(*material.get(), usd_material);
-
-            lightusd::Prim material_prim{usd_material};
-            warn_about_unresolved_textures(*material.get(), material_index);
-            write_surface_shader(material_prim, material_path, *material.get(), material_index);
-            m_material_paths[material.get()] = material_path;
-
-            std::string error;
-            if (!scope_prim.add_child(std::move(material_prim), false, &error)) {
-                add_warning(fmt::format("material '{}' could not be added: {}", material_name, error));
-            }
-        }
-        m_materials_prim = std::move(scope_prim);
+        lightusd::Prim material_prim{usd_material};
+        warn_about_unresolved_textures(material);
+        write_surface_shader(material_prim, plan_prim.path, material);
+        return material_prim;
     }
 
     void write_surface_shader(
         lightusd::Prim&                  material_prim,
         const std::string&               material_path,
-        const erhe::primitive::Material& material,
-        const std::size_t                material_index
+        const erhe::primitive::Material& material
     )
     {
         using erhe::primitive::Material;
@@ -656,15 +696,15 @@ private:
             surface.opacityThreshold.set_value(material.get_value(Material::alpha_cutoff_property));
         }
 
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::base_color, "outputs:rgb", surface.diffuseColor);
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::emissive,   "outputs:rgb", surface.emissiveColor);
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::normal,     "outputs:rgb", surface.normal);
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::occlusion,  "outputs:r",   surface.occlusion);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::base_color, "outputs:rgb", surface.diffuseColor);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::emissive,   "outputs:rgb", surface.emissiveColor);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::normal,     "outputs:rgb", surface.normal);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::occlusion,  "outputs:r",   surface.occlusion);
         // erhe has one metallic-roughness slot; UsdPreviewSurface reads the
         // two channels through separate inputs of the one texture, in the
         // glTF channel layout the importer expects back.
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::metallic_roughness, "outputs:g", surface.roughness);
-        connect_texture(material_prim, material_path, material_index, Usd_material_texture_slot::metallic_roughness, "outputs:b", surface.metallic);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness, "outputs:g", surface.roughness);
+        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness, "outputs:b", surface.metallic);
 
         lightusd::Shader shader;
         shader.name    = "surface";
@@ -679,15 +719,15 @@ private:
 
     template <typename T>
     void connect_texture(
-        lightusd::Prim&                 material_prim,
-        const std::string&              material_path,
-        const std::size_t               material_index,
-        const Usd_material_texture_slot slot,
-        const char*                     output_name,
-        T&                              input
+        lightusd::Prim&                  material_prim,
+        const std::string&               material_path,
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot,
+        const char*                      output_name,
+        T&                               input
     )
     {
-        const std::string shader_name = get_texture_shader(material_prim, material_path, material_index, slot);
+        const std::string shader_name = get_texture_shader(material_prim, material_path, material, slot);
         if (shader_name.empty()) {
             return;
         }
@@ -716,19 +756,23 @@ private:
     // Nodes
     // -------------------------------------------------------------------
 
-    // The child nodes of `node` as prims. The filter is the glTF exporter's:
-    // an import_root container is unwrapped with its transform composed in,
-    // a render proxy is derived data rebuilt by its owner, and anything
-    // without Item_flags::content is transient editor furniture - tool
-    // visuals, controllers, rendertarget UI quads - recreated every session.
-    void write_child_nodes(
-        const erhe::Hierarchy&       prim,
-        const glm::mat4&             pre_transform,
-        Name_scope&                  names,
-        std::vector<lightusd::Prim>& out_prims
+    // Pass one over the children of `parent`. The filter is the glTF
+    // exporter's - an import_root container is unwrapped with its transform
+    // composed in, a render proxy is derived data rebuilt by its owner, and
+    // anything without Item_flags::content is transient editor furniture
+    // (tool visuals, controllers, rendertarget UI quads) recreated every
+    // session - widened by the resources a USD file carries: a resource prim
+    // carries show_in_ui rather than content, so a material and every prim on
+    // the way down to one are planned as well
+    // (doc/usd-compatibility-plan.md U4).
+    void plan_children(
+        const erhe::Hierarchy&  parent,
+        const glm::mat4&        pre_transform,
+        Name_scope&             names,
+        std::vector<Plan_prim>& out_prims
     )
     {
-        for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
             const erhe::Typed* child_prim = dynamic_cast<const erhe::Typed*>(child.get());
             if (child_prim == nullptr) {
                 continue;
@@ -736,7 +780,7 @@ private:
             const uint64_t           flags      = child_prim->get_flag_bits();
             const erhe::scene::Node* child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if ((child_node != nullptr) && ((flags & erhe::Item_flags::import_root) != 0)) {
-                write_child_nodes(
+                plan_children(
                     *child_node,
                     pre_transform * child_node->parent_from_node_transform().get_matrix(),
                     names,
@@ -747,43 +791,117 @@ private:
             if ((flags & erhe::Item_flags::render_proxy) != 0) {
                 continue;
             }
-            if ((flags & erhe::Item_flags::content) == 0) {
+            if (((flags & erhe::Item_flags::content) == 0) && !holds_carried_resource(*child_prim)) {
                 continue;
             }
-            out_prims.push_back(
-                (child_node != nullptr)
-                    ? write_node(*child_node, pre_transform, names)
-                    : write_prim(*child_prim, pre_transform, names)
-            );
+            Plan_prim plan_prim{};
+            plan_prim.item          = child_prim;
+            plan_prim.node          = child_node;
+            plan_prim.material      = dynamic_cast<const erhe::primitive::Material*>(child.get());
+            plan_prim.pre_transform = pre_transform;
+            plan_prim.name          = names.make_unique(child_prim->get_name());
+            if (plan_prim.material == nullptr) {
+                // A prim that carries a transform writes it on itself, so its
+                // children start from identity; a prim without one passes the
+                // transform that reached it through to them.
+                Name_scope child_names;
+                plan_children(
+                    *child_prim,
+                    (child_node != nullptr) ? glm::mat4{1.0f} : pre_transform,
+                    child_names,
+                    plan_prim.children
+                );
+            }
+            out_prims.push_back(std::move(plan_prim));
         }
+    }
+
+    // A resource prim a USD file carries, or a prim on the way down to one.
+    // A resource is not content, so this is what widens the content filter;
+    // today the file carries materials, and plan step E4 adds the other
+    // kinds.
+    [[nodiscard]] static auto holds_carried_resource(const erhe::Typed& prim) -> bool
+    {
+        if (erhe::is<erhe::primitive::Material>(&prim)) {
+            return true;
+        }
+        for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+            const erhe::Typed* child_prim = dynamic_cast<const erhe::Typed*>(child.get());
+            if (child_prim == nullptr) {
+                continue;
+            }
+            if ((child_prim->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
+                continue;
+            }
+            if (holds_carried_resource(*child_prim)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The stage path of every planned prim: its parent's path and its own
+    // name. `parent_path` is empty at the top level, or the wrapper prim's
+    // path when the writer adds one.
+    static void assign_paths(std::vector<Plan_prim>& prims, const std::string& parent_path)
+    {
+        for (Plan_prim& prim : prims) {
+            prim.path = parent_path + "/" + prim.name;
+            assign_paths(prim.children, prim.path);
+        }
+    }
+
+    // Where each material of the scene ends up, so a mesh written later binds
+    // it by that path.
+    void record_material_paths(const std::vector<Plan_prim>& prims)
+    {
+        for (const Plan_prim& prim : prims) {
+            if (prim.material != nullptr) {
+                m_material_paths[prim.material] = prim.path;
+            }
+            record_material_paths(prim.children);
+        }
+    }
+
+    void write_plan_prims(const std::vector<Plan_prim>& plan, std::vector<lightusd::Prim>& out_prims)
+    {
+        out_prims.reserve(plan.size());
+        for (const Plan_prim& plan_prim : plan) {
+            out_prims.push_back(write_plan_prim(plan_prim));
+        }
+    }
+
+    // Pass two: one planned prim as one prim of the stage, with the prims
+    // planned below it as its children.
+    [[nodiscard]] auto write_plan_prim(const Plan_prim& plan_prim) -> lightusd::Prim
+    {
+        record_tags(*plan_prim.item, plan_prim.path);
+
+        lightusd::Prim prim =
+            (plan_prim.material != nullptr) ? write_material_prim(plan_prim) :
+            (plan_prim.node     != nullptr) ? write_node         (plan_prim) :
+                                              write_prim         (plan_prim);
+
+        std::vector<lightusd::Prim> child_prims;
+        write_plan_prims(plan_prim.children, child_prims);
+        for (lightusd::Prim& child_prim : child_prims) {
+            std::string error;
+            if (!prim.add_child(std::move(child_prim), false, &error)) {
+                add_warning(fmt::format("a child of '{}' could not be added: {}", plan_prim.name, error));
+            }
+        }
+        return prim;
     }
 
     // One prim of a class that carries no transform as one prim of the
     // stage: the `typeName` is the class's (doc/usd-compatibility-plan.md
     // C5). The transform that reached it composes with its children, which
     // is what the importer inverts.
-    [[nodiscard]] auto write_prim(const erhe::Typed& item, const glm::mat4& pre_transform, Name_scope& names) -> lightusd::Prim
+    [[nodiscard]] auto write_prim(const Plan_prim& plan_prim) -> lightusd::Prim
     {
-        const std::string prim_name = names.make_unique(item.get_name());
-
-        m_prim_path_stack.push_back(prim_name);
-        record_tags(item);
-
-        lightusd::Prim prim = erhe::is<erhe::Scope>(&item)
-            ? write_scope_prim(item, prim_name)
-            : write_typed_prim(item, prim_name);
-
-        Name_scope                  child_names;
-        std::vector<lightusd::Prim> child_prims;
-        write_child_nodes(item, pre_transform, child_names, child_prims);
-        for (lightusd::Prim& child_prim : child_prims) {
-            std::string error;
-            if (!prim.add_child(std::move(child_prim), false, &error)) {
-                add_warning(fmt::format("a child of '{}' could not be added: {}", prim_name, error));
-            }
-        }
-        m_prim_path_stack.pop_back();
-        return prim;
+        return erhe::is<erhe::Scope>(plan_prim.item)
+            ? write_scope_prim(*plan_prim.item, plan_prim.name)
+            : write_typed_prim(*plan_prim.item, plan_prim.name);
     }
 
     [[nodiscard]] auto write_scope_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
@@ -809,17 +927,14 @@ private:
     // One erhe node as one prim: a `Mesh`, `Camera` or UsdLux prim for a prim
     // of that class and an `Xform` for a plain one, each with its own xformOp
     // (doc/usd_compatibility.md, object model). The importer inverts it.
-    [[nodiscard]] auto write_node(const erhe::scene::Node& node, const glm::mat4& pre_transform, Name_scope& names) -> lightusd::Prim
+    [[nodiscard]] auto write_node(const Plan_prim& plan_prim) -> lightusd::Prim
     {
         ++m_node_count;
-        const std::string prim_name = names.make_unique(node.get_name());
-        const glm::mat4   matrix    = pre_transform * node.parent_from_node_transform().get_matrix();
+        const erhe::scene::Node& node      = *plan_prim.node;
+        const std::string&       prim_name = plan_prim.name;
+        const glm::mat4          matrix    = plan_prim.pre_transform * node.parent_from_node_transform().get_matrix();
 
-        m_prim_path_stack.push_back(prim_name);
-        record_tags(node);
-
-        // A Mesh CHILD of this node is a prim of its own, written by
-        // write_child_nodes below.
+        // A Mesh CHILD of this node is a prim of its own, planned as such.
         std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
@@ -835,23 +950,11 @@ private:
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
 
-        lightusd::Prim prim =
+        return
             mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix) :
             camera ? write_camera_prim(node, *camera.get(), prim_name, matrix) :
             light  ? write_light_prim (node, *light.get(),  prim_name, matrix) :
                      write_xform_prim (node,                prim_name, matrix);
-
-        Name_scope                  child_names;
-        std::vector<lightusd::Prim> child_prims;
-        write_child_nodes(node, glm::mat4{1.0f}, child_names, child_prims);
-        for (lightusd::Prim& child_prim : child_prims) {
-            std::string error;
-            if (!prim.add_child(std::move(child_prim), false, &error)) {
-                add_warning(fmt::format("a child of '{}' could not be added: {}", prim_name, error));
-            }
-        }
-        m_prim_path_stack.pop_back();
-        return prim;
     }
 
     template <typename T>
@@ -1311,37 +1414,16 @@ private:
 
     // Item tags become UsdCollectionAPI collections on the default prim
     // (doc/usd_compatibility.md, object model): one collection per tag whose
-    // `includes` names every prim carrying it. The paths are collected while
-    // the prims are written, because a prim path is only known once the
-    // sanitized, sibling-unique names of its ancestors are.
-    void record_tags(const erhe::Item_base& item)
+    // `includes` names every prim carrying it, at the path the first pass
+    // gave the prim.
+    void record_tags(const erhe::Item_base& item, const std::string& path)
     {
         const std::set<std::string>& tags = item.get_tags();
         if (tags.empty()) {
             return;
         }
-        const std::string path = current_prim_path();
         for (const std::string& tag : tags) {
             m_tag_members[sanitize_usd_identifier(tag)].push_back(path);
-        }
-    }
-
-    [[nodiscard]] auto current_prim_path() const -> std::string
-    {
-        std::string path;
-        for (const std::string& component : m_prim_path_stack) {
-            path += "/";
-            path += component;
-        }
-        return path;
-    }
-
-    void prefix_tag_member_paths(const std::string& prefix)
-    {
-        for (std::pair<const std::string, std::vector<std::string>>& entry : m_tag_members) {
-            for (std::string& path : entry.second) {
-                path.insert(0, prefix);
-            }
         }
     }
 
@@ -1391,14 +1473,13 @@ private:
     const Usd_save_arguments& m_arguments;
     Usd_save_result&          m_result;
 
-    std::optional<lightusd::Prim>                                           m_materials_prim;
-    std::map<const erhe::primitive::Material*, std::string>                 m_material_paths;
-    std::map<std::pair<std::size_t, Usd_material_texture_slot>, std::string> m_texture_shader_names;
-    std::set<std::size_t>                                                   m_uv_reader_materials;
-    std::map<std::string, std::vector<std::string>>                         m_tag_members;
-    std::vector<std::string>                                                m_prim_path_stack;
-    std::size_t                                                             m_node_count{0};
-    std::size_t                                                             m_mesh_count{0};
+    std::map<const erhe::primitive::Material*, std::size_t>  m_material_indices;
+    std::map<const erhe::primitive::Material*, std::string>  m_material_paths;
+    std::map<Texture_shader_key, std::string>                m_texture_shader_names;
+    std::set<const erhe::primitive::Material*>               m_uv_reader_materials;
+    std::map<std::string, std::vector<std::string>>          m_tag_members;
+    std::size_t                                              m_node_count{0};
+    std::size_t                                              m_mesh_count{0};
 };
 
 } // anonymous namespace

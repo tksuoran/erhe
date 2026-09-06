@@ -254,21 +254,27 @@ void append_usd_content_library_operations(
         );
     }
     for (std::size_t i = 0, end = usd_data.materials.size(); i < end; ++i) {
-        if (!usd_data.materials[i]) {
+        const std::shared_ptr<erhe::primitive::Material>& material = usd_data.materials[i];
+        if (!material) {
+            continue;
+        }
+        const Gltf_source_reference gltf_source{
+            .gltf_path  = path_string,
+            .item_name  = material->get_name(),
+            .item_index = static_cast<int>(i),
+            .item_type  = "material",
+        };
+        // A material the file placed is already a prim of the loaded tree
+        // (doc/usd-compatibility-plan.md U4), and the tree enters the scene
+        // as a whole: the material needs the library's bookkeeping, not an
+        // insert of its own. Only a material the file gave no place is
+        // attached, which is what creates the `Materials` kind scope.
+        if (material->get_parent().lock()) {
+            content_library->set_gltf_source(material, gltf_source);
             continue;
         }
         operations.push_back(
-            make_library_attach_operation(
-                context,
-                content_library,
-                usd_data.materials[i],
-                Gltf_source_reference{
-                    .gltf_path  = path_string,
-                    .item_name  = usd_data.materials[i]->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "material",
-                }
-            )
+            make_library_attach_operation(context, content_library, material, gltf_source)
         );
     }
 }
@@ -600,10 +606,12 @@ void log_uncarried_editor_state(const Content_library& content_library, const st
     log_uncarried_editor_state_kind<Graph_mesh>   (content_library, "node graph mesh",    path);
     log_uncarried_editor_state_kind<Graph_texture>(content_library, "node graph texture", path);
     log_uncarried_editor_state_kind<Style>        (content_library, "style",              path);
-    // Library folders have no USD form yet either; they are part of the
-    // content library's node tree rather than a category of their own.
+    // A folder is a Scope of the scene tree, so it is written when it holds a
+    // resource the file carries (today a material); a folder holding only
+    // kinds listed above, or nothing at all, is left out
+    // (src/erhe/usd/notes.md, Export).
     log_parsers->info(
-        "save_scene_usd '{}': content-library folders are not carried by a USD file yet",
+        "save_scene_usd '{}': a content-library folder holding no material is not carried by a USD file yet",
         erhe::file::to_string(path)
     );
 }

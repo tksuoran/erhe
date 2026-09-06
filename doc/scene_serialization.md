@@ -298,8 +298,12 @@ neither direction is offered anywhere
 Opening a USD file as a scene (`open_scene_usd`) builds a fresh `Scene_root`
 with its own empty content library, puts the file's top-level prims directly
 under the scene root - a USD file *is* the scene, so no `import_root`
-wrapper is added - and attaches the file's materials and the textures its
-image files decode to as the scene's own library items. Importing the same
+wrapper is added - and indexes the file's materials and the textures its
+image files decode to as the scene's own resources. A material is a prim of
+that tree and enters the scene with it, at the place the file gave it; only a
+material the file placed nowhere is attached under the `Materials` kind
+scope, and a texture always is, because a USD file names image files rather
+than texture prims. Importing the same
 file as an asset (the Asset Browser's "Import", MCP `import_usd`) keeps
 using the wrapper and the target scene's library, unchanged.
 

@@ -863,7 +863,11 @@ private:
 
             std::shared_ptr<erhe::primitive::Material> material = std::make_shared<erhe::primitive::Material>(create_info);
             material->set_source_path(m_arguments.path);
-            material->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+            // A resource prim is shown in the UI and is not scene content
+            // (src/editor/content_library/notes.md), which is what keeps the
+            // glTF node writer from writing it as a node.
+            material->enable_flag_bits(erhe::Item_flags::show_in_ui);
+            m_material_by_path[usd_material.abs_path] = material_index;
 
             if (usd_material.surfaceShader.has_value()) {
                 apply_preview_surface(
@@ -1434,9 +1438,11 @@ private:
         return (prim.type_name() == "Model") ? prim.prim_type_name() : prim.type_name();
     }
 
-    // The shading network is namespace, and a GeomSubset's facets already
-    // ride a primitive of its mesh: such a prim contributes no erhe prim of
-    // its own. Tydra lists each as a transform node all the same.
+    // A `Material` prim is the erhe material prim (U4, see place_material);
+    // the `Shader` and `NodeGraph` prims below it are its network, and a
+    // `GeomSubset`'s facets already ride a primitive of its mesh, so neither
+    // contributes an erhe prim of its own. Tydra lists each as a transform
+    // node all the same.
     [[nodiscard]] static auto is_shading_prim_type(const std::string& type_name) -> bool
     {
         return
@@ -1462,29 +1468,6 @@ private:
             (type_name == "DiskLight")     ||
             (type_name == "CylinderLight") ||
             (type_name == "GeometryLight");
-    }
-
-    // A Scope whose children are all shading prims is the namespace a
-    // material network lives in rather than a prim of the tree: erhe's
-    // materials are library items until U4 makes them prims, so such a
-    // scope contributes nothing and the writer re-creates one from the
-    // material library on export. Every other Scope - an empty one included
-    // - is an erhe::Scope.
-    [[nodiscard]] auto is_shading_scope(const Tydra_node& usd_node) const -> bool
-    {
-        if (usd_node.children.empty()) {
-            return false;
-        }
-        for (const Tydra_node& usd_child : usd_node.children) {
-            const lightusd::Prim* prim = find_prim(usd_child.abs_path);
-            if (prim == nullptr) {
-                return false;
-            }
-            if (!is_shading_prim_type(get_usd_type_name(*prim))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     [[nodiscard]] auto subtree_has_scene_content(const Tydra_node& usd_node) const -> bool
@@ -1513,9 +1496,9 @@ private:
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
         if (is_shading_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
-            return;
-        }
-        if ((type_name == "Scope") && is_shading_scope(usd_node)) {
+            if (type_name == "Material") {
+                place_material(usd_node, parent);
+            }
             return;
         }
         if (!is_xformable_prim_type(type_name)) {
@@ -1560,6 +1543,32 @@ private:
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, node, child_transform);
         }
+    }
+
+    // The material a `Material` prim became, parented where the stage puts
+    // that prim (doc/usd-compatibility-plan.md U4): a material is a prim of
+    // the tree, so a stage that keeps its materials in `/Looks` gives erhe a
+    // `Scope` named `Looks` holding them. The prim name is the material's
+    // name, so two materials of one name in two scopes stay apart by their
+    // place; the shading network below the prim stays namespace.
+    void place_material(const Tydra_node& usd_node, const std::shared_ptr<erhe::Hierarchy>& parent)
+    {
+        const std::map<std::string, std::size_t>::const_iterator i = m_material_by_path.find(usd_node.abs_path);
+        if (i == m_material_by_path.end()) {
+            log_usd->warn(
+                "USD material prim '{}' has no converted material - it is not placed in the tree",
+                usd_node.abs_path
+            );
+            return;
+        }
+        const std::shared_ptr<erhe::primitive::Material>& material = m_result.data.materials[i->second];
+        if (!material) {
+            return;
+        }
+        if (!usd_node.prim_name.empty()) {
+            material->set_name(usd_node.prim_name);
+        }
+        material->set_parent(parent);
     }
 
     // A prim whose class carries no transform: a `Scope`, and the `Typed`
@@ -1682,6 +1691,9 @@ private:
     const lightusd::Stage*       m_stage{nullptr};
     const Tydra_scene*           m_scene{nullptr};
     std::map<std::size_t, bool>  m_mesh_attached;
+    // The material each `Material` prim of the stage became, by the prim's
+    // absolute path: what place_material puts into the tree.
+    std::map<std::string, std::size_t> m_material_by_path;
     // Authored property names per prim path, see authored_property_names.
     std::map<std::string, std::set<std::string>> m_authored_property_names;
 };

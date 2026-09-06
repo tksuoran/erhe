@@ -126,8 +126,8 @@ TEST_F(Cube_round_trip, node_names_survive)
     EXPECT_TRUE(find_node(trip->reloaded.data, "cube").operator bool());
     EXPECT_TRUE(find_node(trip->reloaded.data, "cam").operator bool());
     EXPECT_TRUE(find_node(trip->reloaded.data, "sun").operator bool());
-    // The Materials scope and its shading network are namespace, not scene
-    // graph: the four prims above are the whole node list.
+    // The materials scope is a Scope prim and the materials below it are
+    // material prims: the four prims above are the whole node list.
     EXPECT_EQ(trip->reloaded.data.nodes.size(), 4u);
 }
 

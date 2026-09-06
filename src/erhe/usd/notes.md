@@ -75,16 +75,17 @@ translation units.
   transform, so the transform that reached it composes with its children,
   and a transform authored on such a prim is dropped with one warning
   naming the prim.
-- A `Material`, `Shader`, `NodeGraph` or `GeomSubset` prim whose subtree
-  carries no mesh, camera, light, skeleton or volume contributes no erhe
-  prim: the shading network is namespace and a subset's facets already ride
-  a primitive of its mesh, yet Tydra lists each as a transform node. A
-  `Scope` whose children are all such prims - the form a stage's material
-  library takes - contributes none either: its materials become library
-  items, and the writer re-creates the scope from the material library, so
-  keeping it would add one empty scope to the file per save. U4 makes
-  materials prims of the tree and retires that rule; every other `Scope`,
-  an empty one included, is an `erhe::Scope`.
+- A `Material` prim becomes the erhe material prim, parented where the
+  stage puts it (`doc/usd-compatibility-plan.md` U4): a stage keeping its
+  materials in `/Looks` gives erhe a `Scope` named `Looks` holding them, and
+  the prim name is the material's name, so two materials of one name in two
+  scopes stay apart by their place. A `material:binding` names a path, so
+  the binding follows the prim rather than the name. Every `Scope` is an
+  `erhe::Scope`, an empty one included.
+- A `Shader`, `NodeGraph` or `GeomSubset` prim whose subtree carries no
+  mesh, camera, light, skeleton or volume contributes no erhe prim: the
+  shading network is namespace and a subset's facets already ride a
+  primitive of its mesh, yet Tydra lists each as a transform node.
 - Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of
@@ -164,11 +165,29 @@ because the same spelling rule decides what an item is called on a stage.
   one `materialBind` `GeomSubset` each, over the concatenated `points` /
   `faceVertexCounts` / `faceVertexIndices` of every primitive, with the
   primvars written `faceVarying`. `subdivisionScheme` is always `none`: the
-  authored polygons are the mesh. Materials live in a `/Materials` `Scope` as
-  `Material` + `UsdPreviewSurface` `Shader`, with one `UsdUVTexture` shader
-  per bound slot and one `UsdPrimvarReader_float2` for their UVs. The stage
-  names one `defaultPrim`: the single top-level prim, or a `World` `Xform`
-  gathering them when the scene has several.
+  authored polygons are the mesh. A material is written as a `Material` prim
+  where the material sits in the scene tree, holding its
+  `UsdPreviewSurface` `Shader`, one `UsdUVTexture` shader per bound slot and
+  one `UsdPrimvarReader_float2` for their UVs; those shader prims occupy the
+  material prim's namespace, so a prim the user parented to a material is not
+  written. The stage names one `defaultPrim`: the single top-level prim, or a
+  `World` `Xform` gathering them when the scene has several.
+- Which prims are written. A prim is written when it is scene content
+  (`Item_flags::content`), or when it is a resource the file carries or holds
+  one below it - a resource prim is shown in the UI and is not content, so
+  that widening is what puts a material and the scopes down to it on the
+  stage, and it leaves an empty kind scope out of the file. Today the file
+  carries materials; the other resource kinds are plan step E4.
+- Two passes. The first decides every prim's stage path - the sanitized,
+  sibling-unique name under each parent, and the `World` wrapper when the
+  scene has several top-level prims - and records where each material
+  landed; the second writes the prims, so a mesh binds its material by the
+  path the material prim actually got. `Usd_save_arguments::materials` is
+  the caller's texture index, not a placement list: a material of that list
+  which is not a prim of the tree is not written, and a material a mesh
+  binds but the scene does not own has no prim, so its binding is dropped
+  with one warning naming it (plan step X1 gives a prefab template's
+  materials a prim of their own).
 - Values. Only a local value is written (D32). A property the mapping gives a
   USD attribute goes into that attribute (the closed list is
   `is_native_usd_property`, the exact inverse of what the import reads);
@@ -304,6 +323,13 @@ split by subset, the material values, the camera projection and the light.
 a light with an `erhe:Light:temperature` custom attribute next to a bogus
 `erhe:Light:nope`, asserted through `get_value_source`.
 
+`test/data/looks.usda` covers where materials sit: two `Scope`s below one
+`Xform` holding three materials, two of them named alike, each bound by a
+mesh of its own. `test_usd_materials.cpp` asserts that the material prims
+land at their stage paths, that the binding follows the path rather than the
+name, that a save writes each `Material` prim back where it sits (and invents
+no `Materials` scope) and that the second save is byte-identical.
+
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test
 input.
@@ -336,12 +362,13 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 - A USD file cannot be opened as a scene or instantiated as a prefab yet, only
   imported as an asset; the prefab library parses glTF only.
 - Of the editor state `ERHE_scene` and the asset-root extensions hold in
-  glTF, only the scene-level block travels: the editor writes it as the
-  `erhe:scene` string of `customLayerData` (doc/scene_serialization.md,
-  USD-backed scenes). The brush library, the geometry and texture node
-  graphs, the content-library folder tree and the style library have no USD
-  form yet and no custom prims of their own (C1); a save logs one line per
-  kind the scene holds. The writer also emits no `.usdc` or `.usdz`, no
+  glTF, the scene-level block travels as the `erhe:scene` string of
+  `customLayerData` (doc/scene_serialization.md, USD-backed scenes) and the
+  materials travel as the prims they are, so the scopes that hold them
+  travel with them. The brush library, the geometry and texture node graphs,
+  the style library and the remaining resource kinds have no USD form yet
+  and no custom prims of their own (C1); a save logs one line per kind the
+  scene holds. The writer also emits no `.usdc` or `.usdz`, no
   MaterialX, and none of the composition structure of the file it loaded -
   the first version flattens what it read (plan steps X1 and X2).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written

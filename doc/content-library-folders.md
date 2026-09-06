@@ -133,7 +133,10 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   `folder_name` (a folder under the resource's own parent scope, created when
   missing) and adds `folder_path` (kind-scope-rooted, must exist), queuing the
   D3 reparent; a destination under another kind scope is refused, which is the
-  one place the same-kind rule still holds. Every `create_*` tool that makes a
+  one place the same-kind rule still holds. It finds the resource by walking
+  the scene tree - a resource may sit under any prim, and a USD-backed scene
+  keeps its materials where the file put them - so `item_name` names a prim
+  whose class is a library kind, wherever it sits. Every `create_*` tool that makes a
   resource - `create_material`, `create_style`, `create_physics_material`,
   `create_collision_filter`, `create_joint_settings`, `create_graph_texture`,
   `create_graph_mesh` - queues the D2 insert, so it is undoable. Resource

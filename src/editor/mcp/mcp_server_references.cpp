@@ -42,6 +42,8 @@
 #include "preview/material_preview.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
+
+#include "erhe_scene/scene.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "tools/material_paint_tool.hpp"
@@ -495,30 +497,33 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
 
+    // A resource is a prim of the scene tree and may sit under any prim
+    // (doc/usd-compatibility-plan.md C5), not only under a kind scope: a
+    // USD-backed scene keeps its materials where the file put them, so the
+    // lookup walks the whole tree and a resource is one whose class names a
+    // library kind.
+    const std::shared_ptr<erhe::scene::Node> scene_root_node = scene_root->get_scene().get_root_node();
+    if (!scene_root_node) {
+        return make_error_content("Scene has no root node");
+    }
     std::shared_ptr<erhe::Hierarchy> found_node{};
     std::shared_ptr<erhe::Hierarchy> folder_node{};
     std::size_t                      match_count{0};
-    for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
-        const std::shared_ptr<erhe::Scope> kind_scope = library->find_scope(kind_type_bit);
-        if (!kind_scope) {
-            continue;
-        }
-        kind_scope->for_each<erhe::Hierarchy>(
-            [&found_node, &folder_node, &match_count, &item_name, &folder_name](erhe::Hierarchy& prim) -> bool {
-                const bool is_scope = (dynamic_cast<erhe::Scope*>(&prim) != nullptr);
-                if (!is_scope && (prim.get_name() == item_name)) {
-                    if (!found_node) {
-                        found_node = prim.shared_hierarchy_from_this();
-                    }
-                    ++match_count;
+    scene_root_node->for_each<erhe::Hierarchy>(
+        [&found_node, &folder_node, &match_count, &item_name, &folder_name](erhe::Hierarchy& prim) -> bool {
+            const bool is_scope = (dynamic_cast<erhe::Scope*>(&prim) != nullptr);
+            if (!is_scope && (prim.get_name() == item_name) && (Content_library::get_kind_type_bit(prim) != 0)) {
+                if (!found_node) {
+                    found_node = prim.shared_hierarchy_from_this();
                 }
-                if (is_scope && !folder_name.empty() && (prim.get_name() == folder_name) && !folder_node) {
-                    folder_node = prim.shared_hierarchy_from_this();
-                }
-                return true;
+                ++match_count;
             }
-        );
-    }
+            if (is_scope && !folder_name.empty() && (prim.get_name() == folder_name) && !folder_node) {
+                folder_node = prim.shared_hierarchy_from_this();
+            }
+            return true;
+        }
+    );
     if (!found_node) {
         return make_error_content("Library item not found: " + item_name);
     }

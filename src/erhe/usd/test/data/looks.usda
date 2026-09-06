@@ -1,0 +1,81 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Looks"
+    {
+        def Material "Gold"
+        {
+            token outputs:surface.connect = </World/Looks/Gold/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.9, 0.7, 0.2)
+                token outputs:surface
+            }
+        }
+
+        def Material "Shared"
+        {
+            token outputs:surface.connect = </World/Looks/Shared/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.1, 0.8, 0.3)
+                token outputs:surface
+            }
+        }
+    }
+
+    def Scope "Other"
+    {
+        def Material "Shared"
+        {
+            token outputs:surface.connect = </World/Other/Shared/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.9, 0.1, 0.1)
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "Group"
+    {
+        def Mesh "gold_panel"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding = </World/Looks/Gold>
+        }
+
+        def Mesh "looks_panel"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 1, -1), (1, 1, -1), (1, 1, 1), (-1, 1, 1)]
+            rel material:binding = </World/Looks/Shared>
+        }
+
+        def Mesh "other_panel"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 2, -1), (1, 2, -1), (1, 2, 1), (-1, 2, 1)]
+            rel material:binding = </World/Other/Shared>
+        }
+    }
+}

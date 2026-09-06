@@ -1710,6 +1710,48 @@ def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
     return first_save
 
 
+def usd_resource_placement_leg(S):
+    """A resource is a prim of the scene tree and may sit under any prim
+    (doc/usd-compatibility-plan.md C5, U4); in USD the tree is the file, so a
+    material comes back where it was written. looks.usda already keeps its
+    materials in a Scope below an Xform, and moving one into a Scope below
+    that Scope adds the folder-scope shape; both must reload at the same
+    path, still bound."""
+    scene_name = "looks"
+    if not usd_open_scene(S, USD_DATA_DIR / "looks.usda", scene_name):
+        return
+    scoped = mutate("create_node", {
+        "scene_name": scene_name, "name": "Metals", "prim_type": "Scope", "parent_node_name": "Looks",
+    })
+    check(S, "folder scope created below the material scope",
+          bool(scoped) and scoped.get("node_id") is not None, str(scoped))
+    moved = mutate("move_library_item", {
+        "scene_name": scene_name, "item_name": "Gold", "folder_name": "Metals",
+    })
+    check(S, "material moved into the folder scope", bool(moved) and moved.get("folder"), str(moved))
+
+    saved = USD_SAVE_DIR / "usd_placement_looks.usda"
+    if not usd_save_scene(S, scene_name, saved):
+        return
+    usd_close_scene(S, scene_name)
+
+    reloaded_name = saved.stem
+    if not usd_open_scene(S, saved, reloaded_name):
+        return
+    nodes = call("get_scene_nodes", {"scene_name": reloaded_name}).get("nodes", [])
+    placements = sorted((n.get("name"), n.get("parent")) for n in nodes if n.get("type") == "Material")
+    check(S, "the material prims reload where they were saved",
+          placements == [("Gold", "Metals"), ("Shared", "Looks"), ("Shared", "Other")], str(placements))
+    check(S, "no Materials kind scope is invented",
+          not any(n.get("name") == "Materials" for n in nodes), str(sorted(n.get("name") for n in nodes)))
+    for mesh_name, material_name in (("gold_panel", "Gold"), ("looks_panel", "Shared"), ("other_panel", "Shared")):
+        details = call("get_node_details", {"scene_name": reloaded_name, "node_name": mesh_name})
+        materials = (details.get("mesh") or {}).get("materials", [])
+        check(S, f"'{mesh_name}' is still bound to '{material_name}'",
+              materials == [material_name], str(details.get("mesh")))
+    usd_close_scene(S, reloaded_name)
+
+
 def run_usdchecker(section, usdchecker, usda_path):
     result = subprocess.run([usdchecker, str(usda_path)], capture_output=True, text=True, timeout=300)
     output = (result.stdout + result.stderr).strip()
@@ -1756,6 +1798,11 @@ def section_usd_round_trip(usdchecker_arg):
     # texture must come back as a scene texture of the reloaded scene, with
     # the asset path rewritten relative to the written file.
     usd_round_trip_leg(S, "textured.usda", "textured", edits=[], extra_keys=["textures"])
+
+    # looks.usda holds its materials in two scopes, one pair of them sharing a
+    # name: where a material sits is what the placement leg checks.
+    usd_round_trip_leg(S, "looks.usda", "looks", edits=[], extra_keys=[])
+    usd_resource_placement_leg(S)
 
     usdchecker = find_usdchecker(usdchecker_arg)
     if usdchecker is None:

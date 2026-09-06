@@ -153,6 +153,11 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Mesh>>         meshes;
     std::vector<std::shared_ptr<erhe::scene::Camera>>       cameras;
     std::vector<std::shared_ptr<erhe::scene::Light>>        lights;
+    // The materials the file's `Material` prims became. Each is parented
+    // where its prim sits on the stage (doc/usd-compatibility-plan.md U4), so
+    // a caller that inserts the tree's root takes them with it; a material
+    // the conversion found no prim for has no parent, and it is the caller
+    // that decides where such a material goes.
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<Usd_image>                                  images;
     std::vector<Usd_material_texture_binding>               material_texture_bindings;
@@ -233,6 +238,12 @@ public:
     // prim: an erhe item path excludes the root's own name (M1), so the
     // root's children are the stage's top-level prims.
     std::shared_ptr<const erhe::scene::Node>                root_node;
+    // The scene's own materials, in the order `textures` indexes them. Where
+    // a material prim goes on the stage is decided by the tree - a material
+    // is a prim of it (doc/usd-compatibility-plan.md U4) - so this list is
+    // the texture index alone: a material listed here but absent from the
+    // tree is not written, and a material of the tree that is not listed is
+    // written without textures.
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::vector<Usd_save_texture>                           textures;
     // Written verbatim as the root layer's `customLayerData`, one string
@@ -254,10 +265,10 @@ public:
 
 // Write one `.usda` layer holding the scene under Usd_save_arguments::root_node:
 // Xform / Mesh / GeomSubset / Camera / UsdLux prims per doc/usd_compatibility.md,
-// a `/Materials` scope holding Material + Shader networks, local property
-// values only (D32), erhe-only properties as `erhe:Owner:name` custom
-// attributes and item tags as UsdCollectionAPI collections on the default
-// prim. Failures are values, not exceptions.
+// a `Material` prim with its Shader network where the erhe material sits in
+// the tree, local property values only (D32), erhe-only properties as
+// `erhe:Owner:name` custom attributes and item tags as UsdCollectionAPI
+// collections on the default prim. Failures are values, not exceptions.
 [[nodiscard]] auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result;
 
 } // namespace erhe::usd
