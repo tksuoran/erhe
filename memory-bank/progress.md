@@ -60,6 +60,7 @@
   U4-DONE-2026-09-06
 ✓M6-double+mat4{078f5fd86,2026-09-06,harness:1-coder;property-tests-100→104;usd-tests-47→48;rows-unverified-interactively{no-shipped-property-yet}}
 ✓M7-style-chains{2026-09-06,harness:1-coder;property104→108;item177→178;headless:A→B→light-chain+live-edit+cycle-refused+save/open+close-clean}|?user-interactive{Style-item-style-row-picker}
+✓M8-xformOp-stacks{2026-09-06,harness:2-coders;scene84→105;usd48→55;headless:open-xform_ops.usda→transform_selection→save-usda:translate-op-moved,rotate/scale/pivot/matrix-lines-byte-identical;close-clean}|?user-interactive{drag-a-USD-imported-prim;Properties-TRS-rows-on-stacked-prim}
   traps::save_usda-writes-/Materials-from-index{would-duplicate-kind-scope};Xformable::node_sanity_check-static_casts-Item_host->Scene_host{palette-prims-must-not-reach};kind-scopes+resource-prims-carry-no-content-flag{glTF-node-export-skips}
 
 

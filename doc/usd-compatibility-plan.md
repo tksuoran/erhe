@@ -185,6 +185,19 @@ record has the history.
   refuses a cycle (`doc/property-system.md` D25, `doc/style-library.md`);
   `ERHE_scene` `styles[].style` carries it
   (`doc/gltf_extensions/ERHE_scene.md`). USD carries no styles until E4.
+- M8 xformOp stacks: an `Xformable` carries the xformOp stack it was
+  authored with (op types, suffixes, `!invert!`, authored precisions,
+  `!resetXformStack!` stored only) and composes it to its TRS; a
+  transform edit lands in the op the stack designates or, when no op can
+  carry it, collapses the stack to one `transform` op
+  (`src/erhe/scene/notes.md`); the USD reader builds the stack from the
+  raw prim and the writer emits it as authored, falling back to one
+  `xformOp:transform` for a prim without a stack
+  (`src/erhe/usd/notes.md`, `doc/usd_compatibility.md`). `erhe_usd_tests`
+  round-trips a three-op stack, a pivot pair and a matrix op byte for
+  byte and lands a move in the translate op alone. glTF keeps writing the
+  composed TRS (C1). Time-sampled ops take their default or first sample
+  (section 6).
 
 ## 3. Remaining steps
 
@@ -206,23 +219,6 @@ way `double` and `glm::mat4` (section 2) have.
 
 Why: listed so that a later step does not invent an ad hoc carrier.
 Nothing is added ahead of a demonstrated need.
-
-### M8 xformOp stacks (M)
-
-What: `Xformable` holds an authored USD xformOp stack (ordered
-translate / rotate / scale / transform ops with their suffixes and
-inversion flags) next to the single TRS it composes to, so an imported
-stack round-trips as authored instead of collapsing to one
-`xformOp:transform` matrix, and the transform tools edit the op the
-stack designates. Until M8, the importer composes the stack to erhe's
-TRS and the exporter writes one `xformOp:transform`.
-
-Why: `UsdGeomXformable` transforms are more general than erhe's
-`Trs_transform`; C5 names this as the deferred half of the transform
-model.
-
-Verification: `erhe_usd_tests` round-trips a prim with a three-op stack
-byte for byte; a moved prim's edit lands in the designated op.
 
 ### X1 References as prefab instances (M)
 
@@ -303,18 +299,17 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. M8 xformOp stacks
-2. X1 references as prefab instances
-3. E4 editor state in a USD file (completes G2)
-4. X2 editable instances (G3)
+1. X1 references as prefab instances
+2. E4 editor state in a USD file (completes G2)
+3. X2 editable instances (G3)
 
 M6 (asset paths, arrays) lands when the step that needs it is next (an
 importer hitting a missing type). E2 follows E4; X3 to X5
 have no fixed place: each waits for its dependencies and is taken when
 wanted.
 
-Dependencies: X2 needs X1; M8, E4, X1, E2, X3, X4 and X5 need nothing
-that has not landed.
+Dependencies: X2 needs X1; E4, X1, E2, X3, X4 and X5 need nothing that
+has not landed.
 
 ## 5. Out of scope
 
