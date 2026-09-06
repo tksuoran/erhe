@@ -182,32 +182,10 @@ composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
-### E4 Editor state in a USD file (M; completes G2)
-
-What: the editor state a USD-backed scene does not carry yet
-(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
-the `customLayerData` keys already in use) rides USD's own means (C1).
-The resources are prims (U4), so brushes, styles, physics materials,
-collision filters, joint settings and the geometry and texture node
-graphs are written and read as prims where they sit in the tree, one
-custom `typeName` per kind (the class token `Typed` already fixes) with
-attributes named as the glTF fields are (a node graph as a JSON string
-attribute until a prim form is wanted), and an empty folder `Scope` is
-written as the `Scope` it is; animations, skins, prefab references and
-the physics API schemas on nodes (section 6) stay listed as not
-carried. A save no longer logs a kind it carries; the open side reads
-every kind it writes. `.usdc` output follows once the `.usda` output
-round-trips through E3 with all of it.
-
-Verification: the E3 leg extended with a scene that holds one of each
-kind (build it over MCP the way the glTF sections build theirs); a
-fresh-session reload shows the same scopes, styles and brushes;
-`scene-close leak` clean.
-
 ### M6 Value types USD needs (S each, as needed)
 
-What: add `Property_type` alternatives only when an import or export step
-hits them: `double` (USD `double` transforms and time codes), `glm::mat4`
+What: add `Property_type` alternatives when a step needs them (M8 is the
+first, for `double` and `glm::mat4`): `double` (USD `double` transforms and time codes), `glm::mat4`
 (xformOp matrices), an asset path (texture `inputs:file` today is an
 object reference to a loaded texture; the path is the USD form), and
 homogeneous arrays (`float[]`, `int[]`) for primvars that a node or
@@ -245,6 +223,28 @@ model.
 
 Verification: `erhe_usd_tests` round-trips a prim with a three-op stack
 byte for byte; a moved prim's edit lands in the designated op.
+
+### E4 Editor state in a USD file (M; completes G2)
+
+What: the editor state a USD-backed scene does not carry yet
+(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
+the `customLayerData` keys already in use) rides USD's own means (C1).
+The resources are prims (U4), so brushes, styles, physics materials,
+collision filters, joint settings and the geometry and texture node
+graphs are written and read as prims where they sit in the tree, one
+custom `typeName` per kind (the class token `Typed` already fixes) with
+attributes named as the glTF fields are (a node graph as a JSON string
+attribute until a prim form is wanted), and an empty folder `Scope` is
+written as the `Scope` it is; animations, skins, prefab references and
+the physics API schemas on nodes (section 6) stay listed as not
+carried. A save no longer logs a kind it carries; the open side reads
+every kind it writes. `.usdc` output follows once the `.usda` output
+round-trips through E3 with all of it.
+
+Verification: the E3 leg extended with a scene that holds one of each
+kind (build it over MCP the way the glTF sections build theirs); a
+fresh-session reload shows the same scopes, styles and brushes;
+`scene-close leak` clean.
 
 ### E2 Material fidelity (M)
 
@@ -303,16 +303,17 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file (completes G2)
-2. X1 references as prefab instances, then X2 editable instances (G3)
+1. M6 value types M8 needs (`double`, `glm::mat4`), then M7 style
+   chains, then M8 xformOp stacks
+2. E4 editor state in a USD file (completes G2)
+3. X1 references as prefab instances, then X2 editable instances (G3)
 
-M6, M7 and M8 land when the step that needs them is
-next (any importer hitting a missing type, X3, a file whose xformOp
-stack must survive). E2 and X3 to X5 have no fixed place: each waits
-for its dependencies and is taken when wanted.
+The rest of M6 (asset paths, arrays) lands when the step that needs it
+is next (an importer hitting a missing type). E2 and X3 to X5 have no
+fixed place: each waits for its dependencies and is taken when wanted.
 
-Dependencies: X2 needs X1; X3 needs M7; E4, X1, M8, E2, X4 and X5
-need nothing that has not landed.
+Dependencies: M8 needs M6's `double` and `glm::mat4`; X2 needs X1; X3
+needs M7; M7, E4, X1, E2, X4 and X5 need nothing that has not landed.
 
 ## 5. Out of scope
 
