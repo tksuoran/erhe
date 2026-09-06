@@ -969,8 +969,8 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(item),
-                .parent  = library->graph_textures,
+                .item    = item,
+                .parent  = library->get_scope(erhe::Item_type::graph_texture),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -1051,7 +1051,7 @@ auto Mcp_server::query_graph_textures(const json& args) -> std::string
     json graph_textures = json::array();
     const auto append_from = [&graph_textures](Scene_root& scene_root) {
         const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-        if (!library || !library->graph_textures) {
+        if (!library) {
             return;
         }
         for (const std::shared_ptr<Graph_texture>& graph_texture : library->get_all<Graph_texture>()) {
@@ -1105,8 +1105,8 @@ auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(item),
-                .parent  = library->graph_meshes,
+                .item    = item,
+                .parent  = library->get_scope(erhe::Item_type::graph_mesh),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -1193,7 +1193,7 @@ auto Mcp_server::query_graph_meshes(const json& args) -> std::string
     json graph_meshes = json::array();
     const auto append_from = [&graph_meshes](Scene_root& scene_root) {
         const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-        if (!library || !library->graph_meshes) {
+        if (!library) {
             return;
         }
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {

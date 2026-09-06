@@ -323,7 +323,7 @@ void Animation_window::animation_combo()
     if (m_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->animations) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<erhe::scene::Animation>& animation : content_library->get_all<erhe::scene::Animation>()) {
@@ -756,7 +756,7 @@ void Animation_window::create_key_for_selection()
         erhe::scene::Scene* scene = nodes.front()->get_scene();
         Scene_root* scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
         const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-        if (!library || !library->animations) {
+        if (!library) {
             return;
         }
         animation = m_context.asset_manager->create<erhe::scene::Animation>(*scene_root, "Animation");
@@ -764,7 +764,6 @@ void Animation_window::create_key_for_selection()
         compound_parameters.operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
                 library,
-                library->animations,
                 animation,
                 Gltf_source_reference{
                     .item_name = animation->get_name(),

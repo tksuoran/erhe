@@ -374,7 +374,7 @@ void Geometry_output_node::material_imgui()
     }
     if (scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library && library->materials) {
+        if (library) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
                 int material_index = 0;

@@ -179,7 +179,7 @@ void Geometry_graph_mesh::apply_baked_products()
     std::shared_ptr<erhe::primitive::Material> material = products.material;
     if (!material) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library && library->materials) {
+        if (library) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
                 material = materials.front();

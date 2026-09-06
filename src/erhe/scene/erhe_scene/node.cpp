@@ -570,10 +570,14 @@ void Xformable::node_sanity_check(bool destruction_in_progress) const
     for (const auto& child : get_children()) {
         erhe::Item_host* child_host       = child->get_item_host();
         erhe::Item_host* self_host        = get_item_host();
-        auto*            child_scene_host = static_cast<Scene_host*>(child_host);
-        auto*            self_scene_host  = static_cast<Scene_host*>(self_host);
-        Scene*           child_scene      = (child_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;
-        Scene*           self_scene       = (self_host  != nullptr) ? self_scene_host ->get_hosted_scene() : nullptr;
+        // A host is not necessarily a Scene_host: the editor's content library
+        // hosts the prims of a library that has no scene (the template
+        // palette), so the cast is checked and a non-scene host simply reports
+        // no scene (doc/usd-compatibility-plan.md U4).
+        auto*            child_scene_host = dynamic_cast<Scene_host*>(child_host);
+        auto*            self_scene_host  = dynamic_cast<Scene_host*>(self_host);
+        Scene*           child_scene      = (child_scene_host != nullptr) ? child_scene_host->get_hosted_scene() : nullptr;
+        Scene*           self_scene       = (self_scene_host  != nullptr) ? self_scene_host ->get_hosted_scene() : nullptr;
 
         if (child_host != self_host) {
             log->error(

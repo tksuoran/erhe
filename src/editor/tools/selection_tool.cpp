@@ -1278,16 +1278,6 @@ void Selection_tool::viewport_toolbar()
 
 void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& item)
 {
-    if (item->get_type() == erhe::Item_type::content_library_node) {
-        const auto node = std::dynamic_pointer_cast<Content_library_node>(item);
-        if (node) {
-            const auto node_item = node->item;
-            if (node_item) {
-                m_last_selected_by_type[node_item->get_type()] = node_item;
-            }
-        }
-    }
-
     m_last_selected_by_type[item->get_type()] = item;
 }
 

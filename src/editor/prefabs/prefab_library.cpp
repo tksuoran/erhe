@@ -486,7 +486,6 @@ auto instantiate_prefab(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
                     content_library,
-                    content_library->textures,
                     image,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -507,7 +506,6 @@ auto instantiate_prefab(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
                     content_library,
-                    content_library->materials,
                     material,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -733,21 +731,18 @@ namespace {
 // glTF source; a reload produces new texture / material objects, so the old
 // entries would otherwise linger (and keep the previous GPU textures alive).
 template <typename T>
-void remove_gltf_source_entries(const std::shared_ptr<Content_library_node>& folder, const std::string& gltf_path)
+void remove_gltf_source_entries(Content_library& content_library, const std::string& gltf_path)
 {
     std::vector<std::shared_ptr<T>> stale_entries;
-    for (const std::shared_ptr<erhe::Hierarchy>& child : folder->get_children()) {
-        const std::shared_ptr<Content_library_node> entry = std::dynamic_pointer_cast<Content_library_node>(child);
-        if (!entry || !entry->gltf_source.has_value() || (entry->gltf_source->gltf_path != gltf_path)) {
+    for (const std::shared_ptr<T>& item : content_library.get_all<T>()) {
+        const Resource_metadata* const metadata = content_library.find_metadata(*item);
+        if ((metadata == nullptr) || !metadata->gltf_source.has_value() || (metadata->gltf_source->gltf_path != gltf_path)) {
             continue;
         }
-        const std::shared_ptr<T> item = std::dynamic_pointer_cast<T>(entry->item);
-        if (item) {
-            stale_entries.push_back(item);
-        }
+        stale_entries.push_back(item);
     }
     for (const std::shared_ptr<T>& item : stale_entries) {
-        folder->remove(item);
+        content_library.remove(item);
     }
 }
 
@@ -762,41 +757,47 @@ void add_prefab_reference_entries(Content_library& content_library, const Prefab
     for (std::size_t i = 0; i < prefab.gltf_data.images.size(); ++i) {
         const std::shared_ptr<erhe::graphics::Texture>& image = prefab.gltf_data.images[i];
         if (image) {
-            content_library.add(
+            // The template's textures belong to the template's own tree; the
+            // instancing scene lists them so its material set gives them slots
+            // (2e retires the concept).
+            content_library.add_referenced(image);
+            content_library.set_gltf_source(
                 image,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,
                     .item_name  = image->get_name(),
                     .item_index = static_cast<int>(i),
                     .item_type  = "texture",
-                },
-                (i < prefab.gltf_data.image_sources.size()) ? prefab.gltf_data.image_sources[i] : std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                true // is_reference
+                }
             );
+            if (i < prefab.gltf_data.image_sources.size()) {
+                content_library.set_image_source(image, prefab.gltf_data.image_sources[i]);
+            }
         }
     }
     for (std::size_t i = 0; i < prefab.gltf_data.materials.size(); ++i) {
         const std::shared_ptr<erhe::primitive::Material>& material = prefab.gltf_data.materials[i];
         if (material) {
-            content_library.add(
+            // See instantiate: a referenced listing records its defining
+            // container; texture listings carry no asset_key yet (no managed
+            // Asset_type for textures in v1).
+            content_library.add_referenced(
                 material,
-                Gltf_source_reference{
-                    .gltf_path  = gltf_path_str,
-                    .item_name  = material->get_name(),
-                    .item_index = static_cast<int>(i),
-                    .item_type  = "material",
-                },
-                std::shared_ptr<erhe::gltf::Gltf_image_source>{},
-                true, // is_reference
-                // See instantiate: reference entries record their defining
-                // container; texture entries carry no asset_key yet (no
-                // managed Asset_type for textures in v1).
                 Asset_key{
                     .scope = Asset_scope::file,
                     .type  = Asset_type::material,
                     .path  = gltf_path_str,
                     .uid   = material->get_gltf_uid(),
                     .name  = material->get_name(),
+                }
+            );
+            content_library.set_gltf_source(
+                material,
+                Gltf_source_reference{
+                    .gltf_path  = gltf_path_str,
+                    .item_name  = material->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "material",
                 }
             );
         }
@@ -808,8 +809,8 @@ namespace {
 void replace_content_library_entries(Content_library& content_library, const Prefab& prefab)
 {
     const std::string gltf_path_str = prefab.source_path.generic_string();
-    remove_gltf_source_entries<erhe::graphics::Texture  >(content_library.textures,  gltf_path_str);
-    remove_gltf_source_entries<erhe::primitive::Material>(content_library.materials, gltf_path_str);
+    remove_gltf_source_entries<erhe::graphics::Texture  >(content_library, gltf_path_str);
+    remove_gltf_source_entries<erhe::primitive::Material>(content_library, gltf_path_str);
     add_prefab_reference_entries(content_library, prefab);
 }
 

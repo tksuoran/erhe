@@ -324,7 +324,13 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
     if (ImGui::BeginDragDropTargetCustom(rect, drag_target_id)) {
         ERHE_DEFER( ImGui::EndDragDropTarget(); );
 
-        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        // Brush and material resource prims dragged out of the Hierarchy
+        // window carry a payload named for their own class.
+        const ImGuiDragDropFlags resource_flags = ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect;
+        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Brush::static_type_name.data(), resource_flags);
+        if (payload == nullptr) {
+            payload = ImGui::AcceptDragDropPayload(erhe::primitive::Material::static_type_name.data(), resource_flags);
+        }
         if (payload == nullptr) {
             // glTF assets dragged from the Asset browser: AABB wireframe
             // preview while hovering, instantiate as a prefab on drop.
@@ -365,18 +371,12 @@ void Viewport_window::drag_and_drop_target(float min_x, float min_y, float max_x
             return;
         }
 
-        const erhe::Item_base* item_base = *(static_cast<erhe::Item_base**>(payload->Data));
-        const Content_library_node* node = dynamic_cast<const Content_library_node*>(item_base);
-        if (node == nullptr) {
+        erhe::Item_base* const item_base = *(static_cast<erhe::Item_base**>(payload->Data));
+        if (item_base == nullptr) {
             cancel_brush_drag_and_drop();
             return;
         }
-
-        std::shared_ptr<erhe::Item_base> item = node->item;
-        if (!item) {
-            cancel_brush_drag_and_drop();
-            return;
-        }
+        const std::shared_ptr<erhe::Item_base> item = item_base->shared_from_this();
 
         auto brush    = std::dynamic_pointer_cast<Brush>(item);
         auto material = std::dynamic_pointer_cast<erhe::primitive::Material>(item);

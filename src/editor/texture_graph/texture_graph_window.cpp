@@ -625,7 +625,7 @@ void Texture_graph_window::target_selector_imgui()
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_textures) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->get_all<Graph_texture>()) {
@@ -637,7 +637,6 @@ void Texture_graph_window::target_selector_imgui()
     ImGui::SameLine();
     Item_reference_options options;
     options.candidates                  = m_target_candidates;
-    options.accept_content_library_node = true;
     options.none_text                   = "(no target)";
     options.show_select_button          = false; // keep target decoupled from the global selection
     if (item_reference_imgui<Graph_texture>(m_app_context, "texture_graph_target", m_target, Graph_texture::get_static_type(), options)) {

@@ -1440,17 +1440,7 @@ void Asset_manager::arm_scene_library(const std::shared_ptr<Scene_root>& scene_r
         return;
     }
     library->set_asset_manager(this);
-    if (library->root) {
-        erhe::Item_host* const owner = static_cast<erhe::Item_host*>(scene_root.get());
-        library->root->for_each<Content_library_node>(
-            [this, owner](Content_library_node& node) -> bool {
-                if (node.item) {
-                    on_library_node_attached(owner, node);
-                }
-                return true;
-            }
-        );
-    }
+    library->announce_all_listed();
 }
 
 auto Asset_manager::find_adoptable_container(const std::filesystem::path& path) const -> std::shared_ptr<Asset_container_record>
@@ -1655,13 +1645,18 @@ auto Asset_manager::find_record_by_owner(const erhe::Item_host* owner) const -> 
     return {};
 }
 
-void Asset_manager::on_library_node_attached(erhe::Item_host* const owner, Content_library_node& node)
+void Asset_manager::on_library_item_attached(
+    erhe::Item_host* const                  owner,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const Library_listing                   listing,
+    std::unique_ptr<Asset_reference>&       usership
+)
 {
     verify_main_thread();
-    if (!node.item) {
+    if (!item) {
         return;
     }
-    const Asset_type type = asset_type_from_item(*node.item);
+    const Asset_type type = asset_type_from_item(*item);
     if (!is_manager_owned_asset_type(type)) {
         return;
     }
@@ -1671,42 +1666,42 @@ void Asset_manager::on_library_node_attached(erhe::Item_host* const owner, Conte
     }
     // Builtin-scope assets (the bone-visualization materials, the default
     // brushes) are editor-owned and shared by every scene's library. They
-    // belong to the builtin registry, not to the container of whichever
-    // scene lists them: registering them as a scene record's assets makes
-    // the record's unload visit them, find the OTHER scenes' library
-    // entries as users, and refuse - so a saved scene's container could
-    // never unload once a second scene listed the same builtin. They are
-    // never unloaded, so no usership is needed either.
-    if (is_builtin_asset(*node.item)) {
+    // belong to the builtin registry, not to the container of whichever scene
+    // lists them: registering them as a scene record's assets makes the
+    // record's unload visit them, find the OTHER scenes' listings as users,
+    // and refuse - so a saved scene's container could never unload once a
+    // second scene listed the same builtin. They are never unloaded, so no
+    // usership is needed either.
+    if (is_builtin_asset(*item)) {
         return;
     }
-    if (!node.is_reference) {
+    if (listing == Library_listing::owned) {
         Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
         ERHE_VERIFY(entries != nullptr);
-        // Idempotent: handle_add_child claims whole subtrees and can
-        // re-visit an already-listed item; one object is one entry.
-        const auto i = std::find(entries->items.begin(), entries->items.end(), node.item);
+        // Idempotent: the registration sweep can re-visit an already-listed
+        // resource; one object is one entry.
+        const auto i = std::find(entries->items.begin(), entries->items.end(), item);
         if (i == entries->items.end()) {
-            entries->items.push_back(node.item);
-            log_asset->trace("scene container record {}: registered {} '{}'", record->id, c_str(type), node.item->get_name());
+            entries->items.push_back(item);
+            log_asset->trace("scene container record {}: registered {} '{}'", record->id, c_str(type), item->get_name());
         }
     }
-    // Every asset-typed library entry is a declared user (R5.6): definition
-    // entries pin their own scene's asset; reference entries pin the listed
+    // Every asset-typed library resource is a declared user (R5.6): an owned
+    // resource pins its own scene's asset; a referenced one pins the listed
     // asset of its defining container, converting the former undeclared
     // library pin into a named unload refusal.
-    if (!node.asset_usership) {
-        node.asset_usership = std::make_unique<Asset_reference>();
+    if (!usership) {
+        usership = std::make_unique<Asset_reference>();
     }
-    if (node.asset_usership->get() != node.item) {
-        node.asset_usership->set_user_label(
+    if (usership->get() != item) {
+        usership->set_user_label(
             fmt::format(
                 "scene '{}' library {} '{}'{}",
-                record->scene_name, c_str(type), node.item->get_name(),
-                node.is_reference ? " (reference)" : ""
+                record->scene_name, c_str(type), item->get_name(),
+                (listing == Library_listing::referenced) ? " (reference)" : ""
             )
         );
-        node.asset_usership->adopt(*this, node.item);
+        usership->adopt(*this, item);
     }
 }
 
@@ -1752,18 +1747,23 @@ auto Asset_manager::get_last_announced_uids() const -> const std::vector<std::si
     return m_last_announced_uids;
 }
 
-void Asset_manager::on_library_node_detached(erhe::Item_host* const owner, Content_library_node& node)
+void Asset_manager::on_library_item_detached(
+    erhe::Item_host* const                  owner,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const Library_listing                   listing,
+    std::unique_ptr<Asset_reference>&       usership
+)
 {
     verify_main_thread();
-    if (!node.item) {
+    if (!item) {
         return;
     }
-    const Asset_type type = asset_type_from_item(*node.item);
+    const Asset_type type = asset_type_from_item(*item);
     if (!is_manager_owned_asset_type(type)) {
         return;
     }
-    node.asset_usership.reset();
-    if (node.is_reference) {
+    usership.reset();
+    if (listing == Library_listing::referenced) {
         return;
     }
     const std::shared_ptr<Asset_container_record> record = find_record_by_owner(owner);
@@ -1772,10 +1772,10 @@ void Asset_manager::on_library_node_detached(erhe::Item_host* const owner, Conte
     }
     Asset_container_record::Scene_entries* entries = record->get_scene_entries(type);
     ERHE_VERIFY(entries != nullptr);
-    const auto i = std::remove(entries->items.begin(), entries->items.end(), node.item);
+    const auto i = std::remove(entries->items.begin(), entries->items.end(), item);
     if (i != entries->items.end()) {
         entries->items.erase(i, entries->items.end());
-        log_asset->trace("scene container record {}: unregistered {} '{}'", record->id, c_str(type), node.item->get_name());
+        log_asset->trace("scene container record {}: unregistered {} '{}'", record->id, c_str(type), item->get_name());
     }
 }
 

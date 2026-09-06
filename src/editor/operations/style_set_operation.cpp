@@ -87,11 +87,11 @@ auto make_style_from_values(
     const std::shared_ptr<erhe::Item_base>& first = items.front();
     Scene_root* const scene_root = find_scene_root_for_item(context, *first);
     const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-    if (!library || !library->styles) {
+    if (!library) {
         log_operations->warn("style from '{}': item '{}' belongs to no scene library", name, first->get_name());
         return {};
     }
-    std::shared_ptr<Style> style = std::make_shared<Style>(make_unique_style_name(*library->styles, name));
+    std::shared_ptr<Style> style = std::make_shared<Style>(make_unique_style_name(*library, name));
     // Only the values a style can hold (by identity), as paste.
     const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
     std::size_t value_count = 0;
@@ -111,8 +111,8 @@ auto make_style_from_values(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = context,
-                .item    = std::make_shared<Content_library_node>(style),
-                .parent  = library->styles,
+                .item    = style,
+                .parent  = library->get_scope(erhe::Item_type::style),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )

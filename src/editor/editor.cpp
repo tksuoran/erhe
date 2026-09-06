@@ -2481,7 +2481,7 @@ public:
         // complete at this point.
         {
             const std::shared_ptr<Content_library>& palette_library = m_scene_builder->get_content_library();
-            if (palette_library && palette_library->brushes) {
+            if (palette_library) {
                 for (const std::shared_ptr<Brush>& brush : palette_library->get_all<Brush>()) {
                     m_asset_manager->register_builtin(Asset_type::brush, brush);
                 }
@@ -3074,9 +3074,9 @@ public:
         // own their library items (item host = the Scene_root), and an item
         // is a member of exactly one library.
         std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
-        if (m_default_content_library && m_default_content_library->brushes && content_library->brushes) {
+        if (m_default_content_library) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_default_content_library->mutex};
-            copy_content_library_folder(*m_default_content_library->brushes, *content_library->brushes);
+            copy_content_library(*m_default_content_library, *content_library);
         }
         add_default_materials(*content_library.get());
         add_default_physics_materials(*content_library.get());
@@ -3346,18 +3346,17 @@ public:
             watch.frames_remaining = k_scene_close_leak_check_frames;
             watch.scene_root       = scene_root;
             const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-            if (library && library->root) {
-                library->root->for_each<Content_library_node>(
-                    [&watch](const Content_library_node& node) -> bool {
-                        // Reference entries list items owned by another
-                        // scene's library; only owned items must die with
+            if (library) {
+                for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+                    for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
+                        // Referenced listings name resources owned by another
+                        // scene's library; only owned resources must die with
                         // this scene.
-                        if (node.item && !node.is_reference) {
-                            watch.items.emplace_back(node.item);
+                        if (item && !library->is_referenced(*item)) {
+                            watch.items.emplace_back(item);
                         }
-                        return true;
                     }
-                );
+                }
             }
             scene_root->get_scene().for_each_node(
                 [&watch](const std::shared_ptr<erhe::scene::Node>& node) {

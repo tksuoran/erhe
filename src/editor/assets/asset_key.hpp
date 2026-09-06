@@ -37,6 +37,14 @@ enum class Asset_type : int {
     node      = 5  // scene_local-only (graph transform-driver references, e.g. Lattice_node)
 };
 
+// Whether a content library lists a resource as a prim of its own scene's
+// tree, or as a reference to one another container owns (2e retires the
+// second form).
+enum class Library_listing : int {
+    owned      = 0,
+    referenced = 1
+};
+
 [[nodiscard]] auto c_str(Asset_scope scope) -> const char*;
 [[nodiscard]] auto c_str(Asset_type type) -> const char*;
 [[nodiscard]] auto parse_asset_scope(std::string_view text) -> Asset_scope;
@@ -83,9 +91,13 @@ public:
 [[nodiscard]] auto asset_type_from_item(const erhe::Item_base& item) -> Asset_type;
 
 // The R5.6 flip scope: asset types whose runtime ownership belongs to the
-// Asset_manager (scene container records hold them strongly) and which
-// never claim an Item_host. mesh is a scene_local resolution convenience
-// for graph source nodes, not a manager-owned type.
+// Asset_manager - a scene container record holds them strongly and is what
+// a definition-vs-reference question is answered from. They are hosted like
+// every other prim now that a resource lives in its scene's tree
+// (doc/usd-compatibility-plan.md U4), so hosting says which scene HOLDS a
+// resource while the record says which container DEFINES it. mesh is a
+// scene_local resolution convenience for graph source nodes, not a
+// manager-owned type.
 [[nodiscard]] auto is_manager_owned_asset_type(Asset_type type) -> bool;
 
 }

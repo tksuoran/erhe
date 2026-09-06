@@ -263,14 +263,16 @@ auto Scene_builder::add_cameras(const Add_cameras_args& args) -> bool
     return true;
 }
 
-auto Scene_builder::make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
+auto Scene_builder::make_brush(erhe::Scope& scope, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>
 {
     // TODO This is very crude locking.
     //      We could be able to do more in parallel - check if we can do more fine grained locking.
     const std::shared_ptr<Content_library>& content_library = m_content_library;
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
 
-    return folder.make<Brush>(brush_create_info);
+    std::shared_ptr<Brush> brush = std::make_shared<Brush>(std::move(brush_create_info));
+    brush->set_parent(&scope);
+    return brush;
 }
 
 auto Scene_builder::build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -> erhe::primitive::Build_info
@@ -288,14 +290,14 @@ auto Scene_builder::build_info(erhe::scene_renderer::Mesh_memory& mesh_memory) -
 }
 
 auto Scene_builder::make_brush(
-    Content_library_node&                            folder,
+    erhe::Scope&                                     scope,
     App_settings&                                    app_settings,
     const erhe::primitive::Build_info&               brush_build_info,
     const std::shared_ptr<erhe::geometry::Geometry>& geometry
 ) -> std::shared_ptr<Brush>
 {
     return make_brush(
-        folder,
+        scope,
         Brush_data{
             .context      = m_context,
             .app_settings = app_settings,
@@ -314,11 +316,13 @@ void Scene_builder::make_platonic_solid_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     const auto scale = 1.0f;
 
-    m_platonic_solids_folder = brushes.make_folder("Platonic Solids");
+    m_platonic_solids_folder = std::make_shared<erhe::Scope>("Platonic Solids");
+    m_platonic_solids_folder->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    m_platonic_solids_folder->set_parent(&brushes);
     auto& folder = *m_platonic_solids_folder.get();
 
     const uint64_t flags =
@@ -369,7 +373,7 @@ void Scene_builder::make_sphere_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
     std::shared_ptr<erhe::geometry::Geometry> sphere = std::make_shared<erhe::geometry::Geometry>("sphere");
     erhe::geometry::shapes::make_sphere(
         sphere->get_mesh(),
@@ -406,7 +410,7 @@ void Scene_builder::make_torus_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     const float major_radius = 1.0f ; // * config.object_scale;
     const float minor_radius = 0.25f; // * config.object_scale;
@@ -492,7 +496,7 @@ void Scene_builder::make_cylinder_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     const float scale = 1.0f; //config.object_scale;
     std::size_t index = 0;
@@ -539,7 +543,7 @@ void Scene_builder::make_cone_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     std::shared_ptr<erhe::geometry::Geometry> cone_geometry = std::make_shared<erhe::geometry::Geometry>("cone");
     erhe::geometry::shapes::make_cone( // always axis = x
@@ -584,7 +588,7 @@ void Scene_builder::make_capsule_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     const float radius = 1.0f;
     const float length = 2.0f; // cylinder mid-section length; total height = length + 2 * radius
@@ -630,7 +634,7 @@ void Scene_builder::make_json_brushes(
 {
     ERHE_PROFILE_FUNCTION();
 
-    Content_library_node& brushes = get_brushes();
+    erhe::Scope& brushes = get_brushes();
 
     static constexpr uint64_t process_flags =
         erhe::geometry::Geometry::process_flag_connect |
@@ -640,7 +644,9 @@ void Scene_builder::make_json_brushes(
         erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates |
         erhe::geometry::Geometry::process_flag_generate_tangents;
 
-    m_johnson_solids_folder = brushes.make_folder("Johnson Solids");
+    m_johnson_solids_folder = std::make_shared<erhe::Scope>("Johnson Solids");
+    m_johnson_solids_folder->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    m_johnson_solids_folder->set_parent(&brushes);
     auto& folder = *m_johnson_solids_folder.get();
 
     for (const auto& key_name : library.names) {
@@ -680,10 +686,10 @@ void Scene_builder::make_json_brushes(
     }
 }
 
-auto Scene_builder::get_brushes() -> Content_library_node&
+auto Scene_builder::get_brushes() -> erhe::Scope&
 {
-    auto content_library = m_content_library;
-    return *(content_library->brushes.get());
+    const std::shared_ptr<Content_library>& content_library = m_content_library;
+    return *content_library->get_scope(erhe::Item_type::brush).get();
 }
 
 void Scene_builder::make_brushes(
@@ -749,9 +755,9 @@ void Scene_builder::make_brushes(
         }
     }
 
-    auto sort_folder = [](Content_library_node& folder)
+    auto sort_folder = [](erhe::Scope& scope)
     {
-        std::vector<std::shared_ptr<erhe::Hierarchy>>& entries = folder.get_mutable_children();
+        std::vector<std::shared_ptr<erhe::Hierarchy>>& entries = scope.get_mutable_children();
 
         std::sort(
             entries.begin(),
@@ -1212,7 +1218,7 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
     // See add_torus_chain: the material is created in the scene's own library.
-    auto& material_library = m_scene_root->get_content_library()->materials;
+    Content_library& material_library = *m_scene_root->get_content_library().get();
     auto material = m_context.asset_manager->create<erhe::primitive::Material>(
         *m_scene_root,
         erhe::primitive::Material_create_info{
@@ -1224,7 +1230,7 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
             }
         }
     );
-    material_library->add(material);
+    material_library.add(material);
 
     const int x_count = shape.x;
     const int y_count = shape.y;
@@ -1631,7 +1637,7 @@ void Scene_builder::register_floor_resources(
         // instance (the scene's library owns it), not to the template
         // library the brushes were built into.
         const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
-        if (content_library && content_library->materials) {
+        if (content_library) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->add(material);
         }
@@ -1663,7 +1669,7 @@ void Scene_builder::unregister_floor_resources(
     if (material && m_scene_root) {
         // See register_floor_resources: the scene's own library.
         const std::shared_ptr<Content_library> content_library = m_scene_root->get_content_library();
-        if (content_library && content_library->materials) {
+        if (content_library) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
             content_library->remove(material);
         }

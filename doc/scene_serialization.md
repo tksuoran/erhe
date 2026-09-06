@@ -54,6 +54,16 @@ its mesh state; the `ERHE_light` payload of a light node is the light prim's
 own. The glTF `mesh` and `camera` entries carry no `uid`: such a prim's
 identity is its node entry.
 
+A scene's content-library resources - materials, textures, brushes, styles,
+physics materials, collision filters, joint settings, animations, skins and
+node graphs - are prims of the same tree, under the kind `Scope`s the library
+keeps below the scene root (`doc/usd-compatibility-plan.md` U4). Those scopes
+and the resource prims below them carry no `Item_flags::content`, and the node
+writer emits a transform-less prim only when it carries that flag, so they are
+never written as nodes: a resource rides its own flat glTF list (materials,
+images, animations, skins) or its `ERHE_*` asset-root table (brushes, node
+graphs), and its place in the tree rides `ERHE_scene` `library_folders`.
+
 A prim of a class that carries no transform - an `erhe::Scope`, or the
 `erhe::Typed` a USD `typeName` erhe has no class for becomes - is written as
 a glTF node with the identity transform whose `ERHE_node` extension names

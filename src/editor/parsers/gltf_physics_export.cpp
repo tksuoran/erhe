@@ -565,17 +565,17 @@ auto build_gltf_physics_data(
     // editor-authored assets survive save / load (parity with scene.json
     // v3+). get_*_index() deduplicates against the referenced entries above.
     if (content_library != nullptr) {
-        if (content_library->physics_materials) {
+        if (content_library) {
             for (const std::shared_ptr<erhe::physics::Physics_material>& material : content_library->get_all<erhe::physics::Physics_material>()) {
                 static_cast<void>(builder.get_material_index(material));
             }
         }
-        if (content_library->collision_filters) {
+        if (content_library) {
             for (const std::shared_ptr<erhe::physics::Collision_filter>& filter : content_library->get_all<erhe::physics::Collision_filter>()) {
                 static_cast<void>(builder.get_filter_index(filter));
             }
         }
-        if (content_library->physics_joints) {
+        if (content_library) {
             for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : content_library->get_all<erhe::physics::Physics_joint_settings>()) {
                 static_cast<void>(builder.get_joint_index(settings));
             }

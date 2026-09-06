@@ -4,6 +4,7 @@
 #include "physics/collision_generator.hpp"
 #include "scene/make_mesh_config.hpp"
 
+#include "erhe_item/scope.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <memory>
@@ -58,7 +59,7 @@ namespace editor {
 class Brush;
 class Brush_data;
 class Content_library;
-class Content_library_node;
+
 class Depth_visualization_window;
 class App_context;
 class App_message_bus;
@@ -187,17 +188,17 @@ private:
         bool             cast_shadow
     ) -> std::shared_ptr<erhe::scene::Light>;
 
-    auto make_brush(Content_library_node& folder, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
+    auto make_brush(erhe::Scope& scope, Brush_data&& brush_create_info) -> std::shared_ptr<Brush>;
 
     //// auto make_brush(
-    ////     Content_library_node&              folder,
+    ////     erhe::Scope&                       scope,
     ////     App_settings&                      app_settings,
     ////     erhe::scene_renderer::Mesh_memory& mesh_memory,
     ////     GEO::Mesh&&                        geo_mesh
     //// ) -> std::shared_ptr<Brush>;
 
     auto make_brush(
-        Content_library_node&                            folder,
+        erhe::Scope&                                     scope,
         App_settings&                                    app_settings,
         const erhe::primitive::Build_info&               brush_build_info,
         const std::shared_ptr<erhe::geometry::Geometry>& geometry
@@ -207,7 +208,7 @@ private:
 
     void animate_lights     (const double time_d);
 
-    auto get_brushes() -> Content_library_node&;
+    auto get_brushes() -> erhe::Scope&;
 
     // The brush makers below make_brushes() run on taskflow workers.
     // build_info() reads Mesh_memory vertex-input state, so make_brushes()
@@ -245,8 +246,8 @@ private:
 
     std::vector<std::shared_ptr<erhe::physics::ICollision_shape>> m_collision_shapes;
 
-    std::shared_ptr<Content_library_node> m_platonic_solids_folder;
-    std::shared_ptr<Content_library_node> m_johnson_solids_folder;
+    std::shared_ptr<erhe::Scope> m_platonic_solids_folder;
+    std::shared_ptr<erhe::Scope> m_johnson_solids_folder;
 
     // Brushes are built eagerly in the Scene_builder constructor using
     // these defaults. ensure_brushes() guards on m_brushes_built and is

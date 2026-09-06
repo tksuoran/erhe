@@ -583,8 +583,8 @@ auto Mcp_server::action_create_physics_material(const json& args) -> std::string
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(item),
-                .parent  = library->physics_materials,
+                .item    = item,
+                .parent  = library->get_scope(erhe::Item_type::physics_material),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -684,8 +684,8 @@ auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(item),
-                .parent  = library->collision_filters,
+                .item    = item,
+                .parent  = library->get_scope(erhe::Item_type::collision_filter),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -780,8 +780,8 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(item),
-                .parent  = library->physics_joints,
+                .item    = item,
+                .parent  = library->get_scope(erhe::Item_type::physics_joint_settings),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )

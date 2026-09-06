@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_property/expression.hpp"
+#include "erhe_property/owner_type.hpp"
 #include "erhe_property/property_value.hpp"
 
 #include <glm/glm.hpp>
@@ -130,6 +131,9 @@ private:
     std::string                                              m_expression_scratch; // the formula being typed in the active expression row
     std::vector<const erhe::property::Dependency_property*>  m_add_candidates;     // Add Property: the picker's entries, refilled each frame the row draws
     std::vector<const erhe::property::Dependency_property*>  m_add_scratch;        // Add Property: one item's candidates while forming the union
+    // Owner types a Scope offers first in Add Property: the classes of the
+    // prims below it (doc/content-library-folders.md D8).
+    std::vector<erhe::property::Owner_type>                  m_add_preferred_owner_types;
     std::string                                              m_add_filter;         // Add Property: the filter text
     std::string                                              m_add_filter_lower;   // Add Property: the filter lowered for matching
     std::string                                              m_add_label_lower;    // Add Property: a candidate's label lowered for matching

@@ -504,20 +504,20 @@ auto Mcp_server::action_create_style(const json& args) -> std::string
         return make_error_content("Scene not found: " + scene_name);
     }
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->styles) {
+    if (!library) {
         return make_error_content("Scene has no content library");
     }
     std::shared_ptr<Style> style{};
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        style = std::make_shared<Style>(make_unique_style_name(*library->styles, name));
+        style = std::make_shared<Style>(make_unique_style_name(*library, name));
     }
     m_context.operation_stack->execute_now(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = std::make_shared<Content_library_node>(style),
-                .parent  = library->styles,
+                .item    = style,
+                .parent  = library->get_scope(erhe::Item_type::style),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )

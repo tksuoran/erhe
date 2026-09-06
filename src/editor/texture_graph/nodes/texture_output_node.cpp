@@ -155,7 +155,7 @@ void Texture_output_node::register_texture()
         return;
     }
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->textures) {
+    if (!library) {
         return;
     }
     if (m_registered_texture == texture) {
@@ -176,7 +176,7 @@ void Texture_output_node::unregister_texture()
     const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (m_registered_texture && scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library && library->textures) {
+        if (library) {
             library->remove(m_registered_texture);
         }
     }
@@ -282,7 +282,7 @@ void Texture_output_node::imgui()
     }
     if (selection_root) {
         const std::shared_ptr<Content_library> library = selection_root->get_content_library();
-        if (library && library->materials) {
+        if (library) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
                 int material_index = 0;

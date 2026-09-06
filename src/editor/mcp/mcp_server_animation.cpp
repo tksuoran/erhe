@@ -51,7 +51,7 @@ namespace {
             continue;
         }
         const std::shared_ptr<Content_library>& library = scene_root->get_content_library();
-        if (!library || !library->animations) {
+        if (!library) {
             continue;
         }
         std::shared_ptr<erhe::scene::Animation> found = find_library_item<erhe::scene::Animation>(library, name);
@@ -145,7 +145,7 @@ auto Mcp_server::query_scene_animations(const json& args) -> std::string
     json animations = json::array();
     const auto append_from = [&animations](Scene_root& scene_root) {
         const std::shared_ptr<Content_library>& library = scene_root.get_content_library();
-        if (!library || !library->animations) {
+        if (!library) {
             return;
         }
         for (const std::shared_ptr<erhe::scene::Animation>& animation : library->get_all<erhe::scene::Animation>()) {
@@ -316,7 +316,7 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
         erhe::scene::Scene* scene      = nodes.front()->get_scene();
         Scene_root*         scene_root = (scene != nullptr) ? static_cast<Scene_root*>(scene->get_item_host()) : nullptr;
         const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-        if (!library || !library->animations || (m_context.asset_manager == nullptr)) {
+        if (!library || (m_context.asset_manager == nullptr)) {
             return make_error_content("No animation targeted and the keyed scene cannot host a new one");
         }
         animation = m_context.asset_manager->create<erhe::scene::Animation>(*scene_root, "Animation");
@@ -324,7 +324,6 @@ auto Mcp_server::action_animation_create_key(const json& args) -> std::string
         m_context.operation_stack->execute_now(
             std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
                 library,
-                library->animations,
                 animation,
                 Gltf_source_reference{
                     .item_name = animation->get_name(),

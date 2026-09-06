@@ -94,6 +94,43 @@ constexpr std::array<std::string_view, 5> c_prim_payload_types{
     return false;
 }
 
+// The item the drag payload carries, when the payload is one of the item
+// tree's own (the tree names a payload for the dragged item's class, see
+// SetDragDropPayload below).
+[[nodiscard]] auto peek_prim_payload(const ImGuiPayload* const payload_peek) -> std::shared_ptr<erhe::Item_base>
+{
+    if ((payload_peek == nullptr) || (payload_peek->Data == nullptr) || (payload_peek->DataSize != sizeof(erhe::Item_base*))) {
+        return {};
+    }
+    erhe::Item_base* const raw = *static_cast<erhe::Item_base**>(payload_peek->Data);
+    if (raw == nullptr) {
+        return {};
+    }
+    if (!payload_peek->IsDataType(raw->get_type_name().data())) {
+        return {};
+    }
+    return raw->shared_from_this();
+}
+
+// The content library of the scene whose tree holds the item, or null when
+// the item is not hosted by a registered scene.
+[[nodiscard]] auto find_owning_library(App_context& context, const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Content_library>
+{
+    if (!item || (context.app_scenes == nullptr)) {
+        return {};
+    }
+    erhe::Item_host* const host = item->get_item_host();
+    if (host == nullptr) {
+        return {};
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : context.app_scenes->get_scene_roots()) {
+        if (static_cast<erhe::Item_host*>(scene_root.get()) == host) {
+            return scene_root->get_content_library();
+        }
+    }
+    return {};
+}
+
 [[nodiscard]] auto accept_prim_payload(const ImGuiDragDropFlags flags) -> const ImGuiPayload*
 {
     for (const std::string_view type_name : c_prim_payload_types) {
@@ -662,44 +699,39 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
 
     const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
 
-    const auto& target_cl_node = std::dynamic_pointer_cast<Content_library_node>(item);
+    const std::shared_ptr<erhe::Item_base> payload_prim   = peek_prim_payload(payload_peek);
+    const std::shared_ptr<Content_library> target_library = find_owning_library(m_context, item);
 
-    // A library entry or folder dropped on a folder of its own category
-    // moves there (doc/content-library-folders.md D3); the library root
-    // and the category folders are not movable.
-    if (target_cl_node && !target_cl_node->item && payload_peek && payload_peek->IsDataType("Content_library_node")) {
-        erhe::Item_base* const      payload_item_base = *static_cast<erhe::Item_base**>(payload_peek->Data);
-        Content_library_node* const payload_node      = dynamic_cast<Content_library_node*>(payload_item_base);
-        const std::shared_ptr<erhe::Hierarchy> payload_parent = (payload_node != nullptr) ? payload_node->get_parent().lock() : std::shared_ptr<erhe::Hierarchy>{};
-        const Content_library_node* const payload_parent_node = dynamic_cast<const Content_library_node*>(payload_parent.get());
+    // A resource prim or a folder scope dropped on a scope of the same
+    // library moves there (doc/content-library-folders.md D3). The kind scope
+    // itself is a target but never a payload: it is where a kind lives.
+    {
+        const std::shared_ptr<erhe::Scope> target_scope = std::dynamic_pointer_cast<erhe::Scope>(item);
+        const std::shared_ptr<erhe::Hierarchy> payload_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(payload_prim);
         const bool payload_movable =
-            (payload_node != nullptr) &&
-            (payload_parent_node != nullptr) &&
-            (payload_parent_node->type_code != erhe::Item_type::content_library_node) && // not a category folder
-            (payload_parent_node->type_code == target_cl_node->type_code) && // a leaf entry carries no type_code; its category is its parent's
-            (payload_node != target_cl_node.get()) &&
-            (payload_parent_node != target_cl_node.get()) &&
-            !target_cl_node->is_ancestor(payload_node) &&
-            (target_cl_node->get_library() != nullptr) &&
-            (payload_node->get_library() == target_cl_node->get_library());
+            target_scope && payload_hierarchy && target_library &&
+            (target_library->find_scope_kind(*target_scope) != 0) &&
+            (find_owning_library(m_context, payload_prim) == target_library) &&
+            (target_library->find_scope_kind(*payload_hierarchy) != 0) &&
+            (payload_hierarchy != target_scope) &&
+            (payload_hierarchy->get_parent().lock() != target_scope) &&
+            !target_scope->is_ancestor(payload_hierarchy.get()) &&
+            (target_library->find_scope(target_library->find_scope_kind(*payload_hierarchy)) != payload_hierarchy);
         if (payload_movable) {
             const ImRect rect{rect_min, rect_max};
             if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
                 drag_and_drop_rectangle_preview(rect);
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                    payload_prim->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                );
                 if (payload != nullptr) {
-                    Content_library* const library = target_cl_node->get_library();
-                    Scene_root* const scene_root = static_cast<Scene_root*>(library->get_owner());
-                    const std::shared_ptr<Content_library> library_shared = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-                    if (library_shared) {
-                        auto op = std::make_shared<Content_library_move_operation>(
-                            library_shared,
-                            std::dynamic_pointer_cast<Content_library_node>(payload_node->shared_from_this()),
-                            target_cl_node,
-                            target_cl_node->get_child_count()
-                        );
-                        m_context.operation_stack->queue(op);
-                    }
+                    auto op = std::make_shared<Content_library_move_operation>(
+                        target_library,
+                        payload_hierarchy,
+                        target_scope,
+                        target_scope->get_child_count()
+                    );
+                    m_context.operation_stack->queue(op);
                 }
                 ImGui::EndDragDropTarget();
                 return true;
@@ -709,42 +741,34 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     }
 
     // Handle material drop onto a brush in the content library
-    if (target_cl_node && payload_peek && payload_peek->IsDataType("Content_library_node")) {
-        const auto target_brush = std::dynamic_pointer_cast<Brush>(target_cl_node->item);
-        if (target_brush) {
+    {
+        const std::shared_ptr<Brush> target_brush = std::dynamic_pointer_cast<Brush>(item);
+        const std::shared_ptr<erhe::primitive::Material> dropped_material =
+            std::dynamic_pointer_cast<erhe::primitive::Material>(payload_prim);
+        if (target_brush && dropped_material && target_library && target_library->has_item(*target_brush)) {
             const ImRect rect{rect_min, rect_max};
             if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
                 drag_and_drop_rectangle_preview(rect);
                 const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                    "Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                    dropped_material->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
                 );
                 if (payload != nullptr) {
-                    erhe::Item_base* payload_item_base = *static_cast<erhe::Item_base**>(payload->Data);
-                    Content_library_node* payload_node = dynamic_cast<Content_library_node*>(payload_item_base);
-                    if (payload_node != nullptr) {
-                        std::shared_ptr<erhe::primitive::Material> dropped_material =
-                            std::dynamic_pointer_cast<erhe::primitive::Material>(payload_node->item);
-                        if (dropped_material) {
-                            // Find content library containing this brush
-                            std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
-                            std::shared_ptr<erhe::Hierarchy> parent = target_cl_node->get_parent().lock();
-                            Content_library_node* brushes_folder = dynamic_cast<Content_library_node*>(parent.get());
-                            Content_library* const library = (brushes_folder != nullptr) ? brushes_folder->get_library() : nullptr;
-                            if (library != nullptr) {
-                                // Check for existing fork with same geometry and material
-                                bool found = false;
-                                const std::vector<std::shared_ptr<Brush>>& all_brushes = library->get_all<Brush>();
-                                for (const std::shared_ptr<Brush>& b : all_brushes) {
-                                    if ((b->get_geometry() == original_geometry) && (b->get_material() == dropped_material)) {
-                                        found = true;
-                                        break;
-                                    }
-                                }
-                                if (!found) {
-                                    std::shared_ptr<Brush> forked = target_brush->make_with_material(dropped_material);
-                                    brushes_folder->add(forked);
-                                }
-                            }
+                    // Check for an existing fork with the same geometry and material
+                    const std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
+                    bool found = false;
+                    for (const std::shared_ptr<Brush>& b : target_library->get_all<Brush>()) {
+                        if ((b->get_geometry() == original_geometry) && (b->get_material() == dropped_material)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        const std::shared_ptr<Brush> forked = target_brush->make_with_material(dropped_material);
+                        const std::shared_ptr<erhe::Hierarchy> brush_parent = target_brush->get_parent().lock();
+                        if (brush_parent) {
+                            forked->set_parent(brush_parent);
+                        } else {
+                            target_library->add(forked);
                         }
                     }
                 }
@@ -798,17 +822,10 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     std::shared_ptr<Brush>                     brush{};
     std::shared_ptr<Graph_mesh>                graph_mesh{};
 
-    if (!payload_is_node && payload_peek->IsDataType("Content_library_node")){
-        erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
-        std::shared_ptr<erhe::Item_base> shared_item_base = payload_item_base->shared_from_this();
-        std::shared_ptr<Content_library_node> content_library_node = std::dynamic_pointer_cast<Content_library_node>(
-            shared_item_base
-        );
-        if (content_library_node) {
-            material   = std::dynamic_pointer_cast<erhe::primitive::Material>(content_library_node->item);
-            brush      = std::dynamic_pointer_cast<Brush>(content_library_node->item);
-            graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(content_library_node->item);
-        }
+    if (!payload_is_node && payload_prim) {
+        material   = std::dynamic_pointer_cast<erhe::primitive::Material>(payload_prim);
+        brush      = std::dynamic_pointer_cast<Brush>(payload_prim);
+        graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(payload_prim);
     }
     if (!payload_is_node && payload_peek->IsDataType(c_inventory_slot_payload_type)) {
         // An inventory slot can define a brush, a material, or both.
@@ -821,9 +838,12 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         }
     }
 
-    // Accept either payload type that can carry a brush / material
-    const auto accept_brush_or_material_payload = []() -> const ImGuiPayload* {
-        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+    // Accept either payload type that can carry a brush / material: the
+    // resource prim's own class name, or an inventory slot.
+    const auto accept_brush_or_material_payload = [&payload_prim]() -> const ImGuiPayload* {
+        const ImGuiPayload* payload = payload_prim
+            ? ImGui::AcceptDragDropPayload(payload_prim->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect)
+            : nullptr;
         if (payload == nullptr) {
             payload = ImGui::AcceptDragDropPayload(c_inventory_slot_payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
         }
@@ -839,18 +859,13 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     if (graph_mesh) {
         Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
         const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-        bool asset_in_library = false;
-        if (library && library->graph_meshes) {
-            const std::vector<std::shared_ptr<Graph_mesh>>& library_graph_meshes = library->get_all<Graph_mesh>();
-            asset_in_library = std::find(library_graph_meshes.begin(), library_graph_meshes.end(), graph_mesh) != library_graph_meshes.end();
-        }
-        if (!asset_in_library) {
+        if (!library || !library->has_item(*graph_mesh)) {
             return false;
         }
         const ImRect rect{rect_min, rect_max};
         if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
             drag_and_drop_rectangle_preview(rect);
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(graph_mesh->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             if (payload != nullptr) {
                 std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
                 if (!attachment) {
@@ -880,7 +895,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
                 if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_top)) {
                     drag_and_drop_rectangle_preview(rect);
                     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                        "Content_library_node", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+                        material->get_type_name().data(), ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
                     );
                     if (payload == nullptr) {
                         payload = ImGui::AcceptDragDropPayload(
@@ -1301,10 +1316,14 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
         if (hierarchy) {
         // In the content library, only Materials are copyable for now.
-        const auto& content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-        const bool is_content_library_non_copyable = content_node && (
-            !content_node->item || !std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item)
-        );
+        const std::shared_ptr<Content_library> item_library = find_owning_library(m_context, item);
+        const bool is_library_resource = item_library && item_library->has_item(*item);
+        const bool is_library_scope    = item_library &&
+            (std::dynamic_pointer_cast<erhe::Scope>(item) != nullptr) &&
+            (item_library->find_scope_kind(*std::dynamic_pointer_cast<erhe::Scope>(item)) != 0);
+        const bool is_content_library_non_copyable =
+            (is_library_scope || is_library_resource) &&
+            (std::dynamic_pointer_cast<erhe::primitive::Material>(item) == nullptr);
 
         const bool selected_or_hierarchy = item->is_selected() || hierarchy;
         const bool can_copy = selected_or_hierarchy && !is_content_library_non_copyable;
@@ -1338,20 +1357,20 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             ImGui::EndDisabled();
         }
 
-        // For content library nodes, paste always targets the folder.
-        // If the target is a leaf item, redirect to its parent folder.
-        // Only allow paste into the Materials folder for now.
+        // For content-library resources, paste always targets the scope. If
+        // the target is a resource prim, redirect to its parent scope. Only
+        // allow paste into a Materials scope for now.
         std::shared_ptr<erhe::Hierarchy> paste_target = hierarchy;
-        if (content_node && content_node->item) {
+        if (is_library_resource) {
             paste_target = hierarchy->get_parent().lock();
         }
-        const auto& paste_target_content_node = std::dynamic_pointer_cast<Content_library_node>(paste_target);
-        const bool is_materials_folder = paste_target_content_node &&
-            !paste_target_content_node->item &&
-            paste_target_content_node->type_code == erhe::Item_type::material;
+        const std::shared_ptr<erhe::Scope> paste_target_scope = std::dynamic_pointer_cast<erhe::Scope>(paste_target);
+        const bool is_materials_scope = item_library && paste_target_scope &&
+            (item_library->find_scope_kind(*paste_target_scope) == erhe::Item_type::material);
 
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
-        const bool can_paste = !clipboard_contents.empty() && paste_target && (!content_node || is_materials_folder);
+        const bool can_paste = !clipboard_contents.empty() && paste_target &&
+            (!(is_library_scope || is_library_resource) || is_materials_scope);
         if (!can_paste) {
             ImGui::BeginDisabled();
         }
@@ -1503,13 +1522,9 @@ void Item_tree::root_popup_menu()
 
 namespace {
 
-// Content library leaf nodes are labeled with their payload item
+// A resource prim is its own label item.
 [[nodiscard]] auto get_label_item(const std::shared_ptr<erhe::Item_base>& item) -> const std::shared_ptr<erhe::Item_base>&
 {
-    const auto content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_library_node && (content_library_node->get_child_count() == 0) && content_library_node->item) {
-        return content_library_node->item;
-    }
     return item;
 }
 
@@ -1680,12 +1695,7 @@ void Item_tree::item_icon_and_text(const std::shared_ptr<erhe::Item_base>& item)
 
 auto Item_tree::should_show(const std::shared_ptr<erhe::Item_base>& item) -> Show_mode
 {
-    // Content-library nodes (issue #240) do not carry show_in_ui, so bypass the
-    // tree's type filter for them; this lets the Content Library nested under the
-    // Scene item show in the scene hierarchy window (which filters on show_in_ui)
-    // and does not affect the standalone content library window (all-accepting).
-    const bool is_content_library = std::dynamic_pointer_cast<Content_library_node>(item) != nullptr;
-    const bool show_by_type = is_content_library || m_filter(item->get_flag_bits());
+    const bool show_by_type = m_filter(item->get_flag_bits());
     const bool show_by_name = m_text_filter.PassFilter(item->get_name().c_str());
     if (show_by_type && show_by_name) {
         return Show_mode::Show;
@@ -1740,38 +1750,14 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
     const bool force_expand = (show == Show_mode::Show_expanded);
 
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy   >(item);
-    const auto& scene     = std::dynamic_pointer_cast<erhe::scene::Scene>(item);
     const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
     // Prefab instance roots are sealed: their subtree is prefab content,
     // editable only by opening the prefab's own scene, so the row renders
     // as a leaf and the interior is never listed.
     const bool is_prefab_instance_root = node && static_cast<bool>(erhe::scene::get_attachment<Prefab_instance>(node.get()));
     bool is_leaf = true;
-    const bool is_content_library_node = std::dynamic_pointer_cast<Content_library_node>(item) != nullptr;
     if (hierarchy && !is_prefab_instance_root) {
-        // Content-library nodes bypass the tree's type filter (issue #240), so
-        // count their children unfiltered; other hierarchies use the filter.
-        const std::size_t child_count = is_content_library_node
-            ? hierarchy->get_child_count()
-            : hierarchy->get_child_count(m_filter);
-        if (child_count > 0) {
-            is_leaf = false;
-        }
-    }
-    // A Scene item (issue #240) is not itself a Hierarchy; its single tree child
-    // is the Content Library, reached via the scene's host (Scene_root). The
-    // scene root node's child nodes are NOT nested here - they render separately
-    // (the scene hierarchy window sets the scene root node as its root).
-    std::shared_ptr<erhe::Hierarchy> scene_content_library_root;
-    if (scene) {
-        Scene_root* scene_root = static_cast<Scene_root*>(scene->get_item_host());
-        if (scene_root != nullptr) {
-            const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (content_library) {
-                scene_content_library_root = content_library->root;
-            }
-        }
-        if (scene_content_library_root) {
+        if (hierarchy->get_child_count(m_filter) > 0) {
             is_leaf = false;
         }
     }
@@ -1802,9 +1788,8 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         const ImGuiStyle& style    = ImGui::GetStyle();
 
         // Primary visual: brush thumbnail (drawn live) or a resolved icon
-        const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item);
-        if (content_library_node && m_context.thumbnails) {
-            row.brush = std::dynamic_pointer_cast<Brush>(content_library_node->item);
+        if (m_context.thumbnails != nullptr) {
+            row.brush = std::dynamic_pointer_cast<Brush>(item);
         }
         float primary_width = m_cached_icon_font_size; // thumbnails are square
         if (!row.brush) {
@@ -1820,14 +1805,16 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         // naming its defining container. The path comes from the entry's
         // recorded asset_key / gltf_source; entries carrying neither fall
         // back to the manager's key (file-scope for path-bound containers).
-        if (content_library_node && content_library_node->is_reference && content_library_node->item) {
+        const std::shared_ptr<Content_library> row_library = find_owning_library(m_context, item);
+        const Resource_metadata* const row_metadata = row_library ? row_library->find_metadata(*item) : nullptr;
+        if ((row_metadata != nullptr) && row_metadata->is_reference) {
             std::string container_path;
-            if (content_library_node->asset_key.has_value() && !content_library_node->asset_key->path.empty()) {
-                container_path = content_library_node->asset_key->path;
-            } else if (content_library_node->gltf_source.has_value() && !content_library_node->gltf_source->gltf_path.empty()) {
-                container_path = content_library_node->gltf_source->gltf_path;
+            if (row_metadata->asset_key.has_value() && !row_metadata->asset_key->path.empty()) {
+                container_path = row_metadata->asset_key->path;
+            } else if (row_metadata->gltf_source.has_value() && !row_metadata->gltf_source->gltf_path.empty()) {
+                container_path = row_metadata->gltf_source->gltf_path;
             } else if (m_context.asset_manager != nullptr) {
-                const Asset_key key = m_context.asset_manager->make_key(*content_library_node->item);
+                const Asset_key key = m_context.asset_manager->make_key(*item);
                 if (key.scope == Asset_scope::file) {
                     container_path = key.path;
                 }
@@ -1895,12 +1882,6 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
         for (const auto& child_node : hierarchy->get_children()) {
             flatten_visible_rows(child_node, indent + indent_spacing);
         }
-    }
-    // Nest the Content Library under the Scene item (issue #240). Scene is not a
-    // Hierarchy, so this is handled explicitly rather than via the block above.
-    if (scene_content_library_root) {
-        const float indent_spacing = ImGui::GetStyle().IndentSpacing;
-        flatten_visible_rows(scene_content_library_root, indent + indent_spacing);
     }
 }
 

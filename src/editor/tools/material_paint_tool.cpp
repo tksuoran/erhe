@@ -305,9 +305,9 @@ void Material_paint_tool::tool_properties(erhe::imgui::Imgui_window&)
     if (!scene_root) {
         return;
     }
-    const auto& material_library = scene_root->get_content_library()->materials;
+    const Content_library& material_library = *scene_root->get_content_library().get();
     std::shared_ptr<erhe::primitive::Material> material = m_material.get_as<erhe::primitive::Material>();
-    if (material_library->combo(m_context, "Material", material, false)) {
+    if (material_library.combo(m_context, "Material", material, false)) {
         set_material(material);
     }
 }

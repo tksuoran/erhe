@@ -564,7 +564,7 @@ void apply_slot_edit(const Slot_edit& edit, erhe::primitive::Material_texture_sa
             return "texture_samplers must be an object";
         }
 
-        if (!library || !library->textures) {
+        if (!library) {
             return "Content library has no textures node (texture-sampler edits need a scene-hosted material)";
         }
         const auto& tex_list = library->get_all<erhe::graphics::Texture>();
@@ -618,7 +618,7 @@ auto Mcp_server::find_material_by_id(const std::size_t material_id) -> std::shar
     if (m_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-            if (!library || !library->materials) {
+            if (!library) {
                 continue;
             }
             for (const std::shared_ptr<erhe::primitive::Material>& mat : library->get_all<erhe::primitive::Material>()) {
@@ -678,7 +678,7 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
         }
 
         library = sr->get_content_library();
-        if (!library || !library->materials) {
+        if (!library) {
             json r = make_text_content("No materials in scene: " + scene_name);
             r["isError"] = true;
             return r.dump();
@@ -798,7 +798,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
         return r.dump();
     }
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->materials) {
+    if (!library) {
         json r = make_text_content("Scene has no material library: " + scene_name);
         r["isError"] = true;
         return r.dump();
@@ -913,7 +913,7 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
         }
     } else if (!material_name.empty()) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (!library || !library->materials) {
+        if (!library) {
             return make_error_content("Scene has no material library: " + scene_name);
         }
         std::vector<std::size_t> matching_ids;
@@ -1024,17 +1024,16 @@ auto Mcp_server::action_copy_library_item(const json& args) -> std::string
         return r.dump();
     }
 
-    const auto pick_folder = [](Content_library& library, const std::string& type) -> std::shared_ptr<Content_library_node> {
-        if (type == "material")         return library.materials;
-        if (type == "brush")            return library.brushes;
-        if (type == "physics_material") return library.physics_materials;
-        if (type == "collision_filter") return library.collision_filters;
-        if (type == "physics_joint")    return library.physics_joints;
-        return {};
+    const auto pick_kind = [](const std::string& type) -> uint64_t {
+        if (type == "material")         return erhe::Item_type::material;
+        if (type == "brush")            return erhe::Item_type::brush;
+        if (type == "physics_material") return erhe::Item_type::physics_material;
+        if (type == "collision_filter") return erhe::Item_type::collision_filter;
+        if (type == "physics_joint")    return erhe::Item_type::physics_joint_settings;
+        return 0;
     };
-    const std::shared_ptr<Content_library_node> source_folder = pick_folder(*source_library.get(), item_type);
-    const std::shared_ptr<Content_library_node> target_folder = pick_folder(*target_library.get(), item_type);
-    if (!source_folder || !target_folder) {
+    const uint64_t kind_type_bit = pick_kind(item_type);
+    if (kind_type_bit == 0) {
         json r = make_text_content(
             "Unsupported item_type '" + item_type + "' - supported: material, brush, physics_material, "
             "collision_filter, physics_joint (textures and graph assets cannot be copied across scenes)"
@@ -1047,17 +1046,14 @@ auto Mcp_server::action_copy_library_item(const json& args) -> std::string
     std::size_t                      match_count = 0;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{source_library->mutex};
-        source_folder->for_each<Content_library_node>(
-            [&found, &match_count, &item_name](Content_library_node& node) -> bool {
-                if (node.item && (node.item->get_name() == item_name)) {
-                    if (!found) {
-                        found = node.item;
-                    }
-                    ++match_count;
+        for (const std::shared_ptr<erhe::Item_base>& item : source_library->get_all_of_kind(kind_type_bit)) {
+            if (item && (item->get_name() == item_name)) {
+                if (!found) {
+                    found = item;
                 }
-                return true;
+                ++match_count;
             }
-        );
+        }
     }
     if (!found) {
         json r = make_text_content("Item not found in " + source_scene + ": " + item_name);

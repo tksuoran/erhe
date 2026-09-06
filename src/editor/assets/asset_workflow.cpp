@@ -119,12 +119,12 @@ auto make_material_external(
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
     if (library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        const std::shared_ptr<Content_library_node> entry = library->find_entry(*material);
-        if (entry) {
-            entry->is_reference = true;
-            entry->asset_key    = asset_manager.make_key(*material);
-            if (entry->asset_usership) {
-                entry->asset_usership->set_user_label(
+        if (library->has_item(*material)) {
+            library->set_referenced(*material);
+            library->set_asset_key(material, asset_manager.make_key(*material));
+            const Resource_metadata* const metadata = library->find_metadata(*material);
+            if ((metadata != nullptr) && metadata->asset_usership) {
+                metadata->asset_usership->set_user_label(
                     fmt::format("scene '{}' library material '{}' (reference)", scene_root.get_name(), material->get_name())
                 );
             }
@@ -157,8 +157,7 @@ auto make_material_internal(
     bool is_listed_reference = false;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
-        const std::shared_ptr<Content_library_node> entry = library->find_entry(*material);
-        is_listed_reference = entry && entry->is_reference;
+        is_listed_reference = library->is_referenced(*material);
     }
     if (!is_listed_reference) {
         out_error = fmt::format(
@@ -248,7 +247,7 @@ auto reference_material_into_scene(
         return {};
     }
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-    if (!library || !library->materials) {
+    if (!library) {
         out_error = fmt::format("scene '{}' has no material library", scene_root.get_name());
         return {};
     }
@@ -262,7 +261,6 @@ auto reference_material_into_scene(
     context.operation_stack->queue(
         std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
             library,
-            library->materials,
             material,
             Gltf_source_reference{
                 .gltf_path  = stored_key.path,
@@ -292,7 +290,7 @@ void import_texture_into_scene(
         return;
     }
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (!library || !library->textures) {
+    if (!library) {
         log_asset->warn("import texture: scene '{}' has no texture library", scene_root->get_name());
         return;
     }
@@ -312,13 +310,12 @@ void import_texture_into_scene(
                 return; // scene closed while the image was loading
             }
             const std::shared_ptr<Content_library> target_library = target->get_content_library();
-            if (!target_library || !target_library->textures) {
+            if (!target_library) {
                 return;
             }
             context_ptr->operation_stack->queue(
                 std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
                     target_library,
-                    target_library->textures,
                     texture,
                     Gltf_source_reference{
                         .gltf_path  = path_string,

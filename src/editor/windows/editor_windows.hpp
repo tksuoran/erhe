@@ -60,7 +60,7 @@ public:
 
     // "Open Editor" / "Open Properties" dispatch used by the item context
     // menu and item double-click (issue #252). These accept the raw tree item
-    // (a scene Node, a Scene, or a Content_library_node-wrapped asset) and
+    // (a scene Node, a Scene, or a content-library resource prim) and
     // unwrap as needed.
 
     // True when the item has an editor: a Graph Mesh, a Graph Texture, or a
@@ -71,7 +71,7 @@ public:
     // viewport. No-op when the item has no editor.
     void open_editor_for_item(const std::shared_ptr<erhe::Item_base>& item);
     // Open a new Properties window pinned to the item (unwrapping a
-    // Content_library_node to its inner asset).
+    // a resource prim to its own editor).
     void open_properties_for_item(const std::shared_ptr<erhe::Item_base>& item);
     // Open a new viewport window bound to the given scene (deferred out of
     // ImGui iteration).

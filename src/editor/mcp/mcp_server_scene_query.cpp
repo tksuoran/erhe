@@ -348,7 +348,7 @@ auto Mcp_server::query_list_scenes(const json& args) -> std::string
         const auto  library = sr->get_content_library();
 
         int material_count = 0;
-        if (library && library->materials) {
+        if (library) {
             material_count = static_cast<int>(library->get_all<erhe::primitive::Material>().size());
         }
 
@@ -1342,7 +1342,7 @@ auto Mcp_server::query_scene_materials(const json& args) -> std::string
     }
 
     auto library = sr->get_content_library();
-    if (!library || !library->materials) {
+    if (!library) {
         return make_json_content({{"materials", json::array()}}).dump();
     }
 
@@ -1435,7 +1435,7 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     }
 
     auto library = sr->get_content_library();
-    if (!library || !library->materials) {
+    if (!library) {
         json r = make_text_content("No materials in scene: " + scene_name);
         r["isError"] = true;
         return r.dump();
@@ -1533,7 +1533,7 @@ auto Mcp_server::query_scene_textures(const json& args) -> std::string
     }
 
     auto library = sr->get_content_library();
-    if (!library || !library->textures) {
+    if (!library) {
         return make_json_content({{"textures", json::array()}}).dump();
     }
 
@@ -1577,22 +1577,18 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
     }
 
     auto library = sr->get_content_library();
-    if (!library || !library->brushes) {
+    if (!library) {
         return make_json_content({{"brushes", json::array()}}).dump();
     }
 
-    // Walk the brush subtree depth-first so the content-library folder
+    // Walk the Brushes scope depth-first so the content-library folder
     // hierarchy is reported per brush; get_all<Brush>() would flatten it.
     json brushes = json::array();
-    const std::function<void(const Content_library_node&, const std::string&)> visit =
-        [&](const Content_library_node& folder_node, const std::string& folder_path) -> void
+    const std::function<void(const erhe::Hierarchy&, const std::string&)> visit =
+        [&](const erhe::Hierarchy& scope, const std::string& folder_path) -> void
         {
-            for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
-                const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-                if (!child) {
-                    continue;
-                }
-                const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child->item);
+            for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
+                const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child);
                 if (!brush) {
                     const std::string child_path = folder_path.empty()
                         ? child->get_name()
@@ -1612,7 +1608,10 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
                 });
             }
         };
-    visit(*library->brushes, std::string{});
+    const std::shared_ptr<erhe::Scope> brushes_scope = library->find_scope(erhe::Item_type::brush);
+    if (brushes_scope) {
+        visit(*brushes_scope, std::string{});
+    }
 
     return make_json_content({{"brushes", brushes}}).dump();
 }
@@ -1895,28 +1894,28 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     }
     auto library = sr.get_content_library();
     if (library) {
-        if (library->materials) {
+        if (library) {
             for (const auto& mat : library->get_all<erhe::primitive::Material>()) {
                 if (target_ids.contains(mat->get_id())) {
                     result.push_back(mat);
                 }
             }
         }
-        if (library->brushes) {
+        if (library) {
             for (const auto& brush : library->get_all<Brush>()) {
                 if (target_ids.contains(brush->get_id())) {
                     result.push_back(brush);
                 }
             }
         }
-        if (library->graph_textures) {
+        if (library) {
             for (const auto& graph_texture : library->get_all<Graph_texture>()) {
                 if (target_ids.contains(graph_texture->get_id())) {
                     result.push_back(graph_texture);
                 }
             }
         }
-        if (library->graph_meshes) {
+        if (library) {
             for (const auto& graph_mesh : library->get_all<Graph_mesh>()) {
                 if (target_ids.contains(graph_mesh->get_id())) {
                     result.push_back(graph_mesh);

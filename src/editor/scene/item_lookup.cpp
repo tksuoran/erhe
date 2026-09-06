@@ -77,7 +77,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
 
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
-    if (library && library->materials) {
+    if (library) {
         for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
             if (material && matches(*material)) {
                 return material;
@@ -85,7 +85,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
         }
     }
     // Styles: the targets of every item's style property (doc/style-library.md D3).
-    if (library && library->styles) {
+    if (library) {
         for (const std::shared_ptr<Style>& style : library->get_all<Style>()) {
             if (style && matches(*style)) {
                 return style;
@@ -93,7 +93,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
         }
     }
     // Textures: the targets of a material's texture slot properties (D28).
-    if (library && library->textures) {
+    if (library) {
         for (const std::shared_ptr<erhe::graphics::Texture>& texture : library->get_all<erhe::graphics::Texture>()) {
             if (texture && matches(*texture)) {
                 return texture;
@@ -102,7 +102,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Physics joint settings: the targets of a Node_joint's joint_settings
     // property (section 4.17).
-    if (library && library->physics_joints) {
+    if (library) {
         for (const std::shared_ptr<erhe::physics::Physics_joint_settings>& settings : library->get_all<erhe::physics::Physics_joint_settings>()) {
             if (settings && matches(*settings)) {
                 return settings;
@@ -111,7 +111,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Animations: content-library items with computed properties
     // (section 4.16) the property tools address by id or name.
-    if (library && library->animations) {
+    if (library) {
         for (const std::shared_ptr<erhe::scene::Animation>& animation : library->get_all<erhe::scene::Animation>()) {
             if (animation && matches(*animation)) {
                 return animation;
@@ -120,7 +120,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Brushes: the targets of a Brush_placement's brush property
     // (section 4.11).
-    if (library && library->brushes) {
+    if (library) {
         for (const std::shared_ptr<Brush>& brush : library->get_all<Brush>()) {
             if (brush && matches(*brush)) {
                 return brush;
@@ -129,14 +129,14 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     }
     // Physics materials and collision filters: the targets of a
     // Node_physics' reference properties (section 4.10).
-    if (library && library->physics_materials) {
+    if (library) {
         for (const std::shared_ptr<erhe::physics::Physics_material>& physics_material : library->get_all<erhe::physics::Physics_material>()) {
             if (physics_material && matches(*physics_material)) {
                 return physics_material;
             }
         }
     }
-    if (library && library->collision_filters) {
+    if (library) {
         for (const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter : library->get_all<erhe::physics::Collision_filter>()) {
             if (collision_filter && matches(*collision_filter)) {
                 return collision_filter;
@@ -146,7 +146,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
     // Graph assets and their nodes: the nodes share the asset's host
     // (Graph_asset::set_item_host), so a D22 expression or an MCP property
     // call reaches a graph node the way it reaches a scene item.
-    if (library && library->graph_meshes) {
+    if (library) {
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {
             if (!graph_mesh) {
                 continue;
@@ -161,7 +161,7 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
             }
         }
     }
-    if (library && library->graph_textures) {
+    if (library) {
         for (const std::shared_ptr<Graph_texture>& graph_texture : library->get_all<Graph_texture>()) {
             if (!graph_texture) {
                 continue;
@@ -174,25 +174,6 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
                     return node;
                 }
             }
-        }
-    }
-    // Content-library nodes themselves - folders above all
-    // (doc/content-library-folders.md D7), so the property tools address a
-    // folder by id or name; an entry node shares its item's name, and the
-    // item is found first above.
-    if (library && library->root) {
-        std::shared_ptr<erhe::Item_base> found_node{};
-        library->root->for_each<Content_library_node>(
-            [&found_node, &matches](Content_library_node& node) -> bool {
-                if (matches(node)) {
-                    found_node = node.shared_from_this();
-                    return false;
-                }
-                return true;
-            }
-        );
-        if (found_node) {
-            return found_node;
         }
     }
     return {};
@@ -218,16 +199,6 @@ auto find_item_in_scene_by_reference(Scene_root& scene_root, const std::string_v
             erhe::Hierarchy* const node = erhe::find_by_path(*root_node, name_or_path);
             if (node != nullptr) {
                 return node->shared_from_this();
-            }
-        }
-        const std::shared_ptr<Content_library>& library = scene_root.get_content_library();
-        if (library && library->root) {
-            erhe::Hierarchy* const found = erhe::find_by_path(*library->root, name_or_path);
-            Content_library_node* const library_node = dynamic_cast<Content_library_node*>(found);
-            if (library_node != nullptr) {
-                // An entry node carries the item the path names; a folder
-                // node is itself the addressed item.
-                return library_node->item ? library_node->item : library_node->shared_from_this();
             }
         }
     }
@@ -260,15 +231,10 @@ auto find_scene_root_for_item(App_context& context, const erhe::Item_base& item)
             }
             continue;
         }
-        // An unhosted item (an asset-typed one): the scene whose content
-        // library lists it, else the scene the manager records as defining it.
-        // A library node itself (a folder holding a reference property,
-        // doc/content-library-folders.md D8) belongs to its library's scene.
+        // An unhosted item: the scene whose content library lists it (a
+        // resource this scene references but does not own), else the scene
+        // the manager records as defining it.
         const std::shared_ptr<Content_library>& library = scene_root->get_content_library();
-        const Content_library_node* const library_node = dynamic_cast<const Content_library_node*>(&item);
-        if ((library_node != nullptr) && library && (library_node->get_library() == library.get())) {
-            return scene_root.get();
-        }
         if (library && library->has_item(item)) {
             return scene_root.get();
         }
@@ -308,14 +274,16 @@ void collect_reference_candidates(
         }
     };
 
+    // Resource prims are prims of the scene tree, so the node walk below
+    // reaches the ones placed there; a referenced listing (a resource another
+    // container owns) is not in the tree and is offered from the index.
     const std::shared_ptr<Content_library>& library = scene_root->get_content_library();
-    if (library && library->root) {
-        library->root->for_each_const<Content_library_node>(
-            [&consider](const Content_library_node& node) -> bool {
-                consider(node.item);
-                return true;
+    if (library) {
+        for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+            for (const std::shared_ptr<erhe::Item_base>& item : library->get_all_of_kind(kind_type_bit)) {
+                consider(item);
             }
-        );
+        }
     }
 
     // Scene nodes and their attachments, for a node-typed (or mesh-, camera-,

@@ -1009,8 +1009,7 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node>(item_in);
-    const auto& item = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
+    const std::shared_ptr<erhe::Item_base>& item = item_in;
     if (!item) {
         return;
     }
@@ -1168,7 +1167,6 @@ void Properties::target_selector_imgui()
     const bool was_pinned = !m_target.expired();
     std::shared_ptr<erhe::Item_base> value = m_target.lock();
     Item_reference_options options;
-    options.accept_content_library_node = true;
     options.none_text                   = "(selection)";
     options.show_select_button          = false;
     // Any item type: the widget iterates the type bits, so an all-ones mask
@@ -1226,9 +1224,7 @@ void Properties::imgui()
             m_type_groups[group_index].push_back(item);
         };
         for (const std::shared_ptr<erhe::Item_base>& selected : items) {
-            // A content-library entry stands for its item, as in item_properties().
-            const std::shared_ptr<Content_library_node> content_library_node = std::dynamic_pointer_cast<Content_library_node>(selected);
-            const std::shared_ptr<erhe::Item_base>&     item                 = (content_library_node && content_library_node->item) ? content_library_node->item : selected;
+            const std::shared_ptr<erhe::Item_base>& item = selected;
             add_to_group(item);
             // A node's attachments get their sections too (the single-item
             // path draws them under the node).

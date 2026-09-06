@@ -24,7 +24,7 @@ namespace erhe::scene_renderer {
 namespace editor {
 
 class App_context;
-class Content_library_node;
+class Content_library;
 class Scene_root;
 
 // Visualizes the XR controllers: one node per hand. Each hand shows the
@@ -109,7 +109,7 @@ private:
     [[nodiscard]] auto get_hand(bool right_hand) -> Hand&;
 
     erhe::scene_renderer::Mesh_memory&    m_mesh_memory;
-    std::shared_ptr<Content_library_node> m_material_library;
+    std::shared_ptr<Content_library> m_material_library;
     uint64_t                              m_content_layer_id{0};
     Hand                                  m_left_hand;
     Hand                                  m_right_hand;

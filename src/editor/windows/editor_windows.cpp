@@ -144,18 +144,12 @@ auto Editor_windows::item_has_editor(const std::shared_ptr<erhe::Item_base>& ite
     if (!item) {
         return false;
     }
-    // Scenes are the Hierarchy header item (not wrapped in a Content_library_node).
+    // Scenes are the Hierarchy header item.
     if (std::dynamic_pointer_cast<erhe::scene::Scene>(item)) {
         return true;
     }
-    // Content-library assets are selected wrapped; unwrap to the inner item.
-    std::shared_ptr<erhe::Item_base> inner = item;
-    const std::shared_ptr<Content_library_node> content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_node && content_node->item) {
-        inner = content_node->item;
-    }
-    return static_cast<bool>(std::dynamic_pointer_cast<Graph_mesh>(inner))
-        || static_cast<bool>(std::dynamic_pointer_cast<Graph_texture>(inner));
+    return static_cast<bool>(std::dynamic_pointer_cast<Graph_mesh>(item))
+        || static_cast<bool>(std::dynamic_pointer_cast<Graph_texture>(item));
 }
 
 void Editor_windows::open_or_reuse_geometry_graph_window(const std::shared_ptr<Graph_mesh>& target)
@@ -213,17 +207,12 @@ void Editor_windows::open_editor_for_item(const std::shared_ptr<erhe::Item_base>
         return;
     }
     // Content-library graph asset -> its graph editor.
-    std::shared_ptr<erhe::Item_base> inner = item;
-    const std::shared_ptr<Content_library_node> content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_node && content_node->item) {
-        inner = content_node->item;
-    }
-    const std::shared_ptr<Graph_mesh> graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(inner);
+    const std::shared_ptr<Graph_mesh> graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(item);
     if (graph_mesh) {
         open_or_reuse_geometry_graph_window(graph_mesh);
         return;
     }
-    const std::shared_ptr<Graph_texture> graph_texture = std::dynamic_pointer_cast<Graph_texture>(inner);
+    const std::shared_ptr<Graph_texture> graph_texture = std::dynamic_pointer_cast<Graph_texture>(item);
     if (graph_texture) {
         open_or_reuse_texture_graph_window(graph_texture);
         return;
@@ -232,14 +221,7 @@ void Editor_windows::open_editor_for_item(const std::shared_ptr<erhe::Item_base>
 
 void Editor_windows::open_properties_for_item(const std::shared_ptr<erhe::Item_base>& item)
 {
-    // Pin to the inner asset when the item is a content-library wrapper, so
-    // the Properties window shows the Material / Graph_texture / etc. directly.
-    std::shared_ptr<erhe::Item_base> inner = item;
-    const std::shared_ptr<Content_library_node> content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-    if (content_node && content_node->item) {
-        inner = content_node->item;
-    }
-    open_properties_window(inner);
+    open_properties_window(item);
 }
 
 void Editor_windows::update_once_per_frame()

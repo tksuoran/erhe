@@ -1754,7 +1754,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     node_joint->set_name(is_hinge ? "Hinge joint" : "Ball joint");
     node_joint->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
-    auto settings_library_node = std::make_shared<Content_library_node>(settings);
+
 
     // Single compound so one Undo reverts the joint, both frame nodes, the settings
     // asset, and the alignment. Order matters: the moved node is transformed before
@@ -1766,8 +1766,8 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = settings_library_node,
-                .parent  = content_library->physics_joints,
+                .item    = settings,
+                .parent  = content_library->get_scope(erhe::Item_type::physics_joint_settings),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -2764,8 +2764,7 @@ void Operations::create_material()
         return;
     }
 
-    std::shared_ptr<Content_library>      content_library = scene_root->get_content_library();
-    std::shared_ptr<Content_library_node> materials       = content_library->materials;
+    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
     std::shared_ptr<erhe::primitive::Material> new_material = m_context.asset_manager->create<erhe::primitive::Material>(
         *scene_root,
@@ -2778,13 +2777,11 @@ void Operations::create_material()
             }
         }
     );
-    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_material);
-
     std::shared_ptr<Item_insert_remove_operation> make_material_operation = std::make_shared<Item_insert_remove_operation>(
         Item_insert_remove_operation::Parameters{
             .context = m_context,
-            .item    = new_content_library_node,
-            .parent  = materials,
+            .item    = new_material,
+            .parent  = content_library->get_scope(erhe::Item_type::material),
             .mode    = Item_insert_remove_operation::Mode::insert
         }
     );
@@ -2802,14 +2799,13 @@ void Operations::create_physics_material()
     std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
     auto new_physics_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
-    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_physics_material);
 
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = new_content_library_node,
-                .parent  = content_library->physics_materials,
+                .item    = new_physics_material,
+                .parent  = content_library->get_scope(erhe::Item_type::physics_material),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -2826,14 +2822,13 @@ void Operations::create_collision_filter()
     std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
     auto new_collision_filter = std::make_shared<erhe::physics::Collision_filter>("New Collision Filter");
-    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_collision_filter);
 
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = new_content_library_node,
-                .parent  = content_library->collision_filters,
+                .item    = new_collision_filter,
+                .parent  = content_library->get_scope(erhe::Item_type::collision_filter),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -2850,14 +2845,13 @@ void Operations::create_joint_settings()
     std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
     auto new_joint_settings = std::make_shared<erhe::physics::Physics_joint_settings>("New Joint Settings");
-    std::shared_ptr<Content_library_node> new_content_library_node = std::make_shared<Content_library_node>(new_joint_settings);
 
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
                 .context = m_context,
-                .item    = new_content_library_node,
-                .parent  = content_library->physics_joints,
+                .item    = new_joint_settings,
+                .parent  = content_library->get_scope(erhe::Item_type::physics_joint_settings),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
@@ -2904,8 +2898,7 @@ void Operations::create_brush()
         return;
     }
 
-    std::shared_ptr<Content_library>      content_library = scene_root->get_content_library();
-    std::shared_ptr<Content_library_node> brushes         = content_library->brushes;
+    std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
 
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
@@ -2945,7 +2938,7 @@ void Operations::create_brush()
                 .geometry     = geometry
             }
         );
-        brushes->add(new_brush);
+        content_library->add(new_brush);
         if (first_primitive.material) {
             new_brush->set_material(first_primitive.material);
         }

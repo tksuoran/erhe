@@ -6,7 +6,7 @@
 // Non-template helpers are declared here and defined in
 // mcp_server_shared.cpp; only templates stay in the header.
 
-#include "content_library/content_library.hpp"  // Content_library_node (find_library_item)
+#include "content_library/content_library.hpp"  // Content_library (find_library_item)
 #include "tools/mesh_component_selection.hpp"   // Mesh_component_mode
 #include "transform/transform_tool_settings.hpp" // Transform_reference_mode
 

@@ -277,7 +277,7 @@ auto Texture_material_output_node::get_content_library() -> std::shared_ptr<Cont
         return {};
     }
     const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-    if (library && library->textures) {
+    if (library) {
         return library;
     }
     return {};
@@ -311,7 +311,7 @@ void Texture_material_output_node::unregister_texture(Baked_texture& slot)
     const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (slot.registered && scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library && library->textures) {
+        if (library) {
             library->remove(slot.registered);
         }
     }
@@ -323,7 +323,7 @@ void Texture_material_output_node::unregister_orm()
     const std::shared_ptr<Scene_root> scene_root = m_scene_root.lock();
     if (m_orm_registered && scene_root) {
         const std::shared_ptr<Content_library> library = scene_root->get_content_library();
-        if (library && library->textures) {
+        if (library) {
             library->remove(m_orm_registered);
         }
     }
@@ -589,7 +589,7 @@ void Texture_material_output_node::imgui()
     }
     if (selection_root) {
         const std::shared_ptr<Content_library> library = selection_root->get_content_library();
-        if (library && library->materials) {
+        if (library) {
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials = library->get_all<erhe::primitive::Material>();
             if (!materials.empty()) {
                 int material_index = 0;
@@ -616,7 +616,7 @@ void Texture_material_output_node::imgui()
 
         // Create a fresh material and select it (not undoable; a content-library
         // edit, like the geometry output node's assignment side effects).
-        if (library && library->materials && ImGui::Button("New Material")) {
+        if (library && ImGui::Button("New Material")) {
             std::shared_ptr<erhe::primitive::Material> new_material = m_context.asset_manager->create<erhe::primitive::Material>(
                 *selection_root,
                 erhe::primitive::Material_create_info{.name = m_base_name}

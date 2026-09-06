@@ -350,24 +350,24 @@ auto Mcp_server::action_free_undone_loads(const json& args) -> std::string
 
 namespace {
 
-// Walks a category-rooted, slash-separated folder path
-// (doc/content-library-folders.md D7: "Materials/Metals") from the library
-// root without creating anything. Returns the deepest existing folder in
-// out_folder and the first missing component's name in out_missing (empty
-// when the whole path exists); false when the first component names no
-// category folder.
+// Walks a kind-scope-rooted, slash-separated folder path
+// (doc/content-library-folders.md D7: "Materials/Metals") from the library's
+// kind scopes without creating anything. Returns the deepest existing scope
+// in out_scope and the first missing component's name in out_missing (empty
+// when the whole path exists); false when the first component names no kind
+// scope.
 auto walk_library_folder_path(
-    const Content_library&                 library,
-    const std::string&                     folder_path,
-    std::shared_ptr<Content_library_node>& out_folder,
-    std::string&                           out_missing,
-    std::string&                           out_rest
+    const Content_library&        library,
+    const std::string&            folder_path,
+    std::shared_ptr<erhe::Scope>& out_scope,
+    std::string&                  out_missing,
+    std::string&                  out_rest
 ) -> bool
 {
-    out_folder.reset();
+    out_scope.reset();
     out_missing.clear();
     out_rest.clear();
-    std::shared_ptr<Content_library_node> current = library.root;
+    std::shared_ptr<erhe::Scope> current{};
     std::size_t start = 0;
     bool first = true;
     while (start < folder_path.size()) {
@@ -377,19 +377,29 @@ auto walk_library_folder_path(
         if (name.empty()) {
             continue;
         }
-        std::shared_ptr<Content_library_node> found{};
-        for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : current->get_children()) {
-            const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-            if (child && !child->item && (child->get_name() == name)) {
-                found = child;
-                break;
+        std::shared_ptr<erhe::Scope> found{};
+        if (first) {
+            for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+                const std::shared_ptr<erhe::Scope> kind_scope = library.find_scope(kind_type_bit);
+                if (kind_scope && (kind_scope->get_name() == name)) {
+                    found = kind_scope;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        } else {
+            for (const std::shared_ptr<erhe::Hierarchy>& child : current->get_children()) {
+                const std::shared_ptr<erhe::Scope> child_scope = std::dynamic_pointer_cast<erhe::Scope>(child);
+                if (child_scope && (child_scope->get_name() == name)) {
+                    found = child_scope;
+                    break;
+                }
             }
         }
         if (!found) {
-            if (first) {
-                return false;
-            }
-            out_folder  = current;
+            out_scope   = current;
             out_missing = name;
             out_rest    = (start < folder_path.size()) ? folder_path.substr(start) : std::string{};
             return true;
@@ -397,8 +407,15 @@ auto walk_library_folder_path(
         first   = false;
         current = found;
     }
-    out_folder = current;
+    out_scope = current;
     return !first;
+}
+
+// The kind scope a prim sits under, null when it is not below one.
+[[nodiscard]] auto find_kind_scope_of(const Content_library& library, const erhe::Hierarchy& prim) -> std::shared_ptr<erhe::Scope>
+{
+    const uint64_t kind_type_bit = library.find_scope_kind(prim);
+    return (kind_type_bit != 0) ? library.find_scope(kind_type_bit) : std::shared_ptr<erhe::Scope>{};
 }
 
 } // anonymous namespace
@@ -422,11 +439,11 @@ auto Mcp_server::action_create_library_folder(const json& args) -> std::string
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
 
-    std::shared_ptr<Content_library_node> parent{};
-    std::string                           missing{};
-    std::string                           rest{};
+    std::shared_ptr<erhe::Scope> parent{};
+    std::string                  missing{};
+    std::string                  rest{};
     if (!walk_library_folder_path(*library, folder_path, parent, missing, rest)) {
-        return make_error_content("Folder path does not start with a category folder: " + folder_path);
+        return make_error_content("Folder path does not start with a resource kind scope: " + folder_path);
     }
     if (missing.empty()) {
         return make_error_content("Folder already exists: " + folder_path);
@@ -434,11 +451,10 @@ auto Mcp_server::action_create_library_folder(const json& args) -> std::string
     if (!rest.empty()) {
         return make_error_content("Parent folder does not exist for: " + folder_path);
     }
-    if (parent == library->root) {
-        return make_error_content("A folder cannot be created directly under the library root: " + folder_path);
-    }
 
-    auto new_folder = std::make_shared<Content_library_node>(missing, parent->type_code, parent->type_name, parent->category_owner_type);
+    // A content-library folder is a Scope (doc/content-library-folders.md D2).
+    auto new_folder = std::make_shared<erhe::Scope>(missing);
+    new_folder->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
             Item_insert_remove_operation::Parameters{
@@ -478,24 +494,30 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
 
-    std::shared_ptr<Content_library_node> found_node{};
-    std::shared_ptr<Content_library_node> folder_node{};
-    std::size_t                           match_count{0};
-    library->root->for_each<Content_library_node>(
-        [&found_node, &folder_node, &match_count, &item_name, &folder_name](Content_library_node& node) -> bool {
-            if (node.item && (node.item->get_name() == item_name)) {
-                if (!found_node) {
-                    found_node = std::dynamic_pointer_cast<Content_library_node>(node.shared_from_this());
-                }
-                ++match_count;
-            }
-            // A folder entry carries no item, only a name.
-            if (!folder_name.empty() && !node.item && (node.get_name() == folder_name) && !folder_node) {
-                folder_node = std::dynamic_pointer_cast<Content_library_node>(node.shared_from_this());
-            }
-            return true;
+    std::shared_ptr<erhe::Hierarchy> found_node{};
+    std::shared_ptr<erhe::Scope>     folder_node{};
+    std::size_t                      match_count{0};
+    for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+        const std::shared_ptr<erhe::Scope> kind_scope = library->find_scope(kind_type_bit);
+        if (!kind_scope) {
+            continue;
         }
-    );
+        kind_scope->for_each<erhe::Hierarchy>(
+            [&found_node, &folder_node, &match_count, &item_name, &folder_name](erhe::Hierarchy& prim) -> bool {
+                const bool is_scope = (dynamic_cast<erhe::Scope*>(&prim) != nullptr);
+                if (!is_scope && (prim.get_name() == item_name)) {
+                    if (!found_node) {
+                        found_node = prim.shared_hierarchy_from_this();
+                    }
+                    ++match_count;
+                }
+                if (is_scope && !folder_name.empty() && (prim.get_name() == folder_name) && !folder_node) {
+                    folder_node = std::dynamic_pointer_cast<erhe::Scope>(prim.shared_hierarchy_from_this());
+                }
+                return true;
+            }
+        );
+    }
     if (!found_node) {
         return make_error_content("Library item not found: " + item_name);
     }
@@ -504,23 +526,29 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
             "Item name '" + item_name + "' matches " + std::to_string(match_count) + " library entries"
         );
     }
-    const std::shared_ptr<Content_library_node> parent_node = std::dynamic_pointer_cast<Content_library_node>(found_node->get_parent().lock());
+    const std::shared_ptr<erhe::Scope> parent_node = std::dynamic_pointer_cast<erhe::Scope>(found_node->get_parent().lock());
     if (!parent_node) {
         return make_error_content("Library item has no parent folder: " + item_name);
     }
 
     std::vector<std::shared_ptr<Operation>> operations;
+    // The kind scope the destination belongs to. A folder this call creates
+    // is not in the tree until the queued insert runs, so its kind is the
+    // kind of the scope it will be created under.
+    std::shared_ptr<erhe::Scope> destination_kind_scope{};
     if (!folder_path.empty()) {
         std::string missing{};
         std::string rest{};
         if (!walk_library_folder_path(*library, folder_path, folder_node, missing, rest) || !missing.empty() || !folder_node) {
             return make_error_content("Folder path does not exist: " + folder_path);
         }
+        destination_kind_scope = find_kind_scope_of(*library, *folder_node);
     } else if (!folder_node) {
         // Create the destination folder under the moved entry's own parent,
         // so a move never has to invent a type mapping; the insert and the
         // move undo together.
-        folder_node = std::make_shared<Content_library_node>(folder_name, parent_node->type_code, parent_node->type_name, parent_node->category_owner_type);
+        folder_node = std::make_shared<erhe::Scope>(folder_name);
+        folder_node->enable_flag_bits(erhe::Item_flags::show_in_ui);
         operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
                 Item_insert_remove_operation::Parameters{
@@ -531,10 +559,13 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
                 }
             )
         );
+        destination_kind_scope = find_kind_scope_of(*library, *parent_node);
+    } else {
+        destination_kind_scope = find_kind_scope_of(*library, *folder_node);
     }
-    // A leaf entry carries no type_code of its own; its category is its parent's.
-    if (folder_node->type_code != parent_node->type_code) {
-        return make_error_content("Destination folder is of another category: " + folder_node->get_name());
+    // A resource stays under the kind scope it belongs to.
+    if (destination_kind_scope != find_kind_scope_of(*library, *found_node)) {
+        return make_error_content("Destination folder is of another resource kind: " + folder_node->get_name());
     }
     if ((folder_node.get() == found_node.get()) || folder_node->is_ancestor(found_node.get())) {
         return make_error_content("Destination folder is inside the moved entry: " + folder_node->get_name());

@@ -250,7 +250,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
 
     if (is_brush_tool) {
         std::shared_ptr<Brush> brush;
-        if (library && library->brushes) {
+        if (library) {
             for (const std::shared_ptr<Brush>& b : library->get_all<Brush>()) {
                 if (b->get_name() == name) {
                     brush = b;
@@ -271,7 +271,7 @@ auto Mcp_server::action_set_tool_asset(const json& args) -> std::string
     }
 
     std::shared_ptr<erhe::primitive::Material> material;
-    if (library && library->materials) {
+    if (library) {
         for (const std::shared_ptr<erhe::primitive::Material>& m : library->get_all<erhe::primitive::Material>()) {
             if (m->get_name() == name) {
                 material = m;
@@ -426,7 +426,7 @@ auto find_verb_material(
     const std::shared_ptr<Content_library> library = scene_root.get_content_library();
     if (args.contains("material_id")) {
         const std::size_t material_id = args.value("material_id", std::size_t{0});
-        if (library && library->materials) {
+        if (library) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
             for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
                 if (material && (material->get_id() == material_id)) {
@@ -449,7 +449,7 @@ auto find_verb_material(
         out_error = "'material_id' or 'material_name' is required";
         return {};
     }
-    if (library && library->materials) {
+    if (library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
             if (material && (material->get_name() == material_name)) {

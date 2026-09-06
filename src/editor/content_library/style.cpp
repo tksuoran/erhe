@@ -19,17 +19,14 @@ auto Style::get_secondary_property_owner_type() const -> std::optional<erhe::pro
     return erhe::property::root_owner_type;
 }
 
-auto make_unique_style_name(const Content_library_node& styles_folder, const std::string_view base_name) -> std::string
+auto make_unique_style_name(const Content_library& library, const std::string_view base_name) -> std::string
 {
     std::set<std::string> used_names;
-    styles_folder.for_each_const<Content_library_node>(
-        [&used_names](const Content_library_node& node) -> bool {
-            if (node.item) {
-                used_names.insert(node.item->get_name());
-            }
-            return true;
+    for (const std::shared_ptr<Style>& style : library.get_all<Style>()) {
+        if (style) {
+            used_names.insert(style->get_name());
         }
-    );
+    }
     std::string final_name{base_name};
     for (std::size_t number = 2; used_names.contains(final_name); ++number) {
         final_name = std::string{base_name} + " (" + std::to_string(number) + ")";

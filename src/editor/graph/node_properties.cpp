@@ -91,8 +91,7 @@ void Node_properties_window::item_properties(const std::shared_ptr<erhe::Item_ba
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto& content_library_node = std::dynamic_pointer_cast<Content_library_node   >(item_in);
-    const auto& item                 = (content_library_node && content_library_node->item) ? content_library_node->item : item_in;
+    const std::shared_ptr<erhe::Item_base>& item = item_in;
 
     if (!item) {
         return;

@@ -185,6 +185,12 @@ public:
     // from a registry that has already released it.
     void detach_from_editor_scenes    (App_scenes& app_scenes);
 
+    // Every `Typed` prim of this scene's tree that is not an `Xformable` (a
+    // `Scope`, a resource prim): forwarded to the content library, which keeps
+    // the scene's resource index (doc/usd-compatibility-plan.md U4).
+    void register_prim    (const std::shared_ptr<erhe::Typed>&         prim)   override;
+    void unregister_prim  (const std::shared_ptr<erhe::Typed>&         prim)   override;
+
     void register_node    (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void unregister_node  (const std::shared_ptr<erhe::scene::Node>&   node)   override;
     void register_camera  (const std::shared_ptr<erhe::scene::Camera>& camera) override;

@@ -315,7 +315,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
     // sees the first time they open the material panel would compile
     // on the first preview frame.
     std::vector<std::shared_ptr<erhe::primitive::Material>> all_materials;
-    if (m_content_library && m_content_library->materials) {
+    if (m_content_library) {
         const std::vector<std::shared_ptr<erhe::primitive::Material>>& own = m_content_library->get_all<erhe::primitive::Material>();
         all_materials.insert(all_materials.end(), own.begin(), own.end());
     }
@@ -325,7 +325,7 @@ void Scene_preview::prewarm_variants(erhe::scene_renderer::Forward_renderer& for
                 continue;
             }
             const std::shared_ptr<Content_library> main_library = main_scene_root->get_content_library();
-            if (!main_library || !main_library->materials) {
+            if (!main_library) {
                 continue;
             }
             const std::vector<std::shared_ptr<erhe::primitive::Material>>& mats = main_library->get_all<erhe::primitive::Material>();

@@ -5,6 +5,7 @@
 #include "operations/operation.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 
+#include "erhe_item/scope.hpp"
 #include "erhe_profile/profile.hpp"
 
 #include <fmt/format.h>
@@ -24,16 +25,16 @@ public:
     // entry hosted by the library's owner.
     Content_library_attach_operation(
         std::shared_ptr<Content_library>               content_library,
-        std::shared_ptr<Content_library_node>          sublibrary,
         std::shared_ptr<T>                             item,
         Gltf_source_reference                          gltf_source,
         std::shared_ptr<erhe::gltf::Gltf_image_source> image_source = {},
         bool                                           is_reference = false,
-        std::optional<Asset_key>                       asset_key    = {}
+        std::optional<Asset_key>                       asset_key    = {},
+        std::shared_ptr<erhe::Scope>                   scope        = {}
     )
         : m_content_library{std::move(content_library)}
-        , m_sublibrary     {std::move(sublibrary)}
         , m_item           {std::move(item)}
+        , m_scope          {std::move(scope)}
         , m_gltf_source    {std::move(gltf_source)}
         , m_image_source   {std::move(image_source)}
         , m_is_reference   {is_reference}
@@ -64,19 +65,35 @@ public:
             m_usership.adopt(*context.asset_manager, m_item);
         }
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
-        m_sublibrary->add(m_item, m_gltf_source, m_image_source, m_is_reference, m_asset_key);
+        if (m_is_reference) {
+            m_content_library->add_referenced(m_item, m_asset_key);
+            m_content_library->set_gltf_source(m_item, m_gltf_source);
+        } else if (m_scope) {
+            // An explicit scope: the file names the folder the resource sits
+            // in (a legacy brush folder_path).
+            m_item->set_parent(m_scope);
+            m_content_library->set_gltf_source(m_item, m_gltf_source);
+            if (m_image_source) {
+                m_content_library->set_image_source(m_item, m_image_source);
+            }
+            if (m_asset_key.has_value()) {
+                m_content_library->set_asset_key(m_item, m_asset_key.value());
+            }
+        } else {
+            m_content_library->add(m_item, m_gltf_source, m_image_source, m_asset_key);
+        }
     }
 
     void undo(App_context&) override
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
-        m_sublibrary->remove(m_item);
+        m_content_library->remove(m_item);
     }
 
 private:
     std::shared_ptr<Content_library>               m_content_library;
-    std::shared_ptr<Content_library_node>          m_sublibrary;
     std::shared_ptr<T>                             m_item;
+    std::shared_ptr<erhe::Scope>                   m_scope;
     Gltf_source_reference                          m_gltf_source;
     std::shared_ptr<erhe::gltf::Gltf_image_source> m_image_source;
     bool                                           m_is_reference{false};

@@ -353,7 +353,6 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
             compound_parameters.operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
                     content_library,
-                    content_library->materials,
                     material,
                     Gltf_source_reference{
                         .item_name = material->get_name(),

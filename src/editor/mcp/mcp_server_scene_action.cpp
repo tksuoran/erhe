@@ -1323,7 +1323,7 @@ auto Mcp_server::place_brush_instance(
             return r.dump();
         }
     }
-    if (!material && !material_name.empty() && library && library->materials) {
+    if (!material && !material_name.empty() && library) {
         const auto& mat_list = library->get_all<erhe::primitive::Material>();
         for (const auto& mat : mat_list) {
             if (mat->get_name() == material_name) {
@@ -1332,7 +1332,7 @@ auto Mcp_server::place_brush_instance(
             }
         }
     }
-    if (!material && library && library->materials) {
+    if (!material && library) {
         const auto& mat_list = library->get_all<erhe::primitive::Material>();
         if (!mat_list.empty()) {
             material = mat_list.front();
@@ -1513,7 +1513,7 @@ auto Mcp_server::action_place_brush(const json& args) -> std::string
     }
 
     auto library = sr->get_content_library();
-    if (!library || !library->brushes) {
+    if (!library) {
         json r = make_text_content("No brushes in scene");
         r["isError"] = true;
         return r.dump();
@@ -1562,7 +1562,7 @@ auto Mcp_server::action_place_brush_instances(const json& args) -> std::string
         return r.dump();
     }
     auto library = sr->get_content_library();
-    if (!library || !library->brushes) {
+    if (!library) {
         json r = make_text_content("No brushes in scene");
         r["isError"] = true;
         return r.dump();
@@ -2035,7 +2035,7 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
 
     auto library = sr->get_content_library();
     if (add_brush) {
-        if (!library || !library->brushes) {
+        if (!library) {
             json r = make_text_content("No brush library in scene");
             r["isError"] = true;
             return r.dump();

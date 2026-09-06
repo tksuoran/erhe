@@ -11,7 +11,7 @@
 
 namespace editor {
 
-class Content_library_node;
+class Content_library;
 
 // A style item of the content library's Styles category
 // (doc/style-library.md D2): a named holder of property values of any item
@@ -42,7 +42,7 @@ public:
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override;
 };
 
-// A name no style in the folder uses: `base_name`, else `base_name (N)`.
-[[nodiscard]] auto make_unique_style_name(const Content_library_node& styles_folder, std::string_view base_name) -> std::string;
+// A name no style of the library uses: `base_name`, else `base_name (N)`.
+[[nodiscard]] auto make_unique_style_name(const Content_library& library, std::string_view base_name) -> std::string;
 
 }

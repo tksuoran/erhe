@@ -175,15 +175,17 @@ Scene_root::Scene_root(
         );
     }
 
-    // The scene owns its content library: every library item reports this
-    // Scene_root as its Item_host. Items added before this point (e.g. the
-    // default materials created ahead of Scene_root construction) are hosted
-    // retroactively by set_owner().
-    if (m_content_library) {
-        m_content_library->set_owner(this);
-    }
-
     m_scene = std::make_shared<Scene>(name, this);
+
+    // The scene owns its content library: its resources are prims of this
+    // scene's tree, under the kind scopes the library keeps below the root
+    // node, and report this Scene_root as their Item_host. Resources added
+    // before this point (e.g. the default materials created ahead of
+    // Scene_root construction) move into the tree here
+    // (doc/usd-compatibility-plan.md U4).
+    if (m_content_library) {
+        m_content_library->set_owner(this, m_scene->get_root_node());
+    }
     m_layers.add_layers_to_scene(*m_scene.get());
 
     // The Scene item is selectable and shown as the top row of the Hierarchy
@@ -343,7 +345,7 @@ Scene_root::~Scene_root() noexcept
     // clipboard/selection references) can outlive this host; detach them now
     // so no item keeps a dangling Item_host pointer.
     if (m_content_library) {
-        m_content_library->set_owner(nullptr);
+        m_content_library->set_owner(nullptr, {});
     }
 }
 
@@ -431,32 +433,32 @@ auto Scene_root::make_browser_window(
                 // shows for the source file. The texture is already resident,
                 // so nothing is loaded here.
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
-                    const auto hovered_content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-                    if (hovered_content_node) {
-                        const auto hovered_texture = std::dynamic_pointer_cast<erhe::graphics::Texture>(hovered_content_node->item);
-                        if (hovered_texture) {
-                            ImGui::BeginTooltip();
-                            ImGui::TextUnformatted(hovered_texture->get_name().c_str());
-                            draw_texture_preview(context, hovered_texture, 256.0f);
-                            ImGui::EndTooltip();
-                        }
+                    const std::shared_ptr<erhe::graphics::Texture> hovered_texture =
+                        std::dynamic_pointer_cast<erhe::graphics::Texture>(item);
+                    if (hovered_texture) {
+                        ImGui::BeginTooltip();
+                        ImGui::TextUnformatted(hovered_texture->get_name().c_str());
+                        draw_texture_preview(context, hovered_texture, 256.0f);
+                        ImGui::EndTooltip();
                     }
                 }
                 return false;
             }
+            const std::shared_ptr<Content_library> library = get_content_library();
+            if (!library) {
+                return m_node_tree_window->drag_and_drop_target(item);
+            }
             // Texture file drop from the asset browser: dropping an image file
-            // onto this scene's Textures folder (or a texture in it) imports it
+            // onto this scene's Textures scope (or a texture in it) imports it
             // into this content library, the same verb the asset browser's
             // context menu offers.
             {
-                const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-                const auto& textures_folder = get_content_library()->textures;
-                const bool is_textures_folder = content_node && (content_node == textures_folder);
-                const bool is_texture_item    = content_node && !is_textures_folder &&
-                    content_node->item &&
-                    std::dynamic_pointer_cast<erhe::graphics::Texture>(content_node->item) &&
-                    (content_node->get_parent().lock() == textures_folder);
-                if (is_textures_folder || is_texture_item) {
+                const std::shared_ptr<erhe::Scope> textures_scope = library->find_scope(erhe::Item_type::texture);
+                const bool is_textures_scope = textures_scope && (item == textures_scope);
+                const bool is_texture_item   = !is_textures_scope &&
+                    (std::dynamic_pointer_cast<erhe::graphics::Texture>(item) != nullptr) &&
+                    library->has_item(*item);
+                if (is_textures_scope || is_texture_item) {
                     const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
                     if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_texture::static_type_name.data())) {
                         if (ImGui::BeginDragDropTarget()) {
@@ -480,52 +482,41 @@ auto Scene_root::make_browser_window(
                     }
                 }
             }
-            // Material cross-library drop (migrated from the removed Content Library
-            // window, #241 follow-up): dropping a material from another scene's
-            // content library onto this scene's Materials folder (or a material in
-            // it) copies the material into this library.
-            const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-            if (content_node) {
-                const auto& materials_folder = get_content_library()->materials;
-                const bool is_materials_folder = (content_node == materials_folder);
-                const bool is_material_item    = !is_materials_folder &&
-                    content_node->item &&
-                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item) &&
-                    (content_node->get_parent().lock() == materials_folder);
-                if (is_materials_folder || is_material_item) {
+            // Material cross-library drop (migrated from the removed Content
+            // Library window, #241 follow-up): dropping a material from another
+            // scene's content library onto this scene's Materials scope (or a
+            // material in it) copies the material into this library.
+            {
+                const std::shared_ptr<erhe::Scope> materials_scope = library->find_scope(erhe::Item_type::material);
+                const bool is_materials_scope = materials_scope && (item == materials_scope);
+                const bool is_material_item   = !is_materials_scope &&
+                    (std::dynamic_pointer_cast<erhe::primitive::Material>(item) != nullptr) &&
+                    library->has_item(*item);
+                if (is_materials_scope || is_material_item) {
                     const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
-                    if ((payload_peek != nullptr) && payload_peek->IsDataType("Content_library_node")) {
+                    if ((payload_peek != nullptr) && payload_peek->IsDataType(erhe::primitive::Material::static_type_name.data())) {
                         erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
-                        auto source_node = std::dynamic_pointer_cast<Content_library_node>(payload_item_base->shared_from_this());
-                        if (source_node && source_node->item) {
-                            auto source_material = std::dynamic_pointer_cast<erhe::primitive::Material>(source_node->item);
-                            if (source_material) {
-                                bool is_same_library = false;
-                                for (auto check = source_node->get_parent().lock(); check; check = check->get_parent().lock()) {
-                                    if (check == get_content_library()->root) {
-                                        is_same_library = true;
-                                        break;
+                        const std::shared_ptr<erhe::primitive::Material> source_material =
+                            (payload_item_base != nullptr)
+                                ? std::dynamic_pointer_cast<erhe::primitive::Material>(payload_item_base->shared_from_this())
+                                : std::shared_ptr<erhe::primitive::Material>{};
+                        if (source_material && !library->has_item(*source_material) && ImGui::BeginDragDropTarget()) {
+                            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::primitive::Material::static_type_name.data());
+                            if (payload != nullptr) {
+                                const std::shared_ptr<erhe::primitive::Material> new_material =
+                                    context.asset_manager->create<erhe::primitive::Material>(*this, *source_material);
+                                auto op = std::make_shared<Item_insert_remove_operation>(
+                                    Item_insert_remove_operation::Parameters{
+                                        .context = context,
+                                        .item    = new_material,
+                                        .parent  = library->get_scope(erhe::Item_type::material),
+                                        .mode    = Item_insert_remove_operation::Mode::insert
                                     }
-                                }
-                                if (!is_same_library && ImGui::BeginDragDropTarget()) {
-                                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Content_library_node");
-                                    if (payload != nullptr) {
-                                        auto new_material = context.asset_manager->create<erhe::primitive::Material>(*this, *source_material);
-                                        auto new_node = std::make_shared<Content_library_node>(new_material);
-                                        auto op = std::make_shared<Item_insert_remove_operation>(
-                                            Item_insert_remove_operation::Parameters{
-                                                .context = context,
-                                                .item    = new_node,
-                                                .parent  = materials_folder,
-                                                .mode    = Item_insert_remove_operation::Mode::insert
-                                            }
-                                        );
-                                        context.operation_stack->queue(op);
-                                    }
-                                    ImGui::EndDragDropTarget();
-                                    return true;
-                                }
+                                );
+                                context.operation_stack->queue(op);
                             }
+                            ImGui::EndDragDropTarget();
+                            return true;
                         }
                     }
                 }
@@ -830,32 +821,35 @@ auto Scene_root::make_browser_window(
         }
     );
     // Content-library context menu (migrated from the removed Content Library
-    // window, #241 follow-up): "Create Material" on this scene's Materials folder.
+    // window, #241 follow-up): the resource verbs on a kind `Scope`, on a
+    // folder scope below one, and on a resource prim
+    // (doc/usd-compatibility-plan.md U4).
     m_node_tree_window->add_item_context_menu_callback(
         [this, &context](
             const std::shared_ptr<erhe::Item_base>& item,
             std::vector<std::function<void()>>&     deferred_operations,
             bool&                                   close
         ) {
-            const auto content_node = std::dynamic_pointer_cast<Content_library_node>(item);
-            if (!content_node) {
+            const std::shared_ptr<Content_library> library = get_content_library();
+            if (!library) {
                 return;
             }
-            const bool is_folder = !content_node->item && (content_node->type_code != 0);
-            // "Create Folder" on a category folder or a folder inside one
-            // (doc/content-library-folders.md D2); the library root is not
-            // a target, a folder under it would have no category.
-            if (is_folder && (content_node->type_code != erhe::Item_type::content_library_node)) {
-                App_context* context_ptr = &context;
-                if (ImGui::MenuItem("Create Folder")) {
+            const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(item);
+            const uint64_t scope_kind = scope ? library->find_scope_kind(*scope) : 0;
+            App_context* const context_ptr = &context;
+            // A scope below a kind scope is a content-library folder
+            // (doc/content-library-folders.md D2).
+            if (scope && (scope_kind != 0)) {
+                if (ImGui::MenuItem("Create Scope")) {
                     deferred_operations.push_back(
-                        [context_ptr, content_node]() {
-                            auto new_folder = std::make_shared<Content_library_node>("New Folder", content_node->type_code, content_node->type_name, content_node->category_owner_type);
+                        [context_ptr, scope]() {
+                            std::shared_ptr<erhe::Scope> new_scope = std::make_shared<erhe::Scope>("New Scope");
+                            new_scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_folder,
-                                    .parent  = content_node,
+                                    .item    = new_scope,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
@@ -865,29 +859,29 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            if (is_folder && (content_node->type_code == erhe::Item_type::material)) {
-                auto         materials   = get_content_library()->materials;
-                App_context* context_ptr = &context;
+            // Creating a resource places the prim under the scope the menu was
+            // opened on, so a resource created on a folder lands in it.
+            if (scope && (scope_kind == erhe::Item_type::material)) {
                 if (ImGui::MenuItem("Create Material")) {
                     deferred_operations.push_back(
-                        [this, context_ptr, materials]() {
-                            auto new_material = context_ptr->asset_manager->create<erhe::primitive::Material>(
-                                *this,
-                                erhe::primitive::Material_create_info{
-                                    .name = "New Material",
-                                    .values = {
-                                        .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
-                                        .roughness  = glm::vec2{0.5f, 0.5f},
-                                        .metallic   = 1.0f
+                        [this, context_ptr, scope]() {
+                            const std::shared_ptr<erhe::primitive::Material> new_material =
+                                context_ptr->asset_manager->create<erhe::primitive::Material>(
+                                    *this,
+                                    erhe::primitive::Material_create_info{
+                                        .name = "New Material",
+                                        .values = {
+                                            .base_color = glm::vec3{0.5f, 0.5f, 0.5f},
+                                            .roughness  = glm::vec2{0.5f, 0.5f},
+                                            .metallic   = 1.0f
+                                        }
                                     }
-                                }
-                            );
-                            auto new_node = std::make_shared<Content_library_node>(new_material);
+                                );
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_node,
-                                    .parent  = materials,
+                                    .item    = new_material,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
@@ -897,21 +891,17 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            // "Create Physics Material" on the Physics Materials folder
-            // (doc/property-system.md section 4.12).
-            if (is_folder && (content_node->type_code == erhe::Item_type::physics_material)) {
-                auto         physics_materials = get_content_library()->physics_materials;
-                App_context* context_ptr       = &context;
+            // doc/property-system.md section 4.12.
+            if (scope && (scope_kind == erhe::Item_type::physics_material)) {
                 if (ImGui::MenuItem("Create Physics Material")) {
                     deferred_operations.push_back(
-                        [context_ptr, physics_materials]() {
+                        [context_ptr, scope]() {
                             auto new_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
-                            auto new_node     = std::make_shared<Content_library_node>(new_material);
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_node,
-                                    .parent  = physics_materials,
+                                    .item    = new_material,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
@@ -921,21 +911,17 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            // "Create Style" on the Styles folder (doc/style-library.md R1):
-            // an empty style.
-            if (is_folder && (content_node->type_code == erhe::Item_type::style)) {
-                auto         styles      = get_content_library()->styles;
-                App_context* context_ptr = &context;
+            // doc/style-library.md R1: an empty style.
+            if (scope && (scope_kind == erhe::Item_type::style)) {
                 if (ImGui::MenuItem("Create Style")) {
                     deferred_operations.push_back(
-                        [context_ptr, styles]() {
-                            auto new_style = std::make_shared<Style>(make_unique_style_name(*styles, "New Style"));
-                            auto new_node  = std::make_shared<Content_library_node>(new_style);
+                        [this, context_ptr, scope]() {
+                            auto new_style = std::make_shared<Style>(make_unique_style_name(*get_content_library(), "New Style"));
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_node,
-                                    .parent  = styles,
+                                    .item    = new_style,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
@@ -945,25 +931,23 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            if (is_folder && (content_node->type_code == erhe::Item_type::graph_texture)) {
-                auto         graph_textures = get_content_library()->graph_textures;
-                App_context* context_ptr    = &context;
+            if (scope && (scope_kind == erhe::Item_type::graph_texture)) {
                 if (ImGui::MenuItem("Create Graph Texture")) {
                     deferred_operations.push_back(
-                        [context_ptr, graph_textures]() {
+                        [context_ptr, scope]() {
                             auto new_graph_texture = std::make_shared<Graph_texture>("Graph Texture");
-                            auto new_node = std::make_shared<Content_library_node>(new_graph_texture);
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_node,
-                                    .parent  = graph_textures,
+                                    .item    = new_graph_texture,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
                             context_ptr->operation_stack->queue(op);
-                            // Issue #252: point the Texture Graph window at the new
-                            // asset explicitly (no longer via the global selection).
+                            // Issue #252: point the Texture Graph window at the
+                            // new asset explicitly (no longer via the global
+                            // selection).
                             if (context_ptr->texture_graph_window != nullptr) {
                                 context_ptr->texture_graph_window->set_target(new_graph_texture);
                             }
@@ -972,25 +956,23 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            if (is_folder && (content_node->type_code == erhe::Item_type::graph_mesh)) {
-                auto         graph_meshes = get_content_library()->graph_meshes;
-                App_context* context_ptr  = &context;
+            if (scope && (scope_kind == erhe::Item_type::graph_mesh)) {
                 if (ImGui::MenuItem("Create Graph Mesh")) {
                     deferred_operations.push_back(
-                        [context_ptr, graph_meshes]() {
+                        [context_ptr, scope]() {
                             auto new_graph_mesh = std::make_shared<Graph_mesh>("Graph Mesh");
-                            auto new_node = std::make_shared<Content_library_node>(new_graph_mesh);
                             auto op = std::make_shared<Item_insert_remove_operation>(
                                 Item_insert_remove_operation::Parameters{
                                     .context = *context_ptr,
-                                    .item    = new_node,
-                                    .parent  = graph_meshes,
+                                    .item    = new_graph_mesh,
+                                    .parent  = scope,
                                     .mode    = Item_insert_remove_operation::Mode::insert
                                 }
                             );
                             context_ptr->operation_stack->queue(op);
-                            // Issue #252: point the Geometry Graph window at the new
-                            // asset explicitly (no longer via the global selection).
+                            // Issue #252: point the Geometry Graph window at the
+                            // new asset explicitly (no longer via the global
+                            // selection).
                             if (context_ptr->geometry_graph_window != nullptr) {
                                 context_ptr->geometry_graph_window->set_target(new_graph_mesh);
                             }
@@ -999,23 +981,28 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            // R7 asset workflow verbs on material leaves: "Make External"
-            // moves a definition into a fresh asset container file (the
-            // entry flips to a reference; the next scene save writes an R6
-            // proxy); "Make Internal" copies a referenced material's data
-            // into a scene-owned definition and de-links. Neither is
-            // undoable (they alter container files / manager state).
+
+            if (!library->has_item(*item)) {
+                return; // not a resource this library lists
+            }
+            // R7 asset workflow verbs on materials: "Make External" moves a
+            // definition into a fresh asset container file (the listing flips
+            // to a reference; the next scene save writes an R6 proxy); "Make
+            // Internal" copies a referenced material's data into a scene-owned
+            // definition and de-links. Neither is undoable (they alter
+            // container files / manager state).
             {
                 const std::shared_ptr<erhe::primitive::Material> leaf_material =
-                    std::dynamic_pointer_cast<erhe::primitive::Material>(content_node->item);
+                    std::dynamic_pointer_cast<erhe::primitive::Material>(item);
                 if (leaf_material && (context.asset_manager != nullptr)) {
-                    App_context* context_ptr = &context;
-                    if (!content_node->is_reference && is_asset_definition(*leaf_material)) {
+                    const bool is_reference = library->is_referenced(*leaf_material);
+                    if (!is_reference && is_asset_definition(*leaf_material)) {
                         if (ImGui::MenuItem("Make External")) {
                             deferred_operations.push_back(
                                 [this, context_ptr, leaf_material]() {
-                                    // Default location; a name collision on disk gets
-                                    // a numeric suffix instead of overwriting.
+                                    // Default location; a name collision on disk
+                                    // gets a numeric suffix instead of
+                                    // overwriting.
                                     const std::filesystem::path directory =
                                         std::filesystem::path{"res"} / "editor" / "assets" / "materials";
                                     std::filesystem::path path = directory / (leaf_material->get_name() + ".glb");
@@ -1032,7 +1019,7 @@ auto Scene_root::make_browser_window(
                             close = true;
                         }
                     }
-                    if (content_node->is_reference) {
+                    if (is_reference) {
                         if (ImGui::MenuItem("Make Internal")) {
                             deferred_operations.push_back(
                                 [this, context_ptr, leaf_material]() {
@@ -1047,20 +1034,20 @@ auto Scene_root::make_browser_window(
                     }
                 }
             }
-            // "Place in Scene": instance a brush leaf at the world origin
-            // with the library's first material. The placement shares the
-            // brush's primitive (one GPU allocation for every instance of
-            // the brush) and inserts undoably.
+            // "Place in Scene": instance a brush at the world origin with the
+            // library's first material. The placement shares the brush's
+            // primitive (one GPU allocation for every instance of the brush)
+            // and inserts undoably.
             {
-                const std::shared_ptr<Brush> leaf_brush = std::dynamic_pointer_cast<Brush>(content_node->item);
+                const std::shared_ptr<Brush> leaf_brush = std::dynamic_pointer_cast<Brush>(item);
                 if (leaf_brush && ImGui::MenuItem("Place in Scene")) {
-                    App_context* context_ptr = &context;
                     deferred_operations.push_back(
                         [this, context_ptr, leaf_brush]() {
                             std::shared_ptr<erhe::primitive::Material> material;
-                            const std::shared_ptr<Content_library>& library = get_content_library();
-                            if (library && library->materials) {
-                                const auto& materials = library->get_all<erhe::primitive::Material>();
+                            const std::shared_ptr<Content_library>& library_shared = get_content_library();
+                            if (library_shared) {
+                                const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
+                                    library_shared->get_all<erhe::primitive::Material>();
                                 if (!materials.empty()) {
                                     material = materials.front();
                                 }
@@ -1079,18 +1066,18 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
             }
-            // "Copy to Scene": copy a library item into another open scene's
-            // library. Copies never alias - each library owns its items (see
-            // doc/content-library-ownership-plan.md); shown only for copyable
-            // types (copy_library_item_to_library rejects textures and graph
-            // assets, which are shared GPU / graph resources).
+            // "Copy to Scene": copy a library resource into another open
+            // scene's library. Copies never alias - each library owns its
+            // resources; shown only for copyable kinds
+            // (copy_library_item_to_library rejects textures and graph assets,
+            // which are shared GPU / graph resources).
             const uint64_t copyable_types =
                 erhe::Item_type::brush |
                 erhe::Item_type::material |
                 erhe::Item_type::physics_material |
                 erhe::Item_type::collision_filter |
                 erhe::Item_type::physics_joint_settings;
-            if (content_node->item && ((content_node->item->get_type() & copyable_types) != 0) && (context.app_scenes != nullptr)) {
+            if (((item->get_type() & copyable_types) != 0) && (context.app_scenes != nullptr)) {
                 const std::vector<std::shared_ptr<Scene_root>>& scene_roots = context.app_scenes->get_scene_roots();
                 bool has_other_scene = false;
                 for (const std::shared_ptr<Scene_root>& other : scene_roots) {
@@ -1105,7 +1092,7 @@ auto Scene_root::make_browser_window(
                             continue;
                         }
                         if (ImGui::MenuItem(other->get_name().c_str())) {
-                            const std::shared_ptr<erhe::Item_base> library_item = content_node->item;
+                            const std::shared_ptr<erhe::Item_base> library_item = item;
                             deferred_operations.push_back(
                                 [library_item, other]() {
                                     const std::shared_ptr<Content_library> target_library = other->get_content_library();
@@ -1401,7 +1388,7 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
                     reference_key = std::move(key);
                 }
             }
-            material_library.add_reference(primitive.material, reference_key);
+            material_library.add_referenced(primitive.material, reference_key);
         }
     }
 }
@@ -1410,12 +1397,12 @@ auto Scene_root::is_asset_definition(const erhe::Item_base& item) const -> bool
 {
     // R5.6 classification (asset-manager plan, R5 sub-plan resolution 2):
     // a definition is an asset whose defining container is this scene's
-    // record - recorded manager state, never derived from hosting (asset
-    // types are not hosted post-flip). Scenes without a record (previews,
-    // the tool scene; the manager hook is only armed for registered
-    // scenes) define nothing: their libraries hold entries whose lifetime
-    // is the node's item pointer. Keep every definition-vs-reference
-    // decision routed through here.
+    // record - recorded manager state, never derived from hosting. Hosting
+    // says which scene's tree HOLDS a resource, which is not the same
+    // question: a scene holds a resource another container defines. Scenes
+    // without a record (previews, the tool scene; the manager hook is only
+    // armed for registered scenes) define nothing. Keep every
+    // definition-vs-reference decision routed through here.
     Asset_manager* const asset_manager = m_content_library ? m_content_library->get_asset_manager() : nullptr;
     if (asset_manager == nullptr) {
         return false;
@@ -2284,6 +2271,20 @@ void Scene_root::update_pointer_for_rendertarget_meshes(Scene_view* scene_view)
 auto Scene_root::get_content_library() const -> std::shared_ptr<Content_library>
 {
     return m_content_library;
+}
+
+void Scene_root::register_prim(const std::shared_ptr<erhe::Typed>& prim)
+{
+    if (m_content_library) {
+        m_content_library->register_prim(prim);
+    }
+}
+
+void Scene_root::unregister_prim(const std::shared_ptr<erhe::Typed>& prim)
+{
+    if (m_content_library) {
+        m_content_library->unregister_prim(prim);
+    }
 }
 
 void Scene_root::sanity_check()

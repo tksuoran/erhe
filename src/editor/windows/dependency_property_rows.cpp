@@ -1,4 +1,6 @@
 #include "windows/dependency_property_rows.hpp"
+
+#include "erhe_item/scope.hpp"
 #include "windows/attached_property_listing.hpp"
 #include "windows/item_reference.hpp"
 #include "windows/property_editor.hpp"
@@ -360,9 +362,41 @@ void Dependency_property_rows::add_property_row(Property_editor& editor)
                     }
                 }
             }
+            // A `Scope` offers the classes of the prims below it first: a
+            // Materials scope lists `Material.*` above every other class
+            // (doc/content-library-folders.md D8).
+            m_add_preferred_owner_types.clear();
+            if (m_items->size() == 1) {
+                const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(m_items->front());
+                if (scope) {
+                    const std::function<void(const erhe::Hierarchy&)> collect_owner_types =
+                        [this, &collect_owner_types](const erhe::Hierarchy& prim) -> void {
+                            for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+                                const erhe::property::Owner_type owner_type = child->get_property_owner_type();
+                                if (
+                                    std::find(m_add_preferred_owner_types.begin(), m_add_preferred_owner_types.end(), owner_type) ==
+                                    m_add_preferred_owner_types.end()
+                                ) {
+                                    m_add_preferred_owner_types.push_back(owner_type);
+                                }
+                                collect_owner_types(*child);
+                            }
+                        };
+                    collect_owner_types(*scope);
+                }
+            }
+            const std::vector<erhe::property::Owner_type>& preferred = m_add_preferred_owner_types;
+            const auto rank = [&preferred](const erhe::property::Owner_type owner_type) -> int {
+                return (std::find(preferred.begin(), preferred.end(), owner_type) != preferred.end()) ? 0 : 1;
+            };
             std::sort(
                 m_add_candidates.begin(), m_add_candidates.end(),
-                [](const Dependency_property* lhs, const Dependency_property* rhs) {
+                [&rank](const Dependency_property* lhs, const Dependency_property* rhs) {
+                    const int lhs_rank = rank(lhs->get_owner_type());
+                    const int rhs_rank = rank(rhs->get_owner_type());
+                    if (lhs_rank != rhs_rank) {
+                        return lhs_rank < rhs_rank;
+                    }
                     return (lhs->get_owner_type() != rhs->get_owner_type())
                         ? (lhs->get_owner_type() < rhs->get_owner_type())
                         : (lhs->get_index() < rhs->get_index());
@@ -795,7 +829,6 @@ auto Dependency_property_rows::draw_widget(
             collect_reference_candidates(m_context, *m_items->front(), allowed_types, m_reference_candidates);
             Item_reference_options options;
             options.candidates                  = m_reference_candidates;
-            options.accept_content_library_node = true;
             options.show_clear_button           = ui.show_clear_button;
             if (any_mixed) {
                 options.none_text = "(mixed)";

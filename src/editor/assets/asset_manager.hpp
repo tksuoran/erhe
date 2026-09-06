@@ -38,7 +38,6 @@ class Asset_load_request;
 class Asset_load_result;
 class Asset_load_task;
 class Asset_load_tick_context;
-class Content_library_node;
 class Scene_root;
 
 // A glTF container file parsed once by the Asset_manager (plan D3). The
@@ -320,15 +319,25 @@ public:
         return item;
     }
 
-    // Library bookkeeping hooks (R5.6), called by the content-library
-    // claim/release walks for manager-owned asset types (and by the
-    // on_scene_registered sweep). An OWNING entry adds/removes the scene
-    // record's strong entry; every entry (owning and reference) holds a
-    // declared usership on its node ("scene '<name>' library <type>
-    // '<item>'"), so unload refusals name library entries. No-ops for
-    // owners without a record (preview scenes, the tool scene).
-    void on_library_node_attached(erhe::Item_host* owner, Content_library_node& node);
-    void on_library_node_detached(erhe::Item_host* owner, Content_library_node& node);
+    // Library bookkeeping hooks (R5.6), called by the content library as a
+    // resource enters or leaves its index (and by the on_scene_registered
+    // sweep). An OWNED resource adds/removes the scene record's strong entry;
+    // every listed resource, owned and referenced alike, holds a declared
+    // usership ("scene '<name>' library <type> '<item>'") in the library's
+    // metadata slot passed here, so unload refusals name library resources.
+    // No-ops for owners without a record (preview scenes, the tool scene).
+    void on_library_item_attached(
+        erhe::Item_host*                        owner,
+        const std::shared_ptr<erhe::Item_base>& item,
+        Library_listing                         listing,
+        std::unique_ptr<Asset_reference>&       usership
+    );
+    void on_library_item_detached(
+        erhe::Item_host*                        owner,
+        const std::shared_ptr<erhe::Item_base>& item,
+        Library_listing                         listing,
+        std::unique_ptr<Asset_reference>&       usership
+    );
 
     // Removal announcement (doc/import-undo-reference-clearing.md). The
     // library claim / release walks call these for EVERY entry type, not only

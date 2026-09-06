@@ -15,7 +15,7 @@ class Item_reference_options
 public:
     const char*                                       none_text{"(none)"};       // shown when the reference is empty
     std::span<const std::shared_ptr<erhe::Item_base>> candidates{};              // non-empty enables a picker popup
-    bool                                              accept_content_library_node{false}; // also accept a Content_library_node payload, unwrapping to its item
+
     bool                                              show_select_button{true};  // button that adds the referenced item to the selection
     bool                                              show_clear_button {true};  // button that clears the reference
 };

@@ -11,14 +11,14 @@
 namespace editor {
 
 Content_library_move_operation::Content_library_move_operation(
-    std::shared_ptr<Content_library>      content_library,
-    std::shared_ptr<Content_library_node> node,
-    std::shared_ptr<Content_library_node> new_parent,
-    const std::size_t                     new_index
+    std::shared_ptr<Content_library> content_library,
+    std::shared_ptr<erhe::Hierarchy> prim,
+    std::shared_ptr<erhe::Hierarchy> new_parent,
+    const std::size_t                new_index
 )
     : m_content_library{std::move(content_library)}
-    , m_node           {std::move(node)}
-    , m_before_parent  {std::dynamic_pointer_cast<Content_library_node>(m_node->get_parent().lock())}
+    , m_node           {std::move(prim)}
+    , m_before_parent  {m_node->get_parent().lock()}
     , m_before_index   {m_node->get_index_in_parent()}
     , m_after_parent   {std::move(new_parent)}
     , m_after_index    {new_index}

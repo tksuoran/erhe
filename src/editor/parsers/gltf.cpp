@@ -316,7 +316,6 @@ void append_content_library_attach_operations(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
                     content_library,
-                    content_library->textures,
                     image,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -339,7 +338,6 @@ void append_content_library_attach_operations(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
                     content_library,
-                    content_library->materials,
                     material,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -362,7 +360,6 @@ void append_content_library_attach_operations(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::scene::Skin>>(
                     content_library,
-                    content_library->skins,
                     skin,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -382,7 +379,6 @@ void append_content_library_attach_operations(
             operations.push_back(
                 std::make_shared<Content_library_attach_operation<erhe::scene::Animation>>(
                     content_library,
-                    content_library->animations,
                     animation,
                     Gltf_source_reference{
                         .gltf_path  = gltf_path_str,
@@ -1343,9 +1339,9 @@ auto make_gltf_image_source_provider(const std::shared_ptr<Content_library>& con
     if (content_library) {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
         for (const std::shared_ptr<erhe::graphics::Texture>& texture : content_library->get_all<erhe::graphics::Texture>()) {
-            const std::shared_ptr<Content_library_node> entry = content_library->find_entry(*texture);
-            if (entry && entry->image_source) {
-                (*sources)[texture.get()] = entry->image_source;
+            const Resource_metadata* const metadata = content_library->find_metadata(*texture);
+            if ((metadata != nullptr) && metadata->image_source) {
+                (*sources)[texture.get()] = metadata->image_source;
             }
         }
     }
@@ -1382,7 +1378,7 @@ auto make_gltf_image_source_provider(const std::shared_ptr<Content_library>& con
 auto collect_gltf_export_animations(const std::shared_ptr<Content_library>& content_library)
     -> std::vector<std::shared_ptr<erhe::scene::Animation>>
 {
-    if (!content_library || !content_library->animations) {
+    if (!content_library) {
         return {};
     }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};

@@ -218,16 +218,6 @@ auto Icon_set::get_item_icon(const std::shared_ptr<erhe::Item_base>& item) const
 
     const uint64_t type_mask = item->get_type();
 
-    if (test_bit_set(type_mask, erhe::Item_type::content_library_node)) {
-        const auto content_node = std::static_pointer_cast<Content_library_node>(item);
-        if (content_node->item) {
-            return get_item_icon(content_node->item);
-        }
-        // Content libray node without item is considered folder
-        icon.code = icons.folder;
-        return icon;
-    }
-
     // Visit only the set type bits, lowest first (same order as scanning all positions)
     for (uint64_t bits = type_mask; bits != 0u; bits = bits & (bits - 1u)) {
         const unsigned int bit_position = static_cast<unsigned int>(std::countr_zero(bits));

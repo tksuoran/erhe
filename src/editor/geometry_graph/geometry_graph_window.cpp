@@ -614,7 +614,7 @@ auto Geometry_graph_window::next_graph_needing_evaluation() -> std::shared_ptr<G
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_meshes) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -840,7 +840,7 @@ void Geometry_graph_window::update_live_nodes()
     }
     for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
         const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-        if (!content_library || !content_library->graph_meshes) {
+        if (!content_library) {
             continue;
         }
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -974,7 +974,7 @@ void Geometry_graph_window::set_node_previews_enabled(const bool enabled)
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_meshes) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -1024,7 +1024,7 @@ void Geometry_graph_window::update_node_previews()
                 if (m_app_context.app_scenes != nullptr) {
                     for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
                         const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-                        if (!content_library || !content_library->graph_meshes) {
+                        if (!content_library) {
                             continue;
                         }
                         for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -1097,7 +1097,7 @@ void Geometry_graph_window::update_node_previews()
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_meshes) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -1122,7 +1122,7 @@ void Geometry_graph_window::process_attachment_push_requests()
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_meshes) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -1163,7 +1163,7 @@ void Geometry_graph_window::target_selector_imgui()
     if (m_app_context.app_scenes != nullptr) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_app_context.app_scenes->get_scene_roots()) {
             const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
-            if (!content_library || !content_library->graph_meshes) {
+            if (!content_library) {
                 continue;
             }
             for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
@@ -1175,7 +1175,6 @@ void Geometry_graph_window::target_selector_imgui()
     ImGui::SameLine();
     Item_reference_options options;
     options.candidates                  = m_target_candidates;
-    options.accept_content_library_node = true;
     options.none_text                   = "(no target)";
     options.show_select_button          = false; // keep target decoupled from the global selection
     if (item_reference_imgui<Graph_mesh>(m_app_context, "geometry_graph_target", m_target, Graph_mesh::get_static_type(), options)) {
@@ -1320,7 +1319,7 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
 {
     // Custom target over the whole canvas rect (the ax::NodeEditor canvas is
     // not a single ImGui item, so BeginDragDropTarget() cannot latch onto it).
-    // Accepts a content-library brush (the same "Content_library_node" payload
+    // Accepts a content-library brush (the same "Brush" prim payload
     // the item tree sets and the 3D viewport accepts) and creates a Brush
     // source node at the drop position, bound to the dropped brush.
     const ImGuiID drag_target_id = ImGui::GetID(static_cast<const void*>(this));
@@ -1345,7 +1344,7 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     std::shared_ptr<erhe::scene::Mesh> mesh{};
     bool                               delivery = false;
     const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-        "Content_library_node",
+        Brush::static_type_name.data(),
         ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
     );
     const ImGuiPayload* slot_payload = (payload == nullptr)
@@ -1373,12 +1372,11 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
         );
     }
     if (payload != nullptr) {
-        erhe::Item_base* const      item_base    = *(static_cast<erhe::Item_base**>(payload->Data));
-        const Content_library_node* library_node = dynamic_cast<const Content_library_node*>(item_base);
-        if (library_node == nullptr) {
+        erhe::Item_base* const item_base = *(static_cast<erhe::Item_base**>(payload->Data));
+        if (item_base == nullptr) {
             return;
         }
-        brush = std::dynamic_pointer_cast<Brush>(library_node->item);
+        brush = std::dynamic_pointer_cast<Brush>(item_base->shared_from_this());
         delivery = payload->IsDelivery();
     } else if (slot_payload != nullptr) {
         const Slot_drag_payload& slot = *static_cast<const Slot_drag_payload*>(slot_payload->Data);

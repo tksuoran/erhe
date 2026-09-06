@@ -503,9 +503,9 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     std::shared_ptr<Content_library> content_library = std::make_shared<Content_library>();
     if (m_context.scene_builder != nullptr) {
         const std::shared_ptr<Content_library> brush_source = m_context.scene_builder->get_content_library();
-        if (brush_source && brush_source->brushes && content_library->brushes) {
+        if (brush_source) {
             std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{brush_source->mutex};
-            copy_content_library_folder(*brush_source->brushes, *content_library->brushes);
+            copy_content_library(*brush_source, *content_library);
         }
     }
     // The default scene starts with a set of default materials (added at editor

@@ -62,9 +62,9 @@ layer) and D30 (secondary owner types), the library reference is
   not on the style's own `Item_base` chain) are its secondary properties,
   the Add Property picker offers them all by qualified name, and the
   values live in the item's own store. `erhe::Item_type::style` is its
-  type bit; the library's `styles` category folder carries it. A style is
-  clonable (its values copy), and "Copy to Scene" copies it like a
-  material.
+  type bit; a style is a prim of its scene's tree under the library's
+  `Styles` scope (`doc/usd-compatibility-plan.md` U4). A style is clonable
+  (its values copy), and "Copy to Scene" copies it like a material.
 - D3 The `style` property. `Item_base::style_property` is a bridged (D18)
   object-reference property registered on `Item_base`: `get` is the
   object's style source, `set` is `set_style`, validated by

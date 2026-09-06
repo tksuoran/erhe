@@ -21,7 +21,6 @@ namespace editor {
 
 class App_context;
 class Brush;
-class Content_library_node;
 class Slot_entry;
 class Tool;
 

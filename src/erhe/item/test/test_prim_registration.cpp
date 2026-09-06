@@ -162,6 +162,35 @@ TEST(PrimRegistration, MoveBetweenHostsUnregistersThenRegisters)
     EXPECT_EQ(resource->get_item_host(), &host_b);
 }
 
+// A content-library resource kind: a typed prim of a class the editor's
+// Content_library indexes, placed under a kind Scope of the hosted tree
+// (doc/usd-compatibility-plan.md U4).
+TEST(PrimRegistration, ResourceKindUnderKindScopeRegistersWithItsClass)
+{
+    Recording_host host;
+    const std::shared_ptr<Hosted_root>   root      = make_hosted_root(host);
+    const std::shared_ptr<erhe::Scope>   materials = std::make_shared<erhe::Scope>("Materials");
+    const std::shared_ptr<erhe::Scope>   metals    = std::make_shared<erhe::Scope>("Metals");
+    const std::shared_ptr<Resource_prim> copper    = std::make_shared<Resource_prim>("Copper");
+    materials->set_parent(root);
+    metals->set_parent(materials);
+    copper->set_parent(metals);
+
+    ASSERT_EQ(host.prims.size(), 3u);
+    EXPECT_TRUE(host.holds(copper));
+    EXPECT_EQ(host.registered.back()->get_type_name(), Resource_prim::static_type_name);
+    EXPECT_EQ(copper->get_path(), "Materials/Metals/Copper");
+
+    // A move to another folder scope of the same host keeps the host, so the
+    // host is not told: a move is not a removal followed by an addition, and
+    // the index it keeps stays as it is.
+    copper->set_parent(materials);
+    EXPECT_TRUE(host.holds(copper));
+    EXPECT_EQ(std::count(host.unregistered.begin(), host.unregistered.end(), std::static_pointer_cast<erhe::Typed>(copper)), 0);
+    EXPECT_EQ(std::count(host.registered.begin(),   host.registered.end(),   std::static_pointer_cast<erhe::Typed>(copper)), 1);
+    EXPECT_EQ(copper->get_path(), "Materials/Copper");
+}
+
 TEST(PrimRegistration, UnhostedTreeRegistersNothing)
 {
     Recording_host host;

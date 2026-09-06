@@ -462,13 +462,17 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                 changed = true;
             }
 
-            // Accept content library node drops (brushes and materials)
-            const ImGuiPayload* node_payload = ImGui::AcceptDragDropPayload("Content_library_node");
+            // Accept content-library resource drops (brushes and materials);
+            // a resource prim's payload is named for its own class.
+            const ImGuiPayload* node_payload = ImGui::AcceptDragDropPayload(Brush::static_type_name.data());
+            if (node_payload == nullptr) {
+                node_payload = ImGui::AcceptDragDropPayload(erhe::primitive::Material::static_type_name.data());
+            }
             if ((node_payload != nullptr) && (m_context.asset_manager != nullptr)) {
                 erhe::Item_base* item_base = *static_cast<erhe::Item_base**>(node_payload->Data);
-                Content_library_node* node = dynamic_cast<Content_library_node*>(item_base);
-                if (node != nullptr) {
-                    std::shared_ptr<Brush> dropped_brush = std::dynamic_pointer_cast<Brush>(node->item);
+                const std::shared_ptr<erhe::Item_base> node = (item_base != nullptr) ? item_base->shared_from_this() : std::shared_ptr<erhe::Item_base>{};
+                if (node) {
+                    std::shared_ptr<Brush> dropped_brush = std::dynamic_pointer_cast<Brush>(node);
                     if (dropped_brush) {
                         slot.brush.adopt(*m_context.asset_manager, dropped_brush);
                         slot.material.set_key(Asset_key{});
@@ -480,7 +484,7 @@ auto Inventory_window::render_slot(const int id, Slot_entry& slot, const bool is
                         changed       = true;
                     }
                     std::shared_ptr<erhe::primitive::Material> dropped_material =
-                        std::dynamic_pointer_cast<erhe::primitive::Material>(node->item);
+                        std::dynamic_pointer_cast<erhe::primitive::Material>(node);
                     if (dropped_material) {
                         const std::shared_ptr<Brush> current_brush = slot.get_brush();
                         if (current_brush) {
@@ -558,7 +562,7 @@ auto Inventory_window::find_or_create_brush_with_material(
     // Search all content libraries for the original brush and a matching fork
     for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
         const std::shared_ptr<Content_library>& content_library = scene_root->get_content_library();
-        if (!content_library || !content_library->brushes) {
+        if (!content_library) {
             continue;
         }
         bool contains_original = false;

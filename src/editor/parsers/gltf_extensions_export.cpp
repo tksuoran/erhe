@@ -212,12 +212,12 @@ void add_material_asset_references(
     const std::filesystem::path canonical_export_path = normalize_asset_path(export_path);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
     for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->get_all<erhe::primitive::Material>()) {
-        const std::shared_ptr<Content_library_node> entry = content_library->find_entry(*material);
         {
-            if (!entry || !entry->is_reference) {
+            const Resource_metadata* const metadata = content_library->find_metadata(*material);
+            if ((metadata == nullptr) || !metadata->is_reference) {
                 continue;
             }
-            const Content_library_node& node = *entry.get();
+            const Resource_metadata& node = *metadata;
             if (!node.asset_key.has_value() || (node.asset_key->scope != Asset_scope::file) || node.asset_key->path.empty()) {
                 log_parsers->warn(
                     "glTF export: reference material '{}' has no file-scope asset key - exporting full data (an independent definition)",
@@ -389,7 +389,7 @@ void add_gltf_editor_state(
         }
         // styles (doc/style-library.md D4): every style item with its target
         // class and local values, before the folders that may name them.
-        if (content_library && content_library->styles) {
+        if (content_library) {
             nlohmann::json styles = nlohmann::json::array();
             for (const std::shared_ptr<Style>& style : content_library->get_all<Style>()) {
                 if (!style) {
@@ -434,49 +434,49 @@ void add_gltf_editor_state(
             }
         }
         // library_folders (doc/content-library-folders.md D5): every folder
-        // below a category folder, depth first, with its local property
-        // values and the names of the entries directly in it.
-        if (content_library && content_library->root) {
+        // scope below a kind scope, depth first, with its local property
+        // values and the names of the resources directly in it. The path is
+        // the scope path from the kind scope, so a load places the resources
+        // back where they sat.
+        if (content_library) {
             nlohmann::json library_folders = nlohmann::json::array();
-            const std::function<void(const Content_library_node&, const std::string&)> collect_folder =
-                [&](const Content_library_node& folder_node, const std::string& folder_path) -> void
+            const std::function<void(const erhe::Scope&, const std::string&)> collect_folder =
+                [&](const erhe::Scope& scope, const std::string& scope_path) -> void
                 {
-                    const std::shared_ptr<erhe::Hierarchy> parent = folder_node.get_parent().lock();
-                    const bool is_category = (parent.get() == content_library->root.get());
-                    // A category folder is not listed: its entries are where a
+                    // A kind scope is not listed: its resources are where a
                     // load puts the ones no folder names.
-                    if (!is_category) {
+                    if (!scope_path.empty() && (scope_path.find('/') != std::string::npos)) {
                         nlohmann::json items = nlohmann::json::array();
-                        for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
-                            const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-                            if (child && child->item) {
-                                items.push_back(child->item->get_name());
+                        for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
+                            if (std::dynamic_pointer_cast<erhe::Scope>(child)) {
+                                continue;
                             }
+                            items.push_back(child->get_name());
                         }
-                        nlohmann::json entry{{"path", folder_path}};
-                        const nlohmann::json properties = json_properties(folder_node);
+                        nlohmann::json entry{{"path", scope_path}};
+                        const nlohmann::json properties = json_properties(scope);
                         if (properties.is_object() && !properties.empty()) {
                             entry["properties"] = properties;
                         }
-                        if (folder_node.get_style()) {
-                            entry["style"] = folder_node.get_style()->get_reference_path();
+                        if (scope.get_style()) {
+                            entry["style"] = scope.get_style()->get_reference_path();
                         }
                         if (!items.empty()) {
                             entry["items"] = items;
                         }
                         library_folders.push_back(std::move(entry));
                     }
-                    for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
-                        const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-                        if (child && !child->item) {
-                            collect_folder(*child, fmt::format("{}/{}", folder_path, child->get_name()));
+                    for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
+                        const std::shared_ptr<erhe::Scope> child_scope = std::dynamic_pointer_cast<erhe::Scope>(child);
+                        if (child_scope) {
+                            collect_folder(*child_scope, fmt::format("{}/{}", scope_path, child_scope->get_name()));
                         }
                     }
                 };
-            for (const std::shared_ptr<erhe::Hierarchy>& category_hierarchy : content_library->root->get_children()) {
-                const std::shared_ptr<Content_library_node> category = std::dynamic_pointer_cast<Content_library_node>(category_hierarchy);
-                if (category && !category->item) {
-                    collect_folder(*category, category->get_name());
+            for (const uint64_t kind_type_bit : Content_library::get_kind_type_bits()) {
+                const std::shared_ptr<erhe::Scope> kind_scope = content_library->find_scope(kind_type_bit);
+                if (kind_scope) {
+                    collect_folder(*kind_scope, kind_scope->get_name());
                 }
             }
             if (!library_folders.empty()) {
@@ -491,20 +491,16 @@ void add_gltf_editor_state(
     // meshes (ERHE_geometry path); the brush metadata references them by
     // mesh index via the builder below. The collision shape is rebuilt at
     // first instantiation (Brush::late_initialize), as today.
-    if (content_library && content_library->brushes) {
+    if (content_library) {
         // Depth-first walk preserving the content-library folder hierarchy
         // (same traversal as save_scene's brush pass).
-        const std::function<void(const Content_library_node&, const std::string&)> collect_brush_folder =
-            [&](const Content_library_node& folder_node, const std::string& folder_path) -> void
+        const std::function<void(const erhe::Hierarchy&, const std::string&)> collect_brush_folder =
+            [&](const erhe::Hierarchy& scope, const std::string& folder_path) -> void
             {
-                for (const std::shared_ptr<erhe::Hierarchy>& child_hierarchy : folder_node.get_children()) {
-                    const std::shared_ptr<Content_library_node> child = std::dynamic_pointer_cast<Content_library_node>(child_hierarchy);
-                    if (!child) {
-                        continue;
-                    }
-                    const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child->item);
+                for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
+                    const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child);
                     if (!brush) {
-                        // A folder node (item == nullptr): recurse, extending the path.
+                        // A folder scope: recurse, extending the path.
                         const std::string child_path = folder_path.empty()
                             ? child->get_name()
                             : fmt::format("{}/{}", folder_path, child->get_name());
@@ -534,12 +530,15 @@ void add_gltf_editor_state(
                     );
                 }
             };
-        collect_brush_folder(*content_library->brushes, std::string{});
+        const std::shared_ptr<erhe::Scope> brushes_scope = content_library->find_scope(erhe::Item_type::brush);
+        if (brushes_scope) {
+            collect_brush_folder(*brushes_scope, std::string{});
+        }
     }
 
     // ERHE_node_graphs: graph assets embed their node-graph JSON natively
     // (no string-in-string escaping, unlike scene.json).
-    if (content_library && content_library->graph_textures) {
+    if (content_library) {
         for (const std::shared_ptr<Graph_texture>& graph_texture : content_library->get_all<Graph_texture>()) {
             data->graph_textures.push_back(
                 nlohmann::json{
@@ -549,7 +548,7 @@ void add_gltf_editor_state(
             );
         }
     }
-    if (content_library && content_library->graph_meshes) {
+    if (content_library) {
         for (const std::shared_ptr<Graph_mesh>& graph_mesh : content_library->get_all<Graph_mesh>()) {
             data->graph_meshes.push_back(
                 nlohmann::json{
@@ -572,7 +571,7 @@ void add_gltf_editor_state(
         }
     };
 
-    if (content_library && content_library->materials && content_library->graph_textures) {
+    if (content_library) {
         const auto add_binding = [&data](const erhe::primitive::Material& material, const char* slot, const erhe::primitive::Material_texture_sampler& sampler) {
             const Graph_texture* graph_texture = dynamic_cast<const Graph_texture*>(sampler.texture_reference.get());
             if (graph_texture != nullptr) {
@@ -605,7 +604,7 @@ void add_gltf_editor_state(
         }
     }
 
-    if (content_library && content_library->materials) {
+    if (content_library) {
         // Walk the just-serialized graph JSON for output-node material
         // references (geometry and texture graph output nodes all write
         // parameters.material as a content-library material name).

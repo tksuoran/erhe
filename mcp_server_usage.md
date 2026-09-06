@@ -160,6 +160,14 @@ Returns: `{lights: [{name, node, type, color, intensity, range}]}`
 
 List all materials in a scene's content library.
 
+A scene's content-library resources are prims of the scene's own tree
+(`doc/usd-compatibility-plan.md` U4), under the `Scope`s named for their kind
+(`Materials`, `Textures`, `Brushes`, `Styles`, `Physics Materials`, ...), so
+`get_scene_nodes` reports them with their class as `type` and the property
+tools address them by `item_name`, `item_id` or path like any prim.
+`create_library_folder` creates a `Scope` below a kind scope and
+`move_library_item` reparents a resource into one.
+
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
   -H "Content-Type: application/json" \
@@ -190,7 +198,9 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_brushes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{brushes: [{name, id}]}`
+Returns: `{brushes: [{name, id, folder_path, vertex_count, facet_count}]}` -
+`folder_path` is the scope path below the `Brushes` scope, empty for a brush
+directly under it.
 
 ### pick_at
 

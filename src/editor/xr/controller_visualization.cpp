@@ -130,7 +130,7 @@ Controller_visualization::Controller_visualization(
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_material_library = scene_root.get_content_library()->materials;
+    m_material_library = scene_root.get_content_library();
     m_content_layer_id = scene_root.layers().content()->id;
 
     auto controller_material = m_material_library->make<erhe::primitive::Material>(

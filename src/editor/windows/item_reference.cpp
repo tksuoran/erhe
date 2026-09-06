@@ -19,10 +19,7 @@ namespace {
 // erhe::Item_type::c_bit_labels[], so each set bit of allowed_types maps to one acceptable payload
 // type string. Note: a mask using a base-type bit (e.g. node_attachment) does not match a leaf
 // payload string (e.g. "Mesh"); pass the leaf type bits whose class-name labels you want to accept.
-[[nodiscard]] auto try_accept_item_payload(
-    const uint64_t                      allowed_types,
-    const bool                          accept_content_library_node
-) -> std::shared_ptr<erhe::Item_base>
+[[nodiscard]] auto try_accept_item_payload(const uint64_t allowed_types) -> std::shared_ptr<erhe::Item_base>
 {
     const auto read_item = [](const ImGuiPayload* payload) -> erhe::Item_base* {
         if ((payload == nullptr) || (payload->Data == nullptr) || (payload->DataSize != sizeof(erhe::Item_base*))) {
@@ -42,13 +39,6 @@ namespace {
         }
     }
 
-    if (accept_content_library_node) {
-        erhe::Item_base* const raw = read_item(ImGui::AcceptDragDropPayload(Content_library_node::static_type_name.data()));
-        Content_library_node* const node = dynamic_cast<Content_library_node*>(raw);
-        if ((node != nullptr) && node->item && ((node->item->get_type() & allowed_types) != 0)) {
-            return node->item;
-        }
-    }
 
     return {};
 }
@@ -96,7 +86,7 @@ auto item_reference_imgui(
     // No ImGuiDragDropFlags_AcceptNoDrawDefaultRect here: that lets ImGui draw the standard
     // drop-target highlight rectangle while a compatible payload hovers (GitHub issue #231).
     if (ImGui::BeginDragDropTarget()) {
-        const std::shared_ptr<erhe::Item_base> dropped = try_accept_item_payload(allowed_types, options.accept_content_library_node);
+        const std::shared_ptr<erhe::Item_base> dropped = try_accept_item_payload(allowed_types);
         if (dropped && (dropped != io_value)) {
             io_value = dropped;
             changed  = true;

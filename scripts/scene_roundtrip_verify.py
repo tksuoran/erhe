@@ -433,6 +433,35 @@ def norm_node(node, parent_name=None):
     }
 
 
+# The kind scopes a scene's content library keeps its resources under
+# (doc/usd-compatibility-plan.md U4). They are prims of the scene tree, so
+# get_scene_nodes reports them and the resources below them; the node diff
+# excludes that subtree because the library round trip is compared by the
+# dedicated materials / brushes / graph_meshes / graph_textures records, and
+# a scene always creates its own default materials, so library membership is
+# not a node-tree difference.
+LIBRARY_SCOPE_NAMES = {
+    "Brushes", "Animations", "Skins", "Materials", "Textures", "Graph Textures",
+    "Graph Meshes", "Physics Materials", "Collision Filters", "Physics Joints", "Styles",
+}
+
+
+def drop_library_prims(raw_nodes):
+    library_ids = {
+        n.get("id")
+        for n in raw_nodes
+        if (n.get("type") == "Scope") and (n.get("name") in LIBRARY_SCOPE_NAMES) and (n.get("parent") == "root")
+    }
+    changed = True
+    while changed:
+        changed = False
+        for n in raw_nodes:
+            if (n.get("parent_id") in library_ids) and (n.get("id") not in library_ids):
+                library_ids.add(n.get("id"))
+                changed = True
+    return [n for n in raw_nodes if n.get("id") not in library_ids]
+
+
 def normalize_import_roots(raw_nodes):
     """import_root wrapper nodes are transparent on export (their children
     are written in their place; doc/scene_serialization.md save pipeline
@@ -525,7 +554,7 @@ def snapshot_scene(scene_name, material_names, detail_nodes):
     """Collect the diffable MCP-visible state of a scene."""
     snap = {}
 
-    nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+    nodes = drop_library_prims(call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", []))
     snap["nodes"] = sorted(normalize_import_roots(nodes), key=node_sort_key)
 
     materials = call("get_scene_materials", {"scene_name": scene_name}).get("materials", [])

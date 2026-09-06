@@ -241,7 +241,6 @@ void append_usd_content_library_operations(
         operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::graphics::Texture>>(
                 content_library,
-                content_library->textures,
                 textures[i],
                 Gltf_source_reference{
                     .gltf_path  = path_string,
@@ -259,7 +258,6 @@ void append_usd_content_library_operations(
         operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::primitive::Material>>(
                 content_library,
-                content_library->materials,
                 usd_data.materials[i],
                 Gltf_source_reference{
                     .gltf_path  = path_string,
@@ -626,7 +624,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     };
 
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
-    if (content_library && content_library->materials) {
+    if (content_library) {
         save_arguments.materials = content_library->get_all<erhe::primitive::Material>();
     }
     for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {

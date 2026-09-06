@@ -400,7 +400,6 @@ void import_gltf_physics(
         operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::physics::Physics_material>>(
                 content_library,
-                content_library->physics_materials,
                 item,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,
@@ -424,7 +423,6 @@ void import_gltf_physics(
         operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::physics::Collision_filter>>(
                 content_library,
-                content_library->collision_filters,
                 item,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,
@@ -481,7 +479,6 @@ void import_gltf_physics(
         operations.push_back(
             std::make_shared<Content_library_attach_operation<erhe::physics::Physics_joint_settings>>(
                 content_library,
-                content_library->physics_joints,
                 item,
                 Gltf_source_reference{
                     .gltf_path  = gltf_path_str,

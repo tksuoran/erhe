@@ -191,8 +191,8 @@ void Material_preview::on_items_removed(const Removed_items& removed)
     if (!m_last_material || !removed.lookup.contains(m_last_material.get())) {
         return;
     }
-    if (m_content_library && m_content_library->materials) {
-        m_content_library->materials->remove_all_children_recursively();
+    if (m_content_library && m_last_material) {
+        m_content_library->remove_referenced(m_last_material);
     }
     if (m_mesh && !m_mesh->get_primitives().empty()) {
         m_mesh->set_primitive_material(0, {});
@@ -210,8 +210,8 @@ void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
     {
         return;
     }
-    if (m_content_library && m_content_library->materials) {
-        m_content_library->materials->remove_all_children_recursively();
+    if (m_content_library && m_last_material) {
+        m_content_library->remove_referenced(m_last_material);
     }
     if (m_mesh && !m_mesh->get_primitives().empty()) {
         m_mesh->set_primitive_material(0, {});
@@ -227,11 +227,13 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     erhe::graphics::Command_buffer& command_buffer = *m_context.current_command_buffer;
     erhe::graphics::Scoped_debug_group outer_debug_scope{command_buffer, "Scene_preview::render_preview()"};
 
-    m_content_library->materials->remove_all_children_recursively();
-    // Reference entry: the inspected material is owned by its own scene's
+    if (m_last_material && (m_last_material != material)) {
+        m_content_library->remove_referenced(m_last_material);
+    }
+    // Referenced listing: the inspected material is owned by its own scene's
     // content library; the preview library only lists it for rendering and
-    // must not claim the item's host.
-    m_content_library->add_reference(material);
+    // never places it in its own tree.
+    m_content_library->add_referenced(material);
     m_last_material = material;
 
     m_mesh->set_primitive_material(0, material);
