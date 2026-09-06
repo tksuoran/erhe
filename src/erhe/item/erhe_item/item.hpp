@@ -251,7 +251,9 @@ public:
     static constexpr uint64_t index_asset_file_texture     = 46;
     static constexpr uint64_t index_style                  = 47;
     static constexpr uint64_t index_asset_file_usd         = 48;
-    static constexpr uint64_t count                        = 49;
+    static constexpr uint64_t index_typed                  = 49;
+    static constexpr uint64_t index_scope                  = 50;
+    static constexpr uint64_t count                        = 51;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -302,6 +304,8 @@ public:
     static constexpr uint64_t asset_file_texture     = (uint64_t{1} << index_asset_file_texture    );
     static constexpr uint64_t style                  = (uint64_t{1} << index_style                 );
     static constexpr uint64_t asset_file_usd         = (uint64_t{1} << index_asset_file_usd        );
+    static constexpr uint64_t typed                  = (uint64_t{1} << index_typed                 );
+    static constexpr uint64_t scope                  = (uint64_t{1} << index_scope                 );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -353,7 +357,9 @@ public:
         "Prefab_instance",
         "Asset_file_texture",
         "Style",
-        "Asset_file_usd"
+        "Asset_file_usd",
+        "Typed",
+        "Scope"
     };
 };
 

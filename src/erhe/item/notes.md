@@ -14,6 +14,8 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - **`Item_filter`** - Four-criteria bitmask filter (all-set, any-set, all-clear, any-clear) with AND semantics.
 - **`Item<Base, Intermediate, Self, Kind>`** - CRTP template providing `clone()`, `get_type()`, `get_type_name()`. Three clone modes: copy constructor, custom clone constructor, not clonable.
 - **`Hierarchy`** - Parent/child tree built on `Item_base`. Supports reparenting, depth tracking, recursive traversal (`for_each`), removal (splice or recursive), and cloning with `adopt_orphan_children()`. Implements the `Dependency_object` inheritance virtuals (`get_inheritance_parent`, `for_each_inheritance_child`) so `inherits`-flagged properties flow down the tree; `set_parent` captures an inheritance snapshot before the move and applies it after, so the subtree's property-changed notifications carry the old values. `child_count_property` is a computed property (D26, owner types `node | content_library_node`) reading `get_child_count()`; `handle_add_child` / `handle_remove_child` push it to expressions.
+- **`Typed`** - A typed prim (`doc/usd-compatibility-plan.md` C5): the level of the prim class hierarchy that carries the USD `typeName` token, see "Prim classes".
+- **`Scope`** - A `Scope` prim: children only, no transform, and every class's value properties as its secondary properties, see "Prim classes".
 - **`Item_host`** - Abstract host for items, provides a mutex for synchronized access. `Item_host_lock_guard` falls back to a static orphan mutex when no host is available.
 
 ## Public API
@@ -45,6 +47,10 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - `for_each<T>(callback)`, `for_each_child<T>(callback)` - type-filtered subtree traversal with early termination
 - `adopt_orphan_children()` - fix parent back-pointers after copy construction
 - `hierarchy_sanity_check()` - validates parent/child consistency and detects cycles
+
+### Typed / Scope
+- `get_prim_type_name()`, `set_prim_type_name(token)`, `get_class_type_name()` (virtual), `type_name_property` - the prim's USD `typeName` token, see "Prim classes"
+- `Scope::get_secondary_property_owner_type()` - the root owner type, see "Prim classes"
 
 ### Free functions
 - `erhe::find_by_path(root, path)` - the item a path names below `root`, see "Item paths"
@@ -81,6 +87,43 @@ pure function of the item's own flag bits whenever nothing is authored.
 The editor's draw-list filters still test the individual flag bits: each of
 them separates one KIND of editor-only content (the tool pass, the brush
 pass, the rendertarget overlay pass), which `purpose` cannot express.
+
+## Prim classes
+
+Every scene is one tree of prims and the erhe class of a prim sits in a
+class hierarchy that mirrors the USD schema hierarchy
+(`doc/usd-compatibility-plan.md` C5). A level's class has its own
+`Item_type` bit and a concrete class's static type is the OR of its chain
+(`Scope::get_static_type()` is `typed | scope`), so `is<Typed>(scope)`
+holds by the ordinary subset test and the property owner-type chain
+(`doc/property-system.md` D27) follows the same levels. `erhe::item` holds
+the two levels that need no transform and no scene:
+
+- **`Typed`** (USD `UsdTyped`, base `Hierarchy`) carries the prim's
+  `typeName` token. It is instantiated as itself for a prim whose type has
+  no erhe class - `Cube`, `PointInstancer`, `SkelRoot`, a typeless `def` -
+  so that prim's name, place in the tree and children survive a round trip.
+- **`Scope`** (USD `Scope`, base `Typed`) holds children and nothing else:
+  no transform exists on it, so a transform composes through it to the
+  nearest transformable ancestor. Resources are conventionally gathered
+  under one.
+
+The token is `Typed::type_name_property`, a bridged string property
+(`doc/property-system.md` D18) over `get_prim_type_name()` /
+`set_prim_type_name()`, so it is always the prim's own local value and
+never inherits. A class that fixes its token overrides
+`Typed::get_class_type_name()` with it - `Scope` returns `"Scope"` - and
+then reports that constant and refuses every write, through the bridge's
+object-level `validate` for the property path and a logged error for a
+direct `set_prim_type_name()`. A class that fixes none, a plain `Typed`,
+returns an empty `get_class_type_name()` and carries the token an importer
+authors.
+
+`Scope::get_secondary_property_owner_type()` is the root owner type, as an
+editor `Style` item's is (`doc/property-system.md` D30), so a scope holds
+any class's value properties by qualified name (`Material.roughness` on a
+materials scope) and its descendants inherit them - the content-library
+folder rule.
 
 ## Item paths
 
@@ -168,7 +211,7 @@ and is the identifier a USD prim path is.
 
 ## Testing
 
-143 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
+169 unit tests in `test/` using Google Test (CPM-fetched). Run with `ERHE_BUILD_TESTS=ON`.
 
 | File | Tests | Coverage |
 |------|-------|----------|
@@ -183,6 +226,7 @@ and is the identifier a USD prim path is.
 | `test_item_host.cpp` | 6 | Host resolution, lock guard with/without host |
 | `test_properties.cpp` | 4 | Metadata by item type, inheritance through `Hierarchy`, reparent / remove re-reads, clone keeps local values |
 | `test_item_visibility.cpp` | 6 | Derived flag bits follow local, inherited and tree-change values of the visible / shadow_cast / lightmapped properties; `set_flag_bits` drops derived bits; copy re-derives |
+| `test_typed_scope.cpp` | 6 | Composed type bits of `Typed` / `Scope`, class type names, authored and class-fixed `type_name`, path through a `Scope`, category values a `Scope` holds for its descendants |
 | `test_item_sealing.cpp` | 3 | `lock_edit` seals / unseals through every flag writer; inherited values still reach a sealed child; copies follow the copied flag |
 
 Test harness (`main.cpp`) bootstraps `erhe::file::log_file` before `erhe::item::initialize_logging()` to break a circular dependency.

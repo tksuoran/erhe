@@ -12,6 +12,10 @@ erhe_target_sources_grouped(
     erhe_item/item_host.hpp
     erhe_item/item_log.cpp
     erhe_item/item_log.hpp
+    erhe_item/scope.cpp
+    erhe_item/scope.hpp
+    erhe_item/typed.cpp
+    erhe_item/typed.hpp
     erhe_item/unique_id.hpp
 )
 

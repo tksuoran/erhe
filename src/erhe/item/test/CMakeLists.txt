@@ -27,6 +27,7 @@ add_executable(${_target}
     test_item_visibility.cpp
     test_item_purpose.cpp
     test_item_sealing.cpp
+    test_typed_scope.cpp
 )
 
 target_link_libraries(${_target}
