@@ -180,6 +180,11 @@ record has the history.
   (`doc/usd_compatibility.md` Property-system rows); `erhe_property_tests`
   and `erhe_usd_tests` cover both. No shipped property is of either type
   until M8.
+- M7 Style chains: a style has a style of its own; the style layer is
+  the chain of the styles' local values, nearest first, and `set_style`
+  refuses a cycle (`doc/property-system.md` D25, `doc/style-library.md`);
+  `ERHE_scene` `styles[].style` carries it
+  (`doc/gltf_extensions/ERHE_scene.md`). USD carries no styles until E4.
 
 ## 3. Remaining steps
 
@@ -201,18 +206,6 @@ way `double` and `glm::mat4` (section 2) have.
 
 Why: listed so that a later step does not invent an ad hoc carrier.
 Nothing is added ahead of a demonstrated need.
-
-### M7 Style chains (S)
-
-What: allow a `Style` item to have a style itself (`Item_base::style`
-already exists on every item; the D25 lookup walks the chain, with a
-cycle check at assignment).
-
-Why: USD `class` prims inherit from other classes; an imported class
-hierarchy maps onto style chains without flattening.
-
-Verification: headless script: style B uses style A, an item uses B,
-values of A reach the item; assigning A to B's style is refused.
 
 ### M8 xformOp stacks (M)
 
@@ -283,7 +276,7 @@ last remaining reason the old `ERHE_overrides` design existed: the
 property system's local layer is the override, and M1 paths are the
 addressing.
 
-### X3 Class inheritance (S, after M7)
+### X3 Class inheritance (S)
 
 What: `class` prims with `inherits` arcs import as `Style` items with
 style chains (M7) instead of being flattened, and styles export as
@@ -310,7 +303,7 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. M7 style chains, then M8 xformOp stacks
+1. M8 xformOp stacks
 2. X1 references as prefab instances
 3. E4 editor state in a USD file (completes G2)
 4. X2 editable instances (G3)
@@ -320,8 +313,8 @@ importer hitting a missing type). E2 follows E4; X3 to X5
 have no fixed place: each waits for its dependencies and is taken when
 wanted.
 
-Dependencies: X2 needs X1; X3 needs M7; M7, M8, E4, X1, E2, X4 and X5
-need nothing that has not landed.
+Dependencies: X2 needs X1; M8, E4, X1, E2, X3, X4 and X5 need nothing
+that has not landed.
 
 ## 5. Out of scope
 
