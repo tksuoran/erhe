@@ -22,6 +22,14 @@
 
 namespace {
 
+// M6 value types: no shipped item property is a double or a mat4 yet (M8
+// adds the first), so the custom-attribute leg of both is exercised with
+// two properties registered on the node owner type here.
+const erhe::property::Property<double> c_usd_test_double =
+    erhe::property::Property<double>::register_property("usd_test_double", erhe::scene::Node::property_owner_type());
+const erhe::property::Property<glm::mat4> c_usd_test_matrix =
+    erhe::property::Property<glm::mat4>::register_property("usd_test_matrix", erhe::scene::Node::property_owner_type());
+
 [[nodiscard]] auto test_data_path(const char* file_name) -> std::filesystem::path
 {
     return std::filesystem::path{ERHE_USD_TEST_DATA_DIR} / file_name;
@@ -263,6 +271,16 @@ protected:
         ASSERT_TRUE(lamp.operator bool());
         lamp->set_value(erhe::scene::Light::range_property, 12.5f);
 
+        // A double and a mat4 local value on a node, to be carried by the
+        // `double` and `matrix4d` custom attributes.
+        const std::shared_ptr<erhe::scene::Node> shown = find_node(trip->source.data, "shown");
+        ASSERT_TRUE(shown.operator bool());
+        shown->set_value(c_usd_test_double, 0.1 + 1.0e-12);
+        glm::mat4 matrix{1.0f};
+        matrix[0] = glm::vec4{0.5f,  0.25f, 0.0f,  0.0f};
+        matrix[3] = glm::vec4{1.5f, -2.25f, 3.75f, 1.0f};
+        shown->set_value(c_usd_test_matrix, matrix);
+
         trip->save_and_reload("authored.usda");
         ASSERT_TRUE(trip->save.error.empty()) << trip->save.error;
         ASSERT_TRUE(trip->reloaded.error.empty()) << trip->reloaded.error;
@@ -380,3 +398,21 @@ TEST(Usd_identifier, colliding_names_are_suffixed)
 }
 
 } // anonymous namespace
+
+TEST_F(Authored_round_trip, double_and_matrix_survive_as_custom_attributes)
+{
+    const std::shared_ptr<erhe::scene::Node> shown = find_node(trip->reloaded.data, "shown");
+    ASSERT_TRUE(shown.operator bool());
+
+    EXPECT_EQ(shown->get_value_source(c_usd_test_double.get()), erhe::property::Value_source::local);
+    EXPECT_DOUBLE_EQ(shown->get_value(c_usd_test_double), 0.1 + 1.0e-12);
+
+    EXPECT_EQ(shown->get_value_source(c_usd_test_matrix.get()), erhe::property::Value_source::local);
+    const glm::mat4 matrix = shown->get_value(c_usd_test_matrix);
+    EXPECT_FLOAT_EQ(matrix[0][0],  0.5f);
+    EXPECT_FLOAT_EQ(matrix[0][1],  0.25f);
+    EXPECT_FLOAT_EQ(matrix[3][0],  1.5f);
+    EXPECT_FLOAT_EQ(matrix[3][1], -2.25f);
+    EXPECT_FLOAT_EQ(matrix[3][2],  3.75f);
+    EXPECT_FLOAT_EQ(matrix[3][3],  1.0f);
+}

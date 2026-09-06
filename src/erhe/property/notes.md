@@ -23,8 +23,12 @@ inventory (and the owner's design section when the design changed).
 
 - **`Property_value`** - `std::variant<bool, int, float, glm::vec2, glm::vec3,
   glm::vec4, glm::quat, std::string, Enum_value, glm::ivec2, glm::ivec3,
-  glm::ivec4, Object_reference>`; `Property_type` enumerators are the
-  variant indices. `Enum_value` wraps the integer of a C++ enumeration so
+  glm::ivec4, Object_reference, double, glm::mat4>`; `Property_type`
+  enumerators are the variant indices. `double` (`Property_type::double_floating`,
+  text `double`) and `glm::mat4` (`Property_type::mat4`) are the USD value
+  types (`doc/usd-compatibility-plan.md` M6): a `double` behaves as `float`
+  does everywhere, a `mat4` is a whole value - not an expression target or
+  source, and its Properties row is four drag rows, one per column. `Enum_value` wraps the integer of a C++ enumeration so
   generic code can tell an enumeration from an `int`. `Object_reference`
   (D28) is a strong `std::shared_ptr<Dependency_object>` compared by
   identity; its text form is the pointee's `get_reference_path()` and it

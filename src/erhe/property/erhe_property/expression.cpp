@@ -125,6 +125,8 @@ auto component_of(const Property_value& value, const int component, double& out)
         case Property_type::ivec3:       if (component > 2) { return false; } out = static_cast<double>(std::get<glm::ivec3>(value)[component]); return true;
         case Property_type::ivec4:       if (component > 3) { return false; } out = static_cast<double>(std::get<glm::ivec4>(value)[component]); return true;
         case Property_type::object:      return false;
+        case Property_type::double_floating: if (component != 0) { return false; } out = std::get<double>(value); return true;
+        case Property_type::mat4:        return false; // 16 components; not a formula target or source
     }
     return false;
 }
@@ -211,6 +213,8 @@ auto Expression::component_count(const Property_type type) -> int
         case Property_type::ivec3:       return 3;
         case Property_type::ivec4:       return 4;
         case Property_type::object:      return 0;
+        case Property_type::double_floating: return 1;
+        case Property_type::mat4:        return 0; // not expressible: Expression::compile refuses it
     }
     return 0;
 }
@@ -364,6 +368,8 @@ auto Expression::evaluate(const Enum_info* enum_info) -> std::optional<Property_
                     ? fmt::format("{{{}}} is a string property", reference.describe())
                     : (type_of(source_value) == Property_type::object)
                     ? fmt::format("{{{}}} is an object reference property", reference.describe())
+                    : (type_of(source_value) == Property_type::mat4)
+                    ? fmt::format("{{{}}} is a matrix property", reference.describe())
                     : fmt::format("{{{}}} has no component {}", reference.describe(), component_letter(component));
                 return std::nullopt;
             }
@@ -397,6 +403,8 @@ auto Expression::evaluate(const Enum_info* enum_info) -> std::optional<Property_
         }
         case Property_type::string: return std::nullopt;
         case Property_type::object: return std::nullopt;
+        case Property_type::double_floating: value = result[0]; break;
+        case Property_type::mat4: return std::nullopt; // component_count() is 0, so compile() already refused
         case Property_type::ivec2: value = glm::ivec2{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1]))}; break;
         case Property_type::ivec3: value = glm::ivec3{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1])), static_cast<int>(std::lround(result[2]))}; break;
         case Property_type::ivec4: value = glm::ivec4{static_cast<int>(std::lround(result[0])), static_cast<int>(std::lround(result[1])), static_cast<int>(std::lround(result[2])), static_cast<int>(std::lround(result[3]))}; break;

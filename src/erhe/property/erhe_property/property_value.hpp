@@ -46,7 +46,9 @@ using Property_value = std::variant<
     glm::ivec2,
     glm::ivec3,
     glm::ivec4,
-    Object_reference
+    Object_reference,
+    double,
+    glm::mat4
 >;
 
 // Enumerators are the Property_value variant indices.
@@ -63,7 +65,12 @@ enum class Property_type : uint8_t {
     ivec2       = 9,
     ivec3       = 10,
     ivec4       = 11,
-    object      = 12
+    object      = 12,
+
+    // USD needs these (doc/usd-compatibility-plan.md M6): `double` carries
+    // USD `double` transforms and time codes, `mat4` an xformOp matrix.
+    double_floating = 13,
+    mat4            = 14
 };
 
 [[nodiscard]] constexpr auto c_str(const Property_type type) -> const char*
@@ -82,6 +89,8 @@ enum class Property_type : uint8_t {
         case Property_type::ivec3:       return "ivec3";
         case Property_type::ivec4:       return "ivec4";
         case Property_type::object:      return "object";
+        case Property_type::double_floating: return "double";
+        case Property_type::mat4:            return "mat4";
     }
     return "?";
 }
@@ -105,7 +114,9 @@ concept Property_value_type =
     std::is_same_v<T, glm::ivec2>  ||
     std::is_same_v<T, glm::ivec3>  ||
     std::is_same_v<T, glm::ivec4>  ||
-    std::is_same_v<T, Object_reference>;
+    std::is_same_v<T, Object_reference> ||
+    std::is_same_v<T, double>      ||
+    std::is_same_v<T, glm::mat4>;
 
 template <typename T>
 concept Property_enum_type = std::is_enum_v<T>;
@@ -141,6 +152,8 @@ template <Property_storable T>
     if constexpr (std::is_same_v<S, glm::ivec3>)  { return Property_type::ivec3;       }
     if constexpr (std::is_same_v<S, glm::ivec4>)  { return Property_type::ivec4;       }
     if constexpr (std::is_same_v<S, Object_reference>) { return Property_type::object; }
+    if constexpr (std::is_same_v<S, double>)      { return Property_type::double_floating; }
+    if constexpr (std::is_same_v<S, glm::mat4>)   { return Property_type::mat4;            }
 }
 
 // C++ value -> stored variant
@@ -174,7 +187,7 @@ template <Property_storable T>
 
 // The value a property of the given type has when its metadata names none:
 // false, 0, 0.0f, zero vectors, identity quaternion, "", enumeration 0,
-// null reference
+// null reference, identity matrix
 // (Property<E>::register_property replaces that with the table's first
 // entry).
 [[nodiscard]] inline auto zero_value(const Property_type type) -> Property_value
@@ -193,6 +206,8 @@ template <Property_storable T>
         case Property_type::ivec3:       return glm::ivec3{0};
         case Property_type::ivec4:       return glm::ivec4{0};
         case Property_type::object:      return Object_reference{};
+        case Property_type::double_floating: return 0.0;
+        case Property_type::mat4:            return glm::mat4{1.0f};
     }
     return false;
 }

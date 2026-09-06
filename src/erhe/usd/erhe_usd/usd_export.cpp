@@ -281,6 +281,14 @@ public:
             var.set_value(lightusd::value::int4{v.x, v.y, v.z, v.w});
             break;
         }
+        case erhe::property::Property_type::double_floating: {
+            var.set_value(std::get<double>(value));
+            break;
+        }
+        case erhe::property::Property_type::mat4: {
+            var.set_value(to_usd(std::get<glm::mat4>(value)));
+            break;
+        }
         case erhe::property::Property_type::enumeration: {
             var.set_value(lightusd::value::token{erhe::property::to_string(property, value)});
             break;

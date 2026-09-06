@@ -87,6 +87,8 @@ const Property<glm::quat>   ex_quat   = Property<glm::quat>::register_property("
 const Property<std::string> ex_string = Property<std::string>::register_property("ex_string", type_e());
 const Property<glm::ivec3>  ex_ivec3  = Property<glm::ivec3>::register_property("ex_ivec3", type_e());
 const Property<Mode>        ex_mode   = Property<Mode>::register_property("ex_mode", type_e(), c_mode_info);
+const Property<double>      ex_double = Property<double>::register_property("ex_double", type_e());
+const Property<glm::mat4>   ex_mat4   = Property<glm::mat4>::register_property("ex_mat4", type_e());
 const Property<float>       ex_clamped = Property<float>::register_property(
     "ex_clamped", type_e(),
     Property_metadata{
@@ -549,4 +551,38 @@ TEST(Expressions, batches_collapse_before_dependents_run)
     ASSERT_NE(last, o.changes.rend());
     EXPECT_EQ(std::get<float>(last->old_value), 2.0f);
     EXPECT_EQ(std::get<float>(last->new_value), 7.0f);
+}
+
+// M6 value types: a double is a one-component numeric target and source; a
+// mat4 is not expressible at all.
+TEST(Expressions, double_is_a_numeric_target_and_source)
+{
+    Named_object o{"double_host"};
+    o.set_value(ex_source, 2.0f);
+
+    ASSERT_TRUE(o.set_expression(ex_double.get(), "{ex_source} / 3"));
+    EXPECT_DOUBLE_EQ(o.get_value(ex_double), 2.0 / 3.0);
+
+    // The double result keeps precision a float target would lose.
+    EXPECT_NE(static_cast<float>(o.get_value(ex_double)), o.get_value(ex_double));
+
+    // A double property reads back as a number in another formula.
+    o.clear_value(ex_double);
+    o.set_value(ex_double, 0.5);
+    ASSERT_TRUE(o.set_expression(ex_float.get(), "{ex_double} * 4"));
+    EXPECT_EQ(o.get_value(ex_float), 2.0f);
+}
+
+TEST(Expressions, mat4_is_refused_as_an_expression_target)
+{
+    EXPECT_EQ(Expression::component_count(Property_type::mat4), 0);
+
+    std::string error;
+    EXPECT_EQ(Expression::compile("1", Property_type::mat4, error), nullptr);
+    EXPECT_NE(error.find("mat4"), std::string::npos);
+    EXPECT_NE(error.find("cannot be driven by an expression"), std::string::npos);
+
+    Named_object o{"mat4_host"};
+    EXPECT_FALSE(o.set_expression(ex_mat4.get(), "1"));
+    EXPECT_FALSE(o.get_expression(ex_mat4.get()).has_value());
 }

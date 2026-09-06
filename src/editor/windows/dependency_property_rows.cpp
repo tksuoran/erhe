@@ -864,6 +864,40 @@ auto Dependency_property_rows::draw_widget(
             }
             return changed;
         }
+        case Property_type::double_floating: {
+            // USD `double` (transforms, time codes): the float row's range
+            // and speed metadata, at double precision.
+            double       v    = std::get<double>(value);
+            const double dmin = static_cast<double>(min);
+            const double dmax = static_cast<double>(max);
+            const char* const format = any_mixed ? c_mixed_format : "%.6f";
+            const bool changed = slider
+                ? ImGui::SliderScalar("##", ImGuiDataType_Double, &v, &dmin, &dmax, format)
+                : ImGui::DragScalar("##", ImGuiDataType_Double, &v, speed, has_range ? &dmin : nullptr, has_range ? &dmax : nullptr, format);
+            if (changed) {
+                value = v;
+            }
+            return changed;
+        }
+        case Property_type::mat4: {
+            // One DragFloat4 row per column, in glm storage order. Edited as
+            // a whole value: a matrix mixed across the selection has no
+            // meaningful per-component merge.
+            glm::mat4 m = std::get<glm::mat4>(value);
+            const uint32_t column_mixed = any_mixed ? 0xfu : 0u;
+            bool changed = false;
+            ImGui::BeginGroup();
+            for (int column = 0; column < 4; ++column) {
+                ImGui::PushID(column);
+                changed = drag_components(ImGuiDataType_Float, &m[column].x, 4, column_mixed, speed, nullptr, nullptr, "%.3f") || changed;
+                ImGui::PopID();
+            }
+            ImGui::EndGroup();
+            if (changed) {
+                value = m;
+            }
+            return changed;
+        }
         case Property_type::enumeration: {
             immediate = true;
             const erhe::property::Enum_info* info = property.get_enum_info();
@@ -1033,7 +1067,7 @@ void Dependency_property_rows::context_menu(const Dependency_property& property,
         remove_property(property);
     }
     const bool driven      = target(0)->get_expression(property).has_value();
-    const bool can_drive   = !driven && writable && !metadata.is_computed() && (property.get_type() != Property_type::string) && (property.get_type() != Property_type::object);
+    const bool can_drive   = !driven && writable && !metadata.is_computed() && (property.get_type() != Property_type::string) && (property.get_type() != Property_type::object) && (property.get_type() != Property_type::mat4);
     if (ImGui::MenuItem("Edit as expression", nullptr, false, can_drive)) {
         edit_as_expression(property);
     }
@@ -1094,8 +1128,10 @@ void Dependency_property_rows::edit_as_expression(const Dependency_property& pro
         case Property_type::ivec2:       { const glm::ivec2 v = std::get<glm::ivec2>(value); text = std::to_string(v.x) + ", " + std::to_string(v.y); break; }
         case Property_type::ivec3:       { const glm::ivec3 v = std::get<glm::ivec3>(value); text = std::to_string(v.x) + ", " + std::to_string(v.y) + ", " + std::to_string(v.z); break; }
         case Property_type::ivec4:       { const glm::ivec4 v = std::get<glm::ivec4>(value); text = std::to_string(v.x) + ", " + std::to_string(v.y) + ", " + std::to_string(v.z) + ", " + std::to_string(v.w); break; }
+        case Property_type::double_floating: text = erhe::property::to_string(Property_value{std::get<double>(value)}); break;
         case Property_type::string:      return;
         case Property_type::object:      return;
+        case Property_type::mat4:        return; // 16 components: not an expression target
     }
     begin_edit(property);
     queue_set(property, erhe::property::Local_state{erhe::property::Expression_text{std::move(text)}});

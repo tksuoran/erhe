@@ -19,6 +19,13 @@ auto float_to_string(const float value) -> std::string
     return std::string{buffer, result.ptr};
 }
 
+auto double_to_string(const double value) -> std::string
+{
+    char buffer[64];
+    const std::to_chars_result result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+    return std::string{buffer, result.ptr};
+}
+
 auto trim(std::string_view text) -> std::string_view
 {
     while (!text.empty() && ((text.front() == ' ') || (text.front() == '\t') || (text.front() == '\n') || (text.front() == '\r'))) {
@@ -67,6 +74,20 @@ auto parse_float(const std::string_view text) -> std::optional<float>
     const std::string copy{text};
     char* end = nullptr;
     const float value = std::strtof(copy.c_str(), &end);
+    if ((end == copy.c_str()) || (end != copy.c_str() + copy.size())) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+auto parse_double(const std::string_view text) -> std::optional<double>
+{
+    // Same reason as parse_float: std::from_chars for floating point is not
+    // available on every libc++ erhe builds against; strtod on a
+    // null-terminated copy is.
+    const std::string copy{text};
+    char* end = nullptr;
+    const double value = std::strtod(copy.c_str(), &end);
     if ((end == copy.c_str()) || (end != copy.c_str() + copy.size())) {
         return std::nullopt;
     }
@@ -159,6 +180,21 @@ auto to_string(const Property_value& value, const Enum_info* enum_info) -> std::
         case Property_type::object: {
             const Object_reference& reference = std::get<Object_reference>(value);
             return reference.object ? reference.object->get_reference_path() : std::string{};
+        }
+        case Property_type::double_floating: return double_to_string(std::get<double>(value));
+        case Property_type::mat4: {
+            // 16 floats in glm's own storage order: column 0 first, each
+            // column x y z w.
+            const glm::mat4& m = std::get<glm::mat4>(value);
+            const float* const f = &m[0].x;
+            std::string text;
+            for (int i = 0; i < 16; ++i) {
+                if (i > 0) {
+                    text += ' ';
+                }
+                text += float_to_string(f[i]);
+            }
+            return text;
         }
     }
     return {};
@@ -267,6 +303,25 @@ auto parse_value(const Property_type type, const std::string_view text_in, const
         case Property_type::object: {
             // Needs the referencing object; see the context overload.
             return std::nullopt;
+        }
+        case Property_type::double_floating: {
+            const std::optional<double> value = parse_double(text);
+            if (!value.has_value()) {
+                return std::nullopt;
+            }
+            return value.value();
+        }
+        case Property_type::mat4: {
+            const std::optional<std::vector<float>> v = parse_floats(text, 16);
+            if (!v.has_value()) {
+                return std::nullopt;
+            }
+            glm::mat4 m{1.0f};
+            float* const f = &m[0].x;
+            for (std::size_t i = 0; i < 16; ++i) {
+                f[i] = v->at(i);
+            }
+            return m;
         }
     }
     return std::nullopt;

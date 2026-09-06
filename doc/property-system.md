@@ -50,9 +50,9 @@ property store, and the migration of items onto it so the
 editor can edit, undo and inspect item state through one generic
 mechanism instead of one hand-written path per field.
 
-Value types in scope: `bool`, `int`, `float`, `glm::vec2`, `glm::vec3`,
+Value types in scope: `bool`, `int`, `float`, `double`, `glm::vec2`, `glm::vec3`,
 `glm::vec4`, `glm::ivec2`, `glm::ivec3`, `glm::ivec4`, `glm::quat`,
-`std::string`, C++ enumerations (any `enum class` with an enumerator
+`glm::mat4`, `std::string`, C++ enumerations (any `enum class` with an enumerator
 table, see D2a), and references to other objects (D28).
 
 ## 2. Requirements
@@ -150,9 +150,15 @@ table, see D2a), and references to other objects (D28).
 - D2 Value representation.
   `Property_value = std::variant<bool, int, float, glm::vec2, glm::vec3,
   glm::vec4, glm::quat, std::string, Enum_value, glm::ivec2, glm::ivec3,
-  glm::ivec4, Object_reference>` (the integer vectors and the object
-  reference appended so the variant indices of the earlier types are
-  stable; `Object_reference` is D28) with a matching
+  glm::ivec4, Object_reference, double, glm::mat4>` (each addition appended
+  so the variant indices of the earlier types are stable;
+  `Object_reference` is D28, `double` and `glm::mat4` are the USD value
+  types of `doc/usd-compatibility-plan.md` M6 - `Property_type::double_floating`
+  and `Property_type::mat4`, spelled `double` and `mat4` in text. A `double`
+  is a one-component numeric value wherever a `float` is one; a `glm::mat4`
+  is a whole value: it is neither an expression target nor an expression
+  source, and its row is four drag rows, one per column, in glm's column
+  order) with a matching
   `enum class Property_type : uint8_t` whose enumerators are the variant
   indices. `Property<T>` is valid for `T` in that list or for any C++
   enumeration type (constrained with a concept); an enumeration `T` maps to
@@ -431,10 +437,12 @@ table, see D2a), and references to other objects (D28).
   std::string` and `parse_value(Property_type, std::string_view, const
   Enum_info*) -> std::optional<Property_value>` in
   `erhe_property/property_string.hpp`. Vectors and quaternions are
-  space-separated components, booleans are `true` / `false`, enumerations are
-  their `Enum_info` labels, strings are verbatim. Both directions round-trip
-  every value exactly for the non-float types and to the shortest float
-  representation that round-trips for `float` (`std::to_chars`). An
+  space-separated components, a `glm::mat4` is its 16 components in glm's
+  storage order (column 0 first, each column `x y z w`), booleans are
+  `true` / `false`, enumerations are their `Enum_info` labels, strings are
+  verbatim. Both directions round-trip every value exactly for the
+  non-floating-point types and to the shortest representation that
+  round-trips for `float` and `double` (`std::to_chars`). An
   object reference (D28) needs the referencing object to parse, so a
   second overload `parse_value(const Dependency_object& context,
   property, text)` resolves the text through
