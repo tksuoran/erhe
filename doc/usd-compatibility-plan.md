@@ -58,9 +58,11 @@ Constraints every step respects:
   a node graph) is a prim in that same tree, conventionally gathered
   under a `Scope`. A typed prim (`Mesh`, `Camera`, `Light`, `Material`,
   ...) is a child prim of its parent, never an attachment of it, and a
-  parent may hold several `Mesh` children; a transform belongs to the
-  Xformable prims (`Node` and its subclasses) and passes through the
-  prims that have none. What stays on a prim as an attachment is exactly
+  parent may hold several `Mesh` children. `Node` is the one prim that
+  carries a transform (USD `Xform`); every other prim has none, and a
+  prim's world transform is that of its nearest `Node` ancestor, so a
+  transform passes through the prims below a `Node` until the next
+  `Node`. What stays on a prim as an attachment is exactly
   what USD applies to a prim as an API schema (physics body and joint,
   layout hints, brush placement, prefab instance carrier). glTF is a
   serialization of that tree, as USD is (G3): the glTF reader and writer
@@ -124,61 +126,70 @@ week or more.
 
 ### U1 Prim tree (M)
 
-What: the scene tree accepts any `Hierarchy` item as a prim, and
-transforms pass through prims that have none. `Node::get_parent_node()`
+What: the scene tree accepts any `Hierarchy` item as a prim, and a
+transform passes through prims that have none. `Node::get_parent_node()`
 returns the nearest `Node` ancestor rather than casting the parent, and
 every reader of a node's parent transform goes through it, so a `Node`
-under a non-Node prim composes with the first Xformable above it - the
-`Scope` rule of USD. Three classes in `erhe::scene`, each with its own
+under a non-Node prim composes with the first `Node` above it - the
+`Scope` rule of USD. `Node` itself is the `Xform` prim: the class that
+carries a transform and the one every node-creation path makes; no
+class is added for it. Two classes in `erhe::scene`, each with its own
 `Item_type` bit, `static_type_name`, icon and clone:
 
 | erhe class | base | USD `typeName` | what it holds |
 |---|---|---|---|
 | `Prim` | `erhe::Item<Item_base, Hierarchy, Prim>` | any type without an erhe class, and a typeless `def` | `type_name` (string property, local; empty for a typeless prim). The carrier for every unsupported schema (`Cube`, `PointInstancer`, `SkelRoot`, ...): name, place and children survive a round trip; its schema attributes do not (section 5) |
 | `Scope` | `erhe::Item<Item_base, Hierarchy, Scope>` | `Scope` | children only; no transform exists on it, so no tool can move it and no `xformOp` is written. Its secondary property owner type is the root owner type (as `Style`), so a `Scope` holds category values for its descendants (`Material.roughness` on a materials scope, the D30 folder rule) |
-| `Xform` | `erhe::Item<Item_base, Node, Xform>` | `Xform` | nothing beyond `Node`: a transform with children. Every node-creation path (Create menu, MCP `create_node`, import of a transform-only node) makes an `Xform`; `Node` is the Xformable base and is no longer instantiated on its own |
 
 The USD importer creates the class the `typeName` names and the exporter
 writes the `typeName` the class names; the glTF reader and writer treat
-`Xform` as the node it is and carry `Prim` and `Scope` through
+`Node` as the node it is and carry `Prim` and `Scope` through
 `ERHE_scene` (C5, C1).
 
 Verification: `erhe_item_tests` for the parent-node walk through a
 non-Node prim (world transform of a `Node` under a `Scope` under a moved
-`Xform`); `erhe_usd_tests` round-trips an empty `Xform`, a `Scope`
+`Node`); `erhe_usd_tests` round-trips an empty `Xform`, a `Scope`
 holding a `Mesh`, a `Cube` prim and a typeless `def` under their own
 classes; headless, the glTF and USD round trips pass and a viewport
 screenshot of the default scene is unchanged.
 
-### U2 Mesh is a prim (L, after U1)
+### U2 Mesh is a prim (M, after U1)
 
-What: `erhe::scene::Mesh` becomes a `Node` subclass
-(`erhe::Item<Item_base, Node, Mesh>`) carrying its own transform, name
-and children, and stops being a `Node_attachment`; `Rendertarget_mesh`
-follows as its subclass. A parent holds any number of `Mesh` children.
-Every consumer that finds "the mesh of a node" - draw lists and the
-scene renderer, the raytrace and ID pickers, hover and selection, the
-transform and mesh-edit tools, physics shape construction, brush
-placement, the Properties window, MCP node queries - addresses the
-`Mesh` prim itself and, where it needs the meshes below a node, walks
-the children. The glTF reader makes a node that carries a mesh into one
-`Mesh` prim with that node's transform, name, children and remaining
-attachments; the writer inverts it (a `Mesh` prim is a node with a
-`mesh`). The USD mapping's `Mesh` row is the natural form.
+What: `erhe::scene::Mesh` becomes a transform-less `Hierarchy` item
+(`erhe::Item<Item_base, Hierarchy, Mesh>`), a child prim of its parent,
+and stops being a `Node_attachment`; `Rendertarget_mesh` follows as its
+subclass. A parent holds any number of `Mesh` children. `Mesh::get_node()`
+keeps its signature and comes to mean the nearest `Node` ancestor - the
+node the mesh used to be attached to, in every scene built so far - held
+in a cached pointer that the reparent hook refreshes, so the draw lists,
+the pickers, hover and selection, the tools, physics shape construction
+and brush placement keep reading a node's transform without a walk per
+use. A consumer that finds "the mesh of a node" through the attachment
+list reads the node's `Mesh` children instead. The glTF reader makes a
+node that carries a mesh into a `Node` with one `Mesh` child of the same
+name; the writer inverts it (a `Node` whose child is a `Mesh` is a node
+with a `mesh`). The USD importer applies the convention C5 states: a
+`Mesh` prim is a child of its `Xform`, and a `Mesh` prim that authors
+`xformOp`s of its own imports as a `Node` of that name carrying the ops
+with the `Mesh` as its child; the exporter writes that pair as it stands,
+so such a file gains one level on its first save (the one structural
+change the convention makes, logged once per file).
 
-Why: the largest single move toward C5, and the one that decides the
-shape of the rest: once a `Mesh` is a prim, the same pattern applies to
-cameras and lights.
+Why: C5's "typed prims are children, never attachments", in the
+cheapest form: a mesh never owned a transform, and the nearest-Node
+rule gives it the one it always read.
 
 Verification: the glTF round trip, the USD leg and
 `undo_reference_clearing_smoke_test.py` pass; headless screenshots of
 the default scene and of a Sponza import are identical before and after;
-`get_scene_nodes` lists meshes as nodes; `scene-close leak` clean.
+`get_scene_nodes` lists meshes as child prims; `scene-close leak` clean.
 
 ### U3 Camera and Light are prims (M, after U2)
 
-What: `Camera` and `Light` follow U2: `Node` subclasses, children of
-their parent, never attachments. Viewports, the headset view, shadow and
+What: `Camera` and `Light` follow U2: transform-less `Hierarchy` items,
+children of their `Node`, never attachments, with the same cached
+nearest-Node rule and the same import convention for a prim that
+authors its own `xformOp`s. Viewports, the headset view, shadow and
 light buffers, gizmos and the Properties window address the prim. The
 attachments that remain are the applied-API-schema set C5 names
 (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`,

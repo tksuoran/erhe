@@ -50,7 +50,7 @@
 [TASK::usd-object-model]{U1-U4,NEXT}
 ✓plan-revised-2026-09-06{C5-unified-prim-tree;doc/usd-compatibility-plan.md-section-3-U1..U4;section-4-order}
 ?U1-prim-tree
-?U2-mesh-is-prim{L}
+?U2-mesh-is-prim{M;transform-less-child}
 ?U3-camera+light-prims
 ?U4-resources-are-prims{L}
 
