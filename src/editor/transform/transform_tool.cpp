@@ -497,7 +497,7 @@ auto Transform_tool::resolve_transform_target(
     const std::shared_ptr<erhe::scene::Node>& node
 ) -> std::shared_ptr<erhe::scene::Node>
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     if (!mesh || !mesh->skin) {
         return node;
     }
@@ -1304,7 +1304,7 @@ void Transform_tool::render_rays(erhe::scene::Node& node)
 {
     ERHE_PROFILE_FUNCTION();
 
-    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&node);
+    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(&node);
     if (!mesh) {
         return;
     }
@@ -1391,7 +1391,7 @@ void Transform_tool::render_initial_position_ray()
     if (!entry.node) {
         return;
     }
-    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(entry.node.get());
+    std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(entry.node.get());
     auto* scene_root = static_cast<Scene_root*>(entry.node->node_data.host);
     if (scene_root == nullptr) {
         return;

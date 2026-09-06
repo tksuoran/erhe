@@ -1,7 +1,7 @@
-// Node attachments inherit visible / shadow_cast / lightmapped from their
-// node (D23 in doc/property-system.md): Node_attachment's inheritance
-// parent is its node, Node lists attachments as inheritance children, and
-// set_node brackets a move with the inheritance snapshot.
+// A prim inherits visible / shadow_cast / lightmapped from its parent prim
+// (D23 in doc/property-system.md), and a node's attachments inherit from
+// their node. A Mesh is a child prim (doc/usd-compatibility-plan.md C5), so
+// its inheritance parent is the prim it is parented to.
 
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -40,7 +40,7 @@ TEST(Attachment_inheritance, mesh_inherits_from_its_node)
 {
     auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     EXPECT_EQ(mesh->get_inheritance_parent(), node.get());
     EXPECT_TRUE(mesh->is_visible());
 
@@ -60,7 +60,7 @@ TEST(Attachment_inheritance, mesh_follows_an_ancestor_hide)
     auto child = std::make_shared<Xform>("child");
     auto mesh  = std::make_shared<Counting_mesh>("mesh");
     child->set_parent(root);
-    child->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, child);
 
     root->hide();
     EXPECT_FALSE(child->is_visible());
@@ -72,7 +72,7 @@ TEST(Attachment_inheritance, local_true_on_mesh_survives_node_hide)
 {
     auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     mesh->show();
     node->hide();
     EXPECT_FALSE(node->is_visible());
@@ -104,7 +104,7 @@ TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
         }
     );
 
-    hidden->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, hidden);
     EXPECT_FALSE(mesh->is_visible());
     ASSERT_TRUE(seen);
     EXPECT_EQ(seen_args.old_value, true);
@@ -114,8 +114,8 @@ TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
     EXPECT_EQ(mesh->visible_updates, 1);
 
     seen = false;
-    shown->attach(mesh);
-    EXPECT_EQ(mesh->get_node(), shown.get());
+    erhe::scene::set_mesh_parent(mesh, shown);
+    EXPECT_EQ(mesh->get_parent_node().get(), shown.get());
     EXPECT_TRUE(mesh->is_visible());
     ASSERT_TRUE(seen);
     EXPECT_EQ(seen_args.old_value, false);
@@ -123,7 +123,7 @@ TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
     EXPECT_EQ(mesh->visible_updates, 2);
 
     seen = false;
-    shown->detach(mesh.get());
+    erhe::scene::set_mesh_parent(mesh, {});
     EXPECT_TRUE(mesh->is_visible());
     EXPECT_FALSE(seen); // default true, unchanged
 }
@@ -137,8 +137,8 @@ TEST(Attachment_inheritance, shadow_cast_on_group_reaches_meshes_without_local_v
     auto mesh_b   = std::make_shared<Mesh>("mesh b");
     node_a->set_parent(group);
     node_b->set_parent(group);
-    node_a->attach(mesh_a);
-    node_b->attach(mesh_b);
+    erhe::scene::set_mesh_parent(mesh_a, node_a);
+    erhe::scene::set_mesh_parent(mesh_b, node_b);
     mesh_b->set_value(Mesh::shadow_cast_property, false);
 
     group->set_value(Mesh::shadow_cast_property, true);

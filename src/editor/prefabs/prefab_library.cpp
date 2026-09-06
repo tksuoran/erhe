@@ -49,7 +49,7 @@ void retarget_meshes(
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     if (mesh) {
         mesh->layer_id = content_layer_id;
         mesh->update_rt_primitives();

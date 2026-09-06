@@ -887,7 +887,7 @@ auto Mcp_server::action_assign_mesh_material(const json& args) -> std::string
     if (!node) {
         return make_error_content("Mesh node not found in scene: " + scene_name);
     }
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     if (!mesh) {
         return make_error_content("Node has no mesh: " + node->get_name());
     }

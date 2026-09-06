@@ -552,23 +552,52 @@ constexpr Serialized_item_flag c_serialized_item_flags[] = {
     return erhe::scene::Projection::Type::perspective_vertical;
 }
 
-// Applies the "<prefix>flags" name array exactly (every persistent flag
+// One "<prefix>flags" / "<prefix>properties" pair of a payload.
+class Item_payload_half
+{
+public:
+    std::string_view flags_key;
+    std::string_view properties_key;
+};
+
+// Applies the "<prefix>flags" name arrays exactly (every persistent flag
 // enabled when listed, disabled when not, unknown names ignored) and the
-// "<prefix>properties" local values (D23). A payload with flags but no
-// properties object is an older file: visible / shadow_cast / lightmapped
-// are read from its flags list.
+// "<prefix>properties" local values (D23) that a payload carries for one
+// item. A payload with flags but no properties object is an older file:
+// visible / shadow_cast / lightmapped are read from its flags list.
+//
+// Several halves reach one item - a Mesh prim is both the node and the mesh
+// of an ERHE_node payload (doc/usd-compatibility-plan.md C5) - so the local
+// values of every half are restored before the flags of any half are
+// applied: lock_edit is a seal, and a sealed item refuses every value write
+// that is not writable_when_sealed (doc/property-system.md). The flags
+// applied here are the non-derived ones, so no restored value is overwritten.
 void apply_persistent_flags_and_properties(
-    erhe::Item_base&                              item,
-    const simdjson::dom::object&                  extension_object,
-    const std::string_view                        flags_key,
-    const std::string_view                        properties_key,
-    std::vector<Unresolved_object_property>&      unresolved
+    erhe::Item_base&                               item,
+    const simdjson::dom::object&                   extension_object,
+    const std::initializer_list<Item_payload_half> halves,
+    std::vector<Unresolved_object_property>&       unresolved
 )
 {
-    simdjson::dom::array flags_array;
-    const bool has_flags = extension_object.at_key(flags_key).get_array().get(flags_array) == simdjson::SUCCESS;
-    uint64_t listed_bits = 0;
-    if (has_flags) {
+    for (const Item_payload_half& half : halves) {
+        simdjson::dom::object properties_object;
+        if (extension_object.at_key(half.properties_key).get_object().get(properties_object) != simdjson::SUCCESS) {
+            continue;
+        }
+        for (const simdjson::dom::key_value_pair member : properties_object) {
+            std::string_view value;
+            if (member.value.get_string().get(value) != simdjson::SUCCESS) {
+                continue;
+            }
+            static_cast<void>(apply_item_local_property(item, member.key, value, unresolved));
+        }
+    }
+    for (const Item_payload_half& half : halves) {
+        simdjson::dom::array flags_array;
+        if (extension_object.at_key(half.flags_key).get_array().get(flags_array) != simdjson::SUCCESS) {
+            continue;
+        }
+        uint64_t listed_bits = 0;
         for (const simdjson::dom::element flag_element : flags_array) {
             std::string_view flag_name;
             if (flag_element.get_string().get(flag_name) != simdjson::SUCCESS) {
@@ -577,18 +606,10 @@ void apply_persistent_flags_and_properties(
             listed_bits |= persistent_item_flag_from_name(flag_name);
         }
         apply_persistent_item_flags(item, listed_bits);
-    }
-    simdjson::dom::object properties_object;
-    if (extension_object.at_key(properties_key).get_object().get(properties_object) == simdjson::SUCCESS) {
-        for (const simdjson::dom::key_value_pair member : properties_object) {
-            std::string_view value;
-            if (member.value.get_string().get(value) != simdjson::SUCCESS) {
-                continue;
-            }
-            static_cast<void>(apply_item_local_property(item, member.key, value, unresolved));
+        simdjson::dom::object properties_object;
+        if (extension_object.at_key(half.properties_key).get_object().get(properties_object) != simdjson::SUCCESS) {
+            apply_legacy_derived_item_flags(item, listed_bits);
         }
-    } else if (has_flags) {
-        apply_legacy_derived_item_flags(item, listed_bits);
     }
 }
 
@@ -2861,7 +2882,38 @@ private:
             return;
         }
 
-        auto erhe_node = std::make_shared<erhe::scene::Xform>(node_name);
+        // Mesh needs to be cloned, because erhe currently puts skin into the mesh.
+        const auto clone_mesh = [&](const std::string& name) -> std::shared_ptr<erhe::scene::Mesh> {
+            const std::size_t mesh_index = node.meshIndex.value();
+            const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
+            std::shared_ptr<erhe::scene::Mesh> clone = std::make_shared<erhe::scene::Mesh>(
+                template_mesh,
+                erhe::for_clone{true}
+            );
+            clone->set_name(name);
+            clone->set_source_path(m_arguments.path);
+            clone->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+            return clone;
+        };
+
+        // EXT_mesh_gpu_instancing: the node draws its mesh once per instance
+        // transform. erhe has no instanced draw path, so each instance
+        // becomes a child Mesh prim carrying its own mesh clone. The
+        // extension forbids combining it with a skin, and a skinned mesh
+        // here would carry the skin on only one of the clones, so instancing
+        // is ignored in that (invalid) case.
+        const std::vector<erhe::scene::Trs_transform> instances =
+            (node.meshIndex.has_value() && !node.skinIndex.has_value())
+                ? parse_instance_transforms(node)
+                : std::vector<erhe::scene::Trs_transform>{};
+
+        // A glTF node that carries a mesh IS the Mesh prim
+        // (doc/usd-compatibility-plan.md C5): the glTF node's name,
+        // transform, children and remaining attachments are the prim's.
+        const bool node_is_mesh = node.meshIndex.has_value() && instances.empty();
+        std::shared_ptr<erhe::scene::Xformable> erhe_node = node_is_mesh
+            ? std::static_pointer_cast<erhe::scene::Xformable>(clone_mesh(node_name))
+            : std::static_pointer_cast<erhe::scene::Xformable>(std::make_shared<erhe::scene::Xform>(node_name));
         erhe_node->set_source_path(m_arguments.path);
         copy_uid(node, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -2898,65 +2950,29 @@ private:
             m_data_out.node_external_assets[node_index] = node.externalAssetIndex.value();
         }
         if (node.meshIndex.has_value()) {
-            const std::size_t mesh_index = node.meshIndex.value();
-            const erhe::scene::Mesh& template_mesh = *m_data_out.meshes[mesh_index].get();
-
-            // Mesh needs to be cloned, because erhe currently puts skin into the mesh.
-            const auto clone_mesh = [&]() -> std::shared_ptr<erhe::scene::Mesh> {
-                std::shared_ptr<erhe::scene::Mesh> clone = std::make_shared<erhe::scene::Mesh>(
-                    template_mesh,
-                    erhe::for_clone{true}
-                );
-                // The clone starts uid-less (a clone is a new object); the FIRST
-                // instantiation of a glTF mesh inherits the file identity so it
-                // round-trips. Later instantiations of the same mesh are
-                // additional objects (a glTF mesh shared by N nodes re-exports
-                // as N meshes) and get fresh uids at export.
-                if (!template_mesh.get_gltf_uid().empty() && !m_mesh_uid_claimed[mesh_index]) {
-                    clone->set_gltf_uid(template_mesh.get_gltf_uid());
-                    m_mesh_uid_claimed[mesh_index] = true;
-                }
-                return clone;
-            };
-
-            // EXT_mesh_gpu_instancing: the node draws its mesh once per
-            // instance transform. erhe has no instanced draw path, so each
-            // instance becomes a child node carrying its own mesh clone.
-            // The extension forbids combining it with a skin, and a skinned
-            // mesh here would attach the skin to only one of the clones, so
-            // instancing is ignored in that (invalid) case.
-            const std::vector<erhe::scene::Trs_transform> instances = node.skinIndex.has_value()
-                ? std::vector<erhe::scene::Trs_transform>{}
-                : parse_instance_transforms(node);
             if (!instances.empty()) {
                 log_gltf->info(
                     "Node '{}': EXT_mesh_gpu_instancing with {} instances - expanding into child nodes",
                     node_name, instances.size()
                 );
                 for (std::size_t i = 0, end = instances.size(); i < end; ++i) {
-                    auto instance_node = std::make_shared<erhe::scene::Xform>(
+                    std::shared_ptr<erhe::scene::Mesh> instance_node = clone_mesh(
                         fmt::format("{} instance {}", node_name, i)
                     );
-                    instance_node->set_source_path(m_arguments.path);
-                    instance_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
                     instance_node->Hierarchy::set_parent(erhe_node);
                     instance_node->node_data.transforms.parent_from_node = instances[i];
                     instance_node->update_world_from_node();
                     instance_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
-                    instance_node->attach(clone_mesh());
                     instance_node->set_parent(erhe_node);
                 }
-            } else {
-                if (node.skinIndex.has_value()) {
-                    if (!node.instancingAttributes.empty()) {
-                        log_gltf->warn(
-                            "Node '{}': EXT_mesh_gpu_instancing on a skinned mesh node is not allowed - instancing ignored",
-                            node_name
-                        );
-                    }
-                    m_nodes_with_skin.push_back(node_index);
+            } else if (node.skinIndex.has_value()) {
+                if (!node.instancingAttributes.empty()) {
+                    log_gltf->warn(
+                        "Node '{}': EXT_mesh_gpu_instancing on a skinned mesh node is not allowed - instancing ignored",
+                        node_name
+                    );
                 }
-                erhe_node->attach(clone_mesh());
+                m_nodes_with_skin.push_back(node_index);
             }
         }
     }
@@ -2971,7 +2987,7 @@ private:
             parse_skin(skin_index);
         }
         std::shared_ptr<erhe::scene::Node> erhe_node = m_data_out.nodes[node_index];
-        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(erhe_node.get());
+        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_mesh(erhe_node.get());
         erhe_mesh->skin = m_data_out.skins[skin_index];
     }
 
@@ -3955,10 +3971,20 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     continue;
                 }
                 if (extension_name == "ERHE_node") {
-                    apply_persistent_flags_and_properties(*prim, extension_object, "flags", "properties", result.unresolved_object_properties);
-                    const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_attachment<erhe::scene::Mesh>(node.get()) : nullptr;
-                    if (mesh) {
-                        apply_persistent_flags_and_properties(*mesh, extension_object, "mesh_flags", "mesh_properties", result.unresolved_object_properties);
+                    // A Mesh prim is the node AND the mesh of the payload, so
+                    // both halves reach it in one call and the seal lands last.
+                    const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node.get()) : nullptr;
+                    if (mesh.get() == prim.get()) {
+                        apply_persistent_flags_and_properties(
+                            *prim, extension_object,
+                            {Item_payload_half{"flags", "properties"}, Item_payload_half{"mesh_flags", "mesh_properties"}},
+                            result.unresolved_object_properties
+                        );
+                    } else {
+                        apply_persistent_flags_and_properties(*prim, extension_object, {Item_payload_half{"flags", "properties"}}, result.unresolved_object_properties);
+                        if (mesh) {
+                            apply_persistent_flags_and_properties(*mesh, extension_object, {Item_payload_half{"mesh_flags", "mesh_properties"}}, result.unresolved_object_properties);
+                        }
                     }
                 } else if ((extension_name == "ERHE_light") && node) {
                     const std::shared_ptr<erhe::scene::Light> light = erhe::scene::get_attachment<erhe::scene::Light>(node.get());
@@ -3970,7 +3996,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                         if ((extension_object.at_key("infinite_range").get_bool().get(bool_value) == simdjson::SUCCESS) && bool_value) {
                             light->set_range(0.0f);
                         }
-                        apply_persistent_flags_and_properties(*light, extension_object, "flags", "properties", result.unresolved_object_properties);
+                        apply_persistent_flags_and_properties(*light, extension_object, {Item_payload_half{"flags", "properties"}}, result.unresolved_object_properties);
                         clear_local_properties_not_listed(*light, extension_object, "properties");
                     }
                 }
@@ -4027,7 +4053,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 if (read_float(extension_object, "shadow_range", float_value)) {
                     camera->set_shadow_range(float_value);
                 }
-                apply_persistent_flags_and_properties(*camera, extension_object, "flags", "properties", result.unresolved_object_properties);
+                apply_persistent_flags_and_properties(*camera, extension_object, {Item_payload_half{"flags", "properties"}}, result.unresolved_object_properties);
                 clear_local_properties_not_listed(*camera, extension_object, "properties");
             }
         }
@@ -5097,9 +5123,6 @@ private:
     // the Primitive shared_ptrs).
     using Mesh_content_key = std::pair<std::string, std::vector<std::pair<const void*, const void*>>>;
     std::map<Mesh_content_key, std::size_t> m_mesh_content_to_gltf_mesh_index;
-    // First exporter of each glTF mesh index; only this mesh stamps the glTF
-    // mesh's uid/name identity.
-    std::unordered_map<const erhe::scene::Mesh*, std::size_t> m_erhe_canonical_mesh_to_gltf_mesh_index;
     [[nodiscard]] auto process_mesh(const erhe::scene::Mesh* erhe_mesh) -> std::size_t
     {
         ERHE_VERIFY(erhe_mesh != nullptr);
@@ -5209,7 +5232,6 @@ private:
         std::size_t gltf_mesh_index = m_gltf_asset.meshes.size();
         m_gltf_asset.meshes.emplace_back(std::move(gltf_mesh));
         m_erhe_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
-        m_erhe_canonical_mesh_to_gltf_mesh_index.insert({erhe_mesh, gltf_mesh_index});
         if (!has_extension_payloads) {
             m_mesh_content_to_gltf_mesh_index.emplace(std::move(content_key), gltf_mesh_index);
         }
@@ -6027,6 +6049,22 @@ private:
                 // rebuilt by their owner - never part of the file content.
                 continue;
             }
+            {
+                // A Mesh is a prim (doc/usd-compatibility-plan.md C5), so the
+                // exclusion hook applies here: an excluded mesh is a baked
+                // artifact its owner rebuilds on load, and writing it as a
+                // transform-only node would resurrect it as an empty prim
+                // beside the rebuilt one.
+                const erhe::scene::Mesh* const erhe_child_mesh = dynamic_cast<const erhe::scene::Mesh*>(erhe_child_node);
+                if (erhe_child_mesh != nullptr) {
+                    if (m_arguments.excluded_meshes.contains(erhe_child_mesh)) {
+                        continue;
+                    }
+                    if ((erhe_child_mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0) {
+                        continue;
+                    }
+                }
+            }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::content) == 0) {
                 // Item_flags::content marks scene content; everything else
                 // living under the root is transient editor furniture -
@@ -6081,7 +6119,12 @@ private:
         // excluded mesh is a baked artifact rebuilt on load (graph-mesh
         // controlled) - the node exports without it (no glTF mesh, no
         // mesh_flags, no skin).
-        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&erhe_node);
+        // A Mesh prim is written as one glTF node with `mesh` set (C5); a
+        // Mesh CHILD of this node is a prim of its own and is written by
+        // process_child_nodes below.
+        std::shared_ptr<erhe::scene::Mesh> erhe_mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(
+            const_cast<erhe::scene::Node&>(erhe_node).shared_from_this()
+        );
         if (erhe_mesh && m_arguments.excluded_meshes.contains(erhe_mesh.get())) {
             erhe_mesh.reset();
         }
@@ -6558,9 +6601,10 @@ private:
             targets.insert(targets.end(), category_targets.begin(), category_targets.end());
         };
         add_targets(m_gltf_asset.nodes,      m_erhe_node_to_gltf_node_index);
-        // Canonical meshes only: content-deduped meshes share a glTF mesh,
-        // which must be uid-stamped exactly once (by its first exporter).
-        add_targets(m_gltf_asset.meshes,     m_erhe_canonical_mesh_to_gltf_mesh_index);
+        // The glTF mesh entries are not stamped: a Mesh is a prim, so its
+        // identity is the node entry stamped above, and the mesh entry is a
+        // synthesized object of the serialization like an accessor or a
+        // sampler.
         add_targets(m_gltf_asset.cameras,    m_erhe_camera_to_gltf_camera_index);
         // ERHE_asset_reference proxies are excluded: a proxy's identity
         // lives in its defining container, and stamping would write a

@@ -1431,11 +1431,13 @@ void Debug_visualizations::selection_visualization(const Render_context& context
                 line_renderer.add_lines( m, green, {{ O, axis_y }} );
                 line_renderer.add_lines( m, blue,  {{ O, axis_z }} );
             }
-            for (const auto& attachment : node->get_attachments()) {
-                const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
+            {
+                const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
                 if (mesh) {
                     mesh_visualization(context, mesh.get());
                 }
+            }
+            for (const auto& attachment : node->get_attachments()) {
                 //const auto skin = as_skin(attachment);
                 //if (skin) {
                 //    skin_visualization(context, skin.get());

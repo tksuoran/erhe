@@ -89,7 +89,7 @@ Merge_operation::Merge_operation(Parameters&& parameters)
         }
         erhe::scene::Node* node = shared_node.get();
 
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
         if (!mesh) {
             continue;
         }

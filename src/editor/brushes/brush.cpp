@@ -362,8 +362,10 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         instance_create_info.material->get_name()
     );
 
-    auto node = std::make_shared<erhe::scene::Xform>(name);
+    // The instance prim IS the mesh (doc/usd-compatibility-plan.md C5): it
+    // carries the instance transform, the node flags and the physics body.
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
+    const std::shared_ptr<erhe::scene::Node>& node = mesh;
     mesh->add_primitive(scaled.primitive, instance_create_info.material);
 
     ERHE_VERIFY(instance_create_info.scene_root != nullptr);
@@ -377,7 +379,6 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         mesh->set_value(erhe::scene::Mesh::lightmapped_property, true);
     }
     node->set_world_from_node(instance_create_info.world_from_node);
-    node->attach             (mesh);
     node->enable_flag_bits   (instance_create_info.node_flags);
 
     if (m_data.app_settings.config().physics.static_enable) {

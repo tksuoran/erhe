@@ -1269,13 +1269,12 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
             const float py = erhe::math::remap(static_cast<float>(y), 0.0f, static_cast<float>(y_count - 1), -y_half_extent, y_half_extent);
             for (int z = 0; z < z_count; ++z) {
                 const float pz = erhe::math::remap(static_cast<float>(z), 0.0f, static_cast<float>(z_count - 1), -z_half_extent, z_half_extent);
-                auto node = std::make_shared<erhe::scene::Xform>("Cube");
-                auto mesh = std::make_shared<erhe::scene::Mesh>("");
+                auto mesh = std::make_shared<erhe::scene::Mesh>("Cube");
+                const std::shared_ptr<erhe::scene::Node>& node = mesh;
                 mesh->add_primitive(primitive, material);
                 mesh->layer_id = m_scene_root->layers().content()->id;
                 mesh->enable_flag_bits(Item_flags::content);
                 mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
-                node->attach(mesh);
                 node->set_parent(root);
                 node->set_parent_from_node(erhe::math::create_translation<float>(px, py, pz));
                 node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);

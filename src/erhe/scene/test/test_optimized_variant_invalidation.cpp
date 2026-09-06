@@ -92,7 +92,7 @@ public:
     std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Xform>("node");
     std::shared_ptr<erhe::scene::Mesh> mesh = std::make_shared<erhe::scene::Mesh>("mesh");
     mesh->add_primitive(primitive, {});
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     node->set_parent(host.scene.get_root_node());
     host.scene.get_mesh_layers().front()->add(mesh);
     return mesh;

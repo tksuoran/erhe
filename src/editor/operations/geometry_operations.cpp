@@ -592,7 +592,7 @@ auto Binary_mesh_operation::make_operations(
             continue;
         }
         erhe::scene::Node* raw_node = node.get();
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(raw_node);
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(raw_node);
         if (!mesh) {
             continue;
         }

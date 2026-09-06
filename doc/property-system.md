@@ -1086,10 +1086,13 @@ table, see D2a), and references to other objects (D28).
   `Material` values for the materials below it, which is why every
   `Material` value property of section 4.1 is registered `inherits`;
   and the scene node (section 4.2), whose secondary owner type is
-  `Node_attachment` so that it holds the values of every attachment
-  class (`Light.color` on an empty node) for the attachments below it,
-  which is why every `Light` property of section 4.3 is registered
-  `inherits`. Section 6 records the registration-time check this makes
+  `Item_base` so that it holds the values of every other item class
+  (`Light.color` on an empty node, `Mesh.shadow_cast` on a group) for the
+  prims and attachments below it, which is why every `Light` property of
+  section 4.3 is registered `inherits`. `Item_base` rather than a narrower
+  type because those classes no longer share one base: a `Mesh` is a prim
+  under `Xformable` (`doc/usd-compatibility-plan.md` C5) while `Light` and
+  `Camera` are attachments. Section 6 records the registration-time check this makes
   wanted.
 - D31 Per-object default. `Property_metadata::compute_default`, when
   bound, is the property's DEFAULT layer for an object: the value it

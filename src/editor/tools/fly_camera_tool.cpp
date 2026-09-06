@@ -418,7 +418,7 @@ auto Fly_camera_frame_command::try_call() -> bool
         if (!node) {
             continue;
         }
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }

@@ -660,7 +660,7 @@ auto Asset_manager::resolve_scene_local(const Asset_key& key, std::string& out_e
             // Meshes are scene content, not library entries: match by the
             // mesh attachment's name over the scene's nodes.
             scene_root->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
                 if (mesh && (mesh->get_name() == key.name)) {
                     consider(mesh);
                 }

@@ -412,7 +412,7 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
     proxy.mesh->enable_flag_bits(erhe::Item_flags::bone_proxy);
     proxy.node->enable_flag_bits(erhe::Item_flags::bone_proxy);
 
-    proxy.node->attach(proxy.mesh);
+    erhe::scene::set_mesh_parent(proxy.mesh, proxy.node);
     proxy.node->set_parent(joint);
     return proxy;
 }

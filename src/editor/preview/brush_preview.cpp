@@ -249,7 +249,7 @@ void Brush_preview::render_preview(
     update_rendertarget(*m_context.graphics_device);
 
     if (m_mesh) {
-        m_node->detach(m_mesh.get());
+        erhe::scene::set_mesh_parent(m_mesh, {});
         m_mesh.reset();
     }
 
@@ -272,7 +272,7 @@ void Brush_preview::render_preview(
     const std::shared_ptr<erhe::primitive::Material>& render_material =
         material ? material : (headlight_shading ? m_headlight_material : m_material);
     m_mesh->add_primitive(primitive, render_material);
-    m_node->attach(m_mesh);
+    erhe::scene::set_mesh_parent(m_mesh, m_node);
 
     // After the persistent mesh's primitives have been re-added, which is
     // where this thumbnail's material reference is enqueued (D6).

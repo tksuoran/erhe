@@ -48,24 +48,18 @@ void collect_orphan_materials(
     if (!hierarchy) {
         return;
     }
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(hierarchy);
-    if (node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-            if (!mesh) {
+    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(hierarchy);
+    if (mesh) {
+        for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+            const std::shared_ptr<erhe::primitive::Material>& material = primitive.material;
+            if (!material || (material->get_item_host() != nullptr)) {
                 continue;
             }
-            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
-                const std::shared_ptr<erhe::primitive::Material>& material = primitive.material;
-                if (!material || (material->get_item_host() != nullptr)) {
-                    continue;
-                }
-                if ((asset_manager != nullptr) && asset_manager->is_managed(*material)) {
-                    continue;
-                }
-                if (std::find(out_materials.begin(), out_materials.end(), material) == out_materials.end()) {
-                    out_materials.push_back(material);
-                }
+            if ((asset_manager != nullptr) && asset_manager->is_managed(*material)) {
+                continue;
+            }
+            if (std::find(out_materials.begin(), out_materials.end(), material) == out_materials.end()) {
+                out_materials.push_back(material);
             }
         }
     }
@@ -87,10 +81,11 @@ void collect_clipboard_pins(const std::shared_ptr<erhe::Item_base>& item, std::u
     if (node) {
         for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
             out_pinned.insert(attachment.get());
-            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-            if (!mesh) {
-                continue;
-            }
+        }
+    }
+    {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+        if (mesh) {
             if (mesh->skin) {
                 out_pinned.insert(mesh->skin.get());
             }
@@ -135,16 +130,10 @@ void collect_managed_assets(const std::shared_ptr<erhe::Item_base>& item, std::v
         }
     };
     consider(item);
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-            if (!mesh) {
-                continue;
-            }
-            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
-                consider(primitive.material);
-            }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
+    if (mesh) {
+        for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+            consider(primitive.material);
         }
     }
     const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);

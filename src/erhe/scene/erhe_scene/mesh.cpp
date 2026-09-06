@@ -13,6 +13,7 @@
 #include "erhe_verify/verify.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace erhe::scene {
 
@@ -240,7 +241,7 @@ void Mesh::update_rt_primitives()
     // primitives on an already-placed node (e.g. a geometry graph re-bake)
     // leaves the raytrace instances at the origin - hover / picking misses
     // the mesh until the node next moves.
-    handle_node_transform_update();
+    update_transform_dependent_state();
     notify_primitives_changed();
 }
 
@@ -368,39 +369,6 @@ auto Mesh::get_primitives() const -> const std::vector<Mesh_primitive>&
 
 Mesh::Mesh() = default;
 
-Mesh::Mesh(Mesh&& other) noexcept
-    : Item          {std::move(other)}
-    , layer_id      {other.layer_id}
-    , skin          {std::move(other.skin)}
-    , point_size    {other.point_size}
-    , line_width    {other.line_width}
-    , m_primitives  {std::move(other.m_primitives)}
-    , m_rt_scene    {other.m_rt_scene}
-    , m_rt_primitives{std::move(other.m_rt_primitives)}
-    , m_rt_primitives_dirty{other.m_rt_primitives_dirty}
-{
-    other.m_rt_scene = nullptr;
-    stamp_primitive_owners();
-}
-
-Mesh& Mesh::operator=(Mesh&& other) noexcept
-{
-    if (this != &other) {
-        Item::operator=(std::move(other));
-        layer_id              = other.layer_id;
-        skin                  = std::move(other.skin);
-        point_size            = other.point_size;
-        line_width            = other.line_width;
-        m_primitives          = std::move(other.m_primitives);
-        m_rt_scene            = other.m_rt_scene;
-        m_rt_primitives       = std::move(other.m_rt_primitives);
-        m_rt_primitives_dirty = other.m_rt_primitives_dirty;
-        other.m_rt_scene      = nullptr;
-        stamp_primitive_owners();
-    }
-    return *this;
-}
-
 Mesh::Mesh(const std::string_view name)
     : Item{name}
 {
@@ -477,8 +445,12 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 {
     const auto shared_this = std::static_pointer_cast<Mesh>(shared_from_this()); // keep alive
 
-    Scene_host* old_scene_host = static_cast<Scene_host*>(old_item_host);
-    Scene_host* new_scene_host = static_cast<Scene_host*>(new_item_host);
+    // The node registration first: the mesh layers below hold a mesh the
+    // scene already knows as a node.
+    Xformable::handle_item_host_update(old_item_host, new_item_host);
+
+    Scene_host* old_scene_host = dynamic_cast<Scene_host*>(old_item_host);
+    Scene_host* new_scene_host = dynamic_cast<Scene_host*>(new_item_host);
 
     if (old_scene_host != nullptr) {
         old_scene_host->unregister_mesh(shared_this);
@@ -490,6 +462,8 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
 
 void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits)
 {
+    Xformable::handle_flag_bits_update(old_flag_bits, new_flag_bits);
+
     const uint64_t changed_bits = old_flag_bits ^ new_flag_bits;
 
     // Mirror every flag change to the scene host (draw list entry flags,
@@ -520,9 +494,15 @@ void Mesh::handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bit
     }
 }
 
-void Mesh::handle_node_transform_update()
+void Mesh::handle_transform_update(const uint64_t serial)
 {
-    const glm::mat4& world_from_node = (get_node() != nullptr) ? get_node()->world_from_node() : glm::mat4{1.0f};
+    Xformable::handle_transform_update(serial);
+    update_transform_dependent_state();
+}
+
+void Mesh::update_transform_dependent_state()
+{
+    const glm::mat4 world_from_node = Xformable::world_from_node();
     // Affine transform: det(mat4) == det(upper-left mat3); this runs for
     // every mesh under a moving subtree, every frame.
     const float determinant = glm::determinant(glm::mat3{world_from_node});
@@ -619,8 +599,7 @@ auto Mesh::get_aabb_world() const -> erhe::math::Aabb
         // returning an empty box that silently culls the mesh.
     }
 
-    const erhe::scene::Node* node = get_node();
-    const glm::mat4 world_from_local = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
+    const glm::mat4 world_from_local = Xformable::world_from_node();
     erhe::math::Aabb aabb;
     for (const Mesh_primitive& mesh_primitive : m_primitives) {
         const erhe::math::Aabb primitive_aabb_local = mesh_primitive.primitive->get_bounding_box();
@@ -642,14 +621,45 @@ auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<M
     if (scene_mesh) {
         return scene_mesh;
     }
+    const erhe::Hierarchy* hierarchy = dynamic_cast<const erhe::Hierarchy*>(item.get());
+    return get_mesh(hierarchy);
+}
 
-    // If we have node, get mesh from node
-    std::shared_ptr<Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-    if (node_shared) {
-        return get_attachment<Mesh>(node_shared.get());
+auto get_mesh(const erhe::Hierarchy* item) -> std::shared_ptr<Mesh>
+{
+    if (item == nullptr) {
+        return {};
     }
-
+    const Mesh* mesh = dynamic_cast<const Mesh*>(item);
+    if (mesh != nullptr) {
+        return std::static_pointer_cast<Mesh>(const_cast<Mesh*>(mesh)->shared_from_this());
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        std::shared_ptr<Mesh> child_mesh = std::dynamic_pointer_cast<Mesh>(child);
+        if (child_mesh) {
+            return child_mesh;
+        }
+    }
     return {};
+}
+
+void set_mesh_parent(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<erhe::Hierarchy>& parent)
+{
+    ERHE_VERIFY(mesh);
+    // The qualified call to the two-argument overload: the one-argument
+    // Hierarchy::set_parent forwards through the virtual, which lands back
+    // in Xformable's world-preserving override.
+    mesh->Hierarchy::set_parent(parent, std::numeric_limits<std::size_t>::max());
+}
+
+void for_each_mesh_child(const erhe::Hierarchy& item, const std::function<void(const std::shared_ptr<Mesh>&)>& callback)
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item.get_children()) {
+        std::shared_ptr<Mesh> child_mesh = std::dynamic_pointer_cast<Mesh>(child);
+        if (child_mesh) {
+            callback(child_mesh);
+        }
+    }
 }
 
 

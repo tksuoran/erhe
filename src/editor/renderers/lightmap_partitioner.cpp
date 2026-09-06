@@ -788,7 +788,7 @@ void Lightmap_partitioner::commit_prepare()
             );
             entry.piece_mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
             entry.piece_mesh->hide();
-            entry.piece_node->attach(entry.piece_mesh);
+            erhe::scene::set_mesh_parent(entry.piece_mesh, entry.piece_node);
             // Piece nodes hold world-space geometry on a static identity
             // transform: skip the per-frame transform update pass and lock
             // them against the viewport transform tool.

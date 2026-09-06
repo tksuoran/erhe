@@ -91,7 +91,7 @@ auto build_shape_from_node_mesh(const erhe::scene::Node* node, const bool convex
     if (node == nullptr) {
         return {};
     }
-    const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+    const auto mesh = erhe::scene::get_mesh(node);
     return build_shape_from_mesh(mesh.get(), convex_hull);
 }
 

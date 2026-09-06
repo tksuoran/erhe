@@ -135,7 +135,7 @@ TEST_F(Cube_round_trip, mesh_topology_survives)
 {
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "cube");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     ASSERT_TRUE(mesh.operator bool());
 
     // One primitive per materialBind GeomSubset, the way the source file's
@@ -160,7 +160,7 @@ TEST_F(Cube_round_trip, subset_material_bindings_survive)
 {
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "cube");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     ASSERT_TRUE(mesh.operator bool());
 
     std::set<std::string> bound_material_names;
@@ -297,7 +297,7 @@ TEST_F(Authored_round_trip, mesh_shadow_cast_survives_as_custom_attribute)
 {
     const std::shared_ptr<erhe::scene::Node> node = find_node(trip->reloaded.data, "shown");
     ASSERT_TRUE(node.operator bool());
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     ASSERT_TRUE(mesh.operator bool());
     EXPECT_TRUE(mesh->get_value(erhe::scene::Mesh::shadow_cast_property));
 }

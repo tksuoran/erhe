@@ -1,11 +1,12 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
-#include "erhe_scene/node_attachment.hpp"
+#include "erhe_scene/gprim.hpp"
 #include "erhe_primitive/primitive.hpp"
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -80,12 +81,13 @@ private:
     std::size_t m_index{0};
 };
 
-class Mesh : public erhe::Item<Item_base, Node_attachment, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
+// A geometric prim (doc/usd-compatibility-plan.md C5, USD `Mesh`): an
+// `Xformable` with its own transform, name and children, and a child prim of
+// its parent. A parent holds any number of `Mesh` children.
+class Mesh : public erhe::Item<Item_base, Gprim, Mesh, erhe::Item_kind::clone_using_custom_clone_constructor>
 {
 public:
     Mesh(); // default
-    explicit Mesh(Mesh&&) noexcept; // re-stamps the primitives' owner link
-    Mesh& operator=(Mesh&&) noexcept;
     ~Mesh() noexcept override;
 
     explicit Mesh(const Mesh&) = delete;
@@ -100,12 +102,24 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Mesh"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::node_attachment | erhe::Item_type::mesh; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Gprim::get_static_type() | erhe::Item_type::mesh; }
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
-    // Implements Node_attachment
-    void handle_item_host_update     (erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
-    void handle_node_transform_update()                                                               override;
+    // Overrides Typed: the class fixes the token.
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Mesh"; }
+
+    // Overrides Xformable: registers / unregisters the mesh with the scene's
+    // mesh layers on top of the node registration the base does, and mirrors
+    // the world transform into the raytrace instances, the negative
+    // determinant flag and the computed world bounds.
+    void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
+    void handle_transform_update(uint64_t serial)                                                override;
+
+    // The mesh itself: the transitional accessor every consumer that reads
+    // "the node of this mesh" still spells, kept while the U steps of
+    // doc/usd-compatibility-plan.md retire it.
+    [[nodiscard]] auto get_node()       -> Node*       { return this; }
+    [[nodiscard]] auto get_node() const -> const Node* { return this; }
 
     // Implements Item_base (D29): the primitives are the sub-objects.
     [[nodiscard]] auto get_property_sub_object_count() const -> std::size_t override;
@@ -175,7 +189,7 @@ public:
     [[nodiscard]] auto get_aabb_world        () const -> erhe::math::Aabb;
     // Computed (doc/property-system.md D26): the corners of
     // get_aabb_world(), 0 0 0 for an invalid box; pushed to expressions from
-    // handle_node_transform_update and the primitive changes.
+    // handle_transform_update and the primitive changes.
     static const erhe::property::Property<glm::vec3> world_bounds_min_property;
     static const erhe::property::Property<glm::vec3> world_bounds_max_property;
     // Inherited flags (doc/property-system.md D23): the closest ancestor
@@ -204,6 +218,11 @@ public:
 private:
     static void on_render_flag_property_changed(erhe::property::Dependency_object& object, const erhe::property::Property_changed_args& args);
     void        rederive_render_flag_bits();
+    // The state that mirrors this mesh's world transform: the raytrace
+    // instance transforms, the negative-determinant flag, the computed world
+    // bounds and the scene host's draw list records. Run from
+    // handle_transform_update() and after a primitive-list change.
+    void        update_transform_dependent_state();
 
 private:
     friend class Mesh_primitive;
@@ -226,6 +245,21 @@ private:
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
 
+// The one mesh of a prim: the prim itself when it is a Mesh, else its first
+// Mesh child. The convenience for the one-mesh case; a consumer that needs
+// every mesh of a prim uses for_each_mesh_child().
 [[nodiscard]] auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>;
+[[nodiscard]] auto get_mesh(const erhe::Hierarchy* item) -> std::shared_ptr<Mesh>;
+
+// Make `mesh` a child prim of `parent` (a null parent detaches it), keeping
+// the mesh's LOCAL transform. Xformable::set_parent preserves the WORLD
+// transform instead, which would give a mesh created at the origin a local
+// transform that cancels its new parent's; a mesh that carries no transform
+// of its own belongs at its parent's place.
+void set_mesh_parent(const std::shared_ptr<Mesh>& mesh, const std::shared_ptr<erhe::Hierarchy>& parent);
+
+// Every Mesh child of a prim, in child order. Takes a callback and allocates
+// nothing, so it is usable from per-frame code.
+void for_each_mesh_child(const erhe::Hierarchy& item, const std::function<void(const std::shared_ptr<Mesh>&)>& callback);
 
 } // namespace erhe::scene

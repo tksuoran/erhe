@@ -806,11 +806,10 @@ private:
         return lightusd::Prim{model};
     }
 
-    // One erhe node as one prim. The node's attachment types the prim that
-    // holds the node's transform (doc/usd_compatibility.md, object model),
-    // which is what the importer inverts: it makes one node per prim and
-    // attaches the content the prim type names, so the pair round-trips
-    // without gaining a level.
+    // One erhe node as one prim. A Mesh prim writes a USD `Mesh` with its own
+    // xformOp; a node with a camera or light attachment writes the prim its
+    // attachment types (doc/usd_compatibility.md, object model), which is
+    // what the importer inverts.
     [[nodiscard]] auto write_node(const erhe::scene::Node& node, const glm::mat4& pre_transform, Name_scope& names) -> lightusd::Prim
     {
         ++m_node_count;
@@ -820,7 +819,11 @@ private:
         m_prim_path_stack.push_back(prim_name);
         record_tags(node);
 
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(&node);
+        // A Mesh CHILD of this node is a prim of its own, written by
+        // write_child_nodes below.
+        std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(
+            const_cast<erhe::scene::Node&>(node).shared_from_this()
+        );
         if (mesh && ((mesh->get_flag_bits() & erhe::Item_flags::rendertarget) != 0)) {
             // A rendertarget mesh is a UI quad rendered into every frame; it
             // has no serializable source image, so the node exports without it.

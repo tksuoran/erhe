@@ -6,6 +6,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_usd/usd.hpp"
@@ -151,6 +152,19 @@ TEST_F(Prim_import, transform_composes_through_a_scope)
     EXPECT_NEAR(world_position.z, 0.0f, 1e-5f);
 }
 
+// A `Mesh` prim of the stage is an erhe::scene::Mesh prim, not an Xform
+// carrying a mesh attachment (doc/usd-compatibility-plan.md C5).
+TEST_F(Prim_import, mesh_prim_is_a_mesh)
+{
+    const std::shared_ptr<erhe::Hierarchy> cube = find_prim(root, "cube");
+    ASSERT_TRUE(cube.operator bool());
+    EXPECT_TRUE(erhe::is<erhe::scene::Mesh>(cube.get()));
+    const erhe::scene::Mesh* mesh = static_cast<const erhe::scene::Mesh*>(cube.get());
+    EXPECT_EQ(mesh->get_class_type_name(), "Mesh");
+    EXPECT_TRUE(mesh->get_attachments().empty());
+    EXPECT_EQ(mesh->get_primitives().size(), 1u);
+}
+
 class Prim_round_trip : public testing::Test
 {
 protected:
@@ -213,6 +227,50 @@ TEST_F(Prim_round_trip, transform_still_composes_through_the_scope)
     ASSERT_TRUE(erhe::is<erhe::scene::Node>(cube.get()));
     const erhe::scene::Node* node = static_cast<const erhe::scene::Node*>(cube.get());
     const glm::vec3 world_position = glm::vec3{node->world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    EXPECT_NEAR(world_position.y, 2.0f, 1e-5f);
+}
+
+// The mesh comes back as a Mesh prim, and the written file carries it as one
+// `Mesh` prim of its own - not an Xform with a mesh inside it.
+TEST_F(Prim_round_trip, mesh_prim_round_trips_as_a_mesh)
+{
+    const std::shared_ptr<erhe::Hierarchy> cube = find_prim(reloaded_root, "cube");
+    ASSERT_TRUE(cube.operator bool());
+    EXPECT_TRUE(erhe::is<erhe::scene::Mesh>(cube.get()));
+
+    const std::string written = read_file(written_path);
+    EXPECT_NE(written.find("def Mesh \"cube\""), std::string::npos) << written;
+}
+
+// A Mesh prim carries its own transform: its xformOps are written on the
+// Mesh prim itself.
+TEST_F(Prim_round_trip, mesh_prim_carries_its_own_xform_op)
+{
+    const std::shared_ptr<erhe::Hierarchy> source_cube = find_prim(source_root, "cube");
+    ASSERT_TRUE(source_cube.operator bool());
+    ASSERT_TRUE(erhe::is<erhe::scene::Mesh>(source_cube.get()));
+    std::static_pointer_cast<erhe::scene::Mesh>(source_cube)->set_parent_from_node(
+        erhe::scene::Trs_transform{glm::vec3{3.0f, 0.0f, 0.0f}}
+    );
+
+    const std::filesystem::path moved_path = temporary_path("prims_moved.usda");
+    const erhe::usd::Usd_save_arguments save_arguments{
+        .path      = moved_path,
+        .root_node = source_root,
+        .materials = source.data.materials
+    };
+    const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+    ASSERT_TRUE(save.error.empty()) << save.error;
+
+    std::shared_ptr<erhe::scene::Node>  moved_root = std::make_shared<erhe::scene::Xform>("moved_root");
+    const erhe::usd::Usd_load_result    moved      = load(moved_path, moved_root);
+    ASSERT_TRUE(moved.error.empty()) << moved.error;
+    const std::shared_ptr<erhe::Hierarchy> moved_cube = find_prim(moved_root, "cube");
+    ASSERT_TRUE(moved_cube.operator bool());
+    ASSERT_TRUE(erhe::is<erhe::scene::Mesh>(moved_cube.get()));
+    const erhe::scene::Node* node = static_cast<const erhe::scene::Node*>(moved_cube.get());
+    const glm::vec3 world_position = glm::vec3{node->world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    EXPECT_NEAR(world_position.x, 3.0f, 1e-5f);
     EXPECT_NEAR(world_position.y, 2.0f, 1e-5f);
 }
 

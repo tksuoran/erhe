@@ -57,7 +57,7 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Rendertarget_mesh"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node_attachment | erhe::Item_type::mesh | erhe::Item_type::rendertarget; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::scene::Mesh::get_static_type() | erhe::Item_type::rendertarget; }
     auto get_type     () const -> uint64_t         override;
     auto get_type_name() const -> std::string_view override;
 

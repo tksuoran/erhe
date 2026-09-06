@@ -202,17 +202,11 @@ void collect_subtree_mesh_materials(const std::shared_ptr<erhe::Hierarchy>& hier
     if (!hierarchy) {
         return;
     }
-    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(hierarchy);
-    if (node) {
-        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-            const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(attachment);
-            if (!mesh) {
-                continue;
-            }
-            for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
-                if (primitive.material) {
-                    out_items.insert(primitive.material.get());
-                }
+    const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(hierarchy);
+    if (mesh) {
+        for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+            if (primitive.material) {
+                out_items.insert(primitive.material.get());
             }
         }
     }

@@ -172,7 +172,7 @@ Controller_visualization::Controller_visualization(
         hand.node->show();
         hand.placeholder_mesh->enable_flag_bits(erhe::Item_flags::controller);
         hand.placeholder_mesh->layer_id = m_content_layer_id;
-        hand.node->attach(hand.placeholder_mesh);
+        erhe::scene::set_mesh_parent(hand.placeholder_mesh, hand.node);
         hand.node->set_parent(view_root);
     }
 }
@@ -250,7 +250,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
             continue;
         }
         node->show();
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }
@@ -290,7 +290,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     }
 
     model_root->set_parent(hand.node.get());
-    hand.node->detach(hand.placeholder_mesh.get());
+    erhe::scene::set_mesh_parent(hand.placeholder_mesh, {});
     hand.has_render_model = true;
     if (!gltf_data.animations.empty() && gltf_data.animations.front()) {
         setup_control_drives(hand, *gltf_data.animations.front(), right_hand);

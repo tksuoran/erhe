@@ -1017,22 +1017,23 @@ auto Operations::mesh_context() -> Mesh_operation_parameters
     };
 }
 
-// Special rule to count meshes as selected even when the node that
-// contains the mesh is seletected and mesh itself is not selected.
+// Special rule to count meshes as selected even when the parent prim that
+// holds the mesh is selected and the mesh itself is not.
 auto Operations::count_selected_meshes() const -> size_t
 {
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
     std::size_t count = 0;
     for (const auto& item : selected_items) {
-        auto node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-        if (node) {
-            for (const auto& attachment : node->get_attachments()) {
-                if (erhe::is<erhe::scene::Mesh>(attachment)) {
-                    ++count;
-                }
-            }
-        } else if (erhe::is<erhe::scene::Mesh>(item)) {
+        if (erhe::is<erhe::scene::Mesh>(item)) {
             ++count;
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (node) {
+            erhe::scene::for_each_mesh_child(
+                *node.get(),
+                [&count](const std::shared_ptr<erhe::scene::Mesh>&) { ++count; }
+            );
         }
     }
     return count;
@@ -1661,7 +1662,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     // intersect, and reject the joint when none exists. Tolerance scales with the
     // smaller object so a feature-contact touch is not mistaken for penetration.
     const auto mesh_world_diagonal = [](const std::shared_ptr<erhe::scene::Node>& node) -> float {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             return 0.0f;
         }
@@ -1864,7 +1865,7 @@ auto Operations::flip_joint(const Add_joint_avoidance avoidance) -> bool
 
     // Penetration tolerance scales with the smaller body (same rule as Add Joint).
     const auto mesh_world_diagonal = [](const std::shared_ptr<erhe::scene::Node>& node) -> float {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             return 0.0f;
         }
@@ -1985,7 +1986,7 @@ void Operations::center_transform()
     parameters.items = items;
     //std::unordered_map<uint64_t, glm::mat4> mesh_transform;
     parameters.make_entry_node_callback = [](erhe::scene::Node* node, Mesh_operation_parameters& parameters) {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
         if (!mesh) {
             return;
         }
@@ -1999,7 +2000,7 @@ void Operations::center_transform()
     // Second: Reset transform in all nodes
     const std::vector<std::shared_ptr<erhe::scene::Node>>& nodes = get_all<erhe::scene::Node>(items);
     for (const std::shared_ptr<erhe::scene::Node>& node : nodes) {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             return;
         }
@@ -2872,7 +2873,7 @@ void Operations::create_brush()
         for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {
             std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
             if (node) {
-                mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                mesh = erhe::scene::get_mesh(node.get());
                 if (mesh) {
                     break;
                 }

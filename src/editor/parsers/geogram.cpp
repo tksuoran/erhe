@@ -89,14 +89,14 @@ void import_geogram(
     const bool raytrace_ok = primitive->make_raytrace();
     static_cast<void>(raytrace_ok);
 
-    auto node = std::make_shared<erhe::scene::Xform>(path_string);
+    // The imported prim IS the mesh (doc/usd-compatibility-plan.md C5).
     auto mesh = std::make_shared<erhe::scene::Mesh>(path_string);
+    const std::shared_ptr<erhe::scene::Node>& node = mesh;
     mesh->add_primitive(primitive, material);
 
     mesh->layer_id = scene_root.layers().content()->id;
     mesh->enable_flag_bits(mesh_flags);
     mesh->set_value       (erhe::scene::Mesh::shadow_cast_property, true);
-    node->attach          (mesh);
     node->enable_flag_bits(node_flags);
     node->set_world_from_node(
         erhe::scene::Trs_transform(glm::vec3{0.0f, 0.1f, 0.0f})

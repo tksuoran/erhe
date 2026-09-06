@@ -695,7 +695,7 @@ void Paint_tool::window_imgui()
             auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(item);
             if (!mesh) {
                 if (node) {
-                    mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+                    mesh = erhe::scene::get_mesh(node);
                 }
                 if (!mesh) {
                     continue;

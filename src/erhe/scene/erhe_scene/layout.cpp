@@ -64,7 +64,7 @@ namespace {
 [[nodiscard]] auto node_own_local_aabb(const Node& node) -> erhe::math::Aabb
 {
     erhe::math::Aabb aabb{};
-    const std::shared_ptr<Mesh> mesh = get_attachment<Mesh>(&node);
+    const std::shared_ptr<Mesh> mesh = get_mesh(&node);
     if (mesh) {
         for (const Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
             if (!mesh_primitive.primitive) {

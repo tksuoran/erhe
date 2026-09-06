@@ -78,18 +78,21 @@ void Merge_static_subtree_operation::build_target(
 
     Target target;
     target.root = root;
-    target.mesh = erhe::scene::get_attachment<Mesh>(root.get());
+    target.mesh = erhe::scene::get_mesh(root.get());
 
-    // A node is merged only when a Mesh is its sole attachment and every
-    // primitive carries source geometry - anything else (joint anchors,
+    // A node is merged only when it IS a Mesh prim carrying nothing else and
+    // every primitive carries source geometry - anything else (joint anchors,
     // group nodes, sensor bodies, buffer-only meshes) is kept.
     const auto is_mergeable = [](Node* node) -> std::shared_ptr<Mesh> {
-        const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& attachments = node->get_attachments();
-        if (attachments.size() != 1) {
+        if (!node->get_attachments().empty()) {
             return {};
         }
-        const std::shared_ptr<Mesh> mesh = std::dynamic_pointer_cast<Mesh>(attachments.front());
-        if (!mesh || mesh->get_primitives().empty()) {
+        Mesh* const mesh_prim = dynamic_cast<Mesh*>(node);
+        if (mesh_prim == nullptr) {
+            return {};
+        }
+        const std::shared_ptr<Mesh> mesh = std::static_pointer_cast<Mesh>(mesh_prim->shared_from_this());
+        if (mesh->get_primitives().empty()) {
             return {};
         }
         for (const Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
@@ -166,7 +169,7 @@ void Merge_static_subtree_operation::build_target(
             dispositions[node.get()] = Disposition::merged;
             return Disposition::merged;
         }
-        if (node->get_attachments().empty() && has_children && all_children_removed) {
+        if (node->get_attachments().empty() && !erhe::is<Mesh>(node.get()) && has_children && all_children_removed) {
             // Part pose node / chain group whose whole payload was merged.
             // Attachment-less LEAVES are never pruned - zero-child markers
             // (joint pivot anchors) may be referenced from outside.
@@ -271,7 +274,7 @@ void Merge_static_subtree_operation::execute(App_context& context)
             node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
         if (target.mesh_created) {
-            target.root->attach(target.mesh);
+            erhe::scene::set_mesh_parent(target.mesh, target.root);
         }
         erhe::raytrace::IScene* const rt_scene = target.mesh->get_rt_scene();
         target.mesh->detach_rt_from_scene();
@@ -279,7 +282,6 @@ void Merge_static_subtree_operation::execute(App_context& context)
         if (rt_scene != nullptr) {
             target.mesh->attach_rt_to_scene(rt_scene);
         }
-        target.mesh->handle_node_transform_update();
         context.app_message_bus->mesh_geometry_changed.send_message(Mesh_geometry_changed_message{.mesh = target.mesh});
     }
 
@@ -308,9 +310,8 @@ void Merge_static_subtree_operation::undo(App_context& context)
         if (rt_scene != nullptr) {
             target.mesh->attach_rt_to_scene(rt_scene);
         }
-        target.mesh->handle_node_transform_update();
         if (target.mesh_created) {
-            target.root->detach(target.mesh.get());
+            erhe::scene::set_mesh_parent(target.mesh, {});
         }
         // Parents come before children in the stored depth-first order, so a
         // forward pass rebuilds the chains.

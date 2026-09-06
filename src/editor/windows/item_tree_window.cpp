@@ -833,7 +833,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
     // When an inventory slot defines both brush and material, the brush wins:
     // a new node is created and the slot material is applied to its mesh.
     if (material && !brush) {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
             if (!mesh_primitives.empty()) {

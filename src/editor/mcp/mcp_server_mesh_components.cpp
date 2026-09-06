@@ -220,7 +220,7 @@ namespace {
     std::string&                                 out_error
 ) -> const erhe::primitive::Buffer_mesh*
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
     if (!mesh) {
         out_error = "Node has no mesh: " + node->get_name();
         return nullptr;

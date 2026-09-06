@@ -107,9 +107,11 @@ public:
 
     // Inherited properties reach child nodes and then attachments (D23).
     void for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback) override;
-    // A node holds the properties of every attachment class (Light, Camera,
-    // Mesh, ...) for the attachments below it to inherit (D30): its
-    // secondary owner type is Node_attachment, whose descendants they are.
+    // A node holds the value properties of every other item class (Light,
+    // Camera, Mesh, ...) for the prims and attachments below it to inherit
+    // (D30). Those classes no longer share one base - Mesh is a prim under
+    // Xformable while Light and Camera are attachments - so the secondary
+    // owner type is Item_base, the type every item class descends from.
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override;
 
     // Public API
@@ -123,7 +125,11 @@ public:
     // Overrides Typed: registers / unregisters the node with the scene host
     // and carries the host to the attachments and to the prim subtree.
     void handle_item_host_update (erhe::Item_host* old_scene_host, erhe::Item_host* new_scene_host) override;
-    void handle_transform_update (uint64_t serial) const;
+    // Called wherever this prim's world transform changed: notifies the
+    // attachments, pushes the transform properties to expressions and queues
+    // the subtree for propagation. A subclass that mirrors the transform
+    // elsewhere (Mesh: raytrace instances, world bounds) overrides it.
+    virtual void handle_transform_update(uint64_t serial);
     void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = std::numeric_limits<std::size_t>::max());
     void handle_remove_attachment(Node_attachment* attachment);
 

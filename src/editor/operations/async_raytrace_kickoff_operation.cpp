@@ -255,12 +255,11 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                     // Rebuilds the raytrace primitives from the committed
                     // shapes and re-registers the mesh's draw list records
                     // (Mesh::update_rt_primitives -> notify_primitives_changed).
+                    // Fresh raytrace instances start with identity
+                    // transforms; update_rt_primitives seeds them with the
+                    // mesh's world transform (and commits) right away.
                     affected_mesh->update_rt_primitives();
                     scene_root->end_mesh_rt_update(affected_mesh);
-                    // Fresh raytrace instances start with identity transforms;
-                    // push the node's world transform (and commit) right away
-                    // instead of waiting for the next node-transform update.
-                    affected_mesh->handle_node_transform_update();
                 }
             }
         );

@@ -23,7 +23,9 @@ using erhe::scene::Node;
 // #249 decision: at most one Camera / Light / Mesh / ... per node).
 auto camera_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Camera    >(&node); }
 auto light_gate           (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Light     >(&node); }
-auto mesh_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Mesh      >(&node); }
+// A Mesh is a prim, not an attachment, and a parent holds any number of Mesh
+// children (doc/usd-compatibility-plan.md C5), so this one never refuses.
+auto mesh_gate            (const Node&     ) -> bool { return true; }
 auto rigid_body_gate      (const Node& node) -> bool { return !erhe::scene::get_attachment<Node_physics           >(&node); }
 auto joint_gate           (const Node&     ) -> bool { return true; } // multiple joints per node are legal
 auto layout_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Layout    >(&node); }

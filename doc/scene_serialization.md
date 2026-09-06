@@ -39,13 +39,20 @@ JSON, erhe state attaches at three levels:
 | the glTF `scene` object | `ERHE_scene` (per-scene setting overrides, ambient light, enable_physics) |
 | asset root (`extensions`) | `ERHE_brushes`, `ERHE_node_graphs`, `ERHE_collections`, plus the Khronos physics extensions' shape/material/filter tables |
 
+A glTF node with a `mesh` is an `erhe::scene::Mesh` prim
+(`usd-compatibility-plan.md` C5): the glTF node's name, transform, children
+and remaining attachments are the mesh prim's, and the writer inverts it -
+a `Mesh` prim is written as one glTF node with `mesh` set, a `Mesh` child of
+another prim as a child node of its own. The `ERHE_node` payload of such a
+node carries both halves, `flags` / `properties` for the prim and
+`mesh_flags` / `mesh_properties` for its mesh state.
+
 A prim of a class that carries no transform - an `erhe::Scope`, or the
-`erhe::Typed` a USD `typeName` erhe has no class for becomes
-(`usd-compatibility-plan.md` C5) - is written as a glTF node with the
-identity transform whose `ERHE_node` extension names its `prim_class`
-(and, for a `Typed`, its `prim_type_name`); the reader creates that class
-and reads no transform for it. A node without the field is an `Xform`, the
-class every glTF node has.
+`erhe::Typed` a USD `typeName` erhe has no class for becomes - is written as
+a glTF node with the identity transform whose `ERHE_node` extension names
+its `prim_class` (and, for a `Typed`, its `prim_type_name`); the reader
+creates that class and reads no transform for it. A node with neither a
+`mesh` nor the field is an `Xform`, the class every other glTF node has.
 
 Cross-references between payloads use glTF indices within the same asset
 (node index, material index, mesh index). Item flags serialize as name lists
@@ -112,7 +119,9 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    - the **exclusion hook**: meshes and physics controlled by a
      `Geometry_graph_mesh` attachment are excluded from plain export - they
      are baked products, re-derived from the graph on load, and must not be
-     double-persisted.
+     double-persisted. An excluded mesh is a prim, so the writer skips the
+     whole prim rather than only its glTF `mesh`; writing it as a
+     transform-only node would resurrect it beside the rebuilt one.
    The library-domain extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,
    `ERHE_material`, `ERHE_geometry`) are written by the exporter itself in
    `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp`.

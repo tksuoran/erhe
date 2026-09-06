@@ -54,7 +54,7 @@ constexpr float c_min_geometry_extent = 1e-6f;
 [[nodiscard]] auto node_local_aabb(erhe::scene::Node* node) -> erhe::math::Aabb
 {
     erhe::math::Aabb aabb{};
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node);
     if (mesh) {
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
             if (!mesh_primitive.primitive) {

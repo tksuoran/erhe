@@ -569,7 +569,7 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
     );
 
     m_radial_menu_node = std::make_shared<erhe::scene::Xform>("Radial menu node");
-    m_radial_menu_node->attach(m_radial_menu_background_mesh);
+    erhe::scene::set_mesh_parent(m_radial_menu_background_mesh, m_radial_menu_node);
     m_radial_menu_node->enable_flag_bits(
         erhe::Item_flags::content    |
         erhe::Item_flags::show_in_ui

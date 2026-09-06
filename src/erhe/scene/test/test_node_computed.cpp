@@ -174,7 +174,7 @@ TEST(Node_computed, mesh_world_bounds_follow_the_node_and_the_primitives)
     auto mesh  = std::make_shared<Mesh>("Box mesh");
     auto light = std::make_shared<erhe::scene::Light>("Lamp");
     node->set_parent(host.scene.get_root_node());
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     node->attach(light);
 
     // No primitives: an invalid box reads as zero.
@@ -191,6 +191,9 @@ TEST(Node_computed, mesh_world_bounds_follow_the_node_and_the_primitives)
     EXPECT_EQ(light->get_value(erhe::scene::Light::intensity_property), 1.0f); // pushed by the primitive change
 
     node->set_parent_from_node(translated(glm::vec3{5.0f, 0.0f, 0.0f}));
+    // The mesh is a child prim, so its world transform follows in the scene's
+    // propagation pass (an attachment was notified inline).
+    host.scene.update_node_transforms();
     EXPECT_TRUE(approx(mesh->get_value(Mesh::world_bounds_min_property), glm::vec3{4.0f, -1.0f, -1.0f}));
     EXPECT_TRUE(approx(mesh->get_value(Mesh::world_bounds_max_property), glm::vec3{6.0f,  1.0f,  1.0f}));
     EXPECT_EQ(light->get_value(erhe::scene::Light::intensity_property), 6.0f); // pushed by the node move

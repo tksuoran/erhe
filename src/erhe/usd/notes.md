@@ -64,9 +64,10 @@ translation units.
   glTF primitives use.
 - The erhe class of a prim is the class its `typeName` names
   (`doc/usd-compatibility-plan.md` C5, the object-model table of
-  `doc/usd_compatibility.md`): `Xform` and the prim types whose content the
-  conversion attaches to a node - `Mesh`, `Camera` and the UsdLux types -
-  become an `erhe::scene::Xform`, `Scope` becomes an `erhe::Scope`, and
+  `doc/usd_compatibility.md`): a `Mesh` prim becomes an
+  `erhe::scene::Mesh` carrying its own transform, `Xform` and the prim types
+  whose content the conversion attaches to a node - `Camera` and the UsdLux
+  types - become an `erhe::scene::Xform`, `Scope` becomes an `erhe::Scope`, and
   every other `typeName`, a typeless `def` included, becomes an
   `erhe::Typed` carrying that token. The `typeName` comes from the composed
   prim: a generic `Model` prim carries the authored token, every typed prim
@@ -152,8 +153,9 @@ because the same spelling rule decides what an item is called on a stage.
   `erhe::Scope` writes a `Scope` prim, an `erhe::Typed` writes
   `def <token> "name"` - a typeless `def` when the token is empty - with its
   children and none of its attributes, and a transformable prim writes the
-  prim its own attachment types: `Xform`, `Mesh`, `Camera`, `DistantLight`
-  or `SphereLight`. That is what the importer inverts, so a file round-trips
+  prim its own class or its attachment types name: an `erhe::scene::Mesh`
+  writes a `Mesh` prim with its own `xformOp`s, and an `Xform` writes
+  `Xform`, `Camera`, `DistantLight` or `SphereLight`. That is what the importer inverts, so a file round-trips
   without gaining a level. A prim of a class that carries no transform gets
   none, and the transform that reached it composes with its children. A mesh
   with one primitive binds its material directly; several primitives become

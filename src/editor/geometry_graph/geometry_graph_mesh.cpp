@@ -112,16 +112,19 @@ void Geometry_graph_mesh::set_graph_mesh(const std::shared_ptr<Graph_mesh>& grap
 void Geometry_graph_mesh::release_controlled_products()
 {
     const std::shared_ptr<erhe::scene::Node> node = m_controlled_node.lock();
-    if (node) {
-        if (m_node_physics) {
-            node->detach(m_node_physics.get());
-        }
-        if (m_mesh) {
-            node->detach(m_mesh.get());
-        }
-        if (m_ghost_mesh) {
-            node->detach(m_ghost_mesh.get());
-        }
+    if (node && m_node_physics) {
+        // An attachment is released through the node that holds it.
+        node->detach(m_node_physics.get());
+    }
+    // A Mesh is a child prim (doc/usd-compatibility-plan.md C5), so it is
+    // released from whatever parent holds it - reaching the controlled node
+    // is neither needed nor sufficient, and a mesh left behind here comes
+    // back as a second, name-suffixed sibling on the next bake.
+    if (m_mesh) {
+        erhe::scene::set_mesh_parent(m_mesh, {});
+    }
+    if (m_ghost_mesh) {
+        erhe::scene::set_mesh_parent(m_ghost_mesh, {});
     }
     m_controlled_node.reset();
     m_node_physics.reset();
@@ -155,14 +158,13 @@ void Geometry_graph_mesh::apply_baked_products()
 
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
-    // The node may already carry Mesh / Node_physics attachments (e.g.
-    // the Graph_mesh was dropped onto an existing mesh node). A node has
-    // exactly one attachment of each type, so adopt them as the
-    // controlled products - the bake replaces the mesh's primitives and
-    // dictates the physics state from here on - instead of attaching
-    // duplicates.
+    // The node may already carry a Mesh child or a Node_physics attachment
+    // (e.g. the Graph_mesh was dropped onto an existing mesh node): adopt
+    // them as the controlled products - the bake replaces the mesh's
+    // primitives and dictates the physics state from here on - instead of
+    // adding duplicates.
     if (!m_mesh) {
-        m_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+        m_mesh = erhe::scene::get_mesh(node);
     }
     if (!m_node_physics) {
         m_node_physics = erhe::scene::get_attachment<Node_physics>(node);
@@ -196,13 +198,13 @@ void Geometry_graph_mesh::apply_baked_products()
             // fill / point passes), no shadow_cast, no id (not pickable);
             // the primitive has no raytrace shape, so hover misses it too.
             m_ghost_mesh->enable_flag_bits(erhe::Item_flags::render_wireframe);
-            node->attach(m_ghost_mesh);
+            erhe::scene::set_mesh_parent(m_ghost_mesh, node->shared_node_from_this());
             m_controlled_node = node->shared_node_from_this();
         }
         m_ghost_mesh->clear_primitives();
         m_ghost_mesh->add_primitive(products.ghost_primitive, material);
     } else if (m_ghost_mesh) {
-        node->detach(m_ghost_mesh.get());
+        erhe::scene::set_mesh_parent(m_ghost_mesh, {});
         m_ghost_mesh.reset();
     }
 
@@ -227,7 +229,7 @@ void Geometry_graph_mesh::apply_baked_products()
         m_mesh->layer_id = scene_root->layers().content()->id;
         m_mesh->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::id);
         m_mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
-        node->attach(m_mesh);
+        erhe::scene::set_mesh_parent(m_mesh, node->shared_node_from_this());
         m_controlled_node = node->shared_node_from_this();
     }
     // The mesh is registered in the scene at this point (node->attach()

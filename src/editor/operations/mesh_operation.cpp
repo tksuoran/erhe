@@ -444,7 +444,7 @@ void Mesh_operation::make_entries(
         // If we have node selected, get mesh from node
         if (!scene_mesh) {
             if (node != nullptr) {
-                scene_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node);
+                scene_mesh = erhe::scene::get_mesh(node);
             }
         }
         if (!scene_mesh) {

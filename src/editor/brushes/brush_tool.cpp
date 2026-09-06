@@ -808,7 +808,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
 
     m_preview_mesh->layer_id = scene_root->layers().brush()->id;
 
-    m_preview_node->attach(m_preview_mesh);
+    erhe::scene::set_mesh_parent(m_preview_mesh, m_preview_node);
     m_preview_node->set_parent(scene_root->get_scene().get_root_node());
 
     update_preview_mesh_node_transform();

@@ -102,7 +102,7 @@ Quad_view::Quad_view(
         );
 
         m_rendertarget_node = std::make_shared<erhe::scene::Xform>(std::string{debug_label} + " RT node");
-        m_rendertarget_node->attach(m_rendertarget_mesh);
+        erhe::scene::set_mesh_parent(m_rendertarget_mesh, m_rendertarget_node);
         // rendertarget (and no content): transient editor furniture, matching
         // the standalone scene rendertarget node - the glTF exporter saves
         // only content-flagged children, so the hotbar / hud quad never leaks

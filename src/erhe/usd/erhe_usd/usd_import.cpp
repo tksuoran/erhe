@@ -1525,7 +1525,16 @@ private:
         const std::string node_name = usd_node.prim_name.empty()
             ? fmt::format("node_{}", m_result.data.nodes.size())
             : usd_node.prim_name;
-        std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Xform>(node_name);
+        // A `Mesh` prim IS the erhe Mesh prim (doc/usd-compatibility-plan.md
+        // C5): its own xformOps are its transform, and a mesh under an
+        // `Xform` composes with it.
+        std::shared_ptr<erhe::Item_base>   content = take_mesh(usd_node);
+        std::shared_ptr<erhe::scene::Node> node    = std::dynamic_pointer_cast<erhe::scene::Node>(content);
+        if (!node) {
+            node = std::make_shared<erhe::scene::Xform>(node_name);
+        } else {
+            node->set_name(node_name);
+        }
         node->set_source_path(m_arguments.path);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         node->Hierarchy::set_parent(parent);
@@ -1534,7 +1543,9 @@ private:
         node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         m_result.data.nodes.push_back(node);
 
-        const std::shared_ptr<erhe::Item_base> attachment = attach_node_content(usd_node, node);
+        if (!content) {
+            content = attach_node_content(usd_node, node);
+        }
 
         // The prim's own opinions: `visibility` and `purpose` on the node
         // that holds its place in the scene graph, and every `erhe:` custom
@@ -1544,7 +1555,7 @@ private:
             Authored_opinions{
                 .absolute_path     = usd_node.abs_path,
                 .visibility_target = node.get(),
-                .primary           = attachment.get(),
+                .primary           = content.get(),
                 .secondary         = node.get()
             }
         );
@@ -1601,6 +1612,27 @@ private:
         }
     }
 
+    // The Mesh prim of a `Mesh` prim of the stage; null for every other prim
+    // type and for content the conversion skipped.
+    [[nodiscard]] auto take_mesh(const Tydra_node& usd_node) -> std::shared_ptr<erhe::scene::Mesh>
+    {
+        if ((usd_node.id < 0) || (usd_node.nodeType != lightusd::tydra::NodeType::Mesh)) {
+            return {};
+        }
+        const std::size_t content_index = static_cast<std::size_t>(usd_node.id);
+        if (content_index >= m_result.data.meshes.size()) {
+            return {};
+        }
+        // A USD mesh several prims reference becomes one erhe mesh per prim,
+        // the way a glTF mesh shared by several nodes does.
+        const erhe::scene::Mesh& template_mesh = *m_result.data.meshes[content_index].get();
+        std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh_attached[content_index]
+            ? std::make_shared<erhe::scene::Mesh>(template_mesh, erhe::for_clone{true})
+            : m_result.data.meshes[content_index];
+        m_mesh_attached[content_index] = true;
+        return mesh;
+    }
+
     // The item the prim's own type contributes, attached to `node`; null for
     // a plain Xform prim and for content the conversion skipped.
     [[nodiscard]] auto attach_node_content(const Tydra_node& usd_node, const std::shared_ptr<erhe::scene::Node>& node) -> std::shared_ptr<erhe::Item_base>
@@ -1610,20 +1642,6 @@ private:
         }
         const std::size_t content_index = static_cast<std::size_t>(usd_node.id);
         switch (usd_node.nodeType) {
-            case lightusd::tydra::NodeType::Mesh: {
-                if (content_index >= m_result.data.meshes.size()) {
-                    return {};
-                }
-                // A USD mesh several prims reference becomes one erhe mesh
-                // per prim, the way a glTF mesh shared by several nodes does.
-                const erhe::scene::Mesh& template_mesh = *m_result.data.meshes[content_index].get();
-                std::shared_ptr<erhe::scene::Mesh> mesh = m_mesh_attached[content_index]
-                    ? std::make_shared<erhe::scene::Mesh>(template_mesh, erhe::for_clone{true})
-                    : m_result.data.meshes[content_index];
-                m_mesh_attached[content_index] = true;
-                node->attach(mesh);
-                return mesh;
-            }
             case lightusd::tydra::NodeType::Camera: {
                 if (content_index < m_result.data.cameras.size()) {
                     const std::shared_ptr<erhe::scene::Camera>& camera = m_result.data.cameras[content_index];

@@ -427,7 +427,7 @@ auto build_gltf_physics_data(
                             );
                             continue;
                         }
-                        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
                         if (!mesh) {
                             log_parsers->warn(
                                 "gltf physics export: body '{}' has a {} shape but no mesh attachment - skipping collider",

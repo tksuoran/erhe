@@ -374,11 +374,13 @@ def wait_for_scene_node(scene_name, node_name, tries=100):
     return False
 
 
-def wait_for_node_attachment(scene_name, node_name, attachment_type, tries=100):
+def wait_for_mesh_child(scene_name, node_name, tries=100):
+    """A Mesh is a child prim of the node it belongs to
+    (doc/usd-compatibility-plan.md C5), not an attachment of it."""
     for _ in range(tries):
         nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
         for node in nodes:
-            if node.get("name") == node_name and attachment_type in node.get("attachment_types", []):
+            if node.get("parent") == node_name and node.get("type") == "Mesh":
                 return True
         time.sleep(0.1)
     return False
@@ -859,7 +861,7 @@ def section_build_scene():
         check(S, "graph mesh carrier node created", wait_for_scene_node(scene, "P6 GM Node"))
         bound = mutate("set_node_graph_mesh", {"scene_name": scene, "node_name": "P6 GM Node", "graph_mesh": "P6 GM"})
         check(S, "set_node_graph_mesh", bool(bound) and bound.get("bound"), str(bound))
-        check(S, "graph mesh bake materialized on the carrier", wait_for_node_attachment(scene, "P6 GM Node", "Mesh"))
+        check(S, "graph mesh bake materialized on the carrier", wait_for_mesh_child(scene, "P6 GM Node"))
 
     def block_light():
         # A light (ERHE_light) - create_scene scenes start with a camera only.
@@ -1048,7 +1050,7 @@ def section_reload_and_diff():
     check(S, "load_scene queued", bool(queued) and queued.get("queued"), str(queued))
     loaded_scene = E2E_GLB.stem
     check(S, "loaded scene appears in list_scenes", wait_for_scene(loaded_scene))
-    check(S, "graph mesh re-baked on load", wait_for_node_attachment(loaded_scene, "P6 GM Node", "Mesh", tries=300))
+    check(S, "graph mesh re-baked on load", wait_for_mesh_child(loaded_scene, "P6 GM Node", tries=300))
 
     loaded = snapshot_scene(loaded_scene, exported_materials, detail_nodes)
     for key in ["nodes", "materials", "material_default_sources", "animations", "brushes", "graph_meshes", "graph_textures", "node_details"]:
@@ -1626,7 +1628,7 @@ def section_usd_round_trip(usdchecker_arg):
             ("material",          "OnlyDiffuse", "base_color", "0.9 0.1 0.2"),
             ("light",             "lamp",     "intensity",   "7.5"),
             ("node",              "helper",   "purpose",     "Proxy"),
-            ("attachment:Mesh",   "hidden",   "shadow_cast", "false"),
+            ("node",              "hidden",   "shadow_cast", "false"),
         ],
         extra_keys=[],
     )

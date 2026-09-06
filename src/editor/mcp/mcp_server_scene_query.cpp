@@ -235,7 +235,7 @@ auto Mcp_server::query_draw_lists(const json& args) -> std::string
         if (!node) {
             return make_error_content("Mesh node not found in scene: " + scene_name);
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             return make_error_content("Node has no mesh: " + node->get_name());
         }
@@ -514,6 +514,55 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     const glm::vec3 wk = world_trs.get_skew();
     const glm::vec4 wp = found_node->position_in_world();
 
+    // The mesh of this prim: a Mesh IS the prim (doc/usd-compatibility-plan.md
+    // C5), so its detail is reported on the node, not among its attachments.
+    const auto mesh_details = [&scene](const std::shared_ptr<erhe::scene::Mesh>& mesh) -> json {
+        json mesh_json = json::object();
+        mesh_json["primitive_count"] = static_cast<int>(mesh->get_primitives().size());
+        json mat_names = json::array();
+        int total_vertices = 0;
+        int total_facets = 0;
+        for (const auto& prim : mesh->get_primitives()) {
+            mat_names.push_back(prim.material ? prim.material->get_name() : "(none)");
+            if (prim.primitive && prim.primitive->render_shape) {
+                const auto& geom = prim.primitive->render_shape->get_geometry_const();
+                if (geom) {
+                    total_vertices += static_cast<int>(geom->get_mesh().vertices.nb());
+                    total_facets   += static_cast<int>(geom->get_mesh().facets.nb());
+                }
+            }
+        }
+        mesh_json["materials"]     = mat_names;
+        mesh_json["vertex_count"]  = total_vertices;
+        mesh_json["facet_count"]   = total_facets;
+        // World-space bounds. For a skinned mesh these are the POSED bounds
+        // computed from the joint transforms - the mesh node's own transform
+        // does not affect them, because skinning ignores it.
+        const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
+        if (aabb_world.is_valid()) {
+            mesh_json["world_aabb"] = {
+                {"min", json::array({aabb_world.min.x, aabb_world.min.y, aabb_world.min.z})},
+                {"max", json::array({aabb_world.max.x, aabb_world.max.y, aabb_world.max.z})}
+            };
+            mesh_json["skinned"] = static_cast<bool>(mesh->skin);
+        }
+        // Layer diagnostics: layer_id is the mesh's target layer;
+        // in_layer_id is the layer that actually contains it (they
+        // diverge when the mesh was registered into the scene before
+        // its layer_id was set - such a mesh does not render).
+        mesh_json["layer_id"] = mesh->layer_id;
+        json in_layer_id{};
+        for (const auto& mesh_layer : scene.get_mesh_layers()) {
+            const auto& layer_meshes = mesh_layer->meshes;
+            if (std::find(layer_meshes.begin(), layer_meshes.end(), mesh) != layer_meshes.end()) {
+                in_layer_id = mesh_layer->id;
+                break;
+            }
+        }
+        mesh_json["in_layer_id"] = in_layer_id;
+        return mesh_json;
+    };
+
     json attachments = json::array();
     for (const auto& att : found_node->get_attachments()) {
         json att_json = {
@@ -521,52 +570,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"name", att->get_name()},
             {"id",   att->get_id()}
         };
-
-        auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(att);
-        if (mesh) {
-            att_json["primitive_count"] = static_cast<int>(mesh->get_primitives().size());
-            json mat_names = json::array();
-            int total_vertices = 0;
-            int total_facets = 0;
-            for (const auto& prim : mesh->get_primitives()) {
-                mat_names.push_back(prim.material ? prim.material->get_name() : "(none)");
-                if (prim.primitive && prim.primitive->render_shape) {
-                    const auto& geom = prim.primitive->render_shape->get_geometry_const();
-                    if (geom) {
-                        total_vertices += static_cast<int>(geom->get_mesh().vertices.nb());
-                        total_facets   += static_cast<int>(geom->get_mesh().facets.nb());
-                    }
-                }
-            }
-            att_json["materials"]     = mat_names;
-            att_json["vertex_count"]  = total_vertices;
-            att_json["facet_count"]   = total_facets;
-            // World-space bounds. For a skinned mesh these are the POSED bounds
-            // computed from the joint transforms - the mesh node's own transform
-            // does not affect them, because skinning ignores it.
-            const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
-            if (aabb_world.is_valid()) {
-                att_json["world_aabb"] = {
-                    {"min", json::array({aabb_world.min.x, aabb_world.min.y, aabb_world.min.z})},
-                    {"max", json::array({aabb_world.max.x, aabb_world.max.y, aabb_world.max.z})}
-                };
-                att_json["skinned"] = static_cast<bool>(mesh->skin);
-            }
-            // Layer diagnostics: layer_id is the mesh's target layer;
-            // in_layer_id is the layer that actually contains it (they
-            // diverge when the mesh was registered into the scene before
-            // its layer_id was set - such a mesh does not render).
-            att_json["layer_id"] = mesh->layer_id;
-            json in_layer_id{};
-            for (const auto& mesh_layer : scene.get_mesh_layers()) {
-                const auto& layer_meshes = mesh_layer->meshes;
-                if (std::find(layer_meshes.begin(), layer_meshes.end(), mesh) != layer_meshes.end()) {
-                    in_layer_id = mesh_layer->id;
-                    break;
-                }
-            }
-            att_json["in_layer_id"] = in_layer_id;
-        }
 
         auto geometry_graph_mesh = std::dynamic_pointer_cast<Geometry_graph_mesh>(att);
         if (geometry_graph_mesh) {
@@ -664,13 +667,11 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     {
         std::function<void(const std::shared_ptr<erhe::scene::Node>&)> merge_subtree =
             [&](const std::shared_ptr<erhe::scene::Node>& node) {
-                for (const auto& att : node->get_attachments()) {
-                    const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(att);
-                    if (mesh) {
-                        const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
-                        if (aabb_world.is_valid()) {
-                            subtree_aabb.include(aabb_world);
-                        }
+                const auto mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
+                if (mesh) {
+                    const erhe::math::Aabb aabb_world = mesh->get_aabb_world();
+                    if (aabb_world.is_valid()) {
+                        subtree_aabb.include(aabb_world);
                     }
                 }
                 for (const auto& child : node->get_children()) {
@@ -708,6 +709,9 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"skew",          {wk.x, wk.y, wk.z}}
         }},
         {"attachments",    attachments},
+        {"mesh",           erhe::is<erhe::scene::Mesh>(found_node.get())
+            ? mesh_details(std::static_pointer_cast<erhe::scene::Mesh>(found_node))
+            : json(nullptr)},
         {"children",       children},
         {"subtree_world_aabb", subtree_aabb.is_valid()
             ? json{
@@ -1228,7 +1232,7 @@ auto Mcp_server::query_geometry_batch(const json& args) -> std::string
                 if (!want_name.empty() && (node->get_name() != want_name)) {
                     return true;
                 }
-                const auto mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+                const auto mesh = erhe::scene::get_mesh(node.get());
                 if (!mesh) {
                     return true;
                 }

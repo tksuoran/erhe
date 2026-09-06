@@ -1068,20 +1068,27 @@ auto Scene_commands::attach_new_light(erhe::scene::Node& node) -> std::shared_pt
 
 auto Scene_commands::attach_new_empty_mesh(erhe::scene::Node& node) -> std::shared_ptr<erhe::scene::Mesh>
 {
-    if (erhe::scene::get_attachment<erhe::scene::Mesh>(&node)) {
-        log_scene->warn("Node '{}' already has a mesh attachment", node.get_name());
-        return {};
-    }
     // An empty mesh (no primitives) renders nothing until the user adds
     // geometry, but it needs the visible flag so anything added later is not
-    // stuck invisible (same reasoning as create_new_empty_node).
+    // stuck invisible (same reasoning as create_new_empty_node). A Mesh is a
+    // prim (doc/usd-compatibility-plan.md C5), so it enters the scene as a
+    // child of the node; a parent holds any number of them.
     auto mesh = std::make_shared<erhe::scene::Mesh>("new mesh");
     mesh->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     Scene_root* scene_root = get_scene_root(&node);
     if (scene_root != nullptr) {
         mesh->layer_id = scene_root->layers().content()->id;
     }
-    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(mesh, node.shared_node_from_this()));
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = mesh,
+                .parent  = node.shared_node_from_this(),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
     return mesh;
 }
 
@@ -1187,7 +1194,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     const glm::vec3 target_position{0.0f, 0.0f, 1.0f};
     glm::mat4 world_from_node = erhe::math::create_look_at(eye_position, target_position, up_direction);
     node->set_world_from_node(world_from_node);
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     node->enable_flag_bits(
         erhe::Item_flags::rendertarget |
         erhe::Item_flags::show_in_ui
@@ -1218,22 +1225,17 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
         }
     );
 
+    // The rendertarget mesh is already a child prim of the node, so inserting
+    // the node inserts the whole subtree.
     m_context.operation_stack->queue(
-        std::make_shared<Compound_operation>(
-            Compound_operation::Parameters{
-                .operations = {
-                    std::make_shared<Item_insert_remove_operation>(
-                        Item_insert_remove_operation::Parameters{
-                            .context = m_context,
-                            .item    = node,
-                            .parent  = (parent != nullptr)
-                                ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                                : scene_root->get_hosted_scene()->get_root_node(),
-                            .mode    = Item_insert_remove_operation::Mode::insert
-                        }
-                    ),
-                    std::make_shared<Node_attach_operation>(mesh, node)
-                }
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = node,
+                .parent  = (parent != nullptr)
+                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
+                    : scene_root->get_hosted_scene()->get_root_node(),
+                .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );

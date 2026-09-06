@@ -72,7 +72,7 @@ public:
     std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>("mesh");
     mesh->add_primitive(make_primitive(), material);
     mesh->add_primitive(make_primitive(), material);
-    node->attach(mesh);
+    erhe::scene::set_mesh_parent(mesh, node);
     node->set_parent(host.scene.get_root_node());
     host.scene.get_mesh_layers().front()->add(mesh);
     return mesh;
@@ -151,7 +151,7 @@ TEST(Mesh_primitive_material, copies_re_stamp_the_owner_link)
     std::shared_ptr<Node> node  = std::make_shared<Xform>("other node");
     std::shared_ptr<Mesh> other = std::make_shared<Mesh>("other");
     other->set_primitives(copied);
-    node->attach(other);
+    erhe::scene::set_mesh_parent(other, node);
     node->set_parent(host.scene.get_root_node());
     host.scene.get_mesh_layers().front()->add(other);
     EXPECT_EQ(other->get_primitives()[1].get_owner(), other.get());

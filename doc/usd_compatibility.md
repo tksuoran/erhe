@@ -45,17 +45,18 @@ an exporter writes and an importer converts to.
 
 ## Object model
 
-USD has one typed prim per object; erhe has a `Node` with attachments. The
-mapping an exporter applies and an importer inverts:
+USD has one typed prim per object; erhe is moving to the same shape
+(`doc/usd-compatibility-plan.md` C5) and still carries some object kinds as
+node attachments. The mapping an exporter applies and an importer inverts:
 
 | erhe | USD | notes |
 |---|---|---|
 | `Xform` (transform + children) | `Xform` (`UsdGeomXformable`) | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks, imported as composed then decomposed |
 | `Scope` (children only, no transform) | `Scope` | a transform composes through it to the nearest transformable ancestor. A content-library folder maps to one from U4 on; until then the folder tree is its own thing and a `Scope` is what a USD `Scope` prim becomes - except the scope that gathers a stage's `Material` prims, which is the namespace of a material library rather than a prim of the tree and is re-created from the library on export |
 | `Typed` (`typeName` token, children) | every other `typeName`, and a typeless `def` | the class a prim gets when erhe has none for its `typeName` (`Cube`, `PointInstancer`, `SkelRoot`): its name, its place in the tree and its children round-trip, its schema attributes do not. A transform authored on such a prim is dropped with one warning |
-| `Xform` whose only attachment is one `Mesh` | `Mesh` prim (Xformable itself) | the natural form; an importer creates node + mesh attachment |
+| `Mesh` prim (`erhe::scene::Mesh`, an `Xformable`) | `Mesh` prim | one to one: the erhe mesh carries its own transform, name and children, and a parent holds any number of `Mesh` children |
 | `Xform` with several attachments | `Xform` with one typed child prim per attachment | child prims carry no transform of their own |
-| `Mesh` attachment + `Mesh_primitive` list | `Mesh` prim + `GeomSubset` per primitive (`familyName = materialBind`) | one material per subset via `MaterialBindingAPI` |
+| `Mesh` prim + `Mesh_primitive` list | `Mesh` prim + `GeomSubset` per primitive (`familyName = materialBind`) | one material per subset via `MaterialBindingAPI` |
 | `Light` attachment | `UsdLux` prim, see "Lights" | |
 | `Camera` attachment | `Camera` prim, see "Cameras" | |
 | `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |

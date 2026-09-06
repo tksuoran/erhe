@@ -72,7 +72,7 @@ void async_for_nodes_with_mesh(
             continue;
         }
         const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-        if (!node || !erhe::scene::get_attachment<erhe::scene::Mesh>(node.get())) {
+        if (!node || !erhe::scene::get_mesh(node.get())) {
             continue;
         }
         item_host = item->get_item_host();
@@ -99,7 +99,7 @@ void async_for_nodes_with_mesh(
             continue;
         }
         const erhe::scene::Node* raw_node = node.get();
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(raw_node);
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(raw_node);
         if (!mesh) {
             continue;
         }

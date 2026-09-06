@@ -194,7 +194,7 @@ auto make_material_internal(
         if (!node) {
             return true;
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             return true;
         }

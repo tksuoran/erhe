@@ -312,7 +312,7 @@ void Xformable::for_each_inheritance_child(const std::function<void(erhe::proper
 
 auto Xformable::get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type>
 {
-    return Node_attachment::property_owner_type();
+    return erhe::Item_base::property_owner_type();
 }
 
 void Xformable::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachment, std::size_t position)
@@ -456,7 +456,7 @@ void Xformable::handle_item_host_update(erhe::Item_host* const old_item_host, er
 
 bool Xformable::s_check_no_transform_update_writes{false};
 
-void Xformable::handle_transform_update(const uint64_t serial) const
+void Xformable::handle_transform_update(const uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 

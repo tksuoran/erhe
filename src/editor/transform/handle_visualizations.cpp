@@ -1623,7 +1623,7 @@ void Handle_visualizations::compute_selection_box()
             continue;
         }
         const glm::mat4 box_from_node = box_inv * node->world_from_node();
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
                 if (!mesh_primitive.primitive) {

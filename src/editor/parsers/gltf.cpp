@@ -122,7 +122,7 @@ void substitute_material_in_parse(
         if (!node) {
             continue;
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }
@@ -414,7 +414,7 @@ void append_content_library_attach_operations(
         if (!node) {
             continue;
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }
@@ -572,7 +572,7 @@ void build_imported_buffer_meshes(
         if (!node) {
             continue;
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }
@@ -705,7 +705,7 @@ void finalize_imported_meshes(
         if (!node) {
             continue;
         }
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (!mesh) {
             continue;
         }
@@ -869,7 +869,7 @@ auto make_import_gltf_operation(
             if (!node) {
                 continue;
             }
-            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
             if (mesh) {
                 mesh->layer_id = content_layer_id;
             }
@@ -950,7 +950,7 @@ auto make_import_gltf_operation(
         if (!node) {
             continue;
         }
-        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+        std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
         if (mesh) {
             ++mesh_count;
             const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
@@ -1668,7 +1668,7 @@ auto open_scene_gltf(
             if (!node) {
                 continue;
             }
-            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+            const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
             if (mesh) {
                 mesh->layer_id = Mesh_layer_id::content;
             }

@@ -261,7 +261,7 @@ auto resolve_mesh_geometry(
     std::shared_ptr<erhe::geometry::Geometry>& out_geometry
 ) -> bool
 {
-    out_mesh = erhe::scene::get_attachment<erhe::scene::Mesh>(node.get());
+    out_mesh = erhe::scene::get_mesh(node.get());
     if (!out_mesh) {
         return false;
     }
