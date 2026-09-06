@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3✓{d5f0be1a8+7fd9f447d}→U4⚡{commit-1✓cf19e2608;2a✓hook;2b✓index;2c✓tree-move;2d-ops+menus-in-flight;split-2b..2f-in-progress.md;decisions-in-plan}→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3✓{d5f0be1a8+7fd9f447d}→U4⚡{commit-1✓cf19e2608;2a✓hook;2b✓index;2c✓tree-move;2d✓ops;2e-asset-manager+referenced-listing-in-flight;split-2b..2f-in-progress.md;decisions-in-plan}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
