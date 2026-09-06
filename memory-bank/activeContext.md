@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1⚡{commit-1✓;2a-in-flight}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
