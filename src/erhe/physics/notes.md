@@ -36,6 +36,9 @@ a specific engine.
   system strings; Jolt backend interns at most 64 system names per world into uint64 bitsets)
 - `Physics_joint_settings` -- shared joint settings item (`Joint_limit` / `Joint_drive` arrays,
   1:1 with KHR_physics_rigid_bodies physicsJoints entries)
+- `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
+  (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes"), each with its erhe class name as
+  its fixed `typeName` token
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
 - `Motion_mode` -- enum: static, kinematic (non-physical/physical), dynamic

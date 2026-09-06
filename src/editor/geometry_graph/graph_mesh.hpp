@@ -69,7 +69,12 @@ public:
 
     // Implements erhe::Item_base
     static constexpr std::string_view static_type_name{"Graph_mesh"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::graph_mesh; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::graph_mesh; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Graph_mesh"; }
 
     // Published by the asset-owned Geometry_output_node from
     // apply_evaluated_to_scene() (main thread); consumed by bound

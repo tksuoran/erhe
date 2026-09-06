@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/node.hpp"
+#include "erhe_item/typed.hpp"
 
 #include <glm/glm.hpp>
 
@@ -62,7 +63,7 @@ public:
     std::size_t                        value_offset;   // in sampler data floats
 };
 
-class Animation : public Item<Item_base, Item_base, Animation>
+class Animation : public Item<Item_base, erhe::Typed, Animation>
 {
 public:
     explicit Animation(const Animation& src);
@@ -73,7 +74,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Animation"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::animation; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | Item_type::animation; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Animation"; }
 
     // Read-only computed properties (doc/property-system.md D26, section
     // 4.16) over the samplers and channels: the keyed time range and the

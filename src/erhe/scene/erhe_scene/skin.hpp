@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 
 #include <glm/glm.hpp>
 
@@ -28,7 +29,7 @@ public:
     std::shared_ptr<erhe::scene::Node>              skeleton;
 };
 
-class Skin : public Item<Item_base, Item_base, Skin>
+class Skin : public Item<Item_base, erhe::Typed, Skin>
 {
 public:
     Skin();
@@ -40,7 +41,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Skin"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return Item_type::node_attachment | Item_type::skin; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | Item_type::node_attachment | Item_type::skin; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Skin"; }
 
     Skin_data skin_data;
 };

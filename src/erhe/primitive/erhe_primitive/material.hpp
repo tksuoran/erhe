@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_set.hpp"
@@ -145,7 +146,7 @@ public:
     Material_data   data  {};
 };
 
-class Material : public erhe::Item<erhe::Item_base, erhe::Item_base, Material>
+class Material : public erhe::Item<erhe::Item_base, erhe::Typed, Material>
 {
 public:
     Material();
@@ -162,7 +163,11 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Material"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::material; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::material; }
+
+    // Overrides erhe::Typed: the class fixes the token, which is USD
+    // `UsdShadeMaterial`'s (doc/usd_compatibility.md, "Materials").
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Material"; }
 
     // Registered properties (erhe::property, doc/property-system.md
     // section 4.1). The typed accessors below read and write these on the

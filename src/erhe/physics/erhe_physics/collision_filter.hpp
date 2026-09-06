@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 
 #include <string>
 #include <string_view>
@@ -23,7 +24,7 @@ namespace erhe::physics {
 //
 // The Jolt backend compiles a filter once per item (keyed by item pointer);
 // editing a live filter requires re-assigning it to the bodies that use it.
-class Collision_filter : public erhe::Item<erhe::Item_base, erhe::Item_base, Collision_filter>
+class Collision_filter : public erhe::Item<erhe::Item_base, erhe::Typed, Collision_filter>
 {
 public:
     Collision_filter();
@@ -34,7 +35,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Collision_filter"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::collision_filter; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::collision_filter; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Collision_filter"; }
 
     std::vector<std::string> collision_systems;
     std::vector<std::string> collide_with_systems;     // non-empty => allowlist semantics

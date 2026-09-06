@@ -15,6 +15,13 @@ Provides a hierarchical container for reusable editor assets: materials, brushes
   - `make<T>()` to create and add a new item in one step
   - `make_folder()` to create sub-folders
 
+- Every kind a library lists -- brush, style, material, texture, graph mesh, graph texture,
+  animation, skin, physics material, collision filter, joint settings -- is a typed prim
+  (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes"), so each carries a `typeName`
+  token and can be parented in a prim tree. Nothing places one there yet: an item is still
+  held by its `Content_library_node` entry, which is its inheritance container and its
+  namespace.
+
 - **`Material_library`** (`material_library.hpp`) -- Helper functions for populating default materials in a content library.
 
 - **`Content_library_window`** (`content_library_window.hpp`) -- Owns an `Item_tree_window` displaying a `Content_library`. Wires up the "Create Material" context menu and cross-library material drag-drop. Constructed by callers (editor.cpp, asset_browser.cpp, operations_window.cpp) alongside a `Scene_root`; not owned by `Scene_root` itself.

@@ -5,6 +5,7 @@
 #include "scene/scene_root.hpp"
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -68,7 +69,7 @@ public:
     std::optional<float>                       mass_override  {};   // rigid body mass; inertia is rescaled to match
 };
 
-class Brush : public erhe::Item<erhe::Item_base, erhe::Item_base, Brush, erhe::Item_kind::not_clonable>
+class Brush : public erhe::Item<erhe::Item_base, erhe::Typed, Brush, erhe::Item_kind::not_clonable>
 {
 public:
     static constexpr float c_scale_factor = 65536.0;
@@ -91,7 +92,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Brush"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::brush; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::brush; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Brush"; }
 
     auto clone() const -> std::shared_ptr<Item_base> override
     {

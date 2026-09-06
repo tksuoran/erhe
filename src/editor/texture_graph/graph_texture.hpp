@@ -39,7 +39,12 @@ public:
 
     // Implements erhe::Item_base
     static constexpr std::string_view static_type_name{"Graph_texture"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::graph_texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::graph_texture; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Graph_texture"; }
 
     // Implements erhe::graphics::Texture_reference: the most recently baked
     // texture of this graph's output node, or nullptr when the graph has no

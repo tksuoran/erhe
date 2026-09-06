@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_property/owner_type.hpp"
 
 #include <memory>
@@ -20,7 +21,7 @@ class Content_library_node;
 // the values live in this item's own store. Any item uses it through its
 // `style` property (Item_base::style_property); the style layer of every
 // user reads this item's local values, live (D25).
-class Style : public erhe::Item<erhe::Item_base, erhe::Item_base, Style>
+class Style : public erhe::Item<erhe::Item_base, erhe::Typed, Style>
 {
 public:
     explicit Style(std::string_view name);
@@ -29,7 +30,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Style"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::style; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::style; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Style"; }
 
     // Overrides Dependency_object: every class's value properties are this
     // item's secondary properties.

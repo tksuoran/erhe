@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 
 #include <array>
 #include <limits>
@@ -54,7 +55,7 @@ public:
 // Shared joint settings asset (KHR_physics_rigid_bodies physicsJoints entry).
 // Data only: constraints are built from this in the Six-DOF constraint
 // wrapper (see iconstraint.hpp) by the editor's Node_joint attachment.
-class Physics_joint_settings : public erhe::Item<erhe::Item_base, erhe::Item_base, Physics_joint_settings>
+class Physics_joint_settings : public erhe::Item<erhe::Item_base, erhe::Typed, Physics_joint_settings>
 {
 public:
     Physics_joint_settings();
@@ -65,7 +66,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Physics_joint_settings"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::physics_joint_settings; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::physics_joint_settings; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Physics_joint_settings"; }
 
     std::vector<Joint_limit> limits;
     std::vector<Joint_drive> drives;

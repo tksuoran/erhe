@@ -15,6 +15,7 @@ add_executable(${_target}
     test_material_authored_values.cpp
     test_material_style.cpp
     test_material_textures.cpp
+    test_material_prim.cpp
     test_mesh_optimizer.cpp
     test_optimized_variant_build.cpp
 )

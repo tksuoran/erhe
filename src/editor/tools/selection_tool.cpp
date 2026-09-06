@@ -549,7 +549,12 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
             continue;
         }
         const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
-        if (!hierarchy) {
+        // A delete removes the item from the parent it hangs off, so an item
+        // with no parent has nothing to be removed from. Content-library
+        // resources are prims (doc/usd-compatibility-plan.md U4) with no
+        // place in the tree yet, and they reach the selection; they are
+        // deleted through the content library, not here.
+        if (!hierarchy || !hierarchy->get_parent().lock()) {
             continue;
         }
         collect_item(*hierarchy, false);
@@ -634,7 +639,10 @@ auto Selection::duplicate_selection() -> bool
 
     for (const auto& item : target_selection) {
         const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
-        if (hierarchy) {
+        // A duplicate is inserted next to the source, so a source with no
+        // parent has nowhere to put one - see delete_items() for the
+        // content-library resources this now skips.
+        if (hierarchy && hierarchy->get_parent().lock()) {
             // Clones keep the source name; a duplicate wants a
             // distinguishing name, so rename the duplicate root here.
             const std::shared_ptr<erhe::Hierarchy> duplicate = std::dynamic_pointer_cast<erhe::Hierarchy>(hierarchy->clone());

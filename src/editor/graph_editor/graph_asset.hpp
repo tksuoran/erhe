@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 
 #include <memory>
 #include <string_view>
@@ -23,11 +24,11 @@ namespace editor {
 // Self is threaded to erhe::Item so get_type() / get_type_name() resolve to the
 // concrete asset's get_static_type() / static_type_name.
 template <typename Self, typename GraphT, typename NodeT>
-class Graph_asset : public erhe::Item<erhe::Item_base, erhe::Item_base, Self, erhe::Item_kind::not_clonable>
+class Graph_asset : public erhe::Item<erhe::Item_base, erhe::Typed, Self, erhe::Item_kind::not_clonable>
 {
 public:
     explicit Graph_asset(std::string_view name)
-        : erhe::Item<erhe::Item_base, erhe::Item_base, Self, erhe::Item_kind::not_clonable>{name}
+        : erhe::Item<erhe::Item_base, erhe::Typed, Self, erhe::Item_kind::not_clonable>{name}
     {
         this->enable_flag_bits(erhe::Item_flags::show_in_ui | erhe::Item_flags::content);
     }
@@ -37,6 +38,13 @@ public:
     // scene items as same-host sources under one item-host lock.
     // Nodes added later get the host in set_owning_* (the two add paths,
     // editor insert and serialization load, both call it).
+    //
+    // The graph nodes are not children of this prim, so `Typed`'s own
+    // subtree walk (Typed::handle_item_host_update) does not reach them: it
+    // carries the host to this asset through this virtual, and this override
+    // extends the same call to the nodes. There is no second walk and no
+    // second bookkeeping - every path that gives the asset a host, the
+    // content library's direct call included, passes through here.
     void set_item_host(erhe::Item_host* item_host) override
     {
         erhe::Item_base::set_item_host(item_host);

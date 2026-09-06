@@ -236,7 +236,15 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
 
 auto Hierarchy::get_inheritance_parent() const -> const erhe::property::Dependency_object*
 {
-    return m_parent.lock().get();
+    const std::shared_ptr<Hierarchy> parent = m_parent.lock();
+    if (parent) {
+        return parent.get();
+    }
+    // No parent of its own: the item inherits from the container that holds
+    // it, which is what Item_base answers. A content-library item is held by
+    // its Content_library_node entry and inherits the folder's values through
+    // it (doc/content-library-folders.md D1).
+    return Item_base::get_inheritance_parent();
 }
 
 void Hierarchy::for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback)
@@ -419,7 +427,10 @@ auto Hierarchy::is_name_available(const std::string_view name) const -> bool
 {
     const std::shared_ptr<Hierarchy> parent = m_parent.lock();
     if (!parent) {
-        return true;
+        // No parent of its own: the namespace is the one the inheritance
+        // container imposes, which is what Item_base answers - a
+        // content-library item shares the namespace of its entry node.
+        return Item_base::is_name_available(name);
     }
     for (const std::shared_ptr<Hierarchy>& sibling : parent->m_children) {
         if (sibling && (sibling.get() != this) && (sibling->get_name() == name)) {

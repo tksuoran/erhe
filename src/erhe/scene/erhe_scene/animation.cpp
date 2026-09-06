@@ -386,7 +386,7 @@ void Animation::notify_keyframes_changed()
 }
 
 Animation::Animation(const std::string_view name)
-    : Item<Item_base, Item_base, Animation>{name}
+    : Item{name}
 {
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_property/dependency_property.hpp"
 
 #include <string_view>
@@ -54,7 +55,7 @@ constexpr float c_default_density          = 1.0f;
 // set_physics_material(); the holder of the reference (the editor's
 // Node_physics) observes the material's properties and pushes it to the
 // body again on a change (doc/property-system.md section 4.12).
-class Physics_material : public erhe::Item<erhe::Item_base, erhe::Item_base, Physics_material>
+class Physics_material : public erhe::Item<erhe::Item_base, erhe::Typed, Physics_material>
 {
 public:
     Physics_material();
@@ -65,7 +66,12 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Physics_material"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::physics_material; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::physics_material; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim type
+    // for this kind, so the token is the erhe class name, written as a custom
+    // typeName (doc/usd_compatibility.md).
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Physics_material"; }
 
     // Registered properties (erhe::property, doc/property-system.md
     // section 4.12): entry-stored, the spec defaults as property defaults.

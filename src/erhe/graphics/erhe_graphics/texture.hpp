@@ -3,6 +3,7 @@
 #include "erhe_graphics/enums.hpp"
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_utility/debug_label.hpp"
 
 #include <string>
@@ -54,7 +55,7 @@ public:
 
 class Texture_impl;
 class Texture
-    : public erhe::Item<erhe::Item_base, erhe::Item_base, Texture, erhe::Item_kind::not_clonable>
+    : public erhe::Item<erhe::Item_base, erhe::Typed, Texture, erhe::Item_kind::not_clonable>
     , public Texture_reference
 {
 public:
@@ -68,7 +69,16 @@ public:
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Texture"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::texture; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Typed::get_static_type() | erhe::Item_type::texture; }
+
+    // Overrides erhe::Typed: the class fixes the token. USD has no prim
+    // type for a texture - it writes one as a `UsdUVTexture` shading
+    // network node of the material that reads it
+    // (doc/usd_compatibility.md, "Materials") - so the token is the erhe
+    // class name. A Texture is a prim only when a loader registers it as
+    // content; a render target, shadow map or other device-internal
+    // texture is the same class and is never placed in the tree.
+    [[nodiscard]] auto get_class_type_name() const -> std::string_view override { return "Texture"; }
 
     // Implements Texture_reference
     auto get_referenced_texture() const -> const Texture* override;

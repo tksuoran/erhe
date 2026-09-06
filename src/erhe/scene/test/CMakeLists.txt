@@ -27,6 +27,7 @@ add_executable(${_target}
     test_node_properties.cpp
     test_optimized_variant_invalidation.cpp
     test_prim_levels.cpp
+    test_resource_prim_tokens.cpp
     test_scope_prims.cpp
 )
 

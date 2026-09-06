@@ -120,6 +120,24 @@ direct `set_prim_type_name()`. A class that fixes none, a plain `Typed`,
 returns an empty `get_class_type_name()` and carries the token an importer
 authors.
 
+Every content-library kind is a typed prim of this hierarchy directly -
+`erhe::primitive::Material` (token `Material`, USD's `UsdShadeMaterial`),
+`erhe::graphics::Texture`, `erhe::scene::Animation`, `erhe::scene::Skin`,
+`erhe::physics::Physics_material`, `Collision_filter`,
+`Physics_joint_settings`, and the editor's `Brush`, `Style`, `Graph_mesh` and
+`Graph_texture`. Each fixes its own token; the kinds USD has no prim type for
+carry the erhe class name as a custom `typeName`, the form a USD file writes
+them in. A `Texture` is a prim of a scene only when a loader registers it as
+content - a render target, shadow map or other device-internal texture is the
+same class and is never placed in a tree.
+
+A prim with no parent of its own is not yet placed in a tree, so
+`Hierarchy::get_inheritance_parent()` and `Hierarchy::is_name_available()`
+answer with what `Item_base` answers for it: the inheritance container that
+holds it. A content-library resource inherits its folder's values and shares
+its entry node's namespace through that container
+(`doc/content-library-folders.md` D1).
+
 A prim's item host is the host of the prim it is parented to. `Typed` owns
 that rule: `Typed::handle_parent_update()` takes the new parent's
 `get_item_host()` and `Typed::handle_item_host_update()` adopts it and carries

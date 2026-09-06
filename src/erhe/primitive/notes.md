@@ -16,7 +16,7 @@ volume computation, and PBR material definitions.
 - `Cpu_vertex_buffer_sink` / `Cpu_index_buffer_sink` -- CPU-memory implementations of the sink interfaces; used by `Primitive_raytrace` and the glTF importer.
 - `Build_info` / `Buffer_info` -- configuration for mesh building (primitive types, vertex format, index type). `Buffer_info` carries both `vertex_buffer_sink` and `index_buffer_sink` references plus a `vertex_input_key`.
 - `Primitive_builder` / `Build_context` -- orchestrates the conversion from GEO::Mesh to Buffer_mesh
-- `Material` -- PBR material (extends `erhe::Item`): base color, roughness, metallic, emissive, texture samplers
+- `Material` -- PBR material: base color, roughness, metallic, emissive, texture samplers. It is a typed prim (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes") whose fixed `typeName` token is `Material`, USD's `UsdShadeMaterial`.
 - `Triangle_soup` -- raw vertex/index data container (e.g., from glTF import)
 - `Vertex_buffer_writer` / `Index_buffer_writer` -- write vertex attributes and indices to byte buffers; on destruction they call `vertex_writer_ready` / `index_writer_ready` on the owning sink.
 - `mesh_optimizer.hpp` -- `optimize_triangle_soup()` / `optimize_triangle_soup_cached()`:
