@@ -54,6 +54,19 @@ public:
     // (doc/property-system.md D18) over the accessors above.
     static const erhe::property::Property<std::string> type_name_property;
 
+    // Overrides Hierarchy: a prim's item host is the host of the prim it is
+    // parented to, so attaching a prim anywhere in a hosted tree carries the
+    // host to every prim below it, and detaching it takes the host away
+    // again. The hook lives at this level so a prim with no transform - a
+    // `Scope` - carries the host through to the transformable prims below it
+    // (doc/usd-compatibility-plan.md C5).
+    void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent) override;
+
+    // The prim's item host changed: adopt the new host and carry it down the
+    // subtree. `erhe::scene::Xformable` overrides this with the scene
+    // registration a transformable prim needs.
+    virtual void handle_item_host_update(Item_host* old_item_host, Item_host* new_item_host);
+
 private:
     std::string m_prim_type_name{};
 };

@@ -251,8 +251,12 @@ public:
     static constexpr uint64_t index_asset_file_texture     = 46;
     static constexpr uint64_t index_style                  = 47;
     static constexpr uint64_t index_asset_file_usd         = 48;
-    static constexpr uint64_t index_typed                  = 49;
-    static constexpr uint64_t index_scope                  = 50;
+    // A more specific class takes the LOWER index: the editor's icon set
+    // picks the icon of the lowest set type bit that has one, so a Scope
+    // shows the scope icon rather than the icon of the Typed level it also
+    // carries (src/editor/graphics/icon_set.cpp).
+    static constexpr uint64_t index_scope                  = 49;
+    static constexpr uint64_t index_typed                  = 50;
     static constexpr uint64_t index_imageable              = 51;
     static constexpr uint64_t index_xform                  = 52;
     static constexpr uint64_t index_boundable              = 53;

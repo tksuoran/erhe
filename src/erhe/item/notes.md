@@ -50,6 +50,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 
 ### Typed / Scope
 - `get_prim_type_name()`, `set_prim_type_name(token)`, `get_class_type_name()` (virtual), `type_name_property` - the prim's USD `typeName` token, see "Prim classes"
+- `handle_parent_update()`, `handle_item_host_update()` (virtual) - the item-host hook of the prim class hierarchy, see "Prim classes"
 - `Scope::get_secondary_property_owner_type()` - the root owner type, see "Prim classes"
 
 ### Free functions
@@ -118,6 +119,17 @@ object-level `validate` for the property path and a logged error for a
 direct `set_prim_type_name()`. A class that fixes none, a plain `Typed`,
 returns an empty `get_class_type_name()` and carries the token an importer
 authors.
+
+A prim's item host is the host of the prim it is parented to. `Typed` owns
+that rule: `Typed::handle_parent_update()` takes the new parent's
+`get_item_host()` and `Typed::handle_item_host_update()` adopts it and carries
+it to every `Typed` child, so attaching a prim anywhere in a hosted tree gives
+the whole subtree below it the host, and detaching it takes the host away
+again. A `Scope` between two transformable prims therefore passes the scene
+host through to the prims below it, and answers `get_item_host()` with the
+scene itself. `erhe::scene::Xformable` overrides the second hook with the
+scene registration a transformable prim needs (see
+`src/erhe/scene/notes.md`).
 
 The levels that need a transform or a scene - `Imageable`, `Xformable`
 (spelled `Node` through most of erhe), `Xform`, `Boundable` and `Gprim` - live

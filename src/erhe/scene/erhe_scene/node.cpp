@@ -201,8 +201,19 @@ auto Xformable::shared_node_from_this() -> std::shared_ptr<Xformable>
 
 auto Xformable::get_parent_node() const -> std::shared_ptr<Xformable>
 {
-    const auto shared_parent_item = get_parent().lock();
-    return std::static_pointer_cast<Xformable>(shared_parent_item);
+    // The nearest Xformable ancestor, not simply the parent: a prim outside
+    // Xformable - a Scope - has no transform, so a transform composes with the
+    // first Xformable above it and passes through the prims that have none
+    // (doc/usd-compatibility-plan.md C5). The walk steps only over those
+    // transformless prims, so on a tree of nodes it is the single hop the cast
+    // was; it is a walk rather than a cached pointer because a cached nearest
+    // ancestor would have to be invalidated through the whole subtree on every
+    // reparent of an ancestor.
+    std::shared_ptr<erhe::Hierarchy> ancestor = get_parent().lock();
+    while (ancestor && !is<Xformable>(ancestor.get())) {
+        ancestor = ancestor->get_parent().lock();
+    }
+    return std::static_pointer_cast<Xformable>(ancestor);
 }
 
 void Xformable::set_node_parent(Xformable* parent)
@@ -384,15 +395,11 @@ void Xformable::handle_parent_update(erhe::Hierarchy* const old_parent_item, erh
     auto shared_this = weak_from_this().lock();
 
     ERHE_VERIFY(old_parent_item != new_parent_item);
-    ERHE_VERIFY((old_parent_item == nullptr) || is<Xformable>(old_parent_item));
-    ERHE_VERIFY((new_parent_item == nullptr) || is<Xformable>(new_parent_item));
-    auto* const old_parent = dynamic_cast<Xformable* const>(old_parent_item);
-    auto* const new_parent = dynamic_cast<Xformable* const>(new_parent_item);
-    erhe::Item_host* const old_item_host = (old_parent != nullptr) ? old_parent->get_item_host() : nullptr;
-    erhe::Item_host* const new_item_host = (new_parent != nullptr) ? new_parent->get_item_host() : nullptr;
-    if (old_item_host != new_item_host) {
-        handle_item_host_update(old_item_host, new_item_host);
-    }
+
+    // Any prim may parent any other prim (C5), so the parent is taken as the
+    // Hierarchy it is: Typed::handle_parent_update carries the parent's item
+    // host to this subtree.
+    Typed::handle_parent_update(old_parent_item, new_parent_item);
 
     // A plain reparent keeps parent_from_node, so world_from_node changes:
     // refresh it eagerly and notify attachments / queue the subtree for
@@ -401,7 +408,7 @@ void Xformable::handle_parent_update(erhe::Hierarchy* const old_parent_item, erh
     // repeats this - harmless.) Skipped when detaching (new parent null,
     // e.g. scene teardown): attachments may already be severed from their
     // host resources there.
-    if (new_parent != nullptr) {
+    if (new_parent_item != nullptr) {
         update_world_from_node();
         handle_transform_update(0);
     }
@@ -434,12 +441,14 @@ void Xformable::handle_item_host_update(erhe::Item_host* const old_item_host, er
         attachment->handle_item_host_update(old_item_host, new_item_host);
     }
 
+    // Every prim child, not only the transformable ones: a Scope between this
+    // node and a node below it carries the host through (C5).
     for (const auto& child : get_children()) {
-        auto child_node = std::dynamic_pointer_cast<Xformable>(child);
-        if (!child_node) {
+        erhe::Typed* const typed_child = dynamic_cast<erhe::Typed*>(child.get());
+        if (typed_child == nullptr) {
             continue;
         }
-        child_node->handle_item_host_update(old_item_host, new_item_host);
+        typed_child->handle_item_host_update(old_item_host, new_item_host);
     }
     // Set by new_item_host->register_node(), or Orphan path above in this function
     ERHE_VERIFY(node_data.host == new_item_host);

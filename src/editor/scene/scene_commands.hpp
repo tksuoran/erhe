@@ -8,6 +8,7 @@
 #include "app_message.hpp"
 
 #include "erhe_commands/command.hpp"
+#include "erhe_item/scope.hpp"
 #include "erhe_message_bus/message_bus.hpp"
 
 #include <memory>
@@ -262,7 +263,15 @@ public:
     // message bus pump.
     auto create_new_scene       () -> std::shared_ptr<Scene_root>;
     auto create_new_camera      (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Camera>;
-    auto create_new_empty_node  (erhe::scene::Node* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+    // Any prim may parent any other prim (doc/usd-compatibility-plan.md C5),
+    // so the parent is taken as the Hierarchy it is: an Xform is created
+    // under a Scope as readily as under another Xform.
+    auto create_new_empty_node  (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::scene::Node>;
+
+    // A Scope prim: children and no transform, the prim resources are
+    // conventionally gathered under (C5). Undoable, like every other creation
+    // here; inserted on the next editor frame.
+    auto create_new_scope       (erhe::Hierarchy* parent = nullptr) -> std::shared_ptr<erhe::Scope>;
 
     // Adds an empty child node at the tip of every leaf bone (a bone with no
     // bone children) in the target subtrees, placed with
@@ -315,7 +324,7 @@ public:
     // (Node_attach_operation with an empty host node). No-op on a null pointer.
     void remove_attachment(const std::shared_ptr<erhe::scene::Node_attachment>& attachment);
 
-    auto get_scene_root         (erhe::scene::Node* parent) const -> Scene_root*;
+    auto get_scene_root         (erhe::Hierarchy* parent) const -> Scene_root*;
     auto get_scene_root         (erhe::primitive::Material* material) const -> Scene_root*;
 
     [[nodiscard]] auto get_add_cameras_command        () -> Add_cameras_command&;

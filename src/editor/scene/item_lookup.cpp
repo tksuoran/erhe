@@ -27,6 +27,37 @@ namespace editor {
 
 namespace {
 
+// The prims of a subtree, and the attachments of the transformable ones.
+// The scene TREE is walked rather than the registered node buckets: any prim
+// may parent any other prim (doc/usd-compatibility-plan.md C5), and only the
+// transformable prims are registered, so a Scope - and everything below one -
+// is reachable this way alone.
+template <typename Predicate>
+auto find_prim_in_subtree(const std::shared_ptr<erhe::Hierarchy>& prim, Predicate&& matches) -> std::shared_ptr<erhe::Item_base>
+{
+    if (!prim) {
+        return {};
+    }
+    if (matches(*prim)) {
+        return prim;
+    }
+    if (erhe::is<erhe::scene::Node>(prim.get())) {
+        const erhe::scene::Node* const node = static_cast<const erhe::scene::Node*>(prim.get());
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+            if (attachment && matches(*attachment)) {
+                return attachment;
+            }
+        }
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+        const std::shared_ptr<erhe::Item_base> found = find_prim_in_subtree(child, matches);
+        if (found) {
+            return found;
+        }
+    }
+    return {};
+}
+
 template <typename Predicate>
 auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::shared_ptr<erhe::Item_base>
 {
@@ -38,28 +69,9 @@ auto find_item_in_scene(Scene_root& scene_root, Predicate&& matches) -> std::sha
         return scene_item;
     }
 
-    // The root node is not registered in the transform-update buckets that
-    // for_each_node visits.
+    // The root node included: it is a prim of the tree like any other.
     const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
-    if (root_node && matches(*root_node)) {
-        return root_node;
-    }
-
-    scene.for_each_node(
-        [&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (matches(*node)) {
-                result = node;
-                return false;
-            }
-            for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-                if (attachment && matches(*attachment)) {
-                    result = attachment;
-                    return false;
-                }
-            }
-            return true;
-        }
-    );
+    result = find_prim_in_subtree(std::static_pointer_cast<erhe::Hierarchy>(root_node), matches);
     if (result) {
         return result;
     }

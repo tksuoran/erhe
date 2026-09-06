@@ -105,7 +105,8 @@ Returns: `{scenes: [{name, node_count, camera_count, light_count, material_count
 
 ### get_scene_nodes
 
-List all nodes in a scene with transform and attachment info.
+List every prim of a scene's tree with its class, place and - for the prims
+that have one - transform and attachment info.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -113,11 +114,15 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_nodes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{nodes: [{name, id, parent, position, rotation_xyzw, scale, attachment_types}]}`
+Returns: `{nodes: [{name, id, type, parent, parent_id, locked, import_root, tags}]}`,
+each transformable prim additionally carrying `position`, `rotation_xyzw`,
+`scale` and `attachment_types`. `type` is the prim's class name (`Xform`,
+`Scope`, ...); a prim outside `Xformable` - a `Scope` - has no transform and no
+attachments, and the prims below it are listed with it as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific node including world position, local transform, attachments (with mesh materials, camera/light properties), children, and selection state.
+Get detailed info for a specific prim including world position, local transform, attachments (with mesh materials, camera/light properties), children, and selection state. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -235,6 +240,20 @@ Returns: `{selected_count, items: [{name, type, id}]}`
 Pass an empty `ids` array to clear selection. All query responses include `id` fields for use with this tool.
 
 ## Action Tools
+
+### create_node
+
+Create an empty prim (undoable, inserted on the next editor frame).
+`prim_type` selects the class: `Xform` (default; a transform with children) or
+`Scope` (children only, no transform - what resources are gathered under). A
+`Scope` accepts no `position`.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_node","arguments":{"scene_name":"Default Scene","name":"Materials","prim_type":"Scope"}}}'
+```
+
+Returns: `{node_name, node_id, prim_type, parent, queued}` (plus `position` for
+an `Xform`).
 
 ### place_brush
 

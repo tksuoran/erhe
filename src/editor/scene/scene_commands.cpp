@@ -441,7 +441,7 @@ auto Scene_commands::get_add_toruses_command() -> Add_toruses_command&
     return m_add_toruses_command;
 }
 
-auto Scene_commands::get_scene_root(erhe::scene::Node* parent) const -> Scene_root*
+auto Scene_commands::get_scene_root(erhe::Hierarchy* parent) const -> Scene_root*
 {
     if (parent != nullptr) {
         return static_cast<Scene_root*>(parent->get_item_host());
@@ -646,7 +646,7 @@ auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared
     return new_camera;
 }
 
-auto Scene_commands::create_new_empty_node(erhe::scene::Node* parent) -> std::shared_ptr<erhe::scene::Node>
+auto Scene_commands::create_new_empty_node(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::scene::Node>
 {
     Scene_root* scene_root = get_scene_root(parent);
     if (scene_root == nullptr) {
@@ -665,14 +665,39 @@ auto Scene_commands::create_new_empty_node(erhe::scene::Node* parent) -> std::sh
                 .context = m_context,
                 .item    = new_empty_node,
                 .parent  = (parent != nullptr)
-                    ? std::static_pointer_cast<erhe::scene::Node>(parent->shared_from_this())
-                    : scene_root->get_hosted_scene()->get_root_node(),
+                    ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this())
+                    : std::static_pointer_cast<erhe::Hierarchy>(scene_root->get_hosted_scene()->get_root_node()),
                 .mode    = Item_insert_remove_operation::Mode::insert
             }
         )
     );
 
     return new_empty_node;
+}
+
+auto Scene_commands::create_new_scope(erhe::Hierarchy* parent) -> std::shared_ptr<erhe::Scope>
+{
+    Scene_root* scene_root = get_scene_root(parent);
+    if (scene_root == nullptr) {
+        return {};
+    }
+
+    std::shared_ptr<erhe::Scope> new_scope = std::make_shared<erhe::Scope>("new scope");
+    new_scope->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+    m_context.operation_stack->queue(
+        std::make_shared<Item_insert_remove_operation>(
+            Item_insert_remove_operation::Parameters{
+                .context = m_context,
+                .item    = new_scope,
+                .parent  = (parent != nullptr)
+                    ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this())
+                    : std::static_pointer_cast<erhe::Hierarchy>(scene_root->get_hosted_scene()->get_root_node()),
+                .mode    = Item_insert_remove_operation::Mode::insert
+            }
+        )
+    );
+
+    return new_scope;
 }
 
 auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>& clicked_node) -> std::size_t

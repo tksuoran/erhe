@@ -2065,9 +2065,12 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         return r.dump();
     }
 
-    std::shared_ptr<erhe::scene::Node> parent{};
+    // Any prim may parent any other prim (doc/usd-compatibility-plan.md C5),
+    // so the parent is looked up as a prim: a new prim goes under a Scope as
+    // readily as under an Xform.
+    std::shared_ptr<erhe::Hierarchy> parent{};
     if (args.contains("parent_node_id") || args.contains("parent_node_name")) {
-        parent = find_node_in_scene(*sr, args, "parent_node_id", "parent_node_name");
+        parent = find_prim_in_scene(*sr, args, "parent_node_id", "parent_node_name");
         if (!parent) {
             json r = make_text_content("Parent node not found");
             r["isError"] = true;
@@ -2077,6 +2080,41 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         parent = sr->get_hosted_scene()->get_root_node();
     }
 
+    const std::string prim_type = args.value("prim_type", "Xform");
+    if ((prim_type != "Xform") && (prim_type != "Scope")) {
+        json r = make_text_content("Invalid prim_type '" + prim_type + "' (expected Xform or Scope)");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string name = args.value("name", "");
+
+    if (prim_type == "Scope") {
+        // A Scope has no transform, so "position" has no meaning on it and is
+        // refused rather than silently dropped.
+        if (args.contains("position")) {
+            json r = make_text_content("A Scope prim has no transform: 'position' is not accepted with prim_type 'Scope'");
+            r["isError"] = true;
+            return r.dump();
+        }
+        const std::shared_ptr<erhe::Scope> scope = m_context.scene_commands->create_new_scope(parent.get());
+        if (!scope) {
+            json r = make_text_content("Failed to create scope");
+            r["isError"] = true;
+            return r.dump();
+        }
+        if (!name.empty()) {
+            scope->set_name(name);
+        }
+        return make_json_content({
+            {"node_name", scope->get_name()},
+            {"node_id",   scope->get_id()},
+            {"prim_type", std::string{scope->get_prim_type_name()}},
+            {"parent",    parent->get_name()},
+            {"queued",    true} // the insert operation executes on the next editor frame
+        }).dump();
+    }
+
     const std::shared_ptr<erhe::scene::Node> node = m_context.scene_commands->create_new_empty_node(parent.get());
     if (!node) {
         json r = make_text_content("Failed to create node");
@@ -2084,7 +2122,6 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
         return r.dump();
     }
 
-    const std::string name = args.value("name", "");
     if (!name.empty()) {
         node->set_name(name);
     }
@@ -2101,6 +2138,7 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
     return make_json_content({
         {"node_name", node->get_name()},
         {"node_id",   node->get_id()},
+        {"prim_type", std::string{node->get_prim_type_name()}},
         {"parent",    parent->get_name()},
         {"position",  {position.x, position.y, position.z}},
         {"queued",    true} // the insert operation executes on the next editor frame

@@ -387,39 +387,66 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
 
     const auto& scene = sr->get_scene();
     json nodes = json::array();
-    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        const auto& trs = node->parent_from_node_transform();
-        const glm::vec3 t = trs.get_translation();
-        const glm::quat r = trs.get_rotation();
-        const glm::vec3 s = trs.get_scale();
+    // The scene TREE, not the registered node lists: any prim may parent any
+    // other prim (doc/usd-compatibility-plan.md C5) and only the transformable
+    // prims are registered, so a walk of the lists would leave out a Scope and
+    // present the prims below it as children of a node they are not under.
+    std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit =
+        [&](const std::shared_ptr<erhe::Hierarchy>& prim) {
+            const std::shared_ptr<erhe::Hierarchy> parent_prim = prim->get_parent().lock();
 
-        json attachment_types = json::array();
-        for (const auto& att : node->get_attachments()) {
-            attachment_types.push_back(std::string{att->get_type_name()});
+            json tags_arr = json::array();
+            for (const auto& tag : prim->get_tags()) {
+                tags_arr.push_back(tag);
+            }
+
+            json entry = {
+                {"name",        prim->get_name()},
+                {"id",          prim->get_id()},
+                {"type",        std::string{prim->get_type_name()}},
+                {"parent",      parent_prim ? parent_prim->get_name() : ""},
+                {"parent_id",   parent_prim ? json(parent_prim->get_id()) : json()},
+                {"locked",      prim->is_lock_edit()},
+                {"import_root", (prim->get_flag_bits() & erhe::Item_flags::import_root) != 0},
+                {"tags",        tags_arr}
+            };
+
+            // Transform and attachments are the transformable prim's; a prim
+            // outside Xformable - a Scope - carries neither.
+            const erhe::scene::Node* const node = erhe::is<erhe::scene::Node>(prim.get())
+                ? static_cast<const erhe::scene::Node*>(prim.get())
+                : nullptr;
+            if (node != nullptr) {
+                const auto& trs = node->parent_from_node_transform();
+                const glm::vec3 t = trs.get_translation();
+                const glm::quat r = trs.get_rotation();
+                const glm::vec3 s = trs.get_scale();
+
+                json attachment_types = json::array();
+                for (const auto& att : node->get_attachments()) {
+                    attachment_types.push_back(std::string{att->get_type_name()});
+                }
+
+                entry["position"]         = {t.x, t.y, t.z};
+                entry["rotation_xyzw"]    = {r.x, r.y, r.z, r.w};
+                entry["scale"]            = {s.x, s.y, s.z};
+                entry["attachment_types"] = attachment_types;
+            }
+
+            nodes.push_back(entry);
+
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                visit(child);
+            }
+        };
+    // The root node itself is not listed (it is not a registered node either,
+    // and every path is relative to it).
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    if (root_node) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
+            visit(child);
         }
-
-        auto parent_node = node->get_parent_node();
-
-        json tags_arr = json::array();
-        for (const auto& tag : node->get_tags()) {
-            tags_arr.push_back(tag);
-        }
-
-        nodes.push_back({
-            {"name",             node->get_name()},
-            {"id",               node->get_id()},
-            {"parent",           parent_node ? parent_node->get_name() : ""},
-            {"parent_id",        parent_node ? json(parent_node->get_id()) : json()},
-            {"position",         {t.x, t.y, t.z}},
-            {"rotation_xyzw",    {r.x, r.y, r.z, r.w}},
-            {"scale",            {s.x, s.y, s.z}},
-            {"attachment_types", attachment_types},
-            {"locked",           node->is_lock_edit()},
-            {"import_root",      (node->get_flag_bits() & erhe::Item_flags::import_root) != 0},
-            {"tags",             tags_arr}
-        });
-        return true;
-    });
+    }
 
     return make_json_content({{"nodes", nodes}}).dump();
 }
@@ -436,31 +463,43 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
     }
 
     const auto& scene = sr->get_scene();
-    std::shared_ptr<erhe::scene::Node> found_node;
-    // A node path (doc/usd-compatibility-plan.md M1) names one node from the
-    // root node down; a text without '/' is a node name.
-    if (node_name.find('/') != std::string::npos) {
-        const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
-        if (root_node) {
-            erhe::Hierarchy* const hierarchy = erhe::find_by_path(*root_node, node_name);
-            found_node = std::dynamic_pointer_cast<erhe::scene::Node>(
-                (hierarchy != nullptr) ? hierarchy->shared_from_this() : std::shared_ptr<erhe::Item_base>{}
-            );
-        }
-    }
-    if (!found_node) {
-        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (node->get_name() == node_name) {
-                found_node = node;
-                return false;
-            }
-            return true;
-        });
-    }
-    if (!found_node) {
+    // A prim path (doc/usd-compatibility-plan.md M1) names one prim from the
+    // root node down; a text without '/' is a prim name. The lookup walks the
+    // scene TREE, so a prim that is not a registered node - a Scope, and the
+    // prims below it - is found too (C5).
+    json lookup_args = json::object();
+    lookup_args["node_name"] = node_name;
+    const std::shared_ptr<erhe::Hierarchy> found_prim = find_prim_in_scene(*sr, lookup_args, "node_id", "node_name");
+    if (!found_prim) {
         json r = make_text_content("Node not found: " + node_name);
         r["isError"] = true;
         return r.dump();
+    }
+
+    json prim_children = json::array();
+    for (const auto& child : found_prim->get_children()) {
+        prim_children.push_back(child->get_name());
+    }
+    const std::shared_ptr<erhe::Hierarchy> prim_parent = found_prim->get_parent().lock();
+
+    const std::shared_ptr<erhe::scene::Node> found_node = erhe::is<erhe::scene::Node>(found_prim.get())
+        ? std::static_pointer_cast<erhe::scene::Node>(found_prim)
+        : std::shared_ptr<erhe::scene::Node>{};
+    if (!found_node) {
+        // A prim outside Xformable has no transform and no attachments; what
+        // it holds is its type, its place in the tree and its children.
+        json prim_result = {
+            {"name",     found_prim->get_name()},
+            {"id",       found_prim->get_id()},
+            {"type",     std::string{found_prim->get_type_name()}},
+            {"parent",   prim_parent ? prim_parent->get_name() : ""},
+            {"children", prim_children},
+            {"visible",  found_prim->is_visible()},
+            {"selected", found_prim->is_selected()},
+            {"locked",   found_prim->is_lock_edit()},
+            {"tags",     [&]() { json t = json::array(); for (const auto& tag : found_prim->get_tags()) t.push_back(tag); return t; }()}
+        };
+        return make_json_content(prim_result).dump();
     }
 
     const auto& trs = found_node->parent_from_node_transform();
@@ -644,12 +683,17 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         merge_subtree(found_node);
     }
 
-    auto parent_node = found_node->get_parent_node();
+    // The parent in the TREE, which is the prim the name identifies; the
+    // nearest Xformable ancestor the world transform composes with may be
+    // further up when transformless prims sit between them (C5).
+    const std::shared_ptr<erhe::scene::Node> transform_parent = found_node->get_parent_node();
 
     json result = {
-        {"name",           found_node->get_name()},
-        {"id",             found_node->get_id()},
-        {"parent",         parent_node ? parent_node->get_name() : ""},
+        {"name",             found_node->get_name()},
+        {"id",               found_node->get_id()},
+        {"type",             std::string{found_node->get_type_name()}},
+        {"parent",           prim_parent ? prim_parent->get_name() : ""},
+        {"transform_parent", transform_parent ? transform_parent->get_name() : ""},
         {"world_position", {wp.x, wp.y, wp.z}},
         {"local_transform", {
             {"translation",   {t.x, t.y, t.z}},
@@ -1807,12 +1851,24 @@ auto Mcp_server::find_items_by_ids(Scene_root& sr, const std::set<std::size_t>& 
     if (scene_item && target_ids.contains(scene_item->get_id())) {
         result.push_back(scene_item);
     }
-    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        if (target_ids.contains(node->get_id())) {
-            result.push_back(node);
+    // The scene TREE, not the registered node buckets: a prim outside
+    // Xformable - a Scope - is a selectable prim of the tree like any other
+    // (doc/usd-compatibility-plan.md C5) and is registered nowhere.
+    std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit_prim =
+        [&](const std::shared_ptr<erhe::Hierarchy>& prim) {
+            if (target_ids.contains(prim->get_id())) {
+                result.push_back(prim);
+            }
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                visit_prim(child);
+            }
+        };
+    const std::shared_ptr<erhe::scene::Node> root_node = scene.get_root_node();
+    if (root_node) {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
+            visit_prim(child);
         }
-        return true;
-    });
+    }
     for (const auto& camera : scene.get_cameras()) {
         if (target_ids.contains(camera->get_id())) {
             result.push_back(camera);

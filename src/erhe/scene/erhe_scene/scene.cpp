@@ -342,7 +342,7 @@ void Scene::update_node_transforms()
     m_updating_node_transforms = false;
 }
 
-void Scene::update_subtree_transforms(Node& node, const bool carry_body_driven)
+void Scene::update_subtree_transforms(erhe::Hierarchy& prim, const bool carry_body_driven)
 {
     // The dirty node itself is already up to date: every write path updates
     // the node's own world transform and notifies its attachments eagerly
@@ -362,11 +362,16 @@ void Scene::update_subtree_transforms(Node& node, const bool carry_body_driven)
     // rigid bodies to the carried node poses (Node_physics::
     // before_physics_simulation runs node -> body for every body each frame
     // while the simulation runs, and on resume when it is paused).
-    for (const auto& child : node.get_children()) {
+    for (const auto& child : prim.get_children()) {
         // Type-bit test + static_cast: this loop visits every node under a
         // moving subtree each frame, so avoid dynamic_pointer_cast's RTTI
         // walk and shared_ptr refcount traffic.
         if (!erhe::is<Node>(child.get())) {
+            // A prim outside Xformable - a Scope - has no transform of its
+            // own, so the moving ancestor's transform passes through it to
+            // the transformable prims below (doc/usd-compatibility-plan.md
+            // C5): recurse without recomputing anything on it.
+            update_subtree_transforms(*child, carry_body_driven);
             continue;
         }
         Node* const child_node = static_cast<Node*>(child.get());

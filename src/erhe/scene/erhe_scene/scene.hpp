@@ -12,6 +12,8 @@
 #include <unordered_set>
 #include <vector>
 
+namespace erhe { class Hierarchy; }
+
 namespace erhe::scene {
 
 class Camera;
@@ -237,7 +239,9 @@ public:
     glm::vec4 ambient_light{0.0f, 0.0f, 0.0f, 0.0f};
 
 private:
-    void update_subtree_transforms(Node& node, bool carry_body_driven);
+    // Recomputes the world transform of every Xformable below `prim`,
+    // recursing THROUGH the prims that have no transform of their own.
+    void update_subtree_transforms(erhe::Hierarchy& prim, bool carry_body_driven);
 
     Scene_host*                               m_host       {nullptr};
     std::shared_ptr<erhe::scene::Node>        m_root_node;

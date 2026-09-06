@@ -120,7 +120,9 @@ public:
     void attach                  (const std::shared_ptr<Node_attachment>& attachment);
     auto detach                  (Node_attachment* attachment) -> bool;
     auto get_attachment_count    (const erhe::Item_filter& filter) const -> std::size_t;
-    void handle_item_host_update (erhe::Item_host* old_scene_host, erhe::Item_host* new_scene_host);
+    // Overrides Typed: registers / unregisters the node with the scene host
+    // and carries the host to the attachments and to the prim subtree.
+    void handle_item_host_update (erhe::Item_host* old_scene_host, erhe::Item_host* new_scene_host) override;
     void handle_transform_update (uint64_t serial) const;
     void handle_add_attachment   (const std::shared_ptr<Node_attachment>& attachment, std::size_t position = std::numeric_limits<std::size_t>::max());
     void handle_remove_attachment(Node_attachment* attachment);

@@ -1053,7 +1053,7 @@
     "name": "set_node_transform"
   },
   {
-    "description": "Create an empty scene node (undoable), optionally parented and positioned. Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
+    "description": "Create an empty scene prim (undoable), optionally parented and positioned. prim_type selects the prim class: an Xform (a transform with children, the default) or a Scope (children only, no transform - what resources are gathered under). Useful as a physics joint anchor: create_physics_joint captures its joint frames from the joint / connected node world transforms, so coincident anchor child nodes on the two bodies give a clean joint pivot.",
     "inputSchema": {
       "properties": {
         "name": {
@@ -1069,13 +1069,21 @@
           "type": "string"
         },
         "position": {
-          "description": "World position [x, y, z] (default [0, 0, 0])",
+          "description": "World position [x, y, z] (default [0, 0, 0]); not accepted with prim_type 'Scope', which has no transform",
           "items": {
             "type": "number"
           },
           "maxItems": 3,
           "minItems": 3,
           "type": "array"
+        },
+        "prim_type": {
+          "description": "Prim class to create: 'Xform' (default, a transform with children) or 'Scope' (children only, no transform)",
+          "enum": [
+            "Xform",
+            "Scope"
+          ],
+          "type": "string"
         },
         "scene_name": {
           "description": "Name of the scene",

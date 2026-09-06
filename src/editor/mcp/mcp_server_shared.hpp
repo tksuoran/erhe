@@ -71,6 +71,13 @@ auto get_vec3(const json& args, const char* key, const glm::vec3 fallback) -> gl
 // Finds a node by the integer args[id_key], or by the string args[name_key].
 auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Node>;
 
+// Finds a PRIM by the integer args[id_key], or by the string args[name_key]
+// (a name, or a path when it holds '/'), walking the scene tree from the root
+// node: any prim may parent any other prim (doc/usd-compatibility-plan.md C5),
+// so a lookup that only visits the registered node lists misses the prims that
+// are not nodes - a Scope and the prims below it.
+auto find_prim_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::Hierarchy>;
+
 auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>;
 
 auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type;

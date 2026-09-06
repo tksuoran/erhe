@@ -25,6 +25,7 @@ add_executable(${_target}
     test_node_properties.cpp
     test_optimized_variant_invalidation.cpp
     test_prim_levels.cpp
+    test_scope_prims.cpp
 )
 
 target_link_libraries(${_target}

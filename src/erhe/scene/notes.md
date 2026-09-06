@@ -46,6 +46,26 @@ owns the rest:
   that draws geometry, so `doubleSided` and `displayColor` belong to it. Both
   hold nothing until a step moves those values here.
 
+Any prim may parent any other prim, so the rules that walk the tree take it as
+the tree of prims it is:
+
+- `Xformable::get_parent_node()` returns the nearest `Xformable` ancestor, not
+  the parent: a prim outside `Xformable` has no transform, so a transform
+  composes with the first `Xformable` above it and passes through the prims
+  that have none. Every reader of a parent transform goes through it. It walks
+  rather than caching the ancestor, because a cache would have to be
+  invalidated through the whole subtree on every reparent of an ancestor; the
+  walk steps only over transformless prims, so on a tree of nodes it is the
+  single hop the cast was.
+- `Scene::update_subtree_transforms()` recurses THROUGH a prim that has no
+  transform, so an `Xform` under a `Scope` follows its ancestor's move.
+- `Xformable::handle_item_host_update()` registers the node with the scene host
+  and carries the host to its attachments and to every prim child, `Scope`
+  children included; `erhe::Typed` owns the hook and the parent-update rule
+  that drives it (see `src/erhe/item/notes.md`), so a `Scope` attached under a
+  hosted prim registers every `Xformable` in its subtree with the scene, and
+  detaching it unregisters them.
+
 A level has its own `Item_type` bit and a concrete class's static type is the
 OR of its chain (`Xform::get_static_type()` is
 `typed | imageable | xformable | xform`), so `is<Xformable>(xform)` holds by

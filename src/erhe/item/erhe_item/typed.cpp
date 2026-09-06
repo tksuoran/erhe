@@ -28,6 +28,29 @@ Typed::Typed(const Typed& src, for_clone)
 {
 }
 
+void Typed::handle_parent_update(Hierarchy* const old_parent, Hierarchy* const new_parent)
+{
+    Item_host* const old_item_host = (old_parent != nullptr) ? old_parent->get_item_host() : nullptr;
+    Item_host* const new_item_host = (new_parent != nullptr) ? new_parent->get_item_host() : nullptr;
+    if (old_item_host != new_item_host) {
+        handle_item_host_update(old_item_host, new_item_host);
+    }
+}
+
+void Typed::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)
+{
+    static_cast<void>(old_item_host);
+    set_item_host(new_item_host);
+    for (const std::shared_ptr<Hierarchy>& child : get_children()) {
+        // The hook is the prim class hierarchy's: a `Hierarchy` child that is
+        // not a prim holds no item host of its own and has nothing to carry.
+        Typed* const typed_child = dynamic_cast<Typed*>(child.get());
+        if (typed_child != nullptr) {
+            typed_child->handle_item_host_update(old_item_host, new_item_host);
+        }
+    }
+}
+
 auto Typed::get_prim_type_name() const -> std::string_view
 {
     const std::string_view class_type_name = get_class_type_name();

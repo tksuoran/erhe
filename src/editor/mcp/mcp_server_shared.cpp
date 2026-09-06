@@ -139,6 +139,41 @@ auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id
     return found;
 }
 
+auto find_prim_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::Hierarchy>
+{
+    const std::size_t prim_id   = args.value(id_key, std::size_t{0});
+    const std::string prim_name = args.value(name_key, "");
+    if ((prim_id == 0) && prim_name.empty()) {
+        return {};
+    }
+    const std::shared_ptr<erhe::scene::Node> root_node = scene_root.get_scene().get_root_node();
+    if (!root_node) {
+        return {};
+    }
+    if ((prim_id == 0) && (prim_name.find('/') != std::string::npos)) {
+        erhe::Hierarchy* const prim = erhe::find_by_path(*root_node, prim_name);
+        return (prim != nullptr)
+            ? std::static_pointer_cast<erhe::Hierarchy>(prim->shared_from_this())
+            : std::shared_ptr<erhe::Hierarchy>{};
+    }
+    std::shared_ptr<erhe::Hierarchy> found;
+    std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit =
+        [&](const std::shared_ptr<erhe::Hierarchy>& prim) {
+            if (found) {
+                return;
+            }
+            if ((prim_id != 0) ? (prim->get_id() == prim_id) : (prim->get_name() == prim_name)) {
+                found = prim;
+                return;
+            }
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                visit(child);
+            }
+        };
+    visit(std::static_pointer_cast<erhe::Hierarchy>(root_node));
+    return found;
+}
+
 auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>
 {
     const std::size_t light_id   = args.value(id_key, std::size_t{0});
