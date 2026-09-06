@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2⚡{commit-1-in-flight:Mesh:Gprim+all-attach-sites+pairing-helpers+glTF/USD-readers-writers;commit-2?selection/gizmo-semantics-several-meshes-per-parent}→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3-NEXT{Camera/Light:Xformable+editor-presentation-of-typed-prims}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}

@@ -133,6 +133,16 @@ record has the history.
   `create_node` takes `prim_type`. The Create menu has no `Scope` entry
   yet, object-reference candidates and `Layout` do not reach through a
   `Scope`, and a material `Scope` stays namespace until U4.
+- U2 Mesh is a Gprim: `erhe::scene::Mesh` is `erhe::Item<Item_base,
+  Gprim, Mesh>`, a child prim with its own transform; a parent holds any
+  number of `Mesh` children; `get_mesh()`, `for_each_mesh_child()` and
+  `set_mesh_parent()` replace the attachment accessors and `get_node()`
+  returns the mesh itself until the U steps retire it
+  (`src/erhe/scene/notes.md`); the glTF reader folds a node with a mesh
+  into one `Mesh` prim and the writer inverts it
+  (`doc/scene_serialization.md`); USD takes a `Mesh` prim as it stands
+  (`src/erhe/usd/notes.md`); `Xformable`'s secondary owner type is
+  `Item_base` (`doc/property-system.md` D30).
 
 ## 3. Remaining steps
 
@@ -142,39 +152,17 @@ composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
-### U2 Mesh is a Gprim (L)
-
-What: `erhe::scene::Mesh` becomes `erhe::Item<Item_base, Gprim, Mesh>`:
-an `Xformable` with its own transform, name and children, a child prim
-of its parent, no longer a `Node_attachment`; `Rendertarget_mesh`
-follows as its subclass. A parent holds any number of `Mesh` children.
-`Mesh::get_node()` returns the mesh itself, so every consumer that reads
-the world transform through it - draw lists and the scene renderer, the
-raytrace and ID pickers, hover and selection, the tools, physics shape
-construction, brush placement - keeps compiling and keeps its meaning;
-a consumer that finds "the mesh of a node" through the attachment list
-reads the node's `Mesh` children instead, and the Properties window and
-MCP node queries present the mesh as the prim it is. The glTF reader
-makes a node that carries a mesh into one `Mesh` prim with that node's
-transform, name, children and remaining attachments; the writer inverts
-it (a `Mesh` prim is a node with a `mesh`). The USD importer and
-exporter take a `Mesh` prim as it stands: its own `xformOp`s are its
-transform, and a mesh under an `Xform` composes with it.
-
-Why: the largest single move toward C5, and the one that settles the
-pattern: once `Mesh` sits under `Gprim`, `Camera` and `Light` follow
-the same path.
-
-Verification: the glTF round trip, the USD leg and
-`undo_reference_clearing_smoke_test.py` pass; headless screenshots of
-the default scene and of a Sponza import are identical before and after;
-`get_scene_nodes` lists meshes as prims; `scene-close leak` clean.
-
-### U3 Camera and Light are Xformables (M, after U2)
+### U3 Camera and Light are Xformables (M)
 
 What: `Camera` becomes `erhe::Item<Item_base, Xformable, Camera>` and
 `Light` becomes an `Xformable` as well, each a child prim of its parent
-with its own transform, never an attachment. `Light` keeps its
+with its own transform, never an attachment. With the three typed prims
+in place, the editor presents them as prims everywhere: the Hierarchy
+window rows, drag and drop, the hover and selection tools, the
+Properties window sections and MCP `get_node_details` treat a `Mesh`,
+`Camera` or `Light` as the prim it is, and the transitional
+`get_node()` accessors are retired where a consumer reads the prim's
+own transform. `Light` keeps its
 `light_type` enumeration and maps to `DistantLight` / `SphereLight` per
 the mapping's light table; splitting it into one class per UsdLux
 schema under `Nonboundable_light_base` (`Xformable`) and
@@ -345,20 +333,19 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. U2 mesh is a Gprim
-2. U3 camera and light are Xformables
-3. U4 resources are prims
-4. E4 editor state in a USD file (completes G2)
-5. X1 references as prefab instances, then X2 editable instances (G3)
+1. U3 camera and light are Xformables
+2. U4 resources are prims
+3. E4 editor state in a USD file (completes G2)
+4. X1 references as prefab instances, then X2 editable instances (G3)
 
-U4 has no dependency on U2, so it may be taken first when a smaller
+U4 has no dependency on U3, so it may be taken first when a smaller
 step is wanted. M6, M7 and M8 land when the step that needs them is
 next (any importer hitting a missing type, X3, a file whose xformOp
 stack must survive). E2 and X3 to X5 have no fixed place: each waits
 for its dependencies and is taken when wanted.
 
-Dependencies: U3 needs U2; E4 and X1 need U4; X2 needs X1; X3 needs
-M7; U2, U4, M8, E2, X4 and X5 need nothing that has not landed.
+Dependencies: E4 and X1 need U4; X2 needs X1; X3 needs M7; U3, U4,
+M8, E2, X4 and X5 need nothing that has not landed.
 
 ## 5. Out of scope
 
