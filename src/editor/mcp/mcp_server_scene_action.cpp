@@ -2401,7 +2401,7 @@ auto Mcp_server::action_edit_light(const json& args) -> std::string
         }
         glm::vec3 position{};
         if (read_vec3("position", position)) {
-            erhe::scene::Node* node = light->get_node();
+            erhe::scene::Node* node = light.get();
             if (node != nullptr) {
                 node->set_world_from_node(erhe::math::create_translation<float>(position));
                 changed["position"] = {position.x, position.y, position.z};

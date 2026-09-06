@@ -14,7 +14,7 @@ auto Render_context::get_camera_node() const -> const erhe::scene::Node*
     if (!view_camera) {
         return nullptr;
     }
-    return view_camera->get_node();
+    return view_camera.get();
 }
 
 auto Render_context::get_scene() const -> const erhe::scene::Scene*

@@ -497,7 +497,7 @@ auto Mesh_component_selection_tool::pick(Scene_view& scene_view) const -> Pick_r
         return result;
     }
 
-    const erhe::scene::Node* node = mesh->get_node();
+    const erhe::scene::Node* node = mesh.get();
     if (node == nullptr) {
         return result;
     }
@@ -766,7 +766,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
         }
         const std::shared_ptr<erhe::scene::Mesh>        mesh     = entry.mesh.lock();
         const std::shared_ptr<erhe::geometry::Geometry> geometry = entry.geometry.lock();
-        const erhe::scene::Node*                        node     = mesh->get_node();
+        const erhe::scene::Node*                        node     = mesh.get();
 
         const glm::mat4  world_from_node = node->world_from_node();
         const glm::mat3  normal_matrix   = glm::transpose(glm::inverse(glm::mat3(world_from_node)));
@@ -884,7 +884,7 @@ void Mesh_component_selection_tool::tool_render(const Render_context& context)
         ? pick(context.scene_view)
         : Pick_result{};
     if (hover.valid) {
-        const erhe::scene::Node* hover_node = hover.mesh->get_node();
+        const erhe::scene::Node* hover_node = hover.mesh.get();
         if (hover_node != nullptr) {
             const glm::mat4  world_from_node = hover_node->world_from_node();
             const GEO::Mesh& geo_mesh        = hover.geometry->get_mesh();

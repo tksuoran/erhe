@@ -480,8 +480,7 @@ void Properties::mesh_properties(erhe::scene::Mesh& mesh)
 {
     ERHE_PROFILE_FUNCTION();
 
-    const auto* node = mesh.get_node();
-    auto* scene_root = static_cast<Scene_root*>(node->get_item_host());
+    auto* scene_root = static_cast<Scene_root*>(mesh.get_item_host());
     if (scene_root == nullptr) {
         // Mesh host not set
         return;
@@ -1052,14 +1051,38 @@ void Properties::item_properties(const std::shared_ptr<erhe::Item_base>& item_in
             }, "Remove this attachment (undoable)");
         }
 
-        // "Add Attachment": popup listing the attachment catalog, entries
-        // disabled when the node cannot take that kind (duplicate / precondition).
+        // "Add Child Prim": popup listing the catalog's child-prim entries;
+        // each lands as a child of the node (doc/usd-compatibility-plan.md C5).
+        add_entry("Add Child Prim", [this, node]() {
+            if (ImGui::Button("Add Child Prim")) {
+                ImGui::OpenPopup("add_child_prim_popup");
+            }
+            if (ImGui::BeginPopup("add_child_prim_popup")) {
+                for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    if (type_info.kind != Attachment_kind::child_prim) {
+                        continue;
+                    }
+                    const bool can_add = type_info.can_add(*node);
+                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
+                        type_info.make(*m_context.scene_commands, *node);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+        });
+
+        // "Add Attachment": popup listing the catalog's applied-API-schema
+        // entries, disabled when the node cannot take that kind (duplicate /
+        // precondition).
         add_entry("Add Attachment", [this, node]() {
             if (ImGui::Button("Add Attachment")) {
                 ImGui::OpenPopup("add_attachment_popup");
             }
             if (ImGui::BeginPopup("add_attachment_popup")) {
                 for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    if (type_info.kind != Attachment_kind::api_schema) {
+                        continue;
+                    }
                     const bool can_add = type_info.can_add(*node);
                     if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
                         type_info.make(*m_context.scene_commands, *node);

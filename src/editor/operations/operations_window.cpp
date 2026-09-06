@@ -146,7 +146,7 @@ void gather_components(Mesh_component_selection& selection, const Mesh_component
         if (!mesh || !geometry) {
             continue;
         }
-        erhe::scene::Node* const node = mesh->get_node();
+        erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -621,7 +621,7 @@ auto Operations::resolve_operation_items(
             if (!mesh) {
                 continue;
             }
-            erhe::scene::Node* node = mesh->get_node();
+            erhe::scene::Node* node = mesh.get();
             if (node == nullptr) {
                 continue;
             }
@@ -1589,7 +1589,7 @@ auto Operations::can_align() const -> bool
         if (!mesh) {
             continue;
         }
-        const erhe::scene::Node* const node = mesh->get_node();
+        const erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -2153,7 +2153,7 @@ void Operations::make_geometry()
                 std::shared_ptr<erhe::scene::Mesh> scene_mesh = erhe::scene::get_mesh(item);
                 ERHE_VERIFY(scene_mesh);
 
-                erhe::scene::Node*                              node              = scene_mesh->get_node();
+                erhe::scene::Node*                              node              = scene_mesh.get();
                 std::shared_ptr<Node_physics>                   node_physics      = erhe::scene::get_attachment<Node_physics>(node);
                 const std::vector<erhe::scene::Mesh_primitive>& primitives_before = scene_mesh->get_primitives();
                 std::vector<erhe::scene::Mesh_primitive>        primitives_after  = primitives_before;
@@ -2924,7 +2924,7 @@ void Operations::create_brush()
         if (!mesh->get_name().empty()) {
             brush_name = mesh->get_name();
         } else {
-            erhe::scene::Node* owner_node = mesh->get_node();
+            erhe::scene::Node* owner_node = mesh.get();
             if ((owner_node != nullptr) && !owner_node->get_name().empty()) {
                 brush_name = owner_node->get_name();
             } else if (!geometry->get_name().empty()) {

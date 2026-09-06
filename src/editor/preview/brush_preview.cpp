@@ -370,7 +370,7 @@ void Brush_preview::render_preview(
         erhe::graphics::Scoped_render_pass scoped_render_pass{*m_render_pass.get(), command_buffer};
         const erhe::scene_renderer::Camera_view_input single_view_input{
             .projection = m_camera->projection(),
-            .node       = m_camera->get_node(),
+            .node       = m_camera.get(),
             .viewport   = viewport
         };
         const Render_context context{

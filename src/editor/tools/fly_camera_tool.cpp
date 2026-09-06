@@ -393,10 +393,7 @@ auto Fly_camera_frame_command::try_call() -> bool
     if (camera == nullptr) {
         return false;
     }
-    erhe::scene::Node* camera_node = camera->get_node();
-    if (camera_node == nullptr) {
-        return false;
-    }
+    erhe::scene::Node* camera_node = camera;
 
     Viewport_scene_view* viewport_scene_view = scene_view->as_viewport_scene_view();
     if (viewport_scene_view == nullptr) {
@@ -877,7 +874,7 @@ void Fly_camera_tool::update_camera()
     const auto camera = (viewport_scene_view)
         ? viewport_scene_view->get_camera()
         : std::shared_ptr<erhe::scene::Camera>{};
-    const auto* camera_node = camera ? camera->get_node() : nullptr;
+    const auto* camera_node = camera ? camera.get() : nullptr;
 
     // TODO This is messy
 
@@ -891,7 +888,7 @@ void Fly_camera_tool::set_camera(erhe::scene::Camera* const camera, erhe::scene:
     // attach() below requires world from node matrix, which
     // might not be valid due to transform hierarchy.
     if ((node == nullptr) && (camera != nullptr)) {
-        node = camera->get_node();
+        node = camera;
     }
 
     if (node != nullptr) {

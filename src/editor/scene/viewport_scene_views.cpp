@@ -449,8 +449,7 @@ auto Scene_views::choose_camera_for_scene(const std::shared_ptr<Scene_root>& sce
         // bound across scenes.
         const bool camera_in_scene =
             camera &&
-            (camera->get_node() != nullptr) &&
-            (camera->get_node()->get_scene() == scene_root->get_hosted_scene());
+            (camera->get_scene() == scene_root->get_hosted_scene());
         if (camera_in_scene) {
             return camera;
         }

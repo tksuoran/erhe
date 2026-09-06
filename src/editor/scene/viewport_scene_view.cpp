@@ -191,7 +191,7 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
     if (camera) {
         single_view_input = erhe::scene_renderer::Camera_view_input{
             .projection = camera->projection(),
-            .node       = camera->get_node(),
+            .node       = camera.get(),
             .viewport   = m_projection_viewport
         };
     }
@@ -698,7 +698,7 @@ void Viewport_scene_view::render_overlay_pass(
 
     erhe::scene_renderer::Camera_view_input single_view_input{
         .projection = camera->projection(),
-        .node       = camera->get_node(),
+        .node       = camera.get(),
         .viewport   = m_projection_viewport
     };
     Render_context context{
@@ -972,7 +972,7 @@ void Viewport_scene_view::update_hover_with_id_render()
 
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
     if (scene_mesh) {
-        const erhe::scene::Node* node = scene_mesh->get_node();
+        const erhe::scene::Node* node = scene_mesh.get();
         ERHE_VERIFY(node != nullptr);
         const erhe::scene::Mesh_primitive& mesh_primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
         const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();

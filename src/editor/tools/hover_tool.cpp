@@ -107,15 +107,8 @@ auto Hover_tool::get_hover_node() const -> std::shared_ptr<erhe::scene::Node>
     if (!hover_scene_mesh) {
         return {};
     }
-    erhe::scene::Node* node = hover_scene_mesh->get_node();
-    if (node == nullptr) {
-        return {};
-    }
-
-    std::shared_ptr<erhe::Item_base> node_item_base = std::dynamic_pointer_cast<erhe::Item_base>(node->shared_from_this());
-    std::shared_ptr<erhe::scene::Node> node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node_item_base);
-
-    return node_shared;
+    // The hovered mesh is itself the prim, so it is the hovered node.
+    return hover_scene_mesh;
 }
 
 void Hover_tool::update_ancestor_hover_flags()
@@ -455,7 +448,7 @@ void Hover_tool::tool_render(const Render_context& context)
     std::optional<std::string> name;
     std::shared_ptr<Grid>              grid       = entry->grid_weak.lock();
     if (scene_mesh) {
-        //// const auto* node = entry->scene_mesh->get_node();
+        //// const auto* node = entry->scene_mesh.get();
         //// entity_position  = glm::vec3{node->position_in_world()};
         //// local_position   = node->transform_point_from_world_to_local(entry->position.value());
         name             = scene_mesh->get_name();
@@ -509,10 +502,7 @@ void Hover_tool::tool_render(const Render_context& context)
         return;
     }
 
-    const erhe::scene::Node* node = scene_mesh->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* node = scene_mesh.get();
 
     if (hover.facet == GEO::NO_INDEX) {
         return;

@@ -117,12 +117,14 @@ curl -X POST http://127.0.0.1:3743/mcp \
 Returns: `{nodes: [{name, id, type, parent, parent_id, locked, import_root, tags}]}`,
 each transformable prim additionally carrying `position`, `rotation_xyzw`,
 `scale` and `attachment_types`. `type` is the prim's class name (`Xform`,
-`Scope`, ...); a prim outside `Xformable` - a `Scope` - has no transform and no
-attachments, and the prims below it are listed with it as their `parent`.
+`Mesh`, `Camera`, `Light`, `Scope`, ...) and `attachment_types` names the
+applied-API-schema attachments alone; a prim outside `Xformable` - a `Scope` -
+has no transform and no attachments, and the prims below it are listed with it
+as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific prim including world position, local transform, attachments (with mesh materials, camera/light properties), children, and selection state. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone.
+Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. `attachments` lists the applied-API-schema attachments alone (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -430,7 +432,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 ## Notes
 
-- `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count` for nodes with attachments
+- `get_node_details` includes `brush_name`, `brush_id`, `locked`, `tags`, and mesh `vertex_count`/`facet_count`
 - `get_scene_nodes` includes `locked` and `tags` fields per node
 - `get_scene_brushes` includes `vertex_count` and `facet_count` per brush
 - Brush instance scale is baked into the geometry at placement time and not stored separately - it cannot be queried back from existing nodes

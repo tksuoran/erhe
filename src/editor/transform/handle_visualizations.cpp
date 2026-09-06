@@ -576,7 +576,7 @@ void Handle_visualizations::update_for_view(Scene_view* scene_view)
     if (!camera) {
         return;
     }
-    const auto* camera_node = camera->get_node();
+    const auto* camera_node = camera.get();
     if (camera_node == nullptr) {
         return;
     }

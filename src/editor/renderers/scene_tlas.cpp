@@ -231,7 +231,7 @@ auto Scene_tlas::update(
         if (!mesh || !mesh->is_visible() || mesh->skin) {
             continue;
         }
-        const erhe::scene::Node* node = mesh->get_node();
+        const erhe::scene::Node* node = mesh.get();
         if (node == nullptr) {
             continue;
         }

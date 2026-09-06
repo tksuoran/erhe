@@ -60,12 +60,6 @@ auto Draw_indirect_buffer::update(
     std::size_t draw_indirect_count{0};
     
     for (const auto& mesh : meshes) {
-        const auto* node = mesh->get_node();
-
-        if (node == nullptr) {
-            continue;
-        }
-
         if (!filter(mesh->get_flag_bits())) {
             continue;
         }
@@ -141,7 +135,6 @@ auto Draw_indirect_buffer::update(
     for (const Mesh_primitive_entry& entry : bucket.entries) {
         const erhe::scene::Mesh* mesh = entry.mesh;
         ERHE_VERIFY(mesh != nullptr);
-        ERHE_VERIFY(mesh->get_node() != nullptr);
         const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
         ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
         const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];

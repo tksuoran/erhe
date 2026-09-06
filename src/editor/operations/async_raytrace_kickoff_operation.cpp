@@ -307,7 +307,7 @@ void kickoff_deferred_finalize(App_context& context, const std::shared_ptr<erhe:
     if (!mesh) {
         return;
     }
-    erhe::scene::Node* const node = mesh->get_node();
+    erhe::scene::Node* const node = mesh.get();
     if (node == nullptr) {
         return;
     }

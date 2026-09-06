@@ -329,10 +329,7 @@ auto Light::tight_directional_light_projection_transforms(const Light_projection
     ERHE_VERIFY(parameters.fit_settings != nullptr);
     const Shadow_frustum_fit_settings& settings = *parameters.fit_settings;
 
-    const Node* const light_node = get_node();
-    ERHE_VERIFY(light_node != nullptr);
-    const Node* const view_camera_node = parameters.view_camera->get_node();
-    ERHE_VERIFY(view_camera_node != nullptr);
+    const Node* const view_camera_node = parameters.view_camera;
 
     Shadow_frustum_fit_debug_data* const debug_out = settings.collect_debug ? parameters.fit_debug_out : nullptr;
     if (debug_out != nullptr) {

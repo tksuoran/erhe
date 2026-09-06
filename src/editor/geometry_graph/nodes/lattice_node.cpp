@@ -7,6 +7,7 @@
 #include "erhe_geometry/geometry.hpp"
 #include "erhe_geometry/operation/lattice_deform.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <imgui/imgui.h>
 #include <nlohmann/json.hpp>
@@ -425,7 +426,12 @@ void Lattice_node::transform_driver_imgui()
                 : "(drop a scene node)");
         ImGui::Button(label.c_str(), ImVec2{140.0f * content_scale(), 0.0f});
         if (ImGui::BeginDragDropTarget()) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::scene::Node::static_type_name.data());
+            // A hierarchy drag names the payload for the dragged prim's own
+            // class, so a plain transform prim arrives as "Xform".
+            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::scene::Xform::static_type_name.data());
+            if (payload == nullptr) {
+                payload = ImGui::AcceptDragDropPayload(erhe::scene::Node::static_type_name.data());
+            }
             if ((payload != nullptr) && (payload->Data != nullptr) && (payload->DataSize == sizeof(erhe::Item_base*))) {
                 erhe::Item_base* const   raw      = *static_cast<erhe::Item_base**>(payload->Data);
                 erhe::scene::Node* const node_raw = dynamic_cast<erhe::scene::Node*>(raw);

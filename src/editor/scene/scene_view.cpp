@@ -397,7 +397,7 @@ void Scene_view::set_world_from_control(glm::vec3 near_position_in_world, glm::v
     if (!camera) {
         return;
     }
-    const auto* camera_node = camera->get_node();
+    const auto* camera_node = camera.get();
     if (camera_node == nullptr) {
         return;
     }
@@ -553,7 +553,7 @@ void Scene_view::update_hover_with_raytrace()
             ERHE_VERIFY(scene_mesh);
             entry.scene_mesh_weak            = scene_mesh;
             entry.scene_mesh_primitive_index = raytrace_primitive->primitive_index;
-            auto* const node = scene_mesh->get_node();
+            auto* const node = scene_mesh.get();
             ERHE_VERIFY(node != nullptr);
             const std::vector<erhe::scene::Mesh_primitive>& scene_mesh_primitives = scene_mesh->get_primitives();
             ERHE_VERIFY(raytrace_primitive->primitive_index < scene_mesh_primitives.size());

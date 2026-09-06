@@ -982,8 +982,7 @@ auto Selection::on_viewport_select() -> bool
         return false;
     }
 
-    auto shared_hover_node = shared_hover_mesh->get_node()->shared_from_this();
-    const bool was_selected = is_in_selection(shared_hover_mesh) || is_in_selection(shared_hover_node);
+    const bool was_selected = is_in_selection(shared_hover_mesh);
     if (m_context.input_state->control) {
         if (m_hover_content) {
             toggle_mesh_selection(shared_hover_mesh, was_selected, false);
@@ -1003,7 +1002,7 @@ auto Selection::on_viewport_select() -> bool
             clear_selection();
         }
     } else {
-        erhe::Item_host* const host = shared_hover_mesh->get_node()->get_item_host();
+        erhe::Item_host* const host = shared_hover_mesh->get_item_host();
         m_range_selection.reset(host);
         toggle_mesh_selection(shared_hover_mesh, was_selected, true);
     }
@@ -1021,9 +1020,8 @@ auto Selection::on_viewport_select_toggle() -> bool
         return false;
     }
 
-    auto shared_hover_node = shared_hover_mesh->get_node()->shared_from_this();
     if (m_hover_content) {
-        const bool was_selected = is_in_selection(shared_hover_mesh) || is_in_selection(shared_hover_node);
+        const bool was_selected = is_in_selection(shared_hover_mesh);
         toggle_mesh_selection(shared_hover_mesh, was_selected, false);
         return true;
     }
@@ -1062,10 +1060,7 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 
     using namespace erhe::utility;
 
-    erhe::scene::Node* const node = mesh->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    erhe::scene::Node* const node = mesh.get();
 
     // Prefab instance subtrees are sealed: picking anything inside an
     // instance selects the outermost instance root instead of the picked

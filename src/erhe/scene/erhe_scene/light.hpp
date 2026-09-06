@@ -183,12 +183,6 @@ public:
     // light layer on top of the node registration the base does.
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
-    // The light itself: the transitional accessor every consumer that reads
-    // "the node of this light" still spells, kept while the U steps of
-    // doc/usd-compatibility-plan.md retire it.
-    [[nodiscard]] auto get_node()       -> Node*       { return this; }
-    [[nodiscard]] auto get_node() const -> const Node* { return this; }
-
     // Public API
     [[nodiscard]] auto projection           (const Light_projection_parameters& parameters) const -> Projection;
     [[nodiscard]] auto projection_transforms(const Light_projection_parameters& parameters) const -> Light_projection_transforms;

@@ -189,10 +189,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
     }
     erhe::renderer::Primitive_renderer line_renderer = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
-    const auto* node = mesh->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* const node = mesh;
 
     const auto* camera_node = render_context.get_camera_node();
     if (camera_node == nullptr) {
@@ -202,7 +199,7 @@ void Debug_visualizations::mesh_visualization(const Render_context& render_conte
     std::shared_ptr<erhe::scene::Camera> selected_camera  = get_selected_camera(render_context);
     std::shared_ptr<erhe::scene::Camera> context_camera   = render_context.scene_view.get_camera();
     std::shared_ptr<erhe::scene::Camera> used_camera      = selected_camera ? selected_camera : context_camera;
-    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera->get_node() : nullptr;
+    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera.get() : nullptr;
 
     Trs_transform camera_world_from_node_transform = (used_camera_node != nullptr)
         ? used_camera_node->world_from_node_transform()
@@ -316,7 +313,7 @@ void Debug_visualizations::skin_visualization(const Render_context& render_conte
     std::shared_ptr<erhe::scene::Camera> selected_camera  = get_selected_camera(render_context);
     std::shared_ptr<erhe::scene::Camera> context_camera   = render_context.scene_view.get_camera();
     std::shared_ptr<erhe::scene::Camera> used_camera      = selected_camera ? selected_camera : context_camera;
-    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera->get_node() : nullptr;
+    erhe::scene::Node*                   used_camera_node = used_camera ? used_camera.get() : nullptr;
 
     Trs_transform camera_world_from_node_transform = (used_camera_node != nullptr)
         ? used_camera_node->world_from_node_transform()
@@ -414,7 +411,7 @@ void Debug_visualizations::mesh_primitive_boxes_visualization(const Render_conte
             if (!mesh) {
                 continue;
             }
-            const erhe::scene::Node* node = mesh->get_node();
+            const erhe::scene::Node* node = mesh.get();
             if (node == nullptr) {
                 continue;
             }
@@ -865,13 +862,12 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
         if (m_settings.shadow_fit_volume_planes &&
             !fit_debug.shadow_volume_planes.empty() &&
             fit_debug.view_frustum_corners_valid &&
-            (resolved_light != nullptr) &&
-            (resolved_light->get_node() != nullptr))
+            (resolved_light != nullptr))
         {
             const glm::vec4 color = style.shadow_fit_volume_planes_color;
             const float     width = style.shadow_fit_volume_planes_width;
 
-            const glm::vec3 light_direction = glm::normalize(glm::vec3{resolved_light->get_node()->direction_in_world()});
+            const glm::vec3 light_direction = glm::normalize(glm::vec3{resolved_light->direction_in_world()});
             const float     shadow_range    = light_projections.parameters.view_camera->get_shadow_range();
             float s_max = glm::dot(fit_debug.view_frustum_corners[0], light_direction);
             for (const glm::vec3& corner : fit_debug.view_frustum_corners) {
@@ -1012,10 +1008,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
 void Debug_visualizations::point_light_visualization(const Light_visualization_context& context)
 {
     const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
-    const auto* node = context.light->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* const node = context.light;
     auto&                              render_context = context.render_context;
     erhe::renderer::Primitive_renderer line_renderer  = render_context.get({erhe::graphics::Primitive_type::line, 2, true, true});
 
@@ -1047,10 +1040,7 @@ void Debug_visualizations::point_light_visualization(const Light_visualization_c
 void Debug_visualizations::spot_light_visualization(const Light_visualization_context& context)
 {
     const Debug_visualizations_style& style = context.render_context.app_context.editor_settings->debug_visualizations_style;
-    const auto* node = context.light->get_node();
-    if (node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* const node = context.light;
 
     const auto* camera_node = context.render_context.get_camera_node();
     if (camera_node == nullptr) {
@@ -1244,16 +1234,13 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
         return;
     }
 
-    const auto* camera_node = camera->get_node();
-    if (camera_node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* const camera_node = camera;
 
     const auto& view_camera = render_context.scene_view.get_camera();
     if (!view_camera) {
         return;
     }
-    const auto* view_camera_node = view_camera->get_node();
+    const auto* view_camera_node = view_camera.get();
     if (view_camera_node == nullptr) {
         return;
     }
@@ -1353,7 +1340,7 @@ void Debug_visualizations::camera_visualization(const Render_context& render_con
 
                 for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
                     const erhe::primitive::Primitive& primitive                 = *mesh_primitive.primitive.get();
-                    erhe::scene::Node*                node                      = mesh->get_node();
+                    erhe::scene::Node*                node                      = mesh.get();
                     const erhe::scene::Trs_transform& world_from_node_transform = node->world_from_node_transform();
                     const glm::mat4                   world_from_node           = world_from_node_transform.get_matrix();
                     const erhe::math::Aabb            node_local_aabb           = primitive.render_shape->get_renderable_mesh().bounding_box;
@@ -1585,7 +1572,7 @@ void Debug_visualizations::selection_visualization(const Render_context& context
         }
         std::shared_ptr<erhe::scene::Camera> selected_camera = get_selected_camera(context);
         if (m_settings.selection_convex_hull_projected && selected_camera) {
-            erhe::scene::Node* camera_node     = selected_camera->get_node();
+            erhe::scene::Node* camera_node     = selected_camera.get();
             const mat4         clip_from_node  = selected_camera->projection()->get_projection_matrix(
                 1.0f,
                 context.scene_view.get_reverse_depth(),
@@ -1686,7 +1673,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
             if (!should_visualize(m_settings.physics, mesh)) {
                 continue;
             }
-            const auto* node = mesh->get_node();
+            const auto* node = mesh.get();
             if (node == nullptr) {
                 continue;
             }
@@ -1783,7 +1770,7 @@ void Debug_visualizations::physics_nodes_visualization(const Render_context& con
     App_context& app_context = context.app_context;
     // Resolve per scene (#239): physics debug draw follows the scene's override.
     if (scene_root->has_physics_world() && get_effective_physics(*app_context.editor_settings, *scene_root).debug_draw) {
-        glm::vec4 camera_position = camera->get_node()->position_in_world();
+        glm::vec4 camera_position = camera->position_in_world();
         const JPH::Vec3 camera_position_jolt{camera_position.x, camera_position.y, camera_position.z};
         app_context.jolt_debug_renderer->SetCameraPos(camera_position_jolt);
         erhe::physics::IWorld& world = scene_root->get_physics_world();
@@ -1813,7 +1800,7 @@ void Debug_visualizations::raytrace_nodes_visualization(const Render_context& co
 
     for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
         for (const auto& mesh : layer->meshes) {
-            const auto* node = mesh->get_node();
+            const auto* node = mesh.get();
             if (node == nullptr) {
                 continue;
             }
@@ -1848,9 +1835,9 @@ void Debug_visualizations::mesh_labels(const Render_context& context, erhe::scen
     if (scene_mesh == nullptr) {
         return;
     }
-    const erhe::scene::Node*   node   = scene_mesh->get_node();
+    const erhe::scene::Node*   node   = scene_mesh;
     const erhe::scene::Camera* camera = context.camera;
-    if ((node == nullptr) || (camera == nullptr)) {
+    if (camera == nullptr) {
         return;
     }
 
@@ -2466,7 +2453,7 @@ void Debug_visualizations::imgui(Scene_view& scene_view, App_context& app_contex
         const std::string text = fmt::format(
             "- Scene_view with Camera {} @ {} - ",
             scene_view_camera->get_name(),
-            glm::vec3{scene_view_camera->get_node()->position_in_world()}
+            glm::vec3{scene_view_camera->position_in_world()}
         );
         ImGui::TextUnformatted(text.c_str());
     }

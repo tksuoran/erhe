@@ -235,7 +235,7 @@ void Paint_tool::tool_render(const Render_context& context)
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const erhe::scene::Node* node = scene_mesh->get_node();
+    const erhe::scene::Node* node = scene_mesh.get();
     if (node == nullptr) {
         return;
     }
@@ -584,7 +584,7 @@ void Paint_tool::paint()
 
     const glm::vec3 hover_position_in_world = content.position.value();
 
-    const erhe::scene::Node* node = scene_mesh->get_node();
+    const erhe::scene::Node* node = scene_mesh.get();
     if (node == nullptr) {
         return;
     }

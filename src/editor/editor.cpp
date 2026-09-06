@@ -936,7 +936,7 @@ public:
                         camera = cameras.front();
                     }
                 }
-                const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
+                const erhe::scene::Node* const camera_node = camera ? camera.get() : nullptr;
                 if (camera_node != nullptr) {
                     lightmap_camera_position     = glm::vec3{camera_node->world_from_node()[3]};
                     lightmap_camera_position_ptr = &lightmap_camera_position;

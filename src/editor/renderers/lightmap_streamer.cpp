@@ -199,11 +199,11 @@ void Lightmap_streamer::apply_tile_regions(Scene_root& scene_root, const int til
             continue;
         }
         lookup_by_name.emplace(
-            Lightmap_tile_io::node_path(mesh->get_node()) + '\n' + mesh->get_name(),
+            Lightmap_tile_io::node_path(mesh.get()) + '\n' + mesh->get_name(),
             mesh
         );
         lookup_by_index.emplace(
-            Lightmap_tile_io::node_index_path(mesh->get_node()) + '\n' + mesh->get_name(),
+            Lightmap_tile_io::node_index_path(mesh.get()) + '\n' + mesh->get_name(),
             mesh
         );
     }

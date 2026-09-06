@@ -34,7 +34,7 @@ void Fork_geometry_operation::apply(App_context& context, const erhe::scene::Mes
         set_error("Fork_geometry_operation: mesh is null");
         return;
     }
-    erhe::scene::Node* node = m_parameters.mesh->get_node();
+    erhe::scene::Node* node = m_parameters.mesh.get();
     if (node == nullptr) {
         set_error("Fork_geometry_operation: mesh node is null");
         return;

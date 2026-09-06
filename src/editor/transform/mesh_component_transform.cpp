@@ -147,7 +147,7 @@ auto compute_selection_frame_rotation(Mesh_component_selection& selection, const
         if (!mesh || !geometry) {
             continue;
         }
-        const erhe::scene::Node* node = mesh->get_node();
+        const erhe::scene::Node* node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -300,10 +300,6 @@ auto Mesh_component_transform::gather(App_context& context) -> bool
         if (!geometry) {
             continue;
         }
-        if (mesh->get_node() == nullptr) {
-            continue;
-        }
-
         const GEO::Mesh& geo_mesh = geometry->get_mesh();
 
         std::vector<GEO::index_t> vertices;
@@ -371,7 +367,7 @@ auto Mesh_component_transform::update_anchor(App_context& context, Transform_too
         if (!mesh) {
             continue;
         }
-        const erhe::scene::Node* node = mesh->get_node();
+        const erhe::scene::Node* node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -407,7 +403,7 @@ auto Mesh_component_transform::update_anchor(App_context& context, Transform_too
     if (!have_rotation) {
         const std::shared_ptr<erhe::scene::Mesh> first_mesh = m_groups.front().mesh.lock();
         if (first_mesh) {
-            const erhe::scene::Node* node = first_mesh->get_node();
+            const erhe::scene::Node* node = first_mesh.get();
             if (node != nullptr) {
                 rotation = node->world_from_node_transform().get_rotation();
             }
@@ -440,7 +436,7 @@ void Mesh_component_transform::begin(App_context& context)
                 (m_transform_mode == Mesh_transform_mode::extrude_vertex_normal);
     for (Group& group : m_groups) {
         const std::shared_ptr<erhe::scene::Mesh> mesh = group.mesh.lock();
-        erhe::scene::Node* const                 node = mesh ? mesh->get_node() : nullptr;
+        erhe::scene::Node* const                 node = mesh ? mesh.get() : nullptr;
         group.before_local.clear();
         if (node == nullptr) {
             continue;
@@ -1033,7 +1029,7 @@ auto Mesh_component_transform::is_geometry_shared(App_context&, const std::share
     if (!mesh || (geometry == nullptr)) {
         return false;
     }
-    erhe::scene::Node* node = mesh->get_node();
+    erhe::scene::Node* node = mesh.get();
     if (node == nullptr) {
         return false;
     }
@@ -1068,7 +1064,7 @@ void Mesh_component_transform::fork_group(App_context& context, Group& group)
     if (!mesh) {
         return;
     }
-    erhe::scene::Node* node = mesh->get_node();
+    erhe::scene::Node* node = mesh.get();
     if (node == nullptr) {
         return;
     }
@@ -1142,7 +1138,7 @@ void Mesh_component_transform::extrude_group(App_context& context, Group& group)
     if (!mesh) {
         return;
     }
-    erhe::scene::Node* node = mesh->get_node();
+    erhe::scene::Node* node = mesh.get();
     if (node == nullptr) {
         return;
     }

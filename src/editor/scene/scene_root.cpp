@@ -606,11 +606,36 @@ auto Scene_root::make_browser_window(
                     );
                 }
             }
-            // "Add Attachment": the full attachment catalog (issue #249), each
-            // entry disabled when the node cannot take that kind. Joint keeps its
-            // richer connect-to-selection behaviour instead of the catalog make.
+            // "Add Child Prim": the catalog's child-prim entries (Mesh, Camera,
+            // Light), each of which lands as a child of this node
+            // (doc/usd-compatibility-plan.md C5).
+            if (ImGui::BeginMenu("Add Child Prim")) {
+                for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    if (type_info.kind != Attachment_kind::child_prim) {
+                        continue;
+                    }
+                    const bool can_add = type_info.can_add(*node);
+                    if (ImGui::MenuItem(std::string{type_info.display_name}.c_str(), nullptr, false, can_add)) {
+                        deferred_operations.push_back(
+                            [&context, node, make = type_info.make]() {
+                                make(*context.scene_commands, *node);
+                            }
+                        );
+                        close = true;
+                    }
+                }
+                ImGui::EndMenu();
+            }
+
+            // "Add Attachment": the catalog's applied-API-schema entries (issue
+            // #249), each entry disabled when the node cannot take that kind.
+            // Joint keeps its richer connect-to-selection behaviour instead of
+            // the catalog make.
             if (ImGui::BeginMenu("Add Attachment")) {
                 for (const Attachment_type_info& type_info : get_attachment_types()) {
+                    if (type_info.kind != Attachment_kind::api_schema) {
+                        continue;
+                    }
                     const bool can_add = type_info.can_add(*node);
                     if (type_info.key == "joint") {
                         if (ImGui::MenuItem("Joint", nullptr, false, can_add)) {
@@ -1290,7 +1315,7 @@ auto Scene_root::get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t
         // a skinned mesh on purpose, set ray.mask |= Raytrace_node_mask::skinned.
         return Raytrace_node_mask::skinned;
     }
-    return get_node_rt_mask(mesh ? mesh->get_node() : nullptr);
+    return get_node_rt_mask(mesh ? mesh : nullptr);
 }
 
 void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
@@ -2053,7 +2078,7 @@ namespace {
 // authored in the scene itself.
 auto is_content_embedded_camera(const erhe::scene::Camera& camera) -> bool
 {
-    for (const erhe::scene::Node* node = camera.get_node(); node != nullptr; node = node->get_parent_node().get()) {
+    for (const erhe::scene::Node* node = &camera; node != nullptr; node = node->get_parent_node().get()) {
         if ((node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
             return true;
         }

@@ -56,7 +56,7 @@ void Paint_weights_operation::apply(
         return;
     }
 
-    erhe::scene::Node* node = m_parameters.mesh->get_node();
+    erhe::scene::Node* node = m_parameters.mesh.get();
     if (node == nullptr) {
         set_error("Paint_weights_operation: mesh node is null");
         return;
@@ -134,7 +134,7 @@ void Paint_weights_operation::apply(
     }
 
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : referers) {
-        erhe::scene::Node* mesh_node = mesh->get_node();
+        erhe::scene::Node* mesh_node = mesh.get();
         if (mesh_node == nullptr) {
             continue;
         }

@@ -857,7 +857,7 @@ void Id_renderer::render(const Render_parameters& parameters)
 
     Ring_buffer_range camera_range = m_camera_buffers.update(
         *camera.projection(),
-        *camera.get_node(),
+        camera,
         viewport,
         1.0f,
         erhe::scene_renderer::Grid_parameters{}, // unused by id pass shaders

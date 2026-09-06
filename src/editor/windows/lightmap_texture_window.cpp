@@ -406,7 +406,7 @@ void Lightmap_texture_window::imgui()
     if (m_context.scene_views != nullptr) {
         const std::shared_ptr<Viewport_scene_view> scene_view = m_context.scene_views->last_scene_view();
         const std::shared_ptr<erhe::scene::Camera> camera = scene_view ? scene_view->get_camera() : nullptr;
-        const erhe::scene::Node* const camera_node = camera ? camera->get_node() : nullptr;
+        const erhe::scene::Node* const camera_node = camera ? camera.get() : nullptr;
         if (camera_node != nullptr) {
             camera_position = glm::vec3{camera_node->world_from_node()[3]};
             camera_valid    = true;

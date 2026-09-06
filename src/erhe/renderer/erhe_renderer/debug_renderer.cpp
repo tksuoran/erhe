@@ -417,7 +417,7 @@ auto Debug_renderer::view_from_camera(
     const erhe::math::Coordinate_conventions& conventions
 ) -> View
 {
-    const erhe::scene::Node* camera_node = camera.get_node();
+    const erhe::scene::Node* camera_node = &camera;
     ERHE_VERIFY(camera_node != nullptr);
 
     const erhe::scene::Camera_projection_transforms projection_transforms = camera.projection_transforms(viewport, true, erhe::math::Depth_range::zero_to_one, conventions);

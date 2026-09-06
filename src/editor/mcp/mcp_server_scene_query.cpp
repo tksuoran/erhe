@@ -563,6 +563,31 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         return mesh_json;
     };
 
+    // A Camera and a Light are prims of their own (C5), so their values sit
+    // on the prim's own entry, under the same keys they had while the two
+    // were attachments.
+    const auto camera_details = [](const std::shared_ptr<erhe::scene::Camera>& camera) -> json
+    {
+        return json{
+            {"exposure",     camera->get_exposure()},
+            {"shadow_range", camera->get_shadow_range()}
+        };
+    };
+
+    const auto light_details = [](const std::shared_ptr<erhe::scene::Light>& light) -> json
+    {
+        const char* type_str = (light->get_light_type() == erhe::scene::Light_type::directional) ? "directional"
+                             : (light->get_light_type() == erhe::scene::Light_type::point)       ? "point"
+                             : (light->get_light_type() == erhe::scene::Light_type::spot)        ? "spot"
+                             :                                                                     "unknown";
+        return json{
+            {"light_type", type_str},
+            {"color",      {light->get_color().x, light->get_color().y, light->get_color().z}},
+            {"intensity",  light->get_intensity()},
+            {"range",      light->get_range()}
+        };
+    };
+
     json attachments = json::array();
     for (const auto& att : found_node->get_attachments()) {
         json att_json = {
@@ -576,24 +601,6 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             const std::shared_ptr<Graph_mesh>& graph_mesh = geometry_graph_mesh->get_graph_mesh();
             att_json["graph_mesh"]    = graph_mesh ? graph_mesh->get_name() : "";
             att_json["graph_mesh_id"] = graph_mesh ? json(graph_mesh->get_id()) : json(nullptr);
-        }
-
-        auto camera = std::dynamic_pointer_cast<erhe::scene::Camera>(att);
-        if (camera) {
-            att_json["exposure"]     = camera->get_exposure();
-            att_json["shadow_range"] = camera->get_shadow_range();
-        }
-
-        auto light = std::dynamic_pointer_cast<erhe::scene::Light>(att);
-        if (light) {
-            const char* type_str = (light->get_light_type() == erhe::scene::Light_type::directional) ? "directional"
-                                 : (light->get_light_type() == erhe::scene::Light_type::point)       ? "point"
-                                 : (light->get_light_type() == erhe::scene::Light_type::spot)         ? "spot"
-                                 : "unknown";
-            att_json["light_type"] = type_str;
-            att_json["color"]      = {light->get_color().x, light->get_color().y, light->get_color().z};
-            att_json["intensity"]  = light->get_intensity();
-            att_json["range"]      = light->get_range();
         }
 
         auto bp = std::dynamic_pointer_cast<Brush_placement>(att);
@@ -712,6 +719,12 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
         {"mesh",           erhe::is<erhe::scene::Mesh>(found_node.get())
             ? mesh_details(std::static_pointer_cast<erhe::scene::Mesh>(found_node))
             : json(nullptr)},
+        {"camera",         erhe::is<erhe::scene::Camera>(found_node.get())
+            ? camera_details(std::static_pointer_cast<erhe::scene::Camera>(found_node))
+            : json(nullptr)},
+        {"light",          erhe::is<erhe::scene::Light>(found_node.get())
+            ? light_details(std::static_pointer_cast<erhe::scene::Light>(found_node))
+            : json(nullptr)},
         {"children",       children},
         {"subtree_world_aabb", subtree_aabb.is_valid()
             ? json{
@@ -743,13 +756,12 @@ auto Mcp_server::query_scene_cameras(const json& args) -> std::string
     const std::vector<std::shared_ptr<erhe::scene::Camera>> selectable_cameras = get_selectable_cameras(sr->get_scene());
     json cameras = json::array();
     for (const auto& camera : sr->get_scene().get_cameras()) {
-        const auto* node = camera->get_node();
         const erhe::scene::Projection* projection = camera->projection();
         const bool selectable = std::find(selectable_cameras.begin(), selectable_cameras.end(), camera) != selectable_cameras.end();
         cameras.push_back({
             {"name",         camera->get_name()},
             {"id",           camera->get_id()},
-            {"node",         node ? node->get_name() : ""},
+            {"node",         camera->get_name()},
             {"exposure",     camera->get_exposure()},
             {"shadow_range", camera->get_shadow_range()},
             {"fov_y",        (projection != nullptr) ? projection->fov_y : 0.0f},
@@ -855,8 +867,7 @@ auto Mcp_server::query_pick_at(const json& args) -> std::string
         const std::shared_ptr<erhe::scene::Mesh> mesh = entry.scene_mesh_weak.lock();
         if (mesh) {
             j["mesh"] = mesh->get_name();
-            const erhe::scene::Node* node = mesh->get_node();
-            j["node"] = (node != nullptr) ? node->get_name() : "";
+            j["node"] = mesh->get_name();
             // A bone-slot hit selects the JOINT, not the proxy; report what a
             // click would actually select.
             if ((entry.slot == Hover_entry::bone_slot) && (m_context.bone_visualization != nullptr)) {
@@ -969,7 +980,6 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
     json lights = json::array();
     for (const auto& ll : sr->get_scene().get_light_layers()) {
         for (const auto& light : ll->lights) {
-            const auto* node = light->get_node();
             const char* type_str = (light->get_light_type() == erhe::scene::Light_type::directional) ? "directional"
                                  : (light->get_light_type() == erhe::scene::Light_type::point)       ? "point"
                                  : (light->get_light_type() == erhe::scene::Light_type::spot)         ? "spot"
@@ -977,7 +987,7 @@ auto Mcp_server::query_scene_lights(const json& args) -> std::string
             json light_json{
                 {"name",        light->get_name()},
                 {"id",          light->get_id()},
-                {"node",        node ? node->get_name() : ""},
+                {"node",        light->get_name()},
                 {"type",        type_str},
                 {"color",       {light->get_color().x, light->get_color().y, light->get_color().z}},
                 {"intensity",   light->get_intensity()},
@@ -1067,14 +1077,13 @@ auto Mcp_server::query_raycast(const json& args) -> std::string
         return r.dump();
     }
     erhe::scene::Mesh* mesh = raytrace_primitive->mesh;
-    erhe::scene::Node* node = mesh->get_node();
     const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
     return make_json_content({
         {"hit",             true},
         {"mesh_name",       mesh->get_name()},
         {"mesh_id",         mesh->get_id()},
-        {"node_name",       node ? node->get_name() : ""},
-        {"node_id",         node ? node->get_id() : 0},
+        {"node_name",       mesh->get_name()},
+        {"node_id",         mesh->get_id()},
         {"primitive_index", raytrace_primitive->primitive_index},
         {"distance",        ray.t_far},
         {"position",        {position.x, position.y, position.z}},
@@ -1191,7 +1200,6 @@ auto Mcp_server::query_geometry_batch(const json& args) -> std::string
                 continue;
             }
             erhe::scene::Mesh* mesh = raytrace_primitive->mesh;
-            erhe::scene::Node* node = mesh->get_node();
             const glm::vec3 position = ray.origin + ray.t_far * ray.direction;
             // The raytracer's hit normal is the unnormalized geometric
             // normal (triangle-area scaled); a placement API wants a unit
@@ -1203,8 +1211,8 @@ auto Mcp_server::query_geometry_batch(const json& args) -> std::string
             }
             results.push_back({
                 {"hit",       true},
-                {"node_name", node ? node->get_name() : ""},
-                {"node_id",   node ? node->get_id() : 0},
+                {"node_name", mesh->get_name()},
+                {"node_id",   mesh->get_id()},
                 {"mesh_name", mesh->get_name()},
                 {"distance",  ray.t_far},
                 {"position",  {position.x, position.y, position.z}},

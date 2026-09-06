@@ -79,7 +79,7 @@ auto intersect(
     float&                                    out_v
 ) -> bool
 {
-    const erhe::scene::Node* node = mesh.get_node();
+    const erhe::scene::Node* node = &mesh;
     ERHE_VERIFY(node != nullptr);
     const glm::mat4  mesh_from_world_  = node->node_from_world();
     const GEO::mat4f mesh_from_world   = to_geo_mat4(mesh_from_world_);

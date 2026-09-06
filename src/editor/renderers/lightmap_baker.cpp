@@ -160,7 +160,7 @@ void compute_region_uv_metrics(erhe::geometry::Geometry& geometry, Lightmap_bake
 [[nodiscard]] auto region_world_bounds(const Lightmap_baker::Instance_region& region) -> erhe::math::Aabb
 {
     erhe::math::Aabb bounds{};
-    const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+    const erhe::scene::Node* const node = region.mesh ? region.mesh.get() : nullptr;
     const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
     erhe::math::Aabb local_bounds{};
     if (region.mesh) {
@@ -2739,7 +2739,7 @@ auto Lightmap_baker::compute_tile_split_estimate(Scene_root& scene_root) -> Esti
             ++skip_not_flagged;
             continue;
         }
-        const erhe::scene::Node* const node = mesh->get_node();
+        const erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -3344,7 +3344,7 @@ auto Lightmap_baker::bake_gbuffer(const int tile) -> bool
                 if (region.tile != tile) {
                     continue; // draw_regions skips these; the record keeps the identity affine
                 }
-                const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+                const erhe::scene::Node* const node = region.mesh ? region.mesh.get() : nullptr;
                 const glm::mat4 world_from_node = (node != nullptr) ? node->world_from_node() : glm::mat4{1.0f};
                 glm::vec4 base_color{1.0f, 1.0f, 1.0f, 1.0f};
                 // Dequantization affine for the drawn primitive; stays the identity
@@ -3977,7 +3977,7 @@ auto Lightmap_baker::collect_lights(Scene_root& scene_root) const -> std::vector
         if (!light || !light->is_visible() || (lights.size() >= c_max_gather_lights)) {
             continue;
         }
-        const erhe::scene::Node* const node = light->get_node();
+        const erhe::scene::Node* const node = light.get();
         if (node == nullptr) {
             continue;
         }
@@ -4067,7 +4067,7 @@ void Lightmap_baker::collect_instances(
         if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {
             continue;
         }
-        const erhe::scene::Node* const node = mesh->get_node();
+        const erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -5061,7 +5061,7 @@ auto Lightmap_baker::compute_region_transform_hash() const -> uint64_t
 {
     uint64_t hash = 0xcbf29ce484222325ull;
     for (const Instance_region& region : m_layout.regions) {
-        const erhe::scene::Node* const node = region.mesh ? region.mesh->get_node() : nullptr;
+        const erhe::scene::Node* const node = region.mesh ? region.mesh.get() : nullptr;
         if (node != nullptr) {
             const glm::mat4 world_from_node = node->world_from_node();
             hash = fnv1a64(&world_from_node, sizeof(world_from_node), hash);
@@ -5130,7 +5130,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
         if (!light || !light->is_visible()) {
             continue;
         }
-        const erhe::scene::Node* const node = light->get_node();
+        const erhe::scene::Node* const node = light.get();
         if (node == nullptr) {
             continue;
         }
@@ -5168,7 +5168,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
         if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {
             continue;
         }
-        const erhe::scene::Node* const node = mesh->get_node();
+        const erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }

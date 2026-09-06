@@ -124,7 +124,7 @@ auto Rotate_tool::begin(unsigned int axis_mask, Scene_view* scene_view) -> bool
         // pick() place the ring in.
         std::optional<vec3> eye_opt = scene_view->get_control_ray_origin_in_world();
         const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
-        const erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
+        const erhe::scene::Node* camera_node = camera ? camera.get() : nullptr;
         if (camera_node != nullptr) {
             eye_opt = vec3{camera_node->position_in_world()};
         }

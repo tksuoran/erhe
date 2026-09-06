@@ -122,8 +122,7 @@ void Primitive_buffer::write_primitive(
     erhe::scene::Mesh* mesh       = &mesh_ref;
     const std::size_t  entry_size = m_primitive_interface.primitive_struct.get_size_bytes();
     const auto&        offsets    = m_primitive_interface.offsets;
-    const erhe::scene::Node* node = mesh->get_node();
-    ERHE_VERIFY(node != nullptr);
+    const erhe::scene::Node* node = mesh;
     const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
     ERHE_VERIFY(mesh_primitive_index < mesh_primitives.size());
     const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[mesh_primitive_index];

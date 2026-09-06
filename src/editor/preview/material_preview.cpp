@@ -265,7 +265,7 @@ void Material_preview::render_preview(const std::shared_ptr<erhe::primitive::Mat
     };
     const erhe::scene_renderer::Camera_view_input single_view_input{
         .projection = m_camera->projection(),
-        .node       = m_camera->get_node(),
+        .node       = m_camera.get(),
         .viewport   = context_viewport
     };
     const Render_context context{

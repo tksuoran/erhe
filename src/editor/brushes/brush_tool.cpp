@@ -340,7 +340,7 @@ auto Brush_tool::try_rotate(int direction) -> bool
         return false;
     }
 
-    erhe::scene::Node* node = hover_scene_mesh->get_node();
+    erhe::scene::Node* node = hover_scene_mesh.get();
     if (node == nullptr) {
         return false;
     }
@@ -415,7 +415,7 @@ auto Brush_tool::get_hover_brush() const -> std::shared_ptr<Brush>
         return {};
     }
 
-    erhe::scene::Node* node = hover_scene_mesh->get_node();
+    erhe::scene::Node* node = hover_scene_mesh.get();
     if (node == nullptr) {
         return {};
     }
@@ -505,7 +505,7 @@ void Brush_tool::on_motion()
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh = m_hover.scene_mesh_weak.lock();
     if (hover_scene_mesh) {
-        erhe::scene::Node* hover_node = hover_scene_mesh->get_node();
+        erhe::scene::Node* hover_node = hover_scene_mesh.get();
         if (hover_node != nullptr) {
             if (m_hover.position.has_value()) {
                 m_hover.position = hover_node->transform_direction_from_world_to_local(m_hover.position.value());
@@ -546,7 +546,7 @@ auto Brush_tool::update_hover_frame_from_mesh() -> bool
         return false;
     }
 
-    const erhe::scene::Node* node = hover_scene_mesh->get_node();
+    const erhe::scene::Node* node = hover_scene_mesh.get();
     if (node == nullptr) {
         return false;
     }
@@ -703,7 +703,7 @@ void Brush_tool::update_preview_mesh_node_transform()
 
     const std::shared_ptr<Scene_root>& scene_root = get_scene_root();
     if (hover_scene_mesh) {
-        m_preview_node->set_parent(hover_scene_mesh->get_node());
+        m_preview_node->set_parent(hover_scene_mesh.get());
         m_preview_node->set_parent_from_node(transform);
     } else if (hover_grid) {
         ERHE_VERIFY(scene_root);
@@ -734,7 +734,7 @@ void Brush_tool::do_insert_operation(Brush& brush)
     }
     const auto hover_from_brush = m_align_transform.value();
 
-    auto* const hover_node = hover_scene_mesh ? hover_scene_mesh->get_node() : nullptr;
+    auto* const hover_node = hover_scene_mesh ? hover_scene_mesh.get() : nullptr;
     const glm::mat4 world_from_node = (hover_node != nullptr)
         ? hover_node->world_from_node() * hover_from_brush
         : hover_from_brush;
@@ -1008,7 +1008,7 @@ void Brush_tool::tool_render(const Render_context& render_context)
         //    return;
         //}
         //
-        //erhe::scene::Node* hover_node = hover_scene_mesh->get_node();
+        //erhe::scene::Node* hover_node = hover_scene_mesh.get();
         //if (hover_node == nullptr) {
         //    return;
         //}

@@ -65,13 +65,7 @@ void Mesh_operation::execute(App_context& context)
         log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
         return;
     }
-    erhe::scene::Node* first_node = first_mesh->get_node();
-    if (first_node == nullptr) {
-        set_error("First mesh node is null");
-        log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
-        return;
-    }
-    erhe::Item_host* item_host = first_node->get_item_host();
+    erhe::Item_host* item_host = first_mesh->get_item_host();
     if (item_host == nullptr) {
         set_error("Item host is null");
         log_operations->warn("Op Execute {} failed: {}", describe(), get_error());
@@ -82,7 +76,7 @@ void Mesh_operation::execute(App_context& context)
     log_operations->trace("Op Execute Begin {}", describe());
 
     for (const auto& entry : m_entries) {
-        auto* node = entry.scene_mesh->get_node();
+        auto* node = entry.scene_mesh.get();
 
         // TODO Improve physics RAII and remove this workaround
         std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
@@ -148,16 +142,14 @@ void Mesh_operation::undo(App_context& context)
     Entry& first_entry = m_entries.front();
     erhe::scene::Mesh* first_mesh = first_entry.scene_mesh.get();
     if (first_mesh == nullptr) { return; }
-    erhe::scene::Node* first_node = first_mesh->get_node();
-    if (first_node == nullptr) { return; }
-    erhe::Item_host* item_host = first_node->get_item_host();
+    erhe::Item_host* item_host = first_mesh->get_item_host();
     if (item_host == nullptr) { return; }
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
     log_operations->trace("Op Undo Begin {}", describe());
 
     for (const auto& entry : m_entries) {
-        auto* node = entry.scene_mesh->get_node();
+        auto* node = entry.scene_mesh.get();
 
         // TODO Improve physics RAII and remove this workaround
         std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
@@ -240,7 +232,7 @@ void Mesh_operation::make_entries(
     make_entries(
         [this, geometry_operation](const std::shared_ptr<erhe::scene::Mesh>& scene_mesh)
         {
-            erhe::scene::Node* node = scene_mesh->get_node();
+            erhe::scene::Node* node = scene_mesh.get();
             Entry entry{
                 // TODO consider keeping node alive always .node   = node_shared,
                 .scene_mesh = scene_mesh,
@@ -412,7 +404,7 @@ void Mesh_operation::make_entries(
     ERHE_VERIFY(item_host != nullptr);
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{item_host->item_host_mutex};
 
-    auto* const first_node_raw = first_node ? first_node.get() : first_mesh->get_node();
+    auto* const first_node_raw = first_node ? first_node.get() : first_mesh.get();
     if (first_node_raw == nullptr) {
         // TODO Can this limitation be lifted?
         log_operations->error("First selected mesh does not have scene, cannot perform geometry operation");
@@ -452,7 +444,7 @@ void Mesh_operation::make_entries(
         }
         // If we have mesh selected, get node from mesh
         if (node == nullptr) {
-            node        = scene_mesh->get_node();
+            node        = scene_mesh.get();
             node_shared = std::dynamic_pointer_cast<erhe::scene::Node>(node->shared_from_this());
         }
 

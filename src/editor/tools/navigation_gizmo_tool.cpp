@@ -128,7 +128,7 @@ auto Navigation_gizmo_tool::on_drag(glm::vec2 relative) -> bool
     m_drag_offset += relative;
 
     const std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-    erhe::scene::Node* node = camera ? camera->get_node() : nullptr;
+    erhe::scene::Node* node = camera ? camera.get() : nullptr;
     if (node == nullptr) {
         return true; // The gesture is ours; there is just nothing to move.
     }
@@ -165,7 +165,7 @@ void Navigation_gizmo_tool::on_drag_end()
         constexpr float drag_threshold = 6.0f;
         if ((glm::length(m_drag_offset) < drag_threshold) && (m_drag_axis >= 0) && (m_drag_axis <= 5)) {
             const std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view->get_camera();
-            erhe::scene::Node* node = camera ? camera->get_node() : nullptr;
+            erhe::scene::Node* node = camera ? camera.get() : nullptr;
             if (node != nullptr) {
                 erhe::scene::Trs_transform transform   = node->world_from_node_transform();
                 glm::quat                  rotation    = transform.get_rotation();

@@ -419,11 +419,7 @@ auto Light::stable_directional_light_projection_transforms(
     using mat3 = glm::mat3;
     using mat4 = glm::mat4;
 
-    const Node* const light_node = get_node();
-    ERHE_VERIFY(light_node != nullptr);
-
-    const Node* const view_camera_node = parameters.view_camera->get_node();
-    ERHE_VERIFY(view_camera_node != nullptr);
+    const Node* const view_camera_node = parameters.view_camera;
 
     //// // View distance is used as radius of the view camera bounding volume
     //// const float r = parameters.view_camera->projection()->z_far;

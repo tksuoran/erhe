@@ -115,7 +115,7 @@ auto Light_mesh::point_in_light(const glm::vec3 point, const erhe::scene::Light&
         return true;
     }
 
-    const auto* node = light.get_node();
+    const auto* node = &light;
     if (node == nullptr) {
         return false;
     }

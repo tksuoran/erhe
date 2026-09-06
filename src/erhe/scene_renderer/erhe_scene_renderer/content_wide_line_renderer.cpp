@@ -127,7 +127,7 @@ void Content_wide_line_renderer::add_mesh(
     const uint32_t           group
 )
 {
-    const erhe::scene::Node* node = mesh.get_node();
+    const erhe::scene::Node* node = &mesh;
     if (node == nullptr) {
         return;
     }

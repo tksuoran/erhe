@@ -35,7 +35,7 @@ auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_
 
 void make_camera          (Scene_commands& sc, Node& node) { sc.attach_new_camera          (node); }
 void make_light           (Scene_commands& sc, Node& node) { sc.attach_new_light           (node); }
-void make_mesh            (Scene_commands& sc, Node& node) { sc.attach_new_empty_mesh       (node); }
+void make_mesh            (Scene_commands& sc, Node& node) { sc.attach_new_empty_mesh      (node); }
 void make_rigid_body      (Scene_commands& sc, Node& node) { sc.create_new_rigid_body       (&node); }
 void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint            (&node); }
 void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layout           (node); }
@@ -47,14 +47,14 @@ void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame
 auto get_attachment_types() -> const std::vector<Attachment_type_info>&
 {
     static const std::vector<Attachment_type_info> catalog = {
-        {"camera",           "Camera",           camera_gate,           make_camera          },
-        {"light",            "Light",            light_gate,            make_light           },
-        {"mesh",             "Mesh",             mesh_gate,             make_mesh            },
-        {"rigid_body",       "Rigid Body",       rigid_body_gate,       make_rigid_body      },
-        {"joint",            "Joint",            joint_gate,            make_joint           },
-        {"layout",           "Layout",           layout_gate,           make_layout          },
-        {"grid",             "Grid",             grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", frame_controller_gate, make_frame_controller}
+        {"camera",           "Camera",           Attachment_kind::child_prim, camera_gate,           make_camera          },
+        {"light",            "Light",            Attachment_kind::child_prim, light_gate,            make_light           },
+        {"mesh",             "Mesh",             Attachment_kind::child_prim, mesh_gate,             make_mesh            },
+        {"rigid_body",       "Rigid Body",       Attachment_kind::api_schema, rigid_body_gate,       make_rigid_body      },
+        {"joint",            "Joint",            Attachment_kind::api_schema, joint_gate,            make_joint           },
+        {"layout",           "Layout",           Attachment_kind::api_schema, layout_gate,           make_layout          },
+        {"grid",             "Grid",             Attachment_kind::api_schema, grid_gate,             make_grid            },
+        {"frame_controller", "Frame Controller", Attachment_kind::api_schema, frame_controller_gate, make_frame_controller}
     };
     return catalog;
 }

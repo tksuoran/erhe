@@ -50,9 +50,6 @@ namespace {
         if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
             continue;
         }
-        if (mesh->get_node() == nullptr) {
-            continue;
-        }
         ++count;
     }
     return count;
@@ -451,7 +448,7 @@ auto Lightmap_partitioner::request_prepare(
     job->lightmapped_mesh_count_at_launch = count_lightmapped_meshes(scene_root);
 
     for (const Mesh_group& group : groups) {
-        erhe::scene::Node* const node = group.mesh->get_node();
+        erhe::scene::Node* const node = group.mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -642,9 +639,6 @@ auto Lightmap_partitioner::validate_job_against_scene(const Prepare_job& job) co
         if (mesh->get_item_host() != job.scene_root) {
             return fmt::format("mesh '{}' left the scene", mesh->get_name());
         }
-        if (mesh->get_node() == nullptr) {
-            return fmt::format("mesh '{}' lost its node", mesh->get_name());
-        }
         const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
         if (task.source_primitive_index >= primitives.size()) {
             return fmt::format("mesh '{}' primitive list changed", mesh->get_name());
@@ -771,7 +765,7 @@ void Lightmap_partitioner::commit_prepare()
                 continue;
             }
             total_pieces += piece_primitives.size();
-            erhe::scene::Node* const node = entry.original_mesh->get_node();
+            erhe::scene::Node* const node = entry.original_mesh.get();
             entry.piece_node = std::make_shared<erhe::scene::Xform>(fmt::format("{}.lm", (node != nullptr) ? node->get_name() : entry.original_mesh->get_name()));
             entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", entry.original_mesh->get_name()));
             entry.piece_mesh->layer_id = scene_root.layers().content()->id;
@@ -1046,7 +1040,7 @@ auto Lightmap_partitioner::count_stale_sources() const -> std::size_t
 {
     std::size_t stale = 0;
     for (const Original_entry& entry : m_entries) {
-        const erhe::scene::Node* const node = entry.original_mesh ? entry.original_mesh->get_node() : nullptr;
+        const erhe::scene::Node* const node = entry.original_mesh ? entry.original_mesh.get() : nullptr;
         if (node == nullptr) {
             continue;
         }
@@ -1067,7 +1061,7 @@ auto Lightmap_partitioner::get_source_state_hash() const -> uint64_t
         }
     };
     for (const Original_entry& entry : m_entries) {
-        const erhe::scene::Node* const node = entry.original_mesh ? entry.original_mesh->get_node() : nullptr;
+        const erhe::scene::Node* const node = entry.original_mesh ? entry.original_mesh.get() : nullptr;
         if (node == nullptr) {
             continue;
         }
@@ -1100,7 +1094,7 @@ auto Lightmap_partitioner::find_piece(
         if (entry.original_mesh->get_name() != mesh_name) {
             continue;
         }
-        const erhe::scene::Node* const node = entry.original_mesh->get_node();
+        const erhe::scene::Node* const node = entry.original_mesh.get();
         if (!node_index_path.empty()) {
             if (Lightmap_tile_io::node_index_path(node) != node_index_path) {
                 continue;

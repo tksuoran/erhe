@@ -766,7 +766,7 @@ void Hotbar::update_node_transform()
         if (!camera) {
             return;
         }
-        camera_node = camera->get_node();
+        camera_node = camera.get();
         if (camera_node == nullptr) {
             return;
         }

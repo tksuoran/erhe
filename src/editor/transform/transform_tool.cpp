@@ -1019,7 +1019,7 @@ void Transform_tool::update_hover()
             // XR originates at the controller.
             glm::vec3 eye_position = origin_opt.value();
             const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
-            const erhe::scene::Node* camera_node = camera ? camera->get_node() : nullptr;
+            const erhe::scene::Node* camera_node = camera ? camera.get() : nullptr;
             if (camera_node != nullptr) {
                 eye_position = glm::vec3{camera_node->position_in_world()};
             }
@@ -1170,7 +1170,7 @@ auto Transform_tool::on_drag_ready() -> bool
         log_trs_tool->trace("Transform tool cannot start drag - Scene view Camera is missing");
         return false;
     }
-    const auto* camera_node = camera->get_node();
+    const auto* camera_node = camera.get();
     if (camera_node == nullptr) {
         log_trs_tool->trace("Transform tool cannot start drag - Scene view Camera node is missing");
         return false;
@@ -1506,7 +1506,7 @@ void Transform_tool::render_offscreen_indicator(const Render_context& context)
         return;
     }
     const erhe::scene::Projection* projection_ptr = camera->projection();
-    const erhe::scene::Node*       node_ptr       = camera->get_node();
+    const erhe::scene::Node*       node_ptr       = camera.get();
     if ((projection_ptr == nullptr) || (node_ptr == nullptr)) {
         return;
     }

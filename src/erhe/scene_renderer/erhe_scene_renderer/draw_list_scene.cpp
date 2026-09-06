@@ -190,7 +190,7 @@ public:
     // R10b: sample from the node's current world transform, not from
     // Item_flags::negative_determinant, which is maintained by
     // handle_node_transform_update() and lags behind at attach time.
-    const erhe::scene::Node* node = mesh.get_node();
+    const erhe::scene::Node* node = &mesh;
     if (node == nullptr) {
         return false;
     }
@@ -534,8 +534,7 @@ void Draw_list_scene::write_entry_record(const Draw_list_object& object, const D
     const Primitive_struct&  offsets = m_primitive_interface.offsets;
     const erhe::scene::Mesh* mesh    = object.info.mesh.get();
     ERHE_VERIFY(mesh != nullptr);
-    const erhe::scene::Node* node = mesh->get_node();
-    ERHE_VERIFY(node != nullptr);
+    const erhe::scene::Node* node = mesh;
     const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
     ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
     const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
@@ -559,8 +558,7 @@ void Draw_list_scene::write_object_transform(const uint32_t object_index)
     Draw_list_object&        object = m_objects[object_index];
     const erhe::scene::Mesh* mesh   = object.info.mesh.get();
     ERHE_VERIFY(mesh != nullptr);
-    const erhe::scene::Node* node = mesh->get_node();
-    ERHE_VERIFY(node != nullptr);
+    const erhe::scene::Node* node = mesh;
     const Primitive_struct& offsets = m_primitive_interface.offsets;
     for (const Draw_list_entry_location& location : object.locations) {
         write_transform_fields(get_record(location), offsets, *node);
@@ -592,7 +590,7 @@ void Draw_list_scene::refresh_object_records(const uint32_t object_index)
     // leave them as they are, the unregister removes the entries.
     {
         const erhe::scene::Mesh* refresh_mesh = object.info.mesh.get();
-        if ((refresh_mesh == nullptr) || (refresh_mesh->get_node() == nullptr)) {
+        if (refresh_mesh == nullptr) {
             return;
         }
     }
@@ -607,7 +605,7 @@ void Draw_list_scene::refresh_object_records(const uint32_t object_index)
         write_entry_record(object, entry, get_record(location));
     }
     const erhe::scene::Mesh* mesh = object.info.mesh.get();
-    const erhe::scene::Node* node = (mesh != nullptr) ? mesh->get_node() : nullptr;
+    const erhe::scene::Node* node = mesh;
     object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
     object.joint_slot       = ((mesh != nullptr) && mesh->skin) ? mesh->skin->skin_data.joint_buffer_index : 0u;
     ++m_refresh_count;
@@ -617,8 +615,8 @@ void Draw_list_scene::update_object_transform(const uint32_t object_index)
 {
     Draw_list_object&        object = m_objects[object_index];
     const erhe::scene::Mesh* mesh   = object.info.mesh.get();
-    const erhe::scene::Node* node   = (mesh != nullptr) ? mesh->get_node() : nullptr;
-    if (node == nullptr) {
+    const erhe::scene::Node* node   = mesh;
+    if (mesh == nullptr) {
         return;
     }
     // Several transform updates of one node within a frame (tools, physics
@@ -685,17 +683,18 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
         unregister_object(Draw_list_object_id{existing->second, m_objects[existing->second].generation});
     }
 
-    // A draw list object exists only for a node-attached mesh: every record
-    // field is written from the node's world transform. Registration arrives
-    // through the pending queue (enqueue_register), so the mesh can have been
-    // detached again between the enqueue and this flush - the queue then also
-    // holds the matching unregister, but this register op is processed first.
-    // The controller placeholder mesh does exactly that: it is attached at
-    // Controller_visualization construction and detached in the same frame,
-    // once the real controller render model has loaded. Decline it here; the
-    // attach that gives the mesh a node enqueues a fresh registration.
-    if (mesh->get_node() == nullptr) {
-        log_draw_list->trace("Not registering mesh '{}': not attached to a node", mesh->get_name());
+    // A draw list object exists only for a mesh that is in a scene: every
+    // record field is written from the mesh's world transform. Registration
+    // arrives through the pending queue (enqueue_register), so the mesh can
+    // have left the scene again between the enqueue and this flush - the queue
+    // then also holds the matching unregister, but this register op is
+    // processed first. The controller placeholder mesh does exactly that: it
+    // is added at Controller_visualization construction and removed in the
+    // same frame, once the real controller render model has loaded. Decline it
+    // here; the add that puts the mesh back in a scene enqueues a fresh
+    // registration.
+    if (mesh->get_scene() == nullptr) {
+        log_draw_list->trace("Not registering mesh '{}': not in a scene", mesh->get_name());
         return Draw_list_object_id{};
     }
 
@@ -716,7 +715,7 @@ auto Draw_list_scene::register_object(const Draw_list_object_create_info& create
     // add_entries() wrote the records from the live node / slots; remember
     // what they were written from for the transform dedup / slot sync.
     {
-        const erhe::scene::Node* node = mesh->get_node();
+        const erhe::scene::Node* node = mesh;
         object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
         object.joint_slot       = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
         if (object.mobility == Draw_mobility::skinned) {
@@ -883,7 +882,7 @@ auto Draw_list_scene::try_material_slot_update(const uint32_t object_index) -> b
 
     Draw_list_object&        object = m_objects[object_index];
     const erhe::scene::Mesh* mesh   = object.info.mesh.get();
-    if ((mesh == nullptr) || (mesh->get_node() == nullptr)) {
+    if (mesh == nullptr) {
         return false;
     }
 
@@ -1016,7 +1015,7 @@ void Draw_list_scene::rebuild_all()
         // slots the records written one line earlier already named.
         sync_object_materials(static_cast<uint32_t>(i));
         add_entries(static_cast<uint32_t>(i));
-        const erhe::scene::Node* node = mesh->get_node();
+        const erhe::scene::Node* node = mesh;
         object.transform_serial = (node != nullptr) ? node->node_data.transforms.world_from_node_serial : 0u;
         object.joint_slot       = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
         if (object.mobility == Draw_mobility::skinned) {

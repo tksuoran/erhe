@@ -382,7 +382,7 @@ void Ray_trace_renderer::render(
         return;
     }
     const erhe::scene::Projection* camera_projection = camera.projection();
-    const erhe::scene::Node*       camera_node       = camera.get_node();
+    const erhe::scene::Node*       camera_node       = &camera;
     if ((camera_projection == nullptr) || (camera_node == nullptr)) {
         return;
     }

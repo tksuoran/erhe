@@ -1590,7 +1590,7 @@ void Scene_builder::animate_lights(const double time_d)
         const glm::vec3 up{0.0f, 1.0f, 0.0f};
         const auto m = erhe::math::create_look_at(eye, center, up);
 
-        l->get_node()->set_parent_from_node(m);
+        l->set_parent_from_node(m);
 
         light_index++;
     }

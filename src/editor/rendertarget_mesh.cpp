@@ -258,10 +258,7 @@ void Rendertarget_mesh::update_headset_hand_tracking()
         m_finger_trigger = distance < 0.014f;
     }
 
-    auto const* node = get_node();
-    if (node == nullptr) {
-        return;
-    }
+    const erhe::scene::Node* const node = this;
 
     const auto pointer      = index_opt.value();
     const auto direction    = glm::vec3{pointer.orientation * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f}};
@@ -306,10 +303,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
         return false;
     }
 
-    auto const* node = get_node();
-    if (node == nullptr) {
-        return false;
-    }
+    const erhe::scene::Node* const node = this;
 
     const glm::vec3 origin_position_in_world = opt_origin_in_world.value();
     const glm::vec3 direction_in_world       = opt_direction_in_world.value();
@@ -355,10 +349,7 @@ auto Rendertarget_mesh::update_pointer(Scene_view* scene_view) -> bool
 
 auto Rendertarget_mesh::get_world_to_window(const glm::vec3 position_in_world) const -> std::optional<glm::vec2>
 {
-    auto const* node = get_node();
-    if (node == nullptr) {
-        return {};
-    }
+    const erhe::scene::Node* const node = this;
 
     const glm::vec3 position_in_mesh = node->transform_point_from_world_to_local(position_in_world);
     const glm::vec2 a{

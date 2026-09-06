@@ -81,7 +81,7 @@ TEST(Mesh_prims, mesh_is_an_xformable_prim)
     EXPECT_TRUE(erhe::is<erhe::scene::Gprim>    (mesh.get()));
     EXPECT_TRUE(erhe::is<erhe::scene::Imageable>(mesh.get()));
     EXPECT_EQ  (mesh->get_class_type_name(), "Mesh");
-    EXPECT_EQ  (mesh->get_node(), mesh.get());
+    EXPECT_EQ  (erhe::scene::get_mesh(mesh.get()), mesh);
 }
 
 TEST(Mesh_prims, mesh_under_an_xform_composes_its_own_transform)

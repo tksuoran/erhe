@@ -46,12 +46,6 @@ public:
     // on top of the node registration the base does.
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
-    // The camera itself: the transitional accessor every consumer that reads
-    // "the node of this camera" still spells, kept while the U steps of
-    // doc/usd-compatibility-plan.md retire it.
-    [[nodiscard]] auto get_node()       -> Node*       { return this; }
-    [[nodiscard]] auto get_node() const -> const Node* { return this; }
-
     // Public API
     // The effective projection: a mirror of the projection properties
     // (local, style or inherited) kept current by on_property_changed, so

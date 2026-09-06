@@ -387,7 +387,7 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     // Ignored when the camera no longer exists or belongs to another scene.
     const std::shared_ptr<erhe::scene::Camera> override_camera = m_scene_view.get_shadow_fit_override_camera().lock();
     if (override_camera) {
-        const erhe::scene::Node* const override_camera_node = override_camera->get_node();
+        const erhe::scene::Node* const override_camera_node = override_camera.get();
         if ((override_camera_node != nullptr) && (override_camera_node->get_scene() == scene_root->get_hosted_scene())) {
             camera = override_camera;
         }

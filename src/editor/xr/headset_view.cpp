@@ -836,7 +836,7 @@ void Headset_view::update_hover_with_id_render()
 
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = entry.scene_mesh_weak.lock();
     if (scene_mesh) {
-        const erhe::scene::Node* node = scene_mesh->get_node();
+        const erhe::scene::Node* node = scene_mesh.get();
         ERHE_VERIFY(node != nullptr);
         const erhe::scene::Mesh_primitive& mesh_primitive = scene_mesh->get_primitives()[entry.scene_mesh_primitive_index];
         const erhe::primitive::Primitive&  primitive      = *mesh_primitive.primitive.get();
@@ -1006,7 +1006,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
                 }
                 view_inputs.push_back(erhe::scene_renderer::Camera_view_input{
                     .projection = camera->projection(),
-                    .node       = camera->get_node(),
+                    .node       = camera,
                     .viewport   = viewport_xy
                 });
             }
@@ -1406,7 +1406,7 @@ auto Headset_view::render_headset(erhe::graphics::Command_buffer& command_buffer
             erhe::scene::Camera* view_camera = view_resources->get_camera();
             const erhe::scene_renderer::Camera_view_input single_view_input{
                 .projection = view_camera->projection(),
-                .node       = view_camera->get_node(),
+                .node       = view_camera,
                 .viewport   = viewport
             };
             Render_context render_context {

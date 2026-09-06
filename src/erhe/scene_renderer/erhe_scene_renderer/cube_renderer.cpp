@@ -114,7 +114,7 @@ void Cube_renderer::render(const Render_parameters& parameters)
     ERHE_VERIFY(camera != nullptr);
     camera_buffer_range = m_camera_buffer.update(
         *camera->projection(),
-        *camera->get_node(),
+        *camera,
         viewport,
         camera->get_exposure(),
         Grid_parameters{}, // unused by cube pass shaders

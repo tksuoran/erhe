@@ -89,7 +89,7 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
         return;
     }
 
-    erhe::scene::Node* node = m_parameters.mesh->get_node();
+    erhe::scene::Node* node = m_parameters.mesh.get();
     if (node == nullptr) {
         set_error("Move_mesh_vertices_operation: mesh node is null");
         return;
@@ -176,7 +176,7 @@ void Move_mesh_vertices_operation::apply(App_context& context, const std::vector
     std::shared_ptr<erhe::physics::ICollision_shape> shared_collision_shape;
 
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : referers) {
-        erhe::scene::Node* mesh_node = mesh->get_node();
+        erhe::scene::Node* mesh_node = mesh.get();
         if (mesh_node == nullptr) {
             continue;
         }

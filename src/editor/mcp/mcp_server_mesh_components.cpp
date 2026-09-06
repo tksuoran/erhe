@@ -382,7 +382,7 @@ auto Mcp_server::query_mesh_component_selection(const json& args) -> std::string
         const std::shared_ptr<erhe::scene::Mesh> mesh = entry.mesh.lock();
         if (mesh) {
             entry_json["mesh_name"] = mesh->get_name();
-            const erhe::scene::Node* node = mesh->get_node();
+            const erhe::scene::Node* node = mesh.get();
             if (node != nullptr) {
                 entry_json["node_name"] = node->get_name();
                 entry_json["node_id"]   = node->get_id();
@@ -442,11 +442,8 @@ auto Mcp_server::query_id_range_mapping(const json& args) -> std::string
         };
         if (range.mesh != nullptr) {
             entry["mesh_name"] = range.mesh->get_name();
-            const erhe::scene::Node* node = range.mesh->get_node();
-            if (node != nullptr) {
-                entry["node_id"]   = node->get_id();
-                entry["node_name"] = node->get_name();
-            }
+            entry["node_id"]   = range.mesh->get_id();
+            entry["node_name"] = range.mesh->get_name();
             // The per-primitive base vertex in the shared pool: the ID shader
             // subtracts this from gl_VertexID so the packed triangle id is the
             // 0-based local facet index. Surfaced so the encoding can be verified.

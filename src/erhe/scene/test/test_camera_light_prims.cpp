@@ -85,8 +85,8 @@ TEST(Camera_light_prims, camera_and_light_are_xformable_prims)
     EXPECT_TRUE(erhe::is<erhe::scene::Imageable>(light.get()));
     EXPECT_EQ  (camera->get_class_type_name(), "Camera");
     EXPECT_EQ  (light ->get_class_type_name(), "Light");
-    EXPECT_EQ  (camera->get_node(), camera.get());
-    EXPECT_EQ  (light ->get_node(), light.get());
+    EXPECT_EQ  (erhe::scene::get_camera(camera.get()), camera);
+    EXPECT_EQ  (erhe::scene::get_light (light .get()), light );
 }
 
 TEST(Camera_light_prims, camera_under_an_xform_composes_its_own_transform)

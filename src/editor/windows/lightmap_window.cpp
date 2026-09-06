@@ -52,7 +52,7 @@ namespace {
         if ((mesh->get_flag_bits() & erhe::Item_flags::lightmapped) == 0u) {
             continue;
         }
-        erhe::scene::Node* const node = mesh->get_node();
+        erhe::scene::Node* const node = mesh.get();
         if (node == nullptr) {
             continue;
         }
@@ -118,8 +118,8 @@ namespace {
         }
         manifest->tiles[static_cast<std::size_t>(region.tile)].regions.push_back(
             Lightmap_tile_io::Region_entry{
-                .node_path       = Lightmap_tile_io::node_path(identity_mesh->get_node()),
-                .node_index_path = Lightmap_tile_io::node_index_path(identity_mesh->get_node()),
+                .node_path       = Lightmap_tile_io::node_path(identity_mesh),
+                .node_index_path = Lightmap_tile_io::node_index_path(identity_mesh),
                 .mesh_name       = identity_mesh->get_name(),
                 .primitive_index = (region.piece_ordinal >= 0) ? region.source_primitive_index : region.primitive_index,
                 .piece_ordinal   = region.piece_ordinal,
@@ -1282,7 +1282,7 @@ void Lightmap_window::imgui()
                     if (layout.tiles[static_cast<std::size_t>(region.tile)].slot < 0) {
                         continue;
                     }
-                    erhe::scene::Node* const node = region.mesh->get_node();
+                    erhe::scene::Node* const node = region.mesh.get();
                     if (node == nullptr) {
                         continue;
                     }

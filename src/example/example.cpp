@@ -227,7 +227,7 @@ public:
         );
 
         m_camera_controller = std::make_shared<Frame_controller>();
-        m_camera_controller->set_node(m_camera->get_node());
+        m_camera_controller->set_node(m_camera.get());
 
         m_last_window_width  = m_window.get_width();
         m_last_window_height = m_window.get_height();
@@ -460,7 +460,7 @@ public:
 
         const erhe::scene_renderer::Camera_view_input single_view_input{
             .projection = m_camera->projection(),
-            .node       = m_camera->get_node(),
+            .node       = m_camera.get(),
             .viewport   = viewport
         };
         m_forward_renderer.render(

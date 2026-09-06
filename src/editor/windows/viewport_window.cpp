@@ -439,7 +439,7 @@ void Viewport_window::imgui()
     imgui_viewport();
     const std::shared_ptr<Viewport_scene_view> viewport_scene_view = m_viewport_scene_view.lock();
     std::shared_ptr<erhe::scene::Camera> camera = viewport_scene_view ? viewport_scene_view->get_camera() : nullptr;
-    erhe::scene::Node* node = camera ? camera->get_node() : nullptr;
+    erhe::scene::Node* node = camera ? camera.get() : nullptr;
     if (viewport_scene_view && viewport_scene_view->get_show_navigation_gizmo() && (node != nullptr)) {
         ImGui::SetCursorPos(viewport_start);
         const ImVec2 after_toolbar_cursor_pos = ImGui::GetCursorPos();

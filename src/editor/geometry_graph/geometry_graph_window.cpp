@@ -42,6 +42,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -1339,7 +1340,7 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     // replaced by that ghost. A brush arrives either as a content-library
     // node (item tree drag) or inside an inventory / hotbar brush slot
     // (Inventory window drag); a scene mesh arrives as a hierarchy drag of
-    // the mesh attachment ("Mesh") or of a node carrying one ("Node").
+    // the mesh prim ("Mesh") or of a transform prim carrying one ("Xform").
     std::shared_ptr<Brush>             brush{};
     std::shared_ptr<erhe::scene::Mesh> mesh{};
     bool                               delivery = false;
@@ -1362,6 +1363,12 @@ void Geometry_graph_window::canvas_drag_and_drop_target(const ImVec2& rect_min, 
     if ((payload == nullptr) && (slot_payload == nullptr) && (item_payload == nullptr)) {
         item_payload = ImGui::AcceptDragDropPayload(
             erhe::scene::Mesh::static_type_name.data(),
+            ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
+        );
+    }
+    if ((payload == nullptr) && (slot_payload == nullptr) && (item_payload == nullptr)) {
+        item_payload = ImGui::AcceptDragDropPayload(
+            erhe::scene::Xform::static_type_name.data(),
             ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
         );
     }

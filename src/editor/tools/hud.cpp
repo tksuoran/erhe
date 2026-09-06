@@ -439,7 +439,7 @@ auto Hud::try_begin_drag() -> bool
     if (!drag_scene_mesh) {
         return false;
     }
-    erhe::scene::Node* node = drag_scene_mesh->get_node();
+    erhe::scene::Node* node = drag_scene_mesh.get();
     if (node == nullptr) {
         return false;
     }

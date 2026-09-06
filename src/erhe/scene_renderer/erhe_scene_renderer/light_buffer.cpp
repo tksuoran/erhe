@@ -485,8 +485,6 @@ auto Light_buffer::update(
         const erhe::scene::Light* const light = light_projection_transforms.light;
         ERHE_VERIFY(light != nullptr);
         ERHE_VERIFY(light_projection_transforms.index == light_index);
-        const erhe::scene::Node* const node = light->get_node();
-        ERHE_VERIFY(node != nullptr);
 
         const bool shadow_mapped = light_projection_transforms.is_shadow_mapped();
         switch (light->get_light_type()) {

@@ -38,6 +38,7 @@
 #include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -51,6 +52,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <limits>
 
@@ -66,6 +68,42 @@ namespace {
 // Live Item_tree instances, in construction order. Raw pointers: entries are
 // added and removed by the constructor / destructor below.
 std::vector<Item_tree*> g_item_trees;
+
+// A hierarchy drag carries the dragged item's own type name
+// (Item_tree::drag_and_drop_source), so a prim payload is named for the prim's
+// concrete class. These are the classes a tree row takes as a reparent /
+// reorder payload: every Xformable the tree shows as a row.
+constexpr std::array<std::string_view, 5> c_prim_payload_types{
+    erhe::scene::Xform ::static_type_name,
+    erhe::scene::Mesh  ::static_type_name,
+    erhe::scene::Camera::static_type_name,
+    erhe::scene::Light ::static_type_name,
+    erhe::scene::Node  ::static_type_name
+};
+
+[[nodiscard]] auto is_prim_payload(const ImGuiPayload* const payload) -> bool
+{
+    if (payload == nullptr) {
+        return false;
+    }
+    for (const std::string_view type_name : c_prim_payload_types) {
+        if (payload->IsDataType(type_name.data())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] auto accept_prim_payload(const ImGuiDragDropFlags flags) -> const ImGuiPayload*
+{
+    for (const std::string_view type_name : c_prim_payload_types) {
+        const ImGuiPayload* const payload = ImGui::AcceptDragDropPayload(type_name.data(), flags);
+        if (payload != nullptr) {
+            return payload;
+        }
+    }
+    return nullptr;
+}
 
 }
 
@@ -754,7 +792,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         return false;
     }
 
-    const bool payload_is_node = payload_peek->IsDataType("Node");
+    const bool payload_is_node = is_prim_payload(payload_peek);
     std::shared_ptr<erhe::primitive::Material> material{};
     std::shared_ptr<Brush>                     brush{};
     std::shared_ptr<Graph_mesh>                graph_mesh{};
@@ -984,20 +1022,20 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             return true;
         }
     } else if (payload_is_node) {
-        log_tree_frame->trace("Dnd item is Node: {}", node->describe());
+        log_tree_frame->trace("Dnd item is a prim: {}", node->describe());
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
         if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
             {
                 drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
                 if (payload != nullptr) {
                     if (payload != nullptr) {
-                        log_tree_frame->trace("Dnd payload is Node (top rect)");
+                        log_tree_frame->trace("Dnd payload is a prim (top rect)");
                         IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
                         erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
                         move_selection(node, payload_item, Placement::Before_anchor);
                     } else {
-                        log_tree_frame->trace("Dnd payload is not Node (top rect)");
+                        log_tree_frame->trace("Dnd payload is not a prim (top rect)");
                     }
                 }
             }
@@ -1009,14 +1047,14 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
         if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
             drag_and_drop_rectangle_preview(middle_rect);
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+            const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             if (payload != nullptr) {
-                log_tree_frame->trace("Dnd payload is Node (middle rect)");
+                log_tree_frame->trace("Dnd payload is a prim (middle rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
                 erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
                 attach_selection_to(node, payload_item);
             } else {
-                log_tree_frame->trace("Dnd payload is not Node (middle rect)");
+                log_tree_frame->trace("Dnd payload is not a prim (middle rect)");
             }
             ImGui::EndDragDropTarget();
             return true;
@@ -1025,21 +1063,21 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         // Move selection after drop target
         const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
         if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("Node", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+            const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
             if (payload != nullptr) {
                 drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
-                log_tree_frame->trace("Dnd payload is Node (bottom rect)");
+                log_tree_frame->trace("Dnd payload is a prim (bottom rect)");
                 IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
                 erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
                 move_selection(node, payload_item, Placement::After_anchor);
             } else {
-                log_tree_frame->trace("Dnd payload is not Node (bottom rect)");
+                log_tree_frame->trace("Dnd payload is not a prim (bottom rect)");
             }
             ImGui::EndDragDropTarget();
             return true;
         }
     } else {
-        log_tree_frame->trace("Dnd item is not Node / Material: {}", item->describe());
+        log_tree_frame->trace("Dnd item is not a prim / Material: {}", item->describe());
     }
     return false;
 }

@@ -218,7 +218,7 @@ auto Physics_tool::acquire_target() -> bool
     }
 
     std::shared_ptr<erhe::scene::Mesh> target_mesh = scene_mesh;
-    erhe::scene::Node*                 target_node = target_mesh->get_node();
+    erhe::scene::Node*                 target_node = target_mesh.get();
     ERHE_VERIFY(target_node != nullptr);
 
     auto target_node_physics = erhe::scene::get_attachment<Node_physics>(target_node);
@@ -250,7 +250,7 @@ auto Physics_tool::acquire_target() -> bool
     m_goal_position_in_world = m_grab_position_world;
 
     m_target_distance       = glm::distance(view_position, m_goal_position_in_world);
-    m_grab_position_in_node = m_target_mesh->get_node()->transform_point_from_world_to_local(
+    m_grab_position_in_node = m_target_mesh->transform_point_from_world_to_local(
         m_goal_position_in_world
     );
     m_grab_position_in_collision_shape = m_grab_position_in_node - rigid_body_center_of_mass;
@@ -258,7 +258,7 @@ auto Physics_tool::acquire_target() -> bool
     m_target_node_physics->markers.clear();
     m_target_node_physics->markers.push_back(m_grab_position_in_node);
 
-    glm::vec3 node_position = glm::vec3{m_target_mesh->get_node()->position_in_world()};
+    glm::vec3 node_position = glm::vec3{m_target_mesh->position_in_world()};
     const glm::mat4 rigid_body_transform = rigid_body->get_world_transform();
     glm::vec3 rigid_body_position = glm::vec3{rigid_body_transform * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
     //log_physics->trace("Node pos: {}", node_position);
@@ -462,10 +462,10 @@ auto Physics_tool::on_drag() -> bool
     }
 
     if (m_mode == Physics_tool_mode::Drag) {
-        m_grab_position_world    = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
+        m_grab_position_world    = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
         m_goal_position_in_world = end.value();
     } else {
-        m_grab_position_world = glm::vec3{m_target_mesh->get_node()->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
+        m_grab_position_world = glm::vec3{m_target_mesh->world_from_node() * glm::vec4{m_grab_position_in_node, 1.0f}};
 
         erhe::math::Aabb mesh_bounding_box;
         for (const erhe::scene::Mesh_primitive& mesh_primitive : m_target_mesh->get_primitives()) {
@@ -519,7 +519,7 @@ void Physics_tool::tool_render(const Render_context& context)
     if (m_target_mesh) {
         erhe::raytrace::IScene& rt_scene = context.scene_view.get_scene_root()->get_raytrace_scene();
         erhe::raytrace::Ray ray{
-            .origin    = glm::vec3{m_target_mesh->get_node()->position_in_world()},
+            .origin    = glm::vec3{m_target_mesh->position_in_world()},
             .t_near    = 0.0f,
             .direction = glm::vec3{0.0f, -1.0f, 0.0f},
             .time      = 0.0f,

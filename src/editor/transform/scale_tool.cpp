@@ -221,7 +221,7 @@ auto Scale_tool::update_uniform(Scene_view* scene_view) -> bool
     if (!camera) {
         return false;
     }
-    const erhe::scene::Node* camera_node = camera->get_node();
+    const erhe::scene::Node* camera_node = camera.get();
     if (camera_node == nullptr) {
         return false;
     }

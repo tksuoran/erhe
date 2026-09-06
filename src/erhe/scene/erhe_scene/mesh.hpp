@@ -115,12 +115,6 @@ public:
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
     void handle_transform_update(uint64_t serial)                                                override;
 
-    // The mesh itself: the transitional accessor every consumer that reads
-    // "the node of this mesh" still spells, kept while the U steps of
-    // doc/usd-compatibility-plan.md retire it.
-    [[nodiscard]] auto get_node()       -> Node*       { return this; }
-    [[nodiscard]] auto get_node() const -> const Node* { return this; }
-
     // Implements Item_base (D29): the primitives are the sub-objects.
     [[nodiscard]] auto get_property_sub_object_count() const -> std::size_t override;
     [[nodiscard]] auto get_property_sub_object      (std::size_t index) -> erhe::property::Dependency_object* override;

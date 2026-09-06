@@ -391,7 +391,7 @@ auto Mesh_component_selection::is_live(const Mesh_component_entry& entry) const 
     if (!mesh) {
         return false;
     }
-    const erhe::scene::Node* node = mesh->get_node();
+    const erhe::scene::Node* node = mesh.get();
     if ((node == nullptr) || (node->get_item_host() == nullptr)) {
         return false; // mesh removed from the scene (e.g. an undone insert)
     }

@@ -363,8 +363,8 @@ void Weight_paint_tool::apply_dab()
     glm::vec3 camera_position{0.0f};
     bool      have_camera{false};
     const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
-    if (camera && (camera->get_node() != nullptr)) {
-        camera_position = glm::vec3{camera->get_node()->position_in_world()};
+    if (camera) {
+        camera_position = glm::vec3{camera->position_in_world()};
         have_camera = true;
     }
 
@@ -382,7 +382,7 @@ void Weight_paint_tool::apply_dab()
     erhe::geometry::Mesh_attributes& attributes = m_stroke_geometry->get_attributes();
     const GEO::Mesh&                 geo_mesh   = m_stroke_geometry->get_mesh();
 
-    const erhe::scene::Node* node = stroke_mesh->get_node();
+    const erhe::scene::Node* node = stroke_mesh.get();
 
     // Dab statistics for debugging
     std::size_t stat_no_attributes    = 0;

@@ -73,7 +73,7 @@ auto get_hit_node(const erhe::raytrace::Hit& hit) -> erhe::scene::Node*
     }
 
     auto* mesh = raytrace_primitive->mesh;
-    return mesh->get_node();
+    return mesh;
 }
 
 auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
@@ -87,8 +87,6 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     ERHE_VERIFY(raytrace_primitive != nullptr);
     auto* mesh = raytrace_primitive->mesh;
     ERHE_VERIFY(mesh != nullptr);
-    auto* node = mesh->get_node();
-    ERHE_VERIFY(node != nullptr);
     const auto& mesh_primitives = mesh->get_primitives();
     ERHE_VERIFY(raytrace_primitive->primitive_index < mesh_primitives.size());
     const erhe::scene::Mesh_primitive& mesh_primitive = mesh_primitives.at(raytrace_primitive->primitive_index);
@@ -112,7 +110,7 @@ auto get_hit_normal(const erhe::raytrace::Hit& hit) -> std::optional<glm::vec3>
     const GEO::Mesh& geo_mesh               = geometry->get_mesh();
     const GEO::vec3f facet_normal           = GEO::normalize(mesh_facet_normalf(geo_mesh, facet));
     const glm::vec3  local_normal           = to_glm_vec3(facet_normal);
-    const glm::mat4  world_from_node        = node->world_from_node();
+    const glm::mat4  world_from_node        = mesh->world_from_node();
     const glm::mat4  normal_world_from_node = glm::transpose(glm::adjugate(world_from_node));
     return glm::vec3{normal_world_from_node * glm::vec4{local_normal, 0.0f}};
 }
