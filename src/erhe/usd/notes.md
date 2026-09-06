@@ -62,6 +62,32 @@ translation units.
   Every other mesh becomes an `erhe::primitive::Triangle_soup` with one
   vertex per polygon corner and polygons fanned into triangles, the carrier
   glTF primitives use.
+- Every prim the conversion gives a transform to keeps the xformOp stack it
+  was authored with, next to the transform Tydra composed for it
+  (`doc/usd-compatibility-plan.md` M8, `src/erhe/scene/notes.md` "Authored
+  xformOp stacks"). Tydra reports the composed `local_matrix` only, so the
+  ops come off the raw prim's `lightusd::Xformable::xformOps` - the composed
+  prim the authored-opinion reader below already looks up. Each op keeps its
+  type, its suffix and its `!invert!` flag as authored, and its value in
+  double precision with the authored value type (`half3` / `float3` /
+  `double3`, `half` / `float` / `double`, `quath` / `quatf` / `quatd`,
+  `matrix4d`) kept as the op's precision, so the export writes the type name
+  the file used. `!resetXformStack!` is the stack's flag rather than an op.
+  A prim that authored no ops gets an empty stack, which composes to identity
+  and exports as no `xformOp`s at all, so a saved layer says exactly what the
+  loaded one did. An op whose value is time-sampled contributes its default
+  when it has one and its first sample otherwise; animated transforms are
+  future work (`doc/usd-compatibility-plan.md` section 6).
+  Three cases keep the composed matrix and no stack, each reported in the
+  log: a prim the stage lookup does not answer for or whose class carries no
+  `xformOps`, an op of a value type erhe has no counterpart for (one
+  warning), and a stack whose composition disagrees with the transform the
+  stage evaluates by more than 1e-5 (one warning - the two agreeing is what
+  `erhe_usd_tests` asserts for every prim of the fixtures). The stage's
+  `upAxis` / `metersPerUnit` correction reaches the top-level prims of a
+  non-Y-up or non-metre stage; those prims write a transform that is not what
+  their ops say, so they keep the composed matrix too (logged at debug
+  level).
 - The erhe class of a prim is the class its `typeName` names
   (`doc/usd-compatibility-plan.md` C5, the object-model table of
   `doc/usd_compatibility.md`): a `Mesh` prim becomes an
@@ -172,6 +198,19 @@ because the same spelling rule decides what an item is called on a stage.
   material prim's namespace, so a prim the user parented to a material is not
   written. The stage names one `defaultPrim`: the single top-level prim, or a
   `World` `Xform` gathering them when the scene has several.
+- A prim's transform. A prim that carries the xformOp stack it was imported
+  with writes that stack: one attribute per op in the authored value type its
+  precision names, the `xformOpOrder` token list carrying the suffixes, the
+  `!invert!` flags and a leading `!resetXformStack!`. An empty stack writes no
+  `xformOp` at all. Every other prim writes its composed matrix as a single
+  `xformOp:transform`, and an identity matrix writes nothing - so a prim erhe
+  created is written the way it always was. The stack is used only when it
+  composes (within 1e-5) to the matrix being written, which is what keeps it
+  out of the two cases where the matrix is not the prim's own: an
+  `import_root` container whose transform is pre-multiplied into its
+  children, and a stage the importer applied an `upAxis` / `metersPerUnit`
+  correction to. erhe keeps every op value in double precision, so a `half`
+  op round-trips through the nearest half - the value it was read from.
 - Which prims are written. A prim is written when it is scene content
   (`Item_flags::content`), or when it is a resource the file carries or holds
   one below it - a resource prim is shown in the UI and is not content, so
@@ -329,6 +368,17 @@ mesh of its own. `test_usd_materials.cpp` asserts that the material prims
 land at their stage paths, that the binding follows the path rather than the
 name, that a save writes each `Material` prim back where it sits (and invents
 no `Materials` scope) and that the second save is byte-identical.
+
+`test/data/xform_ops.usda` is the authored-xformOp-stack case, written in the
+writer's own output spelling so a load and save has to reproduce it line for
+line: a three-op `translate` / `rotateXYZ` / `scale` stack in mixed
+`double3` / `float3` precision, a pivot stack (`translate:pivot`,
+`!invert!translate:pivot`, `!resetXformStack!`), a `matrix4d` `transform` op
+and a prim with no ops. `test_usd_xform_ops.cpp` asserts the round trip is
+byte-identical and is a fixed point (a second load and save reproduces it),
+that every imported prim's stack composes to the transform the stage
+evaluates, and that a `set_parent_from_node` with a changed translation lands
+in the `translate` op while the other ops come back unchanged.
 
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test

@@ -23,6 +23,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform_op.hpp"
 
 // LightUSD headers. Together with usd.cpp and usd_import.cpp this is the
 // only place in erhe that includes them; everything the rest of erhe sees is
@@ -50,6 +51,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace erhe::usd {
@@ -94,6 +96,143 @@ constexpr float c_export_focal_length = 50.0f;
         }
     }
     return result;
+}
+
+[[nodiscard]] auto is_near(const glm::mat4& lhs, const glm::mat4& rhs) -> bool
+{
+    constexpr float tolerance = 1e-5f;
+    for (int j = 0; j < 4; ++j) {
+        for (int i = 0; i < 4; ++i) {
+            if (std::abs(lhs[j][i] - rhs[j][i]) > tolerance) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The USD counterpart of an erhe xformOp type. `Xform_op_type` is USD's own
+// vocabulary, so this is a name-for-name mapping; `ResetXformStack` is a flag
+// of the stack rather than an op and has no `Xform_op_type`.
+[[nodiscard]] auto to_usd_xform_op_type(const erhe::scene::Xform_op_type type) -> lightusd::XformOp::OpType
+{
+    using Usd_type  = lightusd::XformOp::OpType;
+    using Erhe_type = erhe::scene::Xform_op_type;
+    switch (type) {
+        case Erhe_type::translate:  return Usd_type::Translate;
+        case Erhe_type::scale:      return Usd_type::Scale;
+        case Erhe_type::rotate_x:   return Usd_type::RotateX;
+        case Erhe_type::rotate_y:   return Usd_type::RotateY;
+        case Erhe_type::rotate_z:   return Usd_type::RotateZ;
+        case Erhe_type::rotate_xyz: return Usd_type::RotateXYZ;
+        case Erhe_type::rotate_xzy: return Usd_type::RotateXZY;
+        case Erhe_type::rotate_yxz: return Usd_type::RotateYXZ;
+        case Erhe_type::rotate_yzx: return Usd_type::RotateYZX;
+        case Erhe_type::rotate_zxy: return Usd_type::RotateZXY;
+        case Erhe_type::rotate_zyx: return Usd_type::RotateZYX;
+        case Erhe_type::orient:     return Usd_type::Orient;
+        default:                    return Usd_type::Transform;
+    }
+}
+
+[[nodiscard]] auto to_usd_half(const double value) -> lightusd::value::half
+{
+    return lightusd::value::float_to_half_full(static_cast<float>(value));
+}
+
+[[nodiscard]] auto is_three_component_op(const erhe::scene::Xform_op_type type) -> bool
+{
+    using Erhe_type = erhe::scene::Xform_op_type;
+    switch (type) {
+        case Erhe_type::translate:
+        case Erhe_type::scale:
+        case Erhe_type::rotate_xyz:
+        case Erhe_type::rotate_xzy:
+        case Erhe_type::rotate_yxz:
+        case Erhe_type::rotate_yzx:
+        case Erhe_type::rotate_zxy:
+        case Erhe_type::rotate_zyx: return true;
+        default:                    return false;
+    }
+}
+
+// The op's value in the value type its authored precision names, which is
+// what the writer prints the type name of: a `float3` op comes back a
+// `float3` op. erhe keeps every value in double precision, so a `half` op
+// round-trips through the nearest half - the same value it was read from.
+void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& op)
+{
+    using Precision = erhe::scene::Xform_op_precision;
+    if (op.type == erhe::scene::Xform_op_type::transform) {
+        // matrix4d is the only matrix type erhe keeps a value in, and the op
+        // holds it in double precision, so it is written without narrowing.
+        const glm::dmat4          value = std::get<glm::dmat4>(op.value);
+        lightusd::value::matrix4d matrix{};
+        for (int j = 0; j < 4; ++j) {
+            for (int i = 0; i < 4; ++i) {
+                matrix.m[j][i] = value[j][i];
+            }
+        }
+        usd_op.set_value(matrix);
+        return;
+    }
+    if (op.type == erhe::scene::Xform_op_type::orient) {
+        const glm::dquat value = std::get<glm::dquat>(op.value);
+        switch (op.precision) {
+            case Precision::double_: {
+                usd_op.set_value(lightusd::value::quatd{{value.x, value.y, value.z}, value.w});
+                return;
+            }
+            case Precision::float_: {
+                usd_op.set_value(
+                    lightusd::value::quatf{
+                        {static_cast<float>(value.x), static_cast<float>(value.y), static_cast<float>(value.z)},
+                        static_cast<float>(value.w)
+                    }
+                );
+                return;
+            }
+            default: {
+                usd_op.set_value(
+                    lightusd::value::quath{
+                        {to_usd_half(value.x), to_usd_half(value.y), to_usd_half(value.z)},
+                        to_usd_half(value.w)
+                    }
+                );
+                return;
+            }
+        }
+    }
+    if (is_three_component_op(op.type)) {
+        const glm::dvec3 value = std::get<glm::dvec3>(op.value);
+        switch (op.precision) {
+            case Precision::double_: {
+                usd_op.set_value(lightusd::value::double3{value.x, value.y, value.z});
+                return;
+            }
+            case Precision::float_: {
+                usd_op.set_value(
+                    lightusd::value::float3{
+                        static_cast<float>(value.x),
+                        static_cast<float>(value.y),
+                        static_cast<float>(value.z)
+                    }
+                );
+                return;
+            }
+            default: {
+                usd_op.set_value(lightusd::value::half3{to_usd_half(value.x), to_usd_half(value.y), to_usd_half(value.z)});
+                return;
+            }
+        }
+    }
+    // A single-axis rotate: one angle in degrees.
+    const double value = std::get<double>(op.value);
+    switch (op.precision) {
+        case Precision::double_: usd_op.set_value(value);                       return;
+        case Precision::float_:  usd_op.set_value(static_cast<float>(value));   return;
+        default:                 usd_op.set_value(to_usd_half(value));          return;
+    }
 }
 
 [[nodiscard]] auto is_identity(const glm::mat4& matrix) -> bool
@@ -965,9 +1104,23 @@ private:
                      write_xform_prim (node,                prim_name, matrix);
     }
 
+    // The prim's transform (doc/usd-compatibility-plan.md M8): the ops it was
+    // authored with when it carries a stack and the transform being written
+    // is the stack's own composition, else the composed matrix as one
+    // `xformOp:transform`. The composition test is what keeps a stack out of
+    // the two cases where the matrix is not the prim's own: an import_root
+    // container whose transform plan_children pre-multiplies into the prim,
+    // and a stage the importer applied its upAxis / metersPerUnit correction
+    // to. A prim erhe created carries no stack and writes the single matrix
+    // op, so nothing about an editor-authored file changes.
     template <typename T>
-    static void set_transform(T& typed_prim, const glm::mat4& matrix)
+    static void set_transform(T& typed_prim, const erhe::scene::Node& node, const glm::mat4& matrix)
     {
+        const erhe::scene::Xform_op_stack* stack = node.get_xform_op_stack();
+        if ((stack != nullptr) && is_near(glm::mat4{stack->compose()}, matrix)) {
+            write_xform_op_stack(typed_prim, *stack);
+            return;
+        }
         if (is_identity(matrix)) {
             return;
         }
@@ -977,11 +1130,31 @@ private:
         typed_prim.xformOps.push_back(op);
     }
 
+    template <typename T>
+    static void write_xform_op_stack(T& typed_prim, const erhe::scene::Xform_op_stack& stack)
+    {
+        if (stack.reset_xform_stack) {
+            // `!resetXformStack!` is the first token of xformOpOrder and has
+            // no value of its own, which is exactly how LightUSD carries it.
+            lightusd::XformOp reset_op;
+            reset_op.op_type = lightusd::XformOp::OpType::ResetXformStack;
+            typed_prim.xformOps.push_back(reset_op);
+        }
+        for (const erhe::scene::Xform_op& op : stack.ops) {
+            lightusd::XformOp usd_op;
+            usd_op.op_type  = to_usd_xform_op_type(op.type);
+            usd_op.inverted = op.inverted;
+            usd_op.suffix   = op.suffix;
+            set_xform_op_value(usd_op, op);
+            typed_prim.xformOps.push_back(usd_op);
+        }
+    }
+
     [[nodiscard]] auto write_xform_prim(const erhe::scene::Node& node, const std::string& prim_name, const glm::mat4& matrix) -> lightusd::Prim
     {
         lightusd::Xform xform;
         xform.name = prim_name;
-        set_transform(xform, matrix);
+        set_transform(xform, node, matrix);
         write_visibility_and_purpose(node, xform);
         write_erhe_properties(node, xform);
         return lightusd::Prim{xform};
@@ -1180,7 +1353,7 @@ private:
         ++m_mesh_count;
         lightusd::GeomMesh geom_mesh;
         geom_mesh.name = prim_name;
-        set_transform(geom_mesh, matrix);
+        set_transform(geom_mesh, node, matrix);
         // The authored polygons are the mesh, not a subdivision cage: this is
         // what makes the importer build erhe geometry rather than a triangle
         // soup (doc/usd_compatibility.md, geometry attributes).
@@ -1290,7 +1463,7 @@ private:
 
         lightusd::GeomCamera geom_camera;
         geom_camera.name = prim_name;
-        set_transform(geom_camera, matrix);
+        set_transform(geom_camera, node, matrix);
 
         if (is_local(camera, Camera::z_near_property.get()) || is_local(camera, Camera::z_far_property.get())) {
             geom_camera.clippingRange.set_value(
@@ -1376,7 +1549,7 @@ private:
         if (light_type == Light_type::directional) {
             lightusd::DistantLight distant_light;
             distant_light.name = prim_name;
-            set_transform(distant_light, matrix);
+            set_transform(distant_light, node, matrix);
             write_light_api(light, distant_light);
             write_visibility_and_purpose(node, distant_light);
             write_erhe_properties(node, distant_light);
@@ -1386,7 +1559,7 @@ private:
 
         lightusd::SphereLight sphere_light;
         sphere_light.name = prim_name;
-        set_transform(sphere_light, matrix);
+        set_transform(sphere_light, node, matrix);
         // A point light is a sphere light of no extent.
         sphere_light.radius.set_value(0.0f);
         write_light_api(light, sphere_light);

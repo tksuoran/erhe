@@ -51,7 +51,7 @@ node attachments. The mapping an exporter applies and an importer inverts:
 
 | erhe | USD | notes |
 |---|---|---|
-| `Xform` (transform + children) | `Xform` (`UsdGeomXformable`) | glTF quantizes to one T*R*S; USD allows arbitrary xformOp stacks, imported as composed then decomposed |
+| `Xform` (transform + children) | `Xform` (`UsdGeomXformable`) | an `Xformable` holds the xformOp stack it was authored with (`erhe::scene::Xform_op_stack`) next to the single T\*R\*S the stack composes to, so an imported stack - op types, suffixes, `!invert!` flags, authored value precisions and `!resetXformStack!` - is written back as authored; an edit lands in the op the stack designates (`src/erhe/scene/notes.md`, authored xformOp stacks). A prim erhe created carries no stack and writes one `xformOp:transform`. glTF carries the composed T\*R\*S alone |
 | `Scope` (children only, no transform) | `Scope` | a transform composes through it to the nearest transformable ancestor. A content-library folder is one, and so is each kind's scope (`/Materials`, `/Brushes`, ...); every `Scope` a USD file authors round-trips as itself, the scope holding a stage's `Material` prims included. A scope is written when it is scene content or when it holds a resource the file carries, so an empty kind scope adds no prim to a saved layer |
 | `Typed` (`typeName` token, children) | every other `typeName`, and a typeless `def` | the class a prim gets when erhe has none for its `typeName` (`Cube`, `PointInstancer`, `SkelRoot`): its name, its place in the tree and its children round-trip, its schema attributes do not. A transform authored on such a prim is dropped with one warning |
 | `Mesh` prim (`erhe::scene::Mesh`, an `Xformable`) | `Mesh` prim | one to one: the erhe mesh carries its own transform, name and children, and a parent holds any number of `Mesh` children |
@@ -90,7 +90,7 @@ opinions).
 | `glm::mat4` value type (`Property_type::mat4`) | `matrix4d` attribute | glm is column-major with column vectors, USD row-major with row vectors, so one transform is the same 16 numbers in the same order and the conversion is an element-for-element copy |
 | enumeration (D2a) | `token` attribute with `allowedTokens` | labels travel as tokens |
 | object reference (D28, material of a primitive, texture of a slot) | relationship (`material:binding`) or connection (`inputs:file`) | |
-| bridged property (D18, node TRS) | attribute whose value the schema computes from another representation (`xformOp:*`) | always local, never inherited: same as xformOps |
+| bridged property (D18, node TRS) | attribute whose value the schema computes from another representation (`xformOp:*`) | always local, never inherited: same as xformOps. A write through one of these goes on into the prim's authored stack the same way a matrix write does (the `Xform` row above) |
 | computed property (D26, `world_translation`, `Light.flux`) | computed value (`ComputeLocalToWorldTransform`, `extent`) | not authored; a writable computed (D26 `writes`) authors its source |
 | expression / binding (D22) | none (closest: `UsdShade` connections) | erhe-only; carried as custom string metadata if exported at all |
 | `Property_set` (D17) | a `PrimSpec`'s property dictionary | |

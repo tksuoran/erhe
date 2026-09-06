@@ -23,6 +23,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_scene/xform_op.hpp"
 
 // LightUSD headers. Together with usd.cpp this is the only place in erhe
 // that includes them; everything the rest of erhe sees is in usd.hpp.
@@ -38,6 +39,7 @@
 #include "tydra/render-data-converter.hh"
 #include "tydra/scene-access.hh"
 #include "value-pprint.hh"
+#include "timesamples.hh"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -45,6 +47,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -161,6 +164,245 @@ using Tydra_subset    = lightusd::tydra::MaterialSubset;
         }
     }
     return true;
+}
+
+// The glm column-vector matrix of a USD matrix4d, in double precision: the
+// element-for-element copy to_glm above makes, without the narrowing.
+[[nodiscard]] auto to_glm_double(const lightusd::value::matrix4d& matrix) -> glm::dmat4
+{
+    glm::dmat4 result{1.0};
+    for (int j = 0; j < 4; ++j) {
+        for (int i = 0; i < 4; ++i) {
+            result[j][i] = matrix.m[j][i];
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] auto is_near_matrix(const glm::mat4& lhs, const glm::mat4& rhs) -> bool
+{
+    constexpr float tolerance = 1e-5f;
+    for (int j = 0; j < 4; ++j) {
+        for (int i = 0; i < 4; ++i) {
+            if (std::abs(lhs[j][i] - rhs[j][i]) > tolerance) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The erhe counterpart of a USD xformOp type. `ResetXformStack` is a flag of
+// the stack rather than an op, so it is not one of these and the caller
+// handles it.
+[[nodiscard]] auto to_erhe_xform_op_type(
+    const lightusd::XformOp::OpType op_type,
+    erhe::scene::Xform_op_type&     out_type
+) -> bool
+{
+    using Usd_type  = lightusd::XformOp::OpType;
+    using Erhe_type = erhe::scene::Xform_op_type;
+    switch (op_type) {
+        case Usd_type::Transform: out_type = Erhe_type::transform;  return true;
+        case Usd_type::Translate: out_type = Erhe_type::translate;  return true;
+        case Usd_type::Scale:     out_type = Erhe_type::scale;      return true;
+        case Usd_type::RotateX:   out_type = Erhe_type::rotate_x;   return true;
+        case Usd_type::RotateY:   out_type = Erhe_type::rotate_y;   return true;
+        case Usd_type::RotateZ:   out_type = Erhe_type::rotate_z;   return true;
+        case Usd_type::RotateXYZ: out_type = Erhe_type::rotate_xyz; return true;
+        case Usd_type::RotateXZY: out_type = Erhe_type::rotate_xzy; return true;
+        case Usd_type::RotateYXZ: out_type = Erhe_type::rotate_yxz; return true;
+        case Usd_type::RotateYZX: out_type = Erhe_type::rotate_yzx; return true;
+        case Usd_type::RotateZXY: out_type = Erhe_type::rotate_zxy; return true;
+        case Usd_type::RotateZYX: out_type = Erhe_type::rotate_zyx; return true;
+        case Usd_type::Orient:    out_type = Erhe_type::orient;     return true;
+        default:                                                    return false;
+    }
+}
+
+// The authored value of one op. An op that carries time samples rather than a
+// default uses its first sample: erhe has no animated transform to put the
+// rest in yet (doc/usd-compatibility-plan.md section 6, future work).
+template <typename T>
+[[nodiscard]] auto get_xform_op_value(const lightusd::XformOp& op, T& out_value) -> bool
+{
+    if (op.has_default()) {
+        const nonstd::optional<T> value = op.get_value<T>();
+        if (!value) {
+            return false;
+        }
+        out_value = value.value();
+        return true;
+    }
+    const nonstd::optional<lightusd::value::TimeSamples> samples = op.get_timesamples();
+    if (!samples) {
+        return false;
+    }
+    const nonstd::optional<double> time = samples.value().get_time(0);
+    if (!time) {
+        return false;
+    }
+    const nonstd::optional<T> value = op.get_value<T>(time.value());
+    if (!value) {
+        return false;
+    }
+    out_value = value.value();
+    return true;
+}
+
+template <typename T>
+[[nodiscard]] auto get_xform_op_vector(const lightusd::XformOp& op, glm::dvec3& out_value) -> bool
+{
+    std::array<T, 3> value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = glm::dvec3{
+        static_cast<double>(value[0]),
+        static_cast<double>(value[1]),
+        static_cast<double>(value[2])
+    };
+    return true;
+}
+
+[[nodiscard]] auto get_xform_op_half_vector(const lightusd::XformOp& op, glm::dvec3& out_value) -> bool
+{
+    lightusd::value::half3 value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = glm::dvec3{
+        static_cast<double>(lightusd::value::half_to_float(value[0])),
+        static_cast<double>(lightusd::value::half_to_float(value[1])),
+        static_cast<double>(lightusd::value::half_to_float(value[2]))
+    };
+    return true;
+}
+
+template <typename T>
+[[nodiscard]] auto get_xform_op_scalar(const lightusd::XformOp& op, double& out_value) -> bool
+{
+    T value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = static_cast<double>(value);
+    return true;
+}
+
+[[nodiscard]] auto get_xform_op_half_scalar(const lightusd::XformOp& op, double& out_value) -> bool
+{
+    lightusd::value::half value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = static_cast<double>(lightusd::value::half_to_float(value));
+    return true;
+}
+
+template <typename T>
+[[nodiscard]] auto get_xform_op_quaternion(const lightusd::XformOp& op, glm::dquat& out_value) -> bool
+{
+    T value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = glm::dquat{
+        static_cast<double>(value.real),
+        static_cast<double>(value.imag[0]),
+        static_cast<double>(value.imag[1]),
+        static_cast<double>(value.imag[2])
+    };
+    return true;
+}
+
+[[nodiscard]] auto get_xform_op_half_quaternion(const lightusd::XformOp& op, glm::dquat& out_value) -> bool
+{
+    lightusd::value::quath value{};
+    if (!get_xform_op_value(op, value)) {
+        return false;
+    }
+    out_value = glm::dquat{
+        static_cast<double>(lightusd::value::half_to_float(value.real)),
+        static_cast<double>(lightusd::value::half_to_float(value.imag[0])),
+        static_cast<double>(lightusd::value::half_to_float(value.imag[1])),
+        static_cast<double>(lightusd::value::half_to_float(value.imag[2]))
+    };
+    return true;
+}
+
+// One authored `xformOp:<type>[:<suffix>]` as an erhe Xform_op: the type, the
+// suffix and the invert flag as authored, and the value in double precision
+// with the authored value type kept as the op's precision, so the op is
+// written back as the type it was authored with.
+[[nodiscard]] auto read_xform_op(const lightusd::XformOp& usd_op, erhe::scene::Xform_op& out_op) -> bool
+{
+    using Precision = erhe::scene::Xform_op_precision;
+    if (!to_erhe_xform_op_type(usd_op.op_type, out_op.type)) {
+        return false;
+    }
+    out_op.suffix   = usd_op.suffix;
+    out_op.inverted = usd_op.inverted;
+
+    const std::string type_name = usd_op.get_value_type_name();
+    if (type_name == lightusd::value::kMatrix4d) {
+        lightusd::value::matrix4d matrix{};
+        if (!get_xform_op_value(usd_op, matrix)) {
+            return false;
+        }
+        out_op.precision = Precision::double_;
+        out_op.value     = to_glm_double(matrix);
+        return true;
+    }
+    if ((type_name == lightusd::value::kDouble3) || (type_name == lightusd::value::kFloat3) || (type_name == lightusd::value::kHalf3)) {
+        glm::dvec3 value{0.0};
+        const bool read =
+            (type_name == lightusd::value::kDouble3) ? get_xform_op_vector<double>(usd_op, value) :
+            (type_name == lightusd::value::kFloat3)  ? get_xform_op_vector<float >(usd_op, value) :
+                                                       get_xform_op_half_vector   (usd_op, value);
+        if (!read) {
+            return false;
+        }
+        out_op.precision =
+            (type_name == lightusd::value::kDouble3) ? Precision::double_ :
+            (type_name == lightusd::value::kFloat3)  ? Precision::float_  :
+                                                       Precision::half_;
+        out_op.value = value;
+        return true;
+    }
+    if ((type_name == lightusd::value::kDouble) || (type_name == lightusd::value::kFloat) || (type_name == lightusd::value::kHalf)) {
+        double     value = 0.0;
+        const bool read =
+            (type_name == lightusd::value::kDouble) ? get_xform_op_scalar<double>(usd_op, value) :
+            (type_name == lightusd::value::kFloat)  ? get_xform_op_scalar<float >(usd_op, value) :
+                                                      get_xform_op_half_scalar   (usd_op, value);
+        if (!read) {
+            return false;
+        }
+        out_op.precision =
+            (type_name == lightusd::value::kDouble) ? Precision::double_ :
+            (type_name == lightusd::value::kFloat)  ? Precision::float_  :
+                                                      Precision::half_;
+        out_op.value = value;
+        return true;
+    }
+    if ((type_name == lightusd::value::kQuatd) || (type_name == lightusd::value::kQuatf) || (type_name == lightusd::value::kQuath)) {
+        glm::dquat value{1.0, 0.0, 0.0, 0.0};
+        const bool read =
+            (type_name == lightusd::value::kQuatd) ? get_xform_op_quaternion<lightusd::value::quatd>(usd_op, value) :
+            (type_name == lightusd::value::kQuatf) ? get_xform_op_quaternion<lightusd::value::quatf>(usd_op, value) :
+                                                     get_xform_op_half_quaternion                   (usd_op, value);
+        if (!read) {
+            return false;
+        }
+        out_op.precision =
+            (type_name == lightusd::value::kQuatd) ? Precision::double_ :
+            (type_name == lightusd::value::kQuatf) ? Precision::float_  :
+                                                     Precision::half_;
+        out_op.value = value;
+        return true;
+    }
+    return false;
 }
 
 [[nodiscard]] auto is_srgb_color_space(const lightusd::tydra::ColorSpace color_space) -> bool
@@ -440,6 +682,102 @@ private:
             return nullptr;
         }
         return prim;
+    }
+
+    // The Xformable face of a prim, for the prim classes the conversion gives
+    // a transform to. LightUSD's concrete prim classes carry the xformOps, so
+    // the one the prim is has to be asked for by name, the way
+    // get_visibility_and_purpose asks for the two attributes it reads.
+    template <typename T>
+    [[nodiscard]] static auto as_xformable(const lightusd::Prim& prim) -> const lightusd::Xformable*
+    {
+        return prim.as<T>();
+    }
+
+    [[nodiscard]] static auto get_xformable(const lightusd::Prim& prim) -> const lightusd::Xformable*
+    {
+        const lightusd::Xformable* result = nullptr;
+        if ((result = as_xformable<lightusd::Xform        >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomMesh     >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCamera   >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::SphereLight  >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::DistantLight >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::RectLight    >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::DiskLight    >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::CylinderLight>(prim)) != nullptr) { return result; }
+        return nullptr;
+    }
+
+    // The prim's authored xformOp stack (doc/usd-compatibility-plan.md M8).
+    // Tydra composes the ops into one local matrix, so the stack is only on
+    // the raw prim; reading it is what lets the prim be written back with the
+    // ops it was authored with. A prim that authored no ops answers with an
+    // empty stack, which composes to identity and exports as no xformOps at
+    // all. False means the stack is not readable - the prim is not in the
+    // stage, its class carries no xformOps, or an op uses a type erhe has no
+    // counterpart for - and the caller keeps the composed matrix instead.
+    [[nodiscard]] auto read_xform_op_stack(const std::string& absolute_path, erhe::scene::Xform_op_stack& out_stack) -> bool
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return false;
+        }
+        const lightusd::Xformable* xformable = get_xformable(*prim);
+        if (xformable == nullptr) {
+            return false;
+        }
+        for (const lightusd::XformOp& usd_op : xformable->xformOps) {
+            if (usd_op.op_type == lightusd::XformOp::OpType::ResetXformStack) {
+                out_stack.reset_xform_stack = true;
+                continue;
+            }
+            erhe::scene::Xform_op op{};
+            if (!read_xform_op(usd_op, op)) {
+                log_usd->warn(
+                    "USD prim '{}': xformOp of value type '{}' has no erhe counterpart - the prim keeps the composed transform",
+                    absolute_path,
+                    usd_op.get_value_type_name()
+                );
+                return false;
+            }
+            out_stack.ops.push_back(std::move(op));
+        }
+        return true;
+    }
+
+    // The local transform of an imported prim: its authored stack when it has
+    // a readable one, else the matrix Tydra composed. `extra_transform` is the
+    // stage's upAxis / metersPerUnit correction (make_stage_transform), which
+    // reaches the top-level prims of a non-Y-up or non-metre stage; a prim it
+    // applies to writes a transform that is not what its ops say, so it keeps
+    // the composed matrix and no stack.
+    void apply_local_transform(
+        erhe::scene::Node& node,
+        const Tydra_node&  usd_node,
+        const glm::mat4&   extra_transform
+    )
+    {
+        const glm::mat4 composed = to_glm(usd_node.local_matrix);
+        if (is_identity_matrix(extra_transform)) {
+            erhe::scene::Xform_op_stack stack{};
+            if (read_xform_op_stack(usd_node.abs_path, stack)) {
+                const glm::mat4 stack_matrix{stack.compose()};
+                if (is_near_matrix(stack_matrix, composed)) {
+                    node.set_xform_op_stack(std::move(stack));
+                    return;
+                }
+                log_usd->warn(
+                    "USD prim '{}': the authored xformOp stack does not compose to the transform the stage evaluates - the prim keeps the composed transform",
+                    usd_node.abs_path
+                );
+            }
+        } else {
+            log_usd->debug(
+                "USD prim '{}': the stage up-axis / units correction applies to it, so it carries no authored xformOp stack",
+                usd_node.abs_path
+            );
+        }
+        node.node_data.transforms.parent_from_node.set(extra_transform * composed);
     }
 
     [[nodiscard]] auto has_api_schema(const std::string& absolute_path, const lightusd::APISchemas::APIName name) const -> bool
@@ -1521,7 +1859,7 @@ private:
         node->set_source_path(m_arguments.path);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         node->Hierarchy::set_parent(parent);
-        node->node_data.transforms.parent_from_node.set(extra_transform * to_glm(usd_node.local_matrix));
+        apply_local_transform(*node.get(), usd_node, extra_transform);
         node->update_world_from_node();
         node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         m_result.data.nodes.push_back(node);
