@@ -29,6 +29,7 @@ add_executable(${_target}
     test_item_sealing.cpp
     test_typed_scope.cpp
     test_typed_container.cpp
+    test_prim_registration.cpp
 )
 
 target_link_libraries(${_target}

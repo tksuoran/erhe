@@ -10,6 +10,7 @@
 namespace erhe {
 
 class Item_base;
+class Typed;
 
 class Item_host
 {
@@ -27,6 +28,20 @@ public:
     // attachments by name; the editor's Scene_root adds the content
     // library, whose folder paths use the same form.
     [[nodiscard]] virtual auto find_hosted_item(std::string_view name_or_path) -> Item_base* { static_cast<void>(name_or_path); return nullptr; }
+
+    // Prim registration (doc/usd-compatibility-plan.md C5): every `Typed`
+    // prim that enters a tree this host holds reports itself here once, and
+    // reports itself out again when it leaves. `Typed::handle_item_host_update`
+    // is the single call site, so a prim added anywhere below a hosted prim -
+    // a resource under a `Scope`, a `Scope` under the scene root - reaches
+    // the host without its own integration. `erhe::scene::Xformable`
+    // overrides that hook with the scene's own node / camera / mesh / light
+    // registration and does not reach these.
+    //
+    // The editor's `Scene_root` implements them by keeping the scene's
+    // content-library index up to date (src/editor/content_library/notes.md).
+    virtual void register_prim  (const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
+    virtual void unregister_prim(const std::shared_ptr<Typed>& prim) { static_cast<void>(prim); }
 
     ERHE_PROFILE_MUTEX(std::mutex, item_host_mutex);
     static ERHE_PROFILE_MUTEX_DECLARATION(std::mutex, orphan_item_host_mutex);

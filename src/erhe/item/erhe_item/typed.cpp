@@ -1,4 +1,5 @@
 #include "erhe_item/typed.hpp"
+#include "erhe_item/item_host.hpp"
 #include "erhe_item/item_log.hpp"
 
 #include <fmt/format.h>
@@ -39,8 +40,19 @@ void Typed::handle_parent_update(Hierarchy* const old_parent, Hierarchy* const n
 
 void Typed::handle_item_host_update(Item_host* const old_item_host, Item_host* const new_item_host)
 {
-    static_cast<void>(old_item_host);
+    // A prim reports itself out of the host it leaves and into the host it
+    // enters, so a host keeps its own index of the prims it holds without
+    // walking the tree (Item_host::register_prim). A prim that is not owned
+    // by a shared_ptr yet - one still inside its own constructor - has
+    // nothing to hand the host, and registers when it is next re-parented.
+    const std::shared_ptr<Typed> shared_this = std::dynamic_pointer_cast<Typed>(weak_from_this().lock());
+    if ((old_item_host != nullptr) && shared_this) {
+        old_item_host->unregister_prim(shared_this);
+    }
     set_item_host(new_item_host);
+    if ((new_item_host != nullptr) && shared_this) {
+        new_item_host->register_prim(shared_this);
+    }
     for (const std::shared_ptr<Hierarchy>& child : get_children()) {
         // The hook is the prim class hierarchy's: a `Hierarchy` child that is
         // not a prim holds no item host of its own and has nothing to carry.

@@ -16,7 +16,7 @@ Foundational entity system for erhe. Provides identity, flags, naming, tags, par
 - **`Hierarchy`** - Parent/child tree built on `Item_base`. Supports reparenting, depth tracking, recursive traversal (`for_each`), removal (splice or recursive), and cloning with `adopt_orphan_children()`. Implements the `Dependency_object` inheritance virtuals (`get_inheritance_parent`, `for_each_inheritance_child`) so `inherits`-flagged properties flow down the tree; `set_parent` captures an inheritance snapshot before the move and applies it after, so the subtree's property-changed notifications carry the old values. `child_count_property` is a computed property (D26, owner types `node | content_library_node`) reading `get_child_count()`; `handle_add_child` / `handle_remove_child` push it to expressions.
 - **`Typed`** - A typed prim (`doc/usd-compatibility-plan.md` C5): the level of the prim class hierarchy that carries the USD `typeName` token, see "Prim classes".
 - **`Scope`** - A `Scope` prim: children only, no transform, and every class's value properties as its secondary properties, see "Prim classes".
-- **`Item_host`** - Abstract host for items, provides a mutex for synchronized access. `Item_host_lock_guard` falls back to a static orphan mutex when no host is available.
+- **`Item_host`** - Abstract host for items, provides a mutex for synchronized access. `Item_host_lock_guard` falls back to a static orphan mutex when no host is available. `register_prim()` / `unregister_prim()` are the hooks a host keeps its prim index with, see "Prim classes".
 
 ## Public API
 
@@ -148,6 +148,18 @@ host through to the prims below it, and answers `get_item_host()` with the
 scene itself. `erhe::scene::Xformable` overrides the second hook with the
 scene registration a transformable prim needs (see
 `src/erhe/scene/notes.md`).
+
+`Typed::handle_item_host_update()` is also where a prim reports itself to its
+host: it calls `Item_host::unregister_prim()` on the host it leaves and
+`Item_host::register_prim()` on the host it enters, so a host keeps its own
+index of the prims it holds without ever walking the tree, and a prim added
+anywhere below a hosted prim reaches the host with no integration of its own.
+A prim that is not yet owned by a `shared_ptr` has nothing to hand the host
+and registers when it is next re-parented. The two hooks default to doing
+nothing, so a host takes only the prims it cares about; the editor's
+`Scene_root` implements them by keeping the scene's content-library index up
+to date. `erhe::scene::Xformable` does not reach them - its own override
+registers a transformable prim with the scene instead.
 
 The levels that need a transform or a scene - `Imageable`, `Xformable`
 (spelled `Node` through most of erhe), `Xform`, `Boundable` and `Gprim` - live
