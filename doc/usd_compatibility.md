@@ -204,8 +204,9 @@ mechanism composes as, and what has no erhe counterpart yet.
 | erhe | USD composition | notes |
 |---|---|---|
 | a scene file | a root layer | one scene = one layer stack of one layer |
-| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | |
-| edits inside an instance (not possible today: sealed) | `over` prims with sparse local opinions (`L`) | the property system's local layer is the natural carrier once instances are editable and items have paths |
+| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | plan X1: any layer + prim path target, internal references, one carrier per arc |
+| values a template supplies to an instance (today: cloned local values) | the referenced prims' opinions, weaker than the referencing layer | plan X2: a reference layer between style and inherited, read live from the template counterpart |
+| edits inside an instance (not possible today: sealed) | `over` prims with sparse local opinions (`L`) | plan X2: the property system's local layer is the override; an `over` reads and writes as local values |
 | `Style` items | `class` prims + `inherits` (`I`) | |
 | none | variant sets (`V`) | material variants (KHR_materials_variants) would be the first slice |
 | none | payloads (`P`) | deferred loading; erhe's prefab library loads eagerly |

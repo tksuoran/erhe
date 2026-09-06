@@ -222,11 +222,24 @@ Nothing is added ahead of a demonstrated need.
 
 ### X1 References as prefab instances (M)
 
-What: an imported stage's `references` arcs that target a whole file
-become `Prefab_instance` carriers pointing at that file (imported through
-`erhe::usd` into the prefab library, which today parses only glTF), so
-the erhe scene keeps the instance structure instead of a flattened copy.
-LightUSD's `ArcOrigin` tagging says which prims came from which arc.
+What: an imported stage's `references` arcs become `Prefab_instance`
+carriers, so the erhe scene keeps the instance structure instead of a
+flattened copy. A reference names a layer and a prim path in it (the
+layer's default prim when the path is absent) or a prim of the same
+layer (an internal reference); the carrier records that target, and the
+prefab library materializes it through `erhe::usd` (which today parses
+only glTF) as the template subtree the carrier instantiates. LightUSD's
+`ArcOrigin` tagging says which prims came from which arc. A prim with
+several references (a list-edited `references` op) is composed as USD
+composes it and carried as one carrier per arc in the same order.
+Payloads are read as references (section 5 names them deferred loading
+erhe does not do).
+
+Verification: `erhe_usd_tests` imports a stage with a file reference
+with and without a prim path and an internal reference; the carriers
+name the targets and the composed values match the stage; a save of
+the USD-backed scene writes the `references` arcs back, not the
+flattened subtree.
 
 ### E4 Editor state in a USD file (M; completes G2)
 
@@ -260,17 +273,48 @@ both are present.
 
 ### X2 Editable instances with sparse overrides (L, after X1)
 
-What: the prefab plan's per-instance override model (`doc/gltf-prefabs-plan.md`
-lists it as out of scope for the sealed-instance phase): unseal
-instance subtrees for property edits; a local value on an item inside
-an instance is an override, stored by (path inside the instance,
-property, value) and re-applied after the instance is re-cloned on
-reload. In a glTF-backed scene the list rides the carrier node in an
-`ERHE_*` extension; in a USD-backed scene each is an `over` prim on the
-referencing prim, the file's native form (C1). This step retires the
-last remaining reason the old `ERHE_overrides` design existed: the
-property system's local layer is the override, and M1 paths are the
-addressing.
+What: a USD reference is a composition arc, not a copy: the referenced
+prims supply values in a layer weaker than the referencing layer's own
+opinions, and an `over` prim in the referencing layer holds the sparse
+local opinions that override them. The property system carries that
+directly once the values a reference supplies sit below local. Today
+instantiation is a deep clone, so a template's authored values arrive
+on the instance as local values and cannot be told from an override;
+the step changes that:
+
+- A reference layer in the property system, between style and
+  inherited (USD's `R` is weaker than `I`, so `doc/property-system.md`
+  R3 becomes coerced, local, style, reference, inherited, default). An
+  item inside an instance names its counterpart in the template (the
+  `Prefab_instance` carrier keeps the template, M1 paths address the
+  counterpart) and reads that counterpart's effective value as its
+  reference layer. The instance holds no local value of its own for a
+  value the template supplies; a template edit reaches every instance
+  live, the way a style edit reaches its users (D25).
+- Instance subtrees are unsealed for property edits (the sealed
+  instance editing model of `doc/gltf-prefabs-plan.md` ends here); a
+  local value on an item inside an instance is an override. The
+  `Value_source` shows reference and local apart in the Properties
+  window, and clearing a local exposes the reference value.
+- Persistence: in a USD-backed scene each item with local values inside
+  an instance is an `over` prim under the referencing prim, holding the
+  local values only, the file's native form (C1); reading an `over` puts
+  its opinions in the item's local layer, exactly as authored opinions
+  land elsewhere (M4). In a glTF-backed scene the list rides the carrier
+  node in an `ERHE_*` extension as (path inside the instance, property,
+  value). Structural edits inside an instance (adding, removing or
+  reparenting a prim) are section 5.
+
+This step retires the last remaining reason the old `ERHE_overrides`
+design existed: the property system's local layer is the override, and
+M1 paths are the addressing.
+
+Verification: `erhe_property_tests` for the reference layer order and
+live template edits; `erhe_usd_tests` round-trips a reference with an
+`over` on one prim and reads the same local set back; headless: an
+instance property edit shows source local, clear shows source
+reference, a template edit reaches the instance, save and reload keep
+both.
 
 ### X3 Class inheritance (S)
 
@@ -313,6 +357,10 @@ has not landed.
 
 ## 5. Out of scope
 
+- Structural edits inside a reference (adding, removing or reparenting
+  a prim under a referencing prim): a USD `over` can carry them, erhe's
+  instance model does not; an instance is the template's structure with
+  value overrides (X2).
 - Converting between the formats: a glTF scene saved as USD or a USD
   scene saved as glTF, and prefabs of one format inside a scene of the
   other (G3).
