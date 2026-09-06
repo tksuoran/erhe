@@ -72,7 +72,8 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d849
 ?inherits-registration-check{doc/property-system.md-section-6}
 ?Light-derived-rows→Rendertarget_mesh→Animation{doc/property-inventory.md}
 
-?mcp-save-timeout::k_request_timeout=5s{mcp_server.hpp}vs-Debug-save≈5-6s{default-scene-glb-6.8MB;measured-6.4s-idle-ish-2026-09-06;roundtrip-12/164-timeouts;coder-stash-check=pre-existing-at-2b;E3-passed-148/148-earlier-same-day}→decide:profile-save|raise-timeout-for-long-ops
+?save-slow-root-cause::profiled-2026-09-06{glTF-write=0.4s;Asset_browser-scene_saved-handler-full-scan()=3.7s{2858-untracked-local-asset-entries;Asset_node::set_parent=1.15ms-each};not-U1{Asset_node-not-on-Typed-chain}}→fix-in-flight:refresh-only-saved-path{coder};k_request_timeout-stays-5s
+?capture_inheritance_snapshot_recursive::iterates-ENTIRE-global-property-registry-per-reparented-object{dependency_object.cpp:1158;1.37s-capture+1.87s-apply-over-2858-nodes}→should-iterate-owner-type-chain-only;affects-glTF-import/prefab/undo-bulk-reparents;not-scheduled
 ?U1-follow-ups::Create-menu-Scope-entry+collect_reference_candidates-tree-walk{U4};Layout-through-Scope;transform_selection-Scope-message
 
 [BLOCKERS]
