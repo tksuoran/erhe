@@ -27,7 +27,7 @@ public:
     explicit Render_style(std::string_view name);
 
     static constexpr std::string_view static_type_name{"Render_style"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::xformable; }
 
     Render_style_data data;
 };

@@ -16,7 +16,7 @@ namespace erhe {
     class Item_base;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
     class Scene;
 }
 

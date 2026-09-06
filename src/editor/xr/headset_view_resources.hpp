@@ -14,7 +14,7 @@ namespace erhe::graphics {
 }
 namespace erhe::scene {
     class Camera;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {

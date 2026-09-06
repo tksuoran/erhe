@@ -44,7 +44,7 @@ namespace erhe::scene {
     class Light;
     class Mesh;
     class Mesh_layer;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 namespace erhe::ui {
     class Glyph_outline_set;

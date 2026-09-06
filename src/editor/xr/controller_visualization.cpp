@@ -17,6 +17,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_xr/xr_action.hpp"
 #include "erhe_xr/xr_log.hpp"
@@ -165,7 +166,7 @@ Controller_visualization::Controller_visualization(
         Hand& hand = get_hand(right_hand);
         const char* const node_name = right_hand ? "Controller node right" : "Controller node left";
         const char* const mesh_name = right_hand ? "Controller right"      : "Controller left";
-        hand.node             = std::make_shared<erhe::scene::Node>(node_name);
+        hand.node             = std::make_shared<erhe::scene::Xform>(node_name);
         hand.placeholder_mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
         hand.placeholder_mesh->add_primitive(primitive, controller_material);
         hand.node->show();
@@ -206,7 +207,7 @@ void Controller_visualization::load_render_model(App_context& context, erhe::xr:
     }
 
     // Parse the GLB under a detached node; attach only on success.
-    std::shared_ptr<erhe::scene::Node> model_root = std::make_shared<erhe::scene::Node>(
+    std::shared_ptr<erhe::scene::Node> model_root = std::make_shared<erhe::scene::Xform>(
         right_hand ? "Controller model right" : "Controller model left"
     );
     model_root->show();

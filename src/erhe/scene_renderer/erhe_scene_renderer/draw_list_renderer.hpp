@@ -19,7 +19,7 @@ namespace erhe::graphics {
     class Device;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace erhe::scene_renderer {

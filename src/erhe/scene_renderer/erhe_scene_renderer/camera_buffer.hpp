@@ -11,7 +11,7 @@
 
 namespace erhe::graphics { class Device; }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
     class Projection;
     class Trs_transform;
 }

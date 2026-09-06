@@ -30,6 +30,7 @@ public:
     Typed& operator=(const Typed& other);
     explicit Typed(std::string_view name);
     Typed(std::string_view name, std::string_view prim_type_name);
+    Typed(const Typed& src, for_clone);
     ~Typed() noexcept override;
 
     // Implements Item_base

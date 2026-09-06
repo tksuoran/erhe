@@ -20,6 +20,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/xform.hpp"
 
 // LightUSD headers. Together with usd.cpp this is the only place in erhe
 // that includes them; everything the rest of erhe sees is in usd.hpp.
@@ -1458,7 +1459,7 @@ private:
         const std::string node_name = usd_node.prim_name.empty()
             ? fmt::format("node_{}", m_result.data.nodes.size())
             : usd_node.prim_name;
-        std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Node>(node_name);
+        std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Xform>(node_name);
         node->set_source_path(m_arguments.path);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         node->Hierarchy::set_parent(parent);

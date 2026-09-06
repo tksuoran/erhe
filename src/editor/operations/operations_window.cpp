@@ -65,6 +65,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <geogram/mesh/mesh.h>
 
@@ -1736,11 +1737,11 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     // is a child of the anchor body, the connected node a child of the moved body,
     // so find_nearest_node_physics resolves bodies A / B and the frames move with
     // their bodies.
-    auto joint_node = std::make_shared<erhe::scene::Node>("Joint");
+    auto joint_node = std::make_shared<erhe::scene::Xform>("Joint");
     joint_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     joint_node->set_parent_from_node(world_frame);
 
-    auto connected_node = std::make_shared<erhe::scene::Node>("Joint target");
+    auto connected_node = std::make_shared<erhe::scene::Xform>("Joint target");
     connected_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     connected_node->set_parent_from_node(world_frame);
 

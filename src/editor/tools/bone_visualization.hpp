@@ -18,7 +18,7 @@ namespace erhe::primitive {
 }
 namespace erhe::scene {
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
     class Skin;
 }
 namespace erhe::scene_renderer {

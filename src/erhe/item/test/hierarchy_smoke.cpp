@@ -19,7 +19,7 @@ class Test_node : public erhe::Item<erhe::Item_base, erhe::Hierarchy, Test_node>
 public:
     using Item::Item;
     static constexpr std::string_view static_type_name{"Test_node"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node; }
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::xformable; }
 };
 
 // Group node (like Content_library_node / Asset_folder)

@@ -17,6 +17,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <gtest/gtest.h>
 
@@ -88,7 +89,7 @@ public:
     const std::shared_ptr<erhe::primitive::Primitive>& primitive
 ) -> std::shared_ptr<erhe::scene::Mesh>
 {
-    std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Node>("node");
+    std::shared_ptr<erhe::scene::Node> node = std::make_shared<erhe::scene::Xform>("node");
     std::shared_ptr<erhe::scene::Mesh> mesh = std::make_shared<erhe::scene::Mesh>("mesh");
     mesh->add_primitive(primitive, {});
     node->attach(mesh);

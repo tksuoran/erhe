@@ -8,7 +8,7 @@ namespace erhe {
     class Hierarchy;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
     class Node_attachment;
 }
 

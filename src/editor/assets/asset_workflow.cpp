@@ -19,6 +19,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <fmt/format.h>
 
@@ -33,7 +34,7 @@ auto write_material_container_file(
 {
     // Free root node with no children: the container carries materials
     // only, one empty scene keeps the file valid glTF.
-    const std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Node>("asset container");
+    const std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Xform>("asset container");
     const erhe::gltf::Gltf_export_arguments export_arguments{
         .root_node             = *root_node,
         .binary                = path.extension() != std::filesystem::path{".gltf"},

@@ -23,7 +23,7 @@ namespace erhe::scene {
     class Mesh;
     class Mesh_layer;
     class Mesh_primitive_ref;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace erhe::scene_renderer {

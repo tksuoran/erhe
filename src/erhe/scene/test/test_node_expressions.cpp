@@ -7,6 +7,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <glm/gtc/quaternion.hpp>
 #include <gtest/gtest.h>
@@ -59,8 +60,8 @@ auto approx(const glm::vec3& a, const glm::vec3& b, const float eps = 1e-5f) -> 
 TEST(Node_expressions, node_follows_another_node_by_name_through_every_transform_writer)
 {
     Test_scene_host host;
-    auto driver   = std::make_shared<erhe::scene::Node>("Driver");
-    auto follower = std::make_shared<erhe::scene::Node>("Follower");
+    auto driver   = std::make_shared<erhe::scene::Xform>("Driver");
+    auto follower = std::make_shared<erhe::scene::Xform>("Follower");
     driver->set_parent(host.scene.get_root_node());
     follower->set_parent(host.scene.get_root_node());
 
@@ -93,8 +94,8 @@ TEST(Node_expressions, node_follows_another_node_by_name_through_every_transform
 TEST(Node_expressions, parent_path_and_attachment_targets)
 {
     Test_scene_host host;
-    auto parent = std::make_shared<erhe::scene::Node>("Parent");
-    auto child  = std::make_shared<erhe::scene::Node>("Child");
+    auto parent = std::make_shared<erhe::scene::Xform>("Parent");
+    auto child  = std::make_shared<erhe::scene::Xform>("Child");
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
     child->set_parent(parent);
@@ -119,7 +120,7 @@ TEST(Node_expressions, parent_path_and_attachment_targets)
     // item exists.
     ASSERT_TRUE(light->set_expression(erhe::scene::Light::range_property, "{Later/translation.x}"));
     EXPECT_FALSE(light->get_expression_error(erhe::scene::Light::range_property).empty());
-    auto later = std::make_shared<erhe::scene::Node>("Later");
+    auto later = std::make_shared<erhe::scene::Xform>("Later");
     later->set_value(erhe::scene::Node::translation_property, glm::vec3{7.0f, 0.0f, 0.0f});
     later->set_parent(host.scene.get_root_node());
     EXPECT_EQ(light->get_value(erhe::scene::Light::range_property), 7.0f);

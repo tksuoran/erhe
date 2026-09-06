@@ -13,6 +13,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_property/dependency_property.hpp"
 
 #include <gtest/gtest.h>
@@ -83,7 +84,7 @@ TEST(animation_apply, moves_the_animated_node)
 {
     Test_scene_host host;
 
-    auto node = std::make_shared<erhe::scene::Node>("animated node");
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
     node->set_parent(host.scene.get_root_node());
 
     erhe::scene::Animation animation{"test animation"};
@@ -100,8 +101,8 @@ TEST(animation_apply, moves_the_children_of_the_animated_node)
 {
     Test_scene_host host;
 
-    auto parent = std::make_shared<erhe::scene::Node>("animated parent");
-    auto child  = std::make_shared<erhe::scene::Node>("child");
+    auto parent = std::make_shared<erhe::scene::Xform>("animated parent");
+    auto child  = std::make_shared<erhe::scene::Xform>("child");
     parent->set_parent(host.scene.get_root_node());
     child->set_parent(parent);
     child->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 2.0f, 0.0f}));
@@ -121,7 +122,7 @@ TEST(animation_apply, keeps_moving_the_node_on_later_frames)
 {
     Test_scene_host host;
 
-    auto node = std::make_shared<erhe::scene::Node>("animated node");
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
     node->set_parent(host.scene.get_root_node());
 
     erhe::scene::Animation animation{"test animation"};
@@ -146,7 +147,7 @@ TEST(animation_apply, time_range_and_counts_are_computed_properties)
 {
     using erhe::property::Value_source;
     auto animation = std::make_shared<erhe::scene::Animation>("a");
-    auto node      = std::make_shared<erhe::scene::Node>("n");
+    auto node      = std::make_shared<erhe::scene::Xform>("n");
     EXPECT_EQ(animation->get_value(erhe::scene::Animation::sampler_count_property), 0);
     EXPECT_EQ(animation->get_value(erhe::scene::Animation::channel_count_property), 0);
     EXPECT_TRUE(erhe::scene::Animation::first_time_property.get().is_read_only());

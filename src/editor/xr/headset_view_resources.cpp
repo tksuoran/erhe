@@ -6,6 +6,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_verify/verify.hpp"
 
 namespace editor {
@@ -116,7 +117,7 @@ Headset_view_resources::Headset_view_resources(
         fmt::format("Headset Camera slot {}", slot)
     );
 
-    m_node = std::make_shared<erhe::scene::Node>(
+    m_node = std::make_shared<erhe::scene::Xform>(
         fmt::format("Headset Camera node slot {}", slot)
     );
 

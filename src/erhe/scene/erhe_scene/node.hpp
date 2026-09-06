@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_item/hierarchy.hpp"
+#include "erhe_scene/imageable.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_property/dependency_property.hpp"
 
@@ -14,7 +14,7 @@ namespace erhe { class Item_host; }
 
 namespace erhe::scene {
 
-class Node;
+class Xformable;
 class Node_attachment;
 class Scene;
 class Scene_host;
@@ -64,28 +64,39 @@ public:
     static auto diff_mask(const Node_data& lhs, const Node_data& rhs) -> unsigned int;
 };
 
-class Node
+// A transformable prim (doc/usd-compatibility-plan.md C5, USD
+// `UsdGeomXformable`): the level of the prim class hierarchy that carries a
+// transform. Every class below it transforms its children; a prim outside it
+// has no transform of its own, so a transform composes through it.
+//
+// The level is never instantiated on its own; `Xform` is the transform-only
+// prim every node-creation path makes. `Node` is the name most of erhe still
+// spells `Xformable` with.
+class Xformable
     : public erhe::Item<
         Item_base,
-        Hierarchy,
-        Node,
+        Imageable,
+        Xformable,
         erhe::Item_kind::clone_using_custom_clone_constructor
     >
 {
 public:
-    Node();
-    explicit Node(const Node&);
-    Node& operator=(const Node&);
+    Xformable();
+    explicit Xformable(const Xformable&);
+    Xformable& operator=(const Xformable&);
 
-    explicit Node(std::string_view name);
-    Node(const Node& src, for_clone);
-    ~Node() noexcept override;
+    explicit Xformable(std::string_view name);
+    Xformable(const Xformable& src, for_clone);
+    ~Xformable() noexcept override;
 
-    [[nodiscard]] auto shared_node_from_this() -> std::shared_ptr<Node>;
+    [[nodiscard]] auto shared_node_from_this() -> std::shared_ptr<Xformable>;
 
     // Implements Item_base
-    static constexpr std::string_view static_type_name{"Node"};
-    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::node; }
+    static constexpr std::string_view static_type_name{"Xformable"};
+    [[nodiscard]] static constexpr auto get_static_type() -> uint64_t
+    {
+        return Imageable::get_static_type() | erhe::Item_type::xformable;
+    }
     auto get_item_host          () const -> erhe::Item_host*                     override;
     void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
 
@@ -102,9 +113,9 @@ public:
     [[nodiscard]] auto get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type> override;
 
     // Public API
-    [[nodiscard]] auto get_parent_node() const -> std::shared_ptr<Node>;
-    void set_node_parent(Node* parent);
-    void set_node_parent(Node* parent, std::size_t position);
+    [[nodiscard]] auto get_parent_node() const -> std::shared_ptr<Xformable>;
+    void set_node_parent(Xformable* parent);
+    void set_node_parent(Xformable* parent, std::size_t position);
 
     void attach                  (const std::shared_ptr<Node_attachment>& attachment);
     auto detach                  (Node_attachment* attachment) -> bool;
@@ -127,7 +138,7 @@ public:
     [[nodiscard]] auto position_in_world                      () const -> glm::vec4;
     [[nodiscard]] auto direction_in_world                     () const -> glm::vec4;
     [[nodiscard]] auto look_at                                (glm::vec3 target_position) const -> glm::mat4;
-    [[nodiscard]] auto look_at                                (const Node& target) const -> glm::mat4;
+    [[nodiscard]] auto look_at                                (const Xformable& target) const -> glm::mat4;
     [[nodiscard]] auto transform_point_from_world_to_local    (glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_direction_from_world_to_local(glm::vec3 p) const -> glm::vec3;
     [[nodiscard]] auto transform_point_from_local_to_world    (glm::vec3 p) const -> glm::vec3;
@@ -174,8 +185,12 @@ public:
     Node_data node_data;
 };
 
+// The name most of erhe spells `Xformable` with. It is retired when the
+// prim class hierarchy (doc/usd-compatibility-plan.md C5) is complete.
+using Node = Xformable;
+
 template <typename T>
-auto get_attachment(const Node* node) -> std::shared_ptr<T>
+auto get_attachment(const Xformable* node) -> std::shared_ptr<T>
 {
     if (node == nullptr) {
         return {};
@@ -190,3 +205,4 @@ auto get_attachment(const Node* node) -> std::shared_ptr<T>
 }
 
 } // namespace erhe::scene
+

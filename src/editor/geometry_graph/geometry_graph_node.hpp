@@ -14,7 +14,7 @@
 namespace ax::NodeEditor { class EditorContext; }
 namespace erhe::graphics { class Texture; }
 namespace erhe::primitive { class Primitive; }
-namespace erhe::scene { class Node; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 namespace erhe::scene_renderer { class Mesh_memory; }
 
 namespace editor {

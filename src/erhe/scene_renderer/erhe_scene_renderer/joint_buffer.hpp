@@ -6,7 +6,7 @@
 
 #include <glm/glm.hpp>
 
-namespace erhe::scene { class Node; class Skin; }
+namespace erhe::scene { class Xformable; using Node = Xformable; class Skin; }
 
 namespace erhe::scene_renderer {
 

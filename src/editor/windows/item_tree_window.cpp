@@ -42,6 +42,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #include <imgui/imgui.h>
@@ -1940,7 +1941,7 @@ void Item_tree::imgui_tree(float ui_scale)
 
         using Item_flags = erhe::Item_flags;
 
-        auto camera_node = std::make_shared<erhe::scene::Node>("Camera Node");
+        auto camera_node = std::make_shared<erhe::scene::Xform>("Camera Node");
         auto camera = std::make_shared<erhe::scene::Camera>("Camera");
         camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         camera     ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -1954,7 +1955,7 @@ void Item_tree::imgui_tree(float ui_scale)
             )
         );
 
-        auto light_node = std::make_shared<erhe::scene::Node>("Light Node");
+        auto light_node = std::make_shared<erhe::scene::Xform>("Light Node");
         auto light = std::make_shared<erhe::scene::Light>("Light");
         light_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         light     ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);

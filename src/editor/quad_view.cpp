@@ -13,6 +13,7 @@
 #include "erhe_math/math_util.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_utility/debug_label.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -100,7 +101,7 @@ Quad_view::Quad_view(
             erhe::Item_flags::show_in_developer_ui
         );
 
-        m_rendertarget_node = std::make_shared<erhe::scene::Node>(std::string{debug_label} + " RT node");
+        m_rendertarget_node = std::make_shared<erhe::scene::Xform>(std::string{debug_label} + " RT node");
         m_rendertarget_node->attach(m_rendertarget_mesh);
         // rendertarget (and no content): transient editor furniture, matching
         // the standalone scene rendertarget node - the glTF exporter saves

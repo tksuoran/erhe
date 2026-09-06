@@ -36,7 +36,7 @@ namespace erhe::physics {
 }
 namespace erhe::scene {
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
     class Trs_transform;
 }
 namespace erhe::scene_renderer {

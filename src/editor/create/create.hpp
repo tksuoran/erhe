@@ -16,7 +16,7 @@
 #include <imgui/imgui.h>
 
 namespace erhe::imgui { class Imgui_windows; }
-namespace erhe::scene { class Node; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 

@@ -18,7 +18,7 @@ class Camera;
 class Layout;
 class Light;
 class Mesh;
-class Node;
+class Xformable; using Node = Xformable;
 class Scene;
 class Scene_host;
 class Skin;

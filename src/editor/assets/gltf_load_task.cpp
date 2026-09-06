@@ -20,6 +20,7 @@
 #include "erhe_task/task.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <taskflow/taskflow.hpp>
@@ -172,7 +173,7 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
         // Prefab template root: content + show_in_ui, but NOT import_root -
         // it is the template itself, not an import wrapper. Unhosted;
         // Prefab_library::finish_load_template hosts it.
-        parse_result->container_node = std::make_shared<erhe::scene::Node>(
+        parse_result->container_node = std::make_shared<erhe::scene::Xform>(
             m_request.root_node_name.empty() ? erhe::file::to_string(path.filename()) : m_request.root_node_name
         );
         parse_result->container_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
@@ -181,12 +182,12 @@ void Gltf_load_task::start_parse(Asset_load_tick_context& tick_context)
         // wrapper named after the file, unparented until the operation
         // attaches it. Mirror exactly what the inline parse in
         // make_import_gltf_operation produces.
-        parse_result->container_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
+        parse_result->container_node = std::make_shared<erhe::scene::Xform>(erhe::file::to_string(path.filename()));
         parse_result->container_node->enable_flag_bits(
             erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root
         );
     } else {
-        parse_result->container_node = std::make_shared<erhe::scene::Node>("open scene container");
+        parse_result->container_node = std::make_shared<erhe::scene::Xform>("open scene container");
     }
 
     // Everything device-derived is resolved HERE, on the main thread, and

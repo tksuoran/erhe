@@ -9,6 +9,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <gtest/gtest.h>
 
@@ -19,6 +20,7 @@ using namespace erhe::property;
 using erhe::scene::Mesh;
 using erhe::scene::Mesh_primitive;
 using erhe::scene::Node;
+using erhe::scene::Xform;
 using erhe::primitive::Material;
 
 namespace {
@@ -66,7 +68,7 @@ public:
 
 [[nodiscard]] auto make_hosted_mesh(Counting_scene_host& host, const std::shared_ptr<Material>& material) -> std::shared_ptr<Mesh>
 {
-    std::shared_ptr<Node> node = std::make_shared<Node>("node");
+    std::shared_ptr<Node> node = std::make_shared<Xform>("node");
     std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>("mesh");
     mesh->add_primitive(make_primitive(), material);
     mesh->add_primitive(make_primitive(), material);
@@ -128,7 +130,7 @@ TEST(Mesh_primitive_material, sub_object_addressing_agrees_with_the_primitive_li
     EXPECT_EQ(host.material_changed.size(), std::size_t{1});
 
     // The traits reject a pointee that is not a Material.
-    std::shared_ptr<Node> node = std::make_shared<Node>("not a material");
+    std::shared_ptr<Node> node = std::make_shared<Xform>("not a material");
     sub_object->set_value(Mesh_primitive::material_property, Object_reference{node});
     EXPECT_EQ(mesh->get_primitives()[0].material.get(), b.get());
     EXPECT_EQ(host.material_changed.size(), std::size_t{1});
@@ -146,7 +148,7 @@ TEST(Mesh_primitive_material, copies_re_stamp_the_owner_link)
     EXPECT_EQ(copied[0].get_owner(), nullptr);
 
     // set_primitives: the copies belong to the receiving mesh.
-    std::shared_ptr<Node> node  = std::make_shared<Node>("other node");
+    std::shared_ptr<Node> node  = std::make_shared<Xform>("other node");
     std::shared_ptr<Mesh> other = std::make_shared<Mesh>("other");
     other->set_primitives(copied);
     node->attach(other);

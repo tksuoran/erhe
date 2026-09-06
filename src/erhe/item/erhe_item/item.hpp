@@ -222,7 +222,7 @@ public:
     static constexpr uint64_t index_scene                  = 17;
     static constexpr uint64_t index_skin                   = 18;
     static constexpr uint64_t index_texture                = 19;
-    static constexpr uint64_t index_node                   = 20;
+    static constexpr uint64_t index_xformable              = 20;
     static constexpr uint64_t index_asset_folder           = 21;
     static constexpr uint64_t index_asset_file_gltf        = 22;
     static constexpr uint64_t index_asset_file_geogram     = 23;
@@ -253,7 +253,11 @@ public:
     static constexpr uint64_t index_asset_file_usd         = 48;
     static constexpr uint64_t index_typed                  = 49;
     static constexpr uint64_t index_scope                  = 50;
-    static constexpr uint64_t count                        = 51;
+    static constexpr uint64_t index_imageable              = 51;
+    static constexpr uint64_t index_xform                  = 52;
+    static constexpr uint64_t index_boundable              = 53;
+    static constexpr uint64_t index_gprim                  = 54;
+    static constexpr uint64_t count                        = 55;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -275,7 +279,7 @@ public:
     static constexpr uint64_t scene                  = (uint64_t{1} << index_scene                 );
     static constexpr uint64_t skin                   = (uint64_t{1} << index_skin                  );
     static constexpr uint64_t texture                = (uint64_t{1} << index_texture               );
-    static constexpr uint64_t node                   = (uint64_t{1} << index_node                  );
+    static constexpr uint64_t xformable              = (uint64_t{1} << index_xformable             );
     static constexpr uint64_t asset_folder           = (uint64_t{1} << index_asset_folder          );
     static constexpr uint64_t asset_file_gltf        = (uint64_t{1} << index_asset_file_gltf       );
     static constexpr uint64_t asset_file_geogram     = (uint64_t{1} << index_asset_file_geogram    );
@@ -306,6 +310,10 @@ public:
     static constexpr uint64_t asset_file_usd         = (uint64_t{1} << index_asset_file_usd        );
     static constexpr uint64_t typed                  = (uint64_t{1} << index_typed                 );
     static constexpr uint64_t scope                  = (uint64_t{1} << index_scope                 );
+    static constexpr uint64_t imageable              = (uint64_t{1} << index_imageable             );
+    static constexpr uint64_t xform                  = (uint64_t{1} << index_xform                 );
+    static constexpr uint64_t boundable              = (uint64_t{1} << index_boundable             );
+    static constexpr uint64_t gprim                  = (uint64_t{1} << index_gprim                 );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -329,7 +337,7 @@ public:
         "Scene",
         "Skin",
         "Texture",
-        "Node",
+        "Xformable",
         "Asset_folder",
         "Asset_file_gltf",
         "Asset_file_geogram",
@@ -359,7 +367,11 @@ public:
         "Style",
         "Asset_file_usd",
         "Typed",
-        "Scope"
+        "Scope",
+        "Imageable",
+        "Xform",
+        "Boundable",
+        "Gprim"
     };
 };
 

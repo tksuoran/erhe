@@ -119,6 +119,10 @@ direct `set_prim_type_name()`. A class that fixes none, a plain `Typed`,
 returns an empty `get_class_type_name()` and carries the token an importer
 authors.
 
+The levels that need a transform or a scene - `Imageable`, `Xformable`
+(spelled `Node` through most of erhe), `Xform`, `Boundable` and `Gprim` - live
+in `erhe::scene`, see `src/erhe/scene/notes.md` "Prim levels".
+
 `Scope::get_secondary_property_owner_type()` is the root owner type, as an
 editor `Style` item's is (`doc/property-system.md` D30), so a scope holds
 any class's value properties by qualified name (`Material.roughness` on a

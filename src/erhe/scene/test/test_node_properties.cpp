@@ -3,6 +3,7 @@
 // writes update the world transform and the node's transform serial.
 
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_string.hpp"
 
@@ -24,7 +25,7 @@ auto approx(const glm::vec3& a, const glm::vec3& b, const float eps = 1e-5f) -> 
 
 TEST(Node_properties, reads_reflect_the_transform)
 {
-    auto node = std::make_shared<erhe::scene::Node>("n");
+    auto node = std::make_shared<erhe::scene::Xform>("n");
     EXPECT_EQ(node->get_value(erhe::scene::Node::translation_property), glm::vec3{0.0f});
     EXPECT_EQ(node->get_value(erhe::scene::Node::scale_property), glm::vec3{1.0f});
     EXPECT_EQ(node->get_value_source(erhe::scene::Node::translation_property), Value_source::local);
@@ -40,8 +41,8 @@ TEST(Node_properties, reads_reflect_the_transform)
 
 TEST(Node_properties, writes_update_world_transform_and_serial)
 {
-    auto parent = std::make_shared<erhe::scene::Node>("parent");
-    auto child  = std::make_shared<erhe::scene::Node>("child");
+    auto parent = std::make_shared<erhe::scene::Xform>("parent");
+    auto child  = std::make_shared<erhe::scene::Xform>("child");
     child->set_parent(parent);
     parent->set_value(erhe::scene::Node::translation_property, glm::vec3{10.0f, 0.0f, 0.0f});
     const uint64_t serial_before = child->node_data.transforms.parent_from_node_serial;
@@ -63,7 +64,7 @@ TEST(Node_properties, writes_update_world_transform_and_serial)
 
 TEST(Node_properties, untyped_access_and_bag)
 {
-    auto node = std::make_shared<erhe::scene::Node>("n");
+    auto node = std::make_shared<erhe::scene::Xform>("n");
     const Dependency_property* translation = Property_registry::get().find_for_object(node->get_property_owner_type(), "translation");
     ASSERT_NE(translation, nullptr);
     node->set_value(*translation, parse_value(*translation, "1 2 3").value());
@@ -74,7 +75,7 @@ TEST(Node_properties, untyped_access_and_bag)
     EXPECT_TRUE(bag.contains(erhe::scene::Node::rotation_property));
     EXPECT_TRUE(bag.contains(erhe::scene::Node::scale_property));
 
-    auto other = std::make_shared<erhe::scene::Node>("other");
+    auto other = std::make_shared<erhe::scene::Xform>("other");
     bag.apply(*other);
     EXPECT_EQ(other->get_value(erhe::scene::Node::translation_property), (glm::vec3{1.0f, 2.0f, 3.0f}));
     EXPECT_TRUE(approx(glm::vec3{other->position_in_world()}, glm::vec3{1.0f, 2.0f, 3.0f}));

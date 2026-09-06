@@ -12,6 +12,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <fmt/format.h>
 
@@ -88,7 +89,7 @@ void import_geogram(
     const bool raytrace_ok = primitive->make_raytrace();
     static_cast<void>(raytrace_ok);
 
-    auto node = std::make_shared<erhe::scene::Node>(path_string);
+    auto node = std::make_shared<erhe::scene::Xform>(path_string);
     auto mesh = std::make_shared<erhe::scene::Mesh>(path_string);
     mesh->add_primitive(primitive, material);
 

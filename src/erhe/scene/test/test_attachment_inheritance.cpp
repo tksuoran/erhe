@@ -5,6 +5,7 @@
 
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <gtest/gtest.h>
 
@@ -13,6 +14,7 @@
 using namespace erhe::property;
 using erhe::scene::Mesh;
 using erhe::scene::Node;
+using erhe::scene::Xform;
 
 namespace {
 
@@ -36,7 +38,7 @@ public:
 
 TEST(Attachment_inheritance, mesh_inherits_from_its_node)
 {
-    auto node = std::make_shared<Node>("node");
+    auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
     node->attach(mesh);
     EXPECT_EQ(mesh->get_inheritance_parent(), node.get());
@@ -54,8 +56,8 @@ TEST(Attachment_inheritance, mesh_inherits_from_its_node)
 
 TEST(Attachment_inheritance, mesh_follows_an_ancestor_hide)
 {
-    auto root  = std::make_shared<Node>("root");
-    auto child = std::make_shared<Node>("child");
+    auto root  = std::make_shared<Xform>("root");
+    auto child = std::make_shared<Xform>("child");
     auto mesh  = std::make_shared<Counting_mesh>("mesh");
     child->set_parent(root);
     child->attach(mesh);
@@ -68,7 +70,7 @@ TEST(Attachment_inheritance, mesh_follows_an_ancestor_hide)
 
 TEST(Attachment_inheritance, local_true_on_mesh_survives_node_hide)
 {
-    auto node = std::make_shared<Node>("node");
+    auto node = std::make_shared<Xform>("node");
     auto mesh = std::make_shared<Counting_mesh>("mesh");
     node->attach(mesh);
     mesh->show();
@@ -80,8 +82,8 @@ TEST(Attachment_inheritance, local_true_on_mesh_survives_node_hide)
 
 TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
 {
-    auto hidden = std::make_shared<Node>("hidden");
-    auto shown  = std::make_shared<Node>("shown");
+    auto hidden = std::make_shared<Xform>("hidden");
+    auto shown  = std::make_shared<Xform>("shown");
     auto mesh   = std::make_shared<Counting_mesh>("mesh");
     hidden->hide();
 
@@ -128,9 +130,9 @@ TEST(Attachment_inheritance, moving_between_nodes_notifies_once_with_old_value)
 
 TEST(Attachment_inheritance, shadow_cast_on_group_reaches_meshes_without_local_value)
 {
-    auto group    = std::make_shared<Node>("group");
-    auto node_a   = std::make_shared<Node>("a");
-    auto node_b   = std::make_shared<Node>("b");
+    auto group    = std::make_shared<Xform>("group");
+    auto node_a   = std::make_shared<Xform>("a");
+    auto node_b   = std::make_shared<Xform>("b");
     auto mesh_a   = std::make_shared<Mesh>("mesh a");
     auto mesh_b   = std::make_shared<Mesh>("mesh b");
     node_a->set_parent(group);

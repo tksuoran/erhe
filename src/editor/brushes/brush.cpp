@@ -15,6 +15,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -361,7 +362,7 @@ auto Brush::make_instance(const Instance_create_info& instance_create_info) -> s
         instance_create_info.material->get_name()
     );
 
-    auto node = std::make_shared<erhe::scene::Node>(name);
+    auto node = std::make_shared<erhe::scene::Xform>(name);
     auto mesh = std::make_shared<erhe::scene::Mesh>(name);
     mesh->add_primitive(scaled.primitive, instance_create_info.material);
 

@@ -18,7 +18,7 @@
 
 namespace erhe::geometry  { class Geometry; }
 namespace erhe::primitive { class Primitive; }
-namespace erhe::scene     { class Mesh; class Node; class Skin; }
+namespace erhe::scene     { class Mesh; class Xformable; using Node = Xformable; class Skin; }
 
 namespace editor {
 

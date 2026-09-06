@@ -41,6 +41,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
@@ -2271,7 +2272,7 @@ void Transform_tool::create_node_from_anchor()
         return;
     }
 
-    auto new_node = std::make_shared<erhe::scene::Node>("frame node");
+    auto new_node = std::make_shared<erhe::scene::Xform>("frame node");
     new_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     new_node->set_parent_from_node(shared.world_from_anchor);
 

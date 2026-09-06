@@ -7,6 +7,7 @@
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/scene_log.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -393,7 +394,7 @@ Scene& Scene::operator=(const Scene&)
 Scene::Scene(const std::string_view name, Scene_host* const host)
     : Item  {name}
     , m_host{host}
-    , m_root_node  {std::make_shared<Node>("root")}
+    , m_root_node  {std::make_shared<Xform>("root")}
 {
     enable_flag_bits(
         erhe::Item_flags::content             |

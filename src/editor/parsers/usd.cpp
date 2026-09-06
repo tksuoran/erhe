@@ -62,6 +62,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include "editor_log.hpp"
@@ -343,7 +344,7 @@ auto make_import_usd_operation(
     // host to attach to) and detached again before the insert operation takes
     // it.
     erhe::scene::Scene temp_scene{"temp usd scene", nullptr};
-    std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Node>(
+    std::shared_ptr<erhe::scene::Node> root_node = std::make_shared<erhe::scene::Xform>(
         erhe::file::to_string(path.filename())
     );
     root_node->enable_flag_bits(
@@ -450,7 +451,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // import_root wrapper: the file IS the scene, so its top-level prims are
     // the scene's top-level nodes.
     erhe::scene::Scene temp_scene{"temp usd scene", nullptr};
-    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Node>(
+    std::shared_ptr<erhe::scene::Node> container_node = std::make_shared<erhe::scene::Xform>(
         erhe::file::to_string(path.filename())
     );
     container_node->set_parent(temp_scene.get_root_node());

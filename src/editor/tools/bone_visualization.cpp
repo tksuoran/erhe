@@ -18,6 +18,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -399,7 +400,7 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
     // A joint renamed later keeps the old name here until the proxies are
     // rebuilt; the Hover tool's Bone: line reads the joint's live name.
     const std::string& joint_name = joint->get_name();
-    proxy.node  = std::make_shared<erhe::scene::Node>(fmt::format("bone proxy {}", joint_name));
+    proxy.node  = std::make_shared<erhe::scene::Xform>(fmt::format("bone proxy {}", joint_name));
     proxy.mesh  = std::make_shared<erhe::scene::Mesh>(joint_name);
     proxy.mesh->add_primitive(m_bone_primitive, m_material);
     proxy.mesh->layer_id = Mesh_layer_id::bone;

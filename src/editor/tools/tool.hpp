@@ -11,7 +11,7 @@ struct ImFont;
 
 namespace erhe::imgui     { class Imgui_window; }
 namespace erhe::primitive { class Material; }
-namespace erhe::scene     { class Node; }
+namespace erhe::scene     { class Xformable; using Node = Xformable; }
 
 namespace editor {
 

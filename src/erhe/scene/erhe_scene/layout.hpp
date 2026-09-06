@@ -14,7 +14,7 @@
 
 namespace erhe::scene {
 
-class Node;
+class Xformable; using Node = Xformable;
 
 // The kind of arrangement a Layout performs on its node's children.
 enum class Layout_type : unsigned int {

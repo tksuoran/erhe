@@ -25,6 +25,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -1160,7 +1161,7 @@ auto Asset_manager::get_or_load_container(const std::filesystem::path& path, std
     record->display_path   = asset_path_to_string(canonical_path);
     // Parsed nodes are parented under a free root node - no holding scene:
     // container node trees serve asset acquisition and are never rendered.
-    record->root_node = std::make_shared<erhe::scene::Node>(fmt::format("asset container: {}", record->display_path));
+    record->root_node = std::make_shared<erhe::scene::Xform>(fmt::format("asset container: {}", record->display_path));
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
     erhe::gltf::Gltf_parse_arguments parse_arguments{

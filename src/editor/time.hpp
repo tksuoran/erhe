@@ -10,7 +10,7 @@
 #include <mutex>
 #include <vector>
 
-namespace erhe::scene { class Node; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 
 namespace editor {
 

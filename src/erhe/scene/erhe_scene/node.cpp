@@ -60,11 +60,11 @@ auto make_transform_bridge(
 {
     return Property_bridge{
         .get = [getter](const Dependency_object& object) -> Property_value {
-            const Node& node = static_cast<const Node&>(object);
+            const Xformable& node = static_cast<const Xformable&>(object);
             return (node.node_data.transforms.parent_from_node.*getter)();
         },
         .set = [setter](Dependency_object& object, const Property_value& value) {
-            Node& node = static_cast<Node&>(object);
+            Xformable& node = static_cast<Xformable&>(object);
             (node.node_data.transforms.parent_from_node.*setter)(std::get<T>(value));
             node.update_world_from_node();
             node.handle_transform_update(Node_transforms::get_next_serial());
@@ -74,8 +74,8 @@ auto make_transform_bridge(
 
 } // anonymous namespace
 
-const Property<glm::vec3> Node::translation_property = Property<glm::vec3>::register_property(
-    "translation", Node::property_owner_type(),
+const Property<glm::vec3> Xformable::translation_property = Property<glm::vec3>::register_property(
+    "translation", Xformable::property_owner_type(),
     Property_metadata{
         .default_value = glm::vec3{0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
@@ -83,8 +83,8 @@ const Property<glm::vec3> Node::translation_property = Property<glm::vec3>::regi
         .bridge        = make_transform_bridge<glm::vec3>(&Trs_transform::get_translation, &Trs_transform::set_translation)
     }
 );
-const Property<glm::quat> Node::rotation_property = Property<glm::quat>::register_property(
-    "rotation", Node::property_owner_type(),
+const Property<glm::quat> Xformable::rotation_property = Property<glm::quat>::register_property(
+    "rotation", Xformable::property_owner_type(),
     Property_metadata{
         .default_value = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
@@ -92,8 +92,8 @@ const Property<glm::quat> Node::rotation_property = Property<glm::quat>::registe
         .bridge        = make_transform_bridge<glm::quat>(&Trs_transform::get_rotation, &Trs_transform::set_rotation)
     }
 );
-const Property<glm::vec3> Node::scale_property = Property<glm::vec3>::register_property(
-    "scale", Node::property_owner_type(),
+const Property<glm::vec3> Xformable::scale_property = Property<glm::vec3>::register_property(
+    "scale", Xformable::property_owner_type(),
     Property_metadata{
         .default_value = glm::vec3{1.0f, 1.0f, 1.0f},
         .flags         = c_transform_flags,
@@ -103,30 +103,30 @@ const Property<glm::vec3> Node::scale_property = Property<glm::vec3>::register_p
 );
 
 // Computed world transform components (D26)
-const Property<glm::vec3> Node::world_translation_property = Property<glm::vec3>::register_computed(
-    "world_translation", Node::property_owner_type(),
+const Property<glm::vec3> Xformable::world_translation_property = Property<glm::vec3>::register_computed(
+    "world_translation", Xformable::property_owner_type(),
     [](const Dependency_object& object) -> Property_value {
-        return static_cast<const Node&>(object).world_from_node_transform().get_translation();
+        return static_cast<const Xformable&>(object).world_from_node_transform().get_translation();
     },
     Property_metadata{
         .flags = Property_flags::none,
         .ui    = Property_ui{.group = "World", .tooltip = "Position in world space (computed)", .label = "Translation"}
     }
 );
-const Property<glm::quat> Node::world_rotation_property = Property<glm::quat>::register_computed(
-    "world_rotation", Node::property_owner_type(),
+const Property<glm::quat> Xformable::world_rotation_property = Property<glm::quat>::register_computed(
+    "world_rotation", Xformable::property_owner_type(),
     [](const Dependency_object& object) -> Property_value {
-        return static_cast<const Node&>(object).world_from_node_transform().get_rotation();
+        return static_cast<const Xformable&>(object).world_from_node_transform().get_rotation();
     },
     Property_metadata{
         .flags = Property_flags::none,
         .ui    = Property_ui{.group = "World", .tooltip = "Rotation in world space (computed, shown as Euler degrees)", .label = "Rotation"}
     }
 );
-const Property<glm::vec3> Node::world_scale_property = Property<glm::vec3>::register_computed(
-    "world_scale", Node::property_owner_type(),
+const Property<glm::vec3> Xformable::world_scale_property = Property<glm::vec3>::register_computed(
+    "world_scale", Xformable::property_owner_type(),
     [](const Dependency_object& object) -> Property_value {
-        return static_cast<const Node&>(object).world_from_node_transform().get_scale();
+        return static_cast<const Xformable&>(object).world_from_node_transform().get_scale();
     },
     Property_metadata{
         .flags = Property_flags::none,
@@ -152,19 +152,19 @@ Node_data::Node_data(const Node_data& src, for_clone)
     : transforms{src.transforms}
     , host      {nullptr} // clone is created as not attached to anything
 {
-    // Attachments are handled in Node(const Node&)
+    // Attachments are handled in Xformable(const Xformable&)
 }
 
-Node::Node() = default;
-Node::Node(const Node&) { ERHE_FATAL("TODO"); }
-Node& Node::operator=(const Node&) { ERHE_FATAL("TODO"); }
+Xformable::Xformable() = default;
+Xformable::Xformable(const Xformable&) { ERHE_FATAL("TODO"); }
+Xformable& Xformable::operator=(const Xformable&) { ERHE_FATAL("TODO"); }
 
-Node::Node(const std::string_view name)
+Xformable::Xformable(const std::string_view name)
     : Item{name}
 {
 }
 
-Node::Node(const Node& src, for_clone)
+Xformable::Xformable(const Xformable& src, for_clone)
     : Item     {src, erhe::for_clone{}}
     , node_data{src.node_data, erhe::for_clone{}}
 {
@@ -177,40 +177,40 @@ Node::Node(const Node& src, for_clone)
     }
 }
 
-Node::~Node() noexcept
+Xformable::~Xformable() noexcept
 {
     node_sanity_check(true);
 
     log->trace(
-        "~Node '{}' depth = {} child count = {}",
+        "~Xformable '{}' depth = {} child count = {}",
         get_name(),
         get_depth(),
         get_child_count()
     );
 
     while (!node_data.attachments.empty()) {
-        // Causes trigger Node::handle_remove_attachment() calls to this Node
+        // Causes trigger Xformable::handle_remove_attachment() calls to this Xformable
         node_data.attachments.back()->set_node(nullptr);
     }
 }
 
-auto Node::shared_node_from_this() -> std::shared_ptr<Node>
+auto Xformable::shared_node_from_this() -> std::shared_ptr<Xformable>
 {
-    return std::static_pointer_cast<Node>(shared_from_this());
+    return std::static_pointer_cast<Xformable>(shared_from_this());
 }
 
-auto Node::get_parent_node() const -> std::shared_ptr<Node>
+auto Xformable::get_parent_node() const -> std::shared_ptr<Xformable>
 {
     const auto shared_parent_item = get_parent().lock();
-    return std::static_pointer_cast<Node>(shared_parent_item);
+    return std::static_pointer_cast<Xformable>(shared_parent_item);
 }
 
-void Node::set_node_parent(Node* parent)
+void Xformable::set_node_parent(Xformable* parent)
 {
     set_parent(parent, std::numeric_limits<std::size_t>::max());
 }
 
-void Node::set_node_parent(Node* const new_parent_node, const std::size_t position)
+void Xformable::set_node_parent(Xformable* const new_parent_node, const std::size_t position)
 {
     if (new_parent_node != nullptr) {
         auto shared_parent_node = std::static_pointer_cast<erhe::Hierarchy>(new_parent_node->shared_from_this());
@@ -220,7 +220,7 @@ void Node::set_node_parent(Node* const new_parent_node, const std::size_t positi
     }
 }
 
-void Node::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_item, const std::size_t position)
+void Xformable::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_item, const std::size_t position)
 {
     // Copy, not a reference: handle_parent_update() refreshes the cached
     // world transform (world = new_parent_world * old_local) during
@@ -238,8 +238,8 @@ void Node::set_parent(const std::shared_ptr<erhe::Hierarchy>& new_parent_item, c
     }
 }
 
-#pragma region Node attachments
-void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
+#pragma region Xformable attachments
+void Xformable::attach(const std::shared_ptr<Node_attachment>& attachment)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -251,7 +251,7 @@ void Node::attach(const std::shared_ptr<Node_attachment>& attachment)
     node_sanity_check();
 }
 
-auto Node::detach(Node_attachment* attachment) -> bool
+auto Xformable::detach(Node_attachment* attachment) -> bool
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -278,7 +278,7 @@ auto Node::detach(Node_attachment* attachment) -> bool
     return true;
 }
 
-auto Node::get_attachment_count(const erhe::Item_filter& filter) const -> std::size_t
+auto Xformable::get_attachment_count(const erhe::Item_filter& filter) const -> std::size_t
 {
     std::size_t result{};
     for (const auto& attachment : node_data.attachments) {
@@ -289,7 +289,7 @@ auto Node::get_attachment_count(const erhe::Item_filter& filter) const -> std::s
     return result;
 }
 
-void Node::for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback)
+void Xformable::for_each_inheritance_child(const std::function<void(erhe::property::Dependency_object&)>& callback)
 {
     Hierarchy::for_each_inheritance_child(callback);
     for (const std::shared_ptr<Node_attachment>& attachment : node_data.attachments) {
@@ -299,19 +299,19 @@ void Node::for_each_inheritance_child(const std::function<void(erhe::property::D
     }
 }
 
-auto Node::get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type>
+auto Xformable::get_secondary_property_owner_type() const -> std::optional<erhe::property::Owner_type>
 {
     return Node_attachment::property_owner_type();
 }
 
-void Node::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachment, std::size_t position)
+void Xformable::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachment, std::size_t position)
 {
     ERHE_VERIFY(attachment);
 
 #ifndef NDEBUG
     const auto i = std::find(node_data.attachments.begin(), node_data.attachments.end(), attachment);
     if (i != node_data.attachments.end()) {
-        log->error("Node {} already has attachment {}", describe(), attachment->get_name());
+        log->error("Xformable {} already has attachment {}", describe(), attachment->get_name());
         return;
     }
 #endif
@@ -322,7 +322,7 @@ void Node::handle_add_attachment(const std::shared_ptr<Node_attachment>& attachm
     erhe::bump_item_mutation_serial();
 }
 
-void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
+void Xformable::handle_remove_attachment(Node_attachment* const attachment_to_remove)
 {
     ERHE_VERIFY(attachment_to_remove != nullptr);
 
@@ -346,7 +346,7 @@ void Node::handle_remove_attachment(Node_attachment* const attachment_to_remove)
     }
 }
 
-void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+void Xformable::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
 {
     if (((old_flag_bits ^ new_flag_bits) & erhe::Item_flags::no_transform_update) != 0) {
         Scene* const scene = get_scene();
@@ -359,35 +359,35 @@ void Node::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t 
     }
 }
 
-auto Node::get_attachments() const -> const std::vector<std::shared_ptr<Node_attachment>>&
+auto Xformable::get_attachments() const -> const std::vector<std::shared_ptr<Node_attachment>>&
 {
     return node_data.attachments;
 }
 
-#pragma endregion Node attachments
+#pragma endregion Xformable attachments
 
-auto Node::get_item_host() const -> erhe::Item_host*
+auto Xformable::get_item_host() const -> erhe::Item_host*
 {
     return node_data.host;
 }
 
-auto Node::get_scene() const -> Scene*
+auto Xformable::get_scene() const -> Scene*
 {
     return (node_data.host != nullptr)
         ? node_data.host->get_hosted_scene()
         : nullptr;
 }
 
-void Node::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hierarchy* const new_parent_item)
+void Xformable::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hierarchy* const new_parent_item)
 {
     // Keep this alive to make it simple to call node_sanity_check()
     auto shared_this = weak_from_this().lock();
 
     ERHE_VERIFY(old_parent_item != new_parent_item);
-    ERHE_VERIFY((old_parent_item == nullptr) || is<Node>(old_parent_item));
-    ERHE_VERIFY((new_parent_item == nullptr) || is<Node>(new_parent_item));
-    auto* const old_parent = dynamic_cast<Node* const>(old_parent_item);
-    auto* const new_parent = dynamic_cast<Node* const>(new_parent_item);
+    ERHE_VERIFY((old_parent_item == nullptr) || is<Xformable>(old_parent_item));
+    ERHE_VERIFY((new_parent_item == nullptr) || is<Xformable>(new_parent_item));
+    auto* const old_parent = dynamic_cast<Xformable* const>(old_parent_item);
+    auto* const new_parent = dynamic_cast<Xformable* const>(new_parent_item);
     erhe::Item_host* const old_item_host = (old_parent != nullptr) ? old_parent->get_item_host() : nullptr;
     erhe::Item_host* const new_item_host = (new_parent != nullptr) ? new_parent->get_item_host() : nullptr;
     if (old_item_host != new_item_host) {
@@ -409,7 +409,7 @@ void Node::handle_parent_update(erhe::Hierarchy* const old_parent_item, erhe::Hi
     hierarchy_sanity_check();
 }
 
-void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
+void Xformable::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
 {
     ERHE_VERIFY(old_item_host != new_item_host);
 
@@ -435,7 +435,7 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
     }
 
     for (const auto& child : get_children()) {
-        auto child_node = std::dynamic_pointer_cast<Node>(child);
+        auto child_node = std::dynamic_pointer_cast<Xformable>(child);
         if (!child_node) {
             continue;
         }
@@ -445,9 +445,9 @@ void Node::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
     ERHE_VERIFY(node_data.host == new_item_host);
 }
 
-bool Node::s_check_no_transform_update_writes{false};
+bool Xformable::s_check_no_transform_update_writes{false};
 
-void Node::handle_transform_update(const uint64_t serial) const
+void Xformable::handle_transform_update(const uint64_t serial) const
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -489,7 +489,7 @@ void Node::handle_transform_update(const uint64_t serial) const
     }
 }
 
-void Node::update_transform(uint64_t serial)
+void Xformable::update_transform(uint64_t serial)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -543,7 +543,7 @@ void Node::update_transform(uint64_t serial)
     }
 }
 
-void Node::update_world_from_node()
+void Xformable::update_world_from_node()
 {
     const auto& current_parent = get_parent_node();
     if (current_parent && !is_identity_transform(current_parent->world_from_node_transform())) {
@@ -556,7 +556,7 @@ void Node::update_world_from_node()
     }
 }
 
-void Node::node_sanity_check(bool destruction_in_progress) const
+void Xformable::node_sanity_check(bool destruction_in_progress) const
 {
     for (const auto& child : get_children()) {
         erhe::Item_host* child_host       = child->get_item_host();
@@ -583,7 +583,7 @@ void Node::node_sanity_check(bool destruction_in_progress) const
         auto* node = attachment->get_node();
         if (node != this) {
             log->error(
-                "Node '{}' attachment {} '{}' node == '{}'",
+                "Xformable '{}' attachment {} '{}' node == '{}'",
                 get_name(),
                 attachment->get_type_name(),
                 attachment->get_name(),
@@ -597,42 +597,42 @@ void Node::node_sanity_check(bool destruction_in_progress) const
     hierarchy_sanity_check(destruction_in_progress);
 }
 
-auto Node::parent_from_node_transform() const -> const Trs_transform&
+auto Xformable::parent_from_node_transform() const -> const Trs_transform&
 {
     return node_data.transforms.parent_from_node;
 }
 
-auto Node::parent_from_node_transform() -> Trs_transform&
+auto Xformable::parent_from_node_transform() -> Trs_transform&
 {
     return node_data.transforms.parent_from_node;
 }
 
-auto Node::parent_from_node() const -> glm::mat4
+auto Xformable::parent_from_node() const -> glm::mat4
 {
     return node_data.transforms.parent_from_node.get_matrix();
 }
 
-auto Node::world_from_node_transform() const -> const Trs_transform&
+auto Xformable::world_from_node_transform() const -> const Trs_transform&
 {
     return node_data.transforms.world_from_node;
 }
 
-auto Node::world_from_node() const -> glm::mat4
+auto Xformable::world_from_node() const -> glm::mat4
 {
     return node_data.transforms.world_from_node.get_matrix();
 }
 
-auto Node::node_from_parent() const -> glm::mat4
+auto Xformable::node_from_parent() const -> glm::mat4
 {
     return node_data.transforms.parent_from_node.get_inverse_matrix();
 }
 
-auto Node::node_from_world() const -> glm::mat4
+auto Xformable::node_from_world() const -> glm::mat4
 {
     return node_data.transforms.world_from_node.get_inverse_matrix();
 }
 
-auto Node::world_from_parent() const -> glm::mat4
+auto Xformable::world_from_parent() const -> glm::mat4
 {
     const auto& current_parent = get_parent_node();
     if (current_parent) {
@@ -641,7 +641,7 @@ auto Node::world_from_parent() const -> glm::mat4
     return glm::mat4{1};
 }
 
-auto Node::parent_from_world() const -> glm::mat4
+auto Xformable::parent_from_world() const -> glm::mat4
 {
     const auto& current_parent = get_parent_node();
     if (current_parent) {
@@ -650,24 +650,24 @@ auto Node::parent_from_world() const -> glm::mat4
     return glm::mat4{1};
 }
 
-auto Node::position_in_world() const -> glm::vec4
+auto Xformable::position_in_world() const -> glm::vec4
 {
     return world_from_node() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
 }
 
-auto Node::direction_in_world() const -> glm::vec4
+auto Xformable::direction_in_world() const -> glm::vec4
 {
     return world_from_node() * glm::vec4{0.0f, 0.0f, 1.0f, 0.0f};
 }
 
-auto Node::look_at(const glm::vec3 target_position) const -> glm::mat4
+auto Xformable::look_at(const glm::vec3 target_position) const -> glm::mat4
 {
     const glm::vec3 eye_position = glm::vec3{position_in_world()};
     const glm::vec3 up_direction = glm::vec3{world_from_node() * glm::vec4{0.0f, 1.0f, 0.0f, 0.0f}};
     return erhe::math::create_look_at(eye_position, target_position, up_direction);
 }
 
-auto Node::look_at(const Node& target) const -> glm::mat4
+auto Xformable::look_at(const Xformable& target) const -> glm::mat4
 {
     const glm::vec3 eye_position    = glm::vec3{position_in_world()};
     const glm::vec3 target_position = glm::vec3{target.position_in_world()};
@@ -675,36 +675,36 @@ auto Node::look_at(const Node& target) const -> glm::mat4
     return erhe::math::create_look_at(eye_position, target_position, up_direction);
 }
 
-auto Node::transform_point_from_world_to_local(const glm::vec3 p) const -> glm::vec3
+auto Xformable::transform_point_from_world_to_local(const glm::vec3 p) const -> glm::vec3
 {
     // Does not homogenize
     return glm::vec3{node_from_world() * glm::vec4{p, 1.0f}};
 }
 
-auto Node::transform_direction_from_world_to_local(const glm::vec3 direction) const -> glm::vec3
+auto Xformable::transform_direction_from_world_to_local(const glm::vec3 direction) const -> glm::vec3
 {
     return glm::vec3{node_from_world() * glm::vec4{direction, 0.0f}};
 }
 
-auto Node::transform_point_from_local_to_world(const glm::vec3 p) const -> glm::vec3
+auto Xformable::transform_point_from_local_to_world(const glm::vec3 p) const -> glm::vec3
 {
     // Does not homogenize
     return glm::vec3{world_from_node() * glm::vec4{p, 1.0f}};
 }
 
-auto Node::transform_direction_from_local_to_world(const glm::vec3 direction) const -> glm::vec3
+auto Xformable::transform_direction_from_local_to_world(const glm::vec3 direction) const -> glm::vec3
 {
     return glm::vec3{world_from_node() * glm::vec4{direction, 0.0f}};
 }
 
-void Node::set_parent_from_node(const glm::mat4 parent_from_node)
+void Xformable::set_parent_from_node(const glm::mat4 parent_from_node)
 {
     node_data.transforms.parent_from_node.set(parent_from_node);
     update_world_from_node();
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_parent_from_node(const Transform& parent_from_node)
+void Xformable::set_parent_from_node(const Transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -716,7 +716,7 @@ void Node::set_parent_from_node(const Transform& parent_from_node)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_parent_from_node(const Trs_transform& parent_from_node)
+void Xformable::set_parent_from_node(const Trs_transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -728,7 +728,7 @@ void Node::set_parent_from_node(const Trs_transform& parent_from_node)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_node_from_parent(const glm::mat4 node_from_parent)
+void Xformable::set_node_from_parent(const glm::mat4 node_from_parent)
 {
     node_data.transforms.parent_from_node.set(
         glm::inverse(node_from_parent),
@@ -738,7 +738,7 @@ void Node::set_node_from_parent(const glm::mat4 node_from_parent)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_node_from_parent(const Transform& node_from_parent)
+void Xformable::set_node_from_parent(const Transform& node_from_parent)
 {
     node_data.transforms.parent_from_node.set(
         node_from_parent.get_inverse_matrix(),
@@ -748,7 +748,7 @@ void Node::set_node_from_parent(const Transform& node_from_parent)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_world_from_node(const glm::mat4 world_from_node)
+void Xformable::set_world_from_node(const glm::mat4 world_from_node)
 {
     const auto& current_parent = get_parent_node();
     if (current_parent) {
@@ -758,7 +758,7 @@ void Node::set_world_from_node(const glm::mat4 world_from_node)
     }
 }
 
-void Node::set_world_from_node(const Transform& world_from_node)
+void Xformable::set_world_from_node(const Transform& world_from_node)
 {
     const auto& current_parent = get_parent_node();
     if (current_parent) {
@@ -770,7 +770,7 @@ void Node::set_world_from_node(const Transform& world_from_node)
     }
 }
 
-void Node::set_world_from_node(const Trs_transform& world_from_node)
+void Xformable::set_world_from_node(const Trs_transform& world_from_node)
 {
     const auto& current_parent = get_parent_node();
     if (current_parent && !is_identity_transform(current_parent->world_from_node_transform())) {
@@ -786,7 +786,7 @@ void Node::set_world_from_node(const Trs_transform& world_from_node)
     }
 }
 
-void Node::set_node_from_world(const glm::mat4 node_from_world)
+void Xformable::set_node_from_world(const glm::mat4 node_from_world)
 {
     node_data.transforms.world_from_node.set(glm::inverse(node_from_world), node_from_world);
     const auto& world_from_node = node_data.transforms.world_from_node.get_matrix();
@@ -802,7 +802,7 @@ void Node::set_node_from_world(const glm::mat4 node_from_world)
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
-void Node::set_node_from_world(const Transform& node_from_world)
+void Xformable::set_node_from_world(const Transform& node_from_world)
 {
     node_data.transforms.world_from_node.set(
         node_from_world.get_inverse_matrix(),

@@ -18,7 +18,7 @@ namespace erhe {
 namespace erhe::gltf      { class Gltf_data; class Gltf_image_source; class Image_transfer; }
 namespace erhe::graphics  { class Device; class Texture; }
 namespace erhe::primitive { class Build_info; }
-namespace erhe::scene     { class Animation; class Node; }
+namespace erhe::scene     { class Animation; class Xformable; using Node = Xformable; }
 namespace tf              { class Executor; }
 
 namespace editor {

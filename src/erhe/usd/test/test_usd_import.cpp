@@ -8,6 +8,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include <gtest/gtest.h>
@@ -29,7 +30,7 @@ class Cube_import : public testing::Test
 protected:
     void SetUp() override
     {
-        root = std::make_shared<erhe::scene::Node>("import_root");
+        root = std::make_shared<erhe::scene::Xform>("import_root");
         const erhe::usd::Usd_load_arguments arguments{
             .path          = test_data_path("cube.usda"),
             .root_node     = root,
@@ -180,7 +181,7 @@ class Authored_import : public testing::Test
 protected:
     void SetUp() override
     {
-        root = std::make_shared<erhe::scene::Node>("import_root");
+        root = std::make_shared<erhe::scene::Xform>("import_root");
         const erhe::usd::Usd_load_arguments arguments{
             .path          = test_data_path("authored.usda"),
             .root_node     = root,
@@ -276,7 +277,7 @@ TEST_F(Authored_import, erhe_custom_attributes_become_property_values)
 
 TEST(Usd_import, missing_file_is_an_error)
 {
-    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("import_root");
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
     const erhe::usd::Usd_load_arguments arguments{
         .path          = test_data_path("this_file_does_not_exist.usda"),
         .root_node     = root,

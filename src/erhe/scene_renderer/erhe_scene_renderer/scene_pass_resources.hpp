@@ -25,7 +25,7 @@ namespace erhe::graphics {
     class Texture_heap;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
     class Skin;
 }
 namespace erhe::ui {

@@ -93,7 +93,7 @@ const std::array<Asset_type_info, 5> c_asset_type_infos{
     Asset_type_info{Asset_type::material,  "material",  erhe::Item_type::material,  &Content_library::materials },
     Asset_type_info{Asset_type::animation, "animation", erhe::Item_type::animation, &Content_library::animations},
     Asset_type_info{Asset_type::mesh,      "mesh",      erhe::Item_type::mesh,      nullptr                     },
-    Asset_type_info{Asset_type::node,      "node",      erhe::Item_type::node,      nullptr                     }
+    Asset_type_info{Asset_type::node,      "node",      erhe::Item_type::xformable,      nullptr                     }
 };
 
 }

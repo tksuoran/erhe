@@ -38,7 +38,7 @@ namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
     class Scene;
     class Skin;
     using Layer_id = uint64_t;

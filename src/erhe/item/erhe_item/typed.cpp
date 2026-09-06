@@ -23,6 +23,11 @@ Typed::Typed(const std::string_view name, const std::string_view prim_type_name)
     set_prim_type_name(prim_type_name);
 }
 
+Typed::Typed(const Typed& src, for_clone)
+    : Typed{src}
+{
+}
+
 auto Typed::get_prim_type_name() const -> std::string_view
 {
     const std::string_view class_type_name = get_class_type_name();

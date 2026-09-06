@@ -8,6 +8,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_primitive/primitive.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -76,9 +77,10 @@ auto make_unit_box_primitive() -> std::shared_ptr<erhe::primitive::Primitive>
 TEST(Node_computed, world_transform_components_follow_the_propagation_pass)
 {
     using erhe::scene::Node;
+    using erhe::scene::Xform;
     Test_scene_host host;
-    auto parent = std::make_shared<Node>("Parent");
-    auto child  = std::make_shared<Node>("Child");
+    auto parent = std::make_shared<Xform>("Parent");
+    auto child  = std::make_shared<Xform>("Child");
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
     child->set_parent(parent);
@@ -126,10 +128,11 @@ TEST(Node_computed, world_transform_components_follow_the_propagation_pass)
 TEST(Node_computed, child_count_follows_the_tree)
 {
     using erhe::scene::Node;
+    using erhe::scene::Xform;
     Test_scene_host host;
-    auto parent = std::make_shared<Node>("Parent");
-    auto a      = std::make_shared<Node>("A");
-    auto b      = std::make_shared<Node>("B");
+    auto parent = std::make_shared<Xform>("Parent");
+    auto a      = std::make_shared<Xform>("A");
+    auto b      = std::make_shared<Xform>("B");
     auto light  = std::make_shared<erhe::scene::Light>("Lamp");
     parent->set_parent(host.scene.get_root_node());
     parent->attach(light);
@@ -165,8 +168,9 @@ TEST(Node_computed, mesh_world_bounds_follow_the_node_and_the_primitives)
 {
     using erhe::scene::Mesh;
     using erhe::scene::Node;
+    using erhe::scene::Xform;
     Test_scene_host host;
-    auto node  = std::make_shared<Node>("Box");
+    auto node  = std::make_shared<Xform>("Box");
     auto mesh  = std::make_shared<Mesh>("Box mesh");
     auto light = std::make_shared<erhe::scene::Light>("Lamp");
     node->set_parent(host.scene.get_root_node());

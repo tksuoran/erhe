@@ -5,7 +5,7 @@
 
 namespace erhe::scene {
     class Animation;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {

@@ -49,6 +49,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_profile/profile.hpp"
@@ -876,7 +877,7 @@ auto make_import_gltf_operation(
     } else {
         erhe::scene::Scene temp_scene{"temp scene", nullptr};
         const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
-        root_node = std::make_shared<erhe::scene::Node>(erhe::file::to_string(path.filename()));
+        root_node = std::make_shared<erhe::scene::Xform>(erhe::file::to_string(path.filename()));
         // import_root: implicit container, not file content; glTF export writes
         // its children in its place so open/save cycles do not nest wrappers.
         root_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::import_root);
@@ -1056,7 +1057,7 @@ auto make_import_gltf_operation(
     // exclude_from_prefab keeps them out of prefab instances (the flag
     // persists in node extras and instantiation filters flagged items).
     if (add_default_camera) {
-        default_camera_node = std::make_shared<erhe::scene::Node>("Camera");
+        default_camera_node = std::make_shared<erhe::scene::Xform>("Camera");
         std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
         default_camera->set_fov_y          (c_default_camera_fov_y);
         default_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -1108,7 +1109,7 @@ auto make_import_gltf_operation(
     }
 
     if (add_default_light) {
-        default_key_light_node = std::make_shared<erhe::scene::Node>("Key Light");
+        default_key_light_node = std::make_shared<erhe::scene::Xform>("Key Light");
         std::shared_ptr<erhe::scene::Light> key_light = std::make_shared<erhe::scene::Light>("Key Light");
         key_light->set_light_type(erhe::scene::Light::Type::directional);
         key_light->set_color(glm::vec3{1.0f, 1.0f, 1.0});
@@ -1121,7 +1122,7 @@ auto make_import_gltf_operation(
         const glm::quat key_quat{0.8535534f, -0.3535534f, -0.353553385f, -0.146446586f};
         default_key_light_node->set_parent_from_node(glm::mat4{key_quat});
 
-        default_fill_light_node = std::make_shared<erhe::scene::Node>("Fill Light Node");
+        default_fill_light_node = std::make_shared<erhe::scene::Xform>("Fill Light Node");
         std::shared_ptr<erhe::scene::Light> fill_light = std::make_shared<erhe::scene::Light>("Fill Light");
         fill_light->set_light_type(erhe::scene::Light::Type::directional);
         fill_light->set_color(glm::vec3{1.0f, 1.0f, 1.0});
@@ -1627,7 +1628,7 @@ auto open_scene_gltf(
         log_parsers->info("open_scene_gltf: adopting loaded container record for '{}'", erhe::file::to_string(path));
     } else {
         const std::shared_ptr<erhe::scene::Node> temp_scene_root_node = temp_scene.get_root_node();
-        container_node = std::make_shared<erhe::scene::Node>("open scene container");
+        container_node = std::make_shared<erhe::scene::Xform>("open scene container");
         container_node->set_parent(temp_scene_root_node);
 
         erhe::gltf::Image_transfer image_transfer{*context.graphics_device};

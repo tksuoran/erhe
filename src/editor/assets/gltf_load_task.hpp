@@ -14,7 +14,7 @@ namespace erhe::gltf {
     class Image_transfer;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {

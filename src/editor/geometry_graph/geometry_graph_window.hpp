@@ -26,7 +26,7 @@ namespace erhe::graph {
     class Pin;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 namespace erhe::imgui {
     class Imgui_renderer;

@@ -12,7 +12,7 @@
 #include <vector>
 
 namespace erhe::commands { class Commands; }
-namespace erhe::scene    { class Node; }
+namespace erhe::scene    { class Xformable; using Node = Xformable; }
 
 namespace editor {
 

@@ -25,7 +25,7 @@ namespace erhe::renderer {
 }
 namespace erhe::scene {
     class Camera;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 namespace erhe::scene_renderer {
     class Forward_renderer;

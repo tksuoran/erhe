@@ -7,6 +7,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_string.hpp"
 
@@ -98,7 +99,7 @@ TEST(Light_properties, typed_and_untyped_access)
 TEST(Light_properties, every_change_re_resolves_the_light_set)
 {
     Counting_scene_host host;
-    auto node  = std::make_shared<erhe::scene::Node>("n");
+    auto node  = std::make_shared<erhe::scene::Xform>("n");
     auto light = std::make_shared<Light>("l");
     node->attach(light);
     node->set_parent(host.scene.get_root_node());
@@ -132,7 +133,7 @@ TEST(Light_properties, every_change_re_resolves_the_light_set)
 TEST(Light_properties, flux_and_blackbody_are_computed_over_the_stored_values)
 {
     Counting_scene_host host;
-    auto node  = std::make_shared<erhe::scene::Node>("n");
+    auto node  = std::make_shared<erhe::scene::Xform>("n");
     auto light = std::make_shared<Light>("l");
     node->attach(light);
     node->set_parent(host.scene.get_root_node());

@@ -10,7 +10,7 @@ namespace erhe { class Item_host; }
 
 namespace erhe::scene {
 
-class Node;
+class Xformable; using Node = Xformable;
 
 class Node_attachment : public erhe::Item<Item_base, Item_base, Node_attachment, erhe::Item_kind::clone_using_custom_clone_constructor>
 {

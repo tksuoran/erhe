@@ -27,6 +27,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -249,7 +250,7 @@ auto Prefab_library::load_template(Prefab& prefab) -> bool
     ERHE_VERIFY(m_context.executor != nullptr);
     ERHE_VERIFY(m_context.current_command_buffer != nullptr);
 
-    auto template_root = std::make_shared<erhe::scene::Node>(prefab.name);
+    auto template_root = std::make_shared<erhe::scene::Xform>(prefab.name);
     template_root->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
     erhe::gltf::Image_transfer image_transfer{*m_context.graphics_device};
@@ -458,7 +459,7 @@ auto instantiate_prefab(
         erhe::Item_flags::expand  |
         erhe::Item_flags::show_in_ui;
 
-    std::shared_ptr<erhe::scene::Node> instance_root = std::make_shared<erhe::scene::Node>(prefab->name);
+    std::shared_ptr<erhe::scene::Node> instance_root = std::make_shared<erhe::scene::Xform>(prefab->name);
     instance_root->enable_flag_bits(node_flags);
     instance_root->set_world_from_node(world_from_node);
 

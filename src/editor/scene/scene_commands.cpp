@@ -55,6 +55,7 @@
 #include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <fmt/format.h>
 
@@ -531,7 +532,7 @@ auto Scene_commands::create_new_scene() -> std::shared_ptr<Scene_root>
     // defaults). Added before the scene is registered / has a viewport, so no
     // other part can observe the scene camera-less; not routed through the
     // Operation_stack because the scene creation itself is not undoable.
-    std::shared_ptr<erhe::scene::Node>   camera_node = std::make_shared<erhe::scene::Node>("Camera");
+    std::shared_ptr<erhe::scene::Node>   camera_node = std::make_shared<erhe::scene::Xform>("Camera");
     std::shared_ptr<erhe::scene::Camera> camera      = std::make_shared<erhe::scene::Camera>("Camera");
     camera->set_fov_y          (glm::radians(35.0f));
     camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -618,7 +619,7 @@ auto Scene_commands::create_new_camera(erhe::scene::Node* parent) -> std::shared
         return {};
     }
 
-    auto new_node   = std::make_shared<erhe::scene::Node>("new camera node");
+    auto new_node   = std::make_shared<erhe::scene::Xform>("new camera node");
     auto new_camera = std::make_shared<erhe::scene::Camera>("new camera");
     new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     new_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
@@ -656,7 +657,7 @@ auto Scene_commands::create_new_empty_node(erhe::scene::Node* parent) -> std::sh
     // (Mesh, Light, Geometry_graph_mesh, ...) sync their visibility from
     // the node - without it anything attached to an "empty" node would be
     // invisibly stuck.
-    auto new_empty_node = std::make_shared<erhe::scene::Node>("new empty node");
+    auto new_empty_node = std::make_shared<erhe::scene::Xform>("new empty node");
     new_empty_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
         std::make_shared<Item_insert_remove_operation>(
@@ -764,7 +765,7 @@ auto Scene_commands::add_bone_tip_nodes(const std::shared_ptr<erhe::scene::Node>
         }
         const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, joint_index);
 
-        auto tip_node = std::make_shared<erhe::scene::Node>(fmt::format("{} tip", bone->get_name()));
+        auto tip_node = std::make_shared<erhe::scene::Xform>(fmt::format("{} tip", bone->get_name()));
         tip_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
         compound_parameters.operations.push_back(
             std::make_shared<Item_insert_remove_operation>(
@@ -810,7 +811,7 @@ auto Scene_commands::create_new_light(erhe::scene::Node* parent) -> std::shared_
         return {};
     }
 
-    auto new_node  = std::make_shared<erhe::scene::Node>("new light node");
+    auto new_node  = std::make_shared<erhe::scene::Xform>("new light node");
     auto new_light = std::make_shared<erhe::scene::Light>("new light");
     new_node ->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
     new_light->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);
@@ -845,7 +846,7 @@ auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared
         return {};
     }
 
-    auto new_node   = std::make_shared<erhe::scene::Node>("new layout node");
+    auto new_node   = std::make_shared<erhe::scene::Xform>("new layout node");
     auto new_layout = std::make_shared<erhe::scene::Layout>("new layout");
     new_node  ->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     new_layout->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
@@ -884,7 +885,7 @@ auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node) -> std::shar
         if (scene_root == nullptr) {
             return {};
         }
-        auto new_node = std::make_shared<erhe::scene::Node>("new rigid body node");
+        auto new_node = std::make_shared<erhe::scene::Xform>("new rigid body node");
         new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
 
         erhe::physics::IRigid_body_create_info create_info{};
@@ -989,7 +990,7 @@ auto Scene_commands::create_new_joint(
     if (scene_root == nullptr) {
         return {};
     }
-    auto new_node = std::make_shared<erhe::scene::Node>("new joint node");
+    auto new_node = std::make_shared<erhe::scene::Xform>("new joint node");
     new_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_context.operation_stack->queue(
         std::make_shared<Compound_operation>(
@@ -1150,7 +1151,7 @@ auto Scene_commands::create_new_rendertarget(erhe::scene::Node* parent) -> std::
     mesh->enable_flag_bits(erhe::Item_flags::rendertarget | erhe::Item_flags::show_in_ui);
 
     // Node specifies transform for rendertarget in 3D scene
-    auto node = std::make_shared<erhe::scene::Node>("rendertarget node");
+    auto node = std::make_shared<erhe::scene::Xform>("rendertarget node");
     //node->set_parent_from_node(
     //    erhe::math::mat4_rotate_xz_180
     //);

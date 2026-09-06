@@ -10,6 +10,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <gtest/gtest.h>
 
@@ -26,7 +27,7 @@ class Light_test_scene
 public:
     Light_test_scene(const erhe::scene::Light_type light_type, const glm::mat4& world_from_light_node)
     {
-        camera_node = std::make_shared<erhe::scene::Node>("camera node");
+        camera_node = std::make_shared<erhe::scene::Xform>("camera node");
         camera      = std::make_shared<erhe::scene::Camera>("camera");
         camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
         camera->set_z_near(0.1f);
@@ -38,7 +39,7 @@ public:
             glm::inverse(glm::lookAt(glm::vec3{3.0f, 4.0f, 5.0f}, glm::vec3{0.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}))
         );
 
-        light_node = std::make_shared<erhe::scene::Node>("light node");
+        light_node = std::make_shared<erhe::scene::Xform>("light node");
         light      = std::make_shared<erhe::scene::Light>("light");
         light->set_light_type(light_type);
         light->set_range(30.0f);

@@ -37,7 +37,7 @@ namespace erhe::rendergraph {
 namespace erhe::scene {
     class Camera;
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace erhe::primitive { class Material; }

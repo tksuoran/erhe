@@ -8,6 +8,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include <gtest/gtest.h>
@@ -61,7 +62,7 @@ class Round_trip
 public:
     explicit Round_trip(const char* source_file_name)
     {
-        source_root = std::make_shared<erhe::scene::Node>("import_root");
+        source_root = std::make_shared<erhe::scene::Xform>("import_root");
         const erhe::usd::Usd_load_arguments load_arguments{
             .path          = test_data_path(source_file_name),
             .root_node     = source_root,
@@ -80,7 +81,7 @@ public:
         };
         save = erhe::usd::save_usda(save_arguments);
 
-        reloaded_root = std::make_shared<erhe::scene::Node>("reload_root");
+        reloaded_root = std::make_shared<erhe::scene::Xform>("reload_root");
         const erhe::usd::Usd_load_arguments reload_arguments{
             .path          = written_path,
             .root_node     = reloaded_root,
@@ -327,9 +328,9 @@ TEST(Usd_identifier, sanitizing)
 // writer's name scope applies the M2 suffix rule after sanitizing.
 TEST(Usd_identifier, colliding_names_are_suffixed)
 {
-    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("root");
-    const std::shared_ptr<erhe::scene::Node> a    = std::make_shared<erhe::scene::Node>("a.b");
-    const std::shared_ptr<erhe::scene::Node> b    = std::make_shared<erhe::scene::Node>("a b");
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("root");
+    const std::shared_ptr<erhe::scene::Node> a    = std::make_shared<erhe::scene::Xform>("a.b");
+    const std::shared_ptr<erhe::scene::Node> b    = std::make_shared<erhe::scene::Xform>("a b");
     a->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     b->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     a->Hierarchy::set_parent(root);
@@ -340,7 +341,7 @@ TEST(Usd_identifier, colliding_names_are_suffixed)
     const erhe::usd::Usd_save_result    save = erhe::usd::save_usda(save_arguments);
     ASSERT_TRUE(save.error.empty()) << save.error;
 
-    const std::shared_ptr<erhe::scene::Node> reload_root = std::make_shared<erhe::scene::Node>("reload_root");
+    const std::shared_ptr<erhe::scene::Node> reload_root = std::make_shared<erhe::scene::Xform>("reload_root");
     const erhe::usd::Usd_load_arguments      load_arguments{.path = path, .root_node = reload_root, .mesh_layer_id = 0};
     const erhe::usd::Usd_load_result         loaded = erhe::usd::load_usd(load_arguments);
     ASSERT_TRUE(loaded.error.empty()) << loaded.error;

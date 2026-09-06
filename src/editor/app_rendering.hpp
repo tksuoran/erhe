@@ -17,7 +17,7 @@
 
 namespace erhe::commands       { class Commands; }
 namespace erhe::imgui          { class Imgui_windows; }
-namespace erhe::scene          { class Node; }
+namespace erhe::scene          { class Xformable; using Node = Xformable; }
 namespace erhe::scene_renderer { class Content_wide_line_renderer; class Mesh_memory; }
 namespace erhe::window         { class Context_window; }
 

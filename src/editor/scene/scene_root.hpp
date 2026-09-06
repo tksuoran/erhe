@@ -61,7 +61,7 @@ namespace erhe::scene {
     class Mesh_layer;
     class Mesh_raytrace;
     class Message_bus;
-    class Node;
+    class Xformable; using Node = Xformable;
     class Scene;
 }
 

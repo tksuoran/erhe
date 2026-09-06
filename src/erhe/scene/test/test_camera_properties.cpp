@@ -5,6 +5,7 @@
 
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_string.hpp"
 
@@ -16,6 +17,7 @@
 using namespace erhe::property;
 using erhe::scene::Camera;
 using erhe::scene::Node;
+using erhe::scene::Xform;
 using erhe::scene::Projection;
 
 TEST(Camera_properties, defaults_match_projection_defaults)
@@ -75,7 +77,7 @@ TEST(Camera_properties, untyped_access_with_enumeration_labels)
 
 TEST(Camera_properties, node_held_values_are_inherited_into_the_mirror)
 {
-    auto node   = std::make_shared<Node>("n");
+    auto node   = std::make_shared<Xform>("n");
     auto camera = std::make_shared<Camera>("c");
     node->attach(camera);
     const Property_registry& registry = Property_registry::get();

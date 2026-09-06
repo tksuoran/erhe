@@ -76,7 +76,7 @@ Icon_set::Icon_set(
         .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}
     };
     type_icons[erhe::Item_type::index_material            ] = { .code = icons.material};   // .color = glm::vec4{1.0f, 0.1f, 0.1f, 1.0f}};
-    type_icons[erhe::Item_type::index_node                ] = { .code = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
+    type_icons[erhe::Item_type::index_xformable           ] = { .code = icons.node};       // .color = glm::vec4{0.7f, 0.8f, 0.9f, 1.0f}};
     type_icons[erhe::Item_type::index_mesh                ] = { .code = icons.mesh,        .color = glm::vec4{0.6f, 1.0f, 0.6f, 1.0f}};
     type_icons[erhe::Item_type::index_skin                ] = { .code = icons.skin,        .color = glm::vec4{1.0f, 0.5f, 0.5f, 1.0f}};
     type_icons[erhe::Item_type::index_bone                ] = { .code = icons.bone,        .color = glm::vec4{0.5f, 1.0f, 1.0f, 1.0f}};

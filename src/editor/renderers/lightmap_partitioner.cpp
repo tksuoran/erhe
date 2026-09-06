@@ -21,6 +21,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <fmt/format.h>
@@ -771,7 +772,7 @@ void Lightmap_partitioner::commit_prepare()
             }
             total_pieces += piece_primitives.size();
             erhe::scene::Node* const node = entry.original_mesh->get_node();
-            entry.piece_node = std::make_shared<erhe::scene::Node>(fmt::format("{}.lm", (node != nullptr) ? node->get_name() : entry.original_mesh->get_name()));
+            entry.piece_node = std::make_shared<erhe::scene::Xform>(fmt::format("{}.lm", (node != nullptr) ? node->get_name() : entry.original_mesh->get_name()));
             entry.piece_mesh = std::make_shared<erhe::scene::Mesh>(fmt::format("{}.lm", entry.original_mesh->get_name()));
             entry.piece_mesh->layer_id = scene_root.layers().content()->id;
             entry.piece_mesh->set_primitives(piece_primitives);
@@ -831,7 +832,7 @@ void Lightmap_partitioner::commit_prepare()
         // pieces are world-space geometry, so identity world_from_node is
         // what makes them render (and raytrace) in place.
         const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root.item_host_mutex};
-        m_group_node = std::make_shared<erhe::scene::Node>("Lightmap Pieces");
+        m_group_node = std::make_shared<erhe::scene::Xform>("Lightmap Pieces");
         m_group_node->enable_flag_bits(
             erhe::Item_flags::content                 |
             erhe::Item_flags::render_proxy            |

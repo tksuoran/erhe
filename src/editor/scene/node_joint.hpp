@@ -12,7 +12,7 @@ namespace erhe::physics {
     class IWorld;
     class Physics_joint_settings;
 }
-namespace erhe::scene   { class Node; }
+namespace erhe::scene   { class Xformable; using Node = Xformable; }
 
 namespace editor {
 

@@ -42,6 +42,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_log.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
@@ -535,7 +536,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node   = std::make_shared<erhe::scene::Node>(name);
+        auto node   = std::make_shared<erhe::scene::Xform>(name);
         auto camera = std::make_shared<erhe::scene::Camera>(name);
         camera->set_fov_y          (glm::radians(45.0f));
         camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -565,7 +566,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Node>(name);
+        auto node  = std::make_shared<erhe::scene::Xform>(name);
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(erhe::scene::Light::Type::directional);
         light->set_color(color);
@@ -596,7 +597,7 @@ private:
     {
         using Item_flags = erhe::Item_flags;
 
-        auto node  = std::make_shared<erhe::scene::Node>(name);
+        auto node  = std::make_shared<erhe::scene::Xform>(name);
         auto light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(erhe::scene::Light::Type::point);
         light->set_color(color);

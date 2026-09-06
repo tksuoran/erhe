@@ -15,7 +15,7 @@
 namespace erhe::graphics       { class Device; }
 namespace erhe::imgui          { class Imgui_renderer; }
 namespace erhe::rendergraph    { class Rendergraph; }
-namespace erhe::scene          { class Node; };
+namespace erhe::scene          { class Xformable; using Node = Xformable; };
 namespace erhe::scene_renderer { class Mesh_memory; }
 
 struct Hud_config;

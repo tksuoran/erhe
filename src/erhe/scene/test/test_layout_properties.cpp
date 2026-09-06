@@ -5,6 +5,7 @@
 
 #include "erhe_scene/layout.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_property/property_set.hpp"
 #include "erhe_property/property_string.hpp"
 
@@ -17,6 +18,7 @@ using erhe::scene::Axis_direction;
 using erhe::scene::Layout;
 using erhe::scene::Layout_type;
 using erhe::scene::Node;
+using erhe::scene::Xform;
 
 TEST(Layout_properties, defaults_match_previous_initializers)
 {
@@ -76,7 +78,7 @@ TEST(Layout_properties, untyped_access_with_enumeration_labels)
 
 TEST(Layout_properties, node_held_values_are_inherited_into_the_mirror)
 {
-    auto node   = std::make_shared<Node>("n");
+    auto node   = std::make_shared<Xform>("n");
     auto layout = std::make_shared<Layout>("l");
     node->attach(layout);
     const Property_registry& registry = Property_registry::get();

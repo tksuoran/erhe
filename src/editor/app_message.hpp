@@ -7,7 +7,7 @@
 
 namespace erhe        { class Item_base; }
 namespace erhe::scene { class Mesh; }
-namespace erhe::scene { class Node; }
+namespace erhe::scene { class Xformable; using Node = Xformable; }
 namespace erhe::scene { class Skin; }
 
 struct Graphics_preset_entry;

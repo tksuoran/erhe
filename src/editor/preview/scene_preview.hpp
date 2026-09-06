@@ -24,7 +24,7 @@ namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 namespace erhe::dataformat { class Vertex_format; }
 namespace erhe::scene_renderer {

@@ -50,6 +50,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_verify/verify.hpp"
 
 #include <fmt/format.h>
@@ -130,7 +131,7 @@ auto Scene_builder::make_camera(std::string_view name, vec3 position, vec3 look_
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    std::shared_ptr<erhe::scene::Node>   node   = std::make_shared<erhe::scene::Node>(name);
+    std::shared_ptr<erhe::scene::Node>   node   = std::make_shared<erhe::scene::Xform>(name);
     std::shared_ptr<erhe::scene::Camera> camera = std::make_shared<erhe::scene::Camera>(name);
     camera->set_fov_y          (glm::radians(35.0f));
     camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
@@ -1259,7 +1260,7 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
     std::shared_ptr<erhe::primitive::Primitive> primitive = std::make_shared<erhe::primitive::Primitive>(std::move(buffer_mesh));
     ERHE_VERIFY(primitive->render_shape->make_raytrace(cube_geo_mesh));
     const vec3 root_pos{0.0, 1.0f + y_half_extent, 0.0f};
-    std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Node>("Cubes");
+    std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("Cubes");
     root->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     root->set_world_from_node(erhe::math::create_translation<float>(root_pos));
     for (int x = 0; x < x_count; ++x) {
@@ -1268,7 +1269,7 @@ auto Scene_builder::add_cubes(glm::ivec3 shape, float scale, float gap) -> bool
             const float py = erhe::math::remap(static_cast<float>(y), 0.0f, static_cast<float>(y_count - 1), -y_half_extent, y_half_extent);
             for (int z = 0; z < z_count; ++z) {
                 const float pz = erhe::math::remap(static_cast<float>(z), 0.0f, static_cast<float>(z_count - 1), -z_half_extent, z_half_extent);
-                auto node = std::make_shared<erhe::scene::Node>("Cube");
+                auto node = std::make_shared<erhe::scene::Xform>("Cube");
                 auto mesh = std::make_shared<erhe::scene::Mesh>("");
                 mesh->add_primitive(primitive, material);
                 mesh->layer_id = m_scene_root->layers().content()->id;
@@ -1295,7 +1296,7 @@ auto Scene_builder::make_directional_light(
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Node>(name);
+    auto node  = std::make_shared<erhe::scene::Xform>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::directional);
     light->set_color(color);
@@ -1329,7 +1330,7 @@ auto Scene_builder::make_spot_light(
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Node>(name);
+    auto node  = std::make_shared<erhe::scene::Xform>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::spot);
     light->set_color(color);
@@ -1359,7 +1360,7 @@ auto Scene_builder::make_point_light(
 {
     std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{m_scene_root->item_host_mutex};
 
-    auto node  = std::make_shared<erhe::scene::Node>(name);
+    auto node  = std::make_shared<erhe::scene::Xform>(name);
     auto light = std::make_shared<erhe::scene::Light>(name);
     light->set_light_type(Light::Type::point);
     light->set_color(color);

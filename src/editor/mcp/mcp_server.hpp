@@ -31,7 +31,7 @@ namespace erhe::primitive {
     class Material;
 }
 namespace erhe::scene {
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 namespace erhe::scene_renderer {
     enum class Shader_debug : uint16_t;

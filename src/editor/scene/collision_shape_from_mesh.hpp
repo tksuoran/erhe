@@ -3,7 +3,7 @@
 #include <memory>
 
 namespace erhe::physics { class ICollision_shape; }
-namespace erhe::scene   { class Mesh; class Node; }
+namespace erhe::scene   { class Mesh; class Xformable; using Node = Xformable; }
 
 namespace editor {
 

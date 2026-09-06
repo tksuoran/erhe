@@ -86,7 +86,7 @@ constexpr std::string_view      c_joint_group = "Joint";
 const Property<Object_reference> Node_joint::connected_node_property = Property<Object_reference>::register_property(
     "connected_node", c_joint_owner,
     Property_metadata{
-        .ui     = Property_ui{.group = c_joint_group, .tooltip = "Node whose nearest rigid body is body B; none constrains to the world. The joint's own node is refused.", .label = "Connected Node", .reference_item_types = erhe::Item_type::node},
+        .ui     = Property_ui{.group = c_joint_group, .tooltip = "Node whose nearest rigid body is body B; none constrains to the world. The joint's own node is refused.", .label = "Connected Node", .reference_item_types = erhe::Item_type::xformable},
         .bridge = erhe::property::Property_bridge{
             .get = [](const erhe::property::Dependency_object& object) -> Property_value {
                 return Node_traits::to_value(static_cast<const Node_joint&>(object).get_connected_node());

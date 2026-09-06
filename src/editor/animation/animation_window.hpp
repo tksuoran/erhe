@@ -17,7 +17,7 @@ namespace erhe        { class Item_host; }
 namespace erhe::imgui { class Imgui_windows; }
 namespace erhe::scene {
     class Animation;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {

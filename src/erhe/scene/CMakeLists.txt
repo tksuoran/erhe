@@ -5,8 +5,14 @@ erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
     erhe_scene/animation.cpp
     erhe_scene/animation.hpp
+    erhe_scene/boundable.cpp
+    erhe_scene/boundable.hpp
     erhe_scene/camera.cpp
     erhe_scene/camera.hpp
+    erhe_scene/gprim.cpp
+    erhe_scene/gprim.hpp
+    erhe_scene/imageable.cpp
+    erhe_scene/imageable.hpp
     erhe_scene/layout.cpp
     erhe_scene/layout.hpp
     erhe_scene/light.cpp
@@ -35,6 +41,8 @@ erhe_target_sources_grouped(
     erhe_scene/transform.hpp
     erhe_scene/trs_transform.cpp
     erhe_scene/trs_transform.hpp
+    erhe_scene/xform.cpp
+    erhe_scene/xform.hpp
 )
 
 target_include_directories(${_target} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

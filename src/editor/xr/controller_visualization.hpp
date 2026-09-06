@@ -14,7 +14,7 @@ namespace erhe::xr {
 namespace erhe::scene {
     class Animation;
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace erhe::scene_renderer {

@@ -30,6 +30,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #   include "xr/headset_view.hpp"
@@ -791,7 +792,7 @@ void Brush_tool::add_preview_mesh(Brush& brush)
     brush.late_initialize();
     const auto& brush_scaled = brush.get_scaled(m_transform_scale);
     const std::string name = fmt::format("brush-{}", brush.get_name());
-    m_preview_node = std::make_shared<erhe::scene::Node>(name);
+    m_preview_node = std::make_shared<erhe::scene::Xform>(name);
     m_preview_mesh = std::make_shared<erhe::scene::Mesh>(name);
     m_preview_mesh->add_primitive(brush_scaled.primitive, material);
     m_preview_node->enable_flag_bits(

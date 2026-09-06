@@ -65,6 +65,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/forward_renderer.hpp"
 
 #include <simdjson.h>
@@ -1416,7 +1417,7 @@ auto Mcp_server::place_brush_instance(
         // queued - it has no item host yet, which create_new_empty_node's
         // scene-root resolution requires. Ops execute in queue order, so the
         // chain attaches parent-first.
-        attach_node = std::make_shared<erhe::scene::Node>(instance_name.empty() ? std::string{brush.get_name()} : instance_name);
+        attach_node = std::make_shared<erhe::scene::Xform>(instance_name.empty() ? std::string{brush.get_name()} : instance_name);
         // visible: inert while the node is empty, but attachments added later
         // sync their visibility from the node.
         attach_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
@@ -2146,7 +2147,7 @@ auto Mcp_server::action_create_light(const json& args) -> std::string
     std::shared_ptr<erhe::scene::Light> light;
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{sr->item_host_mutex};
-        node  = std::make_shared<erhe::scene::Node>(name);
+        node  = std::make_shared<erhe::scene::Xform>(name);
         light = std::make_shared<erhe::scene::Light>(name);
         light->set_light_type(type);
         light->set_color(color);

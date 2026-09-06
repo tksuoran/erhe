@@ -55,6 +55,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_graphics/device.hpp"
 
 #include <glm/gtx/matrix_operation.hpp>
@@ -1584,7 +1585,7 @@ void Headset_view::setup_root_camera()
     );
 
     m_root_node = get_scene_root()->get_scene().get_root_node();
-    m_headset_node = std::make_shared<erhe::scene::Node>("Headset Root Node");
+    m_headset_node = std::make_shared<erhe::scene::Xform>("Headset Root Node");
     m_headset_node->set_parent(m_root_node);
     m_headset_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
 
@@ -1607,7 +1608,7 @@ void Headset_view::setup_pointer_pick_camera()
     // (-Z). A narrow vertical fov concentrates angular resolution around the
     // ray so the centre texel samples the surface the controller points at.
     // No content flag and hidden: it must never be composited or listed.
-    m_pointer_pick_node   = std::make_shared<erhe::scene::Node>("Pointer Pick Camera Node");
+    m_pointer_pick_node   = std::make_shared<erhe::scene::Xform>("Pointer Pick Camera Node");
     m_pointer_pick_camera = std::make_shared<erhe::scene::Camera>("Pointer Pick Camera");
     m_pointer_pick_node->hide();
     m_pointer_pick_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);

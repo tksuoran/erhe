@@ -32,6 +32,7 @@
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/skin.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_time/timer.hpp"
 
 #include "erhe_verify/verify.hpp"
@@ -2801,7 +2802,7 @@ private:
 
         const std::string node_name = safe_resource_name(node.name, "node", node_index);
         log_gltf->trace("Node: node index = {}, name = {}", node_index, node.name);
-        auto erhe_node = std::make_shared<erhe::scene::Node>(node_name);
+        auto erhe_node = std::make_shared<erhe::scene::Xform>(node_name);
         erhe_node->set_source_path(m_arguments.path);
         copy_uid(node, *erhe_node);
         erhe_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
@@ -2873,7 +2874,7 @@ private:
                     node_name, instances.size()
                 );
                 for (std::size_t i = 0, end = instances.size(); i < end; ++i) {
-                    auto instance_node = std::make_shared<erhe::scene::Node>(
+                    auto instance_node = std::make_shared<erhe::scene::Xform>(
                         fmt::format("{} instance {}", node_name, i)
                     );
                     instance_node->set_source_path(m_arguments.path);

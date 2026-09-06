@@ -10,7 +10,7 @@
 
 namespace erhe::scene {
 
-class Node;
+class Xformable; using Node = Xformable;
 
 class Skin_data
 {

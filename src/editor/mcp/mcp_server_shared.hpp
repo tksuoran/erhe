@@ -35,7 +35,7 @@ namespace httplib {
 
 namespace erhe::scene {
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
 }
 
 namespace editor {

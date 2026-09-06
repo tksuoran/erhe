@@ -47,6 +47,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 #include "erhe_math/viewport.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_verify/verify.hpp"
@@ -567,7 +568,7 @@ void Hotbar::init_radial_menu(erhe::scene_renderer::Mesh_memory& mesh_memory, Sc
         erhe::Item_flags::show_in_ui
     );
 
-    m_radial_menu_node = std::make_shared<erhe::scene::Node>("Radial menu node");
+    m_radial_menu_node = std::make_shared<erhe::scene::Xform>("Radial menu node");
     m_radial_menu_node->attach(m_radial_menu_background_mesh);
     m_radial_menu_node->enable_flag_bits(
         erhe::Item_flags::content    |

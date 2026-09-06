@@ -31,6 +31,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/xform.hpp"
 
 #include <fmt/format.h>
 
@@ -70,7 +71,7 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
 {
     ERHE_PROFILE_FUNCTION();
 
-    m_node = std::make_shared<erhe::scene::Node>("Material Preview Node");
+    m_node = std::make_shared<erhe::scene::Xform>("Material Preview Node");
     m_mesh = std::make_shared<erhe::scene::Mesh>("Material Preview Mesh");
     erhe::primitive::Element_mappings dummy; // TODO make Element_mappings optional
     GEO::Mesh sphere_mesh{3, true};
@@ -116,7 +117,7 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
     const auto paremt = m_scene_root_shared->get_hosted_scene()->get_root_node();
     m_node->set_parent(paremt);
 
-    m_key_light_node = std::make_shared<erhe::scene::Node>("Key Light Node");
+    m_key_light_node = std::make_shared<erhe::scene::Xform>("Key Light Node");
     m_key_light      = std::make_shared<erhe::scene::Light>("Key Light");
     m_key_light_node->enable_flag_bits(erhe::Item_flags::content);
     m_key_light->enable_flag_bits(erhe::Item_flags::content);
@@ -131,13 +132,13 @@ void Material_preview::make_preview_scene(erhe::scene_renderer::Mesh_memory& mes
         )
     );
 
-    //// m_fill_light_node = std::make_shared<erhe::scene::Node>("Fill Light Node");
+    //// m_fill_light_node = std::make_shared<erhe::scene::Xform>("Fill Light Node");
     //// m_fill_light      = std::make_shared<erhe::scene::Light>("Fill Light");
     //// m_fill_light_node->enable_flag_bits(erhe::Item_flags::content);
     //// m_fill_light     ->enable_flag_bits(erhe::Item_flags::content);
     //// m_fill_light     ->layer_id = m_scene_root->layers().light()->id;
 
-    m_camera_node = std::make_shared<erhe::scene::Node>("Camera node");
+    m_camera_node = std::make_shared<erhe::scene::Xform>("Camera node");
     m_camera = std::make_shared<erhe::scene::Camera>("Camera");
     m_camera_node->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
     m_camera->enable_flag_bits(erhe::Item_flags::content | Item_flags::show_in_ui);

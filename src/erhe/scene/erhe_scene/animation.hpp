@@ -8,7 +8,7 @@
 
 namespace erhe::scene {
 
-class Node;
+class Xformable; using Node = Xformable;
 
 enum class Animation_path : int {
     INVALID     = 0,

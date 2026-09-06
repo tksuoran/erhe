@@ -23,7 +23,7 @@ namespace erhe::scene {
     class Layout;
     class Light;
     class Mesh;
-    class Node;
+    class Xformable; using Node = Xformable;
     class Skin;
 }
 namespace erhe::scene_renderer {

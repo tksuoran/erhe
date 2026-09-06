@@ -12,7 +12,7 @@ class Layout;
 class Light;
 class Mesh;
 class Mesh_raytrace;
-class Node;
+class Xformable; using Node = Xformable;
 class Scene;
 class Skin;
 
