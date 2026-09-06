@@ -47,8 +47,12 @@
 ✓Q1-Quest{build-593691fb5;headset-launch+describe_usd_file-10-prims-verified-2026-09-06}
 ?user-interactive-verify{asset-browser-Import/Load-scene-on-USD;Save-Scene-on-USD-scene;Properties-purpose-row}
 
-[TASK::usd-prim-item-types]{U1,NEXT}
-?plan-revised-2026-09-06{doc/usd-compatibility-plan.md-section-3-U1;awaiting-user-review-of-class-list}
+[TASK::usd-object-model]{U1-U4,NEXT}
+✓plan-revised-2026-09-06{C5-unified-prim-tree;doc/usd-compatibility-plan.md-section-3-U1..U4;section-4-order}
+?U1-prim-tree
+?U2-mesh-is-prim{L}
+?U3-camera+light-prims
+?U4-resources-are-prims{L}
 
 
 [NOTES]
