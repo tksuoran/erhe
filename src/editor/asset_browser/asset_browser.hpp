@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <string>
 #include <functional>
@@ -213,7 +214,26 @@ public:
 private:
     void scan(const std::filesystem::path& path, Asset_node* parent);
 
-    auto make_node    (const std::filesystem::path& path, Asset_node* parent) -> std::shared_ptr<Asset_node>;
+    // Change-driven refresh for one written file (#256): the freshly saved
+    // scene file must appear in the browser without a manual Scan, and a full
+    // scan() of both asset roots is far too slow to do on every save. Adds the
+    // one node when the file is new, replaces it when it already had one (the
+    // node caches scanned glTF contents, which the write invalidates), and
+    // falls back to scan() only when the containing directory has no node yet.
+    // A path outside the browser's roots refreshes nothing.
+    void refresh_file(const std::filesystem::path& path);
+
+    // Key under which a node is registered in m_nodes_by_path: the path made
+    // absolute against the working directory the scan roots are relative to,
+    // lexically normalized, with forward slashes. Both a repo-relative and an
+    // absolute saved path map onto the same key.
+    [[nodiscard]] auto make_path_key(const std::filesystem::path& path) const -> std::string;
+    [[nodiscard]] auto find_node    (const std::string& path_key) const -> std::shared_ptr<Asset_node>;
+
+    // Creates the node for one directory entry, registers it in
+    // m_nodes_by_path and attaches it to parent. position selects the sibling
+    // slot; an empty position appends, which is what a scan does.
+    auto make_node    (const std::filesystem::path& path, Asset_node* parent, std::optional<std::size_t> position = {}) -> std::shared_ptr<Asset_node>;
     auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
     // Scene that imports go into: the last hovered viewport's scene, falling
@@ -263,6 +283,16 @@ private:
 
     std::shared_ptr<Asset_node>           m_root;
     std::shared_ptr<Asset_browser_window> m_node_tree_window;
+
+    // Working directory the (repo-relative) scan roots are resolved against,
+    // sampled once per scan() so the path keys of one tree are all built alike.
+    std::filesystem::path m_working_directory;
+    // Path key of the synthetic root (res/editor): a saved file outside it is
+    // not shown by the browser and needs no refresh.
+    std::string           m_root_path_key;
+    // Every node of the current tree by path key, so one saved file is found
+    // without walking the tree. Weak, so a replaced or removed node dies.
+    std::map<std::string, std::weak_ptr<Asset_node>> m_nodes_by_path;
 
     erhe::message_bus::Subscription<Scene_saved_message> m_scene_saved_subscription;
 };

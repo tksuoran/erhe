@@ -36,6 +36,7 @@
 #include <fmt/format.h>
 #include <imgui/imgui.h>
 
+#include <chrono>
 #include <functional>
 
 namespace editor {
@@ -81,7 +82,25 @@ Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default
 Asset_file_other::~Asset_file_other() noexcept                         = default;
 Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* const parent) -> std::shared_ptr<Asset_node>
+auto Asset_browser::make_path_key(const std::filesystem::path& path) const -> std::string
+{
+    return (m_working_directory / path).lexically_normal().generic_string();
+}
+
+auto Asset_browser::find_node(const std::string& path_key) const -> std::shared_ptr<Asset_node>
+{
+    const std::map<std::string, std::weak_ptr<Asset_node>>::const_iterator i = m_nodes_by_path.find(path_key);
+    if (i == m_nodes_by_path.end()) {
+        return {};
+    }
+    return i->second.lock();
+}
+
+auto Asset_browser::make_node(
+    const std::filesystem::path&     path,
+    Asset_node* const                parent,
+    const std::optional<std::size_t> position
+) -> std::shared_ptr<Asset_node>
 {
     std::error_code error_code;
     bool is_directory{false};
@@ -111,8 +130,13 @@ auto Asset_browser::make_node(const std::filesystem::path& path, Asset_node* con
         new_node = std::make_shared<Asset_file_other>(path);
     }
     new_node->show();
+    m_nodes_by_path[make_path_key(path)] = new_node;
     if (parent) {
-        new_node->set_parent(parent);
+        if (position.has_value()) {
+            new_node->set_parent(parent, position.value());
+        } else {
+            new_node->set_parent(parent);
+        }
     }
     return new_node;
 }
@@ -149,10 +173,12 @@ Asset_browser::Asset_browser(
     ERHE_PROFILE_FUNCTION();
 
     // A freshly saved scene file (#256) must appear in the browser without a
-    // manual Scan; rescan whenever a scene is saved to disk.
+    // manual Scan. The save is the change site, and it names the written file,
+    // so only that file's node is refreshed - a full scan() of both asset
+    // roots takes seconds.
     m_scene_saved_subscription = app_message_bus.scene_saved.subscribe(
-        [this](Scene_saved_message&) {
-            scan();
+        [this](Scene_saved_message& message) {
+            refresh_file(message.path);
         }
     );
 
@@ -282,6 +308,11 @@ void Asset_browser::scan(const std::filesystem::path& path, Asset_node* parent)
 
 void Asset_browser::scan()
 {
+    std::error_code working_directory_error_code;
+    const std::filesystem::path working_directory = std::filesystem::current_path(working_directory_error_code);
+    m_working_directory = working_directory_error_code ? std::filesystem::path{} : working_directory;
+    m_nodes_by_path.clear();
+
     const std::filesystem::path editor_root = std::filesystem::path{"res"} / std::filesystem::path{"editor"};
     const std::filesystem::path assets_root = editor_root / std::filesystem::path{"assets"};
     const std::filesystem::path scenes_root = editor_root / std::filesystem::path{"scenes"};
@@ -292,7 +323,8 @@ void Asset_browser::scan()
 
     // Synthetic root under which both the read-only glTF/geogram assets and the
     // saved scene files are shown.
-    m_root = make_node(editor_root, nullptr);
+    m_root          = make_node(editor_root, nullptr);
+    m_root_path_key = make_path_key(editor_root);
 
     std::shared_ptr<Asset_node> assets_node = make_node(assets_root, m_root.get());
     scan(assets_root, assets_node.get());
@@ -301,6 +333,53 @@ void Asset_browser::scan()
     scan(scenes_root, scenes_node.get());
 
     m_node_tree_window->set_root(m_root);
+}
+
+void Asset_browser::refresh_file(const std::filesystem::path& path)
+{
+    const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
+
+    const std::string   path_key   = make_path_key(path);
+    const std::string   parent_key = make_path_key(path.parent_path());
+    std::string_view    outcome{};
+
+    if (!m_root || m_root_path_key.empty() || !path_key.starts_with(m_root_path_key + "/")) {
+        // The browser shows res/editor only; a scene saved elsewhere has no
+        // node to add or refresh.
+        outcome = "outside the asset browser roots, nothing to refresh";
+    } else {
+        const std::shared_ptr<Asset_node> parent_node   = find_node(parent_key);
+        const std::shared_ptr<Asset_node> existing_node = find_node(path_key);
+        if (!parent_node) {
+            // A save into a directory the tree does not have a node for (a
+            // directory created since the last scan): only a scan finds it.
+            log_asset_browser->info(
+                "Asset browser: '{}' was saved into '{}', which has no node yet - rescanning",
+                erhe::file::to_string(path), erhe::file::to_string(path.parent_path())
+            );
+            scan();
+            outcome = "full scan";
+        } else if (existing_node) {
+            // Replaced rather than mutated: the node caches the file's scanned
+            // glTF contents, which this write invalidates, and the replacement
+            // goes through the one construction path a scan uses. Removed
+            // first, so the new node's name does not collide with its own
+            // predecessor's.
+            const std::optional<std::size_t> position = parent_node->get_index_of_child(existing_node.get());
+            existing_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+            make_node(path, parent_node.get(), position);
+            outcome = "node replaced";
+        } else {
+            make_node(path, parent_node.get());
+            outcome = "node added";
+        }
+    }
+
+    const std::chrono::duration<float, std::milli> duration = std::chrono::steady_clock::now() - start_time;
+    log_asset_browser->info(
+        "Asset browser refreshed '{}' after scene save: {} ({:.2f} ms)",
+        erhe::file::to_string(path), outcome, duration.count()
+    );
 }
 
 namespace {
