@@ -60,8 +60,9 @@
   DONE::item-0-removed-from-queue-2026-09-05|?user-interactive{material-sampler-rows,brush-material-row,graph-mesh-row}
 
 [STATE]
-@branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{E4→X2;via-harness;E4-partial-in-stash@{0}}
+@branch::main{#109-commits-unpushed;user-pushes-themselves}
+prompt_queue.txt::item-0=USD-plan-section-4-order{E4→X2;via-harness;E4-fresh-start:stash@{0}-predates-M6..X1-usd_export/import-changes}
+@session-2026-09-06-tally::hierarchy-Create-merge+rt-mask-fix+M6+M7+M8+X1-landed;user-verified:picking+Create-menu;?user-interactive-tomorrow{USD-file-with-references-in-Hierarchy;drag-USD-imported-prim;Style-item-style-picker;double/mat4/asset/array-rows-unreachable-until-a-shipped-property}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
