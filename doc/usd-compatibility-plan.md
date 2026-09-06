@@ -1,6 +1,6 @@
 # USD compatibility plan
 
-Status: steps 1 to 9 of section 3 have landed (G1 and G2 for the schemas I1 covers); Q1 is the remaining step. The editor state a USD-backed scene does not carry yet is listed in `doc/scene_serialization.md`, "USD-backed scenes". The concept and naming mapping every step
+Status: every step of section 3 has landed, including Q1 (the Quest editor answers `describe_usd_file` over the forwarded MCP port); G1 and G2 hold for the schemas I1 covers. The editor state a USD-backed scene does not carry yet is listed in `doc/scene_serialization.md`, "USD-backed scenes"; the X steps and section 5 remain future work. The concept and naming mapping every step
 relies on is `doc/usd_compatibility.md` (referred to below as "the mapping");
 this document holds the steps, their order and their verification.
 

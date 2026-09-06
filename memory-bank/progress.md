@@ -32,7 +32,7 @@
 ?graph-node-parameters::future-work{doc/property-system.md-section-6;only-when-user-asks}
 ?user-interactive-verify{Light-flux-slider-undo;Layout/Grid/Brush_placement-holders;joint-rows}
 
-[TASK::usd-compatibility]{IN-PROGRESS-2026-09-05,via-doc/agent-orchestration-harness.md}
+[TASK::usd-compatibility]{DONE-2026-09-06,via-doc/agent-orchestration-harness.md}
 ✓mapping-doc-rewrite+plan-doc{d25e505e4}+three-stage-goal{489f2c7a6}+anim/physics->future-work{46ce31a3c}
 ✓M1-item-paths{4d400211e;143-item-tests;headless-MCP-by-path-verified}
 ✓M2-sibling-unique-names{156-item-tests;headless:create_node-dup→Marker_1;hintze-hall-import-7-dups→suffixed;undo-restores;rename-refused}
@@ -44,7 +44,8 @@
 ✓I2-authored-opinions{14-usd-tests;headless:authored.usda-visible/purpose/base_color-only/temperature-custom-attr;suzanne-local-set=base_color+metallic;roundtrip-94/94;smoke-52/52}=G1
 ✓E1-save-USDA{1d51c13a5-writer+29-tests;c1a32c475-editor{headless:suzanne-open/edit/save-51-lines/close-clean/reopen-edits-back;gltf-still-gltf;roundtrip-94/94}}=G2
 ✓E3-roundtrip-USD-leg{53d54294d;148/148;usdchecker-SKIP-not-installed}
-⚡Q1-Quest{build✓593691fb5;launch-pending-user-confirmation}
+✓Q1-Quest{build-593691fb5;headset-launch+describe_usd_file-10-prims-verified-2026-09-06}
+?user-interactive-verify{asset-browser-Import/Load-scene-on-USD;Save-Scene-on-USD-scene;Properties-purpose-row}
 
 
 [NOTES]
