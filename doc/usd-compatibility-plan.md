@@ -201,6 +201,27 @@ record has the history.
   byte and lands a move in the translate op alone. glTF keeps writing the
   composed TRS (C1). Time-sampled ops take their default or first sample
   (section 6).
+- X1 References as prefab instances: LightUSD composes nothing at load
+  (its composition option is declared and not implemented), so a
+  referencing prim arrives as authored with its `references` and
+  `payload` metadata and erhe resolves the arcs itself:
+  `Usd_data::references` lists each prim's arcs in the order USD
+  composes them, the importer stops below a referencing prim, and the
+  editor attaches one `Prefab_instance` per arc (source path, prim path,
+  arc kind) and clones the target through `Prefab_library`, keyed by
+  (file, prim path) and loading a USD file at a prim as a template
+  (`src/erhe/usd/notes.md` "Import", `src/editor/parsers/notes.md`,
+  `doc/gltf-prefabs-plan.md`). The instance content is the target prim
+  itself and its subtree under the carrier, one level more than USD's
+  own composition; a save writes the carrier as the referencing prim
+  with its arcs and none of the content, so the round trip is a fixed
+  point (`src/erhe/usd/notes.md` "Export"). A USD-backed instance is
+  sealed like a glTF one, an opinion the referencing layer authors over
+  a reference is dropped with a warning naming it, and an arc inside a
+  template is instantiated through the same library (a cycle is
+  refused); `Prefab_library::reload` refreshes a carrier with several
+  arcs from its first attachment. X2 lifts the seal and carries the
+  opinions.
 
 ## 3. Remaining steps
 
@@ -208,27 +229,6 @@ Steps are grouped by what they touch: M = model generalization (no USD
 code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### X1 References as prefab instances (M)
-
-What: an imported stage's `references` arcs become `Prefab_instance`
-carriers, so the erhe scene keeps the instance structure instead of a
-flattened copy. A reference names a layer and a prim path in it (the
-layer's default prim when the path is absent) or a prim of the same
-layer (an internal reference); the carrier records that target, and the
-prefab library materializes it through `erhe::usd` (which today parses
-only glTF) as the template subtree the carrier instantiates. LightUSD's
-`ArcOrigin` tagging says which prims came from which arc. A prim with
-several references (a list-edited `references` op) is composed as USD
-composes it and carried as one carrier per arc in the same order.
-Payloads are read as references (section 5 names them deferred loading
-erhe does not do).
-
-Verification: `erhe_usd_tests` imports a stage with a file reference
-with and without a prim path and an internal reference; the carriers
-name the targets and the composed values match the stage; a save of
-the USD-backed scene writes the `references` arcs back, not the
-flattened subtree.
 
 ### E4 Editor state in a USD file (M; completes G2)
 
@@ -260,7 +260,7 @@ as an `OpenPBRSurface` / MaterialX network when
 `LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
 both are present.
 
-### X2 Editable instances with sparse overrides (L, after X1)
+### X2 Editable instances with sparse overrides (L)
 
 What: a USD reference is a composition arc, not a copy: the referenced
 prims supply values in a layer weaker than the referencing layer's own
@@ -275,9 +275,9 @@ the step changes that:
   inherited (USD's `R` is weaker than `I`, so `doc/property-system.md`
   R3 becomes coerced, local, style, reference, inherited, default). An
   item inside an instance names its counterpart in the template (the
-  `Prefab_instance` carrier keeps the template, M1 paths address the
-  counterpart) and reads that counterpart's effective value as its
-  reference layer. The instance holds no local value of its own for a
+  `Prefab_instance` carrier keeps the template, M1 paths below the
+  cloned target prim address the counterpart) and reads that
+  counterpart's effective value as its reference layer. The instance holds no local value of its own for a
   value the template supplies; a template edit reaches every instance
   live, the way a style edit reaches its users (D25).
 - What a reference protects is structure, not values: no prim is
@@ -302,7 +302,12 @@ the step changes that:
   an instance is an `over` prim under the referencing prim, holding the
   local values and the `active` metadata only, the file's native form
   (C1); reading an `over` puts its opinions in the item's local layer,
-  exactly as authored opinions land elsewhere (M4). In a glTF-backed
+  exactly as authored opinions land elsewhere (M4). The X1 writer skips
+  every prim below a carrier and the X1 reader warns about such
+  opinions; both give way to this. LightUSD does not say which layer
+  authored an opinion, so the reader tells an `over` below a carrier
+  from the target's own opinions by reading the root layer's prim specs
+  (the X1 warning already does). In a glTF-backed
   scene the list rides the carrier node in an `ERHE_*` extension as
   (path inside the instance, property, value).
 
@@ -345,16 +350,15 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. X1 references as prefab instances
-2. E4 editor state in a USD file (completes G2)
-3. X2 editable instances (G3)
+1. E4 editor state in a USD file (completes G2)
+2. X2 editable instances (G3)
 
 E2 follows E4; X3 to X5
 have no fixed place: each waits for its dependencies and is taken when
 wanted.
 
-Dependencies: X2 needs X1; E4, X1, E2, X3, X4 and X5 need nothing that
-has not landed.
+Dependencies: E4, X2, E2, X3, X4 and X5 need nothing that has not
+landed.
 
 ## 5. Out of scope
 
