@@ -72,9 +72,9 @@ Constraints every step respects:
   schema (physics body and joint, layout hints, brush placement, prefab
   instance carrier). glTF is a serialization of that tree, as USD is
   (G3): the glTF reader and writer map their node + mesh + flat resource
-  lists onto it and back. The U steps of section 3 bring the model to
-  this shape; the transform stays erhe's single TRS until M8 takes up
-  USD's xformOp stacks.
+  lists onto it and back. The U steps of section 2 brought the model to
+  this shape; an `Xformable`'s transform is the TRS its authored xformOp
+  stack composes to (M8), or that TRS alone when it has no stack.
 
 ## 2. What holds today
 
@@ -130,14 +130,14 @@ record has the history.
   prim; the USD reader and writer map class and `typeName` one to one and
   glTF carries `Scope` / `Typed` on `ERHE_node` (`src/erhe/usd/notes.md`
   "Import" / "Export", `doc/gltf_extensions/ERHE_node.md`); MCP
-  `create_node` takes `prim_type`. The Create menu has no `Scope` entry
-  yet, object-reference candidates and `Layout` do not reach through a
-  `Scope`, and a material `Scope` stays namespace until U4.
+  `create_node` takes `prim_type`. Object-reference candidates and
+  `Layout` do not reach through a `Scope` yet: the candidate walk visits
+  the registered transformable prims and the resource index, and
+  `Layout` arranges its direct `Node` children.
 - U2 Mesh is a Gprim: `erhe::scene::Mesh` is `erhe::Item<Item_base,
   Gprim, Mesh>`, a child prim with its own transform; a parent holds any
   number of `Mesh` children; `get_mesh()`, `for_each_mesh_child()` and
-  `set_mesh_parent()` replace the attachment accessors and `get_node()`
-  returns the mesh itself until the U steps retire it
+  `set_mesh_parent()` replace the attachment accessors
   (`src/erhe/scene/notes.md`); the glTF reader folds a node with a mesh
   into one `Mesh` prim and the writer inverts it
   (`doc/scene_serialization.md`); USD takes a `Mesh` prim as it stands
@@ -179,7 +179,7 @@ record has the history.
   read as USD `double` and `matrix4d` attributes
   (`doc/usd_compatibility.md` Property-system rows); `erhe_property_tests`
   and `erhe_usd_tests` cover both. No shipped property is of either type
-  until M8.
+  yet: the xformOp stack (M8) is not exposed as properties.
 - M7 Style chains: a style has a style of its own; the style layer is
   the chain of the styles' local values, nearest first, and `set_style`
   refuses a cycle (`doc/property-system.md` D25, `doc/style-library.md`);
@@ -201,9 +201,8 @@ record has the history.
 
 ## 3. Remaining steps
 
-Steps are grouped by what they touch: U = object model (C5, no USD
-code), M = model generalization (no USD code), E = export, X =
-composition; animation and physics are section 6, future work outside
+Steps are grouped by what they touch: M = model generalization (no USD
+code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
