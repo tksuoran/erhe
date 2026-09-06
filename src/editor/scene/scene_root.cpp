@@ -1272,19 +1272,6 @@ void Scene_root::unregister_camera(const std::shared_ptr<erhe::scene::Camera>& c
     }
 }
 
-auto Scene_root::get_node_rt_mask(erhe::scene::Node* node) -> uint32_t
-{
-    uint32_t mask = 0;
-    if (node != nullptr) {
-        for (const auto& node_attachment : node->get_attachments()) {
-            mask = mask | raytrace_node_mask(*node_attachment.get());
-        }
-        log_raytrace->debug("RT node attach to {}, mask = {}", node->get_name(), m_scene->get_name(), mask);
-    }
-
-    return mask;
-}
-
 void Scene_root::begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     mesh->detach_rt_from_scene();
@@ -1302,7 +1289,18 @@ auto Scene_root::get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t
         // a skinned mesh on purpose, set ray.mask |= Raytrace_node_mask::skinned.
         return Raytrace_node_mask::skinned;
     }
-    return get_node_rt_mask(mesh ? mesh : nullptr);
+    if (mesh == nullptr) {
+        return 0;
+    }
+    // A Mesh is a prim (doc/usd-compatibility-plan.md C5): its own flags
+    // carry the role bits (content, tool, brush, rendertarget, ...), and
+    // any attachment it holds contributes its bits on top.
+    uint32_t mask = raytrace_node_mask(*mesh);
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : mesh->get_attachments()) {
+        mask = mask | raytrace_node_mask(*attachment);
+    }
+    log_raytrace->debug("RT mask for mesh '{}' in scene '{}' = {:#x}", mesh->get_name(), m_scene->get_name(), mask);
+    return mask;
 }
 
 void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh)
