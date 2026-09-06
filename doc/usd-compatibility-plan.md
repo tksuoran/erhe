@@ -182,36 +182,57 @@ camera, and the OpenXR build still compiles.
 What: the content library's items - materials, textures, brushes,
 styles, physics materials, collision filters, joint settings, geometry
 and texture graphs, animations, skins - become `Typed` prims placed in
-the scene tree (`Material` as `erhe::Item<Item_base, Typed, Material>`
-with `UsdShadeNodeGraph` as an intermediate level once shader graphs are
-prims; the erhe-only kinds as `Typed` subclasses with a custom
-`typeName`), and `Content_library_node` and the per-category root
-folders retire: a folder is a `Scope` (its category values are U1's
-`Scope` rule), and a new scene's resources are created under `Scope`s
-named for their kind (`/Materials`, `/Brushes`, ...) so the default
-layout reads like a stage. `Content_library` becomes the per-scene
-index the consumers keep asking - `Material_buffer`, the material and
-brush pickers, the hotbar and inventory slots' `Asset_reference`
-resolution, MCP `get_scene_materials` - maintained from the tree's
-add- and remove-child hooks rather than owning the items. A reference
-entry (an item owned by another scene, the way a new scene lists the
-palette brushes) becomes a prim referencing the owning scene's prim, in
-the form X1 gives references; until X1 lands a new scene gets its own
-copies. In glTF, tree position of a resource rides `ERHE_scene` where
+the scene tree, and `Content_library_node` and the per-category root
+folders retire: a folder is a `Scope`, and a new scene's resources are
+created under `Scope`s named for their kind (`/Materials`, `/Brushes`,
+...) so the default layout reads like a stage. `Content_library` becomes
+the per-scene index the consumers keep asking - `Material_buffer`, the
+material and brush pickers, the hotbar and inventory slots'
+`Asset_reference` resolution, MCP `get_scene_materials` - maintained
+from the tree's add- and remove-child hooks rather than owning the
+items. In glTF, tree position of a resource rides `ERHE_scene` where
 `library_folders` rides today; in USD the tree is the file (C1).
+
+Decisions the commits follow:
+
+- Every library kind is `erhe::Item<Item_base, Typed, X>` directly;
+  `Material` gains a `UsdShadeNodeGraph`-like intermediate level only
+  when shader graphs become prims. `erhe::graphics::Texture` and the
+  graph assets (`Graph_mesh`, `Graph_texture`) have no item identity
+  today and get one first, in the step's first commit, before anything
+  moves in the tree.
+- Reference entries retire. A prim has one parent, so an item listed in
+  a second scene's tree is X1's reference arc; until X1 the index lists
+  the prims the scene owns, a prefab's resources stay in the template's
+  tree and are reached through the instance's meshes, and a new scene
+  gets its own copies, as the palette brushes are copied today.
+- A `Scope` keeps the root secondary owner type (U1) in place of the
+  folder's `category_owner_type`: it holds any class's values, and the
+  Add-Property list offers the classes of its descendant prims first.
+- The Create menu gains a `Scope` entry beside the folder entry it
+  replaces, and the object-reference candidate walk (`item_lookup.cpp`)
+  walks the tree so a resource under any prim is offered.
+
+Commits, each buildable: (1) item identity for every library kind
+(`Typed` base; `Texture` and the graph assets become items); (2) the
+resources move into the tree under `Scope`s, `Content_library_node` and
+the category roots retire, the library becomes an index from the child
+hooks, the operations (`Content_library_move_operation`, create, import,
+prefab instantiation) place prims; (3) the glTF carrier (`ERHE_scene`
+`library_folders` becomes the tree position of each resource), the USD
+writer and reader place resources where they sit, the scripts and docs
+follow.
 
 Why: C5's "any resource under any prim", and what lets E4 write brushes,
 styles and folders as prims under a `Scope` instead of custom
 `customLayerData` forms.
 
-The Create menu gains a `Scope` entry beside the folder entry it
-replaces, and the object-reference candidate walk (`item_lookup.cpp`)
-walks the tree so a resource under any prim is offered.
-
 Verification: `scene_roundtrip_verify.py` (both legs) with a scene whose
 materials sit in nested scopes and under a mesh; drag a material under
 an `Xform`, save, reopen, it is still there and still bound; the asset
-manager's `get_editor_references` and `scene-close leak` stay clean.
+manager's `get_editor_references` and `scene-close leak` stay clean;
+`undo_reference_clearing_smoke_test.py` passes with its shared-material
+assertions rewritten for owned prims.
 
 ### E4 Editor state in a USD file (M, after U4; completes G2)
 
