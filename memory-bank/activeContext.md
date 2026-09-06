@@ -61,7 +61,7 @@
 
 [STATE]
 @branch::main{#47-commits-unpushed;user-pushes-themselves}
-prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3⚡{commit-1✓d5f0be1a8;commit-2-in-flight:editor-presentation+retire-get_node()}→U2→U3→U4→E4→X1/X2;via-harness}
+prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d84968ad3+b7e902fb3}→U2✓{befec879f}→U3✓{d5f0be1a8+7fd9f447d}→U4-NEXT{decisions-in-plan:Typed-base-direct;reference-entries-retire-until-X1;Scope-root-secondary;Texture-prim-only-when-library-registered;Graph_asset-host-propagation-yields-to-Typed}→U2→U3→U4→E4→X1/X2;via-harness}
 
 [OPEN]
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
@@ -75,6 +75,7 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{U1✓{7986a326f+e635b27b6+d849
 ✓save-slow-fixed::af689d5c8{Asset_browser-scene_saved=refresh_file(path):m_nodes_by_path-map;replace/add/rescan-fallback;2-3ms-vs-3845ms;roundtrip-164/164;k_request_timeout-unchanged-5s}
 ?capture_inheritance_snapshot_recursive::iterates-ENTIRE-global-property-registry-per-reparented-object{dependency_object.cpp:1158;1.37s-capture+1.87s-apply-over-2858-nodes}→should-iterate-owner-type-chain-only;affects-glTF-import/prefab/undo-bulk-reparents;not-scheduled
 ?U1-follow-ups::Create-menu-Scope-entry+collect_reference_candidates-tree-walk{U4};Layout-through-Scope;transform_selection-Scope-message
+?user-interactive-verify::hierarchy-DnD-of-prims{payload-fix-7fd9f447d};Add-Child-Prim-menu;Properties-on-Mesh/Camera/Light-prims
 
 [BLOCKERS]
 none

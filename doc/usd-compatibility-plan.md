@@ -143,6 +143,19 @@ record has the history.
   (`doc/scene_serialization.md`); USD takes a `Mesh` prim as it stands
   (`src/erhe/usd/notes.md`); `Xformable`'s secondary owner type is
   `Item_base` (`doc/property-system.md` D30).
+- U3 Camera and Light are Xformables: `Camera` and `Light` are
+  `erhe::Item<Item_base, Xformable, X>` child prims with their own
+  transform (`Light` keeps `light_type`; per-schema light classes wait
+  for a light type that needs its own properties); `set_prim_parent()`,
+  `get_camera()` and `get_light()` are the helpers and no typed prim has
+  a `get_node()` (`src/erhe/scene/notes.md`); `Node_attachment` remains
+  for `Node_physics`, `Node_joint`, `Layout`, `Brush_placement`,
+  `Prefab_instance`, `Frame_controller` and `Grid`; the editor offers
+  "Add Child Prim" beside "Add Attachment" (`Attachment_kind`), the
+  hierarchy accepts a drag payload named for the prim's class, and MCP
+  `get_node_details` carries `mesh` / `camera` / `light` on the node
+  entry (`mcp_server_usage.md`). The interactive drag gesture has not
+  been exercised since the payload fix.
 
 ## 3. Remaining steps
 
@@ -151,31 +164,6 @@ code), M = model generalization (no USD code), E = export, X =
 composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### U3 Camera and Light are Xformables (M)
-
-What: `Camera` becomes `erhe::Item<Item_base, Xformable, Camera>` and
-`Light` becomes an `Xformable` as well, each a child prim of its parent
-with its own transform, never an attachment. With the three typed prims
-in place, the editor presents them as prims everywhere: the Hierarchy
-window rows, drag and drop, the hover and selection tools, the
-Properties window sections and MCP `get_node_details` treat a `Mesh`,
-`Camera` or `Light` as the prim it is, and the transitional
-`get_node()` accessors are retired where a consumer reads the prim's
-own transform. `Light` keeps its
-`light_type` enumeration and maps to `DistantLight` / `SphereLight` per
-the mapping's light table; splitting it into one class per UsdLux
-schema under `Nonboundable_light_base` (`Xformable`) and
-`Boundable_light_base` (`Boundable`) is taken when a light type needs
-its own properties. Viewports, the headset view, shadow and light
-buffers, gizmos and the Properties window address the prim. The
-attachments that remain are the applied-API-schema set C5 names
-(`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`,
-`Prefab_instance`, `Frame_controller`, `Grid`), and `Node_attachment`
-stays for exactly them.
-
-Verification: as U2, plus a screenshot with a spot light and a second
-camera, and the OpenXR build still compiles.
 
 ### U4 Resources are prims (L)
 
@@ -357,19 +345,17 @@ step after it and is not planned here.
 
 Each step independently landable, in this order:
 
-1. U3 camera and light are Xformables
-2. U4 resources are prims
-3. E4 editor state in a USD file (completes G2)
-4. X1 references as prefab instances, then X2 editable instances (G3)
+1. U4 resources are prims
+2. E4 editor state in a USD file (completes G2)
+3. X1 references as prefab instances, then X2 editable instances (G3)
 
-U4 has no dependency on U3, so it may be taken first when a smaller
-step is wanted. M6, M7 and M8 land when the step that needs them is
+M6, M7 and M8 land when the step that needs them is
 next (any importer hitting a missing type, X3, a file whose xformOp
 stack must survive). E2 and X3 to X5 have no fixed place: each waits
 for its dependencies and is taken when wanted.
 
-Dependencies: E4 and X1 need U4; X2 needs X1; X3 needs M7; U3, U4,
-M8, E2, X4 and X5 need nothing that has not landed.
+Dependencies: E4 and X1 need U4; X2 needs X1; X3 needs M7; U4, M8,
+E2, X4 and X5 need nothing that has not landed.
 
 ## 5. Out of scope
 
