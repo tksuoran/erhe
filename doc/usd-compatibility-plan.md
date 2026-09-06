@@ -195,12 +195,14 @@ items. In glTF, tree position of a resource rides `ERHE_scene` where
 
 Decisions the commits follow:
 
-- Every library kind is `erhe::Item<Item_base, Typed, X>` directly;
-  `Material` gains a `UsdShadeNodeGraph`-like intermediate level only
-  when shader graphs become prims. `erhe::graphics::Texture` and the
-  graph assets (`Graph_mesh`, `Graph_texture`) have no item identity
-  today and get one first, in the step's first commit, before anything
-  moves in the tree.
+- Every library kind is `erhe::Item<Item_base, Typed, X>` directly
+  (each is an `erhe::Item` already; the change makes it a `Hierarchy`),
+  and `Material` gains a `UsdShadeNodeGraph`-like intermediate level
+  only when shader graphs become prims. A `Texture` becomes a prim only
+  when the loader registers it as content: a render target, shadow map
+  or other device-internal `Texture` is the same class and is never
+  placed in the tree. `Graph_asset`'s own item-host propagation to its
+  graph nodes yields to `Typed`'s hook.
 - Reference entries retire. A prim has one parent, so an item listed in
   a second scene's tree is X1's reference arc; until X1 the index lists
   the prims the scene owns, a prefab's resources stay in the template's
@@ -213,8 +215,9 @@ Decisions the commits follow:
   replaces, and the object-reference candidate walk (`item_lookup.cpp`)
   walks the tree so a resource under any prim is offered.
 
-Commits, each buildable: (1) item identity for every library kind
-(`Typed` base; `Texture` and the graph assets become items); (2) the
+Commits, each buildable: (1) the `Typed` base for every library kind,
+with the tree walks that now match them audited so nothing changes
+before a resource has a place in the tree; (2) the
 resources move into the tree under `Scope`s, `Content_library_node` and
 the category roots retire, the library becomes an index from the child
 hooks, the operations (`Content_library_move_operation`, create, import,
