@@ -209,6 +209,7 @@ private:
     auto action_lightmap_prepare_cancel(const nlohmann::json& args) -> std::string;
     auto action_lightmap_set_render   (const nlohmann::json& args) -> std::string;
     auto action_lightmap_frame_selection(const nlohmann::json& args) -> std::string;
+    auto action_frame_scene     (const nlohmann::json& args) -> std::string;
     auto action_lightmap_reorder_charts (const nlohmann::json& args) -> std::string;
     auto query_lightmap_tiles           (const nlohmann::json& args) -> std::string;
     auto action_lightmap_subdivide_tile (const nlohmann::json& args) -> std::string;

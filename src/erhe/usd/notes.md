@@ -556,6 +556,15 @@ The tool is listed in `config/editor/mcp_tools.json` in every build; in a
 (ERHE_USD_LIBRARY=none)` so a script gets a clear message rather than an
 unknown-tool reply.
 
+## Survey of the USD Assets Working Group repository
+
+`doc/usd-wg-assets.md` records what this library and the editor make of every
+entry asset of github.com/usd-wg/assets - the load result, the counts, the
+warnings and errors, a capture framed through the MCP `frame_scene` tool, the
+renders the repository ships beside the asset, and a verdict per asset, with
+the gaps that list orders by how many assets each affects;
+`scripts/usd_wg_asset_survey.py` regenerates it against a local clone.
+
 ## Configurations
 
 `scripts\configure_ninja_win_vulkan.bat`, `scripts\configure_ninja_win_clang.bat`

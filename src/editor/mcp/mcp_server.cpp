@@ -564,6 +564,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "save_scene",                     &Mcp_server::action_save_scene                    },
         { "load_scene",                     &Mcp_server::action_load_scene                    },
         { "open_scene",                     &Mcp_server::action_open_scene                    },
+        { "frame_scene",                    &Mcp_server::action_frame_scene                   },
         { "close_scene",                    &Mcp_server::action_close_scene                   },
         { "create_scene",                   &Mcp_server::action_create_scene                  },
         { "export_gltf",                    &Mcp_server::action_export_gltf                   },

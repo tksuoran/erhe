@@ -2959,4 +2959,177 @@ auto Mcp_server::action_merge_static_subtree(const json& args) -> std::string
     }).dump();
 }
 
+// Make a scene visible and framed in a viewport window, for headless capture.
+//
+// Opening a scene creates a viewport window for it, but a scene that authors
+// no camera (most USD files) leaves that window bound to nothing, so it stays
+// black and capture_screenshot records an empty frame. This tool closes that
+// gap: it binds the scene into a viewport, gives it a camera when the file
+// carries none, and moves that camera so the union world AABB of the scene's
+// meshes fills the view.
+auto Mcp_server::action_frame_scene(const json& args) -> std::string
+{
+    const std::string scene_name    = args.value("scene_name", "");
+    const std::string viewport_name = args.value("viewport", "");
+    const float       margin        = args.value("margin", 1.35f);
+    Scene_root* scene_root_raw = find_scene(scene_name);
+    if (scene_root_raw == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+    if (m_context.scene_views == nullptr) {
+        return make_error_content("No scene views available");
+    }
+    const std::shared_ptr<Scene_root> scene_root = scene_root_raw->shared_from_this();
+
+    // The union world AABB of every mesh of the scene.
+    erhe::math::Aabb bounds{};
+    std::size_t mesh_count = 0;
+    erhe::scene::Xformable* root_node = scene_root->get_scene().get_root_node().get();
+    if (root_node != nullptr) {
+        root_node->for_each<erhe::scene::Mesh>(
+            [&bounds, &mesh_count](erhe::scene::Mesh& mesh) -> bool {
+                const erhe::math::Aabb mesh_bounds = mesh.get_aabb_world();
+                if (mesh_bounds.is_valid()) {
+                    bounds.include(mesh_bounds.min);
+                    bounds.include(mesh_bounds.max);
+                    ++mesh_count;
+                }
+                return true;
+            }
+        );
+    }
+
+    // The camera the viewport shows is always this tool's own, created on the
+    // first call for the scene and reused after: an authored camera carries the
+    // view its file intended and a field of view this fit would have to honor
+    // (a USD camera whose focal length and aperture the importer does not carry
+    // arrives with no usable fov, and the fit then places the content out of
+    // sight), so the fit neither reads nor moves it.
+    std::shared_ptr<erhe::scene::Camera> camera{};
+    for (const std::shared_ptr<erhe::scene::Camera>& candidate : get_selectable_cameras(scene_root->get_scene())) {
+        if (candidate->get_name() == "MCP frame camera") {
+            camera = candidate;
+            break;
+        }
+    }
+    bool camera_created = false;
+    if (camera) {
+        // keep the camera an earlier call created
+    } else {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+        camera = std::make_shared<erhe::scene::Camera>("MCP frame camera");
+        camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
+        camera->set_fov_y(glm::radians(45.0f));
+        // `visible` is a property, not a flag bit (Item_base::visible_property),
+        // and a new camera is visible already: setting it here would only log
+        // one dropped-mask warning per framed scene.
+        camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        camera->set_parent(scene_root->get_scene().get_root_node());
+        camera_created = true;
+    }
+
+    // Place the camera on a three-quarter view of the bounds, far enough back
+    // that the bounding sphere fits the vertical field of view.
+    bool      framed = false;
+    glm::vec3 eye    {0.0f, 0.0f, 1.0f};
+    glm::vec3 center {0.0f, 0.0f, 0.0f};
+    if (mesh_count > 0) {
+        center = bounds.center();
+        const float     radius = glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-4f);
+        const float     fov_y  = glm::radians(45.0f);   // the fov set on this tool's camera
+        const float     distance = glm::max((radius / std::tan(0.5f * fov_y)) * margin, radius * 1.5f);
+        const glm::vec3 direction = glm::normalize(glm::vec3{0.55f, 0.40f, 1.0f});
+        eye = center + (direction * distance);
+        camera->set_z_near(glm::max(distance * 0.001f, 1.0e-4f));
+        camera->set_z_far (distance + (radius * 4.0f));
+        camera->set_parent_from_node(
+            erhe::math::create_look_at(eye, center, glm::vec3{0.0f, 1.0f, 0.0f})
+        );
+        framed = true;
+    }
+
+    // A scene that authors no light renders black: erhe supplies no default
+    // light, where usdview lights the stage with a camera light. Give such a
+    // scene one directional headlight along the framing camera's view
+    // direction, so the capture shows the geometry rather than a silhouette.
+    // A scene that carries any light is left as its file authored it.
+    bool light_created = false;
+    if (scene_root->layers().light()->lights.empty()) {
+        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
+        std::shared_ptr<erhe::scene::Light> light = std::make_shared<erhe::scene::Light>("MCP frame light");
+        light->set_light_type(erhe::scene::Light::Type::directional);
+        light->set_color(glm::vec3{1.0f, 1.0f, 1.0f});
+        light->set_intensity(4.0f);   // the default scene's sun + fill total
+        light->set_range(0.0f);
+        light->set_cast_shadow(false);
+        light->layer_id = scene_root->layers().light()->id;
+        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        light->set_parent_from_node(
+            erhe::math::create_look_at(eye, center, glm::vec3{0.0f, 1.0f, 0.0f})
+        );
+        light->set_parent(scene_root->get_scene().get_root_node());
+        light_created = true;
+    }
+
+    // The viewport that shows the scene: the named one, else one already bound
+    // to this scene, else an empty one repurposed, else a new window.
+    std::shared_ptr<Viewport_window> target_window{};
+    for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+        const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+        if (!scene_view) {
+            continue;
+        }
+        const bool named   = !viewport_name.empty() && (viewport_window->get_title() == viewport_name);
+        const bool showing = viewport_name.empty() && (scene_view->get_scene_root() == scene_root);
+        if (named || showing) {
+            target_window = viewport_window;
+            break;
+        }
+    }
+    if (!target_window && viewport_name.empty()) {
+        target_window = m_context.scene_views->try_repurpose_empty_viewport_window(scene_root, camera);
+    }
+    if (!target_window && viewport_name.empty()) {
+        m_context.scene_views->open_new_viewport_scene_view_node(scene_root);
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+            const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
+            if (scene_view && (scene_view->get_scene_root() == scene_root)) {
+                target_window = viewport_window;
+                break;
+            }
+        }
+    }
+    if (!target_window) {
+        // The window the caller named, or a newly opened one, is not there.
+        for (const std::shared_ptr<Viewport_window>& viewport_window : m_context.scene_views->get_viewport_windows()) {
+            if (viewport_window->viewport_scene_view()) {
+                target_window = viewport_window;
+                break;
+            }
+        }
+    }
+    if (!target_window) {
+        return make_error_content("No viewport window available");
+    }
+
+    const std::shared_ptr<Viewport_scene_view> scene_view = target_window->viewport_scene_view();
+    scene_view->set_scene_root(scene_root);
+    scene_view->set_camera(camera);
+    target_window->show_window();
+    target_window->request_window_focus();
+
+    return make_json_content({
+        {"scene",          scene_root->get_name()},
+        {"viewport",       target_window->get_title()},
+        {"camera",         camera->get_name()},
+        {"camera_created", camera_created},
+        {"light_created",  light_created},
+        {"meshes",         mesh_count},
+        {"framed",         framed},
+        {"bounds_min",     json::array({bounds.min.x, bounds.min.y, bounds.min.z})},
+        {"bounds_max",     json::array({bounds.max.x, bounds.max.y, bounds.max.z})},
+        {"message",        "the viewport renders on a following frame - wait a few frames before capture_screenshot"}
+    }).dump();
+}
+
 } // namespace editor
