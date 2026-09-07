@@ -345,6 +345,8 @@ NOISE = [
     (re.compile(r"/[A-Za-z0-9_/.]{4,}"), "<path>"),
     (re.compile(r"(?<![A-Za-z0-9_.])-?\d+(\.\d+)?"), "N"),
     (re.compile(r"\bin Prim \S+"), "in Prim <prim>"),
+    # One hierarchy-sanity failure per prim is one cause, not one per prim.
+    (re.compile(r"^Item \S+ child \S+ parent =="), "Item <item> child <child> parent =="),
 ]
 
 
@@ -657,6 +659,11 @@ def gap_name(message: str) -> str:
     return text[:80]
 
 
+SUBLAYER_GAP = (
+    "subLayers are not composed: a file whose content lives in a subLayer loads as an empty stage"
+)
+
+
 # The prim types whose presence in a file means the editor should have
 # produced a mesh: UsdGeomMesh plus the implicit surfaces and the instancer.
 GEOMETRY_PRIM_TYPES = {
@@ -750,6 +757,12 @@ def gather_gaps(records: list) -> list:
             add("no mesh loaded: " + no_mesh_cause(record), "failure", asset, "")
         if record["loaded"] and (record["meshes"] > 0) and stats.get("available") and stats.get("flat"):
             add("renders nothing: the framed viewport is empty although meshes loaded", "failure", asset, "")
+        # A file whose content lives in a subLayer loads as an empty stage and
+        # says nothing about it, so the layer list is what names the cause.
+        sublayered = any("sub" in str(layer.get("kind", "")).lower()
+                         for layer in (record.get("layers") or []))
+        if record["loaded"] and sublayered and (record["prims"] == 0):
+            add(SUBLAYER_GAP, "failure", asset, "")
         # What the capture, compared against the repository's own reference
         # render, shows the editor getting wrong: a cause no log line states.
         if record.get("eye_gap"):
@@ -844,6 +857,39 @@ REMEDY = [
      "make framed, loaded meshes reach the frame: the geometry, the camera or the material"),
     (re.compile(r"BVH save failed|dropped expired|Main loop STALLED|breadcrumb|scene-close"),
      "not a USD gap: editor-internal noise this survey happens to capture"),
+    (re.compile(r"^Item <item> child <child> parent =="),
+     "keep a prim's parent pointer when an instantiated reference re-parents its clones: the hierarchy "
+     "sanity check reports a child whose parent is none right after a prefab instantiation"),
+    (re.compile(r"has no converted material - it is not placed in the tree"),
+     "convert a Material prim Tydra hands over without a converted network (a MaterialX or non-preview "
+     "surface), so it can be placed where the file puts it"),
+    (re.compile(r"DomeLight texture .* is not sampled"),
+     "sample a DomeLight's texture as an environment map; erhe takes only the light's intensity and "
+     "colour, so an HDRI-lit stage loses the image"),
+    (re.compile(r"could not be decoded"),
+     "decode the image formats the assets use that the loader rejects (Radiance .hdr above all)"),
+    (re.compile(r"Prefab source file not found"),
+     "resolve a reference asset path relative to the layer that authored it before opening it as a "
+     "prefab template"),
+    (re.compile(r"glTF parse error"),
+     "nothing in USD: the prefab library parses a reference target as glTF when it is a USD layer "
+     "(Prefab_library::get_or_load, X1)"),
+    (re.compile(r"Failed to parse USDA|Failed to parse (Attribute|Prim|`)"),
+     "read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage"),
+    (re.compile(r"up axis .* has no erhe counterpart"),
+     "carry a Z-up stage's up axis into the scene instead of importing it as Y-up"),
+    (re.compile(r"per-channel output selection is ignored"),
+     "honour a UsdUVTexture's outputs:r / :g / :b / :rgb connection: only the row whose swatch is wired "
+     "to the output erhe reads samples, and the others render white"),
+    (re.compile(r"no material binding renders black"),
+     "give a prim with no material binding USD's unauthored UsdPreviewSurface fallback (diffuseColor "
+     "0.18 grey) instead of the black erhe shades it with"),
+    (re.compile(r"PointInstancer prims are not instanced"),
+     "instance a PointInstancer's prototypes at its positions / orientations / scales; Tydra converts "
+     "neither the instancer nor its prototypes, so the whole scene loads empty"),
+    (re.compile(r"subLayers are not composed"),
+     "compose the root layer's subLayers before the prim walk: the stage loads the root layer alone, "
+     "so a file that only sublayers its content opens empty and says nothing about it"),
     (re.compile(r"crash", re.I),
      "find and fix the crash before anything else in this list"),
     # The causes the side-by-side comparison against the repository's own
@@ -851,13 +897,13 @@ REMEDY = [
     (re.compile(r"DomeLight is not imported"),
      "sample a DomeLight's inputs:texture:file; the dome's constant color reaches the scene as ambient "
      "light, but erhe has no environment map, so a textured sky contributes one flat color"),
-    (re.compile(r"normal map's bias and scale are ignored"),
+    (re.compile(r"normal map's bias and scale are (ignored|still not applied)"),
      "apply a UsdUVTexture's inputs:bias and inputs:scale to the sampled normal (src/erhe/usd/notes.md, "
      "\"Not yet imported\"); without them a 0..1 normal map is never mapped back to -1..1"),
-    (re.compile(r"UsdTransform2d is not applied"),
+    (re.compile(r"UsdTransform2d is (not applied|applied wrongly)"),
      "read the UsdTransform2d node between a primvar reader and a texture and fold its translate, rotate "
      "and scale into the sampled coordinates (src/erhe/usd/notes.md names it as not imported)"),
-    (re.compile(r"texture coordinates are mirrored and flipped"),
+    (re.compile(r"texture coordinates are mirrored|st primvar is sampled mirrored"),
      "carry the st primvar's orientation through the import: USD's texture origin is bottom-left, and the "
      "mesh conversion must not mirror it (src/erhe/usd/erhe_usd/usd_import.cpp, the texcoord read)"),
     (re.compile(r"opacity is not blended"),
@@ -868,7 +914,7 @@ REMEDY = [
      "auto); every swatch renders white, so no texture value reaches the shader"),
     (re.compile(r"texture packed inside a .usdz"),
      "resolve a texture asset path that names a file inside the .usdz package it was authored in"),
-    (re.compile(r"roughness and its texture do not reach the surface"),
+    (re.compile(r"roughness (and its texture do not reach|does not reach)"),
      "apply inputs:roughness and its texture to the shaded surface; the bands render with one matte "
      "response, so neither the constant nor the textured roughness reaches the shader"),
 ]
