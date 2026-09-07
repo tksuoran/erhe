@@ -79,8 +79,8 @@ Constraints every step respects:
 ## 2. What holds today
 
 G1 holds for the schemas the importer covers, G2 holds for scene
-content (editor state beyond the scene block is E4), and G3 holds for
-references (X2). Each landed step is
+content (editor state beyond the scene block is E4), and the reference-instance
+part of G3 holds (X2). Each landed step is
 listed with the record that now owns its behavior; `git log` on that
 record has the history.
 
@@ -216,11 +216,8 @@ record has the history.
   itself and its subtree under the carrier, one level more than USD's
   own composition; a save writes the carrier as the referencing prim
   with its arcs and none of the content, so the round trip is a fixed
-  point (`src/erhe/usd/notes.md` "Export"). A USD-backed instance is
-  sealed like a glTF one, an opinion the referencing layer authors over
-  a reference is dropped with a warning naming it, and an arc inside a
-  template is instantiated through the same library (a cycle is
-  refused); `Prefab_library::reload` refreshes a carrier with several
+  point (`src/erhe/usd/notes.md` "Export"). An arc inside a template is
+  instantiated through the same library (a cycle is refused); `Prefab_library::reload` refreshes a carrier with several
   arcs from its first attachment.
 - X2 Editable instances with sparse overrides: a USD reference is a
   composition arc, not a copy. Every item inside an instance names its

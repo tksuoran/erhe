@@ -114,7 +114,7 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_nodes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{nodes: [{name, id, type, parent, parent_id, locked, import_root, tags}]}`,
+Returns: `{nodes: [{name, id, type, parent, parent_id, locked, active, import_root, tags}]}`,
 each transformable prim additionally carrying `position`, `rotation_xyzw`,
 `scale` and `attachment_types`. `type` is the prim's class name (`Xform`,
 `Mesh`, `Camera`, `Light`, `Scope`, ...) and `attachment_types` names the
@@ -124,7 +124,7 @@ as their `parent`.
 
 ### get_node_details
 
-Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. `attachments` lists the applied-API-schema attachments alone (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone.
+Get detailed info for a specific prim including world position, local transform, the prim's own class section, attachments, children, and selection state. A `Mesh` prim carries a `mesh` section (materials, primitive and vertex counts, world AABB, layer diagnostics), a `Camera` prim a `camera` section (`exposure`, `shadow_range`) and a `Light` prim a `light` section (`light_type`, `color`, `intensity`, `range`); the key is `null` on a prim of another class. `attachments` lists the applied-API-schema attachments alone (`Node_physics`, `Node_joint`, `Layout`, `Brush_placement`, `Prefab_instance`, `Frame_controller`, `Grid`), because a `Mesh`, `Camera` or `Light` is a child prim and answers as its own node. A `Prefab_instance` attachment carries `prefab_source_path`, `prefab_name` and `prefab_prim_path` (the prim a USD `references` arc named, empty for a glTF prefab); a prim that authors several arcs carries one attachment per arc, in the arcs' order. `parent` is the prim's parent in the tree and `transform_parent` the nearest transformable ancestor its world transform composes with (they differ when a `Scope` sits between them). A prim outside `Xformable` answers with its `type`, place and children alone. Every entry carries `active`: the effective `Item_flags::active` bit, false for an inactive prim and for everything below one (doc/usd-compatibility-plan.md X2).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -304,6 +304,10 @@ curl -X POST http://127.0.0.1:3743/mcp \
 ```
 
 Returns: `{dynamic_physics_enabled: true/false}`
+
+### instantiate_prefab / reload_prefab / get_prefabs / set_prefab_template_property
+
+`instantiate_prefab` places a prefab (a glTF file, or a USD file at a prim) into a scene as a carrier prim with a `Prefab_instance` attachment and the template's content cloned below it; `reload_prefab` re-reads a prefab's file and refreshes every instance, keeping their overrides; `get_prefabs` lists the loaded templates. `set_prefab_template_property` sets (or, with a null value, clears) a local value on an item INSIDE a template - `source_path`, optional `prim_path`, `item_path` (the M1 path below the template root), `property`, `value` - which no scene lookup reaches otherwise; every instance reads the change live through its reference layer. It is not undoable, like `reload_prefab`. An item inside an instance is edited with `set_item_property` (a local value there is an override; a null value clears it and exposes the template's value) and reports `"source": "reference"` in `get_item_properties` for what the template supplies.
 
 ### lock_items / unlock_items
 

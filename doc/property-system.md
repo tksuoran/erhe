@@ -333,8 +333,8 @@ table, see D2a), and references to other objects (D28).
   property the `item_reference_imgui` field (D28). Every such row's
   label is tinted by its value source - gray for the default, green for a
   local value, blue for a member-backed property (D18), cyan for an
-  expression (D22), orange for a style (D25), purple for an inherited
-  value, dim gray for a computed one (D26) - so a hand-written row of the
+  expression (D22), orange for a style (D25), pink for a reference (D33),
+  purple for an inherited value, dim gray for a computed one (D26) - so a hand-written row of the
   same window (state not yet a registered property) and the layer a
   value comes from are both told at a glance; the tooltip names the
   source in words. The `Property_ui` block
@@ -883,64 +883,6 @@ table, see D2a), and references to other objects (D28).
     value field as a local value (a full snapshot, which would shadow a
     style).
 
-- D33 Reference layer (a USD reference arc, `doc/usd-compatibility-plan.md`
-  X2).
-  - Context. An instance of a template is the template's structure with
-    per-item overrides, not a copy of its values: the values the template
-    supplies sit in a layer of their own, below the instance's own local
-    values, so a local value inside an instance is an override and
-    clearing it exposes the template's value again. USD composes a
-    reference arc weaker than inheritance, so the layer sits between style
-    and inherited (R3).
-  - Library. `Dependency_object::set_reference(std::shared_ptr<const
-    Dependency_object>)` / `get_reference()` install one reference source -
-    the counterpart - per object, with `Value_source::reference`. nullptr
-    clears. `get_reference_user_count()` is the source's user count and
-    `reference_chain_reaches` the chain test a picker asks.
-  - What the layer reads. The reference layer of an object is the value
-    its counterpart SUPPLIES ITSELF: the counterpart's base value when
-    that value's source is local, expression, computed, style or
-    (recursively) reference, and nothing when the counterpart would fall
-    to its own inherited or default layer (`get_supplied_value`, the layer
-    walk of `get_base_value` stopped before the inherited branch). A value
-    the counterpart inherits from its own tree is not carried, because the
-    instance's own tree provides inheritance: the instance mirrors the
-    template's structure, and an override on an instance ancestor reaches
-    the instance's descendants through the ordinary inherited walk, which
-    a reference layer on every descendant would shadow. It is also what a
-    USD reference arc composes: the target prim's opinions, not those of
-    its ancestors.
-  - Chain. A counterpart is itself an object with a reference, so what it
-    supplies includes what its own reference supplies, nearest first;
-    `set_reference` refuses (false, logged, nothing changes) a source
-    whose reference chain reaches the object, the source being the object
-    included, so a chain never cycles.
-  - Inheritance and notification. A reference value of an inherits-flagged
-    property is the object's effective value and flows to descendants
-    exactly as a local value would: the inheritance walk, the descendant
-    notification and the tree-change snapshot treat "has a local value" as
-    "has a local, style or reference value" (`has_own_value`).
-    `set_reference` notifies, through the normal path (batches, D19
-    callbacks, observers, descendants), every property in the union of
-    what the old and the new source supply whose effective value or source
-    changes; local and style values are untouched and shadow the
-    reference. A source keeps the list of its users (`set_reference`
-    registers, the copy of a user registers the copy, a user's destructor
-    unregisters); when a value it supplies changes, `notify` forwards the
-    change to every user without a local or style value of that property,
-    with the user's old value taken from the old supplied value (or from
-    the user's own value below the reference layer when the source
-    supplied none) and its new value from the user's effective value, so a
-    template edit is live the way a style edit is (D25).
-  - Local layer, copy and sealing. A bridged property (D18) is always
-    local and ignores the reference layer. `read_local_value`,
-    `for_each_local_value` and `Property_set::read_local_values` stay
-    local-only, so an instance's overrides are exactly its local values.
-    Default elision (D32) keeps a local value that shadows a reference
-    value, as it keeps one shadowing an inherited or style value. A copy
-    (D10) carries the reference pointer as it carries the style pointer. A
-    sealed object (D24) rejects `set_reference`.
-
 - D26 Computed properties (WPF read-only dependency property whose value
   the owner provides; R6).
   - Context. `Property_key<T>` (D3) is the write permission for a
@@ -1236,6 +1178,64 @@ table, see D2a), and references to other objects (D28).
   writes no value entry of its own for them; the flag is data only, and
   `doc/property-inventory.md` owns the list of registrations that carry
   it.
+- D33 Reference layer (a USD reference arc, `doc/usd-compatibility-plan.md`
+  X2).
+  - Context. An instance of a template is the template's structure with
+    per-item overrides, not a copy of its values: the values the template
+    supplies sit in a layer of their own, below the instance's own local
+    values, so a local value inside an instance is an override and
+    clearing it exposes the template's value again. USD composes a
+    reference arc weaker than inheritance, so the layer sits between style
+    and inherited (R3).
+  - Library. `Dependency_object::set_reference(std::shared_ptr<const
+    Dependency_object>)` / `get_reference()` install one reference source -
+    the counterpart - per object, with `Value_source::reference`. nullptr
+    clears. `get_reference_user_count()` is the source's user count and
+    `reference_chain_reaches` the chain test a picker asks.
+  - What the layer reads. The reference layer of an object is the value
+    its counterpart SUPPLIES ITSELF: the counterpart's base value when
+    that value's source is local, expression, computed, style or
+    (recursively) reference, and nothing when the counterpart would fall
+    to its own inherited or default layer (`get_supplied_value`, the layer
+    walk of `get_base_value` stopped before the inherited branch). A value
+    the counterpart inherits from its own tree is not carried, because the
+    instance's own tree provides inheritance: the instance mirrors the
+    template's structure, and an override on an instance ancestor reaches
+    the instance's descendants through the ordinary inherited walk, which
+    a reference layer on every descendant would shadow. It is also what a
+    USD reference arc composes: the target prim's opinions, not those of
+    its ancestors.
+  - Chain. A counterpart is itself an object with a reference, so what it
+    supplies includes what its own reference supplies, nearest first;
+    `set_reference` refuses (false, logged, nothing changes) a source
+    whose reference chain reaches the object, the source being the object
+    included, so a chain never cycles.
+  - Inheritance and notification. A reference value of an inherits-flagged
+    property is the object's effective value and flows to descendants
+    exactly as a local value would: the inheritance walk, the descendant
+    notification and the tree-change snapshot treat "has a local value" as
+    "has a local, style or reference value" (`has_own_value`).
+    `set_reference` notifies, through the normal path (batches, D19
+    callbacks, observers, descendants), every property in the union of
+    what the old and the new source supply whose effective value or source
+    changes; local and style values are untouched and shadow the
+    reference. A source keeps the list of its users (`set_reference`
+    registers, the copy of a user registers the copy, a user's destructor
+    unregisters); when a value it supplies changes, `notify` forwards the
+    change to every user without a local or style value of that property,
+    with the user's old value taken from the old supplied value (or from
+    the user's own value below the reference layer when the source
+    supplied none) and its new value from the user's effective value, so a
+    template edit is live the way a style edit is (D25).
+  - Local layer, copy and sealing. A bridged property (D18) is always
+    local and ignores the reference layer. `read_local_value`,
+    `for_each_local_value` and `Property_set::read_local_values` stay
+    local-only, so an instance's overrides are exactly its local values.
+    Default elision (D32) keeps a local value that shadows a reference
+    value, as it keeps one shadowing an inherited or style value. A copy
+    (D10) carries the reference pointer as it carries the style pointer. A
+    sealed object (D24) rejects `set_reference`.
+
 
 ## 4. Implementation
 
@@ -2046,9 +2046,7 @@ style layer is D25 and the reference layer is D33.
   live there and nowhere else. Its `native_gltf` flag and its elision pass
   are implemented (D32); the `ERHE_*_properties` extensions are not.
 - Style users beyond the content library's style items (D25): the graphics presets once
-  `Graphics_settings` is an item with registered properties, and
-  per-instance prefab overrides once `doc/gltf-prefabs-plan.md` phase 6
-  takes them on.
+  `Graphics_settings` is an item with registered properties.
 - Further computed properties (D26) as their consumers appear: a node's
   world bounds over its subtree, a scene's item counts.
   `Rendertarget_mesh`'s size (section 4.15) and `Animation`'s time range
