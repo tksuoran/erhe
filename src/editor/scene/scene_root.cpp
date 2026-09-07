@@ -25,6 +25,7 @@
 #include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "operations/variant_select_operation.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
@@ -312,6 +313,15 @@ Scene_root::Scene_root(
                         m_physics_disabled_nodes.push_back(item);
                     }
                 }
+            }
+        );
+        // Content taken out of the editor without a scene closing - an undo of
+        // the import that brought a variant set in - takes the set out of the
+        // table, so a dead set is never offered (AGENTS.md "Scene-hosted
+        // references in editor parts").
+        m_items_removed_subscription = app_message_bus->items_removed.subscribe(
+            [this](Items_removed_message& message) {
+                m_variant_table.on_items_removed(*message.removed.get());
             }
         );
     }
@@ -2047,6 +2057,71 @@ auto Scene_root::get_scene_settings() -> Scene_settings&
 auto Scene_root::get_scene_settings() const -> const Scene_settings&
 {
     return m_scene_settings;
+}
+
+auto Scene_root::get_variant_table() -> Variant_table&
+{
+    return m_variant_table;
+}
+
+auto Scene_root::get_variant_table() const -> const Variant_table&
+{
+    return m_variant_table;
+}
+
+auto Scene_root::select_variant(
+    App_context&              context,
+    const std::string&        prim_path,
+    const std::string&        set_name,
+    const std::string&        variant_name,
+    const Variant_switch_mode mode
+) -> std::string
+{
+    const std::shared_ptr<Operation> operation = make_select_variant_operation(
+        shared_from_this(), prim_path, set_name, variant_name
+    );
+    if (!operation) {
+        return fmt::format(
+            "scene '{}' has no variant '{}' in set '{}' on '{}'",
+            get_name(), variant_name, set_name, prim_path
+        );
+    }
+    if (mode == Variant_switch_mode::undoable) {
+        if (context.operation_stack == nullptr) {
+            return "no operation stack";
+        }
+        context.operation_stack->queue(operation);
+    } else {
+        operation->execute(context);
+    }
+    return std::string{};
+}
+
+void Scene_root::apply_variant_selections(App_context& context)
+{
+    // The file's own selection is already applied by the importer; only an
+    // entry that names a different variant has anything to do.
+    // A COPY: applying a selection rewrites m_scene_settings.variant_selections.
+    const std::vector<Variant_selection> selections = m_scene_settings.variant_selections;
+    for (const Variant_selection& selection : selections) {
+        const Variant_set* const set = m_variant_table.find(selection.prim_path, selection.set_name);
+        if (set == nullptr) {
+            log_scene->warn(
+                "scene '{}': variant selection '{}' names set '{}' on '{}', which the scene does not carry",
+                get_name(), selection.variant_name, selection.set_name, selection.prim_path
+            );
+            continue;
+        }
+        if (set->selected == selection.variant_name) {
+            continue;
+        }
+        const std::string error = select_variant(
+            context, selection.prim_path, selection.set_name, selection.variant_name, Variant_switch_mode::immediate
+        );
+        if (!error.empty()) {
+            log_scene->warn("scene '{}': {}", get_name(), error);
+        }
+    }
 }
 
 auto Scene_root::get_scene_id() -> const std::string&

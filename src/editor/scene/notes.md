@@ -26,6 +26,8 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Node_physics`** -- `Node_attachment` wrapping a Jolt rigid body. Synchronizes physics transforms with scene node transforms.
 
+- **`Variant_table`** (`variant_table.hpp`) -- The variant sets one scene carries (doc/usd-compatibility-plan.md X4), owned by its `Scene_root` and dying with it. One `Variant_set` is the prim carrying it, the set name, its variants with their material bindings, the selected variant and how many opinions beyond material bindings the file authored (which this slice does not carry). The prim and the materials are weak references, and `Scene_root` drops a set whose prim an `items_removed` message names, so an undone import stops offering its sets. `Scene_root::select_variant()` switches a set: `Variant_select_operation` records the selection in the table and in `Scene_settings::variant_selections`, and one `Mesh_material_assign_operation` per binding assigns the materials, all in one compound so a single undo reverts the switch. `resolve_variant_binding()` is where a binding path becomes mesh primitives: a path that names a mesh covers the primitives the same variant does not bind by subset, and a deeper path names one primitive by its GeomSubset name.
+
 - **`Node_raytrace`** -- Handles raytrace instance creation/destruction for mesh nodes.
 
 ## Scene persistence (erhe-authored glTF, phase 4)

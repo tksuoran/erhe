@@ -54,6 +54,7 @@ class Geometry_graph_mesh;
 class Node_joint;
 class Node_physics;
 class Rendertarget_mesh;
+class Scene_root;
 
 class Properties : public erhe::imgui::Imgui_window, public Property_editor
 {
@@ -109,6 +110,7 @@ private:
 
     void animation_properties         (const std::shared_ptr<erhe::scene::Animation>& animation);
     void scene_properties             (erhe::scene::Scene& scene);
+    void variant_properties           (Scene_root& scene_root);
     void light_properties             (erhe::scene::Light& light);
     void layout_properties            (erhe::scene::Layout& layout);
     void texture_properties           (const std::shared_ptr<erhe::graphics::Texture>& texture);

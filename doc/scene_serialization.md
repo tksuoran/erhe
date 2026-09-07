@@ -133,7 +133,12 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      node bindings for graph meshes;
    - scene level: `ERHE_scene` - ambient light, `enable_physics`, and the
      per-scene `Scene_settings` overrides (issue #239), serialized through
-     the codegen struct (`scene/definitions/scene_settings.py`);
+     the codegen struct (`scene/definitions/scene_settings.py`). One field
+     of it is scene content rather than a setting override:
+     `variant_selections`, which variant each variant set of the scene has
+     selected (`{prim_path, set_name, variant_name}` per switched set,
+     doc/usd-compatibility-plan.md X4); a set without an entry keeps the
+     selection the file it came from authored;
    - asset root: `ERHE_brushes` (brush library; brush geometry rides as
      extra unreferenced glTF meshes), `ERHE_node_graphs` (graph texture and
      graph mesh assets as embedded node-graph JSON, plus

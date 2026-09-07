@@ -208,6 +208,23 @@ Returns: `{brushes: [{name, id, folder_path, vertex_count, facet_count}]}` -
 `folder_path` is the scope path below the `Brushes` scope, empty for a brush
 directly under it.
 
+### get_scene_variants
+
+List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): a
+USD file's material-binding `variantSet`s become one entry each.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_variants","arguments":{"scene_name":"variants"}}}'
+```
+
+Returns: `{scene_name, variant_sets: [{prim_path, set_name, selected,
+variants: [{name, bindings: [{relative_path, material}]}],
+unsupported_opinion_count}]}` - `prim_path` is the path of the prim carrying
+the set, `relative_path` the path of the bound prim below it (empty for that
+prim itself), and `unsupported_opinion_count` how many opinions beyond
+material bindings the file's variants authored, which this slice neither
+applies nor writes back.
+
 ### pick_at
 
 Headless pick probe: arm the pointer at viewport pixel coordinates and run
@@ -292,6 +309,19 @@ Parameters:
 - `motion_mode` (optional) - `"static"` or `"dynamic"` (default)
 
 Returns: `{node_name, node_id, brush, material, position, scale}`
+
+### select_variant
+
+Select one variant of one variant set: the chosen variant's material bindings
+are assigned and the selection is recorded in the scene settings
+(`Scene_settings.variant_selections`, saved with the scene), as ONE undoable
+operation. Use `get_scene_variants` for the paths and names.
+
+```bash
+py -3 scripts/mcp_call.py select_variant b64:<base64 of {"scene_name":"variants","prim_path":"World/Holder","set_name":"look","variant_name":"red"}>
+```
+
+Returns: `{queued, scene_name, prim_path, set_name, variant_name}`.
 
 ### toggle_physics
 

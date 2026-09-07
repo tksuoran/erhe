@@ -34,6 +34,7 @@
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/variant_table.hpp"
 #include "scene/scene_commit_queue.hpp"
 #include "scene/shadow_fit_debug.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -926,6 +927,54 @@ auto Mcp_server::query_pick_at(const json& args) -> std::string
         {"y",       y},
         {"slots",   slots},
         {"nearest", nearest_json}
+    }).dump();
+}
+
+auto Mcp_server::query_scene_variants(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    Variant_table& variant_table = sr->get_variant_table();
+    variant_table.drop_expired_sets();
+    json variant_sets = json::array();
+    for (const Variant_set& set : variant_table.get_sets()) {
+        json variants = json::array();
+        for (const Variant& variant : set.variants) {
+            json bindings = json::array();
+            for (const Variant_binding& binding : variant.bindings) {
+                const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
+                bindings.push_back(
+                    json{
+                        {"relative_path", binding.relative_path},
+                        {"material",      material ? material->get_name() : std::string{}}
+                    }
+                );
+            }
+            variants.push_back(
+                json{
+                    {"name",     variant.name},
+                    {"bindings", bindings}
+                }
+            );
+        }
+        variant_sets.push_back(
+            json{
+                {"prim_path",                 set.get_prim_path()},
+                {"set_name",                  set.set_name},
+                {"selected",                  set.selected},
+                {"variants",                  variants},
+                {"unsupported_opinion_count", set.unsupported_opinion_count}
+            }
+        );
+    }
+    return make_json_content({
+        {"scene_name",   sr->get_name()},
+        {"variant_sets", variant_sets}
     }).dump();
 }
 

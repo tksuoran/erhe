@@ -178,6 +178,40 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_select_variant(const json& args) -> std::string
+{
+    const std::string scene_name   = args.value("scene_name", "");
+    const std::string prim_path    = args.value("prim_path", "");
+    const std::string set_name     = args.value("set_name", "");
+    const std::string variant_name = args.value("variant_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+    if (prim_path.empty() || set_name.empty() || variant_name.empty()) {
+        json r = make_text_content("prim_path, set_name and variant_name are required");
+        r["isError"] = true;
+        return r.dump();
+    }
+    const std::string error = sr->select_variant(
+        m_context, prim_path, set_name, variant_name, Scene_root::Variant_switch_mode::undoable
+    );
+    if (!error.empty()) {
+        json r = make_text_content(error);
+        r["isError"] = true;
+        return r.dump();
+    }
+    return make_json_content({
+        {"queued",       true},
+        {"scene_name",   sr->get_name()},
+        {"prim_path",    prim_path},
+        {"set_name",     set_name},
+        {"variant_name", variant_name}
+    }).dump();
+}
+
 auto Mcp_server::action_select_items(const json& args) -> std::string
 {
     if (!m_context.selection) {

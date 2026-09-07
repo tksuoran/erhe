@@ -1592,6 +1592,38 @@ def usd_snapshot(scene_name):
         key=lambda t: t["name"],
     )
 
+    # The variant sets the scene carries (doc/usd-compatibility-plan.md X4):
+    # which variant each set has selected and what each variant binds. The
+    # count of opinions beyond material bindings is deliberately NOT diffed -
+    # this slice does not carry them, so a saved file has none where the
+    # source authored some (the same thing the erhe_usd_tests round trip
+    # checks).
+    variant_sets = call("get_scene_variants", {"scene_name": scene_name}).get("variant_sets", [])
+    snap["variants"] = sorted(
+        (
+            {
+                "prim_path": v.get("prim_path"),
+                "set_name":  v.get("set_name"),
+                "selected":  v.get("selected"),
+                "variants":  [
+                    {
+                        "name":     variant.get("name"),
+                        "bindings": sorted(
+                            (
+                                {"relative_path": b.get("relative_path"), "material": b.get("material")}
+                                for b in variant.get("bindings", [])
+                            ),
+                            key=lambda b: (b["relative_path"], b["material"]),
+                        ),
+                    }
+                    for variant in v.get("variants", [])
+                ],
+            }
+            for v in variant_sets
+        ),
+        key=lambda v: (v["prim_path"], v["set_name"]),
+    )
+
     # A local value is an authored value (doc/property-system.md D32): the
     # names an item authors, per item, so an edit that survived the round
     # trip is visible as such and an unauthored value stays unauthored.
@@ -1905,6 +1937,11 @@ def section_usd_round_trip(usdchecker_arg):
     # (doc/usd-compatibility-plan.md X3): the classes must come back as Style
     # items where they sat, with their chain and their assignments.
     usd_round_trip_leg(S, "styles.usda", "styles", edits=[], extra_keys=["styles"])
+    # variants.usda holds two material-binding variant sets, one of them
+    # selecting a variant the composed stage would not show
+    # (doc/usd-compatibility-plan.md X4): the table, the selection and the
+    # bound materials must come back as they went out.
+    usd_round_trip_leg(S, "variants.usda", "variants", edits=[], extra_keys=["variants"])
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 

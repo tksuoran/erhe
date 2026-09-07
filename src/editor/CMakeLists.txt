@@ -363,6 +363,8 @@ erhe_target_sources_grouped(
     operations/property_set_operation.hpp
     operations/style_set_operation.cpp
     operations/style_set_operation.hpp
+    operations/variant_select_operation.cpp
+    operations/variant_select_operation.hpp
     operations/material_change_operation.hpp
     operations/mesh_material_assign_operation.cpp
     operations/mesh_material_assign_operation.hpp
@@ -531,6 +533,8 @@ erhe_target_sources_grouped(
     scene/scene_root.hpp
     scene/scene_settings_resolve.cpp
     scene/scene_settings_resolve.hpp
+    scene/variant_table.cpp
+    scene/variant_table.hpp
     scene/scene_view.cpp
     scene/scene_view.hpp
     scene/shadow_fit_debug.cpp
@@ -755,6 +759,9 @@ set(_codegen_sources
     ${_codegen_out}/lightmap_tile_override.hpp
     ${_codegen_out}/lightmap_tile_override_serialization.hpp
     ${_codegen_out}/lightmap_tile_override.cpp
+    ${_codegen_out}/variant_selection.hpp
+    ${_codegen_out}/variant_selection_serialization.hpp
+    ${_codegen_out}/variant_selection.cpp
     ${_codegen_out}/scene_settings.hpp
     ${_codegen_out}/scene_settings_serialization.hpp
     ${_codegen_out}/scene_settings.cpp
@@ -773,6 +780,7 @@ erhe_codegen_generate(
     DEFINITIONS
         "${_codegen_defs}/gltf_source_reference.py"
         "${_codegen_defs}/lightmap_tile_override.py"
+        "${_codegen_defs}/variant_selection.py"
         "${_codegen_defs}/scene_settings.py"
 )
 erhe_codegen_source_settings(${_codegen_sources})

@@ -9,6 +9,7 @@
 #include "erhe_scene_renderer/light_set.hpp"
 #include "erhe_scene_renderer/material_set.hpp"
 #include "scene/draw_list_scene_dependencies.hpp"
+#include "scene/variant_table.hpp"
 
 #include <deque>
 #include <filesystem>
@@ -315,6 +316,35 @@ public:
     [[nodiscard]] auto get_scene_settings()       -> Scene_settings&;
     [[nodiscard]] auto get_scene_settings() const -> const Scene_settings&;
 
+    // The variant sets this scene's prims carry
+    // (doc/usd-compatibility-plan.md X4), filled by the USD parser when the
+    // scene is opened or an asset is imported and dying with this scene root.
+    [[nodiscard]] auto get_variant_table()       -> Variant_table&;
+    [[nodiscard]] auto get_variant_table() const -> const Variant_table&;
+
+    // Switches one variant set of this scene: the selection is recorded in
+    // Scene_settings::variant_selections and the chosen variant's material
+    // bindings are assigned, all as one undoable compound. Returns an error
+    // text, empty on success. `mode` decides whether the switch goes on the
+    // undo stack (a user switch) or is applied at once (a scene being opened
+    // restoring the selection its file carried).
+    enum class Variant_switch_mode : unsigned int {
+        undoable  = 0,
+        immediate = 1
+    };
+    auto select_variant(
+        App_context&        context,
+        const std::string&  prim_path,
+        const std::string&  set_name,
+        const std::string&  variant_name,
+        Variant_switch_mode mode
+    ) -> std::string;
+
+    // Applies every Scene_settings::variant_selections entry that names a set
+    // of the table whose selection differs, without touching the undo stack:
+    // what a scene being opened does once its variant table is filled.
+    void apply_variant_selections(App_context& context);
+
     // Persistent scene identity (Scene_settings::scene_id, saved with the
     // scene): creation timestamp + random suffix, generated lazily here for
     // scenes that lack one (from-scratch scenes and pre-scene_id files
@@ -344,7 +374,8 @@ private:
     // handles them instead. See Raytrace_node_mask::skinned.
     [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
 
-    erhe::message_bus::Subscription<Selection_message> m_selection_subscription;
+    erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     // Live longest
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
@@ -393,6 +424,7 @@ private:
     std::shared_ptr<erhe::scene::Scene>             m_scene;
     Scene_layers                                    m_layers;
     Scene_settings                                  m_scene_settings;
+    Variant_table                                   m_variant_table;
 
     std::shared_ptr<Item_tree_window>               m_node_tree_window;
 };

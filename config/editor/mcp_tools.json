@@ -2433,6 +2433,22 @@
     "name": "get_scene_settings"
   },
   {
+    "description": "List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): per set the path of the prim carrying it, the set name, the selected variant, every variant with its material bindings, and how many opinions beyond material bindings the file's variants authored (those are not carried and are not written back).",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "get_scene_variants"
+  },
+  {
     "description": "Set a scene's per-scene state: ambient light color and/or the per-scene setting overrides (#239). By default 'settings' REPLACES the whole Scene_settings object (omitted fields return to the editor-global default; {} clears every override); with merge: true the given fields deep-merge (RFC 7386) over the current settings instead - omitted fields keep their values, null deletes an override. These persist in the ERHE_scene extension when the scene is saved.",
     "inputSchema": {
       "properties": {
@@ -2464,6 +2480,37 @@
       "type": "object"
     },
     "name": "set_scene_settings"
+  },
+  {
+    "description": "Select one variant of one variant set of a scene: the chosen variant's material bindings are assigned and the selection is recorded in the scene settings (Scene_settings.variant_selections), as one undoable operation. Use get_scene_variants for the prim paths, set names and variant names.",
+    "inputSchema": {
+      "properties": {
+        "prim_path": {
+          "description": "Path of the prim carrying the variant set (as get_scene_variants reports it)",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
+          "type": "string"
+        },
+        "set_name": {
+          "description": "Variant set name",
+          "type": "string"
+        },
+        "variant_name": {
+          "description": "Name of the variant to select",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name",
+        "prim_path",
+        "set_name",
+        "variant_name"
+      ],
+      "type": "object"
+    },
+    "name": "select_variant"
   },
   {
     "description": "Save a scene in its own source format, without a file dialog. A scene opened from a USD file (source_format 'usd' in list_scenes) writes a .usda layer carrying the scene graph, the content library's materials with their image files, and the scene-level editor state in customLayerData; every other scene writes a single erhe-authored glTF file carrying FULL editor state (render content plus the ERHE_* extensions: scene settings, physics, layouts, brushes, node graphs, collections/tags; ERHE_scene in extensionsUsed marks the file). The reply reports the format written. Without 'path' the scene saves back to its own source file when it was opened/loaded from one, else to res/editor/scenes/<scene name> with that format's extension. When the written file is a loaded prefab source, the prefab is reloaded so every instance in every scene reflects the edit (this subsumed the former save_prefab tool). This is the scene persistence path; export_gltf without editor_state is the plain interchange export.",

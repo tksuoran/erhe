@@ -41,6 +41,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/variant_table.hpp"
 
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
@@ -535,6 +536,68 @@ void resolve_usd_classes(
     }
 }
 
+// The Material prim one variant binding names, by the absolute stage path the
+// file spelled: a material is a prim of the tree (U4), so its path below the
+// prim the file was built under is the stage path without its leading '/'.
+[[nodiscard]] auto find_material_by_stage_path(
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    const std::string&                        material_path
+) -> std::shared_ptr<erhe::primitive::Material>
+{
+    if (!container_node || material_path.empty() || (material_path.front() != '/')) {
+        return {};
+    }
+    erhe::Hierarchy* const prim = erhe::find_by_path(*container_node.get(), material_path.substr(1));
+    if ((prim == nullptr) || !erhe::is<erhe::primitive::Material>(prim)) {
+        return {};
+    }
+    return std::static_pointer_cast<erhe::primitive::Material>(prim->shared_from_this());
+}
+
+// The variant sets the file authored, as the scene's own table
+// (doc/usd-compatibility-plan.md X4): the carrying prim and the bound
+// materials are the items the import made, so a later switch assigns them
+// without re-reading the file. The selected variant is already applied by the
+// reader; the table is what lets the user pick another one.
+void fill_variant_table(
+    const erhe::usd::Usd_data&                usd_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    Variant_table&                            variant_table
+)
+{
+    for (const erhe::usd::Usd_variant_set& usd_set : usd_data.variant_sets) {
+        if (!usd_set.prim) {
+            continue;
+        }
+        Variant_set set{};
+        set.prim                      = usd_set.prim;
+        set.set_name                  = usd_set.set_name;
+        set.selected                  = usd_set.selected;
+        set.unsupported_opinion_count = usd_set.unsupported_opinion_count;
+        for (const erhe::usd::Usd_variant& usd_variant : usd_set.variants) {
+            Variant variant{};
+            variant.name = usd_variant.name;
+            for (const erhe::usd::Usd_variant_binding& usd_binding : usd_variant.bindings) {
+                const std::shared_ptr<erhe::primitive::Material> material =
+                    find_material_by_stage_path(container_node, usd_binding.material_path);
+                if (!material) {
+                    log_parsers->warn(
+                        "USD prim '{}': variant '{}' of set '{}' binds material '{}', which the file has no prim for - the binding is dropped",
+                        usd_set.stage_path, usd_variant.name, usd_set.set_name, usd_binding.material_path
+                    );
+                    continue;
+                }
+                Variant_binding binding{};
+                binding.relative_path = usd_binding.relative_path;
+                binding.material      = material;
+                variant.bindings.push_back(std::move(binding));
+            }
+            set.variants.push_back(std::move(variant));
+        }
+        variant_table.add(std::move(set));
+    }
+}
+
 // The `customLayerData` key the editor's scene state travels under, and the
 // key naming the writer's format revision. The value of `erhe:scene` is the
 // JSON object the glTF ERHE_scene block carries, verbatim as a string:
@@ -665,6 +728,10 @@ auto make_import_usd_operation(
     // Class prims become Style items in the tree, and every `inherits` arc a
     // style assignment; both ride the import_root insert below.
     resolve_usd_classes(usd_data, root_node);
+
+    // The file's variant sets join the target scene's table. The selected
+    // variant is already bound by the reader, so an import needs no switch.
+    fill_variant_table(usd_data, root_node, scene_root->get_variant_table());
 
     // Composition arcs: each referencing prim gets one Prefab_instance per
     // arc, with the arc's target cloned below it. The instances ride the
@@ -898,6 +965,10 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // style assignment, before the prims move under the scene root.
     resolve_usd_classes(usd_data, container_node);
 
+    // The file's variant sets, while the prims are still under the container
+    // the material paths address them from.
+    fill_variant_table(usd_data, container_node, scene_root->get_variant_table());
+
     // Composition arcs: one Prefab_instance per arc under its carrier prim,
     // before the prims move under the scene root.
     if (context.prefab_library != nullptr) {
@@ -930,6 +1001,11 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         child->set_parent(scene_root_node);
     }
     container_node->set_parent({});
+
+    // A selection the scene state carries wins over the one the file's
+    // `variants` metadata authored: the prims are under the scene root now,
+    // so the entries' prim paths address them.
+    scene_root->apply_variant_selections(context);
 
     Async_raytrace_kickoff_operation raytrace_kickoff{scene_root, std::move(mesh_node_items)};
     raytrace_kickoff.execute(context);
@@ -1040,6 +1116,59 @@ void collect_usd_references(
     }
 }
 
+// The scene's variant sets as the writer's table (X4): the selection the
+// scene holds today, and every variant's bindings with the material each
+// binds. A set whose carrying prim is gone is dropped before this runs. An
+// opinion this slice does not carry - a variant that authors anything but a
+// material binding - is not written, so the loss is named once per set.
+void collect_usd_variant_sets(
+    Scene_root&                                        scene_root,
+    const std::filesystem::path&                       path,
+    std::vector<erhe::usd::Usd_save_variant_set>&      out_variant_sets
+)
+{
+    Variant_table& variant_table = scene_root.get_variant_table();
+    variant_table.drop_expired_sets();
+    for (const Variant_set& set : variant_table.get_sets()) {
+        const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+        if (!prim) {
+            continue;
+        }
+        if (set.unsupported_opinion_count > 0) {
+            log_parsers->warn(
+                "save_scene_usd '{}': variant set '{}' on '{}': {} opinions beyond material bindings are not written",
+                erhe::file::to_string(path), set.set_name, set.get_prim_path(), set.unsupported_opinion_count
+            );
+        }
+        erhe::usd::Usd_save_variant_set save_set{};
+        save_set.item     = prim;
+        save_set.set_name = set.set_name;
+        save_set.selected = set.selected;
+        for (const Variant& variant : set.variants) {
+            erhe::usd::Usd_save_variant save_variant{};
+            save_variant.name = variant.name;
+            for (const Variant_binding& binding : variant.bindings) {
+                const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
+                if (!material) {
+                    log_parsers->warn(
+                        "save_scene_usd '{}': variant '{}' of set '{}' on '{}' binds a material that is no longer in the editor - the binding is not written",
+                        erhe::file::to_string(path), variant.name, set.set_name, set.get_prim_path()
+                    );
+                    continue;
+                }
+                save_variant.bindings.push_back(
+                    erhe::usd::Usd_save_variant_binding{
+                        .relative_path = binding.relative_path,
+                        .material      = material
+                    }
+                );
+            }
+            save_set.variants.push_back(std::move(save_variant));
+        }
+        out_variant_sets.push_back(std::move(save_set));
+    }
+}
+
 } // anonymous namespace
 
 auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::filesystem::path& path) -> bool
@@ -1061,6 +1190,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
         collect_usd_references(child, save_arguments.references);
     }
+    collect_usd_variant_sets(scene_root, path, save_arguments.variant_sets);
 
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library) {

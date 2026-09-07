@@ -207,6 +207,8 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     Scene_settings&         scene_settings = scene_root->get_scene_settings();
     const bool              show_developer  = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
 
+    variant_properties(*scene_root);
+
     push_group("Scene Overrides", ImGuiTreeNodeFlags_Framed);
 
     // Whole-config-group override: an "Override" checkbox that engages the
@@ -240,6 +242,49 @@ void Properties::scene_properties(erhe::scene::Scene& scene)
     // serialize). Re-add add_entry rows for scene_settings.clear_color /
     // .post_processing when their per-scene effect is wired up.
 
+    pop_group();
+}
+
+void Properties::variant_properties(Scene_root& scene_root)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    // One combo per variant set the scene carries
+    // (doc/usd-compatibility-plan.md X4). Change-driven: the combo is drawn
+    // from the table, and only a change queues the switch.
+    const std::vector<Variant_set>& sets = scene_root.get_variant_table().get_sets();
+    if (sets.empty()) {
+        return;
+    }
+    push_group("Variants", ImGuiTreeNodeFlags_Framed);
+    for (const Variant_set& set : sets) {
+        const std::string prim_path = set.get_prim_path();
+        const std::string set_name  = set.set_name;
+        if (prim_path.empty()) {
+            continue; // the carrying prim is gone; the table drops the set on the removal message
+        }
+        add_entry(
+            prim_path + " : " + set_name,
+            [this, &scene_root, &set, prim_path, set_name]() {
+                if (!ImGui::BeginCombo("##", set.selected.c_str())) {
+                    return;
+                }
+                for (const Variant& variant : set.variants) {
+                    const bool is_selected = (variant.name == set.selected);
+                    if (ImGui::Selectable(variant.name.c_str(), is_selected) && !is_selected) {
+                        const std::string error = scene_root.select_variant(
+                            m_context, prim_path, set_name, variant.name, Scene_root::Variant_switch_mode::undoable
+                        );
+                        if (!error.empty()) {
+                            log_scene->warn("select variant: {}", error);
+                        }
+                    }
+                }
+                ImGui::EndCombo();
+            },
+            "Which variant of this variant set the scene has selected."
+        );
+    }
     pop_group();
 }
 
