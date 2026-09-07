@@ -153,6 +153,48 @@ public:
     std::vector<std::string>         inherits;
 };
 
+// One material binding a variant authors (doc/usd-compatibility-plan.md X4).
+// `relative_path` is the M1 path of the bound prim below the prim carrying
+// the variant set, and is empty when the binding is on that prim itself;
+// `material_path` is the absolute stage path of the `Material` prim the
+// binding names. The reader resolves neither to an item: the paths are what
+// the caller re-resolves when the selection changes.
+class Usd_variant_binding final
+{
+public:
+    std::string relative_path;
+    std::string material_path;
+};
+
+// One variant of a variant set: its name and the material bindings it
+// authors. Only material bindings are read in this slice - a variant that
+// authors anything else has that counted and reported once for the set.
+class Usd_variant final
+{
+public:
+    std::string                      name;
+    std::vector<Usd_variant_binding> bindings;
+};
+
+// One `variantSet` a prim of the stage authors, and the erhe item that prim
+// became. `selected` is the layer's `variants` selection for the set, or the
+// first variant when the layer authors none - LightUSD composes nothing, so
+// the reader is what applies the selected variant's bindings to the imported
+// result.
+class Usd_variant_set final
+{
+public:
+    std::shared_ptr<erhe::Item_base> prim;
+    std::string                      stage_path;
+    std::string                      set_name;
+    std::vector<Usd_variant>         variants;
+    std::string                      selected;
+    // How many opinions of the set this slice does not carry: an attribute or
+    // a relationship that is not a `material:binding`. Reported once for the
+    // set, because a node-subtree variant is the later slice.
+    std::size_t                      unsupported_opinion_count{0};
+};
+
 // Result of load_stage(). `stage` is null exactly when `error` is non-empty;
 // `warning` can be non-empty either way. erhe::usd reports failures as values
 // rather than exceptions, the way LightUSD itself does.
@@ -252,6 +294,12 @@ public:
     // The `inherits` arcs the file's prims author, one entry per prim that
     // authors at least one, in the order the prims were visited.
     std::vector<Usd_prim_inherits>                          prim_inherits;
+    // The `variantSet`s the file's prims author, one entry per set, in the
+    // order the prims were visited and by set name within one prim
+    // (doc/usd-compatibility-plan.md X4). The selected variant's material
+    // bindings are already applied to the meshes above; the entry is what
+    // lets the caller offer the other selections.
+    std::vector<Usd_variant_set>                            variant_sets;
 
     // Stage constants the import consumed (see load_usd): the up axis and
     // metersPerUnit are applied to the top-level nodes as a root transform,
@@ -348,6 +396,38 @@ public:
     std::vector<Usd_save_reference>        references;
 };
 
+// One material binding of one variant the writer authors
+// (doc/usd-compatibility-plan.md X4). `relative_path` is the path of the
+// bound prim below the prim carrying the set, empty for that prim itself, and
+// `material` is bound by the path the writer gives that material's prim.
+class Usd_save_variant_binding final
+{
+public:
+    std::string                                      relative_path;
+    std::shared_ptr<const erhe::primitive::Material> material;
+};
+
+class Usd_save_variant final
+{
+public:
+    std::string                           name;
+    std::vector<Usd_save_variant_binding> bindings;
+};
+
+// One `variantSet` the writer authors on a prim: the `variantSets` list op,
+// the `variants` selection and the variant blocks, whose bindings become
+// `over` prims at the relative paths holding a `material:binding`
+// relationship. The prim's plain binding stays what the writer writes for the
+// material bound today, which the selected variant's bindings equal.
+class Usd_save_variant_set final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::string                            set_name;
+    std::vector<Usd_save_variant>          variants;
+    std::string                            selected;
+};
+
 // What save_usda() writes. The content is erhe's own - the writer is handed
 // the scene it is to write, not a Usd_data - and the stage constants are the
 // caller's choice (the defaults are what erhe means: Y up, metres).
@@ -374,6 +454,10 @@ public:
     // protects the structure inside a reference; X2 decides what such a prim
     // becomes).
     std::vector<Usd_save_prim_references>                   references;
+    // The variant sets the scene's prims carry, one entry per set. One prim
+    // can carry more than one, and a set is written on the prim its `item`
+    // names.
+    std::vector<Usd_save_variant_set>                       variant_sets;
     // Written verbatim as the root layer's `customLayerData`, one string
     // entry per pair: how the editor carries its own scene state in a USD
     // file (doc/scene_serialization.md, USD-backed scenes).

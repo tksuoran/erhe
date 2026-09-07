@@ -239,6 +239,35 @@ The list-edit rule is the one the arc reader repeats, over target paths.
 the caller makes the Style items, applies the values with
 `erhe::scene::apply_property_values` and sets the styles.
 
+### Variant sets
+
+A variant set is resolved in composition, and LightUSD composes nothing, so a
+variant contributes no property to the composed prim: the `variantSet` blocks
+are read off the root layer's own prim specs the same walk takes the class
+prims from, and the reader is what applies the selection
+(doc/usd-compatibility-plan.md X4). This slice carries material bindings only.
+
+`Usd_data::variant_sets` holds one `Usd_variant_set` per set: the erhe item
+the carrying prim became, the prim's stage path, the set name, one
+`Usd_variant` per variant with the `material:binding` relationships it
+authors - each as the M1 path of the bound prim below the carrying prim and
+the absolute stage path of the `Material` prim - and the selection, which is
+the prim's `variants` metadatum or the first variant when the layer authors
+none. Every other opinion a variant authors is counted in
+`unsupported_opinion_count` and reported once for the set, because node
+subtree variants are the later slice.
+
+The reader then binds the selected variant's materials itself: a binding at a
+`Mesh` prim's path covers the mesh's primitives that the same variant does not
+bind by subset, and a binding at a `GeomSubset` path covers that subset's
+primitive. A material only a variant binds is bound by no prim of the composed
+stage, so Tydra never converts it; those `Material` prims are converted one by
+one with `RenderSceneConverter::ConvertMaterial` and appended to the render
+scene before the materials are converted. The converter moves its own texture
+and image lists into the render scene, so an extra conversion fills them again
+from index zero: the new entries are appended and the ids shifted by what was
+already there, for the six UsdPreviewSurface texture slots erhe reads.
+
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
 volumes, MaterialX / OpenPBR shading networks, texture wrap and filter
@@ -392,6 +421,15 @@ because the same spelling rule decides what an item is called on a stage.
   token attributes they are, `active` as the prim metadatum, and an overridden
   transform as the `xformOp:*` attributes and `xformOpOrder` a typed prim
   writes from its `xformOps`.
+- Variant sets. `Usd_save_arguments::variant_sets` names the prim carrying
+  each set, its variants and their material bindings, and the selection; the
+  writer gives the prim an `append variantSets` list op, a `variants`
+  selection and one `variantSet` block per set. A binding of the carrying prim
+  itself is a `material:binding` relationship of the variant, and a deeper one
+  an `over` prim at its relative path holding that relationship, bound by the
+  path the writer gave the material's prim (U4 2g). The prim's own binding
+  outside the variants is what the writer writes for the material bound today,
+  which the selected variant's bindings equal.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
 - `Usd_save_arguments::custom_layer_data` is written verbatim as the root
@@ -524,6 +562,17 @@ mesh of its own. `test_usd_materials.cpp` asserts that the material prims
 land at their stage paths, that the binding follows the path rather than the
 name, that a save writes each `Material` prim back where it sits (and invents
 no `Materials` scope) and that the second save is byte-identical.
+
+`test/data/variants.usda` covers material-binding variant sets: an `Xform`
+with a two-variant `look` set selecting `"blue"`, whose variants bind the
+`Mesh` below it and that mesh's `GeomSubset` to two materials, one of which
+nothing outside the variants binds; and a second `Xform` whose set authors
+`visibility` rather than a binding, for the unsupported-opinion report.
+`test_usd_variants.cpp` asserts the recorded table, that the selected
+variant's materials are the ones the mesh's primitives bind, that the
+non-binding opinions are reported once for their set, that a save writes the
+`variantSets` / `variants` / `variantSet` lines back and that the second save
+is byte-identical.
 
 `test/data/xform_ops.usda` is the authored-xformOp-stack case, written in the
 writer's own output spelling so a load and save has to reproduce it line for

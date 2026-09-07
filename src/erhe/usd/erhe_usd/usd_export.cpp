@@ -32,6 +32,7 @@
 #include "lightusd.hh"
 #include "core/composition-types.hh"
 #include "core/prim.hh"
+#include "core/variant-types.hh"
 #include "core/model-scope.hh"
 #include "core/prim-metas.hh"
 #include "stage.hh"
@@ -353,6 +354,11 @@ public:
     // the carrier.
     const erhe::Item_base*                 override_root{nullptr};
     std::vector<erhe::scene::Instance_override_item> overrides;
+    // The variant sets the caller named for this prim
+    // (doc/usd-compatibility-plan.md X4). A set adds variant blocks to the
+    // prim and changes nothing else about it, so a prim carrying one is
+    // written and walked the way it otherwise would be.
+    std::vector<const Usd_save_variant_set*> variant_sets;
     std::vector<Plan_prim>           children;
 };
 
@@ -554,6 +560,12 @@ public:
         for (const Usd_save_prim_references& entry : m_arguments.references) {
             if (entry.item && !entry.references.empty()) {
                 m_prim_references[entry.item.get()] = &entry.references;
+            }
+        }
+
+        for (const Usd_save_variant_set& entry : m_arguments.variant_sets) {
+            if (entry.item && !entry.variants.empty()) {
+                m_prim_variant_sets[entry.item.get()].push_back(&entry);
             }
         }
 
@@ -1056,6 +1068,7 @@ private:
             plan_prim.pre_transform = pre_transform;
             plan_prim.name          = names.make_unique(child_prim->get_name());
             plan_prim.references    = find_prim_references(*child_prim);
+            plan_prim.variant_sets  = find_prim_variant_sets(*child_prim);
             if (plan_prim.references != nullptr) {
                 plan_instance_overrides(*child_prim, plan_prim);
             } else if (plan_prim.material == nullptr) {
@@ -1080,6 +1093,15 @@ private:
         const std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*>::const_iterator i =
             m_prim_references.find(&prim);
         return (i != m_prim_references.end()) ? i->second : nullptr;
+    }
+
+    // The variant sets the caller named for this prim, empty when it named
+    // none (doc/usd-compatibility-plan.md X4).
+    [[nodiscard]] auto find_prim_variant_sets(const erhe::Typed& prim) const -> std::vector<const Usd_save_variant_set*>
+    {
+        const std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>>::const_iterator i =
+            m_prim_variant_sets.find(&prim);
+        return (i != m_prim_variant_sets.end()) ? i->second : std::vector<const Usd_save_variant_set*>{};
     }
 
     // A carrier's children are the instance content the arcs' targets supply,
@@ -1236,6 +1258,7 @@ private:
             write_references(prim, *plan_prim.references);
         }
         write_inherits(prim, *plan_prim.item);
+        write_variant_sets(prim, plan_prim);
 
         std::vector<lightusd::Prim> child_prims;
         write_plan_prims(plan_prim.children, child_prims);
@@ -1438,6 +1461,150 @@ private:
                 std::vector<lightusd::Path>{lightusd::Path{i->second, ""}}
             )
         };
+    }
+
+    // ---------------------------------------------------------------------
+    // Variant sets (doc/usd-compatibility-plan.md X4)
+    // ---------------------------------------------------------------------
+
+    // One prim of a variant block: an `over` at its path below the prim
+    // carrying the set, holding the `material:binding` the variant authors
+    // for it. A prim on the way down to a bound one binds nothing and exists
+    // so the path does.
+    class Variant_prim final
+    {
+    public:
+        std::string                      name;
+        const erhe::primitive::Material* material{nullptr};
+        std::vector<Variant_prim>        children;
+    };
+
+    [[nodiscard]] static auto find_or_add_variant_prim(std::vector<Variant_prim>& prims, const std::string_view name) -> Variant_prim&
+    {
+        for (Variant_prim& prim : prims) {
+            if (prim.name == name) {
+                return prim;
+            }
+        }
+        prims.push_back(Variant_prim{.name = std::string{name}});
+        return prims.back();
+    }
+
+    // The variant sets of one prim: the `variantSets` list op, the `variants`
+    // selection and one `variantSet` block per set. A set whose variants all
+    // came out empty is not written at all, because an empty block is not a
+    // variant set USD would read back.
+    void write_variant_sets(lightusd::Prim& prim, const Plan_prim& plan_prim)
+    {
+        if (plan_prim.variant_sets.empty()) {
+            return;
+        }
+        std::vector<std::string>      set_names;
+        lightusd::VariantSelectionMap selection;
+        for (const Usd_save_variant_set* set : plan_prim.variant_sets) {
+            lightusd::VariantSet usd_set;
+            usd_set.name = set->set_name;
+            for (const Usd_save_variant& variant : set->variants) {
+                usd_set.variantSet.emplace(variant.name, write_variant(*set, variant));
+            }
+            if (usd_set.variantSet.empty()) {
+                continue;
+            }
+            set_names.push_back(set->set_name);
+            if (!set->selected.empty()) {
+                selection[set->set_name] = set->selected;
+            }
+            prim.variantSets().emplace(set->set_name, std::move(usd_set));
+        }
+        if (set_names.empty()) {
+            return;
+        }
+        lightusd::PrimMetas& metas = prim.metas();
+        metas.variantSets = std::vector<std::pair<lightusd::ListEditQual, std::vector<std::string>>>{
+            std::make_pair(lightusd::ListEditQual::Append, std::move(set_names))
+        };
+        if (!selection.empty()) {
+            metas.variants = selection;
+        }
+    }
+
+    // One variant: the binding of the prim carrying the set as a property of
+    // the variant itself, and every deeper binding as an `over` prim at its
+    // relative path.
+    [[nodiscard]] auto write_variant(const Usd_save_variant_set& set, const Usd_save_variant& variant) -> lightusd::Variant
+    {
+        lightusd::Variant         usd_variant;
+        std::vector<Variant_prim> tree;
+        for (const Usd_save_variant_binding& binding : variant.bindings) {
+            if (!binding.material) {
+                add_warning(
+                    fmt::format(
+                        "variant '{}' of set '{}' binds no material at '{}' - the binding is not written",
+                        variant.name,
+                        set.set_name,
+                        binding.relative_path
+                    )
+                );
+                continue;
+            }
+            if (binding.relative_path.empty()) {
+                add_material_binding(usd_variant.properties(), *binding.material.get());
+                continue;
+            }
+            std::vector<Variant_prim>* level = &tree;
+            Variant_prim*              prim  = nullptr;
+            std::size_t                start = 0;
+            while (start < binding.relative_path.size()) {
+                const std::size_t      slash = binding.relative_path.find('/', start);
+                const std::string_view name  = (slash == std::string::npos)
+                    ? std::string_view{binding.relative_path}.substr(start)
+                    : std::string_view{binding.relative_path}.substr(start, slash - start);
+                start = (slash == std::string::npos) ? binding.relative_path.size() : (slash + 1);
+                prim  = &find_or_add_variant_prim(*level, name);
+                level = &prim->children;
+            }
+            if (prim != nullptr) {
+                prim->material = binding.material.get();
+            }
+        }
+        for (const Variant_prim& variant_prim : tree) {
+            usd_variant.primChildren().push_back(write_variant_prim(variant_prim));
+        }
+        return usd_variant;
+    }
+
+    [[nodiscard]] auto write_variant_prim(const Variant_prim& variant_prim) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name = variant_prim.name;
+        model.spec = lightusd::Specifier::Over;
+        if (variant_prim.material != nullptr) {
+            add_material_binding(model.props, *variant_prim.material);
+        }
+        lightusd::Prim prim{model};
+        for (const Variant_prim& child : variant_prim.children) {
+            std::string error;
+            if (!prim.add_child(write_variant_prim(child), false, &error)) {
+                add_warning(fmt::format("a variant prim below '{}' could not be added: {}", variant_prim.name, error));
+            }
+        }
+        return prim;
+    }
+
+    // `rel material:binding = </path>`, by the path the writer gave the
+    // material's prim - the same path a mesh's own binding names (U4 2g).
+    void add_material_binding(std::map<std::string, lightusd::Property>& props, const erhe::primitive::Material& material)
+    {
+        const std::map<const erhe::primitive::Material*, std::string>::const_iterator i = m_material_paths.find(&material);
+        if (i == m_material_paths.end()) {
+            add_warning(
+                fmt::format("material '{}' is bound by a variant but was not written - the binding is dropped", material.get_name())
+            );
+            return;
+        }
+        lightusd::Relationship relationship;
+        relationship.set(lightusd::Path{i->second, ""});
+        props.emplace("material:binding", lightusd::Property{std::move(relationship), false});
     }
 
     // The composition arcs of a carrier prim, as the `references` and
@@ -2194,6 +2361,9 @@ private:
     std::set<const erhe::primitive::Material*>               m_uv_reader_materials;
     std::map<std::string, std::vector<std::string>>          m_tag_members;
     std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*> m_prim_references;
+    // The variant sets the caller named, by the item carrying them; one item
+    // can carry more than one set (doc/usd-compatibility-plan.md X4).
+    std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>> m_prim_variant_sets;
     std::size_t                                              m_node_count{0};
     std::size_t                                              m_mesh_count{0};
 };

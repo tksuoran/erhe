@@ -1,0 +1,102 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Looks"
+    {
+        def Material "Red"
+        {
+            token outputs:surface.connect = </World/Looks/Red/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0, 0)
+                token outputs:surface
+            }
+        }
+
+        def Material "Blue"
+        {
+            token outputs:surface.connect = </World/Looks/Blue/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 0, 1)
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "Holder" (
+        variants = {
+            string look = "blue"
+        }
+        append variantSets = "look"
+    )
+    {
+        def Mesh "quad"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4, 4]
+            int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+            point3f[] points = [(-1, 0, -1), (0, 0, -1), (0, 0, 1), (-1, 0, 1), (0, 0, -1), (1, 0, -1), (1, 0, 1), (0, 0, 1)]
+            rel material:binding = </World/Looks/Red>
+
+            def GeomSubset "half"
+            {
+                uniform token elementType = "face"
+                uniform token familyName = "materialBind"
+                int[] indices = [1]
+                rel material:binding = </World/Looks/Red>
+            }
+        }
+        variantSet "look" = {
+            "blue" {
+                over "quad"
+                {
+                    rel material:binding = </World/Looks/Blue>
+
+                    over "half"
+                    {
+                        rel material:binding = </World/Looks/Red>
+                    }
+                }
+            }
+            "red" {
+                over "quad"
+                {
+                    rel material:binding = </World/Looks/Red>
+
+                    over "half"
+                    {
+                        rel material:binding = </World/Looks/Blue>
+                    }
+                }
+            }
+        }
+    }
+
+    def Xform "Extra" (
+        variants = {
+            string detail = "low"
+        }
+        append variantSets = "detail"
+    )
+    {
+        variantSet "detail" = {
+            "high" {
+                token visibility = "inherited"
+            }
+            "low" {
+                token visibility = "invisible"
+            }
+        }
+    }
+}

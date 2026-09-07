@@ -32,6 +32,7 @@
 #include "core/prim.hh"
 #include "core/prim-metas.hh"
 #include "core/prim-spec.hh"
+#include "core/variant-types.hh"
 #include "prim-reconstruct.hh"
 #include "layer.hh"
 #include "stage.hh"
@@ -562,12 +563,14 @@ public:
         read_custom_layer_data(stage);
 
         read_layer_composition();
+        append_variant_only_materials(env, converter, scene);
         convert_images();
         convert_materials();
         convert_meshes();
         convert_cameras();
         convert_lights();
         convert_nodes();
+        apply_variant_bindings();
         elide_default_local_values();
         apply_authored_opinions();
 
@@ -1634,6 +1637,15 @@ private:
             const bool                       geometry_normative   = is_geometry_normative(usd_mesh.abs_path);
             const std::vector<std::uint32_t> facet_corner_offsets = make_facet_corner_offsets(usd_mesh);
             const std::vector<Facet_group>   groups               = make_facet_groups(usd_mesh);
+            // The subset each primitive came from, in the order the
+            // primitives are added: what a variant binding at a GeomSubset
+            // path names (doc/usd-compatibility-plan.md X4).
+            std::vector<std::string>         group_names;
+            group_names.reserve(groups.size());
+            for (const Facet_group& group : groups) {
+                group_names.push_back(group.name);
+            }
+            m_mesh_group_names.push_back(std::move(group_names));
             for (std::size_t group_index = 0; group_index < groups.size(); ++group_index) {
                 const Facet_group& group = groups[group_index];
                 const std::string  name  = group.name.empty()
@@ -1928,6 +1940,8 @@ private:
             }
         );
         record_inherits(usd_node.abs_path, node);
+        record_variant_sets(usd_node.abs_path, node);
+        record_mesh_prim(usd_node, content);
 
         if (record_references(usd_node, node)) {
             return; // the prims below came from the arcs; the targets supply them
@@ -1964,6 +1978,7 @@ private:
         }
         material->set_parent(parent);
         record_inherits(usd_node.abs_path, material);
+        record_variant_sets(usd_node.abs_path, material);
     }
 
     // A prim whose class carries no transform: a `Scope`, and the `Typed`
@@ -2007,6 +2022,7 @@ private:
             }
         );
         record_inherits(usd_node.abs_path, prim);
+        record_variant_sets(usd_node.abs_path, prim);
 
         if (record_references(usd_node, prim)) {
             return; // the prims below came from the arcs; the targets supply them
@@ -2391,6 +2407,7 @@ private:
             return;
         }
         record_spec_inherits(path, spec);
+        record_spec_variant_sets(path, spec);
         for (const lightusd::PrimSpec& child : spec.children()) {
             collect_layer_composition(path + "/" + child.name(), child);
         }
@@ -2475,6 +2492,364 @@ private:
             }
         }
         out_paths.insert(out_paths.end(), resolved.begin(), resolved.end());
+    }
+
+    // ---------------------------------------------------------------------
+    // Variant sets (doc/usd-compatibility-plan.md X4)
+    // ---------------------------------------------------------------------
+
+    // A material only a variant binds is bound by no prim of the composed
+    // stage, so Tydra's render-scene conversion never converts it: switching
+    // the selection would find nothing to bind. The extra `Material` prims
+    // are converted one by one and appended to the render scene, which is
+    // what makes them ordinary materials for everything below.
+    //
+    // The converter moved its own texture and image lists into the render
+    // scene, so an extra conversion fills them again from index zero: the new
+    // entries are appended and the ids shifted by what was already there. The
+    // six texture slots erhe reads are the ones shifted; the render material's
+    // other slots are never read.
+    void append_variant_only_materials(
+        const lightusd::tydra::RenderSceneConverterEnv& env,
+        lightusd::tydra::RenderSceneConverter&          converter,
+        Tydra_scene&                                    scene
+    )
+    {
+        std::set<std::string> bound_material_paths;
+        for (const std::pair<const std::string, std::vector<Usd_variant_set>>& entry : m_variant_sets_by_path) {
+            for (const Usd_variant_set& set : entry.second) {
+                for (const Usd_variant& variant : set.variants) {
+                    for (const Usd_variant_binding& binding : variant.bindings) {
+                        bound_material_paths.insert(binding.material_path);
+                    }
+                }
+            }
+        }
+        if (bound_material_paths.empty()) {
+            return;
+        }
+        std::set<std::string> converted_material_paths;
+        for (const Tydra_material& material : scene.materials) {
+            converted_material_paths.insert(material.abs_path);
+        }
+        for (const std::string& material_path : bound_material_paths) {
+            if (converted_material_paths.count(material_path) != 0) {
+                continue;
+            }
+            const lightusd::Prim* prim = find_prim(material_path);
+            if (prim == nullptr) {
+                continue; // apply_variant_bindings reports the dropped binding
+            }
+            const lightusd::Material* usd_material = prim->as<lightusd::Material>();
+            if (usd_material == nullptr) {
+                continue;
+            }
+            const std::size_t texture_offset = scene.textures.size();
+            const std::size_t image_offset   = scene.images.size();
+            Tydra_material    render_material;
+            if (!converter.ConvertMaterial(env, lightusd::Path{material_path, ""}, *usd_material, &render_material)) {
+                add_warning(
+                    fmt::format(
+                        "USD material '{}' is bound by a variant only and could not be converted: {}",
+                        material_path,
+                        converter.GetError()
+                    )
+                );
+                continue;
+            }
+            for (lightusd::tydra::UVTexture& texture : converter.textures) {
+                if (texture.texture_image_id >= 0) {
+                    texture.texture_image_id += static_cast<std::int64_t>(image_offset);
+                }
+                scene.textures.push_back(texture);
+            }
+            for (const lightusd::tydra::TextureImage& image : converter.images) {
+                scene.images.push_back(image);
+            }
+            converter.textures.clear();
+            converter.images.clear();
+            shift_texture_ids(render_material, texture_offset);
+            scene.materials.push_back(std::move(render_material));
+        }
+    }
+
+    // The texture ids of the six UsdPreviewSurface inputs erhe reads
+    // (apply_preview_surface), moved by what the render scene already held.
+    static void shift_texture_ids(Tydra_material& material, const std::size_t texture_offset)
+    {
+        if (!material.surfaceShader.has_value() || (texture_offset == 0)) {
+            return;
+        }
+        lightusd::tydra::PreviewSurfaceShader& shader = material.surfaceShader.value();
+        const std::array<std::int32_t*, 6> texture_ids{
+            &shader.diffuseColor.texture_id,
+            &shader.emissiveColor.texture_id,
+            &shader.normal.texture_id,
+            &shader.occlusion.texture_id,
+            &shader.roughness.texture_id,
+            &shader.metallic.texture_id
+        };
+        for (std::int32_t* texture_id : texture_ids) {
+            if (*texture_id >= 0) {
+                *texture_id += static_cast<std::int32_t>(texture_offset);
+            }
+        }
+    }
+
+    // The `variantSet` blocks one prim spec authors. LightUSD composes
+    // nothing, so a variant contributes no property to the composed prim: the
+    // layer's own spec is where the blocks are, and applying the selection is
+    // the reader's job (apply_variant_bindings). Only material bindings are
+    // carried in this slice; every other opinion of the set is counted and
+    // reported once.
+    void record_spec_variant_sets(const std::string& path, const lightusd::PrimSpec& spec)
+    {
+        if (spec.variantSets().empty()) {
+            return;
+        }
+        const lightusd::VariantSelectionMap& selection = spec.get_variant_selection_map();
+        std::vector<Usd_variant_set>         sets;
+        for (const std::pair<const std::string, lightusd::VariantSetSpec>& entry : spec.variantSets()) {
+            Usd_variant_set set{};
+            set.stage_path = path;
+            set.set_name   = entry.first;
+            for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
+                Usd_variant variant{};
+                variant.name = variant_entry.first;
+                read_variant_opinions(variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
+                set.variants.push_back(std::move(variant));
+            }
+            const lightusd::VariantSelectionMap::const_iterator i = selection.find(entry.first);
+            if (i != selection.end()) {
+                set.selected = i->second;
+            } else if (!set.variants.empty()) {
+                set.selected = set.variants.front().name;
+            }
+            sets.push_back(std::move(set));
+        }
+        m_variant_sets_by_path.emplace(path, std::move(sets));
+    }
+
+    // One variant block: the `material:binding` relationships it authors, on
+    // the prim carrying the set (an empty relative path) and on the prims it
+    // holds. Anything else it authors is an opinion this slice does not carry.
+    static void read_variant_opinions(
+        const lightusd::PrimSpec& spec,
+        const std::string&        relative_path,
+        Usd_variant&              variant,
+        std::size_t&              unsupported_opinion_count
+    )
+    {
+        for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
+            if ((property.first == "material:binding") && property.second.is_relationship()) {
+                const lightusd::Relationship& relationship = property.second.get_relationship();
+                if (relationship.is_path()) {
+                    variant.bindings.push_back(
+                        Usd_variant_binding{
+                            .relative_path = relative_path,
+                            .material_path = relationship.targetPath.full_path_name()
+                        }
+                    );
+                    continue;
+                }
+                if (relationship.is_pathvector() && !relationship.targetPathVector.empty()) {
+                    variant.bindings.push_back(
+                        Usd_variant_binding{
+                            .relative_path = relative_path,
+                            .material_path = relationship.targetPathVector.front().full_path_name()
+                        }
+                    );
+                    continue;
+                }
+            }
+            ++unsupported_opinion_count;
+        }
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            const std::string child_path = relative_path.empty()
+                ? child.name()
+                : (relative_path + "/" + child.name());
+            read_variant_opinions(child, child_path, variant, unsupported_opinion_count);
+        }
+    }
+
+    // The variant sets of the prim at `absolute_path`, on the item the prim
+    // became.
+    void record_variant_sets(const std::string& absolute_path, const std::shared_ptr<erhe::Item_base>& item)
+    {
+        const std::map<std::string, std::vector<Usd_variant_set>>::const_iterator i = m_variant_sets_by_path.find(absolute_path);
+        if (i == m_variant_sets_by_path.end()) {
+            return;
+        }
+        for (const Usd_variant_set& set : i->second) {
+            Usd_variant_set recorded = set;
+            recorded.prim = item;
+            if (recorded.unsupported_opinion_count != 0) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': variant set '{}' authors {} opinion(s) that are not material bindings - only material bindings are carried",
+                        absolute_path,
+                        recorded.set_name,
+                        recorded.unsupported_opinion_count
+                    )
+                );
+            }
+            m_result.data.variant_sets.push_back(std::move(recorded));
+        }
+    }
+
+    // The mesh a `Mesh` prim became, by the prim's absolute path: what a
+    // variant binding names.
+    void record_mesh_prim(const Tydra_node& usd_node, const std::shared_ptr<erhe::Item_base>& content)
+    {
+        const std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(content);
+        if (!mesh || (usd_node.id < 0)) {
+            return;
+        }
+        m_mesh_by_path.emplace(
+            usd_node.abs_path,
+            Mesh_prim{.mesh = mesh, .template_index = static_cast<std::size_t>(usd_node.id)}
+        );
+    }
+
+    // The selected variant of every set, applied to the imported result: USD
+    // resolves a variant selection in composition, and LightUSD composes
+    // nothing, so a material a variant binds only reaches a mesh through this.
+    void apply_variant_bindings()
+    {
+        for (const Usd_variant_set& set : m_result.data.variant_sets) {
+            const Usd_variant* variant = nullptr;
+            for (const Usd_variant& candidate : set.variants) {
+                if (candidate.name == set.selected) {
+                    variant = &candidate;
+                    break;
+                }
+            }
+            if (variant == nullptr) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': variant set '{}' selects '{}', which the set does not hold - no binding of the set is applied",
+                        set.stage_path,
+                        set.set_name,
+                        set.selected
+                    )
+                );
+                continue;
+            }
+            apply_variant(set, *variant);
+        }
+    }
+
+    void apply_variant(const Usd_variant_set& set, const Usd_variant& variant)
+    {
+        // A binding on a mesh prim covers the mesh's primitives the same
+        // variant does not bind by subset, the way a USD binding on a prim is
+        // the fallback for the descendants that author none.
+        std::set<std::string> bound_paths;
+        for (const Usd_variant_binding& binding : variant.bindings) {
+            bound_paths.insert(binding_absolute_path(set.stage_path, binding.relative_path));
+        }
+        for (const Usd_variant_binding& binding : variant.bindings) {
+            const std::string                                absolute_path = binding_absolute_path(set.stage_path, binding.relative_path);
+            const std::shared_ptr<erhe::primitive::Material> material      = find_material_by_path(binding.material_path);
+            if (!material) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': variant '{}' of set '{}' binds '{}' to material '{}', which the file has no prim for - the binding is dropped",
+                        set.stage_path,
+                        variant.name,
+                        set.set_name,
+                        absolute_path,
+                        binding.material_path
+                    )
+                );
+                continue;
+            }
+            if (!apply_binding(absolute_path, bound_paths, material)) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': variant '{}' of set '{}' binds '{}', which is no mesh or GeomSubset of the file - the binding is dropped",
+                        set.stage_path,
+                        variant.name,
+                        set.set_name,
+                        absolute_path
+                    )
+                );
+            }
+        }
+    }
+
+    [[nodiscard]] static auto binding_absolute_path(const std::string& stage_path, const std::string& relative_path) -> std::string
+    {
+        return relative_path.empty() ? stage_path : (stage_path + "/" + relative_path);
+    }
+
+    [[nodiscard]] auto find_material_by_path(const std::string& material_path) const -> std::shared_ptr<erhe::primitive::Material>
+    {
+        const std::map<std::string, std::size_t>::const_iterator i = m_material_by_path.find(material_path);
+        if (i == m_material_by_path.end()) {
+            return {};
+        }
+        return m_result.data.materials[i->second];
+    }
+
+    // One binding of the selected variant: `absolute_path` is a mesh prim or
+    // a GeomSubset of one. True when the binding reached a primitive.
+    [[nodiscard]] auto apply_binding(
+        const std::string&                                absolute_path,
+        const std::set<std::string>&                      bound_paths,
+        const std::shared_ptr<erhe::primitive::Material>& material
+    ) -> bool
+    {
+        const std::map<std::string, Mesh_prim>::const_iterator mesh_entry = m_mesh_by_path.find(absolute_path);
+        if (mesh_entry != m_mesh_by_path.end()) {
+            const std::vector<std::string>& group_names = mesh_group_names(mesh_entry->second.template_index);
+            bool                            applied     = false;
+            for (std::size_t index = 0, end = group_names.size(); index < end; ++index) {
+                const std::string& group_name = group_names[index];
+                if (!group_name.empty() && (bound_paths.count(absolute_path + "/" + group_name) != 0)) {
+                    continue;
+                }
+                mesh_entry->second.mesh->set_primitive_material(index, material);
+                applied = true;
+            }
+            return applied;
+        }
+        const std::size_t separator = absolute_path.rfind('/');
+        if (separator == std::string::npos) {
+            return false;
+        }
+        const std::string                                      parent_path = absolute_path.substr(0, separator);
+        const std::string                                      subset_name = absolute_path.substr(separator + 1);
+        const std::map<std::string, Mesh_prim>::const_iterator parent      = m_mesh_by_path.find(parent_path);
+        if (parent == m_mesh_by_path.end()) {
+            return false;
+        }
+        const std::vector<std::string>& group_names = mesh_group_names(parent->second.template_index);
+        for (std::size_t index = 0, end = group_names.size(); index < end; ++index) {
+            if (group_names[index] == subset_name) {
+                parent->second.mesh->set_primitive_material(index, material);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] auto mesh_group_names(const std::size_t template_index) const -> const std::vector<std::string>&
+    {
+        static const std::vector<std::string> s_empty;
+        return (template_index < m_mesh_group_names.size()) ? m_mesh_group_names[template_index] : s_empty;
+    }
+
+    // One line of Usd_load_result::warning, and the same line in the log: a
+    // load reports what it had to leave out both to the caller and to the
+    // run's log.
+    void add_warning(const std::string& text)
+    {
+        log_usd->warn("{}", text);
+        if (!m_result.warning.empty()) {
+            m_result.warning += "\n";
+        }
+        m_result.warning += text;
     }
 
     // The `inherits` arcs of the prim at `absolute_path`, on the item the prim
@@ -2563,6 +2938,15 @@ private:
         erhe::property::Dependency_object* secondary        {nullptr};
     };
 
+    // One `Mesh` prim of the stage: the erhe mesh it became and the index of
+    // the Tydra mesh it was converted from, which is what names its subsets.
+    class Mesh_prim final
+    {
+    public:
+        std::shared_ptr<erhe::scene::Mesh> mesh;
+        std::size_t                        template_index{0};
+    };
+
     const Usd_load_arguments&      m_arguments;
     Usd_load_result&               m_result;
     std::vector<Authored_opinions> m_authored_opinions;
@@ -2580,6 +2964,17 @@ private:
     // The `inherits` targets of every non-class prim spec of the root layer,
     // by absolute path, filled by read_layer_composition.
     std::map<std::string, std::vector<std::string>> m_inherits_by_path;
+    // The variant sets of every non-class prim spec of the root layer, by
+    // absolute path, filled by read_layer_composition
+    // (doc/usd-compatibility-plan.md X4).
+    std::map<std::string, std::vector<Usd_variant_set>> m_variant_sets_by_path;
+    // The subset name of every primitive of every converted mesh, in the
+    // order the primitives were added, indexed by the Tydra mesh index. An
+    // empty name is the primitive holding the facets no subset claims.
+    std::vector<std::vector<std::string>>           m_mesh_group_names;
+    // The mesh each `Mesh` prim of the stage became, by the prim's absolute
+    // path: what a variant binding resolves against.
+    std::map<std::string, Mesh_prim>               m_mesh_by_path;
     // The root layer, read lazily by ensure_root_layer.
     lightusd::Layer                              m_root_layer;
     bool                                         m_root_layer_read{false};
