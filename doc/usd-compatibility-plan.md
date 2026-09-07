@@ -384,7 +384,7 @@ the file is a fixed point from the first reload on (the first save of a
 brush built in memory differs in vertex order, since the mesh reader
 re-indexes), and the scene closes clean.
 
-#### S1 USD Assets Working Group survey (M; before E4c)
+#### S1 USD Assets Working Group survey (M; first run landed, `doc/usd-wg-assets.md`)
 
 What: every entry asset of the ASWF USD Assets Working Group repository
 (`<usd-wg-assets>`, a local clone of github.com/usd-wg/assets:
@@ -400,9 +400,21 @@ later step of this plan takes its next fix from that list.
 whole set and regenerates the table, so the survey re-runs after each
 fix.
 
-Verification: the script runs to completion over every entry asset
-without leaving the editor down (a crash restarts it and is recorded
-as the verdict), and the document lists every entry file once.
+The first run (146 entries, no crash, 30 work as they are) puts these
+gaps at the top of the list, in the order the fixes are taken: a scene
+that authors no light renders black (139 entries; usdview lights with a
+camera light, and `UsdLuxDomeLight` is not imported), reference and
+payload arcs on a prim that carries no transform are dropped (44), the
+`UsdGeom` primitive schemas `Cube`, `Sphere`, `Cone`, `Cylinder`,
+`Capsule` and `PointInstancer` produce no mesh (28), a `UsdGeomCamera`
+arrives without a usable field of view, and eight appearance gaps the
+repository's own renders showed (normal-map bias and scale,
+`UsdTransform2d`, mirrored texture coordinates, `UsdPreviewSurface`
+opacity, roughness, `UsdUVTexture` color, a texture inside a `.usdz`).
+The survey re-runs after each fix and the document is regenerated.
+
+Verification (holds): the script runs over every entry asset without
+leaving the editor down, and the document lists every entry file once.
 
 #### E4c Texture node graphs (M)
 
@@ -440,7 +452,7 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. S1 USD Assets Working Group survey
+1. S1 fixes, in the order the survey lists them
 2. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
 3. E2 material fidelity
 
