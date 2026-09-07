@@ -404,19 +404,26 @@ The survey re-runs after each fix and the document is regenerated.
 What holds: an unlit scene is lit by a per-viewport headlight the way
 usdview's camera light lights it, a `DomeLight` is the scene's ambient
 light, a typeless or `Scope` prim that authors arcs is an `Xform`
-carrier, the `UsdGeom` primitive schemas import as the meshes they
+carrier, any prim is a reference target and a `class` prim's `def`
+descendants are prototypes held abstract, a root layer's subLayers are
+composed (the save writes one flattened layer), every `Material` prim
+converts, the `UsdGeom` primitive schemas import as the meshes they
 describe, and a `UsdUVTexture`'s wrap, transform, scale and per-channel
 normal decode reach the material, with a texture packed in a `.usdz`
-read out of the archive. The current run (146 entries, 50 work as they
-are) puts these at the top of the list, in the order the fixes are
-taken: reference targets that resolve nowhere (a target prim absent from
-its layer, an asset path not resolved against the layer that authored
-it), subLayers not composed (a file whose content lives in a subLayer
-loads empty), `PointInstancer` not instanced, and the appearance gaps
-the repository's renders show (USD `st` sampled without the V flip,
+read out of the archive. The current run (146 entries, 42 work as they
+are, none crash) puts these at the top of the list, in the order the
+fixes are taken: a material a prefab template supplies is reported as
+unowned (its owner is the prefab library's holding scene) and a binding
+whose target lives in another layer does not reach the mesh; a
+`PointInstancer` is not instanced; node-subtree variants (X4's later
+slice; Teapot.usd's geometry sits behind one); the appearance gaps the
+repository's renders show (USD `st` sampled without the V flip,
 Radiance `.hdr` decoded nowhere, a `UsdUVTexture`'s per-channel output
 selection ignored, an unauthored `diffuseColor` white where USD's
-fallback is 0.18).
+fallback is 0.18, a time-sampled transform not evaluated at the
+reference's sample); a prim a sublayer authors contributing no authored
+opinion, class prim or xformOp stack; a 4000-prim scene tripping the
+main-loop stall watchdog on load; MaterialX documents.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.
