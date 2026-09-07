@@ -11,6 +11,11 @@ def Xform "World"
         references = @override_target.usda@
     )
     {
+        over "Look"
+        {
+            custom float2 erhe:Material:roughness = (0.25, 0.25)
+        }
+
         over "arm"
         {
             token visibility = "invisible"

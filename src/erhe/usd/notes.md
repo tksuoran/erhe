@@ -366,6 +366,15 @@ because the same spelling rule decides what an item is called on a stage.
   too, and the writer names it in a warning - a reference protects its
   structure (plan section 5). `erhe::usd` knows nothing of prefabs: the editor
   fills the arcs from the carrier's `Prefab_instance` attachments.
+- An `over` prim is typeless, so it carries no schema attribute: every value
+  of an overriding item travels as an `erhe:Owner:name` custom attribute -
+  `is_native_usd_property` is asked with the `custom_attributes` form, which
+  answers only for `visible`, `purpose` and `active` - and that is what lets a
+  schema-named value of a resource inside an instance travel. A `Material`
+  item's `roughness` is `erhe:Material:roughness` on its `over`, because the
+  `inputs:` a `UsdPreviewSurface` carries live on the def'd `Shader` prim
+  below a `Material` prim, which an `over` of that material does not have.
+  The X2 reader reads that form back into the item's local layer.
 - What a carrier does write of the instance below it is the overrides its
   items hold (doc/usd-compatibility-plan.md X2), collected through
   `erhe::scene::collect_instance_override_items`, which owns the rule for what

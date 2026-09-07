@@ -7,6 +7,18 @@
 
 def Xform "Widget"
 {
+    def Material "Look"
+    {
+        token outputs:surface.connect = </Widget/Look/surface.outputs:surface>
+
+        def Shader "surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.4, 0.4, 0.8)
+            token outputs:surface
+        }
+    }
+
     def Xform "arm"
     {
         def Mesh "plate"
@@ -15,6 +27,7 @@ def Xform "Widget"
             int[] faceVertexCounts = [4]
             int[] faceVertexIndices = [0, 1, 2, 3]
             point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding = </Widget/Look>
         }
     }
 }

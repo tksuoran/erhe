@@ -1303,10 +1303,15 @@ private:
     }
 
     // One `over` prim: a prim with no typeName, so it contributes opinions
-    // and defines nothing. The opinions are the item's local values in the
-    // same forms an authored prim carries them - `erhe:Owner:name` custom
-    // attributes, `visibility` / `purpose`, the `active` metadatum and the
-    // xformOps of an overridden transform.
+    // and defines nothing. Being typeless it carries no schema attribute, so
+    // every value of it travels as an `erhe:Owner:name` custom attribute -
+    // the form the X2 reader reads an `over` back in - and only `visibility`,
+    // `purpose`, the `active` metadatum and the xformOps of an overridden
+    // transform keep their native forms. That is what lets a schema-named
+    // value overridden inside an instance travel: a `Material` item's
+    // `roughness` is `erhe:Material:roughness` on its `over`, because the
+    // `inputs:` of a `UsdPreviewSurface` are written on the def'd shader prim
+    // below a `Material` prim, which an `over` of the material does not have.
     [[nodiscard]] auto write_override_prim(const Override_prim& override_prim) -> lightusd::Prim
     {
         lightusd::Model model;
@@ -1315,7 +1320,7 @@ private:
         if (override_prim.item != nullptr) {
             write_token_visibility_and_purpose(*override_prim.item, model.props);
             write_active(*override_prim.item, model);
-            write_erhe_properties(*override_prim.item, model);
+            write_erhe_properties(*override_prim.item, model, Native_property_form::custom_attributes);
             if (override_prim.transform_overridden) {
                 write_override_xform_ops(*override_prim.item, model.props);
             }

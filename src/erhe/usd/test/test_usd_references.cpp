@@ -1,4 +1,5 @@
 #include "erhe_item/item.hpp"
+#include "erhe_primitive/material.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
@@ -497,7 +498,7 @@ TEST_F(Override_import, an_over_below_a_carrier_is_read_as_an_override)
     ASSERT_EQ(result.data.references.size(), 2u);
     const erhe::usd::Usd_prim_references& carrier = result.data.references[0];
     EXPECT_EQ(carrier.stage_path, "/World/Carrier");
-    ASSERT_EQ(carrier.overrides.size(), 2u);
+    ASSERT_EQ(carrier.overrides.size(), 3u);
 
     const erhe::scene::Instance_override* arm = find_override(carrier.overrides, "arm");
     ASSERT_NE(arm, nullptr);
@@ -529,6 +530,20 @@ TEST_F(Override_import, a_nested_over_keeps_its_path_and_carries_active)
 }
 
 // A reference protects its structure (plan section 5): a `def` below a
+// A schema-named value of a resource inside the instance: `roughness` is a
+// `Material` schema attribute on a `Material` prim, and an `over` has no
+// schema, so it travels as the `erhe:Owner:name` custom attribute the reader
+// reads back (doc/usd-compatibility-plan.md X2).
+TEST_F(Override_import, an_over_on_a_material_is_read_as_an_override)
+{
+    ASSERT_FALSE(result.data.references.empty());
+    const erhe::scene::Instance_override* look = find_override(result.data.references[0].overrides, "Look");
+    ASSERT_NE(look, nullptr);
+    const std::string* roughness = find_override_value(*look, "Material.roughness");
+    ASSERT_NE(roughness, nullptr);
+    EXPECT_EQ(*roughness, "0.25 0.25");
+}
+
 // referencing prim adds a prim to the reference, which is not an override.
 TEST_F(Override_import, a_def_below_a_carrier_is_not_an_override)
 {
@@ -572,6 +587,16 @@ public:
         stack.ops.push_back(translate_op);
         clone_arm->set_xform_op_stack(stack);
         clone_plate->set_value(erhe::Item_base::active_property, false);
+
+        // A resource prim inside the instance whose overridden value is one
+        // the Material schema names: it has to reach the file too, and an
+        // `over` has no schema to put it in.
+        template_look = std::make_shared<erhe::primitive::Material>("Look");
+        clone_look    = std::make_shared<erhe::primitive::Material>("Look");
+        clone_look->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        clone_look->set_reference(template_look);
+        clone_look->set_parent(clone_widget);
+        clone_look->set_value(erhe::primitive::Material::roughness_property, glm::vec2{0.25f, 0.25f});
     }
 
     std::shared_ptr<erhe::scene::Node>  root;
@@ -582,6 +607,8 @@ public:
     std::shared_ptr<erhe::scene::Xform> clone_widget;
     std::shared_ptr<erhe::scene::Xform> clone_arm;
     std::shared_ptr<erhe::scene::Xform> clone_plate;
+    std::shared_ptr<erhe::primitive::Material> template_look;
+    std::shared_ptr<erhe::primitive::Material> clone_look;
 };
 
 [[nodiscard]] auto override_save_references(const std::shared_ptr<erhe::scene::Node>& carrier) -> std::vector<erhe::usd::Usd_save_prim_references>
@@ -609,6 +636,10 @@ TEST(Override_export, overrides_are_written_as_over_prims)
     EXPECT_NE(written.find("token visibility = \"invisible\""), std::string::npos) << written;
     EXPECT_NE(written.find("active = false"), std::string::npos) << written;
     EXPECT_NE(written.find("xformOp:translate"), std::string::npos) << written;
+    // A Material schema attribute of an item inside the instance: an `over`
+    // carries no schema, so the value travels as the custom attribute form.
+    EXPECT_NE(written.find("over \"Look\""), std::string::npos) << written;
+    EXPECT_NE(written.find("erhe:Material:roughness"), std::string::npos) << written;
     // The instance content itself is not written: the arc's target supplies it.
     EXPECT_EQ(written.find("def Xform \"arm\""), std::string::npos) << written;
 }
@@ -620,7 +651,13 @@ TEST(Override_export, written_overrides_read_back_the_same)
     ASSERT_TRUE(exported.reloaded.error.empty()) << exported.reloaded.error;
     ASSERT_EQ(exported.reloaded.data.references.size(), 1u);
     const std::vector<erhe::scene::Instance_override>& overrides = exported.reloaded.data.references[0].overrides;
-    ASSERT_EQ(overrides.size(), 2u);
+    ASSERT_EQ(overrides.size(), 3u);
+
+    const erhe::scene::Instance_override* look = find_override(overrides, "Look");
+    ASSERT_NE(look, nullptr);
+    const std::string* roughness = find_override_value(*look, "Material.roughness");
+    ASSERT_NE(roughness, nullptr);
+    EXPECT_EQ(*roughness, "0.25 0.25");
 
     const erhe::scene::Instance_override* arm = find_override(overrides, "arm");
     ASSERT_NE(arm, nullptr);
