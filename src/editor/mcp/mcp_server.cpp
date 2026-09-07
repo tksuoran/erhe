@@ -582,6 +582,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "make_asset_internal",            &Mcp_server::action_make_asset_internal           },
         { "instantiate_prefab",             &Mcp_server::action_instantiate_prefab            },
         { "reload_prefab",                  &Mcp_server::action_reload_prefab                 },
+        { "set_prefab_template_property",   &Mcp_server::action_set_prefab_template_property   },
         { "get_prefabs",                    &Mcp_server::query_prefabs                        },
         { "capture_screenshot",             &Mcp_server::action_capture_screenshot            },
         { "request_renderdoc_capture",      &Mcp_server::action_request_renderdoc_capture     },

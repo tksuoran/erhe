@@ -37,6 +37,7 @@
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "operations/operations_window.hpp"
 #include "physics/physics_tool.hpp"
 #include "preview/material_preview.hpp"
@@ -586,6 +587,16 @@ auto Mcp_server::action_move_library_item(const json& args) -> std::string
     }
     if ((folder_node.get() == found_node.get()) || folder_node->is_ancestor(found_node.get())) {
         return make_error_content("Destination folder is inside the moved entry: " + folder_node->get_name());
+    }
+    // Structure protection (doc/usd-compatibility-plan.md X2): a reference
+    // instance neither gives up a prim nor takes one in.
+    const std::optional<std::string> item_refusal = instance_structure_refusal(*found_node);
+    if (item_refusal.has_value()) {
+        return make_error_content(item_refusal.value());
+    }
+    const std::optional<std::string> child_refusal = instance_child_refusal(*folder_node);
+    if (child_refusal.has_value()) {
+        return make_error_content(child_refusal.value());
     }
 
     // The move is one set_parent: erhe::Hierarchy detaches from the old

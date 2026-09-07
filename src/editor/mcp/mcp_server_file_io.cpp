@@ -25,7 +25,10 @@
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_math/math_util.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_primitive/build_info.hpp"
+#include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_string.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #if defined(ERHE_USD_LIBRARY_LIGHTUSD)
@@ -569,6 +572,119 @@ auto Mcp_server::action_reload_prefab(const json& args) -> std::string
     return make_json_content({
         {"reloaded", true},
         {"path",     path_str}
+    }).dump();
+}
+
+// Edit one property of a prefab TEMPLATE (doc/usd-compatibility-plan.md X2):
+// the templates live in Prefab::holding_scene, which no scene lookup
+// reaches, and a template edit is what every instance of it reads through
+// its reference layer (D33). Deliberately not undoable - a template is a
+// projection of a file, like reload_prefab.
+auto Mcp_server::action_set_prefab_template_property(const json& args) -> std::string
+{
+    const std::string path_str  = args.value("source_path", "");
+    const std::string prim_path = args.value("prim_path", "");
+    const std::string item_path = args.value("item_path", "");
+    const std::string property_name = args.value("property", "");
+    if (path_str.empty()) {
+        return make_error_content("Missing required argument: source_path");
+    }
+    if (property_name.empty()) {
+        return make_error_content("Missing required argument: property");
+    }
+    if (m_context.prefab_library == nullptr) {
+        return make_error_content("Prefab library not available");
+    }
+
+    std::error_code             error_code;
+    const std::filesystem::path wanted_path      = std::filesystem::weakly_canonical(std::filesystem::path{path_str}, error_code);
+    const std::filesystem::path source_path      = error_code ? std::filesystem::path{path_str} : wanted_path;
+    std::shared_ptr<Prefab>     prefab;
+    for (const auto& [key, candidate] : m_context.prefab_library->get_prefabs()) {
+        if ((key.source_path == source_path) && (key.prim_path == prim_path)) {
+            prefab = candidate;
+            break;
+        }
+    }
+    if (!prefab) {
+        return make_error_content("No loaded prefab template for: " + path_str + (prim_path.empty() ? std::string{} : prim_path));
+    }
+    if (!prefab->template_root) {
+        return make_error_content("Prefab template has no root: " + path_str);
+    }
+
+    erhe::Hierarchy* item = item_path.empty()
+        ? prefab->template_root.get()
+        : erhe::find_by_path(*prefab->template_root, item_path);
+    if (item == nullptr) {
+        return make_error_content("Template item not found at path: " + item_path);
+    }
+
+    const erhe::property::Dependency_property* property = erhe::property::Property_registry::get().find_for_object(*item, property_name);
+    if (property == nullptr) {
+        return make_error_content("Template item '" + item->get_name() + "' has no property '" + property_name + "'");
+    }
+    if (property->is_read_only()) {
+        return make_error_content("Property '" + property_name + "' is read-only");
+    }
+
+    const auto value_it = args.find("value");
+    if ((value_it == args.end()) || value_it->is_null()) {
+        // No value clears the template's local value.
+        const bool cleared = item->clear_value(*property);
+        return make_json_content({
+            {"template",  path_str},
+            {"item",      item->get_name()},
+            {"item_path", item_path},
+            {"property",  property_name},
+            {"cleared",   cleared},
+            {"value",     erhe::property::to_string(*property, item->get_value(*property))},
+            {"users",     item->get_reference_user_count()}
+        }).dump();
+    }
+
+    std::string text;
+    if (value_it->is_string()) {
+        text = value_it->get<std::string>();
+    } else if (value_it->is_boolean()) {
+        text = value_it->get<bool>() ? "true" : "false";
+    } else if (value_it->is_number()) {
+        text = value_it->dump();
+    } else if (value_it->is_array()) {
+        for (const json& component : *value_it) {
+            if (!component.is_number()) {
+                return make_error_content("value array entries must be numbers");
+            }
+            if (!text.empty()) {
+                text += " ";
+            }
+            text += component.dump();
+        }
+    } else {
+        return make_error_content("value must be a string, number, bool, array of numbers, or null (clear the template's local value)");
+    }
+    if (property->get_type() == erhe::property::Property_type::object) {
+        return make_error_content("Object reference properties are not settable on a template through this tool");
+    }
+    const std::optional<erhe::property::Property_value> value = erhe::property::parse_value(*property, text);
+    if (!value.has_value()) {
+        return make_error_content("'" + text + "' is not a valid " + erhe::property::c_str(property->get_type()) + " for property '" + property_name + "'");
+    }
+    std::string validation_error;
+    if (!item->validate_value(*property, value.value(), validation_error)) {
+        return make_error_content("'" + text + "' was rejected by property '" + property_name + "': " + validation_error);
+    }
+    if (!item->set_value(*property, value.value())) {
+        return make_error_content("Property '" + property_name + "' refused the value '" + text + "'");
+    }
+
+    return make_json_content({
+        {"template",  path_str},
+        {"item",      item->get_name()},
+        {"item_path", item_path},
+        {"property",  property_name},
+        {"value",     erhe::property::to_string(*property, item->get_value(*property))},
+        {"users",     item->get_reference_user_count()}
     }).dump();
 }
 

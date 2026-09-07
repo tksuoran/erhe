@@ -13,6 +13,7 @@
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/viewport_scene_view.hpp"
@@ -546,6 +547,15 @@ auto Selection::delete_items(const std::vector<std::shared_ptr<erhe::Item_base>>
     };
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
         if (item->is_lock_edit()) {
+            continue;
+        }
+        // A reference instance protects its structure in both formats
+        // (doc/usd-compatibility-plan.md X2): an item inside an instance is
+        // skipped with the reason, while the carrier itself deletes its
+        // whole subtree below.
+        const std::optional<std::string> structure_refusal = instance_structure_refusal(*item);
+        if (structure_refusal.has_value()) {
+            log_selection->info("Delete refused: {}", structure_refusal.value());
             continue;
         }
         const std::shared_ptr<erhe::Hierarchy> hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(item);

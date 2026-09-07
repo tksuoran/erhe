@@ -66,10 +66,13 @@ private:
 };
 
 // Returns the outermost node, walking up from and including the given node,
-// that carries a Prefab_instance attachment; nullptr when the node is not
-// part of any prefab instance. Instance subtrees are sealed (option 2 prefab
-// semantics): picking anything inside an instance resolves to the instance
-// root, and nested instances resolve to the outermost one.
+// that carries a SEALED Prefab_instance attachment (a glTF template,
+// is_sealed_prefab_instance); nullptr when the node is inside no sealed
+// instance. A sealed instance subtree is not editable in the containing
+// scene, so picking anything inside one resolves to the instance root, and
+// nested sealed instances resolve to the outermost one. A USD-backed
+// instance is not sealed: its interior picks and selects like any other prim
+// (doc/usd-compatibility-plan.md X2).
 [[nodiscard]] auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene::Node*;
 
 }

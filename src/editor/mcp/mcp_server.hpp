@@ -263,6 +263,7 @@ private:
     auto action_make_asset_internal       (const nlohmann::json& args) -> std::string;
     auto action_instantiate_prefab(const nlohmann::json& args) -> std::string;
     auto action_reload_prefab   (const nlohmann::json& args) -> std::string;
+    auto action_set_prefab_template_property(const nlohmann::json& args) -> std::string;
     auto query_prefabs          (const nlohmann::json& args) -> std::string;
     auto action_wake_physics_bodies(const nlohmann::json& args) -> std::string;
     auto action_apply_physics_force(const nlohmann::json& args) -> std::string;

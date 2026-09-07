@@ -14,6 +14,7 @@
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/usd.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
 #include "scene/scene_root.hpp"
@@ -23,6 +24,9 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/item_host.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_property/dependency_object.hpp"
+#include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -89,6 +93,110 @@ void seal_instance_subtree(const std::shared_ptr<erhe::scene::Node>& node)
             seal_instance_subtree(child_node);
         }
     }
+}
+
+// The reference layer of one instance item (doc/property-system.md D33): the
+// clone reads its template counterpart, and every local value the clone
+// carries only because the copy brought it over is cleared, so what the
+// template authored reports Value_source::reference and a local value on the
+// clone is an override the user made.
+//
+// Bridged properties (D18: the transform, the name) keep their local value:
+// they have no layers to fall back to.
+void clear_locals_supplied_by_reference(erhe::property::Dependency_object& clone, const erhe::property::Dependency_object& counterpart)
+{
+    const erhe::property::Owner_type owner_type = clone.get_property_owner_type();
+
+    std::vector<const erhe::property::Dependency_property*> candidates;
+    clone.for_each_local_value(
+        [&candidates](const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) {
+            static_cast<void>(value);
+            candidates.push_back(&property);
+        }
+    );
+
+    for (const erhe::property::Dependency_property* property : candidates) {
+        if (property->is_read_only()) {
+            continue;
+        }
+        const erhe::property::Property_metadata& metadata = property->get_metadata(owner_type);
+        if (metadata.bridge.is_bound() || metadata.is_computed()) {
+            continue; // D18 / D26: no layer to fall back to
+        }
+        // What the reference layer reads is what the counterpart supplies
+        // itself (D33); a value the counterpart merely inherits or defaults
+        // to is not carried, and clearing would move the effective value.
+        const erhe::property::Value_source counterpart_source = counterpart.get_value_source(*property);
+        const bool counterpart_supplies =
+            (counterpart_source == erhe::property::Value_source::local)      ||
+            (counterpart_source == erhe::property::Value_source::expression) ||
+            (counterpart_source == erhe::property::Value_source::style)      ||
+            (counterpart_source == erhe::property::Value_source::computed)   ||
+            (counterpart_source == erhe::property::Value_source::reference);
+        if (!counterpart_supplies) {
+            continue;
+        }
+        if (!(counterpart.get_value(*property) == clone.get_value(*property))) {
+            continue; // the copy's value is not what the reference supplies
+        }
+        clone.clear_value(*property);
+    }
+}
+
+// Link one cloned instance item to the template item it was cloned from and
+// clear the locals the reference now supplies, then recurse in lockstep
+// through the children and the attachments. The clone is a deep copy of the
+// template item (Hierarchy's copy constructor, child order preserved,
+// attachments cloned by Xformable(src, for_clone)), which drops every entry
+// whose clone() yields nothing, so the walk iterates the TEMPLATE lists and
+// skips the same entries (is_clonable). What is left must pair up exactly:
+// any other mismatch is a bug in the clone path, not a case to tolerate.
+void link_instance_to_template(
+    const std::shared_ptr<erhe::Item_base>& clone,
+    const std::shared_ptr<erhe::Item_base>& template_item
+)
+{
+    ERHE_VERIFY(clone);
+    ERHE_VERIFY(template_item);
+    ERHE_VERIFY(clone->get_type_name() == template_item->get_type_name());
+
+    clone->set_reference(template_item);
+    clear_locals_supplied_by_reference(*clone, *template_item);
+
+    const erhe::scene::Xformable* template_prim = dynamic_cast<const erhe::scene::Xformable*>(template_item.get());
+    erhe::scene::Xformable*       clone_prim    = dynamic_cast<erhe::scene::Xformable*>(clone.get());
+    if ((template_prim != nullptr) && (clone_prim != nullptr)) {
+        const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& template_attachments = template_prim->get_attachments();
+        const std::vector<std::shared_ptr<erhe::scene::Node_attachment>>& clone_attachments    = clone_prim->get_attachments();
+        std::size_t clone_index = 0;
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& template_attachment : template_attachments) {
+            if (!template_attachment->is_clonable()) {
+                continue;
+            }
+            ERHE_VERIFY(clone_index < clone_attachments.size());
+            link_instance_to_template(clone_attachments[clone_index], template_attachment);
+            ++clone_index;
+        }
+        ERHE_VERIFY(clone_index == clone_attachments.size());
+    }
+
+    const erhe::Hierarchy* template_hierarchy = dynamic_cast<const erhe::Hierarchy*>(template_item.get());
+    const erhe::Hierarchy* clone_hierarchy    = dynamic_cast<const erhe::Hierarchy*>(clone.get());
+    if ((template_hierarchy == nullptr) || (clone_hierarchy == nullptr)) {
+        return;
+    }
+    const std::vector<std::shared_ptr<erhe::Hierarchy>>& template_children = template_hierarchy->get_children();
+    const std::vector<std::shared_ptr<erhe::Hierarchy>>& clone_children    = clone_hierarchy->get_children();
+    std::size_t clone_index = 0;
+    for (const std::shared_ptr<erhe::Hierarchy>& template_child : template_children) {
+        if (!template_child->is_clonable()) {
+            continue;
+        }
+        ERHE_VERIFY(clone_index < clone_children.size());
+        link_instance_to_template(clone_children[clone_index], template_child);
+        ++clone_index;
+    }
+    ERHE_VERIFY(clone_index == clone_children.size());
 }
 
 } // namespace
@@ -745,7 +853,12 @@ void attach_prefab_instance(
         const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
         clone_node->set_parent(node);
         clone_node->set_parent_from_node(parent_from_node);
-        seal_instance_subtree(clone_node);
+        // The counterpart link comes BEFORE any seal: set_reference and
+        // clear_value are both refused on a sealed object (D24).
+        link_instance_to_template(clone_node, child_node);
+        if (is_sealed_prefab_instance(*prefab_instance)) {
+            seal_instance_subtree(clone_node);
+        }
     }
 }
 

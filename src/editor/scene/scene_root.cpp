@@ -25,6 +25,7 @@
 #include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
@@ -548,6 +549,13 @@ auto Scene_root::make_browser_window(
             // doc/usd-compatibility-plan.md C5). The catalog's child-prim
             // entries (Mesh, Camera, Light) sit beside the kinds that only
             // Scene_commands builds (Xform, Scope, Rendertarget, Layout).
+            // Structure protection (doc/usd-compatibility-plan.md X2):
+            // nothing is created under a reference instance carrier or
+            // inside one; the whole menu is greyed with the reason.
+            const std::optional<std::string> child_refusal = instance_child_refusal(*node);
+            if (child_refusal.has_value()) {
+                ImGui::BeginDisabled();
+            }
             if (ImGui::BeginMenu("Create")) {
                 if (ImGui::MenuItem("Xform")) {
                     deferred_operations.push_back(
@@ -599,6 +607,12 @@ auto Scene_root::make_browser_window(
                     close = true;
                 }
                 ImGui::EndMenu();
+            }
+            if (child_refusal.has_value()) {
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("%s", child_refusal.value().c_str());
+                }
             }
             // Rigging: offered only when the clicked subtree contains a bone
             // (early-exit walk; runs only while the popup is open).

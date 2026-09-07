@@ -1,5 +1,7 @@
 #include "prefabs/prefab_instance.hpp"
 
+#include "prefabs/instance_structure.hpp"
+
 #include "erhe_scene/node.hpp"
 
 namespace editor {
@@ -60,7 +62,8 @@ auto get_outermost_prefab_instance_node(erhe::scene::Node* node) -> erhe::scene:
 {
     erhe::scene::Node* outermost = nullptr;
     for (erhe::scene::Node* ancestor = node; ancestor != nullptr; ancestor = ancestor->get_parent_node().get()) {
-        if (erhe::scene::get_attachment<Prefab_instance>(ancestor)) {
+        const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(ancestor);
+        if (prefab_instance && is_sealed_prefab_instance(*prefab_instance)) {
             outermost = ancestor;
         }
     }

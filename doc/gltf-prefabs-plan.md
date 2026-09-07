@@ -5,13 +5,53 @@ b9264190, bad5895d, 4225b7d3, b4a1de9c + the phase 5 commit). Phase 6 items
 1 and 2 implemented 2026-07-11 as the "sealed instances" editing model (see
 below); items 3-5 remain. Written 2026-07-10.
 
-### Editing model decision (2026-07-11): sealed instances ("option 2")
+### What every prefab instance protects: structure
 
-Prefab instances are sealed: the subtree under a `Prefab_instance` carrier
-node is not editable in the containing scene. Editing a prefab requires
-opening its source glTF as a scene (`open_scene`); saving it back writes the
-source file and reloads the prefab, refreshing every instance in every
-scene. (Historical note: this was a separate Save Prefab command / MCP
+The subtree under a `Prefab_instance` carrier is instance content in both
+formats: no prim is added, removed or reparented under a carrier
+(`doc/usd-compatibility-plan.md` X2). `src/editor/prefabs/instance_structure.hpp`
+states that rule once, as two predicates every structural entry point asks:
+`instance_structure_refusal(item)` refuses removing or reparenting an item
+that hangs below a carrier, and `instance_child_refusal(parent)` refuses
+adding anything under a carrier or under an item inside one. Both return the
+user-facing reason, which the entry point logs and an MCP tool returns as its
+error. The carrier itself is a normal scene prim: moving, renaming and
+deleting the whole instance are ordinary scene edits, and deleting the carrier
+deletes its subtree. The entry points are the Hierarchy window
+(`Item_tree::reposition`, `try_add_to_attach`, the drag-and-drop rects, Cut /
+Duplicate / Paste), the Create menu on a prim (`scene_root.cpp`),
+`Selection::delete_items`, and the MCP tools that take a user-chosen parent or
+item (`create_node`, `create_shape`, `place_brush`, `place_brush_instances`,
+`reparent_node`, `delete_nodes`, `clipboard_paste`, `move_library_item`).
+`Item_insert_remove_operation` and `Item_parent_change_operation` themselves
+stay unconditional: instantiation and instance refresh use them.
+
+Each item of an instance also reads its template counterpart as its reference
+layer (`doc/property-system.md` D33). `link_instance_to_template`
+(prefab_library.cpp) walks the clone and the template subtrees in lockstep
+after each clone is parented, calls `set_reference` on every pair - items,
+their attachments and their descendants - and clears every local value the
+copy brought over that the counterpart supplies, so a template-authored value
+reports `Value_source::reference` and a local value inside an instance is an
+override. A template edit therefore reaches every instance live; MCP
+`set_prefab_template_property` is the way to make one (templates live in
+`Prefab::holding_scene`, which no scene lookup reaches).
+
+### Editing model decision (2026-07-11): sealed instances ("option 2"), glTF only
+
+A glTF-backed prefab instance is additionally SEALED: the subtree under the
+`Prefab_instance` carrier is not editable in the containing scene, its rows
+are not listed in the Hierarchy window, and viewport picking resolves to the
+carrier. Editing such a prefab requires opening its source glTF as a scene
+(`open_scene`); saving it back writes the source file and reloads the prefab,
+refreshing every instance in every scene.
+
+A USD-backed instance is never sealed: USD seals no property, so every item
+inside it is listed, selectable, transformable and editable, and only the
+structure rule above applies (`doc/usd-compatibility-plan.md` X2).
+`is_sealed_prefab_instance` (instance_structure.hpp) is the one place that
+distinguishes the two, and `seal_instance_subtree`, the leaf rendering of an
+instance row and the viewport locks all ask it. (Historical note: this was a separate Save Prefab command / MCP
 `save_prefab` tool / `save_prefab_scene` function; it was later merged into
 Save Scene, which saves back to the scene's source file and performs the
 prefab reload itself -- see `doc/scene_serialization.md`.) `Prefab_library::reload` tracks prefab->prefab references recorded
@@ -292,14 +332,15 @@ gracefully.
 
 Ordered by value; each item is independent:
 
-1. **Instance subtree protection** [DONE 2026-07-11]: descendants of a
-   `Prefab_instance` node are sealed with `lock_edit |
+1. **Instance subtree protection** [DONE 2026-07-11, split by format 2026-09-07]:
+   every instance protects its structure through the two predicates stated
+   above; a glTF-backed instance is additionally sealed with `lock_edit |
    lock_viewport_selection | lock_viewport_transform`
-   (`seal_instance_subtree` in prefab_library.cpp); the item tree renders
-   instance roots as non-expandable leaves with a distinct attachment icon;
-   viewport pick redirects to the outermost instance root
-   (`get_outermost_prefab_instance_node`). No drill-in modifier (sealed
-   model: interiors are edited via the opened prefab scene only).
+   (`seal_instance_subtree` in prefab_library.cpp), the item tree renders its
+   root as a non-expandable leaf with a distinct attachment icon, and viewport
+   pick redirects to the outermost instance root
+   (`get_outermost_prefab_instance_node`). No drill-in modifier for a sealed
+   instance: its interior is edited via the opened prefab scene only.
 2. **Reload prefab** [DONE 2026-07-11]: `Prefab_library::reload(path)`
    re-parses the source, rebuilds (transitively) referencing prefab
    templates in dependency order, and re-clones every instance in every

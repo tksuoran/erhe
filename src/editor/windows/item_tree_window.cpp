@@ -22,6 +22,7 @@
 #include "operations/item_reposition_in_parent_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
@@ -444,6 +445,23 @@ void Item_tree::reposition(
         }
     }
 
+    // A reference instance protects its structure (doc/usd-compatibility-plan.md
+    // X2): an item inside an instance is not reparented, and nothing is
+    // inserted under a carrier or inside one.
+    const std::optional<std::string> item_refusal = instance_structure_refusal(*item);
+    if (item_refusal.has_value()) {
+        log_tree->info("Move refused: {}", item_refusal.value());
+        return;
+    }
+    const std::shared_ptr<erhe::Hierarchy> anchor_parent = anchor_hierarchy->get_parent().lock();
+    if (anchor_parent) {
+        const std::optional<std::string> parent_refusal = instance_child_refusal(*anchor_parent);
+        if (parent_refusal.has_value()) {
+            log_tree->info("Move refused: {}", parent_refusal.value());
+            return;
+        }
+    }
+
     if (anchor_hierarchy->get_parent().lock() != hierarchy->get_parent().lock()) {
         compound_parameters.operations.push_back(
             std::make_shared<Item_parent_change_operation>(
@@ -521,6 +539,17 @@ void Item_tree::try_add_to_attach(
             );
             return;
         }
+    }
+
+    const std::optional<std::string> item_refusal = instance_structure_refusal(*item);
+    if (item_refusal.has_value()) {
+        log_tree->info("Move refused: {}", item_refusal.value());
+        return;
+    }
+    const std::optional<std::string> target_refusal = instance_child_refusal(*target_hierarchy);
+    if (target_refusal.has_value()) {
+        log_tree->info("Move refused: {}", target_refusal.value());
+        return;
     }
 
     compound_parameters.operations.push_back(
@@ -997,15 +1026,18 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             return ImGui::AcceptDragDropPayload(Asset_file_gltf::static_type_name.data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
         };
 
-        // Prefab instance subtrees are sealed projections of their source
-        // file (an instance refresh re-clones the template and would drop
-        // any child inserted from outside), so an instance root accepts
-        // only the sibling rects; the child (middle) rect is not offered.
-        const bool is_prefab_instance_root = static_cast<bool>(erhe::scene::get_attachment<Prefab_instance>(node.get()));
+        // A reference instance protects its structure
+        // (doc/usd-compatibility-plan.md X2): no prim is added under a
+        // carrier or inside one, so the child (middle) rect is not offered
+        // there, and the sibling rects are not offered when the prim's own
+        // parent refuses children.
+        const bool refuse_child_of_node   = instance_child_refusal(*node).has_value();
+        const std::shared_ptr<erhe::scene::Node> node_parent = node->get_parent_node();
+        const bool refuse_child_of_parent = node_parent && instance_child_refusal(*node_parent).has_value();
 
         // Insert as sibling before drop target
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
-        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
+        if (!refuse_child_of_parent && ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
             drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
             const ImGuiPayload* payload = accept_gltf_payload();
             if (payload != nullptr) {
@@ -1016,7 +1048,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         }
 
         // Insert as last child of drop target
-        if (!is_prefab_instance_root) {
+        if (!refuse_child_of_node) {
             const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
             if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
                 drag_and_drop_rectangle_preview(middle_rect);
@@ -1031,7 +1063,7 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
 
         // Insert as sibling after drop target
         const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
-        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
+        if (!refuse_child_of_parent && ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
             drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
             const ImGuiPayload* payload = accept_gltf_payload();
             if (payload != nullptr) {
@@ -1330,7 +1362,15 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
         const bool selected_or_hierarchy = item->is_selected() || hierarchy;
         const bool can_copy = selected_or_hierarchy && !is_content_library_non_copyable;
-        if (!can_copy) {
+        // Structure protection (doc/usd-compatibility-plan.md X2): an item
+        // inside a reference instance is not removed, and nothing is
+        // inserted under a carrier or inside one.
+        const std::optional<std::string>       item_structure_refusal = instance_structure_refusal(*item);
+        const std::shared_ptr<erhe::Hierarchy> item_parent            = hierarchy->get_parent().lock();
+        const std::optional<std::string>       parent_child_refusal   = item_parent ? instance_child_refusal(*item_parent) : std::optional<std::string>{};
+        const bool can_cut       = can_copy && !item_structure_refusal.has_value();
+        const bool can_duplicate = can_copy && !parent_child_refusal.has_value();
+        if (!can_cut) {
             ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Cut")) {
@@ -1348,6 +1388,12 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 );
                 m_context.operation_stack->queue(op);
             }
+        }
+        if (!can_cut) {
+            ImGui::EndDisabled();
+        }
+        if (!can_copy) {
+            ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Copy")) {
             if (item->is_selected()) {
@@ -1373,7 +1419,8 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
 
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
         const bool can_paste = !clipboard_contents.empty() && paste_target &&
-            (!(is_library_scope || is_library_resource) || is_materials_scope);
+            (!(is_library_scope || is_library_resource) || is_materials_scope) &&
+            !(paste_target && instance_child_refusal(*paste_target).has_value());
         if (!can_paste) {
             ImGui::BeginDisabled();
         }
@@ -1384,7 +1431,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             ImGui::EndDisabled();
         }
 
-        if (!can_copy) {
+        if (!can_duplicate) {
             ImGui::BeginDisabled();
         }
         if (ImGui::MenuItem("Duplicate")) {
@@ -1409,7 +1456,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 m_context.operation_stack->queue(op);
              }
         }
-        if (!can_copy) {
+        if (!can_duplicate) {
             ImGui::EndDisabled();
         }
 
@@ -1761,12 +1808,15 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
 
     const auto& hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy   >(item);
     const auto& node      = std::dynamic_pointer_cast<erhe::scene::Node >(item);
-    // Prefab instance roots are sealed: their subtree is prefab content,
-    // editable only by opening the prefab's own scene, so the row renders
-    // as a leaf and the interior is never listed.
-    const bool is_prefab_instance_root = node && static_cast<bool>(erhe::scene::get_attachment<Prefab_instance>(node.get()));
+    // A SEALED prefab instance root (a glTF template) hides its interior:
+    // the subtree is prefab content, editable only by opening the prefab's
+    // own scene, so the row renders as a leaf. A USD-backed instance is not
+    // sealed (doc/usd-compatibility-plan.md X2): its interior is listed,
+    // selectable and editable, and only its structure is protected.
+    const std::shared_ptr<Prefab_instance> prefab_instance = node ? erhe::scene::get_attachment<Prefab_instance>(node.get()) : std::shared_ptr<Prefab_instance>{};
+    const bool is_sealed_instance_root = prefab_instance && is_sealed_prefab_instance(*prefab_instance);
     bool is_leaf = true;
-    if (hierarchy && !is_prefab_instance_root) {
+    if (hierarchy && !is_sealed_instance_root) {
         if (hierarchy->get_child_count(m_filter) > 0) {
             is_leaf = false;
         }
@@ -1893,7 +1943,7 @@ void Item_tree::flatten_visible_rows(const std::shared_ptr<erhe::Item_base>& ite
             }
         }
     }
-    if (hierarchy && !is_prefab_instance_root) {
+    if (hierarchy && !is_sealed_instance_root) {
         const float indent_spacing = ImGui::GetStyle().IndentSpacing;
         for (const auto& child_node : hierarchy->get_children()) {
             flatten_visible_rows(child_node, indent + indent_spacing);

@@ -2987,6 +2987,38 @@
     "name": "reload_prefab"
   },
   {
+    "description": "Set (or clear) one property of a loaded prefab TEMPLATE. Templates live outside every scene, so no item lookup reaches them; every instance of the template reads the edited value live through its reference layer (doc/property-system.md D33). Not undoable - a template is a projection of its source file.",
+    "inputSchema": {
+      "properties": {
+        "item_path": {
+          "description": "Path of the template item below the template root ('' = the template root itself; 'Parent/Child' addresses deeper items)",
+          "type": "string"
+        },
+        "prim_path": {
+          "description": "USD prim path the template was taken from; omit for a glTF template or a USD default prim",
+          "type": "string"
+        },
+        "property": {
+          "description": "Property name, as get_item_properties reports it",
+          "type": "string"
+        },
+        "source_path": {
+          "description": "Source file path of the loaded prefab template",
+          "type": "string"
+        },
+        "value": {
+          "description": "New value (string in property_string form, number, bool, or array of numbers). Omit or null to clear the template's local value."
+        }
+      },
+      "required": [
+        "source_path",
+        "property"
+      ],
+      "type": "object"
+    },
+    "name": "set_prefab_template_property"
+  },
+  {
     "description": "List the glTF prefabs currently loaded in the app-wide prefab library (source path, name, content counts)",
     "inputSchema": {
       "properties": {},

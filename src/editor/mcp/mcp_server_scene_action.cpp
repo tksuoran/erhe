@@ -14,6 +14,7 @@
 #include "create/create_cone.hpp"
 #include "create/create_torus.hpp"
 #include "create/create_uv_sphere.hpp"
+#include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "items.hpp"
 #include "operations/geometry_operations.hpp"
@@ -24,6 +25,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "time.hpp"
 #include "renderers/lightmap_baker.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -311,6 +313,17 @@ auto Mcp_server::action_delete_nodes(const json& args) -> std::string
         json r = make_text_content("delete_nodes: no matching nodes");
         r["isError"] = true;
         return r.dump();
+    }
+
+    // Structure protection (doc/usd-compatibility-plan.md X2): an item
+    // inside a reference instance is not deleted (deleting the carrier
+    // deletes the whole instance).
+    for (const std::shared_ptr<erhe::Item_base>& item : items) {
+        const std::optional<std::string> structure_refusal = instance_structure_refusal(*item);
+        if (structure_refusal.has_value()) {
+            log_mcp->info("delete_nodes refused: {}", structure_refusal.value());
+            return make_error_content(structure_refusal.value());
+        }
     }
 
     json deleted = json::array();
@@ -1373,6 +1386,14 @@ auto Mcp_server::place_brush_instance(
             return r.dump();
         }
     }
+    if (parent) {
+        // Structure protection (doc/usd-compatibility-plan.md X2).
+        const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+        if (child_refusal.has_value()) {
+            log_mcp->info("brush placement refused: {}", child_refusal.value());
+            return make_error_content(child_refusal.value());
+        }
+    }
 
     // "scale" as a number is the brush bake scale (geometry, collision
     // shape, volume and inertia all scale - the right choice for physics
@@ -2078,6 +2099,12 @@ auto Mcp_server::action_create_node(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
+        // Structure protection (doc/usd-compatibility-plan.md X2).
+        const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
+        if (child_refusal.has_value()) {
+            log_mcp->info("create_node refused: {}", child_refusal.value());
+            return make_error_content(child_refusal.value());
+        }
     } else {
         parent = sr->get_hosted_scene()->get_root_node();
     }
@@ -2622,6 +2649,20 @@ auto Mcp_server::action_reparent_node(const json& args) -> std::string
         return r.dump();
     }
 
+    // Structure protection (doc/usd-compatibility-plan.md X2): an item
+    // inside a reference instance is not reparented, and nothing is
+    // reparented under a carrier or inside one.
+    const std::optional<std::string> item_refusal = instance_structure_refusal(*child_node);
+    if (item_refusal.has_value()) {
+        log_mcp->info("reparent_node refused: {}", item_refusal.value());
+        return make_error_content(item_refusal.value());
+    }
+    const std::optional<std::string> child_refusal = instance_child_refusal(*new_parent);
+    if (child_refusal.has_value()) {
+        log_mcp->info("reparent_node refused: {}", child_refusal.value());
+        return make_error_content(child_refusal.value());
+    }
+
     std::shared_ptr<Operation> op = std::make_shared<Item_parent_change_operation>(
         new_parent,
         child_node,
@@ -2714,6 +2755,13 @@ auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
         json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
         r["isError"] = true;
         return r.dump();
+    }
+
+    // Structure protection (doc/usd-compatibility-plan.md X2).
+    const std::optional<std::string> child_refusal = instance_child_refusal(*parent_node);
+    if (child_refusal.has_value()) {
+        log_mcp->info("clipboard_paste refused: {}", child_refusal.value());
+        return make_error_content(child_refusal.value());
     }
 
     const bool pasted = m_context.clipboard->try_paste(parent_node, parent_node->get_child_count());

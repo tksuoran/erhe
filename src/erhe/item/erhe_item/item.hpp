@@ -430,6 +430,11 @@ public:
     [[nodiscard]] virtual auto clone() const -> std::shared_ptr<T> {
         return std::make_shared<T>(static_cast<const T&>(*this));
     }
+    // Whether clone() yields an object: false for Item_kind::not_clonable,
+    // whose clone() returns nullptr. Every walk that pairs a source tree
+    // with its clone (the prefab instance / template lockstep walk) asks
+    // this to apply the same skip the copy constructors apply.
+    [[nodiscard]] virtual auto is_clonable() const -> bool { return true; }
 };
 
 template <typename Base, typename Intermediate, typename Self, Item_kind kind = Item_kind::clone_using_copy_constructor>
@@ -446,6 +451,7 @@ public:
             return std::shared_ptr<Base>{};
         }
     }
+    auto is_clonable  () const -> bool             override { return kind != Item_kind::not_clonable; }
     auto get_type     () const -> uint64_t         override { return Self::get_static_type(); }
     auto get_type_name() const -> std::string_view override { return Self::static_type_name; }
 
