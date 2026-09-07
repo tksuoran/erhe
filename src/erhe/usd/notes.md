@@ -203,6 +203,65 @@ translation units.
   and a value that fails to parse or to validate, are skipped with one
   warning each.
 
+### Sublayers
+
+A root layer's `subLayers` are the weakest layers of its layer stack (the `L`
+of USD's LIVRPS), and LightUSD composes nothing at load, so the stage its
+reader builds holds the root layer alone - a file whose content lives in a
+sublayer would arrive empty. `erhe::usd::load_stage` composes the stack itself
+before anything converts the stage: it re-reads the file as a
+`lightusd::Layer`, hands it to LightUSD's `CompositeSublayers` (which resolves
+each asset path against its own layer's directory, follows nested `subLayers`,
+detects cycles and merges per property, so an `over` in a stronger layer lands
+on the `def` of a weaker one as one prim) and turns the composed layer back
+into the stage with `LayerToStage`. Everything downstream - the Tydra
+conversion, the prim tree, a referenced or payload file loaded through this
+same function - sees that one composed stage.
+
+- Strength is local-first: the root layer's own opinions beat every sublayer,
+  and within the `subLayers` array the earlier entry is the stronger one. A
+  prim absent from the stronger layers is added whole.
+- Stage metadata (`defaultPrim`, `upAxis`, `metersPerUnit`,
+  `timeCodesPerSecond`, `framesPerSecond`, `startTimeCode` / `endTimeCode`,
+  `kilogramsPerUnit`, `customLayerData`) takes the root layer's value where it
+  authors one and the strongest sublayer that authors one otherwise.
+  `CompositeSublayers` keeps the root layer's metadata and drops every
+  sublayer's, so erhe walks the sublayer tree a second time for the fields the
+  root leaves unauthored, stopping as soon as all of them are answered. That
+  walk parses those files again; the layers that author stage metadata are the
+  small ones, because a stack's heavy content sits below a reference or a
+  payload.
+- The composed stage keeps the root layer's `subLayers` list as the record of
+  which layers went into it. `Usd_data::sublayers` reports it, and
+  `describe_stage` lists the entries as `sublayer` layer references.
+- The composed top-level prims are sorted by name. A composed layer stack has
+  no single authored top-level order - each layer authors its own - and
+  `lightusd::Layer` holds its prim specs in a hash map, so sorting is what
+  makes the composed tree the same on every run and every platform.
+- The reads that ask which layer authored a thing keep reading the root layer
+  alone: the class prims and `inherits` arcs of X3, the `Brush` prims of E4a,
+  the authored-opinion pass of I2 and the `xformOp` stacks of M8 all go
+  through `find_root_layer_primspec`. A prim a sublayer authors is therefore
+  content of the composed tree but contributes none of those: its transform
+  arrives as the single composed matrix Tydra reports rather than as the op
+  stack the sublayer spells, and a `class` prim of a sublayer is a prim like
+  any other.
+- A sublayer's asset path is resolved the way a `references` asset path is,
+  parent-relative segments included: the composition resolver is given an
+  erhe asset-resolution handler that anchors the path against the layer's
+  directory and normalizes it. LightUSD's own file resolver refuses any path
+  holding a `..` segment (`io::FindFile`), which is exactly how a stack that
+  keeps its shared layers beside the tree names them.
+- A sublayer inside a `.usdz` archive is not composed. The composition
+  resolver reaches the file system, not the archive; such a file loads with
+  the root layer's own content and one warning naming the entries.
+- A save writes ONE layer holding the composed content and authors no
+  `subLayers`. erhe edits the flattened stage, so it has no layer to write an
+  edit back to; a sublayer stack the editor could edit layer by layer is
+  future work (doc/usd-compatibility-plan.md section 5). The save logs one
+  line naming the sublayers the file it was opened from had
+  (`editor::save_scene_usd`, from `Scene_root::get_usd_sublayers()`).
+
 ### Composition arcs
 
 LightUSD composes nothing on load: `LoadUSDFromFile` reads the root layer and

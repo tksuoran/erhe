@@ -2046,6 +2046,16 @@ void Scene_root::set_usd_dome_lights(std::vector<Usd_dome_light_record>&& dome_l
     m_usd_dome_lights = std::move(dome_lights);
 }
 
+auto Scene_root::get_usd_sublayers() const -> const std::vector<std::string>&
+{
+    return m_usd_sublayers;
+}
+
+void Scene_root::set_usd_sublayers(std::vector<std::string>&& sublayers)
+{
+    m_usd_sublayers = std::move(sublayers);
+}
+
 void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_source_format format)
 {
     m_source_path   = path;

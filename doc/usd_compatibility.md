@@ -219,7 +219,8 @@ mechanism composes as, and what has no erhe counterpart yet.
 | a variant set on a prim | variant sets (`V`) | material-binding variant sets are read, the selected variant is applied to the meshes (LightUSD composes no variant), and the whole table is written back; a variant that authors anything else has that counted and reported once for the set. The per-scene selection the user switches is the editor half of X4 |
 | prefab instance from a `payload` arc | payloads (`P`) | read and written as the arc form it is; erhe's prefab library loads eagerly, so a payload is never deferred |
 | none | `specializes` (`S`) | |
-| none | sublayers, session layer | an undo stack is not a layer |
+| a scene's whole content | a root layer's `subLayers` (`L`) | composed at load, strongest first: the root layer's opinions beat every sublayer, an earlier `subLayers` entry beats a later one, a prim absent from the stronger layers is added whole, and stage metadata the root leaves unauthored comes from the strongest sublayer that authors it. A save writes ONE layer holding the composed content and authors no `subLayers` - erhe edits the flattened stage and has no layer to write an edit back to (`src/erhe/usd/notes.md`, "Sublayers"); a stack the editor could edit layer by layer is future work |
+| none | session layer | an undo stack is not a layer |
 | `Value_source` | opinion provenance | erhe resolves every arc itself, so the erhe value source IS the composition provenance; the table below restates each source as the USD origin the Properties window and MCP report (`doc/usd-compatibility-plan.md` X5) |
 
 ### Where a value comes from

@@ -322,6 +322,14 @@ public:
     [[nodiscard]] auto get_usd_dome_lights() const -> const std::vector<Usd_dome_light_record>&;
     void set_usd_dome_lights(std::vector<Usd_dome_light_record>&& dome_lights);
 
+    // The asset paths of the `subLayers` the opened USD file's root layer
+    // listed, strongest first. Their content was composed into the scene, and
+    // a save writes it back as one layer, so this is only what the save log
+    // names. Empty for every scene that was not opened from a sublayered USD
+    // file.
+    [[nodiscard]] auto get_usd_sublayers() const -> const std::vector<std::string>&;
+    void set_usd_sublayers(std::vector<std::string>&& sublayers);
+
     // Definition-vs-reference classification for an asset-typed item
     // entering this scene's content library (asset-manager plan, R5
     // sub-plan resolution 2): true = definition (owning entry), false =
@@ -411,6 +419,7 @@ private:
     std::filesystem::path                           m_source_path;
     Scene_source_format                             m_source_format{Scene_source_format::none};
     std::vector<Usd_dome_light_record>              m_usd_dome_lights;
+    std::vector<std::string>                        m_usd_sublayers;
     bool                                            m_is_registered{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per

@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./sublayer_strong.usda@,
+        @./sublayer_weak.usda@
+    ]
+    upAxis = "Y"
+)
+
+over "World"
+{
+    over "RootOver"
+    {
+        double3 xformOp:translate = (9, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

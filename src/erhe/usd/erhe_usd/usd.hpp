@@ -392,6 +392,12 @@ public:
     // The root layer's `defaultPrim`, empty when the file names none: the prim
     // a reference without a prim path targets.
     std::string default_prim;
+    // The asset paths of the root layer's `subLayers`, in the order the layer
+    // spells them (strongest first). Their content is part of the composed
+    // stage this load converted, so the list is what a caller needs to say
+    // where the content came from - a save writes the composed content into
+    // one layer (src/erhe/usd/notes.md).
+    std::vector<std::string> sublayers;
 
     // The `DomeLight` prims the file authors, in the order the conversion
     // visited them. A dome is never a light of `lights`: erhe has no

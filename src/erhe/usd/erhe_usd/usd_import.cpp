@@ -566,6 +566,9 @@ public:
         m_result.data.up_axis         = scene.meta.upAxis;
         m_result.data.meters_per_unit = scene.meta.metersPerUnit;
         m_result.data.default_prim    = stage.metas().defaultPrim.str();
+        for (const lightusd::SubLayer& sub_layer : stage.metas().subLayers) {
+            m_result.data.sublayers.push_back(sub_layer.assetPath.GetAssetPath());
+        }
         read_custom_layer_data(stage);
 
         read_layer_composition();

@@ -1195,6 +1195,10 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         }
         scene_root->set_usd_dome_lights(std::move(dome_records));
     }
+    // The layers the file's content was composed from. A save writes the
+    // composed content into one layer (src/erhe/usd/notes.md), so the list is
+    // kept for the line the save logs.
+    scene_root->set_usd_sublayers(std::move(usd_data.sublayers));
     if (!scene_state.settings_json.empty()) {
         simdjson::ondemand::parser   settings_parser;
         simdjson::padded_string      settings_padded{scene_state.settings_json};
@@ -1499,6 +1503,25 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         );
     }
     collect_usd_variant_sets(scene_root, path, save_arguments.variant_sets);
+    // A scene opened from a sublayered root layer is edited as the one
+    // composed stage it became, so the save writes that content into this one
+    // layer and authors no `subLayers` (src/erhe/usd/notes.md; a sublayer
+    // stack the editor could edit layer by layer is
+    // doc/usd-compatibility-plan.md section 5).
+    const std::vector<std::string>& sublayers = scene_root.get_usd_sublayers();
+    if (!sublayers.empty()) {
+        std::string sublayer_list;
+        for (const std::string& sublayer : sublayers) {
+            if (!sublayer_list.empty()) {
+                sublayer_list += ", ";
+            }
+            sublayer_list += sublayer;
+        }
+        log_parsers->info(
+            "save_scene_usd '{}': the file this scene was opened from composed {} subLayer(s) ({}) - their content is written into this one layer",
+            erhe::file::to_string(path), sublayers.size(), sublayer_list
+        );
+    }
 
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library) {
