@@ -698,7 +698,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
             if (scene_root) {
                 line_renderer.set_thickness(style.shadow_fit_casters_width);
                 // Matches Shadow_renderer's shadow_filter (visible + shadow_cast).
-                const uint64_t require_bits = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast;
+                const uint64_t require_bits = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast;
                 for (erhe::scene::Mesh_layer* layer : scene_root->layers().mesh_layers()) {
                     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : layer->meshes) {
                         if (!mesh || ((mesh->get_flag_bits() & require_bits) != require_bits)) {
@@ -776,7 +776,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                 if (content_layer != nullptr) {
                     line_renderer.set_thickness(style.shadow_fit_receivers_width);
                     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
-                        if (!mesh || ((mesh->get_flag_bits() & erhe::Item_flags::visible) == 0)) {
+                        if (!mesh || !mesh->is_visible() || !mesh->is_active()) {
                             continue;
                         }
                         const erhe::math::Aabb aabb = mesh->get_aabb_world();
@@ -812,7 +812,7 @@ void Debug_visualizations::shadow_frustum_fit_visualization(const Render_context
                 if (content_layer != nullptr) {
                     std::vector<glm::vec3> receiver_points;
                     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
-                        if (!mesh || ((mesh->get_flag_bits() & erhe::Item_flags::visible) == 0)) {
+                        if (!mesh || !mesh->is_visible() || !mesh->is_active()) {
                             continue;
                         }
                         const erhe::math::Aabb aabb = mesh->get_aabb_world();

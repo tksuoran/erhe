@@ -31,7 +31,7 @@ Raytrace_primitive::Raytrace_primitive(erhe::scene::Mesh* mesh, std::size_t prim
     rt_instance->set_user_data(this);
     rt_instance->set_scene(rt_scene.get());
     rt_scene   ->attach(rt_geometry);
-    if (mesh->is_visible()) {
+    if (mesh->is_visible() && mesh->is_active()) {
         rt_instance->enable();
     } else {
         rt_instance->disable();

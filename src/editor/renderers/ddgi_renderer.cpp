@@ -506,7 +506,7 @@ auto Ddgi_renderer::compute_volume_bounds(Scene_root& scene_root) const -> erhe:
     // included: they do not go into the acceleration structure, but they are
     // lit by the volume, so the volume has to cover them.
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer->meshes) {
-        if (!mesh || !mesh->is_visible()) {
+        if (!mesh || !mesh->is_visible() || !mesh->is_active()) {
             continue;
         }
         const erhe::math::Aabb mesh_bounds = mesh->get_aabb_world();

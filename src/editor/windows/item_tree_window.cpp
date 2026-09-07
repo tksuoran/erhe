@@ -1605,6 +1605,11 @@ void Item_tree::imgui_row(const Flat_row& row)
         ImDrawList* const draw_list = ImGui::GetWindowDrawList();
         const ImGuiStyle& style     = ImGui::GetStyle();
 
+        // An inactive item and everything below it is out of the scene
+        // (doc/usd-compatibility-plan.md X2): the row stays, drawn dim.
+        const bool     dimmed     = !row.item->is_active();
+        const ImGuiCol text_color = dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text;
+
         bool thumbnail_drawn = false;
         if (row.brush && m_context.thumbnails) {
             ImGui::SameLine();
@@ -1630,7 +1635,9 @@ void Item_tree::imgui_row(const Flat_row& row)
                 icon.font,
                 m_cached_icon_font_size,
                 ImVec2{row_pos.x + m_icon_x_offset, row_pos.y + m_icon_y_offset},
-                ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
+                dimmed
+                    ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
+                    : ImGui::GetColorU32(ImVec4{color.x, color.y, color.z, color.w}),
                 icon.code
             );
         }
@@ -1648,7 +1655,7 @@ void Item_tree::imgui_row(const Flat_row& row)
             ImGui::GetFont(),
             ImGui::GetFontSize(),
             ImVec2{row_pos.x + row.label_x_offset, row_pos.y + m_label_y_offset},
-            ImGui::GetColorU32(ImGuiCol_Text),
+            ImGui::GetColorU32(text_color),
             row.label_text.data(),
             row.label_text.data() + row.label_text.size(),
             0.0f,

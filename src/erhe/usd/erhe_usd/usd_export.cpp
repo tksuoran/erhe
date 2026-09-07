@@ -368,7 +368,7 @@ public:
 [[nodiscard]] auto is_native_usd_property(const std::string_view owner, const std::string_view name) -> bool
 {
     if (owner == "Item_base") {
-        return (name == "visible") || (name == "purpose");
+        return (name == "visible") || (name == "purpose") || (name == "active");
     }
     if (owner == "Material") {
         return
@@ -678,6 +678,20 @@ private:
         }
         if (is_local(item, erhe::Item_base::purpose_property.get())) {
             typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
+        }
+        write_active(item, typed_prim);
+    }
+
+    // The `active` prim metadatum (doc/usd-compatibility-plan.md X2): an
+    // authored value only, so a prim of a scene erhe never deactivated
+    // carries no `active` line. USD prunes the whole subtree of an inactive
+    // prim, which is what the derived Item_flags::active bit does in erhe;
+    // the bit is never written - the item's own opinion is.
+    template <typename T>
+    void write_active(const erhe::Item_base& item, T& typed_prim)
+    {
+        if (is_local(item, erhe::Item_base::active_property.get())) {
+            typed_prim.meta.set_active(item.get_value(erhe::Item_base::active_property));
         }
     }
 
@@ -1214,6 +1228,7 @@ private:
         lightusd::Model model;
         model.name           = prim_name;
         model.prim_type_name = std::string{item.get_prim_type_name()};
+        write_active(item, model);
         return lightusd::Prim{model};
     }
 

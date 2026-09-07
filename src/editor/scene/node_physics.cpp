@@ -228,7 +228,10 @@ void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host,
         old_scene_root->unregister_node_physics(shared_this);
         m_rigid_body.reset();
     }
-    if (new_item_host != nullptr) {
+    // An inactive item is out of the simulation (X2): no body is made until
+    // the derived Item_flags::active bit comes back, which
+    // handle_flag_bits_update() acts on.
+    if ((new_item_host != nullptr) && is_active()) {
         Scene_root* new_scene_root = static_cast<Scene_root*>(new_item_host);
         auto& physics_world = new_scene_root->get_physics_world();
 
@@ -239,6 +242,27 @@ void Node_physics::handle_item_host_update(erhe::Item_host* const old_item_host,
             m_rigid_body->begin_move();
             m_rigid_body->end_move();
         }
+    }
+}
+
+void Node_physics::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+{
+    erhe::scene::Node_attachment::handle_flag_bits_update(old_flag_bits, new_flag_bits);
+    if (((old_flag_bits ^ new_flag_bits) & erhe::Item_flags::active) == 0u) {
+        return;
+    }
+    erhe::Item_host* const item_host = get_item_host();
+    if (item_host == nullptr) {
+        return;
+    }
+    Scene_root* const                   scene_root  = static_cast<Scene_root*>(item_host);
+    const std::shared_ptr<Node_physics> shared_this = std::static_pointer_cast<Node_physics>(shared_from_this());
+    if (is_active()) {
+        create_rigid_body(scene_root->get_physics_world());
+        scene_root->register_node_physics(shared_this);
+    } else {
+        scene_root->unregister_node_physics(shared_this);
+        m_rigid_body.reset();
     }
 }
 

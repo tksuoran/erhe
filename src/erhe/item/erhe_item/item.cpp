@@ -105,6 +105,15 @@ const erhe::property::Property<bool> Item_base::visible_property = erhe::propert
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .inherits = true, .ui = erhe::property::Property_ui{.label = "Visible"}}
 );
 
+// USD prim `active` metadata (doc/usd-compatibility-plan.md X2). Not
+// inherits-flagged: the value is the item's own opinion, and the subtree
+// effect USD gives it is carried by the derived Item_flags::active bit
+// (rederive_active_flag_bits).
+const erhe::property::Property<bool> Item_base::active_property = erhe::property::Property<bool>::register_property(
+    "active", Item_base::property_owner_type(),
+    erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .ui = erhe::property::Property_ui{.label = "Active"}}
+);
+
 namespace {
 
 constexpr erhe::property::Enum_entry c_purpose_entries[] = {
@@ -354,7 +363,36 @@ void Item_base::on_flag_property_changed(erhe::property::Dependency_object& obje
     const bool value = erhe::property::get_as<bool>(args.new_value);
     if (&args.property == &visible_property.get()) {
         item.set_derived_flag_bit(Item_flags::visible, value);
+    } else if (&args.property == &active_property.get()) {
+        item.rederive_active_flag_bits();
     }
+}
+
+auto Item_base::is_parent_active() const -> bool
+{
+    const erhe::property::Dependency_object* const parent      = get_inheritance_parent();
+    const Item_base* const                        parent_item  = dynamic_cast<const Item_base*>(parent);
+    return (parent_item == nullptr) || parent_item->is_active();
+}
+
+void Item_base::rederive_active_flag_bits()
+{
+    const bool active     = is_parent_active() && get_value(active_property);
+    const bool was_active = erhe::utility::test_bit_set(m_flag_bits, Item_flags::active);
+    if (active == was_active) {
+        // Every descendant's bit is a function of this one, so an unchanged
+        // bit leaves the whole subtree unchanged.
+        return;
+    }
+    set_derived_flag_bit(Item_flags::active, active);
+    for_each_inheritance_child(
+        [](erhe::property::Dependency_object& child) {
+            Item_base* const child_item = dynamic_cast<Item_base*>(&child);
+            if (child_item != nullptr) {
+                child_item->rederive_active_flag_bits();
+            }
+        }
+    );
 }
 
 void Item_base::set_derived_flag_bit(const uint64_t bit, const bool value)
@@ -375,7 +413,8 @@ void Item_base::set_derived_flag_bit(const uint64_t bit, const bool value)
 void Item_base::rederive_flag_bits()
 {
     m_flag_bits = (m_flag_bits & ~Item_flags::derived)
-        | (get_value(visible_property) ? Item_flags::visible : 0u);
+        | (get_value(visible_property) ? Item_flags::visible : 0u)
+        | (get_value(active_property)  ? Item_flags::active  : 0u);
     sync_seal_with_lock_edit();
 }
 
@@ -444,7 +483,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
     uint64_t mask = requested_mask;
     if ((mask & Item_flags::derived) != 0u) {
         erhe::item::log->error(
-            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Mesh::shadow_cast_property / Mesh::lightmapped_property); the derived bits are dropped from the mask",
+            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Item_base::active_property / Mesh::shadow_cast_property / Mesh::lightmapped_property); the derived bits are dropped from the mask",
             value, m_name, Item_flags::to_string(mask & Item_flags::derived)
         );
         mask &= ~Item_flags::derived;
@@ -532,6 +571,11 @@ void Item_base::hide()
 auto Item_base::is_visible() const -> bool
 {
     return erhe::utility::test_bit_set(m_flag_bits, Item_flags::visible);
+}
+
+auto Item_base::is_active() const -> bool
+{
+    return erhe::utility::test_bit_set(m_flag_bits, Item_flags::active);
 }
 
 auto Item_base::get_purpose() const -> Purpose
@@ -691,6 +735,9 @@ auto Item_base::get_id() const -> std::size_t
 void Item_base::set_inheritance_container(erhe::property::Dependency_object* const container)
 {
     m_inheritance_container = container;
+    // The container is the item's inheritance parent, so the effective
+    // active state can change with it (X2).
+    rederive_active_flag_bits();
 }
 
 auto Item_base::get_inheritance_container() const -> erhe::property::Dependency_object*

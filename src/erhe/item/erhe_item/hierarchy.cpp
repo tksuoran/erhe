@@ -232,6 +232,10 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     handle_parent_update(old_parent, new_parent);
     hierarchy_sanity_check();
     apply_inheritance_snapshot(inheritance_snapshot);
+    // The effective active state (X2) is not an inherited property value:
+    // it is the derived Item_flags::active bit, so the parent change has to
+    // recompute it for this item and, when it moved, for the subtree.
+    rederive_active_flag_bits();
 }
 
 auto Hierarchy::get_inheritance_parent() const -> const erhe::property::Dependency_object*

@@ -22,7 +22,15 @@ Carries the erhe Item state of a node that core glTF cannot express:
   object reference travels as the referenced item's name and is resolved
   in the scene once the file's items exist (`doc/property-system.md`
   D28), so a node-held `Node_physics.physics_material` names a physics
-  material the same file's `KHR_physics_rigid_bodies` array defines.
+  material the same file's `KHR_physics_rigid_bodies` array defines. The
+  item-level properties of every node travel here by their plain names:
+  `visible`, `purpose` and `active`. `active`
+  (`doc/usd-compatibility-plan.md` X2) is USD's prim `active` metadatum -
+  `"active": "false"` takes the node and its whole subtree out of
+  rendering, picking, simulation and every consumer that walks content,
+  and dims the row in the item tree. The subtree effect is derived from
+  the values of the node and its ancestors, so it is never written; only
+  the node's own value is.
 - `style` (optional): the name of the style item the node uses
   (`doc/style-library.md` D4), one of the scene's `ERHE_scene` `styles`;
   emitted only when the node has a style. Assigned on load once the
@@ -47,7 +55,7 @@ Carries the erhe Item state of a node that core glTF cannot express:
 ```json
 {
     "flags": ["content", "visible", "show_in_ui"],
-    "properties": {"Layout.align_y": "Stretch", "Light.color": "1 0.9 0.8"},
+    "properties": {"active": "false", "Layout.align_y": "Stretch", "Light.color": "1 0.9 0.8"},
     "prim_class": "Typed",
     "prim_type_name": "Cube",
     "style": "Warm lights",

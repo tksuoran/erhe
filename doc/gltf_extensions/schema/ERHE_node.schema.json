@@ -5,7 +5,7 @@
     "type": "object",
     "properties": {
         "flags":           {"type": "array", "items": {"type": "string"}},
-        "properties":      {"type": "object", "additionalProperties": {"type": "string"}, "description": "Local values of the node's registered properties (name -> text); present since the property system's D23, absent in older files whose flags list visible / shadow_cast / lightmapped"},
+        "properties":      {"type": "object", "additionalProperties": {"type": "string"}, "description": "Local values of the node's registered properties (name -> text), including the item-level visible / purpose / active; present since the property system's D23, absent in older files whose flags list visible / shadow_cast / lightmapped"},
         "prim_class":      {"type": "string", "enum": ["Scope", "Typed"], "description": "The erhe prim class of a node whose class carries no transform; a node without the field is an Xform"},
         "prim_type_name":  {"type": "string", "description": "The USD typeName token a Typed prim carries; empty for a typeless def"},
         "mesh_flags":      {"type": "array", "items": {"type": "string"}},

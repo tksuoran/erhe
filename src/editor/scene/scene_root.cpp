@@ -1648,6 +1648,16 @@ void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node
     if (!m_physics_world) {
         return;
     }
+    // An inactive item and everything below it is out of the simulation
+    // (doc/usd-compatibility-plan.md X2); the body enters the world when
+    // Node_physics::handle_flag_bits_update sees the bit come back.
+    if (!node_physics->is_active()) {
+        return;
+    }
+    // No caller registers a body that is already in a world: attach
+    // registers only after the old host unregistered, the active-bit flip
+    // only after the body left, and recreate_rigid_body unregisters first.
+    ERHE_VERIFY(node_physics->get_physics_world() == nullptr);
 
 #ifndef NDEBUG
     const auto i = std::find(m_node_physics.begin(), m_node_physics.end(), node_physics);
@@ -1678,6 +1688,9 @@ void Scene_root::unregister_node_physics(const std::shared_ptr<Node_physics>& no
 {
     if (!m_physics_world) {
         return;
+    }
+    if (node_physics->get_physics_world() == nullptr) {
+        return; // not in the world (an inactive item's body never entered it)
     }
 
     // Tear down joint constraints referencing this rigid body before it

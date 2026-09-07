@@ -254,7 +254,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
     const auto& mesh_spans = parameters.mesh_spans;
 
     erhe::Item_filter shadow_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         // proxy_hidden: visually replaced by a render_proxy that casts the
         // shadows instead (lightmap piece meshes).
@@ -288,7 +288,7 @@ auto Shadow_renderer::render(const Render_parameters& parameters) -> bool
                 // require the shadow_cast flag (shadow_filter). Every caster is a
                 // receiver, so compute the world AABB once and bucket it into both.
                 const uint64_t flag_bits = mesh->get_flag_bits();
-                if ((flag_bits & erhe::Item_flags::visible) == 0) {
+                if ((flag_bits & (erhe::Item_flags::visible | erhe::Item_flags::active)) != (erhe::Item_flags::visible | erhe::Item_flags::active)) {
                     continue;
                 }
                 const bool is_caster =
@@ -720,7 +720,7 @@ void Shadow_renderer::prewarm_pipelines(
     const uint32_t boolean_mask_force_disable = 0;
 
     erhe::Item_filter shadow_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::shadow_cast,
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::shadow_cast,
         .require_at_least_one_bit_set   = 0u,
         // proxy_hidden: visually replaced by a render_proxy that casts the
         // shadows instead (lightmap piece meshes).

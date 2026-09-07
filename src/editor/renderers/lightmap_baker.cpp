@@ -3974,7 +3974,7 @@ auto Lightmap_baker::collect_lights(Scene_root& scene_root) const -> std::vector
 {
     std::vector<Light_record> lights;
     for (const std::shared_ptr<erhe::scene::Light>& light : scene_root.layers().light()->lights) {
-        if (!light || !light->is_visible() || (lights.size() >= c_max_gather_lights)) {
+        if (!light || !light->is_visible() || !light->is_active() || (lights.size() >= c_max_gather_lights)) {
             continue;
         }
         const erhe::scene::Node* const node = light.get();
@@ -4061,7 +4061,7 @@ void Lightmap_baker::collect_instances(
     // their render proxies (the piece meshes) are the occluders - both at
     // once would put coplanar duplicates in every shadow ray.
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : scene_root.layers().content()->meshes) {
-        if (!mesh || !mesh->is_visible() || mesh->skin) {
+        if (!mesh || !mesh->is_visible() || !mesh->is_active() || mesh->skin) {
             continue;
         }
         if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {
@@ -5127,7 +5127,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
     result.gbuffer = compute_region_transform_hash();
     uint64_t hash_lighting = 0xcbf29ce484222325ull;
     for (const std::shared_ptr<erhe::scene::Light>& light : scene_root.layers().light()->lights) {
-        if (!light || !light->is_visible()) {
+        if (!light || !light->is_visible() || !light->is_active()) {
             continue;
         }
         const erhe::scene::Node* const node = light.get();
@@ -5162,7 +5162,7 @@ auto Lightmap_baker::compute_scene_hashes(Scene_root& scene_root) const -> Scene
         // are skipped to mirror collect_instances (their render proxies
         // occlude); their motion still invalidates - through the stale-
         // source auto-re-prepare, whose commit swaps the piece meshes.
-        if (!mesh || !mesh->is_visible() || mesh->skin) {
+        if (!mesh || !mesh->is_visible() || !mesh->is_active() || mesh->skin) {
             continue;
         }
         if ((mesh->get_flag_bits() & erhe::Item_flags::proxy_hidden) != 0u) {

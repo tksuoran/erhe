@@ -233,7 +233,7 @@ void Id_renderer::render_meshes(
     ERHE_PROFILE_FUNCTION();
 
     const erhe::Item_filter id_filter{
-        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::id,
+        .require_all_bits_set           = erhe::Item_flags::visible | erhe::Item_flags::active | erhe::Item_flags::id,
         .require_at_least_one_bit_set   = 0u,
         .require_all_bits_clear         = 0u,
         .require_at_least_one_bit_clear = 0u

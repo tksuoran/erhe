@@ -59,6 +59,7 @@ namespace {
         case Value_source::style:         return IM_COL32(255, 225, 170, 255); // orange: from the style
         case Value_source::inherited:     return IM_COL32(225, 195, 255, 255); // purple: from an ancestor
         case Value_source::computed:      return IM_COL32(165, 165, 165, 255); // dim gray: computed, read-only
+        case Value_source::reference:     return IM_COL32(255, 190, 215, 255); // pink: from the reference counterpart (D33)
     }
     return IM_COL32(255, 255, 255, 255);
 }

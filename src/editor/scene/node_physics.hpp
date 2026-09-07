@@ -39,6 +39,12 @@ public:
     // Implements / overrides Node_attachment
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
+    // Overrides Item_base: a flip of the derived Item_flags::active bit
+    // (doc/usd-compatibility-plan.md X2) takes the rigid body out of the
+    // physics world and puts it back. Change-driven: the bit is written
+    // once per change by Item_base::rederive_active_flag_bits().
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
+
     // Implements Dependency_object: refreshes the mirrors and applies the
     // consequence (live body update or recreation) for every source of a
     // change - local, style, inherited.

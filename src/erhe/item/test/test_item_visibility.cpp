@@ -38,7 +38,7 @@ TEST(Item_visibility, defaults_are_the_property_defaults)
     auto item = std::make_shared<Leaf>("i");
     EXPECT_TRUE (item->is_visible());
     EXPECT_TRUE (item->get_value(erhe::Item_base::visible_property));
-    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::derived, erhe::Item_flags::visible);
+    EXPECT_EQ(item->get_flag_bits() & erhe::Item_flags::derived, erhe::Item_flags::visible | erhe::Item_flags::active);
     EXPECT_EQ(item->get_value_source(erhe::Item_base::visible_property.get()), Value_source::default_value);
 }
 

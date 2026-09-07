@@ -114,6 +114,11 @@ void Node_attachment::set_node(Node* const node, const std::size_t position)
 
         handle_node_update(old_node, node);
     }
+    // The node is the attachment's inheritance parent, so the effective
+    // active state (doc/usd-compatibility-plan.md X2) moves with it. Done
+    // before the host update so a consumer of the bit (an attachment that
+    // registers itself with the host) sees the state it is attaching in.
+    rederive_active_flag_bits();
     if (new_host != old_host) {
         handle_item_host_update(old_host, new_host);
         if (m_node != nullptr) {

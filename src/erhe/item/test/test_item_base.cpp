@@ -20,7 +20,7 @@ TEST(ItemBase, DefaultConstruction)
     auto item = std::make_shared<Concrete_item>();
     EXPECT_NE(item->get_id(), 0u);
     EXPECT_TRUE(item->get_name().empty());
-    EXPECT_EQ(item->get_flag_bits(), erhe::Item_flags::visible); // the derived bits start at the property defaults
+    EXPECT_EQ(item->get_flag_bits(), erhe::Item_flags::visible | erhe::Item_flags::active); // the derived bits start at the property defaults
 }
 
 TEST(ItemBase, NamedConstruction)

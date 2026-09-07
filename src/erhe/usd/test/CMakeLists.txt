@@ -11,6 +11,7 @@ CPMAddPackage(
 set(_target "erhe_usd_tests")
 add_executable(${_target}
     main.cpp
+    test_usd_active.cpp
     test_usd_export.cpp
     test_usd_import.cpp
     test_usd_materials.cpp

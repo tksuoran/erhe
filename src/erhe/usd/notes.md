@@ -274,6 +274,20 @@ because the same spelling rule decides what an item is called on a stage.
   properties are skipped: the node transform, the item name and the tags have
   a USD form that owns them. `visible` and `purpose` are read from the node,
   which is where the import puts them.
+- Prim `active` metadata (`doc/usd-compatibility-plan.md` X2). The item's
+  `active` property is USD's prim `active` metadatum: written through
+  `PrimMeta::set_active` when the value is local, so a prim erhe never
+  deactivated carries no `active` line, and read back through
+  `has_active()` / `get_active()`, which is what says the metadatum was
+  authored (metadata has no `authored()` wrapper). It is metadata, not an
+  attribute, so it never travels as an `erhe:` custom attribute
+  (`is_native_usd_property` lists it). USD prunes the whole subtree of an
+  inactive prim; erhe carries that as the derived `Item_flags::active` bit
+  rather than as a property value, so only the item's own opinion is
+  written. `Prim::IsActive` notes that inactive prims are pruned from
+  traversal, but the Tydra render-scene conversion the importer walks does
+  not prune them - the item is created inactive, which is what lets the
+  opinion round-trip.
 - Name sanitizing. `sanitize_usd_identifier` replaces every character outside
   `[A-Za-z0-9_]` with `_` and prefixes `_` to a name starting with a digit.
   Sanitizing can map two distinct item names onto one spelling, so the writer
@@ -415,6 +429,13 @@ split by subset, the material values, the camera projection and the light.
 `visibility` and `purpose`, a material with only `diffuseColor` authored, and
 a light with an `erhe:Light:temperature` custom attribute next to a bogus
 `erhe:Light:nope`, asserted through `get_value_source`.
+
+`test/data/active.usda` covers the prim `active` metadatum: an inactive
+`Xform` with a child and an active sibling. `test_usd_active.cpp` asserts
+that the inactive prim still becomes an item, that the metadatum lands as a
+local `active` value, that the child of an inactive prim is inactive without
+a local value of its own, that a prim without the metadatum has none, and
+that all of it survives a `save_usda` / `load_usd` round trip.
 
 `test/data/looks.usda` covers where materials sit: two `Scope`s below one
 `Xform` holding three materials, two of them named alike, each bound by a

@@ -228,7 +228,7 @@ auto Scene_tlas::update(
     m_instances.clear();
     m_instance_records.clear();
     for (const std::shared_ptr<erhe::scene::Mesh>& mesh : content_layer.meshes) {
-        if (!mesh || !mesh->is_visible() || mesh->skin) {
+        if (!mesh || !mesh->is_visible() || !mesh->is_active() || mesh->skin) {
             continue;
         }
         const erhe::scene::Node* node = mesh.get();

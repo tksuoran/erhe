@@ -129,7 +129,15 @@ public:
     // back to plain FK translation. Authored + serialized (by name; see
     // gltf_item_flags.cpp). See doc/fabrik-ik-requirements.md.
     static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
-    static constexpr uint64_t count                     = 38;
+    // Effective USD `active` state (doc/usd-compatibility-plan.md X2): the
+    // item's own active property AND the bit of its parent. USD prunes the
+    // whole subtree of an inactive prim regardless of a descendant's own
+    // opinion, so the subtree effect is carried by this derived bit rather
+    // than by property inheritance. Clear means the item and everything
+    // below it is out of rendering, picking, simulation and every consumer
+    // that walks content; the item tree still shows the row, dimmed.
+    static constexpr uint64_t active                    = (uint64_t{1} << 38);
+    static constexpr uint64_t count                     = 39;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -141,11 +149,13 @@ public:
         negative_determinant | affects_shadow;
 
     // Derived bits (D23 in doc/property-system.md): the effective value
-    // of the visible property (Item_base) and of the shadow_cast /
-    // lightmapped properties (erhe::scene::Mesh), written only by the
-    // property changed callbacks. set_flag_bits rejects them; write the
-    // property instead (set_visible, set_value(Mesh::shadow_cast_property, ...)).
-    static constexpr uint64_t derived = visible | shadow_cast | lightmapped;
+    // of the visible and active properties (Item_base) and of the
+    // shadow_cast / lightmapped properties (erhe::scene::Mesh), written
+    // only by the property changed callbacks. set_flag_bits rejects them;
+    // write the property instead (set_visible,
+    // set_value(Item_base::active_property, ...),
+    // set_value(Mesh::shadow_cast_property, ...)).
+    static constexpr uint64_t derived = visible | active | shadow_cast | lightmapped;
 
     // The flag bits an item's default Purpose is derived from
     // (Item_base::derive_purpose_from_flags): any of these set, or
@@ -195,6 +205,7 @@ public:
         "Child Hovered in Graph",
         "Ancestor Hovered in Graph",
         "IK Lock",
+        "Active",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;
@@ -523,6 +534,9 @@ public:
     [[nodiscard]] auto is_selected                 () const -> bool;
     [[nodiscard]] auto is_hovered                  () const -> bool;
     [[nodiscard]] auto is_visible                  () const -> bool;
+    // The effective Item_flags::active bit: false for an inactive item and
+    // for every item below one.
+    [[nodiscard]] auto is_active                   () const -> bool;
     [[nodiscard]] auto is_shown_in_ui              () const -> bool;
     [[nodiscard]] auto is_hidden                   () const -> bool;
     [[nodiscard]] auto is_lock_edit                 () const -> bool;
@@ -550,6 +564,13 @@ public:
     // so filters and readers stay bit tests. shadow_cast and lightmapped
     // are erhe::scene::Mesh properties mirrored the same way.
     static const erhe::property::Property<bool> visible_property;
+    // USD prim `active` metadata (doc/usd-compatibility-plan.md X2): the
+    // item's own opinion, so it is NOT an inherits-flagged property. The
+    // subtree effect - USD prunes everything below an inactive prim,
+    // whatever a descendant says of itself - is carried by the derived
+    // Item_flags::active bit, recomputed for the item and its subtree by
+    // rederive_active_flag_bits() whenever the value or the parent moves.
+    static const erhe::property::Property<bool> active_property;
     // USD purpose vocabulary (doc/usd-compatibility-plan.md M3): an
     // inherited enumeration whose default layer is derived from the
     // editor-only flag bits (D31), so an item that authors nothing reports
@@ -628,7 +649,20 @@ protected:
     // shadow_cast / lightmapped in Mesh).
     void        set_derived_flag_bit    (uint64_t bit, bool value);
 
+public:
+    // Recomputes Item_flags::active for this item from its own active value
+    // and its inheritance parent's bit, and, when the bit moved, for the
+    // whole subtree below it. Change-driven: called by the active property's
+    // changed callback and by the structural moves that can change what the
+    // parent is (Hierarchy::set_parent, Node_attachment::set_node,
+    // set_inheritance_container). An item whose bit did not move has a
+    // subtree that did not move either, so the walk stops there.
+    void rederive_active_flag_bits();
+
 private:
+    // True when the item has no inheritance parent (an item outside a tree
+    // uses its own value) or that parent's Item_flags::active bit is set.
+    [[nodiscard]] auto is_parent_active () const -> bool;
     static void on_flag_property_changed(erhe::property::Dependency_object& object, const erhe::property::Property_changed_args& args);
     void        rederive_flag_bits      ();
     void        sync_seal_with_lock_edit();
@@ -638,7 +672,7 @@ protected:
     Item_host*                             m_item_host  {nullptr};
     erhe::property::Dependency_object*     m_inheritance_container{nullptr};
     Unique_id<Item_base>                   m_id         {};
-    uint64_t                               m_flag_bits  {Item_flags::visible}; // derived bits start at the property defaults
+    uint64_t                               m_flag_bits  {Item_flags::visible | Item_flags::active}; // derived bits start at the property defaults
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};
     std::unique_ptr<std::filesystem::path> m_source_path{};

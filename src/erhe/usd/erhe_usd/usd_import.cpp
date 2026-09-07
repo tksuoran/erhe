@@ -594,6 +594,7 @@ private:
         for (const Authored_opinions& opinions : m_authored_opinions) {
             if (opinions.visibility_target != nullptr) {
                 apply_visibility_and_purpose(opinions.absolute_path, *opinions.visibility_target);
+                apply_active(opinions.absolute_path, *opinions.visibility_target);
             }
             apply_erhe_custom_attributes(opinions.absolute_path, opinions.primary, opinions.secondary);
         }
@@ -925,6 +926,25 @@ private:
         if (purpose_authored) {
             item.set_value(erhe::Item_base::purpose_property, to_erhe_purpose(purpose));
         }
+    }
+
+    // The `active` prim metadatum (doc/usd-compatibility-plan.md X2). It is
+    // metadata rather than an attribute, so `has_active()` is what says it
+    // was authored; a prim that authors none leaves the item's `active`
+    // property at its default. The Tydra render-scene conversion the
+    // importer walks does not prune inactive prims (unlike Prim::IsActive's
+    // traversal note), so an inactive prim still becomes an item - which is
+    // what lets `active = false` survive a round trip.
+    void apply_active(const std::string& absolute_path, erhe::Item_base& item)
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return;
+        }
+        if (!prim->metas().has_active()) {
+            return;
+        }
+        item.set_value(erhe::Item_base::active_property, prim->metas().get_active());
     }
 
     // A namespaced custom attribute `erhe:<Owner>:<name>` is an erhe property

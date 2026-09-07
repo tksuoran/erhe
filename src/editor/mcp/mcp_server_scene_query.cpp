@@ -408,6 +408,7 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 {"parent",      parent_prim ? parent_prim->get_name() : ""},
                 {"parent_id",   parent_prim ? json(parent_prim->get_id()) : json()},
                 {"locked",      prim->is_lock_edit()},
+                {"active",      prim->is_active()},
                 {"import_root", (prim->get_flag_bits() & erhe::Item_flags::import_root) != 0},
                 {"tags",        tags_arr}
             };
@@ -496,6 +497,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             {"parent",   prim_parent ? prim_parent->get_name() : ""},
             {"children", prim_children},
             {"visible",  found_prim->is_visible()},
+            {"active",   found_prim->is_active()},
             {"selected", found_prim->is_selected()},
             {"locked",   found_prim->is_lock_edit()},
             {"tags",     [&]() { json t = json::array(); for (const auto& tag : found_prim->get_tags()) t.push_back(tag); return t; }()}
@@ -744,6 +746,7 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             }
             : json(nullptr)},
         {"visible",        found_node->is_visible()},
+        {"active",         found_node->is_active()},
         {"selected",       found_node->is_selected()},
         {"locked",         found_node->is_lock_edit()},
         {"tags",           [&]() { json t = json::array(); for (const auto& tag : found_node->get_tags()) t.push_back(tag); return t; }()}

@@ -146,17 +146,17 @@ App_rendering::App_rendering(
     // content pass, while staying ID-rendered / raytrace-pickable /
     // selectable (see Item_flags).
     const Item_filter filter_not_selected{
-        .require_all_bits_set         = Item_flags::visible,
+        .require_all_bits_set         = Item_flags::visible | Item_flags::active,
         .require_at_least_one_bit_set = Item_flags::content  | Item_flags::controller,
         .require_all_bits_clear       = Item_flags::selected | Item_flags::hovered_in_item_tree | Item_flags::proxy_hidden
     };
     const Item_filter filter_selected{
-        .require_all_bits_set         = Item_flags::content | Item_flags::visible,
+        .require_all_bits_set         = Item_flags::content | Item_flags::visible | Item_flags::active,
         .require_at_least_one_bit_set = Item_flags::selected,
         .require_all_bits_clear       = Item_flags::proxy_hidden
     };
     const Item_filter filter_selected_or_hovered{
-        .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = Item_flags::proxy_hidden
     };
@@ -167,12 +167,12 @@ App_rendering::App_rendering(
     // outline pass itself includes proxy_hidden items (its geometry matches
     // the proxies', so the outline lands exactly around the rendered surface).
     const Item_filter filter_selected_or_hovered_proxy_hidden{
-        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::proxy_hidden,
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active | Item_flags::proxy_hidden,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = 0
     };
     const Item_filter filter_selected_or_hovered_outline{
-        .require_all_bits_set         = Item_flags::content  | Item_flags::visible,
+        .require_all_bits_set         = Item_flags::content  | Item_flags::visible | Item_flags::active,
         .require_at_least_one_bit_set = Item_flags::selected | Item_flags::hovered_in_item_tree,
         .require_all_bits_clear       = 0
     };
@@ -445,7 +445,7 @@ App_rendering::App_rendering(
             .blending_mode_policy          {Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode                {Primitive_mode::edge_lines},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::render_wireframe,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::render_wireframe,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
@@ -543,7 +543,7 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::override_with_base_render_pipeline},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::brush,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::brush,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
@@ -586,7 +586,7 @@ App_rendering::App_rendering(
             .blending_mode_policy         {Blending_mode_policy::opaque_primitives_only},
             .primitive_mode               {Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::bone_proxy,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::bone_proxy,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             },
@@ -649,7 +649,7 @@ App_rendering::App_rendering(
             .blending_mode_policy{Blending_mode_policy::allow_all},
             .primitive_mode      {erhe::primitive::Primitive_mode::polygon_fill},
             .filter{
-                .require_all_bits_set         = Item_flags::visible | Item_flags::rendertarget,
+                .require_all_bits_set         = Item_flags::visible | Item_flags::active | Item_flags::rendertarget,
                 .require_at_least_one_bit_set = 0,
                 .require_all_bits_clear       = 0
             }
