@@ -2569,7 +2569,7 @@
     "name": "open_scene"
   },
   {
-    "description": "Make a scene visible and framed in a viewport window, for headless capture. Binds the scene into a viewport (the one named in 'viewport', else the one already showing the scene, else an empty one, else a new window), gives it the scene's first camera or creates 'MCP frame camera' when the file authors none, and places that camera so the union world AABB of the scene's meshes fills the view. A scene opened from a file that authors no camera otherwise leaves its viewport bound to nothing and renders black. The viewport renders on a following frame: wait a few frames before capture_screenshot.",
+    "description": "Make a scene visible and framed in a viewport window, for headless capture. Binds the scene into a viewport (the one named in 'viewport', else the one already showing the scene, else an empty one, else a new window), looks through the scene's first authored camera when the file has one (untouched, as usdview does) or creates 'MCP frame camera' and places it so the union world AABB of the scene's meshes fills the view when it has none, and reports which in 'camera_source'. A scene opened from a file that authors no camera otherwise leaves its viewport bound to nothing and renders black. The viewport renders on a following frame: wait a few frames before capture_screenshot.",
     "inputSchema": {
       "properties": {
         "margin": {

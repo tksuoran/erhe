@@ -3017,22 +3017,27 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
         );
     }
 
-    // The camera the viewport shows is always this tool's own, created on the
-    // first call for the scene and reused after: an authored camera carries the
-    // view its file intended and a field of view this fit would have to honor
-    // (a USD camera whose focal length and aperture the importer does not carry
-    // arrives with no usable fov, and the fit then places the content out of
-    // sight), so the fit neither reads nor moves it.
+    // The camera the viewport shows: the scene's own first camera when the file
+    // authors one, as usdview looks through an authored camera rather than
+    // framing the bounds; otherwise this tool's own, created on the first call
+    // for the scene and reused after. An authored camera is only looked
+    // through - never moved, and its projection is never read - because it
+    // carries the view its file intended.
     std::shared_ptr<erhe::scene::Camera> camera{};
+    std::shared_ptr<erhe::scene::Camera> own_camera{};
     for (const std::shared_ptr<erhe::scene::Camera>& candidate : get_selectable_cameras(scene_root->get_scene())) {
         if (candidate->get_name() == "MCP frame camera") {
-            camera = candidate;
-            break;
+            own_camera = candidate;
+        } else if (!camera) {
+            camera = candidate;   // the first authored camera, in file order
         }
     }
+    const bool authored_camera = static_cast<bool>(camera);
     bool camera_created = false;
-    if (camera) {
-        // keep the camera an earlier call created
+    if (authored_camera) {
+        // look through the file's own camera, untouched
+    } else if (own_camera) {
+        camera = own_camera;   // keep the camera an earlier call created
     } else {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
         camera = std::make_shared<erhe::scene::Camera>("MCP frame camera");
@@ -3051,7 +3056,7 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
     bool      framed = false;
     glm::vec3 eye    {0.0f, 0.0f, 1.0f};
     glm::vec3 center {0.0f, 0.0f, 0.0f};
-    if (mesh_count > 0) {
+    if ((mesh_count > 0) && !authored_camera) {
         center = bounds.center();
         const float     radius = glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-4f);
         const float     fov_y  = glm::radians(45.0f);   // the fov set on this tool's camera
@@ -3122,6 +3127,7 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
         {"viewport",       target_window->get_title()},
         {"camera",         camera->get_name()},
         {"camera_created", camera_created},
+        {"camera_source",  authored_camera ? "authored" : "computed"},
         {"meshes",         mesh_count},
         {"framed",         framed},
         {"bounds_min",     json::array({bounds.min.x, bounds.min.y, bounds.min.z})},

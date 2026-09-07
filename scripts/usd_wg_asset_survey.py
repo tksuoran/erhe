@@ -633,7 +633,10 @@ def compose_comparison(record: dict, root: pathlib.Path, out_dir: pathlib.Path) 
             reference = reference_image.convert("RGB")
     except Exception:
         return ""
-    target_height = 520
+    # Both halves are shown at the reference render's own height, so a file
+    # whose authored camera the capture looks through puts the same view on
+    # both sides and a difference between them is a real one.
+    target_height = min(max(reference.height, 320), 900)
     panels = []
     for image in (capture, reference):
         scale = target_height / float(image.height)
@@ -878,6 +881,18 @@ REMEDY = [
      "read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage"),
     (re.compile(r"up axis .* has no erhe counterpart"),
      "carry a Z-up stage's up axis into the scene instead of importing it as Y-up"),
+    (re.compile(r"renders black when its bound material comes from another layer"),
+     "bind a material the file authors in a layer other than the mesh's own; the binding survives the "
+     "import (the log's 'has no converted material' line names the same prims) but the mesh shades black"),
+    (re.compile(r"colour reaches only one row"),
+     "sample a UsdUVTexture through every colour-space path the file exercises (raw / sRGB / auto / omit / "
+     "lin_ap1_scene); only one row reaches the surface, the rest render white"),
+    (re.compile(r"time-sampled translation is not evaluated"),
+     "evaluate a time-sampled xformOp at the sample the file's own render uses; the import takes the "
+     "default or first sample, so the prim sits elsewhere (plan section 6, animation)"),
+    (re.compile(r"translucent material renders opaque"),
+     "render a material whose opacity is below one as translucent; the stained-glass cube hides what is "
+     "behind it where the reference shows through"),
     (re.compile(r"per-channel output selection is ignored"),
      "honour a UsdUVTexture's outputs:r / :g / :b / :rgb connection: only the row whose swatch is wired "
      "to the output erhe reads samples, and the others render white"),
@@ -1126,12 +1141,14 @@ def run_self_test(args) -> int:
 
     print(f"self-test: {source.name} -> scene '{scene}', "
           f"camera '{framing.get('camera')}' (created={framing.get('camera_created')}), "
-          f"{framing.get('meshes')} mesh(es), framed={framing.get('framed')}, "
+          f"{framing.get('meshes')} mesh(es), camera_source={framing.get('camera_source')}, "
           f"viewport '{framing.get('viewport')}'")
     print(f"self-test: {shot} viewport stddev={stats.get('viewport_stddev')} "
           f"min={stats.get('viewport_min')} max={stats.get('viewport_max')}")
+    # A scene whose file authors a camera is looked through, not framed, so
+    # `framed` is false there by design.
     ok = (
-        bool(framing.get("framed")) and
+        (bool(framing.get("framed")) or (framing.get("camera_source") == "authored")) and
         (framing.get("meshes", 0) > 0) and
         stats.get("available", False) and
         (not stats.get("flat", True)) and
