@@ -407,7 +407,7 @@ light, a typeless or `Scope` prim that authors arcs is an `Xform`
 carrier, the `UsdGeom` primitive schemas import as the meshes they
 describe, and a `UsdUVTexture`'s wrap, transform, scale and per-channel
 normal decode reach the material, with a texture packed in a `.usdz`
-read out of the archive. The current run (146 entries, 47 work as they
+read out of the archive. The current run (146 entries, 50 work as they
 are) puts these at the top of the list, in the order the fixes are
 taken: reference targets that resolve nowhere (a target prim absent from
 its layer, an asset path not resolved against the layer that authored
