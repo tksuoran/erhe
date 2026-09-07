@@ -253,6 +253,7 @@ and is the identifier a USD prim path is.
 
 - All `Item_base`/`Hierarchy` instances must be `std::make_shared` due to `enable_shared_from_this`. Stack allocation will throw `bad_weak_ptr` on `set_parent()` etc.
 - `Hierarchy` copy constructor cannot call `shared_from_this()` (object not yet managed by shared_ptr). Children's `m_parent` weak_ptrs are left empty and must be fixed by calling `adopt_orphan_children()` after construction, or by calling `set_parent()` which does both the fix-up and depth correction automatically.
+- A clone constructor wires its own members directly and calls no API that ends in `hierarchy_sanity_check()`: the parent/child invariant the check tests does not hold until the fix-up above has run, so a check from a constructor reports every cloned child as `parent == (none)`. `erhe::scene::Xformable(src, for_clone)` attaches its cloned attachments with `set_node()` for this reason, not `attach()`.
 - Copy constructor uses `set_depth_recursive()` to ensure correct depths for the entire cloned subtree.
 - Tags (`m_tags`) are intentionally not copied during cloning - cloned items start with an empty tag set.
 - `Item_flags::count` and `Item_type::count` are the number of defined bits, not bitmasks. The `c_bit_labels` arrays have exactly `count` entries each.

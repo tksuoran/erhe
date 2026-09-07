@@ -346,7 +346,7 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
     }
 
     // Invalidate m_light_projections which at this point has stale texture handles
-    m_light_projections = erhe::scene_renderer::Light_projections{};
+    m_light_projections.clear();
 }
 
 // One white directional light along the view camera's axis, standing in for
@@ -415,6 +415,17 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
         std::chrono::steady_clock::time_point m_start;
     };
     const Cpu_timer_scope cpu_timer_scope{*this};
+
+    // Forget the previous frame's resolution before anything can return.
+    // Light_projections names its lights by raw pointer, and the consumer
+    // (Composition_pass -> Light_buffer::update) reads whatever this node
+    // last left here, whether or not this frame produced it. Every exit
+    // below - no scene root, no camera, no content mesh, no shadow map
+    // texture - would otherwise hand the forward pass the pointers of a
+    // frame whose lights may already have been destroyed, which is what a
+    // scene close does: the light layer empties and the lights are freed
+    // while this node's early exits keep the stale set alive.
+    m_light_projections.clear();
 
     // Render shadow maps
     const auto& scene_root = m_scene_view.get_scene_root();

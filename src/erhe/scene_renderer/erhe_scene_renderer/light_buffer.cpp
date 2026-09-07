@@ -288,6 +288,18 @@ Light_buffer::Light_buffer(
     init_command_buffer.clear_texture(*m_fallback_ddgi_rg_texture.get(),   {0.0, 0.0, 0.0, 0.0});
 }
 
+void Light_projections::clear()
+{
+    light_projection_transforms.clear();
+    light_partition = Light_layer_partition{};
+    shadow_map_2d_slots.clear();
+    point_shadow_slots.clear();
+    shadow_map_texture      = {};
+    shadow_distance_texture = {};
+    shadow_cube_texture     = {};
+    fit_debug_data.clear();
+}
+
 void Light_projections::apply(
     const Light_set&                                light_set,
     const erhe::scene::Camera*                      view_camera,

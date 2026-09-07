@@ -14,7 +14,13 @@ Editor-specific render graph nodes that extend `erhe::rendergraph` for shadow ma
 
 ## Public API / Integration Points
 
-- `Shadow_render_node::get_light_projections()` -- access light projection matrices
+- `Shadow_render_node::get_light_projections()` -- access light projection matrices. The consumer
+  (`Composition_pass` -> `Light_buffer::update`) reads whatever the node last left there, and the
+  slot entries name their lights by raw pointer, so `execute_rendergraph_node` clears the set before
+  anything can return: a frame in which the node bails (no scene root, no camera, no content mesh, no
+  shadow map texture) must hand the forward pass an empty set, never the previous frame's pointers.
+  Closing a scene empties its light layer and frees its lights while those early exits are being
+  taken, and a retained set is then a use-after-free in `Light_buffer::update`.
 - `Shadow_render_node::reconfigure()` -- change shadow map settings at runtime
 - `Post_processing::create_node()` -- factory for post-processing nodes
 - `Post_processing_node::viewport_toolbar()` -- per-viewport bloom/tonemap settings

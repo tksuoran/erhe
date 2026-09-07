@@ -1,0 +1,44 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Xform "Prefabs"
+    {
+        def Xform "bolt"
+        {
+            def Mesh "bolt_mesh"
+            {
+                uniform token subdivisionScheme = "none"
+                int[] faceVertexCounts = [4]
+                int[] faceVertexIndices = [0, 1, 2, 3]
+                point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            }
+        }
+
+        def Xform "assembly" (
+            references = </World/Prefabs/bolt>
+        )
+        {
+            double3 xformOp:translate = (0, 1, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    def Xform "Geometry"
+    {
+        def Xform "assembly_01" (
+            references = </World/Prefabs/assembly>
+        )
+        {
+            over "bolt_mesh"
+            {
+                token visibility = "invisible"
+            }
+        }
+    }
+}

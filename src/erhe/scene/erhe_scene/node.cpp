@@ -176,7 +176,16 @@ Xformable::Xformable(const Xformable& src, for_clone)
         auto attachment_clone_item = src_attachment->clone_attachment();
         auto attachment_clone = std::dynamic_pointer_cast<Node_attachment>(attachment_clone_item);
         if (attachment_clone) {
-            attach(attachment_clone);
+            // set_node(), not attach(): attach() ends in node_sanity_check(),
+            // and this object is still being constructed. Hierarchy's copy
+            // constructor has already deep-copied the children, and it cannot
+            // give them their back-link to this - no shared_ptr owns this yet,
+            // so shared_from_this() is unavailable. The back-links are wired by
+            // adopt_orphan_children() at the clone's first set_parent(), and
+            // until then the whole-subtree invariant the check tests simply
+            // does not hold: running it here reported every cloned child as
+            // "child <name> parent == (none)".
+            attachment_clone->set_node(this);
         }
     }
 }

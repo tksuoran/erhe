@@ -852,3 +852,89 @@ TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a
     ASSERT_TRUE(resave.error.empty()) << resave.error;
     EXPECT_EQ(read_text_file(stage_path), written);
 }
+
+// ---------------------------------------------------------------------------
+// Internal references whose target is itself a referencing prim
+// (doc/usd-compatibility-plan.md X1): the shape the usd-wg
+// `OverridingReferencedInternalReferencesTest` asset has - a component file
+// keeps its subcomponents as prims of the same layer and reaches them through
+// arcs with an empty asset path, and the referencing layer authors an `over`
+// over one of them.
+// ---------------------------------------------------------------------------
+
+class Internal_nested_reference_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = reference_test_data_path("references_internal_nested.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Internal_nested_reference_import, both_arcs_are_reported_in_authored_order)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+
+    const erhe::usd::Usd_prim_references& inner = result.data.references[0];
+    EXPECT_EQ(inner.stage_path, "/World/Prefabs/assembly");
+    ASSERT_EQ(inner.references.size(), 1u);
+    EXPECT_TRUE(inner.references[0].asset_path.empty());
+    EXPECT_EQ(inner.references[0].prim_path, "/World/Prefabs/bolt");
+
+    const erhe::usd::Usd_prim_references& outer = result.data.references[1];
+    EXPECT_EQ(outer.stage_path, "/World/Geometry/assembly_01");
+    ASSERT_EQ(outer.references.size(), 1u);
+    EXPECT_TRUE(outer.references[0].asset_path.empty());
+    EXPECT_EQ(outer.references[0].prim_path, "/World/Prefabs/assembly");
+}
+
+TEST_F(Internal_nested_reference_import, the_arc_targets_are_imported_prims_and_the_carriers_are_empty)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    // Both targets are authored in this layer, so both import as the ordinary
+    // prims they are - a template load reaches them by their prim path.
+    for (const char* name : {"bolt", "bolt_mesh", "assembly"}) {
+        EXPECT_TRUE(find_node(result.data, name).operator bool()) << name;
+    }
+
+    // The content each arc names is supplied by the instantiation, so neither
+    // carrier holds it at import.
+    for (const char* name : {"assembly", "assembly_01"}) {
+        const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, name);
+        ASSERT_TRUE(carrier.operator bool()) << name;
+        EXPECT_TRUE(carrier->get_children().empty()) << name;
+    }
+}
+
+TEST_F(Internal_nested_reference_import, a_carrier_that_is_itself_a_target_keeps_its_own_transform)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    const std::shared_ptr<erhe::scene::Node> assembly = find_node(result.data, "assembly");
+    ASSERT_TRUE(assembly.operator bool());
+    const glm::vec3 translation = glm::vec3{assembly->parent_from_node_transform().get_matrix()[3]};
+    EXPECT_FLOAT_EQ(translation.x, 0.0f);
+    EXPECT_FLOAT_EQ(translation.y, 1.0f);
+    EXPECT_FLOAT_EQ(translation.z, 0.0f);
+}
+
+TEST_F(Internal_nested_reference_import, the_over_below_the_outer_carrier_is_read_as_an_override)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    const erhe::scene::Instance_override* mesh_override = find_override(result.data.references[1].overrides, "bolt_mesh");
+    ASSERT_NE(mesh_override, nullptr);
+    const std::string* visible = find_override_value(*mesh_override, "visible");
+    ASSERT_NE(visible, nullptr);
+    EXPECT_EQ(*visible, "false");
+}

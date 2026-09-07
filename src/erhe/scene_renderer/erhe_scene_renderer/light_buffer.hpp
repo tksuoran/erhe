@@ -166,6 +166,15 @@ public:
         const erhe::scene::Shadow_frustum_fit_settings* fit_settings = nullptr
     );
 
+    // Forget the resolution of the previous apply(). The slot entries name
+    // their lights by raw pointer (Light_projection_transforms::light), so a
+    // resolution must never outlive the frame that produced it: a producer
+    // that can return without applying (Shadow_render_node has several such
+    // exits) clears first, and a consumer then reads an empty set instead of
+    // pointers into lights that have since been destroyed. Buffers keep their
+    // capacity.
+    void clear();
+
     // Debug / tooling lookup by light (linear). Hot paths index
     // light_projection_transforms by slot instead.
     // Warning: Returns pointer to element of member vector. That pointer
