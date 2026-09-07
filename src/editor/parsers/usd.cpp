@@ -1066,9 +1066,8 @@ void log_uncarried_editor_state(const Content_library& content_library, const st
     log_uncarried_editor_state_kind<Brush>        (content_library, "brush",              path);
     log_uncarried_editor_state_kind<Graph_mesh>   (content_library, "node graph mesh",    path);
     log_uncarried_editor_state_kind<Graph_texture>(content_library, "node graph texture", path);
-    log_uncarried_editor_state_kind<Style>        (content_library, "style",              path);
     // A folder is a Scope of the scene tree, so it is written when it holds a
-    // resource the file carries (today a material); a folder holding only
+    // resource the file carries (a material, or a style since X3); a folder holding only
     // kinds listed above, or nothing at all, is left out
     // (src/erhe/usd/notes.md, Export).
     log_parsers->info(
