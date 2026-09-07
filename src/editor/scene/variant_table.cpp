@@ -12,6 +12,7 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <charconv>
 
 namespace editor {
 
@@ -114,6 +115,11 @@ auto Variant_table::get_sets() const -> const std::vector<Variant_set>&
 auto Variant_table::find(const std::string& prim_path, const std::string& set_name) -> Variant_set*
 {
     for (Variant_set& set : m_sets) {
+        if (set.prim.expired()) {
+            // get_prim_path() of a gone prim is the empty string, which is
+            // also the path of a set the scene's root prim carries.
+            continue;
+        }
         if ((set.set_name == set_name) && (set.get_prim_path() == prim_path)) {
             return &set;
         }
@@ -165,6 +171,37 @@ void Variant_table::drop_expired_sets()
     );
 }
 
+auto make_variant_binding_path(
+    const erhe::Hierarchy&   carrier,
+    const erhe::scene::Mesh& mesh,
+    const std::size_t        primitive_index
+) -> std::string
+{
+    if (primitive_index >= mesh.get_primitives().size()) {
+        return std::string{};
+    }
+    // Names collected leaf first, up to (not including) the carrier.
+    std::vector<std::string> names;
+    const erhe::Hierarchy* node = &mesh;
+    while (node != &carrier) {
+        const std::shared_ptr<erhe::Hierarchy> parent = node->get_parent().lock();
+        if (!parent) {
+            return std::string{}; // the mesh does not sit below the carrier
+        }
+        names.push_back(node->get_name());
+        node = parent.get();
+    }
+    std::string path;
+    for (std::size_t i = names.size(); i > 0; --i) {
+        path += names[i - 1];
+        if (i > 1) {
+            path += '/';
+        }
+    }
+    path += fmt::format("#{}", primitive_index);
+    return path;
+}
+
 auto resolve_variant_binding(
     const Variant_set&     set,
     const Variant&         variant,
@@ -174,6 +211,30 @@ auto resolve_variant_binding(
     Variant_binding_target target{};
     const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
     if (!prim) {
+        return target;
+    }
+    // `<mesh path>#<primitive index>`: one primitive of a mesh, named by its
+    // position (see make_variant_binding_path).
+    const std::size_t hash = binding.relative_path.rfind('#');
+    if (hash != std::string::npos) {
+        erhe::Hierarchy* const indexed = find_binding_item(prim, binding.relative_path.substr(0, hash));
+        if ((indexed == nullptr) || !erhe::is<erhe::scene::Mesh>(indexed)) {
+            return target;
+        }
+        erhe::scene::Mesh* const indexed_mesh = static_cast<erhe::scene::Mesh*>(indexed);
+        const std::string index_text = binding.relative_path.substr(hash + 1);
+        std::size_t primitive_index = 0;
+        const std::from_chars_result parsed = std::from_chars(
+            index_text.data(), index_text.data() + index_text.size(), primitive_index
+        );
+        if ((parsed.ec != std::errc{}) ||
+            (parsed.ptr != (index_text.data() + index_text.size())) ||
+            (primitive_index >= indexed_mesh->get_primitives().size()))
+        {
+            return target;
+        }
+        target.mesh = std::static_pointer_cast<erhe::scene::Mesh>(indexed_mesh->shared_from_this());
+        target.primitive_indices.push_back(primitive_index);
         return target;
     }
     erhe::Hierarchy* const bound = find_binding_item(prim, binding.relative_path);

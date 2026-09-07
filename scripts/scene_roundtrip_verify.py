@@ -1957,6 +1957,132 @@ def section_usd_round_trip(usdchecker_arg):
 # main
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# glTF material variants (doc/usd-compatibility-plan.md X4)
+# --------------------------------------------------------------------------
+
+GLTF_VARIANTS_SOURCE = pathlib.Path("src/erhe/gltf/test/data/variants.gltf")
+GLTF_VARIANTS_SAVE   = pathlib.Path("logs") / "gltf_roundtrip_variants.glb"
+
+
+def wait_for_mesh_materials(scene_name, node_name, expected, tries=100):
+    """select_variant is queued on the operation stack; poll the mesh until it
+    shows the expected materials."""
+    materials = None
+    for _ in range(tries):
+        details = call("get_node_details", {"scene_name": scene_name, "node_name": node_name})
+        materials = details.get("mesh", {}).get("materials")
+        if materials == expected:
+            return materials
+        time.sleep(0.1)
+    return materials
+
+
+def gltf_variant_sets(scene_name):
+    """The scene's variant table without the carrying prim's path: the live
+    scene names the set by the prim it hangs on (the import root of a foreign
+    file), the saved file by its own root, and those are the same set."""
+    sets = call("get_scene_variants", {"scene_name": scene_name}).get("variant_sets", [])
+    return sorted(
+        (
+        {
+            "set_name": v.get("set_name"),
+            "selected": v.get("selected"),
+            "variants": [
+                {
+                    "name":     variant.get("name"),
+                    "bindings": sorted(
+                        f"{b.get('relative_path')}={b.get('material')}"
+                        for b in variant.get("bindings", [])
+                    ),
+                }
+                for variant in v.get("variants", [])
+            ],
+        }
+        for v in sets
+        ),
+        key=lambda entry: entry["set_name"]
+    )
+
+
+def section_gltf_variants():
+    """KHR_materials_variants: a foreign file's variant list becomes the
+    scene's table, a switch assigns the variant's materials, and an erhe save
+    writes both the list and the selection back."""
+    S = "gltf-variants"
+    if not GLTF_VARIANTS_SOURCE.is_file():
+        check(S, "variants.gltf fixture available", False, str(GLTF_VARIANTS_SOURCE))
+        return
+
+    scene_name = GLTF_VARIANTS_SOURCE.name
+    queued = mutate("open_scene", {"path": str(GLTF_VARIANTS_SOURCE)})
+    check(S, "open_scene queued", bool(queued) and queued.get("queued"), str(queued))
+    if not check(S, f"scene '{scene_name}' appears in list_scenes", wait_for_scene(scene_name)):
+        return
+
+    sets = call("get_scene_variants", {"scene_name": scene_name}).get("variant_sets", [])
+    check(S, "one variant set named 'materials'",
+          (len(sets) == 1) and (sets[0].get("set_name") == "materials"), str(sets))
+    check(S, "no variant selected on open (KHR authors none)",
+          bool(sets) and (sets[0].get("selected") == ""), str(sets[0].get("selected") if sets else None))
+    check(S, "the file's two variants are listed",
+          bool(sets) and ([v.get("name") for v in sets[0].get("variants", [])] == ["red", "green"]),
+          str([v.get("name") for v in sets[0].get("variants", [])] if sets else None))
+    materials = wait_for_mesh_materials(scene_name, "Panel", ["Plain", "Plain"])
+    check(S, "primitives keep the file's own materials before a switch",
+          materials == ["Plain", "Plain"], str(materials))
+
+    prim_path = sets[0].get("prim_path") if sets else ""
+    mutate("select_variant", {"scene_name": scene_name, "prim_path": prim_path,
+                              "set_name": "materials", "variant_name": "green"})
+    materials = wait_for_mesh_materials(scene_name, "Panel", ["Green", "Plain"])
+    check(S, "the selected variant's bindings are assigned; unmapped primitives keep theirs",
+          materials == ["Green", "Plain"], str(materials))
+
+    original = gltf_variant_sets(scene_name)
+
+    answer = mutate("save_scene", {"scene_name": scene_name, "path": str(GLTF_VARIANTS_SAVE)})
+    check(S, "save_scene wrote the scene", GLTF_VARIANTS_SAVE.is_file() and bool(answer) and answer.get("saved"),
+          str(answer))
+    mutate("close_scene", {"scene_name": scene_name})
+    check(S, f"scene '{scene_name}' closed", wait_for_scene_gone(scene_name))
+    if not GLTF_VARIANTS_SAVE.is_file():
+        return
+
+    reloaded_name = GLTF_VARIANTS_SAVE.stem
+    mutate("load_scene", {"path": str(GLTF_VARIANTS_SAVE)})
+    if not check(S, f"scene '{reloaded_name}' appears in list_scenes", wait_for_scene(reloaded_name)):
+        return
+    reloaded = gltf_variant_sets(reloaded_name)
+    mismatches = []
+    diff_json(reloaded, original, "variants", mismatches)
+    check(S, "round-trip diff: variant table identical", not mismatches, f"{len(mismatches)} mismatches")
+    for mismatch in mismatches[:10]:
+        print(f"       {mismatch}")
+    reloaded_sets = call("get_scene_variants", {"scene_name": reloaded_name}).get("variant_sets", [])
+    check(S, "the reloaded set is carried by the scene's root prim",
+          bool(reloaded_sets) and (reloaded_sets[0].get("prim_path") == ""),
+          str(reloaded_sets[0].get("prim_path") if reloaded_sets else None))
+    materials = wait_for_mesh_materials(reloaded_name, "Panel", ["Green", "Plain"])
+    check(S, "the saved selection is bound again after reload",
+          materials == ["Green", "Plain"], str(materials))
+
+    # The reloaded table drives a switch of its own, and one undo puts the
+    # materials back: the bindings came back as bindings, not as text.
+    mutate("select_variant", {"scene_name": reloaded_name, "prim_path": "",
+                              "set_name": "materials", "variant_name": "red"})
+    materials = wait_for_mesh_materials(reloaded_name, "Panel", ["Red", "Red"])
+    check(S, "a switch on the reloaded scene assigns both mapped primitives",
+          materials == ["Red", "Red"], str(materials))
+    mutate("undo", {})
+    materials = wait_for_mesh_materials(reloaded_name, "Panel", ["Green", "Plain"])
+    check(S, "one undo restores the previous variant's materials",
+          materials == ["Green", "Plain"], str(materials))
+
+    mutate("close_scene", {"scene_name": reloaded_name})
+    check(S, f"scene '{reloaded_name}' closed", wait_for_scene_gone(reloaded_name))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=3743, help="MCP server port (default 3743)")
@@ -1978,6 +2104,7 @@ def main():
         section_prefab_scene,
         lambda: section_foreign_tools(arguments.gltf_validator, arguments.blender),
         lambda: section_usd_round_trip(arguments.usdchecker),
+        section_gltf_variants,
     ]
     for section in sections:
         name = getattr(section, "__name__", "lambda section")
@@ -1994,7 +2121,8 @@ def main():
         print(f"  FAIL {section}: {name} -- {detail}")
 
     if not failed and not arguments.keep_files:
-        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF] + USD_ARTIFACTS:
+        for artifact in [E2E_GLB, FOREIGN_GLB, PREFAB_RESAVE_GLB, R6_GLTF, R6_RESAVE_GLTF,
+                         GLTF_VARIANTS_SAVE] + USD_ARTIFACTS:
             artifact.unlink(missing_ok=True)
     elif arguments.keep_files:
         print(f"(kept {E2E_GLB}, {FOREIGN_GLB}, {PREFAB_RESAVE_GLB}, {R6_GLTF} and {R6_RESAVE_GLTF})")

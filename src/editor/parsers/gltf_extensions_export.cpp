@@ -12,17 +12,21 @@
 #include "geometry_graph/geometry_graph_mesh.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "geometry_graph/graph_mesh_serialization.hpp"
+#include "parsers/gltf.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/variant_table.hpp"
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/graph_texture_serialization.hpp"
 
 #include "scene/generated/scene_settings_serialization.hpp"
 
+#include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
 #include "erhe_gltf/gltf_physics.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_material.hpp"
 #include "erhe_primitive/material.hpp"
@@ -301,6 +305,85 @@ void add_material_asset_references(
     }
 }
 
+// The variant set the file gets: a glTF asset holds ONE list of variant
+// names, so the set written is the one the file's own root carries - the
+// scene's root prim, or an `import_root` child of it, whose children the
+// writer writes in the root's place, giving the same paths in the file. Any
+// other set (a USD-born per-prim set, a second imported asset's) belongs to
+// no glTF root and is named in a warning instead.
+[[nodiscard]] auto find_exported_variant_set(
+    Scene_root&                  scene_root,
+    const std::filesystem::path& export_path
+) -> const Variant_set*
+{
+    Variant_table& variant_table = scene_root.get_variant_table();
+    variant_table.drop_expired_sets();
+    const erhe::scene::Scene& scene = scene_root.get_scene();
+    const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
+    const Variant_set* exported = nullptr;
+    for (const Variant_set& set : variant_table.get_sets()) {
+        const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+        const bool is_root = (prim == scene_root_node);
+        const bool is_import_root_of_scene =
+            !is_root &&
+            (prim != nullptr) &&
+            ((prim->get_flag_bits() & erhe::Item_flags::import_root) != 0) &&
+            (std::dynamic_pointer_cast<erhe::Hierarchy>(prim) != nullptr) &&
+            (std::dynamic_pointer_cast<erhe::Hierarchy>(prim)->get_parent().lock() == scene_root_node);
+        if ((set.set_name == c_gltf_variant_set_name) && (is_root || is_import_root_of_scene) && (exported == nullptr)) {
+            exported = &set;
+            continue;
+        }
+        log_parsers->warn(
+            "save glTF '{}': variant set '{}' on '{}' is not the file's own variant list - it is not written",
+            erhe::file::to_string(export_path), set.set_name, set.get_prim_path()
+        );
+    }
+    return exported;
+}
+
+// The written set's variants as the writer's list: the material each binding
+// assigns, per mesh primitive the binding names.
+void collect_gltf_material_variants(
+    erhe::gltf::Gltf_export_arguments& arguments,
+    const Variant_set&                 set,
+    const std::filesystem::path&       export_path
+)
+{
+    for (const Variant& variant : set.variants) {
+        erhe::gltf::Gltf_export_material_variant export_variant{};
+        export_variant.name = variant.name;
+        for (const Variant_binding& binding : variant.bindings) {
+            const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
+            if (!material) {
+                log_parsers->warn(
+                    "save glTF '{}': variant '{}' binds a material that is no longer in the editor - the binding is not written",
+                    erhe::file::to_string(export_path), variant.name
+                );
+                continue;
+            }
+            const Variant_binding_target target = resolve_variant_binding(set, variant, binding);
+            if (!target.mesh || target.primitive_indices.empty()) {
+                log_parsers->warn(
+                    "save glTF '{}': variant '{}' binds '{}', which names no mesh primitive of the scene - the binding is not written",
+                    erhe::file::to_string(export_path), variant.name, binding.relative_path
+                );
+                continue;
+            }
+            for (const std::size_t primitive_index : target.primitive_indices) {
+                export_variant.bindings.push_back(
+                    erhe::gltf::Gltf_export_material_variant_binding{
+                        .mesh            = target.mesh.get(),
+                        .primitive_index = primitive_index,
+                        .material        = material
+                    }
+                );
+            }
+        }
+        arguments.material_variants.push_back(std::move(export_variant));
+    }
+}
+
 } // anonymous namespace
 
 void add_gltf_editor_state(
@@ -315,6 +398,14 @@ void add_gltf_editor_state(
     const erhe::scene::Scene& scene = scene_root.get_scene();
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
+
+    // KHR_materials_variants (doc/usd-compatibility-plan.md X4): the scene's
+    // variant set goes back into the file it came from, and its selection
+    // into the ERHE_scene settings below.
+    const Variant_set* const exported_variant_set = find_exported_variant_set(scene_root, export_path);
+    if (exported_variant_set != nullptr) {
+        collect_gltf_material_variants(arguments, *exported_variant_set, export_path);
+    }
 
     const std::shared_ptr<Asset_payload_data> data = std::make_shared<Asset_payload_data>();
 
@@ -422,7 +513,23 @@ void add_gltf_editor_state(
             {"ambient_light",  json_vec4(scene.ambient_light)},
             {"enable_physics", scene_root.has_physics_world()},
         };
-        const Scene_settings& scene_settings = scene_root.get_scene_settings();
+        // A COPY: the file records the selection of the set it writes, under
+        // the path the reloaded scene carries that set on - the file's own
+        // root, whose path is empty. Selections of sets this file does not
+        // write name nothing in it, so they are left out.
+        Scene_settings scene_settings = scene_root.get_scene_settings();
+        scene_settings.variant_selections.clear();
+        if (exported_variant_set != nullptr) {
+            for (const Variant_selection& selection : scene_root.get_scene_settings().variant_selections) {
+                if ((selection.set_name == exported_variant_set->set_name) &&
+                    (selection.prim_path == exported_variant_set->get_prim_path()))
+                {
+                    Variant_selection written = selection;
+                    written.prim_path.clear();
+                    scene_settings.variant_selections.push_back(std::move(written));
+                }
+            }
+        }
         if (!is_default(scene_settings)) {
             // The codegen serializer pretty-prints; minify through nlohmann.
             const nlohmann::json settings_json = nlohmann::json::parse(serialize(scene_settings, 0), nullptr, false);

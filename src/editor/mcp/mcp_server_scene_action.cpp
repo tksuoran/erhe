@@ -190,8 +190,10 @@ auto Mcp_server::action_select_variant(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    if (prim_path.empty() || set_name.empty() || variant_name.empty()) {
-        json r = make_text_content("prim_path, set_name and variant_name are required");
+    // An empty prim_path is the scene's root prim, which is what carries a
+    // glTF asset's one variant set (doc/usd-compatibility-plan.md X4).
+    if (set_name.empty() || variant_name.empty()) {
+        json r = make_text_content("set_name and variant_name are required");
         r["isError"] = true;
         return r.dump();
     }

@@ -211,7 +211,11 @@ directly under it.
 ### get_scene_variants
 
 List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): a
-USD file's material-binding `variantSet`s become one entry each.
+USD file's material-binding `variantSet`s become one entry each, and a glTF
+file's `KHR_materials_variants` list one entry named `materials`, carried by
+the prim the file's content sits under (the scene's root prim, whose path is
+empty, for a scene opened from a file; the import root for an imported
+asset).
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_variants","arguments":{"scene_name":"variants"}}}'
@@ -221,7 +225,8 @@ Returns: `{scene_name, variant_sets: [{prim_path, set_name, selected,
 variants: [{name, bindings: [{relative_path, material}]}],
 unsupported_opinion_count}]}` - `prim_path` is the path of the prim carrying
 the set, `relative_path` the path of the bound prim below it (empty for that
-prim itself), and `unsupported_opinion_count` how many opinions beyond
+prim itself, and `<mesh path>#<primitive index>` for a primitive a file names
+only by position, which is every glTF primitive), and `unsupported_opinion_count` how many opinions beyond
 material bindings the file's variants authored, which this slice neither
 applies nor writes back.
 
@@ -315,7 +320,8 @@ Returns: `{node_name, node_id, brush, material, position, scale}`
 Select one variant of one variant set: the chosen variant's material bindings
 are assigned and the selection is recorded in the scene settings
 (`Scene_settings.variant_selections`, saved with the scene), as ONE undoable
-operation. Use `get_scene_variants` for the paths and names.
+operation. Use `get_scene_variants` for the paths and names; an empty
+`prim_path` names the scene's root prim.
 
 ```bash
 py -3 scripts/mcp_call.py select_variant b64:<base64 of {"scene_name":"variants","prim_path":"World/Holder","set_name":"look","variant_name":"red"}>

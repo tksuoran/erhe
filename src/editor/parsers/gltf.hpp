@@ -23,6 +23,12 @@ namespace tf              { class Executor; }
 
 namespace editor {
 
+// The name of the one variant set a glTF asset's KHR_materials_variants list
+// becomes (doc/usd-compatibility-plan.md X4). glTF holds a single asset-wide
+// list of variant names, so a glTF-backed scene's variant table holds exactly
+// one set under this name.
+inline constexpr const char* c_gltf_variant_set_name = "materials";
+
 class App_context;
 class Content_library;
 class Materials;

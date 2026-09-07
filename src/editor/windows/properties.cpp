@@ -258,13 +258,17 @@ void Properties::variant_properties(Scene_root& scene_root)
     }
     push_group("Variants", ImGuiTreeNodeFlags_Framed);
     for (const Variant_set& set : sets) {
-        const std::string prim_path = set.get_prim_path();
-        const std::string set_name  = set.set_name;
-        if (prim_path.empty()) {
+        const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+        if (!prim) {
             continue; // the carrying prim is gone; the table drops the set on the removal message
         }
+        const std::string prim_path = set.get_prim_path();
+        const std::string set_name  = set.set_name;
+        // A set the scene's root prim carries has the empty path (a glTF
+        // asset's one variant list, X4): label it by the prim's name.
+        std::string label = (prim_path.empty() ? prim->get_name() : prim_path) + " : " + set_name;
         add_entry(
-            prim_path + " : " + set_name,
+            std::move(label),
             [this, &scene_root, &set, prim_path, set_name]() {
                 if (!ImGui::BeginCombo("##", set.selected.c_str())) {
                     return;

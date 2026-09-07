@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace erhe           { class Item_base; }
+namespace erhe           { class Hierarchy; class Item_base; }
 namespace erhe::primitive { class Material; }
 namespace erhe::scene     { class Mesh; }
 
@@ -89,6 +89,20 @@ public:
 private:
     std::vector<Variant_set> m_sets;
 };
+
+// The binding path naming one primitive of `mesh` below `carrier` by its
+// index: `<mesh path>#<primitive index>`. A binding path names a primitive
+// one of two ways, and resolve_variant_binding reads both: by the name the
+// file gave it, as a deeper path segment (a USD GeomSubset, X4 commit 1), and
+// by index after a '#' where the file gives it no name of its own - which is
+// every glTF primitive, since KHR_materials_variants maps materials onto the
+// primitives of a mesh by position. Empty when the mesh does not sit below
+// the carrier or the primitive index is out of range.
+[[nodiscard]] auto make_variant_binding_path(
+    const erhe::Hierarchy&   carrier,
+    const erhe::scene::Mesh& mesh,
+    std::size_t              primitive_index
+) -> std::string;
 
 // The mesh primitives one binding of `set` names. An empty
 // `primitive_indices` means the binding reached nothing (a path that names no

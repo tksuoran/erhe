@@ -1231,6 +1231,7 @@ public:
         const Clock::time_point mesh_start_time = Clock::now();
         m_data_out.meshes.resize(mesh_count);
         m_mesh_uid_claimed.resize(mesh_count);
+        m_mesh_variant_mappings.resize(mesh_count);
         for (std::size_t i = 0; i < mesh_count; ++i) {
             pre_parse_mesh(i);
         }
@@ -1286,6 +1287,11 @@ public:
                 parse_node(i, m_arguments.root_node);
             }
         }
+
+        // After the node pass: the bindings name the Mesh prims the nodes
+        // instantiated.
+        log_gltf->trace("parsing material variants");
+        parse_material_variants();
 
         log_gltf->trace("parsing skins");
         for (std::size_t i = 0, end = m_asset->skins.size(); i < end; ++i) {
@@ -2730,7 +2736,9 @@ private:
             std::shared_ptr<erhe::primitive::Primitive> geometry_primitive =
                 parse_erhe_geometry_primitive(primitive, geometry_extension_it->second, name);
             if (geometry_primitive) {
+                const std::size_t erhe_primitive_index = erhe_mesh.get_primitives().size();
                 erhe_mesh.add_primitive(geometry_primitive, erhe_material);
+                record_variant_mappings(mesh_index, primitive, erhe_primitive_index);
                 return;
             }
         }
@@ -2745,8 +2753,96 @@ private:
             log_gltf->error("glTF mesh '{}' primitive {}: unsupported primitive (non-indexed or geometry build failed) - skipped", mesh.name.c_str(), primitive_index);
             return;
         }
+        const std::size_t erhe_primitive_index = erhe_mesh.get_primitives().size();
         erhe_mesh.add_primitive(primitive_entry.primitive, erhe_material);
+        record_variant_mappings(mesh_index, primitive, erhe_primitive_index);
     }
+
+    // KHR_materials_variants: which material one primitive maps per variant,
+    // kept per glTF mesh with the erhe primitive index the parse gave it.
+    // Written only by the task parsing that mesh, so the per-mesh slots need
+    // no locking.
+    class Primitive_variant_mappings
+    {
+    public:
+        std::size_t                             erhe_primitive_index{0};
+        std::vector<std::optional<std::size_t>> material_indices; // per variant index
+    };
+    std::vector<std::vector<Primitive_variant_mappings>> m_mesh_variant_mappings;
+    // Every Mesh prim the parse instantiated from a glTF mesh, with the glTF
+    // mesh index it came from: a glTF mesh is cloned once per instantiating
+    // node, and the clones are what the variants bind materials on.
+    std::vector<std::pair<std::size_t, std::shared_ptr<erhe::scene::Mesh>>> m_mesh_instances;
+
+    void record_variant_mappings(
+        const std::size_t          mesh_index,
+        const fastgltf::Primitive& primitive,
+        const std::size_t          erhe_primitive_index
+    )
+    {
+        if (primitive.mappings.empty()) {
+            return;
+        }
+        Primitive_variant_mappings record{};
+        record.erhe_primitive_index = erhe_primitive_index;
+        record.material_indices.reserve(primitive.mappings.size());
+        for (const fastgltf::Optional<std::size_t>& mapping : primitive.mappings) {
+            record.material_indices.push_back(
+                mapping.has_value() ? std::optional<std::size_t>{mapping.value()} : std::optional<std::size_t>{}
+            );
+        }
+        m_mesh_variant_mappings[mesh_index].push_back(std::move(record));
+    }
+
+    // The asset's KHR_materials_variants list, resolved to the objects this
+    // parse created (doc/usd-compatibility-plan.md X4). The bindings are per
+    // instantiated Mesh prim, so a glTF mesh two nodes instantiate yields a
+    // binding for each - the caller's table names them by their own paths.
+    void parse_material_variants()
+    {
+        const std::size_t variant_count = m_asset->materialVariants.size();
+        if (variant_count == 0) {
+            return;
+        }
+        m_data_out.material_variants.resize(variant_count);
+        for (std::size_t variant_index = 0; variant_index < variant_count; ++variant_index) {
+            m_data_out.material_variants[variant_index].name = std::string{m_asset->materialVariants[variant_index]};
+        }
+        std::size_t binding_count = 0;
+        for (const std::pair<std::size_t, std::shared_ptr<erhe::scene::Mesh>>& instance : m_mesh_instances) {
+            const std::size_t mesh_index = instance.first;
+            if (!instance.second || (mesh_index >= m_mesh_variant_mappings.size())) {
+                continue;
+            }
+            for (const Primitive_variant_mappings& record : m_mesh_variant_mappings[mesh_index]) {
+                const std::size_t mapped_count = std::min(variant_count, record.material_indices.size());
+                for (std::size_t variant_index = 0; variant_index < mapped_count; ++variant_index) {
+                    const std::optional<std::size_t>& material_index = record.material_indices[variant_index];
+                    if (!material_index.has_value()) {
+                        continue; // this variant leaves the primitive its own material
+                    }
+                    if (material_index.value() >= m_data_out.materials.size()) {
+                        log_gltf->warn(
+                            "KHR_materials_variants: variant '{}' maps material {}, which the asset does not have - the mapping is dropped",
+                            m_data_out.material_variants[variant_index].name, material_index.value()
+                        );
+                        continue;
+                    }
+                    Gltf_material_variant_binding binding{};
+                    binding.mesh            = instance.second;
+                    binding.primitive_index = record.erhe_primitive_index;
+                    binding.material        = m_data_out.materials[material_index.value()];
+                    m_data_out.material_variants[variant_index].bindings.push_back(std::move(binding));
+                    ++binding_count;
+                }
+            }
+        }
+        log_gltf->info(
+            "KHR_materials_variants: {} variants, {} material bindings",
+            variant_count, binding_count
+        );
+    }
+
     void parse_skin(const std::size_t skin_index)
     {
         ERHE_PROFILE_FUNCTION();
@@ -2992,6 +3088,9 @@ private:
             clone->set_name(name);
             clone->set_source_path(m_arguments.path);
             clone->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui);
+            // KHR_materials_variants binds materials on the instantiated
+            // prims, not on the template mesh.
+            m_mesh_instances.emplace_back(mesh_index, clone);
             return clone;
         };
 
@@ -3687,6 +3786,7 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
         fastgltf::Extensions::KHR_materials_clearcoat             |
         fastgltf::Extensions::KHR_materials_emissive_strength     |
         fastgltf::Extensions::KHR_materials_sheen                 |
+        fastgltf::Extensions::KHR_materials_variants              |
         //fastgltf::Extensions::KHR_draco_mesh_compression          |
         fastgltf::Extensions::KHR_implicit_shapes                 |
         fastgltf::Extensions::KHR_physics_rigid_bodies            |
@@ -5397,6 +5497,62 @@ private:
         }
     }
 
+    // KHR_materials_variants (doc/usd-compatibility-plan.md X4): the asset's
+    // variant names and, per variant, the material each mapped primitive
+    // binds. The primitive's own "material" is left alone - it is what a
+    // loader binds while no variant is selected. Runs after the mesh passes
+    // (the mesh and primitive indices must exist) and before
+    // combine_buffers() (process_material can embed texture sources).
+    void process_material_variants()
+    {
+        const std::size_t variant_count = m_arguments.material_variants.size();
+        if (variant_count == 0) {
+            return;
+        }
+        for (const Gltf_export_material_variant& variant : m_arguments.material_variants) {
+            m_gltf_asset.materialVariants.emplace_back(variant.name);
+        }
+        for (std::size_t variant_index = 0; variant_index < variant_count; ++variant_index) {
+            const Gltf_export_material_variant& variant = m_arguments.material_variants[variant_index];
+            for (const Gltf_export_material_variant_binding& binding : variant.bindings) {
+                if ((binding.mesh == nullptr) || !binding.material) {
+                    continue;
+                }
+                const auto mesh_it = m_erhe_mesh_to_gltf_mesh_index.find(binding.mesh);
+                const auto map_it  = m_erhe_mesh_primitive_index_map.find(binding.mesh);
+                if ((mesh_it == m_erhe_mesh_to_gltf_mesh_index.end()) ||
+                    (map_it == m_erhe_mesh_primitive_index_map.end()) ||
+                    (binding.primitive_index >= map_it->second.size()) ||
+                    !map_it->second[binding.primitive_index].has_value())
+                {
+                    log_gltf->warn(
+                        "KHR_materials_variants: variant '{}' binds mesh '{}' primitive {}, which is outside the exported asset - skipped",
+                        variant.name, binding.mesh->get_name(), binding.primitive_index
+                    );
+                    continue;
+                }
+                const std::size_t gltf_primitive_index = map_it->second[binding.primitive_index].value();
+                fastgltf::Mesh& gltf_mesh = m_gltf_asset.meshes[mesh_it->second];
+                fastgltf::Primitive& gltf_primitive = gltf_mesh.primitives[gltf_primitive_index];
+                gltf_primitive.mappings.resize(variant_count);
+                const std::size_t material_index = process_material(binding.material.get());
+                const fastgltf::Optional<std::size_t>& mapped = gltf_primitive.mappings[variant_index];
+                if (mapped.has_value() && (mapped.value() != material_index)) {
+                    // Two erhe meshes of identical content share one glTF
+                    // mesh, and KHR_materials_variants is per glTF primitive:
+                    // the first binding written wins.
+                    log_gltf->warn(
+                        "KHR_materials_variants: variant '{}' binds two materials to mesh '{}' primitive {} - keeping material {}",
+                        variant.name, binding.mesh->get_name(), binding.primitive_index, mapped.value()
+                    );
+                    continue;
+                }
+                gltf_primitive.mappings[variant_index] = material_index;
+            }
+        }
+        m_gltf_asset.extensionsUsed.emplace_back("KHR_materials_variants");
+    }
+
     std::unordered_map<const erhe::scene::Camera*, std::size_t> m_erhe_camera_to_gltf_camera_index;
     [[nodiscard]] auto process_camera(erhe::scene::Camera* erhe_camera) -> std::size_t
     {
@@ -6915,6 +7071,10 @@ auto Gltf_exporter::export_gltf() -> std::string
     // After the node and physics passes so the extra meshes land last in
     // the meshes array (deterministic indices for ERHE_brushes).
     process_extra_meshes();
+
+    // After every mesh pass (the variant bindings name exported meshes and
+    // primitives), before combine_buffers() (materials add buffers).
+    process_material_variants();
 
     // After the node pass (indices resolved), before combine_buffers()
     // (both add buffers).

@@ -70,6 +70,21 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
   set and must not be elided. `Property_flags::native_gltf` marks the
   registrations this file format carries natively, for the property
   serializer of `doc/gltf-properties-extension-plan.md`.
+- `KHR_materials_variants` is read and written (doc/usd-compatibility-plan.md
+  X4). `parse_material_variants()` resolves the asset's flat list into
+  `Gltf_data::material_variants`: per variant name, one binding per (Mesh
+  prim, erhe primitive index, material) a mapping names. The bindings are on
+  the instantiated Mesh prims, not on the template mesh, so a glTF mesh two
+  nodes instantiate yields one binding each. A primitive that maps no
+  material for a variant contributes no binding, which is the extension's
+  "keep the primitive's own material" rule. `process_material_variants()`
+  writes `Gltf_export_arguments::material_variants` back: the asset's
+  `variants` list plus each exported primitive's `mappings`, leaving the
+  primitive's `material` alone; the erhe primitive index is mapped through the
+  exporter's own primitive index map, so a primitive that did not export is
+  skipped with a warning. Two erhe meshes of identical content share one glTF
+  mesh, and the extension is per glTF primitive, so the first binding written
+  to a primitive wins (the second is warned about).
 - The text (.gltf) export variant writes no buffer URI and cannot be re-imported; use .glb
   for round-trips and .gltf for JSON inspection.
 - Library-domain `ERHE_*` extensions (`ERHE_node`, `ERHE_camera`, `ERHE_light`,

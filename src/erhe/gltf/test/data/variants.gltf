@@ -1,0 +1,191 @@
+{
+    "asset": {
+        "version": "2.0",
+        "generator": "erhe test fixture"
+    },
+    "extensionsUsed": [
+        "KHR_materials_variants"
+    ],
+    "extensions": {
+        "KHR_materials_variants": {
+            "variants": [
+                {
+                    "name": "red"
+                },
+                {
+                    "name": "green"
+                }
+            ]
+        }
+    },
+    "scene": 0,
+    "scenes": [
+        {
+            "nodes": [
+                0
+            ]
+        }
+    ],
+    "nodes": [
+        {
+            "name": "Panel",
+            "mesh": 0
+        }
+    ],
+    "meshes": [
+        {
+            "name": "Panel",
+            "primitives": [
+                {
+                    "attributes": {
+                        "POSITION": 0
+                    },
+                    "indices": 1,
+                    "material": 0,
+                    "extensions": {
+                        "KHR_materials_variants": {
+                            "mappings": [
+                                {
+                                    "material": 1,
+                                    "variants": [
+                                        0
+                                    ]
+                                },
+                                {
+                                    "material": 2,
+                                    "variants": [
+                                        1
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "attributes": {
+                        "POSITION": 2
+                    },
+                    "indices": 3,
+                    "material": 0,
+                    "extensions": {
+                        "KHR_materials_variants": {
+                            "mappings": [
+                                {
+                                    "material": 1,
+                                    "variants": [
+                                        0
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "materials": [
+        {
+            "name": "Plain",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [
+                    0.8,
+                    0.8,
+                    0.8,
+                    1.0
+                ]
+            }
+        },
+        {
+            "name": "Red",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ]
+            }
+        },
+        {
+            "name": "Green",
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [
+                    0.0,
+                    1.0,
+                    0.0,
+                    1.0
+                ]
+            }
+        }
+    ],
+    "accessors": [
+        {
+            "bufferView": 0,
+            "byteOffset": 0,
+            "componentType": 5126,
+            "count": 4,
+            "type": "VEC3",
+            "min": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "max": [
+                1.0,
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 0,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR"
+        },
+        {
+            "bufferView": 0,
+            "byteOffset": 48,
+            "componentType": 5126,
+            "count": 4,
+            "type": "VEC3",
+            "min": [
+                0.0,
+                0.0,
+                1.0
+            ],
+            "max": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "bufferView": 1,
+            "byteOffset": 12,
+            "componentType": 5123,
+            "count": 6,
+            "type": "SCALAR"
+        }
+    ],
+    "bufferViews": [
+        {
+            "buffer": 0,
+            "byteOffset": 0,
+            "byteLength": 96,
+            "target": 34962
+        },
+        {
+            "buffer": 0,
+            "byteOffset": 96,
+            "byteLength": 24,
+            "target": 34963
+        }
+    ],
+    "buffers": [
+        {
+            "byteLength": 120,
+            "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AACAPwAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAgD8AAIA/AAABAAIAAAACAAMABAAFAAYABAAGAAcA"
+        }
+    ]
+}

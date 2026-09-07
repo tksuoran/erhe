@@ -212,6 +212,31 @@ public:
     );
 };
 
+// One KHR_materials_variants mapping, resolved to the objects the parse
+// created (doc/usd-compatibility-plan.md X4): the Mesh prim a node
+// instantiated from the glTF mesh, which of that prim's primitives the
+// mapping names, and the material the variant binds to it. The primitive
+// index is the erhe one - a glTF primitive erhe cannot build is skipped, so
+// it is not always the glTF primitive index.
+class Gltf_material_variant_binding
+{
+public:
+    std::shared_ptr<erhe::scene::Mesh>         mesh;
+    std::size_t                                primitive_index{0};
+    std::shared_ptr<erhe::primitive::Material> material;
+};
+
+// One entry of the asset's KHR_materials_variants "variants" array with the
+// bindings its index selects. A primitive that maps no material for a
+// variant keeps the material its own "material" names, so it contributes no
+// binding to that variant.
+class Gltf_material_variant
+{
+public:
+    std::string                                name;
+    std::vector<Gltf_material_variant_binding> bindings;
+};
+
 class Gltf_data
 {
 public:
@@ -242,6 +267,9 @@ public:
     Gltf_image_residency                                    image_residency;
     std::vector<std::string>                                extensions;
     Gltf_physics_data                                       physics;
+    // KHR_materials_variants (see Gltf_material_variant above), empty when
+    // the asset declares no variants.
+    std::vector<Gltf_material_variant>                      material_variants;
     // Object-reference local values of the ERHE_* "properties" maps whose
     // name did not resolve during the parse (see Unresolved_object_property);
     // the editor resolves them in its scene once its operations ran.
@@ -413,6 +441,26 @@ public:
     std::map<std::pair<const erhe::scene::Mesh*, std::size_t>, std::string> mesh_primitives; // (mesh, primitive index)
 };
 
+// One material binding to write into an exported primitive's
+// KHR_materials_variants "mappings" (doc/usd-compatibility-plan.md X4). A
+// binding whose mesh or primitive is not in the export is skipped with a
+// warning; the primitive's own "material" stays what it is either way.
+class Gltf_export_material_variant_binding
+{
+public:
+    const erhe::scene::Mesh*                   mesh{nullptr};
+    std::size_t                                primitive_index{0};
+    std::shared_ptr<erhe::primitive::Material> material;
+};
+
+// One entry of the exported asset's KHR_materials_variants "variants" array.
+class Gltf_export_material_variant
+{
+public:
+    std::string                                       name;
+    std::vector<Gltf_export_material_variant_binding> bindings;
+};
+
 // An extra glTF mesh to export that no node references, carrying one
 // geometry-normative primitive (the ERHE_geometry accessor/dump path).
 // Used by the editor for brush geometry (doc/gltf-scene-roundtrip-plan.md
@@ -481,6 +529,10 @@ public:
     std::unordered_set<const erhe::scene::Mesh*> excluded_meshes{};
     // Extra unreferenced meshes to export (see Gltf_export_extra_mesh).
     std::vector<Gltf_export_extra_mesh> extra_meshes{};
+    // KHR_materials_variants to write (see Gltf_export_material_variant):
+    // the asset's variant names and, per variant, the material each mapped
+    // primitive binds. Emitting any variant declares the extension.
+    std::vector<Gltf_export_material_variant> material_variants{};
     // Materials to export even when no exported mesh references them (the
     // exporter is otherwise lazy: process_material only runs for referenced
     // materials). R7 make-external writes single-material asset container

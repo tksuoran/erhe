@@ -138,7 +138,22 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      `variant_selections`, which variant each variant set of the scene has
      selected (`{prim_path, set_name, variant_name}` per switched set,
      doc/usd-compatibility-plan.md X4); a set without an entry keeps the
-     selection the file it came from authored;
+     selection the file it came from authored. A glTF save writes the entry
+     of the one set it carries (see "material variants" below) with an empty `prim_path`: the
+     file's set is carried by the file's own root, which is the prim the
+     reloaded scene carries it on. `KHR_materials_variants` itself has no
+     selection - the primitives' `material` is what a plain loader binds - so
+     this entry is what keeps the selection across an erhe save;
+   - material variants: `find_exported_variant_set()` +
+     `collect_gltf_material_variants()` write the scene's variant set back as
+     `KHR_materials_variants` - the asset's `variants` name list and, per
+     primitive, the material each variant binds. The primitive's own
+     `material` stays what the scene has bound, which is what a loader shows
+     while no variant is selected. A glTF asset holds ONE variant list, so
+     the set written is the one the file's own root carries: the scene's root
+     prim, or an `import_root` child of it, whose children the writer writes
+     in the root's place. Any other set is named in a warning and not
+     written;
    - asset root: `ERHE_brushes` (brush library; brush geometry rides as
      extra unreferenced glTF meshes), `ERHE_node_graphs` (graph texture and
      graph mesh assets as embedded node-graph JSON, plus
@@ -227,7 +242,10 @@ JSON-only, no buffer decode) and branches on
   7. Reparent the parsed top-level nodes directly under the new scene's
      root - no `import_root` wrapper, no injected default camera / lights
      (an erhe-authored scene has exactly what it was saved with).
-  8. Kick off `Async_raytrace_kickoff_operation` (BVH builds on worker
+  8. Fill the scene's `Variant_table` from the asset's
+     `KHR_materials_variants` list (one set named `materials`, carried by
+     the scene's root prim) and apply the `ERHE_scene` selection.
+  9. Kick off `Async_raytrace_kickoff_operation` (BVH builds on worker
      threads, synchronized via the scene's `Item_host` mutex).
 - The handler then wires UI for the returned scene root: a browser window,
   a viewport (an existing empty viewport is repurposed when present, else a

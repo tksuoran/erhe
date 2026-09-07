@@ -15,6 +15,7 @@
 #include "assets/asset_paths.hpp"
 #include "content_library/content_library.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/variant_table.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/library_attach_operation.hpp"
@@ -817,6 +818,52 @@ void finalize_imported_meshes(
     );
 }
 
+// The asset's KHR_materials_variants list as the scene's own variant table
+// (doc/usd-compatibility-plan.md X4): one set named c_gltf_variant_set_name
+// carried by `carrier` - the prim the file's content sits under - holding one
+// binding per mapped primitive, named by its path below the carrier. glTF
+// authors no default selection: a primitive's own `material` is what is bound
+// until a variant is picked, so the set starts with none selected and nothing
+// is assigned here.
+void fill_gltf_variant_table(
+    const erhe::gltf::Gltf_data&              gltf_data,
+    const std::shared_ptr<erhe::scene::Node>& carrier,
+    Variant_table&                            variant_table
+)
+{
+    if (gltf_data.material_variants.empty() || !carrier) {
+        return;
+    }
+    Variant_set set{};
+    set.prim     = carrier;
+    set.set_name = c_gltf_variant_set_name;
+    for (const erhe::gltf::Gltf_material_variant& gltf_variant : gltf_data.material_variants) {
+        Variant variant{};
+        variant.name = gltf_variant.name;
+        for (const erhe::gltf::Gltf_material_variant_binding& gltf_binding : gltf_variant.bindings) {
+            if (!gltf_binding.mesh || !gltf_binding.material) {
+                continue;
+            }
+            const std::string relative_path = make_variant_binding_path(
+                *carrier.get(), *gltf_binding.mesh.get(), gltf_binding.primitive_index
+            );
+            if (relative_path.empty()) {
+                log_parsers->warn(
+                    "KHR_materials_variants: variant '{}' binds mesh '{}' primitive {}, which is not below '{}' - the binding is dropped",
+                    gltf_variant.name, gltf_binding.mesh->get_name(), gltf_binding.primitive_index, carrier->get_name()
+                );
+                continue;
+            }
+            Variant_binding binding{};
+            binding.relative_path = relative_path;
+            binding.material      = gltf_binding.material;
+            variant.bindings.push_back(std::move(binding));
+        }
+        set.variants.push_back(std::move(variant));
+    }
+    variant_table.add(std::move(set));
+}
+
 auto make_import_gltf_operation(
     App_context&                       context,
     erhe::primitive::Build_info        build_info,
@@ -963,6 +1010,11 @@ auto make_import_gltf_operation(
 
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
     finalize_imported_meshes(context, build_info, gltf_data, &mesh_node_items);
+
+    // The file's variant set joins the target scene's table, carried by the
+    // import root: the prim an undo of this import removes, which is what
+    // takes the set out of the table again.
+    fill_gltf_variant_table(gltf_data, root_node, scene_root->get_variant_table());
 
     // glTF 2.1 external assets: instantiate each referenced asset under its
     // carrier node (recursively resolved and cached by Prefab_library). The
@@ -1582,6 +1634,13 @@ auto finish_open_scene_gltf(
     for (const std::shared_ptr<erhe::Hierarchy>& child : children) {
         child->set_parent(scene_root_node);
     }
+
+    // The file's variant set, carried by the scene's own root prim: an
+    // erhe-authored file writes its content in the root's place, so that is
+    // where the set the file describes sits. A selection the ERHE_scene
+    // settings carry is applied once the table holds the set.
+    fill_gltf_variant_table(gltf_data, scene_root_node, scene_root->get_variant_table());
+    scene_root->apply_variant_selections(context);
 
     // After the nodes are in the scene: a saved library_folders path may name
     // any prim of the tree (C5).

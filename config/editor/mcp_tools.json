@@ -2486,7 +2486,7 @@
     "inputSchema": {
       "properties": {
         "prim_path": {
-          "description": "Path of the prim carrying the variant set (as get_scene_variants reports it)",
+          "description": "Path of the prim carrying the variant set (as get_scene_variants reports it); empty names the scene's root prim, which is what carries a glTF asset's variant set",
           "type": "string"
         },
         "scene_name": {
