@@ -90,6 +90,23 @@ auto instance_child_refusal(const erhe::Hierarchy& parent) -> std::optional<std:
     );
 }
 
+auto is_instance_structure_protected(const erhe::Item_base& item) -> bool
+{
+    const erhe::Hierarchy* hierarchy = structural_hierarchy_of(item);
+    if (hierarchy == nullptr) {
+        return false;
+    }
+    const std::shared_ptr<erhe::Hierarchy> parent = hierarchy->get_parent().lock();
+    std::shared_ptr<Prefab_instance>       prefab_instance{};
+    return find_carrier(parent.get(), prefab_instance) != nullptr;
+}
+
+auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool
+{
+    std::shared_ptr<Prefab_instance> prefab_instance{};
+    return find_carrier(&parent, prefab_instance) != nullptr;
+}
+
 auto is_sealed_prefab_instance(const Prefab_instance& prefab_instance) -> bool
 {
     return !is_usd_file_extension(prefab_instance.get_prefab_source_path());

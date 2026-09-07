@@ -1236,7 +1236,6 @@ table, see D2a), and references to other objects (D28).
     (D10) carries the reference pointer as it carries the style pointer. A
     sealed object (D24) rejects `set_reference`.
 
-
 ## 4. Implementation
 
 Each subsection is the design of one owner's migration; the per-field

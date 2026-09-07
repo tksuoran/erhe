@@ -1031,9 +1031,9 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         // carrier or inside one, so the child (middle) rect is not offered
         // there, and the sibling rects are not offered when the prim's own
         // parent refuses children.
-        const bool refuse_child_of_node   = instance_child_refusal(*node).has_value();
+        const bool refuse_child_of_node   = refuses_instance_child(*node);
         const std::shared_ptr<erhe::scene::Node> node_parent = node->get_parent_node();
-        const bool refuse_child_of_parent = node_parent && instance_child_refusal(*node_parent).has_value();
+        const bool refuse_child_of_parent = node_parent && refuses_instance_child(*node_parent);
 
         // Insert as sibling before drop target
         const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
@@ -1365,11 +1365,9 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         // Structure protection (doc/usd-compatibility-plan.md X2): an item
         // inside a reference instance is not removed, and nothing is
         // inserted under a carrier or inside one.
-        const std::optional<std::string>       item_structure_refusal = instance_structure_refusal(*item);
-        const std::shared_ptr<erhe::Hierarchy> item_parent            = hierarchy->get_parent().lock();
-        const std::optional<std::string>       parent_child_refusal   = item_parent ? instance_child_refusal(*item_parent) : std::optional<std::string>{};
-        const bool can_cut       = can_copy && !item_structure_refusal.has_value();
-        const bool can_duplicate = can_copy && !parent_child_refusal.has_value();
+        const std::shared_ptr<erhe::Hierarchy> item_parent = hierarchy->get_parent().lock();
+        const bool can_cut       = can_copy && !is_instance_structure_protected(*item);
+        const bool can_duplicate = can_copy && !(item_parent && refuses_instance_child(*item_parent));
         if (!can_cut) {
             ImGui::BeginDisabled();
         }
@@ -1420,7 +1418,7 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
         const bool can_paste = !clipboard_contents.empty() && paste_target &&
             (!(is_library_scope || is_library_resource) || is_materials_scope) &&
-            !(paste_target && instance_child_refusal(*paste_target).has_value());
+            !(paste_target && refuses_instance_child(*paste_target));
         if (!can_paste) {
             ImGui::BeginDisabled();
         }

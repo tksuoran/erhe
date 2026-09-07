@@ -20,8 +20,13 @@ class Prefab_instance;
 //
 // The two predicates answer that question for the two shapes a structural
 // edit takes; both return the user-facing reason when the edit is refused,
-// and nothing when it is allowed. Each walks the item's ancestors, which is
-// change-driven work: an edit, never a frame.
+// and nothing when it is allowed. Each walks the item's ancestors.
+//
+// Building the message costs a formatted string, so the two bool forms
+// below answer the same question without one. Per-frame UI code - the item
+// tree asks on every row of every frame whether a drop is offered - uses
+// those; the edit and popup paths, which need the reason to log or to show,
+// use the message forms.
 
 // True (a reason) when `item` is INSIDE an instance - it or an ancestor of
 // it hangs below a prim carrying a Prefab_instance attachment - so the item
@@ -32,6 +37,10 @@ class Prefab_instance;
 // True (a reason) when nothing can be added under `parent`: `parent` is an
 // instance carrier, or is itself inside an instance.
 [[nodiscard]] auto instance_child_refusal(const erhe::Hierarchy& parent) -> std::optional<std::string>;
+
+// The same two questions, answered without formatting a message.
+[[nodiscard]] auto is_instance_structure_protected(const erhe::Item_base& item) -> bool;
+[[nodiscard]] auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool;
 
 // Whether this instance's interior is sealed (lock_edit and the viewport
 // locks, seal_instance_subtree): the glTF prefab editing model of
