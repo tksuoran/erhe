@@ -191,6 +191,17 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
 - `asset_path` empty means an internal reference - a prim of the same layer -
   and `prim_path` empty means the target layer's default prim, which
   `Usd_data::default_prim` names.
+- The carrier of an arc is transformable. USD gives a typeless referencing
+  prim the type of the composed target, and LightUSD composes nothing, so the
+  prim erhe reads is typeless; a typeless or `Scope` prim that authors an arc
+  therefore imports as an `erhe::scene::Xform`, which is what holds the
+  instances the arcs become and which carries the prim's own authored
+  transform (the identity when it authors none). The item
+  remembers nothing of having been typeless: the writer spells it
+  `def Xform`, a legal and more explicit spelling of the same composition, and
+  that spelling is the round trip's fixed point from the first save on. A
+  carrier of a type that carries no transform - a `Material`, a `Cube` - stays
+  the prim it is and its arcs are dropped, with one warning naming the type.
 - A payload is reported with kind `payload` and is otherwise a reference: erhe
   reads every arc when the file is read and has no deferred loading (plan
   section 5). `references` arcs come before `payload` arcs, the arc order of

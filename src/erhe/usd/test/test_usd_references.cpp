@@ -1,3 +1,4 @@
+#include "erhe_item/typed.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/instance_override.hpp"
@@ -692,3 +693,162 @@ TEST(Override_export, a_second_save_is_byte_identical)
 }
 
 } // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// Carriers that carry no transform of their own (doc/usd-compatibility-plan.md
+// S1): a typeless `def` and a `Scope` that author arcs import as `Xform`
+// carriers, which is what holds the prefab instances the arcs become.
+// ---------------------------------------------------------------------------
+
+[[nodiscard]] auto find_typed_prim(const erhe::usd::Usd_data& data, const std::string& name) -> std::shared_ptr<erhe::Typed>
+{
+    for (const std::shared_ptr<erhe::Typed>& prim : data.prims) {
+        if (prim && (prim->get_name() == name)) {
+            return prim;
+        }
+    }
+    return {};
+}
+
+class Typeless_carrier_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = reference_test_data_path("references_typeless.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Typeless_carrier_import, a_typeless_carrier_and_a_scope_carrier_are_xform_carriers)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+
+    for (const char* name : {"Carrier", "ScopeCarrier"}) {
+        const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, name);
+        ASSERT_TRUE(carrier.operator bool()) << name;
+        EXPECT_EQ(carrier->get_prim_type_name(), "Xform") << name;
+        EXPECT_FALSE(find_typed_prim(result.data, name).operator bool()) << name;
+    }
+
+    EXPECT_EQ(result.data.references[0].stage_path, "/World/Carrier");
+    EXPECT_EQ(result.data.references[0].item, find_node(result.data, "Carrier"));
+    ASSERT_EQ(result.data.references[0].references.size(), 1u);
+    EXPECT_EQ(result.data.references[0].references[0].asset_path, "reftarget.usda");
+    EXPECT_EQ(result.data.references[0].references[0].prim_path, "/Library/Gadget");
+
+    EXPECT_EQ(result.data.references[1].stage_path, "/World/ScopeCarrier");
+    EXPECT_EQ(result.data.references[1].item, find_node(result.data, "ScopeCarrier"));
+}
+
+TEST_F(Typeless_carrier_import, a_scope_without_arcs_stays_a_scope)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    const std::shared_ptr<erhe::Typed> scope = find_typed_prim(result.data, "PlainScope");
+    ASSERT_TRUE(scope.operator bool());
+    EXPECT_EQ(scope->get_prim_type_name(), "Scope");
+    EXPECT_FALSE(find_node(result.data, "PlainScope").operator bool());
+}
+
+// The writer spells an arc carrier `def Xform`, which is the same composition
+// spelled more explicitly, and that spelling is the round trip's fixed point
+// from the first save on.
+TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a_fixed_point)
+{
+    const std::filesystem::path directory = reference_temporary_directory();
+    for (const char* file_name : {"references_typeless.usda", "reftarget.usda"}) {
+        std::error_code error_code{};
+        std::filesystem::copy_file(
+            reference_test_data_path(file_name),
+            directory / file_name,
+            std::filesystem::copy_options::overwrite_existing,
+            error_code
+        );
+        ASSERT_FALSE(static_cast<bool>(error_code)) << file_name << ": " << error_code.message();
+    }
+    const std::filesystem::path stage_path = directory / "references_typeless.usda";
+
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_arguments load_arguments{
+        .path          = stage_path,
+        .root_node     = root,
+        .mesh_layer_id = 0
+    };
+    const erhe::usd::Usd_load_result loaded = erhe::usd::load_usd(load_arguments);
+    ASSERT_TRUE(loaded.error.empty()) << loaded.error;
+    ASSERT_EQ(loaded.data.references.size(), 2u);
+
+    std::vector<erhe::usd::Usd_save_prim_references> save_references;
+    for (const erhe::usd::Usd_prim_references& entry : loaded.data.references) {
+        erhe::usd::Usd_save_prim_references save_entry{};
+        save_entry.item = entry.item;
+        for (const erhe::usd::Usd_reference& reference : entry.references) {
+            save_entry.references.push_back(
+                erhe::usd::Usd_save_reference{
+                    .source_path = reference.asset_path.empty() ? stage_path : (directory / reference.asset_path),
+                    .prim_path   = reference.prim_path,
+                    .kind        = reference.kind
+                }
+            );
+        }
+        save_references.push_back(std::move(save_entry));
+    }
+
+    const erhe::usd::Usd_save_arguments save_arguments{
+        .path       = stage_path,
+        .root_node  = root,
+        .references = save_references
+    };
+    const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+    ASSERT_TRUE(save.error.empty()) << save.error;
+
+    const std::string written = read_text_file(stage_path);
+    EXPECT_NE(written.find("def Xform \"Carrier\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Xform \"ScopeCarrier\""), std::string::npos) << written;
+    EXPECT_EQ(written.find("def \"Carrier\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Scope \"PlainScope\""), std::string::npos) << written;
+
+    // Reading the written file back and writing it again changes nothing.
+    const std::shared_ptr<erhe::scene::Node> reloaded_root = std::make_shared<erhe::scene::Xform>("reload_root");
+    const erhe::usd::Usd_load_arguments reload_arguments{
+        .path          = stage_path,
+        .root_node     = reloaded_root,
+        .mesh_layer_id = 0
+    };
+    const erhe::usd::Usd_load_result reloaded = erhe::usd::load_usd(reload_arguments);
+    ASSERT_TRUE(reloaded.error.empty()) << reloaded.error;
+    ASSERT_EQ(reloaded.data.references.size(), 2u);
+
+    std::vector<erhe::usd::Usd_save_prim_references> resave_references;
+    for (const erhe::usd::Usd_prim_references& entry : reloaded.data.references) {
+        erhe::usd::Usd_save_prim_references save_entry{};
+        save_entry.item = entry.item;
+        for (const erhe::usd::Usd_reference& reference : entry.references) {
+            save_entry.references.push_back(
+                erhe::usd::Usd_save_reference{
+                    .source_path = reference.asset_path.empty() ? stage_path : (directory / reference.asset_path),
+                    .prim_path   = reference.prim_path,
+                    .kind        = reference.kind
+                }
+            );
+        }
+        resave_references.push_back(std::move(save_entry));
+    }
+    const erhe::usd::Usd_save_arguments resave_arguments{
+        .path       = stage_path,
+        .root_node  = reloaded_root,
+        .references = resave_references
+    };
+    const erhe::usd::Usd_save_result resave = erhe::usd::save_usda(resave_arguments);
+    ASSERT_TRUE(resave.error.empty()) << resave.error;
+    EXPECT_EQ(read_text_file(stage_path), written);
+}

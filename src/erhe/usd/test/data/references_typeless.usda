@@ -1,0 +1,32 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def "Carrier" (
+        references = @reftarget.usda@</Library/Gadget>
+    )
+    {
+    }
+
+    def Scope "ScopeCarrier" (
+        references = @reftarget.usda@</Library/Gadget>
+    )
+    {
+    }
+
+    def Scope "PlainScope"
+    {
+        def Mesh "quad"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        }
+    }
+}

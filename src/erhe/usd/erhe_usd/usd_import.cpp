@@ -1976,6 +1976,26 @@ private:
             (type_name == "GeometryLight");
     }
 
+    // A prim that authors a `references` or `payload` arc is a carrier: the
+    // arcs become one prefab instance each, and an instance is a node
+    // attachment, so a carrier has to be transformable
+    // (doc/usd-compatibility-plan.md X1, S1). USD gives a typeless
+    // referencing prim the type of the composed target, which LightUSD does
+    // not compose at load, so the prim erhe sees is typeless; erhe imports it
+    // - and a `Scope` carrier, whose composed content is transformable all
+    // the same - as an `Xform`, which carries the prim's own authored
+    // transform, the identity when it authors none. A carrier
+    // of another type carries no transform and cannot hold an instance: its
+    // arcs are dropped, with one warning naming the type
+    // (resolve_usd_references).
+    [[nodiscard]] auto imports_as_arc_carrier(const Tydra_node& usd_node, const std::string& type_name) -> bool
+    {
+        if (!type_name.empty() && (type_name != "Scope")) {
+            return false;
+        }
+        return !read_prim_references(usd_node.abs_path).empty();
+    }
+
     [[nodiscard]] auto subtree_has_scene_content(const Tydra_node& usd_node) const -> bool
     {
         // A mesh, camera, punctual light, skeleton or volume is content; a
@@ -2028,7 +2048,7 @@ private:
             }
             return;
         }
-        if (!is_xformable_prim_type(type_name)) {
+        if (!is_xformable_prim_type(type_name) && !imports_as_arc_carrier(usd_node, type_name)) {
             convert_prim(usd_node, type_name, parent, extra_transform);
             return;
         }

@@ -60,6 +60,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
@@ -384,9 +385,16 @@ void resolve_usd_references(
         }
         const std::shared_ptr<erhe::scene::Node> carrier = std::dynamic_pointer_cast<erhe::scene::Node>(entry.item);
         if (!carrier) {
+            // A typeless or `Scope` carrier is imported as an `Xform`
+            // (doc/usd-compatibility-plan.md S1), so what is left here is a
+            // prim of a type that carries no transform and cannot hold a
+            // prefab instance.
+            const std::shared_ptr<erhe::Typed> typed = std::dynamic_pointer_cast<erhe::Typed>(entry.item);
+            const std::string_view type_name = typed ? typed->get_prim_type_name() : std::string_view{};
             log_parsers->warn(
-                "USD prim '{}' authors composition arcs but carries no transform - the arcs are not instantiated",
-                entry.stage_path
+                "USD prim '{}' of type '{}' authors composition arcs, which a prim of this type cannot hold - the arcs are not instantiated",
+                entry.stage_path,
+                type_name
             );
             continue;
         }
