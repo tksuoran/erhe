@@ -61,17 +61,18 @@ public:
 };
 
 // WPF DependencyObject: a sparse store of per-property values with
-// precedence coerced > local > style > inherited > default, validate / coerce /
-// changed callbacks from the property metadata, a virtual changed hook,
-// per-object observers, change batching, and expressions driving
-// properties from other properties (D22).
+// precedence coerced > local > style > reference > inherited > default,
+// validate / coerce / changed callbacks from the property metadata, a
+// virtual changed hook, per-object observers, change batching, and
+// expressions driving properties from other properties (D22).
 class Dependency_object
 {
 public:
     Dependency_object();
     // Copies local values (and their coerced values), expression texts
-    // (unresolved: the copy resolves them itself) and the style pointer;
-    // observers, dependents, the seal and pending batches are not copied.
+    // (unresolved: the copy resolves them itself) and the style and
+    // reference pointers; observers, dependents, the seal and pending
+    // batches are not copied.
     Dependency_object(const Dependency_object& other);
     Dependency_object& operator=(const Dependency_object& other);
     virtual ~Dependency_object() noexcept;
@@ -190,6 +191,29 @@ public:
     // set_style refuses, and what an editor asks to leave a candidate out.
     [[nodiscard]] auto style_chain_reaches(const Dependency_object& object) const -> bool;
 
+    // Reference (D33): one shared reference source per object - the
+    // counterpart the object mirrors (a USD reference arc: the item inside
+    // an instance names the item it was instantiated from) - read between
+    // the style and inherited layers; a bridged property ignores it.
+    // The layer is what the counterpart SUPPLIES ITSELF: its base value
+    // when that value's source is local, expression, computed, style or
+    // (recursively) reference, and nothing when the counterpart would fall
+    // to its own inherited or default layer - the user's own tree provides
+    // inheritance. set_reference notifies every property whose effective
+    // value or source changes (locals and style values shadow the
+    // reference and are untouched); nullptr clears. False (logged) on a
+    // sealed object and on a source whose reference chain reaches this
+    // object. The source keeps a list of its users: a change of a value it
+    // supplies notifies every user without a local or style value of that
+    // property, so a template edit is live.
+    auto               set_reference(std::shared_ptr<const Dependency_object> reference) -> bool;
+    [[nodiscard]] auto get_reference() const -> const std::shared_ptr<const Dependency_object>& { return m_reference; }
+    [[nodiscard]] auto get_reference_user_count() const -> std::size_t;
+    // True when object is this object or on this object's reference chain:
+    // what set_reference refuses, and what a picker asks to leave a
+    // candidate out.
+    [[nodiscard]] auto reference_chain_reaches(const Dependency_object& object) const -> bool;
+
     // Untyped access (editor, undo, serialization, MCP). Writes to a
     // read-only property or a sealed object are rejected here (false);
     // the typed key overloads are the only write path for read-only
@@ -207,8 +231,8 @@ public:
     auto               clear_value     (const Dependency_property& property) -> bool;
     [[nodiscard]] auto read_local_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto has_local_value (const Dependency_property& property) const -> bool;
-    // Local (entry or bridge) or style value: the object is the origin of
-    // the value its descendants inherit.
+    // Local (entry or bridge), style or reference value: the object is the
+    // origin of the value its descendants inherit.
     [[nodiscard]] auto has_own_value   (const Dependency_property& property) const -> bool;
     [[nodiscard]] auto get_value_source(const Dependency_property& property) const -> Value_source;
     // The default layer of the property for THIS object (D31): the
@@ -338,17 +362,35 @@ private:
     [[nodiscard]] auto get_inherited_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto get_style_value    (const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto has_style_value    (const Dependency_property& property) const -> bool;
+    // D33: the value the reference counterpart supplies for the property,
+    // uncoerced (the reading object coerces), or nothing.
+    [[nodiscard]] auto get_reference_value(const Dependency_property& property) const -> std::optional<Property_value>;
+    [[nodiscard]] auto has_reference_value(const Dependency_property& property) const -> bool;
+    // The layer walk of get_base_value stopped before the inherited
+    // branch: what this object supplies to an object referencing it (D33).
+    [[nodiscard]] auto get_supplied_value (const Dependency_property& property, Value_source& out_source) const -> std::optional<Property_value>;
+    // Every property this object supplies through its reference chain and
+    // the style chain of each object on it.
+    void for_each_supplied_property(const std::function<void(const Dependency_property&)>& callback) const;
 
     [[nodiscard]] auto reject_if_sealed   (const Dependency_property& property) const -> bool;
 
     // The effective value the object would have without its style layer
-    // (inherited or default, coerced): a style user's value before the
-    // source gained the property, or after it lost it.
+    // (reference, inherited or default, coerced): a style user's value
+    // before the source gained the property, or after it lost it.
     [[nodiscard]] auto get_effective_value_below_style(const Dependency_property& property, Value_source& out_source) const -> Property_value;
+    // The effective value the object would have without its reference
+    // layer (inherited or default, coerced): a reference user's value
+    // before the counterpart supplied the property, or after it stopped.
+    [[nodiscard]] auto get_effective_value_below_reference(const Dependency_property& property, Value_source& out_source) const -> Property_value;
     // Style users (D25 live edit): this object as a style source.
     void add_style_user   (Dependency_object& user) const;
     void remove_style_user(Dependency_object& user) const;
     void propagate_to_style_users(const Property_changed_args& args);
+    // Reference users (D33 live edit): this object as a reference source.
+    void add_reference_user   (Dependency_object& user) const;
+    void remove_reference_user(Dependency_object& user) const;
+    void propagate_to_reference_users(const Property_changed_args& args);
     auto               set_value_internal  (const Dependency_property& property, const Property_value& value, bool allow_read_only, bool keep_expression) -> bool;
     auto               clear_value_internal(const Dependency_property& property, bool allow_read_only) -> bool;
     void store_coerced       (const Dependency_property& property, Effective_value_entry& entry);
@@ -396,6 +438,8 @@ private:
     std::vector<Pending_change>                     m_pending;
     std::shared_ptr<const Dependency_object>        m_style;
     mutable std::unique_ptr<std::vector<Dependency_object*>> m_style_users; // allocated when this object first becomes a style source
+    std::shared_ptr<const Dependency_object>        m_reference;
+    mutable std::unique_ptr<std::vector<Dependency_object*>> m_reference_users; // allocated when this object first becomes a reference source
     int                                             m_batch_depth{0};
     bool                                            m_sealed{false};
 };
@@ -407,8 +451,8 @@ private:
 // the unauthored ones back out. For each stored, serializable, non-driven
 // local value of `object` whose value equals the object's own default
 // layer (D31, get_default_value), the local value is cleared - unless
-// clearing would let an inherited or style layer through, in which case the
-// value stays local so the effective value never moves. Bridged (D18),
+// clearing would let an inherited, style or reference layer through, in
+// which case the value stays local so the effective value never moves. Bridged (D18),
 // computed (D26), attached (R7), read-only and write-sealed (D24)
 // properties are left alone. Format independent: the glTF and USD
 // importers both run it, and it is what makes an item report

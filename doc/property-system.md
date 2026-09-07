@@ -68,9 +68,9 @@ table, see D2a), and references to other objects (D28).
   An untyped path (`Property_value` variant) exists for generic code: the
   Properties window, undo, serialization, MCP.
 - R3 Precedence. The effective value of a property on an object is, in
-  decreasing precedence: coerced, local, style (D25), inherited, default.
-  Each layer can be present or absent independently; clearing a layer
-  exposes the next one.
+  decreasing precedence: coerced, local, style (D25), reference (D33),
+  inherited, default. Each layer can be present or absent independently;
+  clearing a layer exposes the next one.
   The layer order leaves room for an animated layer between coerced and
   local (future work, section 6).
 - R4 Callbacks. A property has an optional validate callback (value only, no
@@ -883,6 +883,64 @@ table, see D2a), and references to other objects (D28).
     value field as a local value (a full snapshot, which would shadow a
     style).
 
+- D33 Reference layer (a USD reference arc, `doc/usd-compatibility-plan.md`
+  X2).
+  - Context. An instance of a template is the template's structure with
+    per-item overrides, not a copy of its values: the values the template
+    supplies sit in a layer of their own, below the instance's own local
+    values, so a local value inside an instance is an override and
+    clearing it exposes the template's value again. USD composes a
+    reference arc weaker than inheritance, so the layer sits between style
+    and inherited (R3).
+  - Library. `Dependency_object::set_reference(std::shared_ptr<const
+    Dependency_object>)` / `get_reference()` install one reference source -
+    the counterpart - per object, with `Value_source::reference`. nullptr
+    clears. `get_reference_user_count()` is the source's user count and
+    `reference_chain_reaches` the chain test a picker asks.
+  - What the layer reads. The reference layer of an object is the value
+    its counterpart SUPPLIES ITSELF: the counterpart's base value when
+    that value's source is local, expression, computed, style or
+    (recursively) reference, and nothing when the counterpart would fall
+    to its own inherited or default layer (`get_supplied_value`, the layer
+    walk of `get_base_value` stopped before the inherited branch). A value
+    the counterpart inherits from its own tree is not carried, because the
+    instance's own tree provides inheritance: the instance mirrors the
+    template's structure, and an override on an instance ancestor reaches
+    the instance's descendants through the ordinary inherited walk, which
+    a reference layer on every descendant would shadow. It is also what a
+    USD reference arc composes: the target prim's opinions, not those of
+    its ancestors.
+  - Chain. A counterpart is itself an object with a reference, so what it
+    supplies includes what its own reference supplies, nearest first;
+    `set_reference` refuses (false, logged, nothing changes) a source
+    whose reference chain reaches the object, the source being the object
+    included, so a chain never cycles.
+  - Inheritance and notification. A reference value of an inherits-flagged
+    property is the object's effective value and flows to descendants
+    exactly as a local value would: the inheritance walk, the descendant
+    notification and the tree-change snapshot treat "has a local value" as
+    "has a local, style or reference value" (`has_own_value`).
+    `set_reference` notifies, through the normal path (batches, D19
+    callbacks, observers, descendants), every property in the union of
+    what the old and the new source supply whose effective value or source
+    changes; local and style values are untouched and shadow the
+    reference. A source keeps the list of its users (`set_reference`
+    registers, the copy of a user registers the copy, a user's destructor
+    unregisters); when a value it supplies changes, `notify` forwards the
+    change to every user without a local or style value of that property,
+    with the user's old value taken from the old supplied value (or from
+    the user's own value below the reference layer when the source
+    supplied none) and its new value from the user's effective value, so a
+    template edit is live the way a style edit is (D25).
+  - Local layer, copy and sealing. A bridged property (D18) is always
+    local and ignores the reference layer. `read_local_value`,
+    `for_each_local_value` and `Property_set::read_local_values` stay
+    local-only, so an instance's overrides are exactly its local values.
+    Default elision (D32) keeps a local value that shadows a reference
+    value, as it keeps one shadowing an inherited or style value. A copy
+    (D10) carries the reference pointer as it carries the style pointer. A
+    sealed object (D24) rejects `set_reference`.
+
 - D26 Computed properties (WPF read-only dependency property whose value
   the owner provides; R6).
   - Context. `Property_key<T>` (D3) is the write permission for a
@@ -1161,8 +1219,8 @@ table, see D2a), and references to other objects (D28).
   equals the object's own default layer (D31, `get_default_value`),
   skipping bridged (D18), computed (D26), attached (R7), read-only,
   write-sealed (D24), non-`serialize` and expression-driven (D22)
-  properties, and it leaves a local value that shadows an inherited (R8)
-  or style (D25) layer alone so no effective value moves. The pass is
+  properties, and it leaves a local value that shadows an inherited (R8),
+  style (D25) or reference (D33) layer alone so no effective value moves. The pass is
   format independent: `parse_gltf` runs it over every parsed node, mesh,
   light, camera and material after the native glTF fields and before the
   `ERHE_*` extension pass whose `properties` maps carry the authored local
@@ -1964,7 +2022,7 @@ thread affinity, the attached-property browsable attributes, and two-way
 bindings (they exist for UI controls writing back to
 a model; erhe's ImGui windows are immediate-mode and read the item
 directly). Expressions and one-way bindings are D22, sealing is D24, the
-style layer is D25.
+style layer is D25 and the reference layer is D33.
 
 ## 6. Future work
 

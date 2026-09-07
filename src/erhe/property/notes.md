@@ -170,10 +170,10 @@ inventory (and the owner's design section when the design changed).
 
 ## Value precedence and callbacks
 
-Effective value = coerced(base), base = local > style > inherited > default
-(the default being `Property_metadata::compute_default` for the object when
-that is bound, D31); a computed property (D26) bypasses all of it and reads
-its provider.
+Effective value = coerced(base), base = local > style > reference >
+inherited > default (the default being `Property_metadata::compute_default`
+for the object when that is bound, D31); a computed property (D26) bypasses
+all of it and reads its provider.
 The
 coerced value of a local value is stored in the entry and refreshed by
 `set_value` and `coerce_value`; a property without a local value is coerced
@@ -205,6 +205,29 @@ pointer; a sealed object rejects `set_style`. `Property_style` is a named
 source filled from a `Property_set`; the editor's style items
 (`doc/style-library.md`) are sources of their own and are the ones a scene
 saves.
+
+## Reference
+
+`set_reference(std::shared_ptr<const Dependency_object>)` / `get_reference()`
+(D33, a USD reference arc): the counterpart's supplied values sit between
+the user's style and inherited layers (`Value_source::reference`); a local
+value, an expression or a style value shadows them, a bridged property
+ignores them. What a counterpart supplies is its own base value stopped
+before the inherited branch - local, expression, computed, style, or
+(recursively) what its own reference supplies - so a value the counterpart
+inherits from its own tree is not carried: the user's tree provides
+inheritance, and an override on a user's ancestor reaches the user through
+the ordinary inherited walk. `set_reference` refuses a source whose
+reference chain reaches the object (`reference_chain_reaches`, false and
+logged), and notifies every property either source supplies whose effective
+value or source changes, through the normal path, leaving locals and style
+values alone. A source keeps its users (`get_reference_user_count`): when a
+value it supplies changes, `notify` forwards the change to every user
+without a local or style value of that property, so a template edit is
+live. A reference value of an inherits-flagged property is what descendants
+inherit, and it stops an ancestor's propagation like a local value
+(`has_own_value` is local, style or reference). A copy carries the
+reference pointer; a sealed object rejects `set_reference`.
 
 ## Sealing
 
@@ -277,8 +300,9 @@ only, read by serializers, listed in `doc/property-inventory.md`.
 
 ## Copy semantics
 
-Copying a `Dependency_object` copies its entries (local and coerced values).
-Observers, pending batches and inherited state are not copied.
+Copying a `Dependency_object` copies its entries (local and coerced values)
+and its style and reference pointers, registering the copy as a user of
+both. Observers, pending batches and inherited state are not copied.
 
 ## Threading
 
@@ -293,4 +317,5 @@ item state guarded by the item's host mutex, like the rest of the item.
 `test/` (gtest): registry and overrides, every value type, validate, coerce,
 change notifications and batching, inheritance through a `Test_object` tree,
 observers, enumerations, string conversion, property sets, bridged storage,
-computed properties, object references and `register_member`.
+computed properties, the style and reference layers, object references and
+`register_member`.

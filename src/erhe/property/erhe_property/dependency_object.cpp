@@ -107,11 +107,15 @@ Dependency_object::Effective_value_entry& Dependency_object::Effective_value_ent
 Dependency_object::Dependency_object() = default;
 
 Dependency_object::Dependency_object(const Dependency_object& other)
-    : m_entries{other.m_entries}
-    , m_style  {other.m_style}
+    : m_entries  {other.m_entries}
+    , m_style    {other.m_style}
+    , m_reference{other.m_reference}
 {
     if (m_style) {
         m_style->add_style_user(*this);
+    }
+    if (m_reference) {
+        m_reference->add_reference_user(*this);
     }
 }
 
@@ -129,6 +133,13 @@ Dependency_object& Dependency_object::operator=(const Dependency_object& other)
         if (m_style) {
             m_style->add_style_user(*this);
         }
+        if (m_reference) {
+            m_reference->remove_reference_user(*this);
+        }
+        m_reference = other.m_reference;
+        if (m_reference) {
+            m_reference->add_reference_user(*this);
+        }
     }
     return *this;
 }
@@ -138,6 +149,10 @@ Dependency_object::~Dependency_object() noexcept
     if (m_style) {
         m_style->remove_style_user(*this);
         m_style.reset();
+    }
+    if (m_reference) {
+        m_reference->remove_reference_user(*this);
+        m_reference.reset();
     }
     // Expressions on this object stop reading their sources; expressions
     // elsewhere that read this object lose the reference.
@@ -236,12 +251,165 @@ auto Dependency_object::style_chain_reaches(const Dependency_object& object) con
     return false;
 }
 
+// D33 reference layer: the value an object supplies to whoever references
+// it is its own base value stopped before the inherited branch - local,
+// expression, computed, style, or (recursively) what its own reference
+// supplies. A value the object would inherit from its own tree is not
+// supplied: the referencing object's tree provides inheritance, and an
+// override on one of its ancestors must reach its descendants through the
+// ordinary inherited walk. This is also what a USD reference arc composes:
+// the target prim's opinions, not those of its ancestors.
+auto Dependency_object::get_supplied_value(const Dependency_property& property, Value_source& out_source) const -> std::optional<Property_value>
+{
+    const Property_metadata& metadata = get_metadata(property);
+    if (metadata.is_computed()) {
+        out_source = Value_source::computed;
+        return metadata.compute(*this);
+    }
+    if (const Effective_value_entry* entry = find_entry(property.get_index()); entry != nullptr) {
+        out_source = (entry->expression != nullptr) ? Value_source::expression : Value_source::local;
+        if (entry_is_bridged_expression(*entry, metadata)) {
+            return metadata.bridge.get(*this);
+        }
+        return entry->local;
+    }
+    if (metadata.bridge.is_bound()) {
+        out_source = Value_source::local;
+        return metadata.bridge.get(*this);
+    }
+    if (std::optional<Property_value> styled = get_style_value(property); styled.has_value()) {
+        out_source = Value_source::style;
+        return styled;
+    }
+    if (std::optional<Property_value> referenced = get_reference_value(property); referenced.has_value()) {
+        out_source = Value_source::reference;
+        return referenced;
+    }
+    return std::nullopt;
+}
+
+auto Dependency_object::get_reference_value(const Dependency_property& property) const -> std::optional<Property_value>
+{
+    if (!m_reference) {
+        return std::nullopt;
+    }
+    Value_source source{};
+    return m_reference->get_supplied_value(property, source);
+}
+
+auto Dependency_object::has_reference_value(const Dependency_property& property) const -> bool
+{
+    return get_reference_value(property).has_value();
+}
+
+// Every property this object supplies: its own local values and those of
+// its style chain, then the same for each object on its reference chain.
+// The properties a computed provider answers are not enumerable and are
+// left out, as they are for a style.
+void Dependency_object::for_each_supplied_property(const std::function<void(const Dependency_property&)>& callback) const
+{
+    for (const Dependency_object* source = this; source != nullptr; source = source->m_reference.get()) {
+        for (const Dependency_object* style = source; style != nullptr; style = style->m_style.get()) {
+            style->for_each_local_value(
+                [&callback](const Dependency_property& property, const Property_value&) {
+                    callback(property);
+                }
+            );
+        }
+    }
+}
+
+auto Dependency_object::reference_chain_reaches(const Dependency_object& object) const -> bool
+{
+    for (const Dependency_object* reference = this; reference != nullptr; reference = reference->m_reference.get()) {
+        if (reference == &object) {
+            return true;
+        }
+    }
+    return false;
+}
+
+auto Dependency_object::get_reference_user_count() const -> std::size_t
+{
+    return m_reference_users ? m_reference_users->size() : std::size_t{0};
+}
+
+void Dependency_object::add_reference_user(Dependency_object& user) const
+{
+    if (!m_reference_users) {
+        m_reference_users = std::make_unique<std::vector<Dependency_object*>>();
+    }
+    if (std::find(m_reference_users->begin(), m_reference_users->end(), &user) == m_reference_users->end()) {
+        m_reference_users->push_back(&user);
+    }
+}
+
+void Dependency_object::remove_reference_user(Dependency_object& user) const
+{
+    if (m_reference_users) {
+        std::erase(*m_reference_users, &user);
+    }
+}
+
+// D33 live edit: a value this object supplies changed (the notify that got
+// here says so through its sources); every user that reads the reference
+// for it is notified with its own old and new value.
+void Dependency_object::propagate_to_reference_users(const Property_changed_args& args)
+{
+    if (!m_reference_users || m_reference_users->empty()) {
+        return;
+    }
+    const auto is_supplied = [](const Value_source source) {
+        return
+            (source == Value_source::local) ||
+            (source == Value_source::expression) ||
+            (source == Value_source::computed) ||
+            (source == Value_source::style) ||
+            (source == Value_source::reference);
+    };
+    const bool old_supplied = is_supplied(args.old_source);
+    const bool new_supplied = is_supplied(args.new_source);
+    if (!old_supplied && !new_supplied) {
+        return; // the source's own inherited / default value moved; what it supplies did not
+    }
+    const std::vector<Dependency_object*> users = *m_reference_users; // a notified user may change its reference
+    for (Dependency_object* user : users) {
+        if (user->has_local_value(args.property) || user->has_style_value(args.property)) {
+            continue;
+        }
+        const Property_metadata& user_metadata = user->get_metadata(args.property);
+        Value_source   old_user_source{};
+        Property_value old_user_value{};
+        if (old_supplied) {
+            old_user_source = Value_source::reference;
+            old_user_value  = user_metadata.coerce ? user_metadata.coerce(*user, args.old_value) : args.old_value;
+        } else {
+            old_user_value = user->get_effective_value_below_reference(args.property, old_user_source);
+        }
+        Value_source   new_user_source{};
+        Property_value new_user_value = user->get_effective_value(args.property, new_user_source);
+        user->notify(args.property, old_user_value, old_user_source, new_user_value, new_user_source);
+    }
+}
+
+// D33: a value the object supplies itself - local, style or reference -
+// is the origin of what its inheritance descendants read.
 auto Dependency_object::has_own_value(const Dependency_property& property) const -> bool
 {
-    return has_local_value(property) || has_style_value(property);
+    return has_local_value(property) || has_style_value(property) || has_reference_value(property);
 }
 
 auto Dependency_object::get_effective_value_below_style(const Dependency_property& property, Value_source& out_source) const -> Property_value
+{
+    if (std::optional<Property_value> referenced = get_reference_value(property); referenced.has_value()) {
+        out_source = Value_source::reference;
+        const Property_metadata& metadata = get_metadata(property);
+        return metadata.coerce ? metadata.coerce(*this, referenced.value()) : referenced.value();
+    }
+    return get_effective_value_below_reference(property, out_source);
+}
+
+auto Dependency_object::get_effective_value_below_reference(const Dependency_property& property, Value_source& out_source) const -> Property_value
 {
     const Property_metadata& metadata = get_metadata(property);
     Property_value value{};
@@ -355,6 +523,10 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
         out_source = Value_source::style;
         return std::move(styled.value());
     }
+    if (std::optional<Property_value> referenced = get_reference_value(property); referenced.has_value()) {
+        out_source = Value_source::reference;
+        return std::move(referenced.value());
+    }
     if (metadata.inherits) {
         if (std::optional<Property_value> inherited = get_inherited_value(property); inherited.has_value()) {
             out_source = Value_source::inherited;
@@ -362,8 +534,8 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
         }
     }
     out_source = Value_source::default_value;
-    // D31: a per-object default is the bottom layer, so an inherited, style
-    // or local value still overrides it.
+    // D31: a per-object default is the bottom layer, so an inherited,
+    // reference, style or local value still overrides it.
     return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
 }
 
@@ -1065,6 +1237,7 @@ void Dependency_object::deliver(const Property_changed_args& args)
     }
     invalidate_dependents(args.property);
     propagate_to_style_users(args);
+    propagate_to_reference_users(args);
 }
 
 void Dependency_object::propagate_to_descendants(
@@ -1076,7 +1249,7 @@ void Dependency_object::propagate_to_descendants(
     for_each_inheritance_child(
         [&](Dependency_object& child) {
             if (child.has_own_value(property)) {
-                return; // a local or style value shadows the subtree
+                return; // a local, style or reference value shadows the subtree
             }
             const Property_metadata& child_metadata = child.get_metadata(property);
             Property_value child_old = old_value;
@@ -1152,8 +1325,9 @@ auto Dependency_object::set_style(std::shared_ptr<const Dependency_object> style
     }
     // Effective values before the switch for every property either style
     // names; locals shadow both styles and are left alone.
-    struct Before
+    class Before
     {
+    public:
         const Dependency_property* property;
         Property_value             value;
         Value_source               source;
@@ -1198,6 +1372,75 @@ auto Dependency_object::set_style(std::shared_ptr<const Dependency_object> style
     return true;
 }
 
+// Reference (D33)
+
+auto Dependency_object::set_reference(std::shared_ptr<const Dependency_object> reference) -> bool
+{
+    if (m_sealed) {
+        log->error("set_reference: object is sealed");
+        return false;
+    }
+    if (reference == m_reference) {
+        return true;
+    }
+    // A reference source is itself an object with a reference, so an
+    // assignment whose chain reaches this object (source == object
+    // included) would make the lookup walk forever; it is refused and the
+    // object keeps its reference.
+    if (reference && reference->reference_chain_reaches(*this)) {
+        log->error(
+            "set_reference: '{}' is on the reference chain of '{}' - the assignment would form a cycle",
+            get_reference_path(), reference->get_reference_path()
+        );
+        return false;
+    }
+    // Effective values before the switch for every property either source
+    // supplies; locals and style values shadow the reference and are left
+    // alone.
+    class Before
+    {
+    public:
+        const Dependency_property* property;
+        Property_value             value;
+        Value_source               source;
+    };
+    std::vector<Before> before;
+    const auto collect = [&](const std::shared_ptr<const Dependency_object>& from) {
+        if (!from) {
+            return;
+        }
+        from->for_each_supplied_property(
+            [&](const Dependency_property& property) {
+                if (has_local_value(property) || has_style_value(property)) {
+                    return;
+                }
+                const bool seen = std::any_of(before.begin(), before.end(), [&property](const Before& b) { return b.property == &property; });
+                if (seen) {
+                    return;
+                }
+                Value_source   source{};
+                Property_value value = get_effective_value(property, source);
+                before.push_back(Before{.property = &property, .value = std::move(value), .source = source});
+            }
+        );
+    };
+    collect(m_reference);
+    collect(reference);
+    if (m_reference) {
+        m_reference->remove_reference_user(*this);
+    }
+    m_reference = std::move(reference);
+    if (m_reference) {
+        m_reference->add_reference_user(*this);
+    }
+    for (const Before& b : before) {
+        Value_source   new_source{};
+        Property_value new_value = get_effective_value(*b.property, new_source);
+        notify(*b.property, b.value, b.source, new_value, new_source);
+    }
+    return true;
+}
+
 // Inheritance snapshots
 
 void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snapshot& snapshot)
@@ -1211,7 +1454,7 @@ void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snaps
             continue;
         }
         if (has_own_value(property)) {
-            continue; // local or style value: unaffected by the tree
+            continue; // local, style or reference value: unaffected by the tree
         }
         Value_source source{};
         Property_value value = get_effective_value(property, source);
@@ -1296,8 +1539,9 @@ void clear_default_valued_local_properties(Dependency_object& object)
             continue;
         }
         if (object.get_value_source(*property) != Value_source::default_value) {
-            // An inherited (R8) or style (D25) layer stands below the local
-            // one: the value is the object's own opinion after all.
+            // An inherited (R8), style (D25) or reference (D33) layer stands
+            // below the local one: the value is the object's own opinion
+            // after all.
             static_cast<void>(object.set_value(*property, local.value()));
         }
     }
