@@ -326,22 +326,85 @@ week or more.
 What: the editor state a USD-backed scene does not carry yet
 (`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
 the `customLayerData` keys already in use) rides USD's own means (C1).
-The resources are prims (U4), so brushes, styles, physics materials,
-collision filters, joint settings and the geometry and texture node
-graphs are written and read as prims where they sit in the tree, one
-custom `typeName` per kind (the class token `Typed` already fixes) with
-attributes named as the glTF fields are (a node graph as a JSON string
-attribute until a prim form is wanted), and an empty folder `Scope` is
-written as the `Scope` it is; animations, skins, prefab references and
+The resources are prims (U4), so each kind is written and read as a
+prim where it sits in the tree, one custom `typeName` per kind (the
+class token `Typed` already fixes) with attributes named as the glTF
+fields are; `erhe::usd` records what the layer authors and the editor
+creates the item, as X3 does for a class prim. Animations, skins and
 the physics API schemas on nodes (section 6) stay listed as not
 carried. A save no longer logs a kind it carries; the open side reads
 every kind it writes. `.usdc` output follows once the `.usda` output
-round-trips through E3 with all of it.
+round-trips through E3 with all of it. The four parts below land
+independently, in this order.
 
-Verification: the E3 leg extended with a scene that holds one of each
-kind (build it over MCP the way the glTF sections build theirs); a
-fresh-session reload shows the same scopes, styles and brushes;
-`scene-close leak` clean.
+#### E4a Brushes (S)
+
+A brush (`ERHE_brushes` in glTF: name, geometry, material, density,
+normal style; the collision shape is rebuilt from the geometry) is a
+`Brush`-typed prim where it sits:
+
+```
+def Scope "Brushes" {
+    def Brush "Cube" {
+        custom float erhe:Brush:density = 1
+        custom token erhe:Brush:normal_style = "polygon_normals"
+        rel material:binding = </World/Materials/Copper>
+        def Mesh "geometry" { points, faceVertexCounts, ... }
+    }
+}
+```
+
+- The geometry is the child `Mesh` prim, written by the mesh writer from
+  the brush's geometry with `subdivisionScheme = none`, which the I1
+  reader keeps normative on reload (the `ERHE_geometry` role in glTF).
+  The brush prim itself holds it, so no node-unreferenced carrier is
+  needed. Facet materials of the geometry, when it has them, ride the
+  child's `GeomSubset` bindings as on any `Mesh`.
+- `material:binding` on the brush prim is the brush's own material
+  property (the material a placed instance gets), by path as U4 binds.
+- `density` and `normal_style` are `erhe:Brush:` custom attributes, the
+  token spelled as the glTF field is.
+- `purpose = guide` is derived from the brush flag (M3) and not
+  authored, so a foreign viewer does not render the brush mesh; `Brush`
+  is not a USD schema, so such a viewer sees a prim of unknown type with
+  a `Mesh` child, and the U1 `Typed` fallback keeps its place when the
+  file comes back.
+- Reader: `Usd_data::brushes` (path, name, the child mesh's converted
+  geometry, material path, density, normal style); the editor creates
+  the `Brush` item at the path, as the glTF loader rebuilds one from
+  the carrier mesh, binds the material by path and places it in the
+  tree; the `Brush` prim's subtree is skipped by the scene conversion
+  (its mesh is not scene content).
+
+Verification: the E3 leg extended with a scene holding two brushes, one
+with a material and one without, built over MCP; a fresh-session reload
+lists both with the same geometry counts, density, normal style and
+material; `place_brush` on the reloaded brush works; a second save is
+byte-identical; `scene-close leak` clean.
+
+#### E4b Geometry node graphs (M)
+
+A `Graph_mesh` is a `Graph_mesh`-typed prim where it sits, carrying the
+graph as one JSON string attribute (`custom string erhe:Graph_mesh:graph`,
+the same JSON the glTF extension carries) until a per-node prim form is
+wanted, and its evaluated geometry as a child `Mesh` prim the way a
+brush does, so a viewer without erhe sees the result. Reload rebuilds
+the graph from the JSON and re-evaluates; the child mesh is read only
+when the JSON is absent (a file edited elsewhere).
+
+#### E4c Texture node graphs (M)
+
+A `Graph_texture` is a `Graph_texture`-typed prim carrying its graph as
+`custom string erhe:Graph_texture:graph`; a material that samples a
+generated texture keeps naming it (today that slot is left out with a
+warning). The generated image is not written; the graph is re-evaluated
+on reload.
+
+#### E4d Content-library folders (S)
+
+A folder holding nothing the file carries is still written as the
+`Scope` it is, and an empty `Scope` on reload is a folder in its place,
+so the folder tree survives a save whatever it holds.
 
 ### E2 Material fidelity (M)
 
@@ -355,10 +418,10 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file (completes G2)
+1. E4 editor state in a USD file, parts E4a to E4d in order (completes G2)
 2. E2 material fidelity
 
-Dependencies: E4 and E2 need nothing that has not landed.
+Dependencies: E4a to E4d and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 
