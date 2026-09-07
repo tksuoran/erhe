@@ -63,7 +63,7 @@ log and the empty-viewport test decided.
 | test_assets/ColorSpaceTests/UsdPreviewSurface/usduvtexture_color_test.usda | one row of the 5x5 chart samples a pale pink, the other four render white where the reference shows every swatch orange |
 | test_assets/NormalsTextureBiasAndScale/NormalsTextureBiasAndScale.usda | the three cubes are light grey with dark glyphs through the file's own camera, matching the reference |
 | test_assets/NormalsTextureBiasAndScale/NormalsTextureBiasAndScale.usdz | same as the .usda: light grey cubes with dark glyphs, matching the reference |
-| test_assets/TextureFileFormatTests/all_files.usda | the two panels of format tiles now load and sit where the reference puts them, but at a small fraction of the reference's size |
+| test_assets/TextureFileFormatTests/all_files.usda | both panels of format tiles load through the file's own camera and sit where the reference puts them; the eight 8-bit tiles (JPEG RGB and grayscale, PNG RGB and grayscale) carry their gradient, the 16-bit, 32-bit and CMYK tiles render blank, and every label reads mirrored |
 
 ## Entries
 
@@ -131,7 +131,7 @@ log and the empty-viewport test decided.
 | test_assets/RoughnessTest | RoughnessTest.usdz | ok | 49 | 26 | 6 | 6 | 0 | 12 warning; Failed to load texture image: `*`. Skip loading. reason = Fa | logs/usd_wg_survey/test_assets_RoughnessTest_RoughnessTest.usdz.png | works, gap: Failed to load texture image: `*`. Skip loading. reason = Failed to resolve asse |
 | test_assets/TextureCoordinateTest | TextureCoordinateTest.usda | ok | 39 | 28 | 5 | 5 | 0 | 11 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureCoordinateTest_TextureCoordinateTest.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | test_assets/TextureCoordinateTest | TextureCoordinateTestMaterialX.usda | ok | 21 | 21 | 5 | 0 | 0 | 11 warning; Attribute `*` does not exist in Prim <prim> | logs/usd_wg_survey/test_assets_TextureCoordinateTest_TextureCoordinateTestMaterialX.usda.png | works, gap: Attribute `*` does not exist in Prim <prim> |
-| test_assets/TextureFileFormatTests | all_files.usda | ok | 12 | 76 | 24 | 16 | 0 | 24 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_all_files.usda.png | works, gap: stage scale not applied |
+| test_assets/TextureFileFormatTests | all_files.usda | ok | 12 | 76 | 24 | 16 | 0 | 24 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_all_files.usda.png | works, gap: 16-bit, 32-bit and CMYK images do not load |
 | test_assets/TextureFileFormatTests | jpeg_cmyk_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_cmyk_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | test_assets/TextureFileFormatTests | jpeg_grayscale_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_grayscale_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | test_assets/TextureFileFormatTests | jpeg_rgb_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_rgb_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
@@ -282,6 +282,7 @@ assets it affects and what the editor would have to support to clear it.
 | 2 | appearance | a mesh renders flat white when its bound material comes from another layer: the material does not reach the surface | bind a material the file authors in a layer other than the mesh's own; the mesh loads and shades with the default white material instead of the one the file binds |
 | 2 | error | breadcrumb t=Ns thread=Nx2a325b037759429b: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
 | 2 | error | breadcrumb t=Ns thread=Nx2d99f53dd20f6e55: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | appearance | 16-bit, 32-bit and CMYK images do not load: their tiles render blank where the reference shows the same gradient the 8-bit tiles carry | decode the image depths and colour models the assets use beyond 8-bit RGB: 16-bit and 32-bit PNG and CMYK JPEG produce no texture, so their tiles render blank |
 | 1 | warning | <path> ()():N Skipping animated attribute '*' for <path> due to unsupported or inconsistent sample type. | diagnose the message and add the support it asks for |
 | 1 | warning | <path> Attribute `*`: `*` is not an allowed token. Ignore it. | diagnose the message and add the support it asks for |
 | 1 | error | > uniform token info:id = "ND_... | diagnose the message and add the support it asks for |
@@ -357,7 +358,6 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | warning | [InternalError] Attribute is invalid.); using default (false). | diagnose the message and add the support it asks for |
 | 1 | error | ^ | diagnose the message and add the support it asks for |
 | 1 | appearance | a UsdUVTexture's colour reaches only one row of the colour-space chart; the other four render white | sample a UsdUVTexture through every colour-space path the file exercises (raw / sRGB / auto / omit / lin_ap1_scene); only one row reaches the surface, the rest render white |
-| 1 | appearance | a stage's metersPerUnit does not scale the imported prims: the tiles load at a fraction of the size the reference renders them at | apply the stage's metersPerUnit to the imported prims, so a stage authored in another unit is the size its own camera frames |
 | 1 | error | breadcrumb t=Ns thread=Nx2a325b037759429b: primitive: build_centroid_points | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nx2a325b037759429b: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nx2a325b037759429b: primitive: optimized variant | not a USD gap: editor-internal noise this survey happens to capture |

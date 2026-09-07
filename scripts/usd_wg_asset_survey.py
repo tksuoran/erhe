@@ -733,6 +733,22 @@ def verdict_class(verdict: str) -> str:
     return "works"
 
 
+# A cause the recorded facts can refute. A stage that authors metersPerUnit 1
+# is already in erhe's unit, so "the scale is not applied" cannot be why its
+# content reads small - the framing is.
+SCALE_CAUSE = re.compile(r"metersPerUnit|stage scale|scale (is )?not applied", re.IGNORECASE)
+
+
+def eye_gap_holds(record: dict) -> bool:
+    """False when the entry's own data refutes the cause read from the capture."""
+    cause = record.get("eye_gap", "")
+    if SCALE_CAUSE.search(cause):
+        meters_per_unit = record.get("meters_per_unit")
+        if (meters_per_unit is not None) and (abs(float(meters_per_unit) - 1.0) < 1.0e-6):
+            return False
+    return True
+
+
 def gather_gaps(records: list) -> list:
     """Each distinct cause once, with the number of assets it affects."""
     causes = {}
@@ -768,7 +784,7 @@ def gather_gaps(records: list) -> list:
             add(SUBLAYER_GAP, "failure", asset, "")
         # What the capture, compared against the repository's own reference
         # render, shows the editor getting wrong: a cause no log line states.
-        if record.get("eye_gap"):
+        if record.get("eye_gap") and eye_gap_holds(record):
             add(record["eye_gap"], "appearance", asset, record.get("eye_note", ""))
 
     gaps = []
@@ -884,9 +900,9 @@ REMEDY = [
     (re.compile(r"renders flat white when its bound material comes from another layer"),
      "bind a material the file authors in a layer other than the mesh's own; the mesh loads and shades "
      "with the default white material instead of the one the file binds"),
-    (re.compile(r"metersPerUnit does not scale the imported prims"),
-     "apply the stage's metersPerUnit to the imported prims, so a stage authored in another unit is the "
-     "size its own camera frames"),
+    (re.compile(r"bit, .*bit and CMYK images do not load|images do not load"),
+     "decode the image depths and colour models the assets use beyond 8-bit RGB: 16-bit and 32-bit PNG and "
+     "CMYK JPEG produce no texture, so their tiles render blank"),
     (re.compile(r"no scene appeared within"),
      "open a stage whose root layer is a MaterialX document reference; the load never produces a scene "
      "and the open never answers"),
