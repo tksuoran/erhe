@@ -1,4 +1,5 @@
 #include "erhe_usd/usd.hpp"
+#include "erhe_usd/usd_impl.hpp"
 #include "erhe_usd/usd_log.hpp"
 
 #include "erhe_dataformat/dataformat.hpp"
@@ -426,6 +427,12 @@ public:
         if (name == "emissive_texture")           { return "surface.inputs:emissiveColor.connect"; }
         return {};
     }
+    if (owner == "Brush") {
+        // The material a placed instance gets is the brush prim's own
+        // material binding (doc/usd-compatibility-plan.md E4a).
+        if (name == "material") { return "material:binding"; }
+        return {};
+    }
     if (owner == "Camera") {
         if (name == "projection_type") { return "projection"; }
         if (name == "fov_x")           { return "horizontalAperture"; }
@@ -591,6 +598,12 @@ public:
         for (const Usd_save_variant_set& entry : m_arguments.variant_sets) {
             if (entry.item && !entry.variants.empty()) {
                 m_prim_variant_sets[entry.item.get()].push_back(&entry);
+            }
+        }
+
+        for (const Usd_save_brush& entry : m_arguments.brushes) {
+            if (entry.item) {
+                m_brushes[entry.item.get()] = &entry;
             }
         }
 
@@ -1209,13 +1222,22 @@ private:
         return prim.get_class_type_name() == c_style_class_type_name;
     }
 
+    // A brush item (doc/usd-compatibility-plan.md E4a), which is a
+    // `Brush`-typed prim on the stage. As with a style, erhe::usd depends on
+    // no editor type, so the kind is recognized by the token erhe::Typed
+    // fixes for it; what the brush holds comes from Usd_save_arguments.
+    [[nodiscard]] static auto is_brush_prim(const erhe::Typed& prim) -> bool
+    {
+        return prim.get_class_type_name() == c_brush_prim_type_name;
+    }
+
     // A resource prim a USD file carries, or a prim on the way down to one.
     // A resource is not content, so this is what widens the content filter;
-    // today the file carries materials, and plan step E4 adds the other
-    // kinds.
+    // today the file carries materials, styles and brushes, and plan steps
+    // E4b to E4d add the other kinds.
     [[nodiscard]] static auto holds_carried_resource(const erhe::Typed& prim) -> bool
     {
-        if (erhe::is<erhe::primitive::Material>(&prim) || is_style_prim(prim)) {
+        if (erhe::is<erhe::primitive::Material>(&prim) || is_style_prim(prim) || is_brush_prim(prim)) {
             return true;
         }
         for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
@@ -1684,6 +1706,9 @@ private:
         if (is_style_prim(*plan_prim.item)) {
             return write_class_prim(*plan_prim.item, plan_prim.name);
         }
+        if (is_brush_prim(*plan_prim.item)) {
+            return write_brush_prim(*plan_prim.item, plan_prim.name);
+        }
         return erhe::is<erhe::Scope>(plan_prim.item)
             ? write_scope_prim(*plan_prim.item, plan_prim.name)
             : write_typed_prim(*plan_prim.item, plan_prim.name);
@@ -1725,6 +1750,55 @@ private:
         model.prim_type_name = std::string{item.get_prim_type_name()};
         write_active(item, model);
         return lightusd::Prim{model};
+    }
+
+    // A brush item as the `Brush`-typed prim it is
+    // (doc/usd-compatibility-plan.md E4a): a prim of erhe's own type name
+    // holding the brush's geometry as a child `Mesh`, the density and the
+    // normal style as `erhe:Brush:` custom attributes, and the material a
+    // placed instance gets as the prim's own `material:binding`. USD has no
+    // schema for it, so a viewer without erhe sees a prim of unknown type
+    // with a `Mesh` child.
+    [[nodiscard]] auto write_brush_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name           = prim_name;
+        model.prim_type_name = std::string{c_brush_prim_type_name};
+        write_token_visibility_and_purpose(item, model.props);
+        write_active(item, model);
+        write_erhe_properties(item, model);
+
+        const std::map<const erhe::Item_base*, const Usd_save_brush*>::const_iterator i = m_brushes.find(&item);
+        if (i == m_brushes.end()) {
+            add_warning(
+                fmt::format("brush '{}' was not offered to the writer - it is written without its geometry", prim_name)
+            );
+            return lightusd::Prim{model};
+        }
+        const Usd_save_brush& brush = *i->second;
+
+        lightusd::Attribute density;
+        density.set_value(brush.density);
+        model.props.emplace(std::string{c_brush_density_attribute}, lightusd::Property{std::move(density), true});
+        if (!brush.normal_style.empty()) {
+            lightusd::Attribute normal_style;
+            normal_style.set_value(lightusd::value::token{brush.normal_style});
+            model.props.emplace(std::string{c_brush_normal_style_attribute}, lightusd::Property{std::move(normal_style), true});
+        }
+        if (brush.material) {
+            add_material_binding(model.props, *brush.material.get());
+        }
+
+        lightusd::Prim prim{model};
+        if (!brush.geometry) {
+            add_warning(fmt::format("brush '{}' has no geometry - the prim is written without its Mesh child", prim_name));
+            return prim;
+        }
+        std::string error;
+        if (!prim.add_child(write_geometry_mesh_prim(*brush.geometry.get(), std::string{c_brush_geometry_prim_name}), false, &error)) {
+            add_warning(fmt::format("the geometry of brush '{}' could not be added: {}", prim_name, error));
+        }
+        return prim;
     }
 
     // One erhe node as one prim: a `Mesh`, `Camera` or UsdLux prim for a prim
@@ -2059,6 +2133,46 @@ private:
         const erhe::primitive::Material* material   {nullptr};
     };
 
+    // The vertex arrays of one accumulator on a GeomMesh, with the
+    // interpolation each of them is authored at.
+    void fill_geom_mesh(lightusd::GeomMesh& geom_mesh, const Mesh_accumulator& accumulator)
+    {
+        geom_mesh.points.set_value(accumulator.points);
+        geom_mesh.faceVertexCounts.set_value(accumulator.face_vertex_counts);
+        geom_mesh.faceVertexIndices.set_value(accumulator.face_vertex_indices);
+        if (accumulator.has_normals) {
+            geom_mesh.normals.set_value(accumulator.normals);
+            geom_mesh.normals.metas().set_interpolation_enum(lightusd::Interpolation::FaceVarying);
+        }
+        if (accumulator.has_texcoords) {
+            add_primvar(geom_mesh, "primvars:st", accumulator.texcoords);
+        }
+        if (accumulator.has_colors) {
+            add_primvar(geom_mesh, "primvars:displayColor", accumulator.colors);
+            add_primvar(geom_mesh, "primvars:displayOpacity", accumulator.opacities);
+        }
+    }
+
+    // One erhe geometry as one `Mesh` prim of its own: no transform, no
+    // material binding and no item behind it - what a brush's geometry child
+    // is (doc/usd-compatibility-plan.md E4a). The authored polygons are the
+    // mesh rather than a subdivision cage, which is what makes the importer
+    // build erhe geometry back rather than a triangle soup. An erhe geometry
+    // binds no material of its own, so the prim carries no GeomSubset: a
+    // material a brush hands on is the brush prim's binding.
+    [[nodiscard]] auto write_geometry_mesh_prim(const erhe::geometry::Geometry& geometry, const std::string& prim_name) -> lightusd::Prim
+    {
+        ++m_mesh_count;
+        lightusd::GeomMesh geom_mesh;
+        geom_mesh.name = prim_name;
+        geom_mesh.subdivisionScheme.set_value(lightusd::GeomMesh::SubdivisionScheme::SubdivisionSchemeNone);
+
+        Mesh_accumulator accumulator;
+        append_geometry(accumulator, geometry);
+        fill_geom_mesh(geom_mesh, accumulator);
+        return lightusd::Prim{geom_mesh};
+    }
+
     [[nodiscard]] auto write_mesh_prim(
         const erhe::scene::Node& node,
         const erhe::scene::Mesh& mesh,
@@ -2107,20 +2221,7 @@ private:
             groups.push_back(std::move(group));
         }
 
-        geom_mesh.points.set_value(accumulator.points);
-        geom_mesh.faceVertexCounts.set_value(accumulator.face_vertex_counts);
-        geom_mesh.faceVertexIndices.set_value(accumulator.face_vertex_indices);
-        if (accumulator.has_normals) {
-            geom_mesh.normals.set_value(accumulator.normals);
-            geom_mesh.normals.metas().set_interpolation_enum(lightusd::Interpolation::FaceVarying);
-        }
-        if (accumulator.has_texcoords) {
-            add_primvar(geom_mesh, "primvars:st", accumulator.texcoords);
-        }
-        if (accumulator.has_colors) {
-            add_primvar(geom_mesh, "primvars:displayColor", accumulator.colors);
-            add_primvar(geom_mesh, "primvars:displayOpacity", accumulator.opacities);
-        }
+        fill_geom_mesh(geom_mesh, accumulator);
 
         write_visibility_and_purpose(node, geom_mesh);
         write_erhe_properties(node, geom_mesh);
@@ -2386,6 +2487,9 @@ private:
     std::set<const erhe::primitive::Material*>               m_uv_reader_materials;
     std::map<std::string, std::vector<std::string>>          m_tag_members;
     std::map<const erhe::Item_base*, const std::vector<Usd_save_reference>*> m_prim_references;
+    // What every brush prim of the tree holds, by the item the caller named
+    // (doc/usd-compatibility-plan.md E4a).
+    std::map<const erhe::Item_base*, const Usd_save_brush*>                  m_brushes;
     // The variant sets the caller named, by the item carrying them; one item
     // can carry more than one set (doc/usd-compatibility-plan.md X4).
     std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>> m_prim_variant_sets;

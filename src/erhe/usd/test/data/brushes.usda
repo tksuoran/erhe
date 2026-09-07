@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Looks"
+    {
+        def Material "Copper"
+        {
+            token outputs:surface.connect = </World/Looks/Copper/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8, 0.4, 0.2)
+                token outputs:surface
+            }
+        }
+    }
+
+    def Scope "Brushes"
+    {
+        def Brush "Quad"
+        {
+            custom float erhe:Brush:density = 2.5
+            custom token erhe:Brush:normal_style = "polygon_normals"
+            rel material:binding = </World/Looks/Copper>
+
+            def Mesh "geometry"
+            {
+                uniform token subdivisionScheme = "none"
+                int[] faceVertexCounts = [4]
+                int[] faceVertexIndices = [0, 1, 2, 3]
+                point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            }
+        }
+
+        def Brush "Triangle"
+        {
+            custom float erhe:Brush:density = 1
+
+            def Mesh "geometry"
+            {
+                uniform token subdivisionScheme = "none"
+                int[] faceVertexCounts = [3]
+                int[] faceVertexIndices = [0, 1, 2]
+                point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0, 1)]
+            }
+        }
+
+        def Brush "Empty"
+        {
+            custom float erhe:Brush:density = 3
+        }
+    }
+}

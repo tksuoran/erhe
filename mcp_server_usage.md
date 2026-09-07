@@ -204,7 +204,10 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_brushes","arguments":{"scene_name":"Default Scene"}}}'
 ```
 
-Returns: `{brushes: [{name, id, folder_path, vertex_count, facet_count}]}` -
+Returns: `{brushes: [{name, id, folder_path, vertex_count, facet_count, material, density, normal_style}]}` -
+`material` is the name of the material a placed instance gets, or `null`;
+`normal_style` is the token a USD `erhe:Brush:normal_style` attribute and the
+glTF `ERHE_brushes` field are spelled with.
 `folder_path` is the scope path below the `Brushes` scope, empty for a brush
 directly under it.
 

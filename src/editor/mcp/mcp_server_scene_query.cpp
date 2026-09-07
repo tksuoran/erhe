@@ -16,6 +16,7 @@
 #include "geometry_graph/graph_mesh.hpp"
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
+#include "parsers/gltf_extensions_names.hpp"
 #include "windows/transform_update_stats.hpp"
 #include "renderers/composition_pass.hpp"
 #include "renderers/lightmap_partitioner.hpp"
@@ -1615,6 +1616,42 @@ auto Mcp_server::query_scene_textures(const json& args) -> std::string
     return make_json_content({{"textures", textures}}).dump();
 }
 
+namespace {
+
+// Where a brush's prim sits, as `get_scene_brushes` reports it: the '/'-joined
+// names below the `Brushes` kind scope when the brush is under that scope
+// (empty for one directly under it), and otherwise the holding prim's own item
+// path - the same path `ERHE_scene` `library_folders` names a resource's
+// holder by (doc/content-library-folders.md D5). A resource may sit under any
+// prim (doc/usd-compatibility-plan.md U4), which is why the second form is
+// needed at all.
+[[nodiscard]] auto brush_folder_path(const Brush& brush, const erhe::Hierarchy* brushes_scope) -> std::string
+{
+    const std::shared_ptr<erhe::Hierarchy> parent = brush.get_parent().lock();
+    if (!parent) {
+        return std::string{};
+    }
+    if ((brushes_scope == nullptr) || !parent->is_ancestor(brushes_scope)) {
+        return (parent.get() == brushes_scope) ? std::string{} : parent->get_path();
+    }
+    std::string                      path;
+    const erhe::Hierarchy*           prim = parent.get();
+    std::vector<std::string>         names;
+    while ((prim != nullptr) && (prim != brushes_scope)) {
+        names.push_back(prim->get_name());
+        prim = prim->get_parent().lock().get();
+    }
+    for (std::vector<std::string>::const_reverse_iterator i = names.rbegin(), end = names.rend(); i != end; ++i) {
+        if (!path.empty()) {
+            path += '/';
+        }
+        path += *i;
+    }
+    return path;
+}
+
+} // anonymous namespace
+
 auto Mcp_server::query_scene_brushes(const json& args) -> std::string
 {
     // Resolve the scene by name, or by id when scene_id is given (lets callers
@@ -1644,36 +1681,30 @@ auto Mcp_server::query_scene_brushes(const json& args) -> std::string
         return make_json_content({{"brushes", json::array()}}).dump();
     }
 
-    // Walk the Brushes scope depth-first so the content-library folder
-    // hierarchy is reported per brush; get_all<Brush>() would flatten it.
-    json brushes = json::array();
-    const std::function<void(const erhe::Hierarchy&, const std::string&)> visit =
-        [&](const erhe::Hierarchy& scope, const std::string& folder_path) -> void
-        {
-            for (const std::shared_ptr<erhe::Hierarchy>& child : scope.get_children()) {
-                const std::shared_ptr<Brush> brush = std::dynamic_pointer_cast<Brush>(child);
-                if (!brush) {
-                    const std::string child_path = folder_path.empty()
-                        ? child->get_name()
-                        : fmt::format("{}/{}", folder_path, child->get_name());
-                    visit(*child, child_path);
-                    continue;
-                }
-                const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
-                const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
-                const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
-                brushes.push_back({
-                    {"name",         brush->get_name()},
-                    {"id",           brush->get_id()},
-                    {"folder_path",  folder_path},
-                    {"vertex_count", vertex_count},
-                    {"facet_count",  facet_count}
-                });
-            }
-        };
+    // Every brush the library owns, wherever its prim sits: a resource is a
+    // prim of the tree and needs not be under its kind scope
+    // (doc/usd-compatibility-plan.md U4), so the index - not a walk of the
+    // `Brushes` scope - is what lists them.
     const std::shared_ptr<erhe::Scope> brushes_scope = library->find_scope(erhe::Item_type::brush);
-    if (brushes_scope) {
-        visit(*brushes_scope, std::string{});
+    json brushes = json::array();
+    for (const std::shared_ptr<Brush>& brush : library->get_all<Brush>()) {
+        if (!brush) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
+        const GEO::index_t vertex_count = geometry ? geometry->get_mesh().vertices.nb() : 0;
+        const GEO::index_t facet_count  = geometry ? geometry->get_mesh().facets.nb()   : 0;
+        const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
+        brushes.push_back({
+            {"name",         brush->get_name()},
+            {"id",           brush->get_id()},
+            {"folder_path",  brush_folder_path(*brush.get(), brushes_scope.get())},
+            {"vertex_count", vertex_count},
+            {"facet_count",  facet_count},
+            {"material",     material ? json(material->get_name()) : json(nullptr)},
+            {"density",      brush->get_density()},
+            {"normal_style", normal_style_name(brush->get_normal_style())}
+        });
     }
 
     return make_json_content({{"brushes", brushes}}).dump();

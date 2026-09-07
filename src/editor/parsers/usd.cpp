@@ -40,6 +40,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
+#include "parsers/gltf_extensions_names.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 
@@ -53,6 +54,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_file/file.hpp"
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -66,6 +68,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include "editor_log.hpp"
@@ -554,6 +557,111 @@ void resolve_usd_classes(
     return std::static_pointer_cast<erhe::primitive::Material>(prim->shared_from_this());
 }
 
+// The build info a brush's primitive is built with, which is the one the
+// glTF loader gives an imported brush.
+[[nodiscard]] auto make_brush_build_info(App_context& context) -> erhe::primitive::Build_info
+{
+    return erhe::primitive::Build_info{
+        .primitive_types = {
+            .fill_triangles          = true,
+            .fill_triangles_expanded = true,
+            .edge_lines              = true,
+            .corner_points           = true,
+            .centroid_points         = true,
+        },
+        .buffer_info = context.mesh_memory->make_primitive_buffer_info()
+    };
+}
+
+// The `Brush` prims the file authored, as the Brush items they are
+// (doc/usd-compatibility-plan.md E4a): the geometry the reader took from the
+// prim's `Mesh` child, the density and normal style it authored, and the
+// material its `material:binding` names, at the place the prim has. A brush
+// whose holding prim is in the loaded tree is parented there and rides that
+// tree's insert, the way a material the file placed does; a brush the file
+// gave no place gets an attach operation of its own, which is what creates
+// the `Brushes` kind scope.
+void resolve_usd_brushes(
+    App_context&                              context,
+    const std::shared_ptr<Content_library>&   content_library,
+    const erhe::usd::Usd_data&                usd_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    const std::string&                        path_string,
+    std::vector<std::shared_ptr<Operation>>&  operations
+)
+{
+    if (usd_data.brushes.empty() || !content_library || (context.mesh_memory == nullptr)) {
+        return;
+    }
+    const erhe::primitive::Build_info brush_build_info = make_brush_build_info(context);
+    int                               brush_index      = 0;
+    for (const erhe::usd::Usd_brush_prim& record : usd_data.brushes) {
+        const Brush_data create_info{
+            .context      = context,
+            .app_settings = *context.app_settings,
+            .name         = record.name,
+            .build_info   = brush_build_info,
+            .normal_style = normal_style_from_name(
+                record.normal_style.empty() ? std::string_view{"corner_normals"} : std::string_view{record.normal_style}
+            ),
+            .geometry     = record.geometry,
+            .density      = record.density,
+        };
+        // A geometry the file's Mesh prim built carries no edges, which a
+        // brush needs; a geometry that already has them is left alone, the
+        // way the glTF loader leaves an ERHE_geometry dump alone.
+        if (record.geometry->get_mesh().edges.nb() == 0) {
+            record.geometry->process({.flags =
+                erhe::geometry::Geometry::process_flag_connect                       |
+                erhe::geometry::Geometry::process_flag_build_edges                   |
+                erhe::geometry::Geometry::process_flag_compute_facet_centroids       |
+                erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals |
+                erhe::geometry::Geometry::process_flag_generate_facet_texture_coordinates
+            });
+        }
+        const std::shared_ptr<Brush> brush = std::make_shared<Brush>(create_info);
+        if (!record.material_path.empty()) {
+            const std::shared_ptr<erhe::primitive::Material> material =
+                find_material_by_stage_path(container_node, record.material_path);
+            if (material) {
+                brush->set_material(material);
+            } else {
+                log_parsers->warn(
+                    "USD brush '{}' binds material '{}', which the file has no prim for - the binding is dropped",
+                    record.stage_path, record.material_path
+                );
+            }
+        }
+        erhe::scene::apply_property_values(
+            *brush.get(),
+            record.values,
+            fmt::format("USD brush {}", record.stage_path)
+        );
+
+        const Gltf_source_reference gltf_source{
+            .gltf_path  = path_string,
+            .item_name  = record.name,
+            .item_index = brush_index,
+            .item_type  = "brush",
+        };
+        ++brush_index;
+        const std::string                      parent_path = parent_prim_path(record.stage_path);
+        const std::shared_ptr<erhe::Hierarchy> parent      = parent_path.empty()
+            ? std::static_pointer_cast<erhe::Hierarchy>(container_node)
+            : find_prim_hierarchy(container_node, parent_path);
+        if (parent) {
+            brush->set_parent(parent);
+            content_library->set_gltf_source(brush, gltf_source);
+            continue;
+        }
+        log_parsers->warn(
+            "USD brush '{}' names a holding prim the import did not make - it is placed in the Brushes scope",
+            record.stage_path
+        );
+        operations.push_back(make_library_attach_operation(context, content_library, brush, gltf_source));
+    }
+}
+
 // The variant sets the file authored, as the scene's own table
 // (doc/usd-compatibility-plan.md X4): the carrying prim and the bound
 // materials are the items the import made, so a later switch assigns them
@@ -752,6 +860,7 @@ auto make_import_usd_operation(
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
+    resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
 
     erhe::scene::Scene* scene = scene_root->get_hosted_scene();
     operations.push_back(
@@ -988,6 +1097,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // dropped - the same shape finish_open_scene_gltf uses.
     std::vector<std::shared_ptr<Operation>> operations;
     append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
+    resolve_usd_brushes(context, content_library, usd_data, container_node, path.generic_string(), operations);
     for (const std::shared_ptr<Operation>& operation : operations) {
         operation->execute(context);
     }
@@ -1063,7 +1173,6 @@ void log_uncarried_editor_state_kind(
 
 void log_uncarried_editor_state(const Content_library& content_library, const std::filesystem::path& path)
 {
-    log_uncarried_editor_state_kind<Brush>        (content_library, "brush",              path);
     log_uncarried_editor_state_kind<Graph_mesh>   (content_library, "node graph mesh",    path);
     log_uncarried_editor_state_kind<Graph_texture>(content_library, "node graph texture", path);
     // A folder is a Scope of the scene tree, so it is written when it holds a
@@ -1112,6 +1221,39 @@ void collect_usd_references(
     }
     for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
         collect_usd_references(child, out_references);
+    }
+}
+
+// The scene's brushes as the writer's records (doc/usd-compatibility-plan.md
+// E4a): the writer needs what a brush holds, since erhe::usd names no editor
+// type. Where the prim goes is the tree's business, not this list's - a brush
+// prim of the tree the list does not name is written without its geometry.
+void collect_usd_brushes(
+    const Content_library&                        content_library,
+    const std::filesystem::path&                  path,
+    std::vector<erhe::usd::Usd_save_brush>&       out_brushes
+)
+{
+    for (const std::shared_ptr<Brush>& brush : content_library.get_all<Brush>()) {
+        if (!brush) {
+            continue;
+        }
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = brush->get_geometry();
+        if (!geometry) {
+            log_parsers->warn(
+                "save_scene_usd '{}': brush '{}' has no geometry - the prim is written without its Mesh child",
+                erhe::file::to_string(path), brush->get_name()
+            );
+        }
+        out_brushes.push_back(
+            erhe::usd::Usd_save_brush{
+                .item         = brush,
+                .geometry     = geometry,
+                .density      = brush->get_density(),
+                .normal_style = normal_style_name(brush->get_normal_style()),
+                .material     = brush->get_material()
+            }
+        );
     }
 }
 
@@ -1194,6 +1336,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library) {
         save_arguments.materials = content_library->get_all<erhe::primitive::Material>();
+        collect_usd_brushes(*content_library.get(), path, save_arguments.brushes);
     }
     for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {
         const std::shared_ptr<erhe::primitive::Material>& material = save_arguments.materials[material_index];

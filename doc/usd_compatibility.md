@@ -62,6 +62,7 @@ node attachments. The mapping an exporter applies and an importer inverts:
 | `Camera` prim (`erhe::scene::Camera`, an `Xformable`) | `Camera` prim, see "Cameras" | one to one: the erhe camera carries its own transform, name and children |
 | `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | |
+| `editor::Brush` | `Brush` (custom `typeName`, no USD schema) | a brush is a prim where it sits: `erhe:Brush:density` and `erhe:Brush:normal_style` custom attributes, `material:binding` for the material a placed instance gets, and the geometry as a child `def Mesh "geometry"` with `subdivisionScheme = none` (`src/erhe/usd/notes.md`, "Brush prims"). `purpose` is derived from the brush flag (M3), so it is not authored |
 | `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
 | prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` (or `payload`) composition arc | one attachment per arc, in the authored order; the arc's target file, prim path and form are what the attachment records, and a save writes them back |
 | item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) on the default prim, one collection per tag | |

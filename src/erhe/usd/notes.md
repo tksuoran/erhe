@@ -239,6 +239,29 @@ The list-edit rule is the one the arc reader repeats, over target paths.
 the caller makes the Style items, applies the values with
 `erhe::scene::apply_property_values` and sets the styles.
 
+### Brush prims
+
+A brush is editor state a USD file carries as a prim of its own type
+(doc/usd-compatibility-plan.md E4a): `def Brush "<name>"` where the brush sits
+in the tree, holding `erhe:Brush:density` and `erhe:Brush:normal_style` custom
+attributes, a `material:binding` to the material a placed instance gets, and
+its geometry as a child `def Mesh "geometry"` written with
+`subdivisionScheme = none`, so a viewer without erhe sees a prim of unknown
+type with a mesh below it. The spellings are `usd_impl.hpp` constants, which
+the reader and the writer share.
+
+The same root-layer walk that takes the class prims records a `Brush`-typed
+prim into `Usd_data::brushes`: the stage path and name, the density and the
+normal-style token pulled out of the neutral value list, the absolute path the
+`material:binding` names, and every other authored opinion in the neutral
+form. The geometry follows once the meshes are converted - the child mesh is
+converted the way every other mesh of the file is, and its geometry is taken
+off the first primitive. The scene conversion stops at a `Brush` prim the way
+it stops at a class prim, so the brush geometry is no mesh of the scene and
+the prim becomes no `Typed` item; a `Brush` prim without a `geometry` child is
+one warning and no brush record. `erhe::usd` creates no item: the caller makes
+the editor Brush at the path the prim has.
+
 ### Variant sets
 
 A variant set is resolved in composition, and LightUSD composes nothing, so a
@@ -323,7 +346,8 @@ because the same spelling rule decides what an item is called on a stage.
   one below it - a resource prim is shown in the UI and is not content, so
   that widening is what puts a material and the scopes down to it on the
   stage, and it leaves an empty kind scope out of the file. Today the file
-  carries materials and styles; the other resource kinds are plan step E4.
+  carries materials, styles and brushes; the other resource kinds are plan
+  steps E4b to E4d.
 - Two passes. The first decides every prim's stage path - the sanitized,
   sibling-unique name under each parent, and the `World` wrapper when the
   scene has several top-level prims - and records where each material and
@@ -388,6 +412,20 @@ because the same spelling rule decides what an item is called on a stage.
   bridged and so never becomes an `erhe:Item_base:style` attribute; the arc is
   the only thing written. A style whose item is not a prim of the written tree
   - a style of another scene - is one warning and no arc.
+- Brushes (doc/usd-compatibility-plan.md E4a). A brush item is written as the
+  `Brush`-typed prim of the "Brush prims" section above, where it sits in the
+  tree. The writer recognizes a brush by the class token `erhe::Typed` fixes
+  for it (`"Brush"`), for the reason it recognizes a style that way, and takes
+  what the prim carries from `Usd_save_arguments::brushes` - `erhe::usd` names
+  no editor type, so the caller hands over the geometry, the density, the
+  normal-style token and the material. `Brush.material` is in
+  `native_usd_property_name`, so the material travels as the prim's
+  `material:binding` and not also as a custom attribute. The geometry child is
+  written by `write_geometry_mesh_prim`, which shares the vertex-array fill and
+  the `subdivisionScheme = none` rule with the mesh writer; an erhe geometry
+  binds no material of its own, so the child carries no `GeomSubset`. A brush
+  prim of the tree the caller did not list is written without its geometry, and
+  named in a warning.
 - Composition arcs. A prim the caller names in
   `Usd_save_arguments::references` is written as the referencing prim it is:
   its own class, name, transform and authored values, plus one explicit
@@ -606,6 +644,13 @@ the prims the arcs name are not.
 network; it is the round-trip script's texture case rather than a unit-test
 input.
 
+`test/data/brushes.usda` holds a `Brushes` scope with two `Brush` prims - one
+binding a material from a `Looks` scope, one not - and a third without a
+`geometry` child. `test_usd_brushes.cpp` asserts the two are recorded with
+their geometry counts, density, token and material path, that the third is one
+warning and no brush, that no brush geometry is scene content, and that a
+brush item is written back as the same prim, twice byte for byte.
+
 `test_usd_export.cpp` round-trips both data files through `save_usda` and
 `load_usd` and asserts that the node names, the mesh topology, the subset
 material bindings, the material local sets, the camera and light values,
@@ -637,10 +682,9 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   glTF, the scene-level block travels as the `erhe:scene` string of
   `customLayerData` (doc/scene_serialization.md, USD-backed scenes) and the
   materials travel as the prims they are, so the scopes that hold them
-  travel with them. The brush library, the geometry and texture node graphs,
-  the style library and the remaining resource kinds have no USD form yet
-  and no custom prims of their own (C1); a save logs one line per kind the
-  scene holds. The writer also emits no `.usdc` or `.usdz`, no
+  travel with them, and the brushes and styles travel as prims of their own.
+  The geometry and texture node graphs and the remaining resource kinds have
+  no USD form yet (C1); a save logs one line per kind the scene holds. The writer also emits no `.usdc` or `.usdz`, no
   MaterialX, and none of the composition structure of the file it loaded -
   the first version flattens what it read (plan steps X1 and X2).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written

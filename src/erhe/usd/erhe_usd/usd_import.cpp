@@ -53,6 +53,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -567,6 +568,7 @@ public:
         convert_images();
         convert_materials();
         convert_meshes();
+        resolve_brush_geometry();
         convert_cameras();
         convert_lights();
         convert_nodes();
@@ -1673,8 +1675,59 @@ private:
                 }
                 mesh->add_primitive(primitive, material_at(group.material_id));
             }
+            m_mesh_index_by_path.emplace(usd_mesh.abs_path, mesh_index);
             m_result.data.meshes.push_back(mesh);
         }
+    }
+
+    // The geometry of every `Brush` prim the layer walk recorded: the prim's
+    // `def Mesh "geometry"` child, converted the way every other mesh of the
+    // file is (doc/usd-compatibility-plan.md E4a). The mesh is not scene
+    // content - convert_node stops at the brush prim - so only its geometry
+    // is taken. A brush prim without such a child is one warning and no
+    // brush record.
+    void resolve_brush_geometry()
+    {
+        std::vector<Usd_brush_prim> brushes;
+        brushes.reserve(m_result.data.brushes.size());
+        for (Usd_brush_prim& brush : m_result.data.brushes) {
+            const std::string geometry_path = brush.stage_path + "/" + std::string{c_brush_geometry_prim_name};
+            const std::map<std::string, std::size_t>::const_iterator i = m_mesh_index_by_path.find(geometry_path);
+            if (i == m_mesh_index_by_path.end()) {
+                add_warning(
+                    fmt::format(
+                        "USD brush prim '{}' holds no '{}' Mesh child - it becomes no brush",
+                        brush.stage_path,
+                        c_brush_geometry_prim_name
+                    )
+                );
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh>& mesh = m_result.data.meshes[i->second];
+            if (mesh) {
+                for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                    if (!mesh_primitive.primitive || !mesh_primitive.primitive->render_shape) {
+                        continue;
+                    }
+                    brush.geometry = mesh_primitive.primitive->render_shape->get_geometry();
+                    if (brush.geometry) {
+                        break;
+                    }
+                }
+            }
+            if (!brush.geometry) {
+                add_warning(
+                    fmt::format(
+                        "USD brush prim '{}': the '{}' Mesh child carries no polygons - it becomes no brush",
+                        brush.stage_path,
+                        c_brush_geometry_prim_name
+                    )
+                );
+                continue;
+            }
+            brushes.push_back(std::move(brush));
+        }
+        m_result.data.brushes = std::move(brushes);
     }
 
     void convert_cameras()
@@ -1902,6 +1955,14 @@ private:
         // (doc/usd-compatibility-plan.md X3). Tydra reports it as a transform
         // node all the same, so the whole subtree is left out here.
         if (m_class_paths.count(usd_node.abs_path) != 0) {
+            return;
+        }
+        // A `Brush` prim is editor state, not scene content
+        // (doc/usd-compatibility-plan.md E4a): the caller makes the Brush item
+        // from the record read_layer_composition made, and its child `Mesh`
+        // holds the brush geometry rather than a mesh of the scene, so the
+        // whole subtree is left out here.
+        if (m_brush_paths.count(usd_node.abs_path) != 0) {
             return;
         }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
@@ -2416,6 +2477,10 @@ private:
             m_result.data.classes.push_back(read_class_prim(path, spec));
             return;
         }
+        if (spec.typeName() == c_brush_prim_type_name) {
+            read_brush_prim(path, spec);
+            return;
+        }
         record_spec_inherits(path, spec);
         record_spec_variant_sets(path, spec);
         for (const lightusd::PrimSpec& child : spec.children()) {
@@ -2439,6 +2504,54 @@ private:
             record.children.push_back(read_class_prim(path + "/" + child.name(), child));
         }
         return record;
+    }
+
+    // One `Brush` prim as the record the caller turns into a Brush item
+    // (doc/usd-compatibility-plan.md E4a): its path and name, the density and
+    // the normal-style token it authors, the material its `material:binding`
+    // names, and every other authored opinion in the neutral form. The
+    // geometry follows once the meshes are converted (resolve_brush_geometry).
+    void read_brush_prim(const std::string& path, const lightusd::PrimSpec& spec)
+    {
+        m_brush_paths.insert(path);
+        Usd_brush_prim record{};
+        record.stage_path = path;
+        record.name       = spec.name();
+        read_spec_values(spec, record.values);
+        std::vector<erhe::scene::Instance_override_value> other_values;
+        other_values.reserve(record.values.size());
+        for (erhe::scene::Instance_override_value& value : record.values) {
+            if (value.name == c_brush_density_value_name) {
+                record.density = static_cast<float>(std::strtod(value.text.c_str(), nullptr));
+                continue;
+            }
+            if (value.name == c_brush_normal_style_value_name) {
+                record.normal_style = value.text;
+                continue;
+            }
+            other_values.push_back(std::move(value));
+        }
+        record.values        = std::move(other_values);
+        record.material_path = read_spec_material_binding(spec);
+        m_result.data.brushes.push_back(std::move(record));
+    }
+
+    // The absolute path a prim spec's `material:binding` names, empty when the
+    // spec binds nothing.
+    [[nodiscard]] static auto read_spec_material_binding(const lightusd::PrimSpec& spec) -> std::string
+    {
+        const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find("material:binding");
+        if ((i == spec.props().end()) || !i->second.is_relationship()) {
+            return std::string{};
+        }
+        const lightusd::Relationship& relationship = i->second.get_relationship();
+        if (relationship.is_path()) {
+            return relationship.targetPath.full_path_name();
+        }
+        if (relationship.is_pathvector() && !relationship.targetPathVector.empty()) {
+            return relationship.targetPathVector.front().full_path_name();
+        }
+        return std::string{};
     }
 
     // The `inherits` arcs of one non-class prim spec, kept by path so the
@@ -2971,6 +3084,15 @@ private:
     // The absolute path of every `class` prim of the root layer, nested ones
     // included, filled by read_layer_composition: what convert_node skips.
     std::set<std::string>                          m_class_paths;
+    // The absolute path of every `Brush` prim of the root layer, filled by
+    // read_layer_composition: what convert_node skips
+    // (doc/usd-compatibility-plan.md E4a).
+    std::set<std::string>                          m_brush_paths;
+    // The converted mesh of every `Mesh` prim of the stage, by the prim's
+    // absolute path, as an index into Usd_data::meshes: what a brush prim's
+    // geometry child is looked up by. Filled by convert_meshes, which runs
+    // before any prim is placed.
+    std::map<std::string, std::size_t>             m_mesh_index_by_path;
     // The `inherits` targets of every non-class prim spec of the root layer,
     // by absolute path, filled by read_layer_composition.
     std::map<std::string, std::vector<std::string>> m_inherits_by_path;

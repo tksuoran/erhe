@@ -349,9 +349,10 @@ the instance content below it is not written - the arcs' targets hold it. An
 arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 
-The editor-state kinds a USD file does not carry yet are the brush library,
-the geometry and texture node graphs, and the content-library folder tree
-(a style is a `class` prim, [`usd-compatibility-plan.md`](usd-compatibility-plan.md) X3). A save logs one line per kind the scene actually holds,
+The editor-state kinds a USD file does not carry yet are the geometry and
+texture node graphs and the content-library folder tree (a style is a `class`
+prim, [`usd-compatibility-plan.md`](usd-compatibility-plan.md) X3; a brush is
+a `Brush` prim holding its geometry as a child `Mesh`, E4a). A save logs one line per kind the scene actually holds,
 so nothing disappears silently; carrying them is future work recorded in
 `src/erhe/usd/notes.md`. Textures are named by their source image file: a
 generated texture has no bytes on disk, so its slot is left out of the

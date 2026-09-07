@@ -15,6 +15,9 @@ namespace erhe {
     class Item_base;
     class Typed;
 }
+namespace erhe::geometry {
+    class Geometry;
+}
 namespace erhe::primitive {
     class Material;
 }
@@ -251,6 +254,33 @@ public:
     std::size_t               image_index{0};
 };
 
+// One `Brush`-typed prim of the root layer (doc/usd-compatibility-plan.md
+// E4a). A brush is editor state a USD file carries as a prim of its own type:
+// the geometry is the prim's child `Mesh`, and the density, the normal style
+// and the material a placed instance gets are its own attributes. erhe::usd
+// records what the layer authored and creates no item - the caller makes the
+// editor Brush, as it does for a class prim (X3).
+class Usd_brush_prim final
+{
+public:
+    std::string                               stage_path;
+    std::string                               name;
+    // The `def Mesh "geometry"` child, converted the way every other mesh of
+    // the file is. Null when the prim has no such child, which is one warning
+    // and no brush.
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
+    float                                     density{1.0f};
+    // The `erhe:Brush:normal_style` token, spelled as the glTF field is; empty
+    // when the prim authors none.
+    std::string                               normal_style;
+    // The absolute stage path of the `Material` prim `material:binding` names,
+    // empty when the prim binds none.
+    std::string                               material_path;
+    // Every other authored opinion of the prim in the neutral name / text
+    // form, the way a class prim carries its own (X2, X3).
+    std::vector<erhe::scene::Instance_override_value> values;
+};
+
 // Everything one USD file contributes to a scene, in erhe types - the USD
 // counterpart of erhe::gltf::Gltf_data, and deliberately the same shape
 // where the two formats overlap. `nodes` holds every imported node (the
@@ -300,6 +330,12 @@ public:
     // bindings are already applied to the meshes above; the entry is what
     // lets the caller offer the other selections.
     std::vector<Usd_variant_set>                            variant_sets;
+    // The `Brush` prims the root layer authors, in the order the layer spells
+    // them (doc/usd-compatibility-plan.md E4a). A brush prim is never a prim
+    // of the lists above: the conversion stops at it, so its child mesh is no
+    // scene content, and the caller makes one Brush item per record at the
+    // path the prim has.
+    std::vector<Usd_brush_prim>                             brushes;
 
     // Stage constants the import consumed (see load_usd): the up axis and
     // metersPerUnit are applied to the top-level nodes as a root transform,
@@ -447,6 +483,23 @@ public:
     std::string                            selected;
 };
 
+// One brush of the scene the writer authors as a `Brush` prim
+// (doc/usd-compatibility-plan.md E4a). erhe::usd names no editor type, so the
+// caller hands over what the brush holds: `item` is the brush prim itself,
+// whose place in the tree decides where the prim goes, and the rest is what
+// the prim carries. A brush prim of the tree the caller does not list here is
+// written without geometry, and named in a warning.
+class Usd_save_brush final
+{
+public:
+    std::shared_ptr<const erhe::Item_base>           item;
+    std::shared_ptr<const erhe::geometry::Geometry>  geometry;
+    float                                            density{1.0f};
+    // The `erhe:Brush:normal_style` token, spelled as the glTF field is.
+    std::string                                      normal_style;
+    std::shared_ptr<const erhe::primitive::Material> material;
+};
+
 // What save_usda() writes. The content is erhe's own - the writer is handed
 // the scene it is to write, not a Usd_data - and the stage constants are the
 // caller's choice (the defaults are what erhe means: Y up, metres).
@@ -477,6 +530,8 @@ public:
     // can carry more than one, and a set is written on the prim its `item`
     // names.
     std::vector<Usd_save_variant_set>                       variant_sets;
+    // The brushes the scene's tree holds, one entry per brush prim.
+    std::vector<Usd_save_brush>                             brushes;
     // Written verbatim as the root layer's `customLayerData`, one string
     // entry per pair: how the editor carries its own scene state in a USD
     // file (doc/scene_serialization.md, USD-backed scenes).

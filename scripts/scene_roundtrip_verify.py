@@ -1538,7 +1538,7 @@ def usd_support_available():
 def usd_snapshot(scene_name):
     """The diffable MCP-visible state of a USD-backed scene. Shares the glTF
     leg's normalization and sorting; the contents are what a USD file
-    carries (no brushes, node graphs or animations)."""
+    carries (no node graphs or animations)."""
     snap = {}
     nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
     snap["nodes"] = sorted(normalize_import_roots(nodes), key=node_sort_key)
@@ -1590,6 +1590,25 @@ def usd_snapshot(scene_name):
     snap["textures"] = sorted(
         ({"name": t.get("name"), "width": t.get("width"), "height": t.get("height")} for t in textures),
         key=lambda t: t["name"],
+    )
+
+    # The brushes the scene carries (doc/usd-compatibility-plan.md E4a): the
+    # same keys the glTF leg diffs, plus what a Brush prim authors of its own.
+    brushes = call("get_scene_brushes", {"scene_name": scene_name}).get("brushes", [])
+    snap["brushes"] = sorted(
+        (
+            {
+                "name":         b.get("name"),
+                "folder_path":  b.get("folder_path"),
+                "facet_count":  b.get("facet_count"),
+                "vertex_count": b.get("vertex_count"),
+                "density":      round(float(b.get("density", 0.0)), 4),
+                "normal_style": b.get("normal_style"),
+                "material":     b.get("material"),
+            }
+            for b in brushes
+        ),
+        key=lambda b: json.dumps(b, sort_keys=True),
     )
 
     # The variant sets the scene carries (doc/usd-compatibility-plan.md X4):
@@ -1942,6 +1961,12 @@ def section_usd_round_trip(usdchecker_arg):
     # (doc/usd-compatibility-plan.md X4): the table, the selection and the
     # bound materials must come back as they went out.
     usd_round_trip_leg(S, "variants.usda", "variants", edits=[], extra_keys=["variants"])
+    # brushes.usda holds a Brushes scope with two Brush prims, one binding a
+    # material and one not, each with its geometry as a child Mesh prim
+    # (doc/usd-compatibility-plan.md E4a): the brushes must come back with
+    # their counts, density, normal style and material, and their geometry
+    # must not appear as a mesh of the scene.
+    usd_round_trip_leg(S, "brushes.usda", "brushes", edits=[], extra_keys=["brushes"])
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 
