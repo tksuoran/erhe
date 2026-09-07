@@ -337,7 +337,7 @@ every kind it writes. `.usdc` output follows once the `.usda` output
 round-trips through E3 with all of it. The four parts below land
 independently, in this order.
 
-#### E4a Brushes (S)
+#### E4a Brushes (S; landed, `src/erhe/usd/notes.md` "Brushes")
 
 A brush (`ERHE_brushes` in glTF: name, geometry, material, density,
 normal style; the collision shape is rebuilt from the geometry) is a
@@ -376,11 +376,13 @@ def Scope "Brushes" {
   tree; the `Brush` prim's subtree is skipped by the scene conversion
   (its mesh is not scene content).
 
-Verification: the E3 leg extended with a scene holding two brushes, one
-with a material and one without, built over MCP; a fresh-session reload
-lists both with the same geometry counts, density, normal style and
-material; `place_brush` on the reloaded brush works; a second save is
-byte-identical; `scene-close leak` clean.
+Verification (holds): the round-trip script's brushes leg over
+`brushes.usda` and a headless session with two brushes built over MCP,
+one with a material; reload lists both with the same counts, density,
+normal style and material, `place_brush` works on the reloaded brush,
+the file is a fixed point from the first reload on (the first save of a
+brush built in memory differs in vertex order, since the mesh reader
+re-indexes), and the scene closes clean.
 
 #### E4b Geometry node graphs (M)
 
@@ -418,10 +420,10 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file, parts E4a to E4d in order (completes G2)
+1. E4 editor state in a USD file, parts E4b to E4d in order (E4a landed; completes G2)
 2. E2 material fidelity
 
-Dependencies: E4a to E4d and E2 need nothing that has not landed.
+Dependencies: E4b to E4d and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 
