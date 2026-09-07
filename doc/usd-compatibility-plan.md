@@ -230,36 +230,6 @@ code), E = export, X = composition; animation and physics are section 6, future 
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
-### E4 Editor state in a USD file (M; completes G2)
-
-What: the editor state a USD-backed scene does not carry yet
-(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
-the `customLayerData` keys already in use) rides USD's own means (C1).
-The resources are prims (U4), so brushes, styles, physics materials,
-collision filters, joint settings and the geometry and texture node
-graphs are written and read as prims where they sit in the tree, one
-custom `typeName` per kind (the class token `Typed` already fixes) with
-attributes named as the glTF fields are (a node graph as a JSON string
-attribute until a prim form is wanted), and an empty folder `Scope` is
-written as the `Scope` it is; animations, skins, prefab references and
-the physics API schemas on nodes (section 6) stay listed as not
-carried. A save no longer logs a kind it carries; the open side reads
-every kind it writes. `.usdc` output follows once the `.usda` output
-round-trips through E3 with all of it.
-
-Verification: the E3 leg extended with a scene that holds one of each
-kind (build it over MCP the way the glTF sections build theirs); a
-fresh-session reload shows the same scopes, styles and brushes;
-`scene-close leak` clean.
-
-### E2 Material fidelity (M)
-
-What: erhe-only material fields that `UsdPreviewSurface` cannot carry
-(anisotropic roughness, transmission, brushed metal) export additionally
-as an `OpenPBRSurface` / MaterialX network when
-`LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
-both are present.
-
 ### X2 Editable instances with sparse overrides (L)
 
 What: a USD reference is a composition arc, not a copy: the referenced
@@ -346,18 +316,48 @@ when full provenance is wanted). This is the "composition in the editor"
 feature in its read-only form; live re-composition after an edit is the
 step after it and is not planned here.
 
+### E4 Editor state in a USD file (M; completes G2)
+
+What: the editor state a USD-backed scene does not carry yet
+(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
+the `customLayerData` keys already in use) rides USD's own means (C1).
+The resources are prims (U4), so brushes, styles, physics materials,
+collision filters, joint settings and the geometry and texture node
+graphs are written and read as prims where they sit in the tree, one
+custom `typeName` per kind (the class token `Typed` already fixes) with
+attributes named as the glTF fields are (a node graph as a JSON string
+attribute until a prim form is wanted), and an empty folder `Scope` is
+written as the `Scope` it is; animations, skins, prefab references and
+the physics API schemas on nodes (section 6) stay listed as not
+carried. A save no longer logs a kind it carries; the open side reads
+every kind it writes. `.usdc` output follows once the `.usda` output
+round-trips through E3 with all of it.
+
+Verification: the E3 leg extended with a scene that holds one of each
+kind (build it over MCP the way the glTF sections build theirs); a
+fresh-session reload shows the same scopes, styles and brushes;
+`scene-close leak` clean.
+
+### E2 Material fidelity (M)
+
+What: erhe-only material fields that `UsdPreviewSurface` cannot carry
+(anisotropic roughness, transmission, brushed metal) export additionally
+as an `OpenPBRSurface` / MaterialX network when
+`LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
+both are present.
+
 ## 4. Order
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file (completes G2)
-2. X2 editable instances (G3)
+1. X2 editable instances (G3)
+2. X3 class inheritance
+3. X4 variants
+4. X5 composition provenance in the Properties window
+5. E4 editor state in a USD file (completes G2)
+6. E2 material fidelity
 
-E2 follows E4; X3 to X5
-have no fixed place: each waits for its dependencies and is taken when
-wanted.
-
-Dependencies: E4, X2, E2, X3, X4 and X5 need nothing that has not
+Dependencies: X2, X3, X4, X5, E4 and E2 need nothing that has not
 landed.
 
 ## 5. Out of scope
