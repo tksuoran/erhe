@@ -334,8 +334,8 @@ creates the item, as X3 does for a class prim. Animations, skins and
 the physics API schemas on nodes (section 6) stay listed as not
 carried. A save no longer logs a kind it carries; the open side reads
 every kind it writes. `.usdc` output follows once the `.usda` output
-round-trips through E3 with all of it. The four parts below land
-independently, in the order E4a, E4c, E4b, E4d.
+round-trips through E3 with all of it. The parts below land
+independently, in the order E4a, S1, E4c, E4b, E4d.
 
 #### E4a Brushes (S; landed, `src/erhe/usd/notes.md` "Brushes")
 
@@ -384,6 +384,26 @@ the file is a fixed point from the first reload on (the first save of a
 brush built in memory differs in vertex order, since the mesh reader
 re-indexes), and the scene closes clean.
 
+#### S1 USD Assets Working Group survey (M; before E4c)
+
+What: every entry asset of the ASWF USD Assets Working Group repository
+(`<usd-wg-assets>`, a local clone of github.com/usd-wg/assets:
+`full_assets/*`, `test_assets/*` and `intent-vfx/scenes/*`) is opened in
+the editor and its outcome recorded in `doc/usd-wg-assets.md`: the
+entry file, whether it loads, the prim, mesh, material and light counts
+against what the file authors, the warnings and errors the load logs,
+a screenshot, and a verdict (works, works with a named gap, fails with
+a named cause). The document is the checklist of USD support the editor
+still lacks, ordered by how many assets each gap blocks, and every
+later step of this plan takes its next fix from that list.
+`scripts/usd_wg_asset_survey.py` drives a headless editor over the
+whole set and regenerates the table, so the survey re-runs after each
+fix.
+
+Verification: the script runs to completion over every entry asset
+without leaving the editor down (a crash restarts it and is recorded
+as the verdict), and the document lists every entry file once.
+
 #### E4c Texture node graphs (M)
 
 A `Graph_texture` is the `UsdShade` network it is: a `NodeGraph` prim
@@ -420,10 +440,12 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
-2. E2 material fidelity
+1. S1 USD Assets Working Group survey
+2. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
+3. E2 material fidelity
 
-Dependencies: E4b to E4d and E2 need nothing that has not landed.
+Dependencies: S1, E4b to E4d and E2 need nothing that has not landed;
+the fixes S1 lists are taken up in the order of the assets they block.
 
 ## 5. Out of scope
 
