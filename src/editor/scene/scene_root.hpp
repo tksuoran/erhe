@@ -92,6 +92,22 @@ enum class Scene_source_format : unsigned int {
 };
 
 [[nodiscard]] auto c_str(Scene_source_format format) -> const char*;
+
+// One `DomeLight` prim a USD-backed scene was opened from authored. erhe has
+// no environment map, so a dome is read as the scene's ambient light
+// (erhe::scene::Scene::ambient_light) and the prim itself is kept here so a
+// save spells it back as the `DomeLight` it was. The record is USD-only
+// state: an erhe-authored scene carries its ambient light in the scene block
+// and holds no dome (src/erhe/usd/notes.md).
+class Usd_dome_light_record
+{
+public:
+    std::string name;
+    glm::vec3   color    {1.0f, 1.0f, 1.0f};
+    float       intensity{1.0f};
+    float       exposure {0.0f};
+    std::string texture_file;
+};
 class Scene_view;
 class Viewport_scene_view;
 
@@ -300,6 +316,12 @@ public:
     void set_source_path(const std::filesystem::path& path, Scene_source_format format);
     [[nodiscard]] auto get_source_format () const -> Scene_source_format;
 
+    // The `DomeLight` prims the opened USD file authored, in file order (see
+    // Usd_dome_light_record). Empty for every scene that was not opened from
+    // a USD file holding one.
+    [[nodiscard]] auto get_usd_dome_lights() const -> const std::vector<Usd_dome_light_record>&;
+    void set_usd_dome_lights(std::vector<Usd_dome_light_record>&& dome_lights);
+
     // Definition-vs-reference classification for an asset-typed item
     // entering this scene's content library (asset-manager plan, R5
     // sub-plan resolution 2): true = definition (owning entry), false =
@@ -388,6 +410,7 @@ private:
     std::shared_ptr<Content_library>                m_content_library;
     std::filesystem::path                           m_source_path;
     Scene_source_format                             m_source_format{Scene_source_format::none};
+    std::vector<Usd_dome_light_record>              m_usd_dome_lights;
     bool                                            m_is_registered{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per

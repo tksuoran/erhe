@@ -1786,6 +1786,44 @@ private:
         }
     }
 
+    // A `DomeLight` becomes the scene's ambient light: the dome's constant
+    // radiance is `inputs:color * inputs:intensity * 2^inputs:exposure`, and
+    // that is what the light block's ambient term holds. The first dome of a
+    // file sets it; a second one is a warning and is recorded but not
+    // composed, because erhe has one ambient term.
+    void convert_dome_light(const Tydra_light& usd_light, const std::string& light_name)
+    {
+        const glm::vec3 color{usd_light.color[0], usd_light.color[1], usd_light.color[2]};
+        const float     scale     = usd_light.intensity * std::pow(2.0f, usd_light.exposure);
+        const bool      is_first  = m_result.data.dome_lights.empty();
+
+        m_result.data.dome_lights.push_back(
+            Usd_dome_light{
+                .name         = light_name,
+                .stage_path   = usd_light.abs_path,
+                .color        = color,
+                .intensity    = usd_light.intensity,
+                .exposure     = usd_light.exposure,
+                .texture_file = usd_light.textureFile
+            }
+        );
+        if (is_first) {
+            m_result.data.ambient_light = color * scale;
+        } else {
+            log_usd->warn(
+                "USD light '{}': the file authors more than one DomeLight - erhe has one ambient light, so only the first is used",
+                light_name
+            );
+        }
+        if (!usd_light.textureFile.empty()) {
+            log_usd->warn(
+                "USD light '{}': DomeLight texture '{}' is not sampled - erhe has no environment map, so the dome contributes its constant color only",
+                light_name,
+                usd_light.textureFile
+            );
+        }
+    }
+
     void convert_lights()
     {
         m_result.data.lights.resize(m_scene->lights.size());
@@ -1819,6 +1857,13 @@ private:
                     );
                     light_type = erhe::scene::Light_type::point;
                     break;
+                }
+                case Tydra_light::Type::Dome: {
+                    // erhe has no environment map: a dome light is the
+                    // scene's ambient light (doc/usd_compatibility.md,
+                    // Lights). The prim is recorded so a save spells it back.
+                    convert_dome_light(usd_light, light_name);
+                    continue;
                 }
                 default: {
                     log_usd->info("USD light '{}': light type has no erhe counterpart - skipped", light_name);
@@ -1895,18 +1940,22 @@ private:
         return (prim.type_name() == "Model") ? prim.prim_type_name() : prim.type_name();
     }
 
-    // A `Material` prim is the erhe material prim (U4, see place_material);
-    // the `Shader` and `NodeGraph` prims below it are its network, and a
-    // `GeomSubset`'s facets already ride a primitive of its mesh, so neither
-    // contributes an erhe prim of its own. Tydra lists each as a transform
-    // node all the same.
-    [[nodiscard]] static auto is_shading_prim_type(const std::string& type_name) -> bool
+    // The prim types that contribute no prim of the erhe tree. A `Material`
+    // prim is the erhe material prim (U4, see place_material); the `Shader`
+    // and `NodeGraph` prims below it are its network; a `GeomSubset`'s facets
+    // already ride a primitive of its mesh; and a `DomeLight` is the scene's
+    // ambient light (doc/usd-compatibility-plan.md S1), which
+    // convert_dome_light() reads. Tydra lists each as a transform node all
+    // the same. A prim of one of these types that does hold scene content
+    // below it stays as a transform node, so the content keeps its place.
+    [[nodiscard]] static auto is_contentless_prim_type(const std::string& type_name) -> bool
     {
         return
             (type_name == "Material")  ||
             (type_name == "Shader")    ||
             (type_name == "NodeGraph") ||
-            (type_name == "GeomSubset");
+            (type_name == "GeomSubset")||
+            (type_name == "DomeLight");
     }
 
     // The typeNames erhe has a transformable class for: the `Xform` prim
@@ -1929,8 +1978,14 @@ private:
 
     [[nodiscard]] auto subtree_has_scene_content(const Tydra_node& usd_node) const -> bool
     {
-        if (usd_node.nodeType != lightusd::tydra::NodeType::Xform) {
-            return true; // a mesh, camera, light, skeleton or volume
+        // A mesh, camera, punctual light, skeleton or volume is content; a
+        // transform node and an environment (dome) light are not - a dome is
+        // the scene's ambient light and holds no place in the tree.
+        const bool is_content =
+            (usd_node.nodeType != lightusd::tydra::NodeType::Xform) &&
+            (usd_node.nodeType != lightusd::tydra::NodeType::EnvmapLight);
+        if (is_content) {
+            return true;
         }
         for (const Tydra_node& usd_child : usd_node.children) {
             if (subtree_has_scene_content(usd_child)) {
@@ -1967,7 +2022,7 @@ private:
         }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
-        if (is_shading_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
+        if (is_contentless_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
             if (type_name == "Material") {
                 place_material(usd_node, parent);
             }

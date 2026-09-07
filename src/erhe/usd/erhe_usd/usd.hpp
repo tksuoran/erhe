@@ -2,6 +2,8 @@
 
 #include "erhe_scene/instance_override.hpp"
 
+#include <glm/glm.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -281,6 +283,25 @@ public:
     std::vector<erhe::scene::Instance_override_value> values;
 };
 
+// One `DomeLight` prim the file authors. erhe has no environment map, so a
+// dome is imported as the scene's ambient light
+// (`color * intensity * 2^exposure`, see Usd_data::ambient_light) and the
+// prim is recorded here so a save spells it back (src/erhe/usd/notes.md).
+class Usd_dome_light final
+{
+public:
+    std::string name;
+    // Absolute stage path of the prim.
+    std::string stage_path;
+    glm::vec3   color    {1.0f, 1.0f, 1.0f};
+    float       intensity{1.0f};
+    float       exposure {0.0f};
+    // `inputs:texture:file` as the file spells it, empty when the dome
+    // authors none. The image is not sampled - erhe has no environment map -
+    // and the load names it in a warning.
+    std::string texture_file;
+};
+
 // Everything one USD file contributes to a scene, in erhe types - the USD
 // counterpart of erhe::gltf::Gltf_data, and deliberately the same shape
 // where the two formats overlap. `nodes` holds every imported node (the
@@ -345,6 +366,14 @@ public:
     // The root layer's `defaultPrim`, empty when the file names none: the prim
     // a reference without a prim path targets.
     std::string default_prim;
+
+    // The `DomeLight` prims the file authors, in the order the conversion
+    // visited them. A dome is never a light of `lights`: erhe has no
+    // environment map and the dome becomes ambient light.
+    std::vector<Usd_dome_light> dome_lights;
+    // The ambient light the first dome of `dome_lights` composes to
+    // (`color * intensity * 2^exposure`), black when the file authors none.
+    glm::vec3 ambient_light{0.0f, 0.0f, 0.0f};
 
     // The root layer's `customLayerData`, string entries only: what an erhe
     // save put there (the editor's scene state) and what another writer left
@@ -536,6 +565,11 @@ public:
     // entry per pair: how the editor carries its own scene state in a USD
     // file (doc/scene_serialization.md, USD-backed scenes).
     std::map<std::string, std::string>                      custom_layer_data;
+    // The `DomeLight` prims to write, one top-level prim each: the domes a
+    // load recorded (Usd_data::dome_lights). The scene's own ambient light is
+    // carried by the `customLayerData` scene block, not by a dome, so a scene
+    // that never read one writes none.
+    std::vector<Usd_dome_light>                             dome_lights;
     std::string                                             up_axis        {"Y"};
     double                                                  meters_per_unit{1.0};
 };

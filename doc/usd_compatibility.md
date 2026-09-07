@@ -150,7 +150,7 @@ The names are erhe / geogram's own:
 
 | erhe `Light` property | USD (`UsdLux`) | notes |
 |---|---|---|
-| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | the presence of `ShapingAPI` on the prim is what makes an imported sphere / point light a spot light, and the exporter applies that schema for exactly a spot light and authors `inputs:radius = 0` for both sphere forms; area lights (`Rect`, `Disk`, `Cylinder`) import as point lights with a log line, and `DomeLight` and the remaining types are skipped |
+| `light_type` directional / point / spot | `DistantLight` / `SphereLight` (radius 0, `treatAsPoint`) / `SphereLight` + `ShapingAPI` | the presence of `ShapingAPI` on the prim is what makes an imported sphere / point light a spot light, and the exporter applies that schema for exactly a spot light and authors `inputs:radius = 0` for both sphere forms; area lights (`Rect`, `Disk`, `Cylinder`) import as point lights with a log line, `DomeLight` is the scene's ambient light (see the last row) and the remaining types are skipped |
 | `color` | `inputs:color` | |
 | `intensity` | `inputs:intensity` (and `inputs:exposure` = 0) | unit conventions differ; a conversion factor per light type. erhe has no exposure on a light, so the importer folds the two into `intensity * 2^exposure` and applies no unit conversion of its own |
 | `temperature` | `inputs:colorTemperature` + `inputs:enableColorTemperature` | exact match of the erhe property |
@@ -158,7 +158,7 @@ The names are erhe / geogram's own:
 | `inner_spot_angle`, `outer_spot_angle` | `ShapingAPI` `inputs:shaping:cone:angle` + `inputs:shaping:cone:softness` | |
 | `cast_shadow` | `ShadowAPI` `inputs:shadow:enable` | |
 | `flux`, `blackbody` (computed) | not authored | |
-| scene ambient light (`ERHE_scene`) | `DomeLight` with a constant color | |
+| scene ambient light (`ERHE_scene`) | `DomeLight` | the dome's constant radiance is `inputs:color * inputs:intensity * 2^inputs:exposure`, and that is the scene's ambient light; a dome is no prim of the erhe tree and no `erhe::scene::Light`. erhe has no environment map, so `inputs:texture:file` is named in a warning and not sampled. The first dome of a file sets the ambient light, a second one is a warning. A save writes back the domes the load read, as the `DomeLight` prims they were, at the stage root; a scene that read none writes none and carries its ambient light in the `customLayerData` scene block |
 
 ## Cameras
 

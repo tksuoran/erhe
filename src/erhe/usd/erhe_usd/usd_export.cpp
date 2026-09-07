@@ -646,6 +646,12 @@ public:
             add_root_prim(stage, std::move(world_prim));
         }
 
+        // The domes a load recorded, as top-level `DomeLight` prims beside
+        // the content root. A dome lights the whole stage and carries no
+        // place in the content tree (erhe holds it as ambient light), so the
+        // stage root is where it goes; `defaultPrim` still names the content.
+        write_dome_lights(stage, default_prim_name);
+
         stage.metas().defaultPrim = lightusd::value::token{default_prim_name};
         stage.metas().upAxis.set_value(
             (m_arguments.up_axis == "Z") ? lightusd::Axis::Z :
@@ -685,6 +691,29 @@ private:
         }
         m_result.warning += text;
         log_usd->warn("USD '{}': {}", m_arguments.path.generic_string(), text);
+    }
+
+    // One `DomeLight` root prim per recorded dome (Usd_save_arguments::
+    // dome_lights). erhe holds a dome as the scene's ambient light, so the
+    // values written are the ones the load read back out of the prim.
+    void write_dome_lights(lightusd::Stage& stage, const std::string& default_prim_name)
+    {
+        if (m_arguments.dome_lights.empty()) {
+            return;
+        }
+        Name_scope names;
+        static_cast<void>(names.make_unique(default_prim_name));
+        for (const Usd_dome_light& dome : m_arguments.dome_lights) {
+            lightusd::DomeLight dome_light;
+            dome_light.name = names.make_unique(dome.name.empty() ? std::string{"DomeLight"} : dome.name);
+            dome_light.color.set_value(lightusd::value::color3f{dome.color.x, dome.color.y, dome.color.z});
+            dome_light.intensity.set_value(dome.intensity);
+            dome_light.exposure.set_value(dome.exposure);
+            if (!dome.texture_file.empty()) {
+                dome_light.file.set_value(lightusd::value::AssetPath{dome.texture_file});
+            }
+            add_root_prim(stage, lightusd::Prim{dome_light});
+        }
     }
 
     void add_root_prim(lightusd::Stage& stage, lightusd::Prim&& prim)

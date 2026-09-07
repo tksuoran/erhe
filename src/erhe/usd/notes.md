@@ -108,10 +108,24 @@ translation units.
   scopes stay apart by their place. A `material:binding` names a path, so
   the binding follows the prim rather than the name. Every `Scope` is an
   `erhe::Scope`, an empty one included.
-- A `Shader`, `NodeGraph` or `GeomSubset` prim whose subtree carries no
-  mesh, camera, light, skeleton or volume contributes no erhe prim: the
-  shading network is namespace and a subset's facets already ride a
-  primitive of its mesh, yet Tydra lists each as a transform node.
+- A `Shader`, `NodeGraph`, `GeomSubset` or `DomeLight` prim whose subtree
+  carries no mesh, camera, punctual light, skeleton or volume contributes no
+  erhe prim: the shading network is namespace, a subset's facets already ride
+  a primitive of its mesh and a dome light is the scene's ambient light, yet
+  Tydra lists each as a transform node.
+- A `DomeLight` is the scene's ambient light, not an `erhe::scene::Light`:
+  erhe has no environment map, so the dome's constant radiance
+  (`inputs:color * inputs:intensity * 2^inputs:exposure`) becomes
+  `Usd_data::ambient_light` and the prim itself is recorded in
+  `Usd_data::dome_lights`. The first dome of a file sets the ambient light; a
+  second one is a warning. `inputs:texture:file` is named in a warning and
+  not sampled - an environment map is future work, and until it exists a
+  textured dome contributes its constant color only. A save writes the
+  records of `Usd_save_arguments::dome_lights` back as `DomeLight` prims at
+  the stage root, which is where the editor sends the domes the scene was
+  opened from (`Scene_root::get_usd_dome_lights`); a scene that read no dome
+  writes none and carries its ambient light in the `customLayerData` scene
+  block instead.
 - Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of

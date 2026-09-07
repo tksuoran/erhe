@@ -2036,6 +2036,16 @@ auto Scene_root::get_source_format() const -> Scene_source_format
     return m_source_format;
 }
 
+auto Scene_root::get_usd_dome_lights() const -> const std::vector<Usd_dome_light_record>&
+{
+    return m_usd_dome_lights;
+}
+
+void Scene_root::set_usd_dome_lights(std::vector<Usd_dome_light_record>&& dome_lights)
+{
+    m_usd_dome_lights = std::move(dome_lights);
+}
+
 void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_source_format format)
 {
     m_source_path   = path;

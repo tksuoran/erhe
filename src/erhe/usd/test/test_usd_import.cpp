@@ -289,4 +289,54 @@ TEST(Usd_import, missing_file_is_an_error)
     EXPECT_TRUE(result.data.nodes.empty());
 }
 
+// A DomeLight has no erhe light counterpart - erhe has no environment map -
+// so it is read as the scene's ambient light and recorded as a prim
+// (doc/usd-compatibility-plan.md S1).
+class Dome_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = test_data_path("dome.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Dome_import, dome_becomes_ambient_light)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    // color * intensity * 2^exposure = (0.5, 0.25, 0.125) * 2 * 2
+    EXPECT_FLOAT_EQ(result.data.ambient_light.x, 2.0f);
+    EXPECT_FLOAT_EQ(result.data.ambient_light.y, 1.0f);
+    EXPECT_FLOAT_EQ(result.data.ambient_light.z, 0.5f);
+}
+
+TEST_F(Dome_import, dome_is_recorded_as_a_prim)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.dome_lights.size(), 1u);
+    const erhe::usd::Usd_dome_light& dome = result.data.dome_lights.front();
+    EXPECT_EQ(dome.name, "sky");
+    EXPECT_EQ(dome.stage_path, "/sky");
+    EXPECT_FLOAT_EQ(dome.intensity, 2.0f);
+    EXPECT_FLOAT_EQ(dome.exposure, 1.0f);
+    EXPECT_EQ(dome.texture_file, "sky.hdr");
+}
+
+TEST_F(Dome_import, dome_is_no_scene_light)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    for (const std::shared_ptr<erhe::scene::Light>& light : result.data.lights) {
+        EXPECT_TRUE(light == nullptr);
+    }
+}
+
 } // anonymous namespace

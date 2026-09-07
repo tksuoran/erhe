@@ -89,9 +89,10 @@ public:
     {
         written_path = temporary_path(written_file_name);
         const erhe::usd::Usd_save_arguments save_arguments{
-            .path      = written_path,
-            .root_node = source_root,
-            .materials = source.data.materials
+            .path        = written_path,
+            .root_node   = source_root,
+            .materials   = source.data.materials,
+            .dome_lights = source.data.dome_lights
         };
         save = erhe::usd::save_usda(save_arguments);
 
@@ -447,3 +448,50 @@ TEST_F(Authored_round_trip, asset_path_and_arrays_survive_as_custom_attributes)
     EXPECT_EQ(shown->get_value_source(c_usd_test_ints.get()), erhe::property::Value_source::local);
     EXPECT_EQ(shown->get_value(c_usd_test_ints), (std::vector<int>{-1, 0, 7}));
 }
+
+// A DomeLight is erhe's ambient light on the way in and the prim it was on
+// the way out: nothing of the scene tree carries it, so the writer takes the
+// records the load produced (doc/usd-compatibility-plan.md S1).
+class Dome_round_trip : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        trip = std::make_unique<Round_trip>("dome.usda");
+        ASSERT_TRUE(trip->source.error.empty()) << trip->source.error;
+        trip->save_and_reload("dome.usda");
+        ASSERT_TRUE(trip->save.error.empty()) << trip->save.error;
+        ASSERT_TRUE(trip->reloaded.error.empty()) << trip->reloaded.error;
+    }
+
+    std::unique_ptr<Round_trip> trip;
+};
+
+TEST_F(Dome_round_trip, dome_prim_survives)
+{
+    ASSERT_EQ(trip->reloaded.data.dome_lights.size(), 1u);
+    const erhe::usd::Usd_dome_light& dome = trip->reloaded.data.dome_lights.front();
+    EXPECT_EQ(dome.name, "sky");
+    EXPECT_FLOAT_EQ(dome.color.x, 0.5f);
+    EXPECT_FLOAT_EQ(dome.color.y, 0.25f);
+    EXPECT_FLOAT_EQ(dome.color.z, 0.125f);
+    EXPECT_FLOAT_EQ(dome.intensity, 2.0f);
+    EXPECT_FLOAT_EQ(dome.exposure, 1.0f);
+    EXPECT_EQ(dome.texture_file, "sky.hdr");
+}
+
+TEST_F(Dome_round_trip, ambient_light_survives)
+{
+    EXPECT_FLOAT_EQ(trip->reloaded.data.ambient_light.x, 2.0f);
+    EXPECT_FLOAT_EQ(trip->reloaded.data.ambient_light.y, 1.0f);
+    EXPECT_FLOAT_EQ(trip->reloaded.data.ambient_light.z, 0.5f);
+}
+
+TEST_F(Dome_round_trip, dome_is_no_scene_light)
+{
+    for (const std::shared_ptr<erhe::scene::Light>& light : trip->reloaded.data.lights) {
+        EXPECT_TRUE(light == nullptr);
+    }
+    EXPECT_TRUE(find_node(trip->reloaded.data, "sky") == nullptr);
+}
+

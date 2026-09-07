@@ -1042,6 +1042,26 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 
     erhe::scene::Scene& scene = scene_root->get_scene();
     scene.ambient_light = scene_state.ambient_light;
+    // A `DomeLight` is erhe's ambient light and it is what the file itself
+    // authored, so it wins over the scene block an erhe save may have left in
+    // `customLayerData`. The prims are kept so a save writes them back.
+    if (!usd_data.dome_lights.empty()) {
+        scene.ambient_light = glm::vec4{usd_data.ambient_light, scene_state.ambient_light.w};
+        std::vector<Usd_dome_light_record> dome_records;
+        dome_records.reserve(usd_data.dome_lights.size());
+        for (const erhe::usd::Usd_dome_light& dome : usd_data.dome_lights) {
+            dome_records.push_back(
+                Usd_dome_light_record{
+                    .name         = dome.name,
+                    .color        = dome.color,
+                    .intensity    = dome.intensity,
+                    .exposure     = dome.exposure,
+                    .texture_file = dome.texture_file
+                }
+            );
+        }
+        scene_root->set_usd_dome_lights(std::move(dome_records));
+    }
     if (!scene_state.settings_json.empty()) {
         simdjson::ondemand::parser   settings_parser;
         simdjson::padded_string      settings_padded{scene_state.settings_json};
@@ -1330,6 +1350,20 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
 
     for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
         collect_usd_references(child, save_arguments.references);
+    }
+    // The domes the file this scene was opened from authored: written back as
+    // the `DomeLight` prims they were. A scene that read none writes none -
+    // its ambient light travels in the `customLayerData` scene block below.
+    for (const Usd_dome_light_record& dome : scene_root.get_usd_dome_lights()) {
+        save_arguments.dome_lights.push_back(
+            erhe::usd::Usd_dome_light{
+                .name         = dome.name,
+                .color        = dome.color,
+                .intensity    = dome.intensity,
+                .exposure     = dome.exposure,
+                .texture_file = dome.texture_file
+            }
+        );
     }
     collect_usd_variant_sets(scene_root, path, save_arguments.variant_sets);
 
