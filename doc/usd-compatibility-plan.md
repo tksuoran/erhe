@@ -335,7 +335,7 @@ the physics API schemas on nodes (section 6) stay listed as not
 carried. A save no longer logs a kind it carries; the open side reads
 every kind it writes. `.usdc` output follows once the `.usda` output
 round-trips through E3 with all of it. The four parts below land
-independently, in this order.
+independently, in the order E4a, E4c, E4b, E4d.
 
 #### E4a Brushes (S; landed, `src/erhe/usd/notes.md` "Brushes")
 
@@ -384,23 +384,23 @@ the file is a fixed point from the first reload on (the first save of a
 brush built in memory differs in vertex order, since the mesh reader
 re-indexes), and the scene closes clean.
 
-#### E4b Geometry node graphs (M)
-
-A `Graph_mesh` is a `Graph_mesh`-typed prim where it sits, carrying the
-graph as one JSON string attribute (`custom string erhe:Graph_mesh:graph`,
-the same JSON the glTF extension carries) until a per-node prim form is
-wanted, and its evaluated geometry as a child `Mesh` prim the way a
-brush does, so a viewer without erhe sees the result. Reload rebuilds
-the graph from the JSON and re-evaluates; the child mesh is read only
-when the JSON is absent (a file edited elsewhere).
-
 #### E4c Texture node graphs (M)
 
-A `Graph_texture` is a `Graph_texture`-typed prim carrying its graph as
-`custom string erhe:Graph_texture:graph`; a material that samples a
-generated texture keeps naming it (today that slot is left out with a
-warning). The generated image is not written; the graph is re-evaluated
-on reload.
+A `Graph_texture` is the `UsdShade` network it is: a `NodeGraph` prim
+where the asset sits, one `Shader` child per node with an `erhe:texture:`
+`info:id`, parameters and pins as `inputs:` / `outputs:` attributes,
+links as attribute connections, and a material slot that samples the
+graph connected to the graph's interface output in place of a
+`UsdUVTexture`. `doc/usd-texture-graphs-plan.md` owns the design, the
+record between `erhe::usd` and the editor, the two phases and the
+verification.
+
+#### E4b Geometry node graphs (M)
+
+A `Graph_mesh` reuses E4c's prim form with `erhe:geometry:` node ids and
+the evaluated geometry as a child `Mesh "result"` prim written the way
+a brush writes its geometry (E4a); `doc/usd-texture-graphs-plan.md`
+section 4 states the rule. E4c lands first.
 
 #### E4d Content-library folders (S)
 
@@ -420,7 +420,7 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file, parts E4b to E4d in order (E4a landed; completes G2)
+1. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
 2. E2 material fidelity
 
 Dependencies: E4b to E4d and E2 need nothing that has not landed.
