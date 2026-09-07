@@ -37,6 +37,14 @@ override. A template edit therefore reaches every instance live; MCP
 `set_prefab_template_property` is the way to make one (templates live in
 `Prefab::holding_scene`, which no scene lookup reaches).
 
+The overrides an instance holds are persisted with the scene that holds the
+instance, not with the template: `ERHE_node.overrides` on the carrier node in
+a glTF file (`doc/gltf_extensions/ERHE_node.md`) and `over` prims below the
+referencing prim in a USD file (`src/erhe/usd/notes.md`). They survive a
+template reload: `refresh_instance_subtrees` reads them off the clones before
+it drops them and `attach_prefab_instance` puts them back on the fresh ones,
+before the seal, so a sealed glTF instance receives them too.
+
 ### Editing model decision (2026-07-11): sealed instances ("option 2"), glTF only
 
 A glTF-backed prefab instance is additionally SEALED: the subtree under the
@@ -380,8 +388,8 @@ Ordered by value; each item is independent:
   shared materials/textures in both libraries -- acceptable (textures are
   device-global, materials are shared_ptr), but "edit material of an
   instance" then edits it everywhere, including the template. That is
-  standard prefab semantics; per-instance overrides are explicitly out of
-  scope for this plan.
+  standard prefab semantics; a per-instance material is not expressible,
+  while a per-instance property value is (the overrides above).
 - **Spec gaps**: the 2.1 explainers do not yet pin down externalAsset-node
   children or scene selection. The interpretations above (default scene,
   tolerant import, strict export) are recorded so they can be revisited when

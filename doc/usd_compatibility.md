@@ -208,9 +208,9 @@ mechanism composes as, and what has no erhe counterpart yet.
 | erhe | USD composition | notes |
 |---|---|---|
 | a scene file | a root layer | one scene = one layer stack of one layer |
-| prefab instance (sealed subtree, `doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | any layer + prim path target, internal references, one carrier attachment per arc, read and written |
-| values a template supplies to an instance (today: cloned local values) | the referenced prims' opinions, weaker than the referencing layer | plan X2: a reference layer between style and inherited, read live from the template counterpart |
-| edits inside an instance (not possible today: sealed) | `over` prims with sparse local opinions (`L`) | plan X2: the property system's local layer is the override; an `over` reads and writes as local values |
+| prefab instance (`doc/gltf-prefabs-plan.md`) | `references` arc (`R` in LIVRPS) | any layer + prim path target, internal references, one carrier attachment per arc, read and written; a glTF instance seals its subtree, a USD-backed one does not |
+| values a template supplies to an instance | the referenced prims' opinions, weaker than the referencing layer | the reference layer between style and inherited (`doc/property-system.md` D33), read live from the template counterpart |
+| a local value inside an instance | an `over` prim with sparse local opinions (`L`) | what an override is is stated once, in `src/erhe/scene/erhe_scene/instance_override.hpp`; an item's path below the arc's target clone is the `over`'s path below the carrier prim, and the target clone itself is the carrier prim (one level more than USD composes, so a value both author is the carrier's and a transform the target clone overrides is not writable). glTF carries the same list on the carrier node as `ERHE_node.overrides` |
 | `Style` items | `class` prims + `inherits` (`I`) | |
 | none | variant sets (`V`) | material variants (KHR_materials_variants) would be the first slice |
 | prefab instance from a `payload` arc | payloads (`P`) | read and written as the arc form it is; erhe's prefab library loads eagerly, so a payload is never deferred |

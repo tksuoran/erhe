@@ -13,6 +13,8 @@ erhe_target_sources_grouped(
     erhe_scene/gprim.hpp
     erhe_scene/imageable.cpp
     erhe_scene/imageable.hpp
+    erhe_scene/instance_override.cpp
+    erhe_scene/instance_override.hpp
     erhe_scene/layout.cpp
     erhe_scene/layout.hpp
     erhe_scene/light.cpp

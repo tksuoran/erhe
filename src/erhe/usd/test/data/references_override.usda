@@ -1,0 +1,37 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Xform "Carrier" (
+        references = @override_target.usda@
+    )
+    {
+        over "arm"
+        {
+            token visibility = "invisible"
+            double3 xformOp:translate = (1, 2, 3)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            over "plate" (
+                active = false
+            )
+            {
+                custom bool erhe:Mesh:shadow_cast = 0
+            }
+        }
+    }
+
+    def Xform "DefCarrier" (
+        references = @override_target.usda@
+    )
+    {
+        def Xform "extra"
+        {
+        }
+    }
+}

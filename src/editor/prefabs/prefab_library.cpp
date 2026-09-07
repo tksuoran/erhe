@@ -805,7 +805,15 @@ void resolve_external_assets(
         // it (Scene_root::is_asset_definition), which a template material is
         // not, and the instance's meshes are what give it a material slot.
         static_cast<void>(content_library);
-        attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items);
+        // The sparse overrides the file authored inside this instance
+        // (doc/usd-compatibility-plan.md X2). They are handed to the attach
+        // rather than applied after it, because a glTF instance is sealed:
+        // the attach applies them while the clones are still writable.
+        const std::map<std::size_t, std::vector<erhe::scene::Instance_override>>::const_iterator overrides_it =
+            gltf_data.node_instance_overrides.find(node_index);
+        const std::vector<erhe::scene::Instance_override>* overrides =
+            (overrides_it != gltf_data.node_instance_overrides.end()) ? &overrides_it->second : nullptr;
+        attach_prefab_instance(prefab, carrier, content_layer_id, out_mesh_node_items, Prefab_arc_kind::reference, overrides);
     }
 }
 
@@ -814,17 +822,19 @@ void resolve_external_assets(
 // vertex/index ranges in Mesh_memory), so no GPU upload happens per
 // instance.
 void attach_prefab_instance(
-    const std::shared_ptr<Prefab>&                 prefab,
-    const std::shared_ptr<erhe::scene::Node>&      node,
-    const erhe::scene::Layer_id                    content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
-    const Prefab_arc_kind                          arc_kind
+    const std::shared_ptr<Prefab>&                     prefab,
+    const std::shared_ptr<erhe::scene::Node>&          node,
+    const erhe::scene::Layer_id                        content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>*     out_mesh_node_items,
+    const Prefab_arc_kind                              arc_kind,
+    const std::vector<erhe::scene::Instance_override>* overrides
 )
 {
     std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name, prefab->prim_path, arc_kind);
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 
+    std::vector<std::shared_ptr<erhe::scene::Node>> clone_nodes;
     for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
         const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
         if (!child_node) {
@@ -856,7 +866,18 @@ void attach_prefab_instance(
         // The counterpart link comes BEFORE any seal: set_reference and
         // clear_value are both refused on a sealed object (D24).
         link_instance_to_template(clone_node, child_node);
-        if (is_sealed_prefab_instance(*prefab_instance)) {
+        clone_nodes.push_back(clone_node);
+    }
+
+    // The instance's own overrides (doc/usd-compatibility-plan.md X2). They
+    // are applied while the clones are still unsealed, so a sealed glTF
+    // instance receives them too - a seal makes every property read-only, and
+    // an override is a value the file authored, not a user edit made now.
+    if (overrides != nullptr) {
+        erhe::scene::apply_instance_overrides(*node.get(), *overrides);
+    }
+    if (is_sealed_prefab_instance(*prefab_instance)) {
+        for (const std::shared_ptr<erhe::scene::Node>& clone_node : clone_nodes) {
             seal_instance_subtree(clone_node);
         }
     }
@@ -884,12 +905,26 @@ void refresh_instance_subtrees(
                 // subtrees are never persisted), so drop all children and
                 // re-clone from the rebuilt template. The carrier node's
                 // own transform / name / flags are untouched.
+                //
+                // The overrides the instance holds are read off the clones
+                // before they go (doc/usd-compatibility-plan.md X2) and put
+                // back on the fresh ones, so a template reload keeps the
+                // user's edits inside the instance.
+                const std::vector<erhe::scene::Instance_override> overrides =
+                    erhe::scene::collect_instance_overrides(*node.get());
                 node->detach(prefab_instance.get());
                 while (!node->get_children().empty()) {
                     const std::shared_ptr<erhe::Hierarchy> child = node->get_children().back();
                     child->set_parent(std::shared_ptr<erhe::Hierarchy>{});
                 }
-                attach_prefab_instance(it->second, node, content_layer_id, &mesh_node_items);
+                attach_prefab_instance(
+                    it->second,
+                    node,
+                    content_layer_id,
+                    &mesh_node_items,
+                    prefab_instance->get_prefab_arc_kind(),
+                    &overrides
+                );
                 refreshed_keys.insert(key);
             }
         }

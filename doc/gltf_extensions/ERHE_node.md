@@ -45,6 +45,26 @@ Carries the erhe Item state of a node that core glTF cannot express:
 - `prim_type_name` (optional): the USD `typeName` token a `Typed` prim
   carries, empty for a typeless `def`. Written for `"prim_class":
   "Typed"` only - a `Scope` names its own token.
+- `overrides` (optional): the sparse overrides the prefab instance the
+  node carries holds (`doc/usd-compatibility-plan.md` X2). A carrier node
+  is written with `externalAssetIndex` and no children - the referenced
+  file supplies the instance content - but a value the user changed inside
+  the instance belongs to this file, and this is where it travels. One
+  entry per item inside the instance that holds any; what an override is
+  is stated once, in `src/erhe/scene/erhe_scene/instance_override.hpp`.
+  - `path`: the item's path below the arc's target clone, in the erhe
+    path form (`Hierarchy::get_path()`, names separated by `/`). The empty
+    path is the target clone itself.
+  - `properties`: the item's own local values, in the same name to text
+    form `properties` above uses; `active` rides it like any other.
+  - `transform` (optional): the item's local transform as 16 floats in
+    erhe's column-major order, written only when it differs from the
+    template counterpart's.
+
+  The reader records them and the editor applies them to the fresh clones
+  while they are still writable, which is what lets a sealed glTF instance
+  receive them; a template reload re-reads the overrides off the clones
+  and puts them back, so an edit inside an instance survives it.
 - `mesh_flags` (optional): the persistent Item flags of the node's mesh
   attachment. They ride the node because core glTF meshes have no erhe
   payload of their own and erhe `Mesh` attachments are per node while glTF
@@ -59,6 +79,10 @@ Carries the erhe Item state of a node that core glTF cannot express:
     "prim_class": "Typed",
     "prim_type_name": "Cube",
     "style": "Warm lights",
+    "overrides": [
+        {"path": "arm", "properties": {"visible": "false"}, "transform": [1,0,0,0, 0,1,0,0, 0,0,1,0, 1,2,3,1]},
+        {"path": "arm/plate", "properties": {"active": "false"}}
+    ],
     "mesh_flags": ["content", "visible", "shadow_cast", "id", "show_in_ui"]
 }
 ```

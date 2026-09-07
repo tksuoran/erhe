@@ -634,6 +634,63 @@ void clear_local_properties_not_listed(erhe::Item_base& item, const simdjson::do
     );
 }
 
+// The ERHE_node "overrides" array of a carrier node
+// (doc/gltf_extensions/ERHE_node.md): the sparse overrides one prefab
+// instance holds, recorded for the caller that attaches the instance
+// content (doc/usd-compatibility-plan.md X2). An entry without a "path" is
+// not addressable and is dropped.
+void read_instance_overrides(
+    const simdjson::dom::object&                 extension_object,
+    std::vector<erhe::scene::Instance_override>& out_overrides
+)
+{
+    simdjson::dom::array overrides_array;
+    if (extension_object.at_key("overrides").get_array().get(overrides_array) != simdjson::SUCCESS) {
+        return;
+    }
+    for (const simdjson::dom::element override_element : overrides_array) {
+        simdjson::dom::object override_object;
+        if (override_element.get_object().get(override_object) != simdjson::SUCCESS) {
+            continue;
+        }
+        std::string_view path;
+        if (override_object.at_key("path").get_string().get(path) != simdjson::SUCCESS) {
+            continue;
+        }
+        erhe::scene::Instance_override entry{};
+        entry.relative_path = std::string{path};
+        simdjson::dom::object properties_object;
+        if (override_object.at_key("properties").get_object().get(properties_object) == simdjson::SUCCESS) {
+            for (const simdjson::dom::key_value_pair property : properties_object) {
+                std::string_view text;
+                if (property.value.get_string().get(text) != simdjson::SUCCESS) {
+                    continue;
+                }
+                entry.values.push_back(
+                    erhe::scene::Instance_override_value{
+                        .name = std::string{property.key},
+                        .text = std::string{text}
+                    }
+                );
+            }
+        }
+        simdjson::dom::array transform_array;
+        if (override_object.at_key("transform").get_array().get(transform_array) == simdjson::SUCCESS) {
+            std::size_t index = 0;
+            for (const simdjson::dom::element component : transform_array) {
+                double value{0.0};
+                if ((index >= 16) || (component.get_double().get(value) != simdjson::SUCCESS)) {
+                    break;
+                }
+                entry.transform[static_cast<int>(index / 4)][static_cast<int>(index % 4)] = static_cast<float>(value);
+                ++index;
+            }
+            entry.transform_overridden = (index == 16);
+        }
+        out_overrides.push_back(std::move(entry));
+    }
+}
+
 [[nodiscard]] auto is_number(std::string_view s) -> bool
 {
     return 
@@ -4023,6 +4080,13 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                     continue;
                 }
                 if (extension_name == "ERHE_node") {
+                    if ((i < result.node_external_assets.size()) && result.node_external_assets[i].has_value()) {
+                        std::vector<erhe::scene::Instance_override> overrides;
+                        read_instance_overrides(extension_object, overrides);
+                        if (!overrides.empty()) {
+                            result.node_instance_overrides.emplace(i, std::move(overrides));
+                        }
+                    }
                     // A Mesh prim is the node AND the mesh of the payload, so
                     // both halves reach it in one call and the seal lands last.
                     const std::shared_ptr<erhe::scene::Mesh> mesh = node ? erhe::scene::get_mesh(node.get()) : nullptr;
@@ -5980,7 +6044,8 @@ private:
         const erhe::Typed&                         erhe_node,
         const std::size_t                          gltf_node_index,
         const std::shared_ptr<erhe::scene::Mesh>&  erhe_mesh,
-        const std::shared_ptr<erhe::scene::Light>& erhe_light
+        const std::shared_ptr<erhe::scene::Light>& erhe_light,
+        const std::string_view                     extra_erhe_node_members = {}
     )
     {
         std::string members = fmt::format(
@@ -6018,6 +6083,7 @@ private:
                 item_local_properties_to_json(*erhe_mesh)
             );
         }
+        members += extra_erhe_node_members;
         members += "}";
         if (erhe_light) {
             members += fmt::format(
@@ -6163,7 +6229,15 @@ private:
             size_t gltf_external_node_index = m_gltf_asset.nodes.size();
             m_gltf_asset.nodes.emplace_back(std::move(gltf_node));
             m_erhe_node_to_gltf_node_index.insert({&erhe_node, gltf_external_node_index});
-            record_node_extensions(erhe_node, gltf_external_node_index, {}, {});
+            // The instance content is not written - the referenced file
+            // supplies it - but the overrides the user made inside the
+            // instance are the referencing file's own
+            // (doc/usd-compatibility-plan.md X2).
+            const std::string overrides = instance_overrides_to_json(erhe_node);
+            const std::string override_members = overrides.empty()
+                ? std::string{}
+                : fmt::format(",\"overrides\":{}", overrides);
+            record_node_extensions(erhe_node, gltf_external_node_index, {}, {}, override_members);
             return gltf_external_node_index;
         }
 

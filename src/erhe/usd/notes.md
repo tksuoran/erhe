@@ -189,14 +189,26 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
 - Only the arcs a prim itself authors count. An arc authored inside a
   referenced layer is part of that target, and the target's own instantiation
   is what reproduces it.
-- The prims the referencing layer authors below a referencing prim - an `over`
-  holding sparse opinions over what the reference supplied - are not imported.
-  LightUSD does not report which layer an opinion on a composed prim came
-  from, so the root layer is re-read once (only when a referencing prim is
-  met) and its prim spec below the referencing prim is what the warning names.
-  X2 carries these overrides; until then each such prim is reported once with
-  a warning naming what was dropped, and X2 is where the per-layer
-  distinction is needed.
+- An `over` prim the referencing layer authors below a referencing prim is
+  the sparse override of one instance item (doc/usd-compatibility-plan.md X2),
+  reported in `Usd_prim_references::overrides` as an
+  `erhe::scene::Instance_override`: the item's path below the carrier, its
+  values as name / D16 text pairs, and its authored xformOp stack. What an
+  override is - and so what the writer authors - is stated once, in
+  `src/erhe/scene/erhe_scene/instance_override.hpp`. LightUSD does not report
+  which layer an opinion on a composed prim came from, so the root layer is
+  re-read once (only when a referencing prim is met) and its prim specs below
+  the referencing prim are what is read: the specifier is what tells an `over`
+  from a `def`. A prim spec is what a layer authored, so every property it
+  carries is an authored opinion and no `authored()` test is needed; the
+  `erhe:Owner:name` custom attributes, `visibility`, `purpose`, the `active`
+  metadatum and the xformOps (through LightUSD's own
+  `ReconstructXformOpsFromProperties` and then the M8 reader) are what is
+  taken. The reader applies nothing: the instance content does not exist until
+  the caller attaches the arcs' targets.
+- A `def` below a referencing prim adds a prim to a reference, which a
+  reference does not allow (plan section 5): it is named in one warning and
+  dropped.
 
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
@@ -305,12 +317,28 @@ because the same spelling rule decides what an item is called on a stage.
   `Usd_save_reference::source_path` relative to the file being written, and
   empty when the two are the same file (compared after `weakly_canonical`),
   which is USD's spelling of an internal reference; its `prim_path` is empty
-  when the arc names the target's default prim. Instantiation seals the prims
-  it clones, so a child of a carrier that is not sealed (`Item_flags::lock_edit`)
-  is one the user parented there: it is left out too, and the writer names it
-  in a warning - X1 protects the structure inside a reference and X2 decides
-  what such a prim becomes. `erhe::usd` knows nothing of prefabs: the editor
+  when the arc names the target's default prim. A child of a carrier that
+  names no template counterpart is one the user parented there: it is left out
+  too, and the writer names it in a warning - a reference protects its
+  structure (plan section 5). `erhe::usd` knows nothing of prefabs: the editor
   fills the arcs from the carrier's `Prefab_instance` attachments.
+- What a carrier does write of the instance below it is the overrides its
+  items hold (doc/usd-compatibility-plan.md X2), collected through
+  `erhe::scene::collect_instance_override_items`, which owns the rule for what
+  an override is. The clone of an arc's target prim is the carrier prim itself
+  - X1 gives the instance one level more than USD's own composition - so its
+  values are authored on the carrier prim, below the carrier's own: an
+  attribute both author is the carrier's, with a warning naming it, and a
+  transform the target clone overrides is not writable at all, because the
+  carrier prim's own xformOps occupy that slot. Every deeper item becomes an
+  `over` prim at the path it has below the carrier, with an attribute-less
+  `over` for an item on the way down that holds none, so the path exists. An
+  `over` is written as a prim with no typeName, which contributes opinions and
+  defines nothing: the local values as the same `erhe:Owner:name` custom
+  attributes an authored prim carries, `visibility` and `purpose` as the plain
+  token attributes they are, `active` as the prim metadatum, and an overridden
+  transform as the `xformOp:*` attributes and `xformOpOrder` a typed prim
+  writes from its `xformOps`.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
 - `Usd_save_arguments::custom_layer_data` is written verbatim as the root

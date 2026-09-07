@@ -3,6 +3,7 @@
 #include "prefabs/prefab_instance.hpp"
 
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_scene/instance_override.hpp"
 
 #include <glm/glm.hpp>
 
@@ -197,12 +198,16 @@ auto instantiate_prefab(
 // building block shared by instantiate_prefab and glTF external-asset
 // import. `arc_kind` is the composition arc the instance was authored as,
 // which a USD save writes back (X1); a glTF prefab is a reference.
+// `overrides`, when non-null, are the sparse overrides the instance holds
+// (doc/usd-compatibility-plan.md X2): they are applied to the fresh clones
+// before a glTF instance is sealed, so a sealed item still receives them.
 void attach_prefab_instance(
-    const std::shared_ptr<Prefab>&                 prefab,
-    const std::shared_ptr<erhe::scene::Node>&      node,
-    erhe::scene::Layer_id                          content_layer_id,
-    std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
-    Prefab_arc_kind                                arc_kind = Prefab_arc_kind::reference
+    const std::shared_ptr<Prefab>&                        prefab,
+    const std::shared_ptr<erhe::scene::Node>&             node,
+    erhe::scene::Layer_id                                 content_layer_id,
+    std::vector<std::shared_ptr<erhe::Item_base>>*        out_mesh_node_items,
+    Prefab_arc_kind                                       arc_kind = Prefab_arc_kind::reference,
+    const std::vector<erhe::scene::Instance_override>*    overrides = nullptr
 );
 
 // Collect glTF 2.1 external-asset references for export: walks the subtree

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "erhe_scene/instance_override.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -109,6 +111,12 @@ public:
     std::shared_ptr<erhe::Item_base> item;
     std::string                      stage_path;
     std::vector<Usd_reference>       references;
+    // The `over` prims the referencing layer authors below this prim: the
+    // sparse overrides of the instances the arcs bring in
+    // (doc/usd-compatibility-plan.md X2). The reader records them and applies
+    // nothing - the instance content does not exist until the caller attaches
+    // the arcs' targets.
+    std::vector<erhe::scene::Instance_override> overrides;
 };
 
 // Result of load_stage(). `stage` is null exactly when `error` is non-empty;

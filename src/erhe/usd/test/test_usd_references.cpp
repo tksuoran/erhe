@@ -1,12 +1,16 @@
 #include "erhe_item/item.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_scene/xform_op.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -171,13 +175,54 @@ TEST(Reference_target_import, target_file_loads)
     return node;
 }
 
-// A prim instantiation put under a carrier: sealed, the way
-// attach_prefab_instance seals a clone.
-[[nodiscard]] auto make_instance_content_prim(const char* name) -> std::shared_ptr<erhe::scene::Xform>
+// A prim instantiation put under a carrier: it names its counterpart in the
+// template, the way attach_prefab_instance links a clone
+// (doc/property-system.md D33). That link is what tells instance content
+// from a prim the user parented under the carrier by hand.
+[[nodiscard]] auto make_instance_content_prim(const char* name, const std::shared_ptr<erhe::Item_base>& counterpart) -> std::shared_ptr<erhe::scene::Xform>
 {
     std::shared_ptr<erhe::scene::Xform> node = make_prim(name);
-    node->enable_flag_bits(erhe::Item_flags::lock_edit);
+    node->set_reference(counterpart);
     return node;
+}
+
+// One template prim, standing in for the item a reference target supplies.
+[[nodiscard]] auto make_template_prim(const char* name) -> std::shared_ptr<erhe::scene::Xform>
+{
+    return std::make_shared<erhe::scene::Xform>(name);
+}
+
+// The override entry at one relative path, or null.
+[[nodiscard]] auto find_override(
+    const std::vector<erhe::scene::Instance_override>& overrides,
+    const std::string&                                 relative_path
+) -> const erhe::scene::Instance_override*
+{
+    for (const erhe::scene::Instance_override& entry : overrides) {
+        if (entry.relative_path == relative_path) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+// The D16 text of one override value, or null.
+[[nodiscard]] auto find_override_value(const erhe::scene::Instance_override& entry, const std::string& name) -> const std::string*
+{
+    for (const erhe::scene::Instance_override_value& value : entry.values) {
+        if (value.name == name) {
+            return &value.text;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto read_text_file(const std::filesystem::path& path) -> std::string
+{
+    std::ifstream     stream{path};
+    std::stringstream buffer;
+    buffer << stream.rdbuf();
+    return buffer.str();
 }
 
 // Write one hand-built scene and read the written file back.
@@ -218,7 +263,8 @@ TEST(References_export, two_arcs_are_written_in_order_without_instance_content)
     const std::shared_ptr<erhe::scene::Node> root    = std::make_shared<erhe::scene::Xform>("export_root");
     const std::shared_ptr<erhe::scene::Node> carrier = make_prim("Carrier");
     carrier->set_parent(root);
-    make_instance_content_prim("instance_content")->set_parent(carrier);
+    const std::shared_ptr<erhe::scene::Xform> counterpart = make_template_prim("instance_content");
+    make_instance_content_prim("instance_content", counterpart)->set_parent(carrier);
 
     const std::filesystem::path directory = reference_temporary_directory();
     const std::vector<erhe::usd::Usd_save_prim_references> references{
@@ -316,7 +362,8 @@ TEST(References_export, a_prim_parented_under_a_carrier_is_reported_and_left_out
     const std::shared_ptr<erhe::scene::Node> root    = std::make_shared<erhe::scene::Xform>("export_root");
     const std::shared_ptr<erhe::scene::Node> carrier = make_prim("StrayCarrier");
     carrier->set_parent(root);
-    make_instance_content_prim("instance_content")->set_parent(carrier);
+    const std::shared_ptr<erhe::scene::Xform> counterpart = make_template_prim("instance_content");
+    make_instance_content_prim("instance_content", counterpart)->set_parent(carrier);
     make_prim("stray")->set_parent(carrier);
 
     const std::vector<erhe::usd::Usd_save_prim_references> references{
@@ -420,6 +467,191 @@ TEST(References_export, the_fixture_round_trips_to_the_same_arcs)
         EXPECT_TRUE(carrier->get_children().empty()) << name;
     }
     EXPECT_TRUE(find_node(reloaded.data, "quad").operator bool());
+}
+
+// ---------------------------------------------------------------------------
+// Sparse overrides (doc/usd-compatibility-plan.md X2)
+// ---------------------------------------------------------------------------
+
+class Override_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = reference_test_data_path("references_override.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Override_import, an_over_below_a_carrier_is_read_as_an_override)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    const erhe::usd::Usd_prim_references& carrier = result.data.references[0];
+    EXPECT_EQ(carrier.stage_path, "/World/Carrier");
+    ASSERT_EQ(carrier.overrides.size(), 2u);
+
+    const erhe::scene::Instance_override* arm = find_override(carrier.overrides, "arm");
+    ASSERT_NE(arm, nullptr);
+    const std::string* visible = find_override_value(*arm, "visible");
+    ASSERT_NE(visible, nullptr);
+    EXPECT_EQ(*visible, "false");
+    EXPECT_TRUE(arm->transform_overridden);
+    EXPECT_FLOAT_EQ(arm->transform[3][0], 1.0f);
+    EXPECT_FLOAT_EQ(arm->transform[3][1], 2.0f);
+    EXPECT_FLOAT_EQ(arm->transform[3][2], 3.0f);
+    ASSERT_TRUE(arm->xform_op_stack.has_value());
+    ASSERT_EQ(arm->xform_op_stack.value().ops.size(), 1u);
+    EXPECT_EQ(arm->xform_op_stack.value().ops[0].type, erhe::scene::Xform_op_type::translate);
+}
+
+TEST_F(Override_import, a_nested_over_keeps_its_path_and_carries_active)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    const erhe::scene::Instance_override* plate = find_override(result.data.references[0].overrides, "arm/plate");
+    ASSERT_NE(plate, nullptr);
+    const std::string* active = find_override_value(*plate, "active");
+    ASSERT_NE(active, nullptr);
+    EXPECT_EQ(*active, "false");
+    const std::string* shadow_cast = find_override_value(*plate, "Mesh.shadow_cast");
+    ASSERT_NE(shadow_cast, nullptr);
+    EXPECT_EQ(*shadow_cast, "0"); // the USDA literal of a bool, which parse_value accepts
+    EXPECT_FALSE(plate->transform_overridden);
+}
+
+// A reference protects its structure (plan section 5): a `def` below a
+// referencing prim adds a prim to the reference, which is not an override.
+TEST_F(Override_import, a_def_below_a_carrier_is_not_an_override)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    EXPECT_EQ(result.data.references[1].stage_path, "/World/DefCarrier");
+    EXPECT_TRUE(result.data.references[1].overrides.empty());
+}
+
+// One carrier holding one instance, whose interior items name their template
+// counterparts and hold the overrides the writer is to author.
+class Override_scene final
+{
+public:
+    Override_scene()
+    {
+        root = std::make_shared<erhe::scene::Xform>("export_root");
+        carrier = make_prim("Carrier");
+        carrier->set_parent(root);
+
+        template_widget = make_template_prim("Widget");
+        template_arm    = make_template_prim("arm");
+        template_plate  = make_template_prim("plate");
+
+        clone_widget = make_instance_content_prim("Widget", template_widget);
+        clone_arm    = make_instance_content_prim("arm",    template_arm);
+        clone_plate  = make_instance_content_prim("plate",  template_plate);
+        clone_widget->set_parent(carrier);
+        clone_arm->set_parent(clone_widget);
+        clone_plate->set_parent(clone_arm);
+
+        clone_arm->set_value(erhe::Item_base::visible_property, false);
+        // The transform an imported override arrives with: an authored
+        // xformOp stack (doc/usd-compatibility-plan.md M8), which the writer
+        // is to author back as the ops it was given.
+        erhe::scene::Xform_op_stack stack{};
+        erhe::scene::Xform_op       translate_op{};
+        translate_op.type      = erhe::scene::Xform_op_type::translate;
+        translate_op.precision = erhe::scene::Xform_op_precision::double_;
+        translate_op.value     = glm::dvec3{1.0, 2.0, 3.0};
+        stack.ops.push_back(translate_op);
+        clone_arm->set_xform_op_stack(stack);
+        clone_plate->set_value(erhe::Item_base::active_property, false);
+    }
+
+    std::shared_ptr<erhe::scene::Node>  root;
+    std::shared_ptr<erhe::scene::Node>  carrier;
+    std::shared_ptr<erhe::scene::Xform> template_widget;
+    std::shared_ptr<erhe::scene::Xform> template_arm;
+    std::shared_ptr<erhe::scene::Xform> template_plate;
+    std::shared_ptr<erhe::scene::Xform> clone_widget;
+    std::shared_ptr<erhe::scene::Xform> clone_arm;
+    std::shared_ptr<erhe::scene::Xform> clone_plate;
+};
+
+[[nodiscard]] auto override_save_references(const std::shared_ptr<erhe::scene::Node>& carrier) -> std::vector<erhe::usd::Usd_save_prim_references>
+{
+    return std::vector<erhe::usd::Usd_save_prim_references>{
+        erhe::usd::Usd_save_prim_references{
+            .item       = carrier,
+            .references = {
+                erhe::usd::Usd_save_reference{.source_path = reference_temporary_directory() / "override_widget.usda"}
+            }
+        }
+    };
+}
+
+TEST(Override_export, overrides_are_written_as_over_prims)
+{
+    const Override_scene   scene;
+    const Reference_export exported{scene.root, override_save_references(scene.carrier), "written_overrides.usda"};
+    EXPECT_TRUE(exported.save.error.empty()) << exported.save.error;
+    EXPECT_TRUE(exported.save.warning.empty()) << exported.save.warning;
+
+    const std::string written = read_text_file(exported.written_path);
+    EXPECT_NE(written.find("over \"arm\""), std::string::npos) << written;
+    EXPECT_NE(written.find("over \"plate\""), std::string::npos) << written;
+    EXPECT_NE(written.find("token visibility = \"invisible\""), std::string::npos) << written;
+    EXPECT_NE(written.find("active = false"), std::string::npos) << written;
+    EXPECT_NE(written.find("xformOp:translate"), std::string::npos) << written;
+    // The instance content itself is not written: the arc's target supplies it.
+    EXPECT_EQ(written.find("def Xform \"arm\""), std::string::npos) << written;
+}
+
+TEST(Override_export, written_overrides_read_back_the_same)
+{
+    const Override_scene   scene;
+    const Reference_export exported{scene.root, override_save_references(scene.carrier), "written_overrides_reload.usda"};
+    ASSERT_TRUE(exported.reloaded.error.empty()) << exported.reloaded.error;
+    ASSERT_EQ(exported.reloaded.data.references.size(), 1u);
+    const std::vector<erhe::scene::Instance_override>& overrides = exported.reloaded.data.references[0].overrides;
+    ASSERT_EQ(overrides.size(), 2u);
+
+    const erhe::scene::Instance_override* arm = find_override(overrides, "arm");
+    ASSERT_NE(arm, nullptr);
+    const std::string* visible = find_override_value(*arm, "visible");
+    ASSERT_NE(visible, nullptr);
+    EXPECT_EQ(*visible, "false");
+    EXPECT_TRUE(arm->transform_overridden);
+    EXPECT_FLOAT_EQ(arm->transform[3][0], 1.0f);
+
+    const erhe::scene::Instance_override* plate = find_override(overrides, "arm/plate");
+    ASSERT_NE(plate, nullptr);
+    const std::string* active = find_override_value(*plate, "active");
+    ASSERT_NE(active, nullptr);
+    EXPECT_EQ(*active, "false");
+}
+
+TEST(Override_export, a_second_save_is_byte_identical)
+{
+    const Override_scene        scene;
+    const std::filesystem::path first  = reference_temporary_directory() / "override_double_save_1.usda";
+    const std::filesystem::path second = reference_temporary_directory() / "override_double_save_2.usda";
+    for (const std::filesystem::path& path : {first, second}) {
+        const erhe::usd::Usd_save_arguments save_arguments{
+            .path       = path,
+            .root_node  = scene.root,
+            .references = override_save_references(scene.carrier)
+        };
+        const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+        ASSERT_TRUE(save.error.empty()) << save.error;
+    }
+    EXPECT_EQ(read_text_file(first), read_text_file(second));
 }
 
 } // anonymous namespace

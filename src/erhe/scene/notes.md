@@ -130,6 +130,27 @@ stack next to the matrices.
 glTF does not carry the stack (`doc/usd-compatibility-plan.md` C1): a glTF
 save writes the composed TRS, and a glTF scene has no stack to start with.
 
+## Instance overrides
+
+`instance_override.hpp` owns what an override of a prefab instance item is
+(`doc/usd-compatibility-plan.md` X2, `doc/property-system.md` D33): a local
+value of a serializable, non-bridged, non-computed property without an
+expression, or a local transform that differs from the template counterpart's.
+The name is structure and is never an override. The walk starts at the
+referencing item (the carrier): its children are the arcs' clones of the
+target prims, and every item below one that names a counterpart
+(`Dependency_object::get_reference`) is instance content - an item that names
+none was parented under the carrier by hand and is reported by neither
+collector.
+
+`collect_instance_override_items` reports the items, for a writer that reads
+the values in its own file format (`erhe::usd`);
+`collect_instance_overrides` reports the same set with the values read out as
+qualified name / D16 text pairs and the transform as a matrix plus the
+authored xformOp stack, so it survives the items it came from - that form is
+what `erhe::gltf` writes, what a file reader produces, and what
+`apply_instance_overrides` puts back on a freshly attached instance.
+
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.
 - Call `scene.update_node_transforms()` each frame to propagate world transforms.

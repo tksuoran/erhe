@@ -3,8 +3,11 @@
 
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_property/property_string.hpp"
+
+#include <fmt/format.h>
 
 #include <cstdio>
 
@@ -120,6 +123,47 @@ void append_json_string(std::string& out, const std::string_view text)
 }
 
 } // anonymous namespace
+
+auto instance_overrides_to_json(const erhe::Hierarchy& carrier) -> std::string
+{
+    const std::vector<erhe::scene::Instance_override> overrides = erhe::scene::collect_instance_overrides(carrier);
+    if (overrides.empty()) {
+        return std::string{};
+    }
+    std::string out{"["};
+    const char* entry_separator = "";
+    for (const erhe::scene::Instance_override& entry : overrides) {
+        out += entry_separator;
+        out += "{\"path\":";
+        append_json_string(out, entry.relative_path);
+        out += ",\"properties\":{";
+        const char* value_separator = "";
+        for (const erhe::scene::Instance_override_value& value : entry.values) {
+            out += value_separator;
+            append_json_string(out, value.name);
+            out += ':';
+            append_json_string(out, value.text);
+            value_separator = ",";
+        }
+        out += "}";
+        if (entry.transform_overridden) {
+            out += ",\"transform\":[";
+            for (int column = 0; column < 4; ++column) {
+                for (int row = 0; row < 4; ++row) {
+                    if ((column != 0) || (row != 0)) {
+                        out += ',';
+                    }
+                    out += fmt::format("{}", entry.transform[column][row]);
+                }
+            }
+            out += "]";
+        }
+        out += "}";
+        entry_separator = ",";
+    }
+    out += "]";
+    return out;
+}
 
 auto item_local_properties_to_json(const erhe::Item_base& item) -> std::string
 {

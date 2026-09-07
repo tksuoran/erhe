@@ -18,6 +18,7 @@
 #include "erhe_property/property_string.hpp"
 #include "erhe_property/property_value.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -38,6 +39,7 @@
 #include "usdGeom.hh"
 #include "usdShade.hh"
 #include "usdLux.hh"
+#include "pprint-enum.hh"
 
 #include <fmt/format.h>
 
@@ -337,6 +339,14 @@ public:
     // `children` stays empty: the arcs' targets supply the prims below it
     // (doc/usd-compatibility-plan.md X1).
     const std::vector<Usd_save_reference>* references{nullptr};
+    // The overrides the instances below a carrier hold
+    // (doc/usd-compatibility-plan.md X2). `override_root` is the item at the
+    // relative path of the arc's target clone, whose values are authored on
+    // the carrier prim itself - the clone and the carrier are one prim in USD
+    // - and `overrides` holds every deeper item, each an `over` prim below
+    // the carrier.
+    const erhe::Item_base*                 override_root{nullptr};
+    std::vector<erhe::scene::Instance_override_item> overrides;
     std::vector<Plan_prim>           children;
 };
 
@@ -1018,7 +1028,7 @@ private:
             plan_prim.name          = names.make_unique(child_prim->get_name());
             plan_prim.references    = find_prim_references(*child_prim);
             if (plan_prim.references != nullptr) {
-                warn_about_unwritten_carrier_children(*child_prim, plan_prim.name);
+                plan_instance_overrides(*child_prim, plan_prim);
             } else if (plan_prim.material == nullptr) {
                 // A prim that carries a transform writes it on itself, so its
                 // children start from identity; a prim without one passes the
@@ -1044,11 +1054,50 @@ private:
     }
 
     // A carrier's children are the instance content the arcs' targets supply,
-    // so none of them is written. Instantiation seals the prims it clones, so
-    // a child that is not sealed is one the user parented under the carrier:
-    // that prim is left out too, and saying so is the only notice the user
-    // gets until X2 decides what it becomes.
-    void warn_about_unwritten_carrier_children(const erhe::Typed& carrier, const std::string& carrier_name)
+    // so none of them is written as a prim of its own: what a carrier writes
+    // of them is the overrides they hold (doc/usd-compatibility-plan.md X2).
+    // The clone of an arc's target prim is the carrier prim itself - X1's one
+    // extra level - so its overrides are authored on the carrier, and every
+    // deeper item becomes an `over` prim at the path it has below the
+    // carrier. A child that names no counterpart is a prim the user parented
+    // under the carrier by hand: the structure inside a reference is not
+    // written (plan section 5), so it is named in a warning and left out.
+    void plan_instance_overrides(const erhe::Typed& carrier, Plan_prim& plan_prim)
+    {
+        warn_about_unreferenced_carrier_children(carrier, plan_prim.name);
+
+        std::set<std::string> planned_paths;
+        for (erhe::scene::Instance_override_item& entry : erhe::scene::collect_instance_override_items(carrier)) {
+            if (!planned_paths.insert(entry.relative_path).second) {
+                add_warning(
+                    fmt::format(
+                        "prim '{}': more than one instance holds overrides at '{}' - only the first arc's are written",
+                        plan_prim.name,
+                        entry.relative_path
+                    )
+                );
+                continue;
+            }
+            if (entry.relative_path.empty()) {
+                plan_prim.override_root = entry.item;
+                if (entry.transform_overridden) {
+                    add_warning(
+                        fmt::format(
+                            "prim '{}': the transform of an arc's target is the referencing prim's own transform - the override is not written",
+                            plan_prim.name
+                        )
+                    );
+                }
+                continue;
+            }
+            plan_prim.overrides.push_back(std::move(entry));
+        }
+    }
+
+    // A child of a carrier that names no counterpart in a template is not
+    // instance content; saying so is the only notice the user gets that it is
+    // not written.
+    void warn_about_unreferenced_carrier_children(const erhe::Typed& carrier, const std::string& carrier_name)
     {
         std::string names;
         for (const std::shared_ptr<erhe::Hierarchy>& child : carrier.get_children()) {
@@ -1056,8 +1105,7 @@ private:
             if (child_prim == nullptr) {
                 continue;
             }
-            const uint64_t flags = child_prim->get_flag_bits();
-            if ((flags & erhe::Item_flags::lock_edit) != 0) {
+            if (child_prim->get_reference()) {
                 continue; // instance content: the arc's target supplies it
             }
             if (!names.empty()) {
@@ -1148,6 +1196,7 @@ private:
 
         std::vector<lightusd::Prim> child_prims;
         write_plan_prims(plan_prim.children, child_prims);
+        write_override_prims(plan_prim, child_prims);
         for (lightusd::Prim& child_prim : child_prims) {
             std::string error;
             if (!prim.add_child(std::move(child_prim), false, &error)) {
@@ -1155,6 +1204,164 @@ private:
             }
         }
         return prim;
+    }
+
+    // The `over` prims of one carrier (doc/usd-compatibility-plan.md X2). One
+    // entry per item that holds overrides, at the path it has below the
+    // carrier; an item on the way down to one that holds none is still an
+    // `over`, with no attributes, so the path exists.
+    class Override_prim final
+    {
+    public:
+        std::string                name;
+        const erhe::Item_base*     item                {nullptr};
+        bool                       transform_overridden{false};
+        std::vector<Override_prim> children;
+    };
+
+    [[nodiscard]] static auto find_or_add_override_prim(std::vector<Override_prim>& prims, const std::string_view name) -> Override_prim&
+    {
+        for (Override_prim& prim : prims) {
+            if (prim.name == name) {
+                return prim;
+            }
+        }
+        prims.push_back(Override_prim{.name = std::string{name}});
+        return prims.back();
+    }
+
+    void write_override_prims(const Plan_prim& plan_prim, std::vector<lightusd::Prim>& out_prims)
+    {
+        if (plan_prim.overrides.empty()) {
+            return;
+        }
+        std::vector<Override_prim> tree;
+        for (const erhe::scene::Instance_override_item& entry : plan_prim.overrides) {
+            std::vector<Override_prim>* level = &tree;
+            Override_prim*              prim  = nullptr;
+            std::size_t                 start = 0;
+            while (start < entry.relative_path.size()) {
+                const std::size_t      slash = entry.relative_path.find('/', start);
+                const std::string_view name  = (slash == std::string::npos)
+                    ? std::string_view{entry.relative_path}.substr(start)
+                    : std::string_view{entry.relative_path}.substr(start, slash - start);
+                start = (slash == std::string::npos) ? entry.relative_path.size() : (slash + 1);
+                prim  = &find_or_add_override_prim(*level, name);
+                level = &prim->children;
+            }
+            if (prim != nullptr) {
+                prim->item                 = entry.item;
+                prim->transform_overridden = entry.transform_overridden;
+            }
+        }
+        for (const Override_prim& prim : tree) {
+            out_prims.push_back(write_override_prim(prim));
+        }
+    }
+
+    // One `over` prim: a prim with no typeName, so it contributes opinions
+    // and defines nothing. The opinions are the item's local values in the
+    // same forms an authored prim carries them - `erhe:Owner:name` custom
+    // attributes, `visibility` / `purpose`, the `active` metadatum and the
+    // xformOps of an overridden transform.
+    [[nodiscard]] auto write_override_prim(const Override_prim& override_prim) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name = override_prim.name;
+        model.spec = lightusd::Specifier::Over;
+        if (override_prim.item != nullptr) {
+            write_override_visibility_and_purpose(*override_prim.item, model.props);
+            write_active(*override_prim.item, model);
+            write_erhe_properties(*override_prim.item, model);
+            if (override_prim.transform_overridden) {
+                write_override_xform_ops(*override_prim.item, model.props);
+            }
+        }
+        lightusd::Prim prim{model};
+        for (const Override_prim& child : override_prim.children) {
+            std::string error;
+            if (!prim.add_child(write_override_prim(child), false, &error)) {
+                add_warning(fmt::format("an override of '{}' could not be added: {}", override_prim.name, error));
+            }
+        }
+        return prim;
+    }
+
+    // `visibility` and `purpose` of an `over`: a typeless prim carries no
+    // schema attributes, so the two travel as the plain token attributes they
+    // are on the stage.
+    static void write_override_visibility_and_purpose(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
+    {
+        if (is_local(item, erhe::Item_base::visible_property.get())) {
+            add_token_attribute(
+                props,
+                "visibility",
+                lightusd::to_string(
+                    item.get_value(erhe::Item_base::visible_property)
+                        ? lightusd::Visibility::Inherited
+                        : lightusd::Visibility::Invisible
+                )
+            );
+        }
+        if (is_local(item, erhe::Item_base::purpose_property.get())) {
+            add_token_attribute(props, "purpose", lightusd::to_string(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property))));
+        }
+    }
+
+    static void add_token_attribute(std::map<std::string, lightusd::Property>& props, const std::string& name, const std::string& text)
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::token{text});
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    // The xformOps of an `over`, as the `xformOp:*` attributes and the
+    // `xformOpOrder` a typed prim's writer emits from its `xformOps` member
+    // (doc/usd-compatibility-plan.md M8).
+    void write_override_xform_ops(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
+    {
+        const erhe::scene::Node* node = dynamic_cast<const erhe::scene::Node*>(&item);
+        if (node == nullptr) {
+            add_warning(fmt::format("the transform override of '{}' is on an item that carries none", item.get_name()));
+            return;
+        }
+        std::vector<lightusd::XformOp> ops;
+        set_transform(ops, *node, node->parent_from_node_transform().get_matrix());
+
+        std::vector<lightusd::value::token> order;
+        for (const lightusd::XformOp& op : ops) {
+            std::string token_text;
+            if (op.inverted) {
+                token_text += "!invert!";
+            }
+            token_text += lightusd::to_string(op.op_type);
+            if (!op.suffix.empty()) {
+                token_text += ":";
+                token_text += op.suffix;
+            }
+            order.push_back(lightusd::value::token{token_text});
+            if (op.op_type == lightusd::XformOp::OpType::ResetXformStack) {
+                continue;
+            }
+            std::string attribute_name = lightusd::to_string(op.op_type);
+            if (!op.suffix.empty()) {
+                attribute_name += ":";
+                attribute_name += op.suffix;
+            }
+            lightusd::Attribute        attribute;
+            lightusd::primvar::PrimVar var = op.get_var();
+            attribute.set_var(var);
+            props.emplace(attribute_name, lightusd::Property{std::move(attribute), false});
+        }
+        if (order.empty()) {
+            return;
+        }
+        lightusd::Attribute        order_attribute;
+        lightusd::primvar::PrimVar order_var;
+        order_var.set_value(order);
+        order_attribute.set_var(order_var);
+        order_attribute.variability() = lightusd::Variability::Uniform;
+        props.emplace("xformOpOrder", lightusd::Property{std::move(order_attribute), false});
     }
 
     // The composition arcs of a carrier prim, as the `references` and
@@ -1258,11 +1465,12 @@ private:
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
 
+        const erhe::Item_base* override_root = plan_prim.override_root;
         return
-            mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix) :
-            camera ? write_camera_prim(node, *camera.get(), prim_name, matrix) :
-            light  ? write_light_prim (node, *light.get(),  prim_name, matrix) :
-                     write_xform_prim (node,                prim_name, matrix);
+            mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix, override_root) :
+            camera ? write_camera_prim(node, *camera.get(), prim_name, matrix, override_root) :
+            light  ? write_light_prim (node, *light.get(),  prim_name, matrix, override_root) :
+                     write_xform_prim (node,                prim_name, matrix, override_root);
     }
 
     // The prim's transform (doc/usd-compatibility-plan.md M8): the ops it was
@@ -1274,12 +1482,11 @@ private:
     // and a stage the importer applied its upAxis / metersPerUnit correction
     // to. A prim erhe created carries no stack and writes the single matrix
     // op, so nothing about an editor-authored file changes.
-    template <typename T>
-    static void set_transform(T& typed_prim, const erhe::scene::Node& node, const glm::mat4& matrix)
+    static void set_transform(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Node& node, const glm::mat4& matrix)
     {
         const erhe::scene::Xform_op_stack* stack = node.get_xform_op_stack();
         if ((stack != nullptr) && is_near(glm::mat4{stack->compose()}, matrix)) {
-            write_xform_op_stack(typed_prim, *stack);
+            write_xform_op_stack(xform_ops, *stack);
             return;
         }
         if (is_identity(matrix)) {
@@ -1288,18 +1495,17 @@ private:
         lightusd::XformOp op;
         op.op_type = lightusd::XformOp::OpType::Transform;
         op.set_value(to_usd(matrix));
-        typed_prim.xformOps.push_back(op);
+        xform_ops.push_back(op);
     }
 
-    template <typename T>
-    static void write_xform_op_stack(T& typed_prim, const erhe::scene::Xform_op_stack& stack)
+    static void write_xform_op_stack(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Xform_op_stack& stack)
     {
         if (stack.reset_xform_stack) {
             // `!resetXformStack!` is the first token of xformOpOrder and has
             // no value of its own, which is exactly how LightUSD carries it.
             lightusd::XformOp reset_op;
             reset_op.op_type = lightusd::XformOp::OpType::ResetXformStack;
-            typed_prim.xformOps.push_back(reset_op);
+            xform_ops.push_back(reset_op);
         }
         for (const erhe::scene::Xform_op& op : stack.ops) {
             lightusd::XformOp usd_op;
@@ -1307,18 +1513,79 @@ private:
             usd_op.inverted = op.inverted;
             usd_op.suffix   = op.suffix;
             set_xform_op_value(usd_op, op);
-            typed_prim.xformOps.push_back(usd_op);
+            xform_ops.push_back(usd_op);
         }
     }
 
-    [[nodiscard]] auto write_xform_prim(const erhe::scene::Node& node, const std::string& prim_name, const glm::mat4& matrix) -> lightusd::Prim
+    [[nodiscard]] auto write_xform_prim(
+        const erhe::scene::Node& node,
+        const std::string&       prim_name,
+        const glm::mat4&         matrix,
+        const erhe::Item_base*   override_root
+    ) -> lightusd::Prim
     {
         lightusd::Xform xform;
         xform.name = prim_name;
-        set_transform(xform, node, matrix);
+        set_transform(xform.xformOps, node, matrix);
         write_visibility_and_purpose(node, xform);
         write_erhe_properties(node, xform);
+        write_instance_root_override(node, override_root, xform);
         return lightusd::Prim{xform};
+    }
+
+    // The overrides of the clone of an arc's target prim
+    // (doc/usd-compatibility-plan.md X2). The clone and the referencing prim
+    // are one prim in USD - X1 gives the instance one level more than USD's
+    // own composition - so the clone's local values are authored on the
+    // carrier prim, below the carrier's own: an attribute both author is the
+    // carrier's, and saying so is the only notice the user gets.
+    template <typename T>
+    void write_instance_root_override(const erhe::Item_base& carrier, const erhe::Item_base* override_root, T& typed_prim)
+    {
+        if (override_root == nullptr) {
+            return;
+        }
+        if (is_override_available(carrier, *override_root, erhe::Item_base::visible_property.get())) {
+            typed_prim.visibility.set_value(
+                override_root->get_value(erhe::Item_base::visible_property)
+                    ? lightusd::Visibility::Inherited
+                    : lightusd::Visibility::Invisible
+            );
+        }
+        if (is_override_available(carrier, *override_root, erhe::Item_base::purpose_property.get())) {
+            typed_prim.purpose.set_value(to_usd_purpose(override_root->get_value(erhe::Item_base::purpose_property)));
+        }
+        if (is_override_available(carrier, *override_root, erhe::Item_base::active_property.get())) {
+            typed_prim.meta.set_active(override_root->get_value(erhe::Item_base::active_property));
+        }
+        // A name an `erhe:` attribute of the carrier already carries is
+        // reported and dropped by write_erhe_properties itself.
+        write_erhe_properties(*override_root, typed_prim);
+    }
+
+    // True when the target clone's local value of `property` is what the
+    // carrier prim carries: the carrier's own local value wins, and the
+    // dropped one is reported.
+    [[nodiscard]] auto is_override_available(
+        const erhe::Item_base&                     carrier,
+        const erhe::Item_base&                     override_root,
+        const erhe::property::Dependency_property& property
+    ) -> bool
+    {
+        if (!is_local(override_root, property)) {
+            return false;
+        }
+        if (is_local(carrier, property)) {
+            add_warning(
+                fmt::format(
+                    "prim '{}': '{}' is authored by the referencing prim and by the reference target itself - the referencing prim's value is kept",
+                    carrier.get_name(),
+                    property.get_name()
+                )
+            );
+            return false;
+        }
+        return true;
     }
 
     // -------------------------------------------------------------------
@@ -1508,13 +1775,14 @@ private:
         const erhe::scene::Node& node,
         const erhe::scene::Mesh& mesh,
         const std::string&       prim_name,
-        const glm::mat4&         matrix
+        const glm::mat4&         matrix,
+        const erhe::Item_base*   override_root
     ) -> lightusd::Prim
     {
         ++m_mesh_count;
         lightusd::GeomMesh geom_mesh;
         geom_mesh.name = prim_name;
-        set_transform(geom_mesh, node, matrix);
+        set_transform(geom_mesh.xformOps, node, matrix);
         // The authored polygons are the mesh, not a subdivision cage: this is
         // what makes the importer build erhe geometry rather than a triangle
         // soup (doc/usd_compatibility.md, geometry attributes).
@@ -1569,6 +1837,7 @@ private:
         write_visibility_and_purpose(node, geom_mesh);
         write_erhe_properties(node, geom_mesh);
         write_erhe_properties(mesh, geom_mesh);
+        write_instance_root_override(node, override_root, geom_mesh);
 
         // One primitive needs no subset: the importer's remainder group is
         // the whole mesh and reproduces it. Several primitives become one
@@ -1617,14 +1886,15 @@ private:
         const erhe::scene::Node&   node,
         const erhe::scene::Camera& camera,
         const std::string&         prim_name,
-        const glm::mat4&           matrix
+        const glm::mat4&           matrix,
+        const erhe::Item_base*     override_root
     ) -> lightusd::Prim
     {
         using erhe::scene::Camera;
 
         lightusd::GeomCamera geom_camera;
         geom_camera.name = prim_name;
-        set_transform(geom_camera, node, matrix);
+        set_transform(geom_camera.xformOps, node, matrix);
 
         if (is_local(camera, Camera::z_near_property.get()) || is_local(camera, Camera::z_far_property.get())) {
             geom_camera.clippingRange.set_value(
@@ -1668,6 +1938,7 @@ private:
         write_visibility_and_purpose(node, geom_camera);
         write_erhe_properties(node, geom_camera);
         write_erhe_properties(camera, geom_camera);
+        write_instance_root_override(node, override_root, geom_camera);
         return lightusd::Prim{geom_camera};
     }
 
@@ -1700,7 +1971,8 @@ private:
         const erhe::scene::Node&  node,
         const erhe::scene::Light& light,
         const std::string&        prim_name,
-        const glm::mat4&          matrix
+        const glm::mat4&          matrix,
+        const erhe::Item_base*    override_root
     ) -> lightusd::Prim
     {
         using erhe::scene::Light;
@@ -1710,17 +1982,18 @@ private:
         if (light_type == Light_type::directional) {
             lightusd::DistantLight distant_light;
             distant_light.name = prim_name;
-            set_transform(distant_light, node, matrix);
+            set_transform(distant_light.xformOps, node, matrix);
             write_light_api(light, distant_light);
             write_visibility_and_purpose(node, distant_light);
             write_erhe_properties(node, distant_light);
             write_erhe_properties(light, distant_light);
+            write_instance_root_override(node, override_root, distant_light);
             return lightusd::Prim{distant_light};
         }
 
         lightusd::SphereLight sphere_light;
         sphere_light.name = prim_name;
-        set_transform(sphere_light, node, matrix);
+        set_transform(sphere_light.xformOps, node, matrix);
         // A point light is a sphere light of no extent.
         sphere_light.radius.set_value(0.0f);
         write_light_api(light, sphere_light);
@@ -1733,6 +2006,7 @@ private:
         write_visibility_and_purpose(node, sphere_light);
         write_erhe_properties(node, sphere_light);
         write_erhe_properties(light, sphere_light);
+        write_instance_root_override(node, override_root, sphere_light);
 
         lightusd::Prim prim{sphere_light};
         if (light_type == Light_type::spot) {

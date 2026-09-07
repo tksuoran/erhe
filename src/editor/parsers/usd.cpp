@@ -61,6 +61,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
@@ -397,6 +398,12 @@ void resolve_usd_references(
                     : Prefab_arc_kind::reference
             );
         }
+        // The overrides the referencing layer authored over the arcs
+        // (doc/usd-compatibility-plan.md X2), once every arc's content is
+        // under the carrier: an entry names the item at its relative path
+        // below the first arc that has one. A USD instance is not sealed, so
+        // this needs no help from the attach.
+        erhe::scene::apply_instance_overrides(*carrier.get(), entry.overrides);
     }
 }
 

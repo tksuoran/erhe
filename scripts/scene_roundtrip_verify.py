@@ -1710,6 +1710,90 @@ def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
     return first_save
 
 
+def usd_instance_item_state(scene_name, carrier_name):
+    """The items of the instance under `carrier_name`, by their path below the
+    carrier: what each one holds locally, whether it is active, and where it
+    sits. Paths are built from parent_id, because two instances of the same
+    target file hold items of the same names."""
+    nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+    by_id = {node["id"]: node for node in nodes}
+
+    def path_of(node):
+        names = []
+        current = node
+        while current is not None:
+            names.append(current.get("name"))
+            current = by_id.get(current.get("parent_id"))
+        return "/".join(reversed(names))
+
+    state = {}
+    carrier_path = None
+    for node in nodes:
+        if node.get("name") == carrier_name:
+            carrier_path = path_of(node)
+            break
+    if carrier_path is None:
+        return state
+    # Bridged properties (the name, the flags, the TRS) always read as local:
+    # only the stored values an `over` can carry say whether the file authored
+    # an override.
+    carried = {"visible", "purpose", "active", "shadow_cast", "lightmapped"}
+    for node in nodes:
+        path = path_of(node)
+        if not path.startswith(carrier_path + "/"):
+            continue
+        relative = path[len(carrier_path) + 1:]
+        properties = call("get_item_properties", {"item_id": node["id"]}).get("properties", [])
+        state[relative] = {
+            "active":   node.get("active"),
+            "position": node.get("position"),
+            "local":    sorted(p["name"] for p in properties
+                               if (p.get("source") == "local") and (p.get("name") in carried)),
+        }
+    return state
+
+
+def usd_references_leg(S):
+    """A reference with sparse overrides (doc/usd-compatibility-plan.md X2):
+    each `over` below the referencing prim reloads as the local values of one
+    instance item - a value, a transform and the `active` metadatum - and a
+    save writes them back, so a reopened file holds the same set."""
+    scene_name = "references_override"
+    if not usd_open_scene(S, USD_DATA_DIR / "references_override.usda", scene_name):
+        return
+
+    before = usd_instance_item_state(scene_name, "Carrier")
+    arm   = before.get("Widget/arm", {})
+    plate = before.get("Widget/arm/plate", {})
+    check(S, "references_override: the over on 'arm' authored a local value",
+          arm.get("local") == ["visible"], str(arm))
+    check(S, "references_override: 'arm' carries the override transform",
+          arm.get("position") == [1.0, 2.0, 3.0], str(arm))
+    check(S, "references_override: the nested over deactivates 'plate'",
+          plate.get("active") is False, str(plate))
+    check(S, "references_override: the nested over authored its erhe value",
+          "shadow_cast" in plate.get("local", []), str(plate))
+    # A `def` below a referencing prim adds structure to a reference, which is
+    # out of scope (plan section 5): it must not arrive as an override.
+    def_state = usd_instance_item_state(scene_name, "DefCarrier")
+    check(S, "references_override: the def below a carrier authored nothing",
+          all(not entry["local"] and entry["active"] for entry in def_state.values()),
+          str(def_state))
+
+    saved = USD_SAVE_DIR / "usd_roundtrip_references_override.usda"
+    if not usd_save_scene(S, scene_name, saved):
+        return
+    usd_close_scene(S, scene_name)
+
+    reloaded_name = saved.stem
+    if not usd_open_scene(S, saved, reloaded_name):
+        return
+    after = usd_instance_item_state(reloaded_name, "Carrier")
+    check(S, "references_override: the overrides survive save and reload", after == before,
+          f"{after} != {before}")
+    usd_close_scene(S, reloaded_name)
+
+
 def usd_resource_placement_leg(S):
     """A resource is a prim of the scene tree and may sit under any prim
     (doc/usd-compatibility-plan.md C5, U4); in USD the tree is the file, so a
@@ -1803,6 +1887,7 @@ def section_usd_round_trip(usdchecker_arg):
     # name: where a material sits is what the placement leg checks.
     usd_round_trip_leg(S, "looks.usda", "looks", edits=[], extra_keys=[])
     usd_resource_placement_leg(S)
+    usd_references_leg(S)
 
     usdchecker = find_usdchecker(usdchecker_arg)
     if usdchecker is None:

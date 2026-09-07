@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-namespace erhe { class Item_base; }
+namespace erhe { class Hierarchy; class Item_base; }
 
 namespace erhe::gltf {
 
@@ -53,6 +53,16 @@ void apply_persistent_item_flags(erhe::Item_base& item, uint64_t listed_bits);
 // The object is written even when empty: its presence marks a file whose
 // visible / shadow_cast / lightmapped come from properties, not flags.
 [[nodiscard]] auto item_local_properties_to_json(const erhe::Item_base& item) -> std::string;
+
+// The sparse overrides the prefab instance under `carrier` holds
+// (doc/usd-compatibility-plan.md X2, doc/gltf_extensions/ERHE_node.md), as
+// the ERHE_node "overrides" array: one object per item that holds any, with
+// its M1 path below the arc's target clone, its local values in the same
+// name -> D16 text form "properties" uses, and its local transform as 16
+// floats when it differs from the template counterpart's. The empty string
+// when the instance holds none, so the member is written only where there is
+// something to write.
+[[nodiscard]] auto instance_overrides_to_json(const erhe::Hierarchy& carrier) -> std::string;
 
 // Applies one serialized local value; false (logged) for an unknown name
 // or a value that does not parse as the property's type.

@@ -4,6 +4,7 @@
 #include "gltf_physics.hpp"
 
 #include "erhe_graphics/image_loader.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_math/aabb.hpp"
 
@@ -254,6 +255,10 @@ public:
     std::vector<Gltf_file_reference>        files;
     std::vector<Gltf_external_asset>        external_assets;
     std::vector<std::optional<std::size_t>> node_external_assets;
+    // The sparse overrides a carrier node's ERHE_node extension holds, by
+    // node index (doc/usd-compatibility-plan.md X2). The parse records them;
+    // the caller applies them when it attaches the external asset's content.
+    std::map<std::size_t, std::vector<erhe::scene::Instance_override>> node_instance_overrides;
 
     // Captured ERHE_* extension payloads (see Gltf_raw_extensions). The
     // per-object vectors parallel the object vectors above;

@@ -1,0 +1,20 @@
+#usda 1.0
+(
+    defaultPrim = "Widget"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Widget"
+{
+    def Xform "arm"
+    {
+        def Mesh "plate"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        }
+    }
+}

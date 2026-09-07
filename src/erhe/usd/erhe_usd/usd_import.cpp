@@ -32,6 +32,7 @@
 #include "core/prim.hh"
 #include "core/prim-metas.hh"
 #include "core/prim-spec.hh"
+#include "prim-reconstruct.hh"
 #include "layer.hh"
 #include "stage.hh"
 #include "usdGeom.hh"
@@ -2106,42 +2107,189 @@ private:
         if (references.empty()) {
             return false;
         }
-        warn_about_uncarried_overrides(usd_node.abs_path);
         m_result.data.references.push_back(
             Usd_prim_references{
                 .item       = item,
                 .stage_path = usd_node.abs_path,
-                .references = std::move(references)
+                .references = std::move(references),
+                .overrides  = read_instance_overrides(usd_node.abs_path)
             }
         );
         return true;
     }
 
-    // The referencing layer may hold its own opinions over the prims a
-    // reference contributed - an `over` (or a `def`) below the referencing
-    // prim. Those are sparse overrides, which X2 carries; until then they are
-    // dropped, so say so once per prim naming what was authored. LightUSD does
-    // not report which layer an opinion on a composed prim came from, so the
-    // root layer's own prim specs are what is asked: a child spec authored
-    // there under a referencing prim is exactly such an override.
-    void warn_about_uncarried_overrides(const std::string& absolute_path)
+    // The opinions the referencing layer authors over the prims a reference
+    // contributed (doc/usd-compatibility-plan.md X2): an `over` prim below
+    // the referencing prim is the sparse override of one instance item, at
+    // the path it has below the carrier. LightUSD does not report which layer
+    // an opinion on a composed prim came from, so the root layer's own prim
+    // specs are what is asked; a `def` below a referencing prim adds structure
+    // to a reference, which is out of scope (plan section 5), so it is named
+    // in a warning and dropped.
+    [[nodiscard]] auto read_instance_overrides(const std::string& absolute_path) -> std::vector<erhe::scene::Instance_override>
     {
+        std::vector<erhe::scene::Instance_override> overrides;
         const lightusd::PrimSpec* spec = find_root_layer_primspec(absolute_path);
-        if ((spec == nullptr) || spec->children().empty()) {
+        if (spec == nullptr) {
+            return overrides;
+        }
+        read_override_children(absolute_path, *spec, std::string{}, overrides);
+        return overrides;
+    }
+
+    void read_override_children(
+        const std::string&                           absolute_path,
+        const lightusd::PrimSpec&                    spec,
+        const std::string&                           relative_path,
+        std::vector<erhe::scene::Instance_override>& overrides
+    )
+    {
+        std::string defined_names;
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            if (child.specifier() != lightusd::Specifier::Over) {
+                if (!defined_names.empty()) {
+                    defined_names += ", ";
+                }
+                defined_names += child.name();
+                continue;
+            }
+            const std::string child_path = relative_path.empty()
+                ? child.name()
+                : (relative_path + "/" + child.name());
+            erhe::scene::Instance_override entry{};
+            entry.relative_path = child_path;
+            read_override_spec(absolute_path, child, entry);
+            if (!entry.values.empty() || entry.transform_overridden) {
+                overrides.push_back(std::move(entry));
+            }
+            read_override_children(absolute_path, child, child_path, overrides);
+        }
+        if (!defined_names.empty()) {
+            log_usd->warn(
+                "USD prim '{}': the referencing layer defines prims over the reference ({}) - a reference protects its structure, so they are dropped",
+                absolute_path,
+                defined_names
+            );
+        }
+    }
+
+    // One `over` prim spec as the override of one instance item: the
+    // `erhe:Owner:name` custom attributes, `visibility` and `purpose`, the
+    // `active` metadatum and the authored xformOps. A prim spec is what the
+    // layer authored, so every property it carries is an authored opinion -
+    // no `authored()` test is needed here.
+    void read_override_spec(
+        const std::string&              absolute_path,
+        const lightusd::PrimSpec&       spec,
+        erhe::scene::Instance_override& entry
+    )
+    {
+        static constexpr std::string_view prefix{"erhe:"};
+        for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
+            const std::string& name = property.first;
+            if (!property.second.is_attribute()) {
+                continue;
+            }
+            if (name.compare(0, prefix.size(), prefix) == 0) {
+                std::string       qualified_name = name.substr(prefix.size());
+                const std::size_t separator      = qualified_name.find(':');
+                if (separator != std::string::npos) {
+                    qualified_name[separator] = '.';
+                }
+                entry.values.push_back(
+                    erhe::scene::Instance_override_value{
+                        .name = std::move(qualified_name),
+                        .text = attribute_text(property.second.get_attribute())
+                    }
+                );
+                continue;
+            }
+            if (name == "visibility") {
+                const std::string text = attribute_text(property.second.get_attribute());
+                entry.values.push_back(
+                    erhe::scene::Instance_override_value{.name = "visible", .text = (text == "invisible") ? "false" : "true"}
+                );
+                continue;
+            }
+            if (name == "purpose") {
+                entry.values.push_back(
+                    erhe::scene::Instance_override_value{
+                        .name = "purpose",
+                        .text = to_erhe_purpose_text(attribute_text(property.second.get_attribute()))
+                    }
+                );
+                continue;
+            }
+        }
+        if (spec.metas().has_active()) {
+            entry.values.push_back(
+                erhe::scene::Instance_override_value{.name = "active", .text = spec.metas().get_active() ? "true" : "false"}
+            );
+        }
+        read_override_xform_ops(absolute_path, spec, entry);
+    }
+
+    // The authored xformOps of an `over`. A prim spec holds them as the
+    // `xformOp:*` attributes and the `xformOpOrder` they were authored as, so
+    // LightUSD's own reconstruction is what turns them into ops; from there
+    // the M8 reader is the same one a typed prim goes through.
+    void read_override_xform_ops(
+        const std::string&              absolute_path,
+        const lightusd::PrimSpec&       spec,
+        erhe::scene::Instance_override& entry
+    )
+    {
+        if (spec.props().find("xformOpOrder") == spec.props().end()) {
             return;
         }
-        std::string names;
-        for (const lightusd::PrimSpec& child : spec->children()) {
-            if (!names.empty()) {
-                names += ", ";
-            }
-            names += child.name();
+        std::map<std::string, lightusd::Property> properties = spec.props();
+        std::set<std::string>                     table;
+        std::vector<lightusd::XformOp>            usd_ops;
+        std::string                               error;
+        if (!lightusd::prim::ReconstructXformOpsFromProperties(spec.specifier(), table, properties, &usd_ops, &error)) {
+            log_usd->warn("USD prim '{}': the override at '{}' has unreadable xformOps: {}", absolute_path, entry.relative_path, error);
+            return;
         }
-        log_usd->warn(
-            "USD prim '{}': the referencing layer authors opinions over the reference ({}) - sparse overrides are not carried yet",
-            absolute_path,
-            names
-        );
+        erhe::scene::Xform_op_stack stack{};
+        for (const lightusd::XformOp& usd_op : usd_ops) {
+            if (usd_op.op_type == lightusd::XformOp::OpType::ResetXformStack) {
+                stack.reset_xform_stack = true;
+                continue;
+            }
+            erhe::scene::Xform_op op{};
+            if (!read_xform_op(usd_op, op)) {
+                log_usd->warn(
+                    "USD prim '{}': the override at '{}' has an xformOp of value type '{}' with no erhe counterpart - the transform is dropped",
+                    absolute_path,
+                    entry.relative_path,
+                    usd_op.get_value_type_name()
+                );
+                return;
+            }
+            stack.ops.push_back(std::move(op));
+        }
+        entry.transform_overridden = true;
+        entry.transform            = glm::mat4{stack.compose()};
+        entry.xform_op_stack       = std::move(stack);
+    }
+
+    // A USDA attribute value in erhe's property text form (D16), the way an
+    // `erhe:` custom attribute of a composed prim is read.
+    [[nodiscard]] static auto attribute_text(const lightusd::Attribute& attribute) -> std::string
+    {
+        const std::string                literal    = lightusd::value::pprint_value(attribute.get_var().value_raw());
+        const std::optional<std::string> asset_path = usd_asset_literal_path(literal);
+        return asset_path.has_value() ? asset_path.value() : usd_literal_to_property_text(literal);
+    }
+
+    // The USD `purpose` token as the label erhe's Purpose enumeration parses
+    // (doc/usd-compatibility-plan.md M3): the same vocabulary, capitalized.
+    [[nodiscard]] static auto to_erhe_purpose_text(const std::string& token) -> std::string
+    {
+        if (token == "render") { return "Render"; }
+        if (token == "proxy" ) { return "Proxy";  }
+        if (token == "guide" ) { return "Guide";  }
+        return "Default";
     }
 
     // The root layer's prim spec at the given path, or null. The layer is read
