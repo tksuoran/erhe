@@ -400,18 +400,23 @@ later step of this plan takes its next fix from that list.
 whole set and regenerates the table, so the survey re-runs after each
 fix.
 
-The first run (146 entries, no crash, 30 work as they are) puts these
-gaps at the top of the list, in the order the fixes are taken: a scene
-that authors no light renders black (139 entries; usdview lights with a
-camera light, and `UsdLuxDomeLight` is not imported), reference and
-payload arcs on a prim that carries no transform are dropped (44), the
-`UsdGeom` primitive schemas `Cube`, `Sphere`, `Cone`, `Cylinder`,
-`Capsule` and `PointInstancer` produce no mesh (28), and eight
-appearance gaps the
-repository's own renders showed (normal-map bias and scale,
-`UsdTransform2d`, mirrored texture coordinates, `UsdPreviewSurface`
-opacity, roughness, `UsdUVTexture` color, a texture inside a `.usdz`).
 The survey re-runs after each fix and the document is regenerated.
+What holds: an unlit scene is lit by a per-viewport headlight the way
+usdview's camera light lights it, a `DomeLight` is the scene's ambient
+light, a typeless or `Scope` prim that authors arcs is an `Xform`
+carrier, the `UsdGeom` primitive schemas import as the meshes they
+describe, and a `UsdUVTexture`'s wrap, transform, scale and per-channel
+normal decode reach the material, with a texture packed in a `.usdz`
+read out of the archive. The current run (146 entries, 47 work as they
+are) puts these at the top of the list, in the order the fixes are
+taken: reference targets that resolve nowhere (a target prim absent from
+its layer, an asset path not resolved against the layer that authored
+it), subLayers not composed (a file whose content lives in a subLayer
+loads empty), `PointInstancer` not instanced, and the appearance gaps
+the repository's renders show (USD `st` sampled without the V flip,
+Radiance `.hdr` decoded nowhere, a `UsdUVTexture`'s per-channel output
+selection ignored, an unauthored `diffuseColor` white where USD's
+fallback is 0.18).
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.
