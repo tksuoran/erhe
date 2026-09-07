@@ -68,6 +68,8 @@ prompt_queue.txt::item-0=USD-plan-section-4-order{©User-reordered-2026-09-07:X2
 [OPEN]
 !scene_roundtrip_verify.py-RED-on-main{total=56-pass=50-fail=6+editor-segfault-in-prefab/reload-section;pre-M2-baseline-confirmed-by-revert;C1-requires-green;investigating-via-coder}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
+?DrawModes.usd-prefab-instantiation-logs-28x-'Item <carrier> child Teapot parent == (none)'-hierarchy-sanity-errors{pre-existing;reproduced-with-def-Xform-carriers;trigger-unknown;found-S1-F2}
+?USD-subLayers-not-composed{LightUSD-composes-nothing;Teapot.usd/DrawModes.usd-content-via-Teapot_Payload.usd-subLayers→0-meshes;candidate-S1-fix-after-F4}
 ?async-mesh-op-fails-"invalid vector subscript"-on-minimal-2-primitive-glTF-mesh{src/erhe/gltf/test/data/variants.gltf;variant-free-copy-reproduces;vertexcolor_test_grid.glb-does-not;found-X4-c3;NOT-diagnosed}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
 ?startup-log-error::"property 'mass': value rejected by validate callback"{pre-existing,unrelated-to-M1/M2}
