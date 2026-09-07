@@ -406,8 +406,8 @@ that authors no light renders black (139 entries; usdview lights with a
 camera light, and `UsdLuxDomeLight` is not imported), reference and
 payload arcs on a prim that carries no transform are dropped (44), the
 `UsdGeom` primitive schemas `Cube`, `Sphere`, `Cone`, `Cylinder`,
-`Capsule` and `PointInstancer` produce no mesh (28), a `UsdGeomCamera`
-arrives without a usable field of view, and eight appearance gaps the
+`Capsule` and `PointInstancer` produce no mesh (28), and eight
+appearance gaps the
 repository's own renders showed (normal-map bias and scale,
 `UsdTransform2d`, mirrored texture coordinates, `UsdPreviewSurface`
 opacity, roughness, `UsdUVTexture` color, a texture inside a `.usdz`).
