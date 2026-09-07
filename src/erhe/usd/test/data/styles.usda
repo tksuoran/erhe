@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Styles"
+    {
+        class "Metal"
+        {
+            custom float2 erhe:Material:roughness = (0.2, 0.2)
+            custom bool erhe:Mesh:shadow_cast = false
+            custom bool erhe:Mesh:lightmapped = true
+        }
+
+        class "Shiny" (
+            inherits = </World/Styles/Metal>
+        )
+        {
+            custom float erhe:Material:metallic = 1
+        }
+    }
+
+    def Material "Chrome" (
+        inherits = </World/Styles/Shiny>
+    )
+    {
+        token outputs:surface.connect = </World/Chrome/surface.outputs:surface>
+
+        def Shader "surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.5, 0.5, 0.5)
+            token outputs:surface
+        }
+    }
+
+    def Xform "Holder"
+    {
+        def Mesh "quad" (
+            inherits = </World/Styles/Metal>
+        )
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+            rel material:binding = </World/Chrome>
+        }
+    }
+
+    def Xform "Dangling" (
+        inherits = </World/Styles/Missing>
+    )
+    {
+    }
+}

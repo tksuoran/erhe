@@ -197,9 +197,8 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   override is - and so what the writer authors - is stated once, in
   `src/erhe/scene/erhe_scene/instance_override.hpp`. LightUSD does not report
   which layer an opinion on a composed prim came from, so the root layer is
-  re-read once (only when a referencing prim is met) and its prim specs below
-  the referencing prim are what is read: the specifier is what tells an `over`
-  from a `def`. A prim spec is what a layer authored, so every property it
+  re-read once per file and its prim specs below the referencing prim are what
+  is read: the specifier is what tells an `over` from a `def`. A prim spec is what a layer authored, so every property it
   carries is an authored opinion and no `authored()` test is needed; the
   `erhe:Owner:name` custom attributes, `visibility`, `purpose`, the `active`
   metadatum and the xformOps (through LightUSD's own
@@ -209,6 +208,36 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
 - A `def` below a referencing prim adds a prim to a reference, which a
   reference does not allow (plan section 5): it is named in one warning and
   dropped.
+
+### Class prims and inherits arcs
+
+A `class` prim defines no scene content: it holds the opinions its `inherits`
+arcs hand to the prims that name it, which is what an erhe style holds
+(`doc/style-library.md` D25). Tydra's render-scene conversion reports a class
+prim as a transform node all the same, so the reader takes the class prims off
+the root layer's own prim specs and the conversion skips their subtrees
+(doc/usd-compatibility-plan.md X3).
+
+`read_layer_composition()` walks the root layer once, before the prims are
+converted, and fills two things:
+
+- `Usd_data::classes`, one `Usd_class_prim` per `class` prim: its stage path,
+  its name, its `inherits` targets as absolute prim paths, its authored
+  opinions in the same neutral name / text form an `over` prim's are read in,
+  and the classes it holds. Every descendant of a class prim is itself a
+  class, whatever specifier it spells, so a class holding classes is a scope
+  of styles. The layer keeps its top-level prim specs in a hash map and the
+  ascii reader fills no ordering metadatum for a layer, so the top level is
+  read in name order; the children of a prim spec keep the order the layer
+  spells them in.
+- `Usd_data::prim_inherits`, one entry per non-class prim that authors
+  `inherits`: the erhe item the prim became, its stage path and the targets.
+  A material prim is one of these, so a `Material` prim can name a class too.
+
+The list-edit rule is the one the arc reader repeats, over target paths.
+`erhe::usd` creates no item for a class: it cannot name `editor::Style`, so
+the caller makes the Style items, applies the values with
+`erhe::scene::apply_property_values` and sets the styles.
 
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
@@ -265,12 +294,13 @@ because the same spelling rule decides what an item is called on a stage.
   one below it - a resource prim is shown in the UI and is not content, so
   that widening is what puts a material and the scopes down to it on the
   stage, and it leaves an empty kind scope out of the file. Today the file
-  carries materials; the other resource kinds are plan step E4.
+  carries materials and styles; the other resource kinds are plan step E4.
 - Two passes. The first decides every prim's stage path - the sanitized,
   sibling-unique name under each parent, and the `World` wrapper when the
-  scene has several top-level prims - and records where each material
-  landed; the second writes the prims, so a mesh binds its material by the
-  path the material prim actually got. `Usd_save_arguments::materials` is
+  scene has several top-level prims - and records where each material and
+  each style landed; the second writes the prims, so a mesh binds its
+  material, and a prim names its style's `class` prim, by the path that prim
+  actually got. `Usd_save_arguments::materials` is
   the caller's texture index, not a placement list: a material of that list
   which is not a prim of the tree is not written, and a material a mesh
   binds but the scene does not own has no prim, so its binding is dropped
@@ -306,6 +336,20 @@ because the same spelling rule decides what an item is called on a stage.
   then applies erhe's own sibling-unique suffix rule (M2, `<base>_<n>` from
   1). The prim name is the item name: an item whose name needed sanitizing
   comes back under the sanitized spelling.
+- Styles and inherits arcs (doc/usd-compatibility-plan.md X3). A style item is
+  written as a typeless `class` prim where it sits in the tree, and every prim
+  that has a style names that class prim in one explicit `inherits` list op -
+  the same way a mesh binds a material, by the path the prim actually got. The
+  writer recognizes a style by the class token `erhe::Typed` fixes for it
+  (`"Style"`), because `erhe::usd` depends on no editor type. A class prim
+  carries no schema, so every one of its values travels as an
+  `erhe:Owner:name` custom attribute - `is_native_usd_property` is asked with
+  the `custom_attributes` form, which answers only for `visible`, `purpose`
+  and `active` - and `visibility` / `purpose` travel as the plain token
+  attributes a typeless prim spells them with. The style property itself is
+  bridged and so never becomes an `erhe:Item_base:style` attribute; the arc is
+  the only thing written. A style whose item is not a prim of the written tree
+  - a style of another scene - is one warning and no arc.
 - Composition arcs. A prim the caller names in
   `Usd_save_arguments::references` is written as the referencing prim it is:
   its own class, name, transform and authored values, plus one explicit

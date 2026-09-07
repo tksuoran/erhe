@@ -17,6 +17,7 @@ add_executable(${_target}
     test_usd_materials.cpp
     test_usd_prims.cpp
     test_usd_references.cpp
+    test_usd_styles.cpp
     test_usd_xform_ops.cpp
 )
 

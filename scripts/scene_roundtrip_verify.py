@@ -1595,12 +1595,25 @@ def usd_snapshot(scene_name):
     # A local value is an authored value (doc/property-system.md D32): the
     # names an item authors, per item, so an edit that survived the round
     # trip is visible as such and an unauthored value stays unauthored.
+    # `styles` is the same walk's other half: which style each item names, and
+    # what each style item holds locally, so a `class` prim and its `inherits`
+    # arc (doc/usd-compatibility-plan.md X3) are diffed like any other value.
     snap["local_property_names"] = {}
+    snap["styles"] = {}
     for item in [{"name": n["name"], "id": n["id"]} for n in nodes] + [{"name": m["name"], "id": m["id"]} for m in materials]:
         properties = call("get_item_properties", {"item_id": item["id"]}).get("properties", [])
         snap["local_property_names"][item["name"]] = sorted(
             p["name"] for p in properties if p.get("source") == "local"
         )
+        style = next((p.get("value") for p in properties if p.get("name") == "style"), "")
+        snap["styles"][item["name"]] = {
+            "style":  style or "",
+            "values": sorted(
+                f"{p['name']}={p.get('value')}"
+                for p in properties
+                if (p.get("source") == "style") and ("." in p["name"])
+            ),
+        }
     return snap
 
 
@@ -1886,6 +1899,12 @@ def section_usd_round_trip(usdchecker_arg):
     # looks.usda holds its materials in two scopes, one pair of them sharing a
     # name: where a material sits is what the placement leg checks.
     usd_round_trip_leg(S, "looks.usda", "looks", edits=[], extra_keys=[])
+
+    # styles.usda holds a Scope of `class` prims, one class inheriting another,
+    # and a material, a mesh and an Xform naming them through `inherits`
+    # (doc/usd-compatibility-plan.md X3): the classes must come back as Style
+    # items where they sat, with their chain and their assignments.
+    usd_round_trip_leg(S, "styles.usda", "styles", edits=[], extra_keys=["styles"])
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 

@@ -136,6 +136,28 @@ void collect_item(
 
 } // anonymous namespace
 
+void apply_property_values(
+    erhe::Item_base&                            item,
+    const std::vector<Instance_override_value>& values,
+    const std::string_view                      owner
+)
+{
+    for (const Instance_override_value& value : values) {
+        const erhe::property::Dependency_property* property = find_override_property(item, value.name);
+        if (property == nullptr) {
+            log->warn("'{}': the value '{}' names no property of '{}'", owner, value.name, item.get_name());
+            continue;
+        }
+        const std::optional<erhe::property::Property_value> parsed =
+            erhe::property::parse_value(item, *property, value.text);
+        if (!parsed.has_value()) {
+            log->warn("'{}': the value '{}' text '{}' does not parse", owner, value.name, value.text);
+            continue;
+        }
+        item.set_value(*property, parsed.value());
+    }
+}
+
 auto collect_instance_override_items(const erhe::Hierarchy& carrier) -> std::vector<Instance_override_item>
 {
     std::vector<Instance_override_item> result;
@@ -213,20 +235,7 @@ void apply_instance_overrides(erhe::Hierarchy& carrier, const std::vector<Instan
             );
             continue;
         }
-        for (const Instance_override_value& value : entry.values) {
-            const erhe::property::Dependency_property* property = find_override_property(*target, value.name);
-            if (property == nullptr) {
-                log->warn("instance '{}': the override '{}' names no property of '{}'", carrier.get_name(), value.name, target->get_name());
-                continue;
-            }
-            const std::optional<erhe::property::Property_value> parsed =
-                erhe::property::parse_value(*target, *property, value.text);
-            if (!parsed.has_value()) {
-                log->warn("instance '{}': the override '{}' value '{}' does not parse", carrier.get_name(), value.name, value.text);
-                continue;
-            }
-            target->set_value(*property, parsed.value());
-        }
+        apply_property_values(*target, entry.values, carrier.get_name());
         if (entry.transform_overridden) {
             Xformable* xformable = dynamic_cast<Xformable*>(target);
             if (xformable == nullptr) {

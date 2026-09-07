@@ -66,6 +66,12 @@ namespace {
 // root (doc/usd_compatibility.md, stage-level constants).
 constexpr const char* c_world_prim_name = "World";
 
+// The class token erhe::Typed fixes for an editor style item
+// (doc/style-library.md D2). erhe::usd depends on no editor type, so a style
+// is recognized by its token; a style prim is written as a USD `class` prim
+// (doc/usd-compatibility-plan.md X3).
+constexpr std::string_view c_style_class_type_name{"Style"};
+
 // The focal length every exported perspective camera gets. USD is
 // physical-camera-first and erhe stores the two field-of-view angles, so one
 // of the three is free; fixing the focal length puts the angles in the
@@ -375,10 +381,29 @@ public:
 // doc/usd_compatibility.md). Every other local value travels as an `erhe:`
 // custom attribute, so a property is listed here exactly once: writing both
 // forms would author one value twice.
-[[nodiscard]] auto is_native_usd_property(const std::string_view owner, const std::string_view name) -> bool
+// Whether the prim being written carries the schema attributes a value could
+// travel in. A `Material`, `Camera` or UsdLux prim does - its own schema
+// spells `roughness`, `focalLength`, `intensity` - while a typeless prim (a
+// `class` prim of X3) has no schema at all, so every value of it travels as an
+// `erhe:Owner:name` custom attribute. `visible`, `purpose` and `active` are
+// carried natively either way: they are prim metadata and plain tokens, which
+// every prim has.
+enum class Native_property_form : unsigned int {
+    schema_attributes = 0,
+    custom_attributes = 1
+};
+
+[[nodiscard]] auto is_native_usd_property(
+    const std::string_view     owner,
+    const std::string_view     name,
+    const Native_property_form form
+) -> bool
 {
     if (owner == "Item_base") {
         return (name == "visible") || (name == "purpose") || (name == "active");
+    }
+    if (form == Native_property_form::custom_attributes) {
+        return false;
     }
     if (owner == "Material") {
         return
@@ -546,7 +571,7 @@ public:
         const bool        wrap              = (plan.size() != 1);
         const std::string default_prim_name = wrap ? std::string{c_world_prim_name} : plan.front().name;
         assign_paths(plan, wrap ? fmt::format("/{}", c_world_prim_name) : std::string{});
-        record_material_paths(plan);
+        record_resource_paths(plan);
 
         // Pass two: the prims themselves.
         lightusd::Stage             stage;
@@ -639,11 +664,15 @@ private:
     // without the serialize flag is session state, and so is an expression
     // (D14).
     template <typename T>
-    void write_erhe_properties(const erhe::property::Dependency_object& object, T& typed_prim)
+    void write_erhe_properties(
+        const erhe::property::Dependency_object& object,
+        T&                                       typed_prim,
+        const Native_property_form               form = Native_property_form::schema_attributes
+    )
     {
         const erhe::property::Owner_type object_owner_type = object.get_property_owner_type();
         object.for_each_local_value(
-            [this, &object, object_owner_type, &typed_prim](
+            [this, &object, object_owner_type, &typed_prim, form](
                 const erhe::property::Dependency_property& property,
                 const erhe::property::Property_value&      value
             ) {
@@ -655,7 +684,7 @@ private:
                     return;
                 }
                 const std::string_view owner_name = erhe::property::get_owner_type_name(property.get_owner_type());
-                if (is_native_usd_property(owner_name, property.get_name())) {
+                if (is_native_usd_property(owner_name, property.get_name(), form)) {
                     return;
                 }
                 if (object.get_expression(property).has_value()) {
@@ -1124,13 +1153,22 @@ private:
         }
     }
 
+    // A style item (doc/style-library.md D2), which is a `class` prim on the
+    // stage. erhe::usd depends on no editor type, so the class is recognized
+    // by the token erhe::Typed fixes for it - the same token the importer
+    // writes as the prim's typeName for every other class.
+    [[nodiscard]] static auto is_style_prim(const erhe::Typed& prim) -> bool
+    {
+        return prim.get_class_type_name() == c_style_class_type_name;
+    }
+
     // A resource prim a USD file carries, or a prim on the way down to one.
     // A resource is not content, so this is what widens the content filter;
     // today the file carries materials, and plan step E4 adds the other
     // kinds.
     [[nodiscard]] static auto holds_carried_resource(const erhe::Typed& prim) -> bool
     {
-        if (erhe::is<erhe::primitive::Material>(&prim)) {
+        if (erhe::is<erhe::primitive::Material>(&prim) || is_style_prim(prim)) {
             return true;
         }
         for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
@@ -1159,15 +1197,19 @@ private:
         }
     }
 
-    // Where each material of the scene ends up, so a mesh written later binds
-    // it by that path.
-    void record_material_paths(const std::vector<Plan_prim>& prims)
+    // Where each material and each style of the scene ends up, so a mesh
+    // written later binds its material by that path and a prim with a style
+    // names its class prim by that path.
+    void record_resource_paths(const std::vector<Plan_prim>& prims)
     {
         for (const Plan_prim& prim : prims) {
             if (prim.material != nullptr) {
                 m_material_paths[prim.material] = prim.path;
             }
-            record_material_paths(prim.children);
+            if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
+                m_style_paths[prim.item] = prim.path;
+            }
+            record_resource_paths(prim.children);
         }
     }
 
@@ -1193,6 +1235,7 @@ private:
         if (plan_prim.references != nullptr) {
             write_references(prim, *plan_prim.references);
         }
+        write_inherits(prim, *plan_prim.item);
 
         std::vector<lightusd::Prim> child_prims;
         write_plan_prims(plan_prim.children, child_prims);
@@ -1270,7 +1313,7 @@ private:
         model.name = override_prim.name;
         model.spec = lightusd::Specifier::Over;
         if (override_prim.item != nullptr) {
-            write_override_visibility_and_purpose(*override_prim.item, model.props);
+            write_token_visibility_and_purpose(*override_prim.item, model.props);
             write_active(*override_prim.item, model);
             write_erhe_properties(*override_prim.item, model);
             if (override_prim.transform_overridden) {
@@ -1287,10 +1330,10 @@ private:
         return prim;
     }
 
-    // `visibility` and `purpose` of an `over`: a typeless prim carries no
-    // schema attributes, so the two travel as the plain token attributes they
-    // are on the stage.
-    static void write_override_visibility_and_purpose(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
+    // `visibility` and `purpose` of a typeless prim - an `over` (X2) or a
+    // `class` (X3): such a prim carries no schema attributes, so the two
+    // travel as the plain token attributes they are on the stage.
+    static void write_token_visibility_and_purpose(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
     {
         if (is_local(item, erhe::Item_base::visible_property.get())) {
             add_token_attribute(
@@ -1364,6 +1407,34 @@ private:
         props.emplace("xformOpOrder", lightusd::Property{std::move(order_attribute), false});
     }
 
+    // The style of a prim as the `inherits` arc it is
+    // (doc/usd-compatibility-plan.md X3): one explicit list op naming the
+    // class prim's path, the way a material binding names a material prim's
+    // path. A style whose class prim is not in the written tree - a style of
+    // another scene - is one warning and no arc.
+    void write_inherits(lightusd::Prim& prim, const erhe::Item_base& item)
+    {
+        const std::shared_ptr<const erhe::property::Dependency_object>& style = item.get_style();
+        if (!style) {
+            return;
+        }
+        const std::map<const erhe::Item_base*, std::string>::const_iterator i = m_style_paths.find(
+            dynamic_cast<const erhe::Item_base*>(style.get())
+        );
+        if (i == m_style_paths.end()) {
+            add_warning(
+                fmt::format("the style of '{}' is not a prim of the written scene - the inherits arc is dropped", item.get_name())
+            );
+            return;
+        }
+        prim.metas().inherits = std::vector<std::pair<lightusd::ListEditQual, std::vector<lightusd::Path>>>{
+            std::make_pair(
+                lightusd::ListEditQual::ResetToExplicit,
+                std::vector<lightusd::Path>{lightusd::Path{i->second, ""}}
+            )
+        };
+    }
+
     // The composition arcs of a carrier prim, as the `references` and
     // `payload` list ops USD reads them back from: one unqualified (explicit)
     // op per arc kind, holding the arcs in the order the caller named them,
@@ -1413,9 +1484,29 @@ private:
     // is what the importer inverts.
     [[nodiscard]] auto write_prim(const Plan_prim& plan_prim) -> lightusd::Prim
     {
+        if (is_style_prim(*plan_prim.item)) {
+            return write_class_prim(*plan_prim.item, plan_prim.name);
+        }
         return erhe::is<erhe::Scope>(plan_prim.item)
             ? write_scope_prim(*plan_prim.item, plan_prim.name)
             : write_typed_prim(*plan_prim.item, plan_prim.name);
+    }
+
+    // A style item as the `class` prim it is (doc/usd-compatibility-plan.md
+    // X3): a typeless prim that defines nothing and holds the opinions its
+    // `inherits` arcs hand on. It carries no schema, so every value of it -
+    // `Material.roughness`, `Mesh.shadow_cast` - travels as an
+    // `erhe:Owner:name` custom attribute, and `visibility` / `purpose` as the
+    // plain token attributes a typeless prim spells them with.
+    [[nodiscard]] auto write_class_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name = prim_name;
+        model.spec = lightusd::Specifier::Class;
+        write_token_visibility_and_purpose(item, model.props);
+        write_active(item, model);
+        write_erhe_properties(item, model, Native_property_form::custom_attributes);
+        return lightusd::Prim{model};
     }
 
     [[nodiscard]] auto write_scope_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
@@ -2091,6 +2182,9 @@ private:
 
     std::map<const erhe::primitive::Material*, std::size_t>  m_material_indices;
     std::map<const erhe::primitive::Material*, std::string>  m_material_paths;
+    // Where each style item's `class` prim ended up, so a prim with a style
+    // names it by path.
+    std::map<const erhe::Item_base*, std::string>          m_style_paths;
     std::map<Texture_shader_key, std::string>                m_texture_shader_names;
     std::set<const erhe::primitive::Material*>               m_uv_reader_materials;
     std::map<std::string, std::vector<std::string>>          m_tag_members;

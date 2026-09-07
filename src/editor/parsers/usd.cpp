@@ -281,12 +281,14 @@ void append_usd_content_library_operations(
     }
 }
 
-// The node one USD prim path names, walked down from `root` by prim name.
-// Null when no such prim is in the imported tree.
-[[nodiscard]] auto find_prim_node(
-    const std::shared_ptr<erhe::scene::Node>& root,
-    const std::string&                        prim_path
-) -> std::shared_ptr<erhe::scene::Node>
+// The prim one USD prim path names, walked down from `root` by prim name.
+// Null when no such prim is in the imported tree. `root` stands for the
+// stage's pseudo-root: an item path excludes the root's own name (M1), so the
+// first path element is one of the root's children.
+[[nodiscard]] auto find_prim_hierarchy(
+    const std::shared_ptr<erhe::Hierarchy>& root,
+    const std::string&                      prim_path
+) -> std::shared_ptr<erhe::Hierarchy>
 {
     std::shared_ptr<erhe::Hierarchy> current = root;
     std::size_t                      position = 0;
@@ -312,7 +314,15 @@ void append_usd_content_library_operations(
         }
         current = next;
     }
-    return std::dynamic_pointer_cast<erhe::scene::Node>(current);
+    return current;
+}
+
+[[nodiscard]] auto find_prim_node(
+    const std::shared_ptr<erhe::scene::Node>& root,
+    const std::string&                        prim_path
+) -> std::shared_ptr<erhe::scene::Node>
+{
+    return std::dynamic_pointer_cast<erhe::scene::Node>(find_prim_hierarchy(root, prim_path));
 }
 
 // The file one arc names: the stage's own file for an internal reference, and
@@ -404,6 +414,124 @@ void resolve_usd_references(
         // below the first arc that has one. A USD instance is not sealed, so
         // this needs no help from the attach.
         erhe::scene::apply_instance_overrides(*carrier.get(), entry.overrides);
+    }
+}
+
+// The path of the prim holding the prim at `stage_path`: everything before
+// the last '/'. Empty for a top-level prim, which the stage's pseudo-root
+// holds.
+[[nodiscard]] auto parent_prim_path(const std::string& stage_path) -> std::string
+{
+    const std::size_t separator = stage_path.rfind('/');
+    return (separator == std::string::npos) ? std::string{} : stage_path.substr(0, separator);
+}
+
+// One `class` prim as the Style item it is (doc/usd-compatibility-plan.md X3),
+// at the place the class prim has, with the classes it holds as Style items
+// below it. A class prim's opinions are the style's local values, which is
+// what a style is (doc/style-library.md D25).
+void create_usd_style(
+    const erhe::usd::Usd_class_prim&                                                  class_prim,
+    const std::shared_ptr<erhe::Hierarchy>&                                           parent,
+    std::map<std::string, std::shared_ptr<Style>>&                                    out_styles,
+    std::vector<std::pair<const erhe::usd::Usd_class_prim*, std::shared_ptr<Style>>>& out_created
+)
+{
+    std::shared_ptr<Style> style = std::make_shared<Style>(class_prim.name);
+    style->set_parent(parent);
+    erhe::scene::apply_property_values(
+        *style.get(),
+        class_prim.values,
+        fmt::format("USD class {}", class_prim.stage_path)
+    );
+    out_styles.emplace(class_prim.stage_path, style);
+    out_created.emplace_back(&class_prim, style);
+    for (const erhe::usd::Usd_class_prim& child : class_prim.children) {
+        create_usd_style(child, style, out_styles, out_created);
+    }
+}
+
+// The style one prim's `inherits` arcs name: the first target that resolved to
+// a class prim. A second resolving target, a target that is a prim but not a
+// class, and a target that names no prim of the file are each one warning -
+// USD composes all of them, erhe's style layer takes one source (M7).
+void assign_usd_style(
+    erhe::Item_base&                                     item,
+    const std::string&                                   stage_path,
+    const std::vector<std::string>&                      inherits,
+    const std::map<std::string, std::shared_ptr<Style>>& styles,
+    const std::shared_ptr<erhe::Hierarchy>&              root
+)
+{
+    std::shared_ptr<Style> chosen;
+    for (const std::string& target : inherits) {
+        const std::map<std::string, std::shared_ptr<Style>>::const_iterator i = styles.find(target);
+        if (i != styles.end()) {
+            if (!chosen) {
+                chosen = i->second;
+            } else {
+                log_parsers->warn(
+                    "USD prim '{}' also inherits from '{}' - a style has one source, so only the first target is used",
+                    stage_path, target
+                );
+            }
+            continue;
+        }
+        if (find_prim_hierarchy(root, target)) {
+            log_parsers->warn("USD prim '{}' inherits from '{}', which is not a class prim - it becomes no style", stage_path, target);
+        } else {
+            log_parsers->warn("USD prim '{}' inherits from '{}', which names no prim of the file", stage_path, target);
+        }
+    }
+    if (!chosen) {
+        return;
+    }
+    if (!item.set_style(chosen)) {
+        log_parsers->warn("USD prim '{}': the style '{}' would close a style chain cycle - it is not assigned", stage_path, chosen->get_name());
+    }
+}
+
+// Every `class` prim of the file as a Style item, and every `inherits` arc as
+// a style assignment (doc/usd-compatibility-plan.md X3). The styles are
+// created before the chains are set, so a class inheriting a class the file
+// spells later resolves. This runs before the import's insert operation is
+// built, so an undo of the import takes the styles out with the tree.
+void resolve_usd_classes(
+    const erhe::usd::Usd_data&              usd_data,
+    const std::shared_ptr<erhe::Hierarchy>& root
+)
+{
+    if (usd_data.classes.empty() && usd_data.prim_inherits.empty()) {
+        return;
+    }
+    std::map<std::string, std::shared_ptr<Style>>                                    styles;
+    std::vector<std::pair<const erhe::usd::Usd_class_prim*, std::shared_ptr<Style>>> created;
+    for (const erhe::usd::Usd_class_prim& class_prim : usd_data.classes) {
+        const std::string                parent_path = parent_prim_path(class_prim.stage_path);
+        std::shared_ptr<erhe::Hierarchy> parent      = parent_path.empty()
+            ? root
+            : find_prim_hierarchy(root, parent_path);
+        if (!parent) {
+            log_parsers->warn(
+                "USD class '{}' names a holding prim the import did not make - it is placed at the top level",
+                class_prim.stage_path
+            );
+            parent = root;
+        }
+        create_usd_style(class_prim, parent, styles, created);
+    }
+
+    for (const std::pair<const erhe::usd::Usd_class_prim*, std::shared_ptr<Style>>& entry : created) {
+        if (!entry.first->inherits.empty()) {
+            assign_usd_style(*entry.second.get(), entry.first->stage_path, entry.first->inherits, styles, root);
+        }
+    }
+
+    for (const erhe::usd::Usd_prim_inherits& entry : usd_data.prim_inherits) {
+        if (!entry.item) {
+            continue;
+        }
+        assign_usd_style(*entry.item.get(), entry.stage_path, entry.inherits, styles, root);
     }
 }
 
@@ -533,6 +661,10 @@ auto make_import_usd_operation(
         std::span<const std::shared_ptr<erhe::scene::Node>>{usd_data.nodes},
         &mesh_node_items
     );
+
+    // Class prims become Style items in the tree, and every `inherits` arc a
+    // style assignment; both ride the import_root insert below.
+    resolve_usd_classes(usd_data, root_node);
 
     // Composition arcs: each referencing prim gets one Prefab_instance per
     // arc, with the arc's target cloned below it. The instances ride the
@@ -761,6 +893,10 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         std::span<const std::shared_ptr<erhe::scene::Node>>{usd_data.nodes},
         &mesh_node_items
     );
+
+    // Class prims become Style items in the tree, and every `inherits` arc a
+    // style assignment, before the prims move under the scene root.
+    resolve_usd_classes(usd_data, container_node);
 
     // Composition arcs: one Prefab_instance per arc under its carrier prim,
     // before the prims move under the scene root.

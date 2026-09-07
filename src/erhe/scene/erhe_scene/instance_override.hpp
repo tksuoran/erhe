@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace erhe {
@@ -74,6 +75,19 @@ public:
 // The same walk, with every override read out into the format-neutral value
 // form above, so it survives the items it was read from.
 [[nodiscard]] auto collect_instance_overrides(const erhe::Hierarchy& carrier) -> std::vector<Instance_override>;
+
+// Set the named values of `values` on `item`: each entry names a property the
+// way a file spells it (qualified `Owner.name`, or the bare name of a property
+// of the item's own class) and carries the D16 text form of the value. `owner`
+// names the source of the values in a warning - the instance, the class prim -
+// and a value naming no property, or one that does not parse, costs one
+// warning each. This is what both a sparse instance override and an imported
+// USD `class` prim's opinions (doc/usd-compatibility-plan.md X3) are made of.
+void apply_property_values(
+    erhe::Item_base&                            item,
+    const std::vector<Instance_override_value>& values,
+    std::string_view                            owner
+);
 
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's

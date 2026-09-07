@@ -119,6 +119,40 @@ public:
     std::vector<erhe::scene::Instance_override> overrides;
 };
 
+// One `class` prim of the root layer (doc/usd-compatibility-plan.md X3). A
+// class prim defines no scene content: it holds the opinions its `inherits`
+// arcs hand to the prims that name it, which is what an erhe style holds
+// (doc/style-library.md D25). erhe::usd records what the layer authored and
+// creates no item - the class prim becomes an editor Style item.
+class Usd_class_prim final
+{
+public:
+    std::string                                       stage_path;
+    std::string                                       name;
+    // The `inherits` targets as absolute prim paths, in the order USD
+    // composes the list-edited ops into.
+    std::vector<std::string>                          inherits;
+    // The prim's authored opinions in the neutral name / text form: the
+    // qualified `Owner.name` of an `erhe:Owner:name` custom attribute and the
+    // bare `visible`, `purpose` and `active` of the native ones.
+    std::vector<erhe::scene::Instance_override_value> values;
+    // The prims the class holds. Every descendant of a class prim is itself
+    // a class, whatever specifier it spells, so a class holding classes is a
+    // scope of styles.
+    std::vector<Usd_class_prim>                       children;
+};
+
+// The `inherits` arcs one imported prim authors (X3), and the erhe item the
+// prim became. The first target that names a class prim becomes that item's
+// style.
+class Usd_prim_inherits final
+{
+public:
+    std::shared_ptr<erhe::Item_base> item;
+    std::string                      stage_path;
+    std::vector<std::string>         inherits;
+};
+
 // Result of load_stage(). `stage` is null exactly when `error` is non-empty;
 // `warning` can be non-empty either way. erhe::usd reports failures as values
 // rather than exceptions, the way LightUSD itself does.
@@ -209,6 +243,15 @@ public:
     // name are NOT in the lists above: the caller instantiates each arc's
     // target under the carrier.
     std::vector<Usd_prim_references>                        references;
+    // The `class` prims the root layer authors, the top-level ones sorted by
+    // name and every nested one in the order the layer spells them
+    // (doc/usd-compatibility-plan.md X3). A class prim is never a prim of the
+    // lists above: Tydra's render-scene conversion never walks one, and the
+    // caller turns each into a Style item at the path the class prim has.
+    std::vector<Usd_class_prim>                             classes;
+    // The `inherits` arcs the file's prims author, one entry per prim that
+    // authors at least one, in the order the prims were visited.
+    std::vector<Usd_prim_inherits>                          prim_inherits;
 
     // Stage constants the import consumed (see load_usd): the up axis and
     // metersPerUnit are applied to the top-level nodes as a root transform,

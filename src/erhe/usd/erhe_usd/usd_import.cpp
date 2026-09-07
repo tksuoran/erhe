@@ -561,6 +561,7 @@ public:
         m_result.data.default_prim    = stage.metas().defaultPrim.str();
         read_custom_layer_data(stage);
 
+        read_layer_composition();
         convert_images();
         convert_materials();
         convert_meshes();
@@ -571,14 +572,15 @@ public:
         apply_authored_opinions();
 
         log_usd->info(
-            "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights",
+            "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights, {} classes",
             env.usd_filename,
             m_result.data.nodes.size(),
             m_result.data.meshes.size(),
             m_result.data.materials.size(),
             m_result.data.images.size(),
             m_result.data.cameras.size(),
-            m_result.data.lights.size()
+            m_result.data.lights.size(),
+            m_result.data.classes.size()
         );
     }
 
@@ -1873,6 +1875,13 @@ private:
         const glm::mat4&                        extra_transform
     )
     {
+        // A `class` prim defines nothing: it is a style, and the caller makes
+        // the Style item from the record read_layer_composition made
+        // (doc/usd-compatibility-plan.md X3). Tydra reports it as a transform
+        // node all the same, so the whole subtree is left out here.
+        if (m_class_paths.count(usd_node.abs_path) != 0) {
+            return;
+        }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
         if (is_shading_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
@@ -1918,6 +1927,7 @@ private:
                 .secondary         = node.get()
             }
         );
+        record_inherits(usd_node.abs_path, node);
 
         if (record_references(usd_node, node)) {
             return; // the prims below came from the arcs; the targets supply them
@@ -1953,6 +1963,7 @@ private:
             material->set_name(usd_node.prim_name);
         }
         material->set_parent(parent);
+        record_inherits(usd_node.abs_path, material);
     }
 
     // A prim whose class carries no transform: a `Scope`, and the `Typed`
@@ -1995,6 +2006,7 @@ private:
                 .secondary         = prim.get()
             }
         );
+        record_inherits(usd_node.abs_path, prim);
 
         if (record_references(usd_node, prim)) {
             return; // the prims below came from the arcs; the targets supply them
@@ -2184,6 +2196,19 @@ private:
         erhe::scene::Instance_override& entry
     )
     {
+        read_spec_values(spec, entry.values);
+        read_override_xform_ops(absolute_path, spec, entry);
+    }
+
+    // The authored opinions of one prim spec in the neutral name / text form:
+    // the `erhe:Owner:name` custom attributes as `Owner.name`, `visibility`
+    // and `purpose` as the erhe properties they map onto, and the `active`
+    // metadatum. Shared by the `over` prims of X2 and the `class` prims of X3.
+    static void read_spec_values(
+        const lightusd::PrimSpec&                          spec,
+        std::vector<erhe::scene::Instance_override_value>& out_values
+    )
+    {
         static constexpr std::string_view prefix{"erhe:"};
         for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
             const std::string& name = property.first;
@@ -2196,7 +2221,7 @@ private:
                 if (separator != std::string::npos) {
                     qualified_name[separator] = '.';
                 }
-                entry.values.push_back(
+                out_values.push_back(
                     erhe::scene::Instance_override_value{
                         .name = std::move(qualified_name),
                         .text = attribute_text(property.second.get_attribute())
@@ -2206,13 +2231,13 @@ private:
             }
             if (name == "visibility") {
                 const std::string text = attribute_text(property.second.get_attribute());
-                entry.values.push_back(
+                out_values.push_back(
                     erhe::scene::Instance_override_value{.name = "visible", .text = (text == "invisible") ? "false" : "true"}
                 );
                 continue;
             }
             if (name == "purpose") {
-                entry.values.push_back(
+                out_values.push_back(
                     erhe::scene::Instance_override_value{
                         .name = "purpose",
                         .text = to_erhe_purpose_text(attribute_text(property.second.get_attribute()))
@@ -2222,11 +2247,10 @@ private:
             }
         }
         if (spec.metas().has_active()) {
-            entry.values.push_back(
+            out_values.push_back(
                 erhe::scene::Instance_override_value{.name = "active", .text = spec.metas().get_active() ? "true" : "false"}
             );
         }
-        read_override_xform_ops(absolute_path, spec, entry);
     }
 
     // The authored xformOps of an `over`. A prim spec holds them as the
@@ -2292,10 +2316,11 @@ private:
         return "Default";
     }
 
-    // The root layer's prim spec at the given path, or null. The layer is read
-    // once, and only when a referencing prim is met: a file without references
-    // never pays for it.
-    [[nodiscard]] auto find_root_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
+    // The root layer, read once. A composed prim does not say which layer an
+    // opinion came from and Tydra's render-scene conversion never walks a
+    // `class` prim, so the layer's own prim specs are what the reader asks for
+    // the `over` prims of X2 and the `class` prims and `inherits` arcs of X3.
+    [[nodiscard]] auto ensure_root_layer() -> bool
     {
         if (!m_root_layer_read) {
             m_root_layer_read = true;
@@ -2309,13 +2334,19 @@ private:
             );
             if (!m_root_layer_ok) {
                 log_usd->info(
-                    "USD '{}': the root layer could not be re-read for override reporting: {}",
+                    "USD '{}': the root layer could not be re-read for composition reporting: {}",
                     m_arguments.path.generic_string(),
                     error
                 );
             }
         }
-        if (!m_root_layer_ok) {
+        return m_root_layer_ok;
+    }
+
+    // The root layer's prim spec at the given path, or null.
+    [[nodiscard]] auto find_root_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
+    {
+        if (!ensure_root_layer()) {
             return nullptr;
         }
         const lightusd::PrimSpec* spec = nullptr;
@@ -2324,6 +2355,144 @@ private:
             return nullptr;
         }
         return spec;
+    }
+
+    // The `class` prims and the `inherits` arcs the root layer authors
+    // (doc/usd-compatibility-plan.md X3), read before the prims are converted
+    // so a prim's arcs are one map lookup once its item exists. The layer
+    // holds its top-level prim specs in a hash map and the ascii reader fills
+    // no ordering metadatum for a layer, so the top level is walked in name
+    // order; the children of a prim spec keep the order the layer spells.
+    void read_layer_composition()
+    {
+        ERHE_PROFILE_FUNCTION();
+        if (!ensure_root_layer()) {
+            return;
+        }
+        std::vector<std::string> root_names;
+        root_names.reserve(m_root_layer.primspecs().size());
+        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_root_layer.primspecs()) {
+            root_names.push_back(entry.first);
+        }
+        std::sort(root_names.begin(), root_names.end());
+        for (const std::string& root_name : root_names) {
+            const lightusd::PrimSpec& spec = m_root_layer.primspecs().at(root_name);
+            collect_layer_composition("/" + root_name, spec);
+        }
+    }
+
+    // One prim spec of the root layer: a `class` prim is recorded whole (its
+    // descendants are classes of their own), and every other prim contributes
+    // its `inherits` arcs and is walked for the classes below it.
+    void collect_layer_composition(const std::string& path, const lightusd::PrimSpec& spec)
+    {
+        if (spec.specifier() == lightusd::Specifier::Class) {
+            m_result.data.classes.push_back(read_class_prim(path, spec));
+            return;
+        }
+        record_spec_inherits(path, spec);
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            collect_layer_composition(path + "/" + child.name(), child);
+        }
+    }
+
+    // One `class` prim as the record the caller turns into a Style item: its
+    // path, its `inherits` targets, its authored opinions and the classes it
+    // holds. A descendant of a class prim is a class whatever specifier it
+    // spells, so the recursion does not test the specifier again.
+    [[nodiscard]] auto read_class_prim(const std::string& path, const lightusd::PrimSpec& spec) -> Usd_class_prim
+    {
+        m_class_paths.insert(path);
+        Usd_class_prim record{};
+        record.stage_path = path;
+        record.name       = spec.name();
+        read_inherit_paths(spec, record.inherits);
+        read_spec_values(spec, record.values);
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            record.children.push_back(read_class_prim(path + "/" + child.name(), child));
+        }
+        return record;
+    }
+
+    // The `inherits` arcs of one non-class prim spec, kept by path so the
+    // conversion can hand them the item the prim became.
+    void record_spec_inherits(const std::string& path, const lightusd::PrimSpec& spec)
+    {
+        std::vector<std::string> paths;
+        read_inherit_paths(spec, paths);
+        if (!paths.empty()) {
+            m_inherits_by_path.emplace(path, std::move(paths));
+        }
+    }
+
+    // The `inherits` targets a prim spec authors, in the order USD composes
+    // the list-edited ops into. The list-edit rule is the one X1's reference
+    // reader repeats, over target paths rather than arcs.
+    static void read_inherit_paths(const lightusd::PrimSpec& spec, std::vector<std::string>& out_paths)
+    {
+        if (!spec.metas().inherits.has_value()) {
+            return;
+        }
+        std::vector<std::string> resolved;
+        for (const std::pair<lightusd::ListEditQual, std::vector<lightusd::Path>>& list_op : spec.metas().inherits.value()) {
+            std::vector<std::string> items;
+            items.reserve(list_op.second.size());
+            for (const lightusd::Path& target : list_op.second) {
+                if (!target.is_valid()) {
+                    continue;
+                }
+                items.push_back(target.full_path_name());
+            }
+            switch (list_op.first) {
+                case lightusd::ListEditQual::ResetToExplicit: {
+                    resolved = std::move(items);
+                    break;
+                }
+                case lightusd::ListEditQual::Prepend: {
+                    resolved.insert(resolved.begin(), items.begin(), items.end());
+                    break;
+                }
+                case lightusd::ListEditQual::Append:
+                case lightusd::ListEditQual::Add: {
+                    resolved.insert(resolved.end(), items.begin(), items.end());
+                    break;
+                }
+                case lightusd::ListEditQual::Delete: {
+                    const std::set<std::string> deleted{items.begin(), items.end()};
+                    resolved.erase(
+                        std::remove_if(
+                            resolved.begin(),
+                            resolved.end(),
+                            [&deleted](const std::string& candidate) { return deleted.count(candidate) != 0; }
+                        ),
+                        resolved.end()
+                    );
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+        }
+        out_paths.insert(out_paths.end(), resolved.begin(), resolved.end());
+    }
+
+    // The `inherits` arcs of the prim at `absolute_path`, on the item the prim
+    // became (doc/usd-compatibility-plan.md X3). The caller resolves the
+    // targets: erhe::usd creates no Style item.
+    void record_inherits(const std::string& absolute_path, const std::shared_ptr<erhe::Item_base>& item)
+    {
+        const std::map<std::string, std::vector<std::string>>::const_iterator i = m_inherits_by_path.find(absolute_path);
+        if (i == m_inherits_by_path.end()) {
+            return;
+        }
+        m_result.data.prim_inherits.push_back(
+            Usd_prim_inherits{
+                .item       = item,
+                .stage_path = absolute_path,
+                .inherits   = i->second
+            }
+        );
     }
 
     // The Mesh prim of a `Mesh` prim of the stage; null for every other prim
@@ -2405,7 +2574,13 @@ private:
     std::map<std::string, std::size_t> m_material_by_path;
     // Authored property names per prim path, see authored_property_names.
     std::map<std::string, std::set<std::string>> m_authored_property_names;
-    // The root layer, read lazily by find_root_layer_primspec.
+    // The absolute path of every `class` prim of the root layer, nested ones
+    // included, filled by read_layer_composition: what convert_node skips.
+    std::set<std::string>                          m_class_paths;
+    // The `inherits` targets of every non-class prim spec of the root layer,
+    // by absolute path, filled by read_layer_composition.
+    std::map<std::string, std::vector<std::string>> m_inherits_by_path;
+    // The root layer, read lazily by ensure_root_layer.
     lightusd::Layer                              m_root_layer;
     bool                                         m_root_layer_read{false};
     bool                                         m_root_layer_ok  {false};
