@@ -569,7 +569,7 @@ public:
         read_custom_layer_data(stage);
 
         read_layer_composition();
-        append_variant_only_materials(env, converter, scene);
+        append_unconverted_materials(env, converter, scene);
         convert_images();
         convert_materials();
         convert_meshes();
@@ -2665,8 +2665,10 @@ private:
         // A `class` prim defines nothing: it is a style, and the caller makes
         // the Style item from the record read_layer_composition made
         // (doc/usd-compatibility-plan.md X3). Tydra reports it as a transform
-        // node all the same, so the whole subtree is left out here.
+        // node all the same, so the class prim itself is left out here - its
+        // `def` descendants are the prototypes it holds, and they are prims.
         if (m_class_paths.count(usd_node.abs_path) != 0) {
+            convert_class_prototypes(usd_node, parent, extra_transform);
             return;
         }
         // A `Brush` prim is editor state, not scene content
@@ -2712,7 +2714,7 @@ private:
             node->set_name(node_name);
         }
         node->set_source_path(m_arguments.path);
-        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        apply_prim_flags(*node.get());
         node->Hierarchy::set_parent(parent);
         apply_local_transform(*node.get(), usd_node, extra_transform, composed_transform);
         node->update_world_from_node();
@@ -2742,6 +2744,60 @@ private:
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, node, child_transform);
+        }
+    }
+
+    // The prototypes one `class` prim holds (doc/usd-compatibility-plan.md
+    // X3): every `def` descendant is an ordinary prim, converted where the
+    // class prim's own holder is - the class prim becomes a Style item, which
+    // is the caller's to make, and the caller moves the prototype under it. A
+    // `class` descendant is a class of its own and is walked for the
+    // prototypes IT holds.
+    void convert_class_prototypes(
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
+    )
+    {
+        for (const Tydra_node& usd_child : usd_node.children) {
+            if (m_class_paths.count(usd_child.abs_path) != 0) {
+                convert_class_prototypes(usd_child, parent, extra_transform);
+                continue;
+            }
+            if (m_class_prototype_paths.count(usd_child.abs_path) == 0) {
+                continue;
+            }
+            const std::size_t child_count_before = parent->get_children().size();
+            ++m_prototype_depth;
+            convert_node(usd_child, parent, extra_transform);
+            --m_prototype_depth;
+            if (parent->get_children().size() == child_count_before) {
+                continue; // the prim contributed no item of its own
+            }
+            m_result.data.class_prototypes.push_back(
+                Usd_class_prototype{
+                    .item       = parent->get_children().back(),
+                    .stage_path = usd_child.abs_path,
+                    .class_path = usd_node.abs_path
+                }
+            );
+        }
+    }
+
+    // The item flags every imported prim carries. A prototype held by a
+    // `class` prim is out of the render, the pick and the shadow filters -
+    // that is what USD's class abstraction means - so it carries no
+    // `content`; a reference that clones it puts the flag back
+    // (doc/usd-compatibility-plan.md X3). The content a prim carries (a mesh,
+    // a camera, a light) is built by an earlier pass that gave it the flag,
+    // so a prototype prim has it taken away here rather than never given.
+    void apply_prim_flags(erhe::Item_base& item) const
+    {
+        item.enable_flag_bits(erhe::Item_flags::show_in_ui);
+        if (m_prototype_depth > 0) {
+            item.disable_flag_bits(erhe::Item_flags::content);
+        } else {
+            item.enable_flag_bits(erhe::Item_flags::content);
         }
     }
 
@@ -2793,7 +2849,7 @@ private:
             ? std::static_pointer_cast<erhe::Typed>(std::make_shared<erhe::Scope>(prim_name))
             : std::make_shared<erhe::Typed>(prim_name, type_name);
         prim->set_source_path(m_arguments.path);
-        prim->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        apply_prim_flags(*prim.get());
         prim->set_parent(parent);
         m_result.data.prims.push_back(prim);
 
@@ -3211,8 +3267,10 @@ private:
 
     // One `class` prim as the record the caller turns into a Style item: its
     // path, its `inherits` targets, its authored opinions and the classes it
-    // holds. A descendant of a class prim is a class whatever specifier it
-    // spells, so the recursion does not test the specifier again.
+    // holds. A `class` descendant is a class of its own; a `def` descendant is
+    // a prototype - a prim the class holds abstract
+    // (doc/usd-compatibility-plan.md X3) - and is converted as an ordinary
+    // prim with `Item_flags::content` clear.
     [[nodiscard]] auto read_class_prim(const std::string& path, const lightusd::PrimSpec& spec) -> Usd_class_prim
     {
         m_class_paths.insert(path);
@@ -3222,7 +3280,12 @@ private:
         read_inherit_paths(spec, record.inherits);
         read_spec_values(spec, record.values);
         for (const lightusd::PrimSpec& child : spec.children()) {
-            record.children.push_back(read_class_prim(path + "/" + child.name(), child));
+            const std::string child_path = path + "/" + child.name();
+            if (child.specifier() == lightusd::Specifier::Class) {
+                record.children.push_back(read_class_prim(child_path, child));
+            } else {
+                m_class_prototype_paths.insert(child_path);
+            }
         }
         return record;
     }
@@ -3350,9 +3413,13 @@ private:
     // Variant sets (doc/usd-compatibility-plan.md X4)
     // ---------------------------------------------------------------------
 
-    // A material only a variant binds is bound by no prim of the composed
-    // stage, so Tydra's render-scene conversion never converts it: switching
-    // the selection would find nothing to bind. The extra `Material` prims
+    // Tydra converts the materials the composed stage's meshes bind and no
+    // others, so a `Material` prim only a variant binds - or one no mesh of
+    // this file binds at all, which is every material of a file whose meshes
+    // live in another layer - would reach the tree as nothing at all
+    // ("has no converted material"). Every `Material` prim of the stage is
+    // wanted: a material is a prim of the erhe tree (U4), and a reference
+    // into this file is what gives it its meshes. The extra `Material` prims
     // are converted one by one and appended to the render scene, which is
     // what makes them ordinary materials for everything below.
     //
@@ -3361,30 +3428,48 @@ private:
     // entries are appended and the ids shifted by what was already there. The
     // six texture slots erhe reads are the ones shifted; the render material's
     // other slots are never read.
-    void append_variant_only_materials(
+    // Every `Material` prim of one stage subtree, by absolute path.
+    static void collect_material_prim_paths(
+        const lightusd::Prim&  prim,
+        const std::string&     absolute_path,
+        std::set<std::string>& out_paths
+    )
+    {
+        if (prim.as<lightusd::Material>() != nullptr) {
+            out_paths.insert(absolute_path);
+        }
+        for (const lightusd::Prim& child : prim.children()) {
+            collect_material_prim_paths(child, absolute_path + "/" + std::string{child.element_name()}, out_paths);
+        }
+    }
+
+    void append_unconverted_materials(
         const lightusd::tydra::RenderSceneConverterEnv& env,
         lightusd::tydra::RenderSceneConverter&          converter,
         Tydra_scene&                                    scene
     )
     {
-        std::set<std::string> bound_material_paths;
+        std::set<std::string> wanted_material_paths;
         for (const std::pair<const std::string, std::vector<Usd_variant_set>>& entry : m_variant_sets_by_path) {
             for (const Usd_variant_set& set : entry.second) {
                 for (const Usd_variant& variant : set.variants) {
                     for (const Usd_variant_binding& binding : variant.bindings) {
-                        bound_material_paths.insert(binding.material_path);
+                        wanted_material_paths.insert(binding.material_path);
                     }
                 }
             }
         }
-        if (bound_material_paths.empty()) {
+        for (const lightusd::Prim& prim : m_stage->root_prims()) {
+            collect_material_prim_paths(prim, "/" + std::string{prim.element_name()}, wanted_material_paths);
+        }
+        if (wanted_material_paths.empty()) {
             return;
         }
         std::set<std::string> converted_material_paths;
         for (const Tydra_material& material : scene.materials) {
             converted_material_paths.insert(material.abs_path);
         }
-        for (const std::string& material_path : bound_material_paths) {
+        for (const std::string& material_path : wanted_material_paths) {
             if (converted_material_paths.count(material_path) != 0) {
                 continue;
             }
@@ -3402,7 +3487,7 @@ private:
             if (!converter.ConvertMaterial(env, lightusd::Path{material_path, ""}, *usd_material, &render_material)) {
                 add_warning(
                     fmt::format(
-                        "USD material '{}' is bound by a variant only and could not be converted: {}",
+                        "USD material '{}' is bound by no mesh of this file and could not be converted: {}",
                         material_path,
                         converter.GetError()
                     )
@@ -3813,6 +3898,11 @@ private:
     // The absolute path of every `class` prim of the root layer, nested ones
     // included, filled by read_layer_composition: what convert_node skips.
     std::set<std::string>                          m_class_paths;
+    // The `def` descendants of the class prims: the prototypes they hold (X3).
+    std::set<std::string>                          m_class_prototype_paths;
+    // Non-zero while a prototype subtree is converted, which is what clears
+    // `Item_flags::content` on the prims it makes.
+    int                                            m_prototype_depth{0};
     // The absolute path of every `Brush` prim of the root layer, filled by
     // read_layer_composition: what convert_node skips
     // (doc/usd-compatibility-plan.md E4a).

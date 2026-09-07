@@ -81,6 +81,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include <fmt/format.h>
 
 #include <chrono>
+#include <set>
 #include <span>
 #include <vector>
 
@@ -329,12 +330,40 @@ void append_usd_content_library_operations(
     return current;
 }
 
-[[nodiscard]] auto find_prim_node(
-    const std::shared_ptr<erhe::scene::Node>& root,
-    const std::string&                        prim_path
-) -> std::shared_ptr<erhe::scene::Node>
+// The prims one USD file contributed, by raw pointer: what convert_node and
+// convert_prim made, and nothing else.
+[[nodiscard]] auto collect_file_prims(const erhe::usd::Usd_data& usd_data) -> std::set<const erhe::Item_base*>
 {
-    return std::dynamic_pointer_cast<erhe::scene::Node>(find_prim_hierarchy(root, prim_path));
+    std::set<const erhe::Item_base*> prims;
+    for (const std::shared_ptr<erhe::scene::Node>& node : usd_data.nodes) {
+        if (node) {
+            prims.insert(node.get());
+        }
+    }
+    for (const std::shared_ptr<erhe::Typed>& prim : usd_data.prims) {
+        if (prim) {
+            prims.insert(prim.get());
+        }
+    }
+    return prims;
+}
+
+// Give every prim of one subtree the content flag back. A resource prim of
+// the same subtree - a material, a texture - is not in `prims` and keeps the
+// flags it had (doc/usd-compatibility-plan.md U4).
+void enable_prim_content(
+    const std::shared_ptr<erhe::Hierarchy>& item,
+    const std::set<const erhe::Item_base*>& prims
+)
+{
+    if (prims.count(item.get()) != 0) {
+        item->enable_flag_bits(erhe::Item_flags::content);
+    }
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        if (child) {
+            enable_prim_content(child, prims);
+        }
+    }
 }
 
 // The file one arc names: the stage's own file for an internal reference, and
@@ -354,6 +383,17 @@ void append_usd_content_library_operations(
     return source_path.parent_path() / referenced;
 }
 
+// A MaterialX document, which a `references` arc can name and erhe's USD
+// reader cannot open: it is an XML shading document, not a USD layer.
+[[nodiscard]] auto is_materialx_document(const std::filesystem::path& path) -> bool
+{
+    std::string extension = erhe::file::to_string(path.extension());
+    for (char& c : extension) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return extension == ".mtlx";
+}
+
 // True when `stage_path` is `prefix` or a prim below it. An empty prefix
 // accepts every prim.
 [[nodiscard]] auto is_under_prim_path(const std::string& stage_path, const std::string& prefix) -> bool
@@ -367,6 +407,33 @@ void append_usd_content_library_operations(
     return (stage_path.size() > prefix.size()) &&
            (stage_path.compare(0, prefix.size(), prefix) == 0) &&
            (stage_path[prefix.size()] == '/');
+}
+
+// The prim one path names when a `class` prim holds it
+// (doc/usd-compatibility-plan.md X3). A prototype is converted where the class
+// prim's holder is, so it is not below the tree's root at the path it has on
+// the stage until the caller has moved it under the Style item the class prim
+// becomes - which the prefab template load does not do. Null when no class
+// prim holds the path.
+[[nodiscard]] auto find_class_prototype(
+    const erhe::usd::Usd_data& usd_data,
+    const std::string&         prim_path
+) -> std::shared_ptr<erhe::Hierarchy>
+{
+    for (const erhe::usd::Usd_class_prototype& prototype : usd_data.class_prototypes) {
+        if (!is_under_prim_path(prim_path, prototype.stage_path)) {
+            continue;
+        }
+        const std::shared_ptr<erhe::Hierarchy> item = std::dynamic_pointer_cast<erhe::Hierarchy>(prototype.item);
+        if (!item) {
+            continue;
+        }
+        if (prim_path == prototype.stage_path) {
+            return item;
+        }
+        return find_prim_hierarchy(item, prim_path.substr(prototype.stage_path.size()));
+    }
+    return {};
 }
 
 // Instantiate every composition arc the file's prims author
@@ -407,6 +474,14 @@ void resolve_usd_references(
         }
         for (const erhe::usd::Usd_reference& reference : entry.references) {
             const std::filesystem::path target_path = resolve_reference_asset_path(source_path, reference.asset_path);
+            if (is_materialx_document(target_path)) {
+                log_parsers->warn(
+                    "USD prim '{}' references '{}': a MaterialX document is not a USD layer - the arc is not instantiated",
+                    entry.stage_path,
+                    erhe::file::to_string(target_path)
+                );
+                continue;
+            }
             const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(target_path, reference.prim_path);
             if (!prefab) {
                 log_parsers->error(
@@ -452,6 +527,7 @@ void resolve_usd_references(
 void create_usd_style(
     const erhe::usd::Usd_class_prim&                                                  class_prim,
     const std::shared_ptr<erhe::Hierarchy>&                                           parent,
+    const std::vector<erhe::usd::Usd_class_prototype>&                                prototypes,
     std::map<std::string, std::shared_ptr<Style>>&                                    out_styles,
     std::vector<std::pair<const erhe::usd::Usd_class_prim*, std::shared_ptr<Style>>>& out_created
 )
@@ -465,8 +541,30 @@ void create_usd_style(
     );
     out_styles.emplace(class_prim.stage_path, style);
     out_created.emplace_back(&class_prim, style);
+    // The prototypes the class holds (X3) were converted where the class
+    // prim's own holder is; they belong under the Style item, which is what
+    // gives them the path the stage spells.
+    for (const erhe::usd::Usd_class_prototype& prototype : prototypes) {
+        if (prototype.class_path != class_prim.stage_path) {
+            continue;
+        }
+        const std::shared_ptr<erhe::Hierarchy> item = std::dynamic_pointer_cast<erhe::Hierarchy>(prototype.item);
+        if (!item) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (node) {
+            // set_parent preserves the world transform by rewriting the local
+            // one; a prototype keeps the transform it was authored with.
+            const erhe::scene::Trs_transform parent_from_node = node->parent_from_node_transform();
+            node->set_parent(style);
+            node->set_parent_from_node(parent_from_node);
+        } else {
+            item->Hierarchy::set_parent(style);
+        }
+    }
     for (const erhe::usd::Usd_class_prim& child : class_prim.children) {
-        create_usd_style(child, style, out_styles, out_created);
+        create_usd_style(child, style, prototypes, out_styles, out_created);
     }
 }
 
@@ -520,7 +618,7 @@ void resolve_usd_classes(
     const std::shared_ptr<erhe::Hierarchy>& root
 )
 {
-    if (usd_data.classes.empty() && usd_data.prim_inherits.empty()) {
+    if (usd_data.classes.empty() && usd_data.prim_inherits.empty() && usd_data.class_prototypes.empty()) {
         return;
     }
     std::map<std::string, std::shared_ptr<Style>>                                    styles;
@@ -537,7 +635,7 @@ void resolve_usd_classes(
             );
             parent = root;
         }
-        create_usd_style(class_prim, parent, styles, created);
+        create_usd_style(class_prim, parent, usd_data.class_prototypes, styles, created);
     }
 
     for (const std::pair<const erhe::usd::Usd_class_prim*, std::shared_ptr<Style>>& entry : created) {
@@ -975,7 +1073,14 @@ auto load_usd_prefab_template(
         return usd_template;
     }
 
-    const std::shared_ptr<erhe::scene::Node> target = find_prim_node(container_node, root_prim_path);
+    // Any prim is a reference target (doc/usd-compatibility-plan.md S1): the
+    // target may be an `Xformable`, a `Scope`, the `Typed` prim a typeless
+    // `def` or an unrecognized `typeName` becomes, or a prototype a `class`
+    // prim holds (X3).
+    const std::shared_ptr<erhe::Hierarchy> prototype = find_class_prototype(usd_data, root_prim_path);
+    const std::shared_ptr<erhe::Hierarchy> target    = prototype
+        ? prototype
+        : find_prim_hierarchy(container_node, root_prim_path);
     if (!target) {
         container_node->set_parent({});
         usd_template.error = fmt::format("prim '{}' is not in '{}'", root_prim_path, path.generic_string());
@@ -988,11 +1093,24 @@ auto load_usd_prefab_template(
     std::shared_ptr<erhe::scene::Node> template_root = std::make_shared<erhe::scene::Xform>(target->get_name());
     template_root->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     template_root->set_parent(temp_scene.get_root_node());
-    // set_parent preserves the world transform by rewriting the local one; a
-    // template keeps the local transform it was authored with.
-    const erhe::scene::Trs_transform parent_from_node = target->parent_from_node_transform();
-    target->set_parent(template_root);
-    target->set_parent_from_node(parent_from_node);
+    const std::shared_ptr<erhe::scene::Node> target_node = std::dynamic_pointer_cast<erhe::scene::Node>(target);
+    if (target_node) {
+        // set_parent preserves the world transform by rewriting the local
+        // one; a template keeps the local transform it was authored with.
+        const erhe::scene::Trs_transform parent_from_node = target_node->parent_from_node_transform();
+        target_node->set_parent(template_root);
+        target_node->set_parent_from_node(parent_from_node);
+    } else {
+        // A prim that carries no transform: what reached it composes through
+        // it to its children, so the wrapper takes it as it is.
+        target->Hierarchy::set_parent(template_root);
+    }
+    // A prototype held abstract by a `class` prim (X3) is content-less where
+    // it sits; a reference materializes it, so the template it becomes is
+    // content.
+    if (prototype) {
+        enable_prim_content(target, collect_file_prims(usd_data));
+    }
 
     template_root->set_parent({});
     container_node->set_parent({});

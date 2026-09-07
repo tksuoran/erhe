@@ -34,7 +34,15 @@ erhe-authored glTF scene persistence entry points
 
 - **glTF material variants** (`gltf.cpp`, `gltf_extensions_export.cpp`) -- `fill_gltf_variant_table()` turns the asset's `KHR_materials_variants` list into ONE entry of the target scene's `Variant_table`, named `c_gltf_variant_set_name` (`materials`, `parsers/gltf.hpp`), because a glTF asset holds one asset-wide variant list (doc/usd-compatibility-plan.md X4). The carrying prim is the import root on the import path - the prim an undo of the import removes, which takes the set out of the table with it - and the scene's own root prim on the open-scene path, where the file's content sits in the root's place. Bindings name a primitive by index (`<mesh path>#<primitive index>`, `scene/variant_table.hpp`), since glTF gives a primitive no name of its own. glTF authors no selection, so the set starts with none selected and the primitives keep the materials the file gave them until the user picks; the open-scene path then calls `Scene_root::apply_variant_selections()` for the `ERHE_scene` entry. `find_exported_variant_set()` + `collect_gltf_material_variants()` are the save half (doc/scene_serialization.md step 5b), and the `ERHE_scene` settings are serialized from a copy whose `variant_selections` holds the written set's entry under the empty (root) prim path - the path the reloaded scene carries that set on.
 
-- **`load_usd_prefab_template()`** (`usd.{hpp,cpp}`) -- The USD branch of `Prefab_library::load_template`: loads the file, creates its textures, finalizes its meshes, instantiates the arcs authored inside the template subtree (recursively, through the same library, so a cycle is caught there) and returns the prim the arc named wrapped in an unhosted template root.
+- **`load_usd_prefab_template()`** (`usd.{hpp,cpp}`) -- The USD branch of `Prefab_library::load_template`: loads the file, creates its textures, finalizes its meshes, instantiates the arcs authored inside the template subtree (recursively, through the same library, so a cycle is caught there) and returns the prim the arc named wrapped in an unhosted template root. The
+target is any prim (doc/usd-compatibility-plan.md S1): an `Xformable`, a
+`Scope`, the `Typed` prim a typeless `def` or an unrecognized `typeName`
+becomes, or a prototype a `class` prim holds (X3). The wrapper keeps the
+target's authored local transform when the target is an `Xformable` and simply
+holds it otherwise - a prim without a transform composes what reaches it
+through to its children. A prototype target is content-less where it sits, so
+the template it becomes gets `Item_flags::content` back on every prim of the
+file it holds.
 
 - **`import_geogram()`** -- Imports Geogram mesh files.
 

@@ -49,23 +49,25 @@ namespace {
 // primitives, and collect the mesh-carrying nodes when requested (for the
 // raytrace kickoff operation).
 void retarget_meshes(
-    const std::shared_ptr<erhe::scene::Node>&      node,
+    const std::shared_ptr<erhe::Hierarchy>&        item,
     const erhe::scene::Layer_id                    content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items
 )
 {
-    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(item.get());
     if (mesh) {
         mesh->layer_id = content_layer_id;
         mesh->update_rt_primitives();
         if (out_mesh_node_items != nullptr) {
-            out_mesh_node_items->push_back(node);
+            out_mesh_node_items->push_back(item);
         }
     }
-    for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
-        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
-        if (child_node) {
-            retarget_meshes(child_node, content_layer_id, out_mesh_node_items);
+    // Any prim parents any (doc/usd-compatibility-plan.md U4), so the walk is
+    // over the Hierarchy: a `Scope` or a typeless prim in the middle of a USD
+    // template holds meshes below it.
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        if (child) {
+            retarget_meshes(child, content_layer_id, out_mesh_node_items);
         }
     }
 }
@@ -77,20 +79,22 @@ void retarget_meshes(
 // a whole is a normal scene edit. lock_viewport_selection additionally
 // keeps box-select and other direct-pick paths off the interior; click
 // selection resolves to the instance root (get_outermost_prefab_instance_node).
-void seal_instance_subtree(const std::shared_ptr<erhe::scene::Node>& node)
+void seal_instance_subtree(const std::shared_ptr<erhe::Hierarchy>& item)
 {
     constexpr uint64_t seal_flags =
         erhe::Item_flags::lock_edit               |
         erhe::Item_flags::lock_viewport_selection |
         erhe::Item_flags::lock_viewport_transform;
-    node->enable_flag_bits(seal_flags);
-    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
-        attachment->enable_flag_bits(seal_flags);
+    item->enable_flag_bits(seal_flags);
+    const std::shared_ptr<erhe::scene::Xformable> prim = std::dynamic_pointer_cast<erhe::scene::Xformable>(item);
+    if (prim) {
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : prim->get_attachments()) {
+            attachment->enable_flag_bits(seal_flags);
+        }
     }
-    for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
-        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
-        if (child_node) {
-            seal_instance_subtree(child_node);
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        if (child) {
+            seal_instance_subtree(child);
         }
     }
 }
@@ -834,19 +838,20 @@ void attach_prefab_instance(
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 
-    std::vector<std::shared_ptr<erhe::scene::Node>> clone_nodes;
+    // A template child is any prim (doc/usd-compatibility-plan.md U4, S1): a
+    // USD arc names a `Scope` or a typeless `def` as readily as an `Xform`.
+    std::vector<std::shared_ptr<erhe::Hierarchy>> clone_prims;
     for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
-        const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
-        if (!child_node) {
+        if (!child) {
             continue;
         }
-        if ((child_node->get_flag_bits() & erhe::Item_flags::exclude_from_prefab) != 0) {
+        if ((child->get_flag_bits() & erhe::Item_flags::exclude_from_prefab) != 0) {
             continue; // editor-generated helper, never part of prefab content
         }
-        const std::shared_ptr<erhe::Item_base> clone = child_node->clone();
-        const std::shared_ptr<erhe::scene::Node> clone_node = std::dynamic_pointer_cast<erhe::scene::Node>(clone);
-        if (!clone_node) {
-            log_parsers->warn("Prefab '{}': template child '{}' could not be cloned", prefab->name, child_node->get_name());
+        const std::shared_ptr<erhe::Item_base> clone = child->clone();
+        const std::shared_ptr<erhe::Hierarchy> clone_prim = std::dynamic_pointer_cast<erhe::Hierarchy>(clone);
+        if (!clone_prim) {
+            log_parsers->warn("Prefab '{}': template child '{}' could not be cloned", prefab->name, child->get_name());
             continue;
         }
         // Retarget meshes BEFORE parenting: node may already be hosted in a
@@ -855,18 +860,25 @@ void attach_prefab_instance(
         // With the template's placeholder layer id 0 they would silently
         // land in the brush layer (Mesh_layer_id::brush == 0) and never
         // render as content.
-        retarget_meshes(clone_node, content_layer_id, out_mesh_node_items);
-        // Node::set_parent preserves the world transform by rewriting the
-        // local transform; a prefab clone must instead keep its local
-        // (template) transform under its new parent, so restore it after
-        // parenting.
-        const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
-        clone_node->set_parent(node);
-        clone_node->set_parent_from_node(parent_from_node);
+        retarget_meshes(clone_prim, content_layer_id, out_mesh_node_items);
+        const std::shared_ptr<erhe::scene::Node> clone_node = std::dynamic_pointer_cast<erhe::scene::Node>(clone_prim);
+        if (clone_node) {
+            // Node::set_parent preserves the world transform by rewriting the
+            // local transform; a prefab clone must instead keep its local
+            // (template) transform under its new parent, so restore it after
+            // parenting.
+            const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
+            clone_node->set_parent(node);
+            clone_node->set_parent_from_node(parent_from_node);
+        } else {
+            // A prim that carries no transform: what reaches it composes
+            // through it to its children.
+            clone_prim->Hierarchy::set_parent(node);
+        }
         // The counterpart link comes BEFORE any seal: set_reference and
         // clear_value are both refused on a sealed object (D24).
-        link_instance_to_template(clone_node, child_node);
-        clone_nodes.push_back(clone_node);
+        link_instance_to_template(clone_prim, child);
+        clone_prims.push_back(clone_prim);
     }
 
     // The instance's own overrides (doc/usd-compatibility-plan.md X2). They
@@ -877,8 +889,8 @@ void attach_prefab_instance(
         erhe::scene::apply_instance_overrides(*node.get(), *overrides);
     }
     if (is_sealed_prefab_instance(*prefab_instance)) {
-        for (const std::shared_ptr<erhe::scene::Node>& clone_node : clone_nodes) {
-            seal_instance_subtree(clone_node);
+        for (const std::shared_ptr<erhe::Hierarchy>& clone_prim : clone_prims) {
+            seal_instance_subtree(clone_prim);
         }
     }
 }

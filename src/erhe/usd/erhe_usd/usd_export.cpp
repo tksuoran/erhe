@@ -1180,6 +1180,16 @@ private:
     // Nodes
     // -------------------------------------------------------------------
 
+    // Where the children being planned sit: below an ordinary prim of the
+    // tree, or below a `class` prim, whose children are the prototypes it
+    // holds abstract (doc/usd-compatibility-plan.md X3). A prototype carries
+    // no `content` - that is what keeps it out of the render - and is written
+    // back as the ordinary `def` prim it is.
+    enum class Prim_holder : unsigned int {
+        tree        = 0,
+        class_prim  = 1
+    };
+
     // Pass one over the children of `parent`. The filter is the glTF
     // exporter's - an import_root container is unwrapped with its transform
     // composed in, a render proxy is derived data rebuilt by its owner, and
@@ -1193,7 +1203,8 @@ private:
         const erhe::Hierarchy&  parent,
         const glm::mat4&        pre_transform,
         Name_scope&             names,
-        std::vector<Plan_prim>& out_prims
+        std::vector<Plan_prim>& out_prims,
+        const Prim_holder       holder = Prim_holder::tree
     )
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
@@ -1215,7 +1226,11 @@ private:
             if ((flags & erhe::Item_flags::render_proxy) != 0) {
                 continue;
             }
-            if (((flags & erhe::Item_flags::content) == 0) && !holds_carried_resource(*child_prim)) {
+            if (
+                ((flags & erhe::Item_flags::content) == 0) &&
+                (holder != Prim_holder::class_prim)        &&
+                !holds_carried_resource(*child_prim)
+            ) {
                 continue;
             }
             Plan_prim plan_prim{};
@@ -1237,7 +1252,8 @@ private:
                     *child_prim,
                     (child_node != nullptr) ? glm::mat4{1.0f} : pre_transform,
                     child_names,
-                    plan_prim.children
+                    plan_prim.children,
+                    is_style_prim(*child_prim) ? Prim_holder::class_prim : Prim_holder::tree
                 );
             }
             out_prims.push_back(std::move(plan_prim));

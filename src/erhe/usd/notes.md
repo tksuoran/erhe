@@ -230,6 +230,16 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   that spelling is the round trip's fixed point from the first save on. A
   carrier of a type that carries no transform - a `Material`, a `Cube` - stays
   the prim it is and its arcs are dropped, with one warning naming the type.
+- The TARGET of an arc is any prim: an `Xformable`, a `Scope`, the `Typed`
+  prim a typeless `def` or an unrecognized `typeName` becomes, or a prototype
+  a `class` prim holds. A target that carries no transform composes what
+  reached it through to its children, which is what the editor's template
+  wrapper reproduces (`src/editor/parsers/notes.md`).
+- A root-level `over` with `def` descendants and no `def` of its own - the
+  shape a file uses when its own prims reference it - is a prim of the tree
+  like any other: LightUSD reconstructs it whatever its specifier, and it
+  imports as the typeless `Typed` prim it is, so a reference to it resolves.
+  The writer spells it `def`, the round trip's fixed point.
 - A payload is reported with kind `payload` and is otherwise a reference: erhe
   reads every arc when the file is read and has no deferred loading (plan
   section 5). `references` arcs come before `payload` arcs, the arc order of
@@ -268,8 +278,19 @@ A `class` prim defines no scene content: it holds the opinions its `inherits`
 arcs hand to the prims that name it, which is what an erhe style holds
 (`doc/style-library.md` D25). Tydra's render-scene conversion reports a class
 prim as a transform node all the same, so the reader takes the class prims off
-the root layer's own prim specs and the conversion skips their subtrees
-(doc/usd-compatibility-plan.md X3).
+the root layer's own prim specs and the conversion skips the class prims
+themselves (doc/usd-compatibility-plan.md X3).
+
+A class prim's `def` descendants are prototypes: prims the class holds
+abstract, which a reference names and clones. Each is converted as an ordinary
+prim with `Item_flags::content` clear - that is what USD's class abstraction
+means, so the render, pick and shadow filters leave it out - and is reported in
+`Usd_data::class_prototypes` with its stage path and the path of the class prim
+holding it. The prototype is parented where the class prim's own holder is,
+because `erhe::usd` cannot make the Style item; the caller moves it under the
+Style, which is what gives it the path the stage spells. A reference into a
+prototype clones it, and the clone carries `content` again. A `class`
+descendant of a class prim is a class of its own.
 
 `read_layer_composition()` walks the root layer once, before the prims are
 converted, and fills two things:
@@ -278,8 +299,8 @@ converted, and fills two things:
   its name, its `inherits` targets as absolute prim paths, its authored
   opinions in the same neutral name / text form an `over` prim's are read in,
   and the classes it holds. Every descendant of a class prim is itself a
-  class, whatever specifier it spells, so a class holding classes is a scope
-  of styles. The layer keeps its top-level prim specs in a hash map and the
+  class, so a class holding classes is a scope of styles; a `def` descendant
+  is a prototype rather than a class. The layer keeps its top-level prim specs in a hash map and the
   ascii reader fills no ordering metadatum for a layer, so the top level is
   read in name order; the children of a prim spec keep the order the layer
   spells them in.
@@ -336,10 +357,15 @@ subtree variants are the later slice.
 The reader then binds the selected variant's materials itself: a binding at a
 `Mesh` prim's path covers the mesh's primitives that the same variant does not
 bind by subset, and a binding at a `GeomSubset` path covers that subset's
-primitive. A material only a variant binds is bound by no prim of the composed
-stage, so Tydra never converts it; those `Material` prims are converted one by
-one with `RenderSceneConverter::ConvertMaterial` and appended to the render
-scene before the materials are converted. The converter moves its own texture
+primitive. Tydra converts the materials the composed stage's meshes bind and no others,
+so a `Material` prim only a variant binds - or one no mesh of the file binds at
+all, which is every material of a file whose meshes live in another layer -
+would reach the tree as nothing. Every `Material` prim of the stage is wanted:
+a material is a prim of the erhe tree (U4) and a reference into the file is
+what gives it its meshes, so the `Material` prims the render-scene conversion
+left out are converted one by one with
+`RenderSceneConverter::ConvertMaterial` and appended to the render scene
+before the materials are converted. The converter moves its own texture
 and image lists into the render scene, so an extra conversion fills them again
 from index zero: the new entries are appended and the ids shifted by what was
 already there, for the six UsdPreviewSurface texture slots erhe reads.

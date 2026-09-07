@@ -147,6 +147,22 @@ public:
     std::vector<Usd_class_prim>                       children;
 };
 
+// One prototype held abstract by a `class` prim (doc/usd-compatibility-plan.md
+// X3): a `def` descendant of a class prim. USD's class abstraction is what
+// keeps such a prim out of the render, so it is imported as an ordinary prim
+// with `Item_flags::content` clear, and a reference that names it clones it
+// into the referencing prim as content. The item is parented where the class
+// prim's own holder is - the class prim itself becomes a Style item, which is
+// the caller's to make, and the caller moves the prototype under it.
+class Usd_class_prototype final
+{
+public:
+    std::shared_ptr<erhe::Item_base> item;
+    std::string                      stage_path;
+    // The absolute stage path of the `class` prim holding this prototype.
+    std::string                      class_path;
+};
+
 // The `inherits` arcs one imported prim authors (X3), and the erhe item the
 // prim became. The first target that names a class prim becomes that item's
 // style.
@@ -348,6 +364,10 @@ public:
     // lists above: Tydra's render-scene conversion never walks one, and the
     // caller turns each into a Style item at the path the class prim has.
     std::vector<Usd_class_prim>                             classes;
+    // The `def` descendants of the file's class prims, in the order they were
+    // converted (doc/usd-compatibility-plan.md X3). Each is an ordinary prim
+    // of the lists above with `Item_flags::content` clear.
+    std::vector<Usd_class_prototype>                        class_prototypes;
     // The `inherits` arcs the file's prims author, one entry per prim that
     // authors at least one, in the order the prims were visited.
     std::vector<Usd_prim_inherits>                          prim_inherits;
