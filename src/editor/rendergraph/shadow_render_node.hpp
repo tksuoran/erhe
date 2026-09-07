@@ -2,12 +2,17 @@
 
 #include "erhe_rendergraph/rendergraph_node.hpp"
 #include "erhe_scene_renderer/light_buffer.hpp"
+#include "erhe_scene_renderer/light_set.hpp"
 
+#include <array>
 #include <memory>
 #include <span>
 #include <string>
 
+#include <glm/glm.hpp>
+
 namespace erhe::graphics       { class Command_buffer; class Device; class Gpu_timer; }
+namespace erhe::scene          { class Camera; class Light; }
 namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
@@ -110,6 +115,21 @@ private:
     // they change, so a run reveals which camera the shadow fit is fitted to
     // (the headset drives m_root_camera as perspective_xr from the combined
     // stereo eye frustum) and its fov, without per-frame log spam.
+    // Headlight for a scene whose light layer is empty: one white directional
+    // light along the view camera's axis, the way usdview lights a stage that
+    // authors none (doc/usd-compatibility-plan.md S1). It is not a scene item
+    // - no hierarchy row, no save, no undo - and it lives here, per render
+    // node, because its direction is the direction of THIS view's camera.
+    // Its own resolved set is used in place of the scene's for that frame;
+    // the scene's set stays untouched, so a scene shown in two viewports gets
+    // one headlight per viewport.
+    [[nodiscard]] auto resolve_headlight(const erhe::scene::Camera& camera) -> erhe::scene_renderer::Light_set&;
+
+    std::shared_ptr<erhe::scene::Light>                       m_headlight;
+    std::array<std::shared_ptr<erhe::scene::Light>, 1>        m_headlight_lights;
+    erhe::scene_renderer::Light_set                           m_headlight_set;
+    glm::mat4                                                 m_headlight_world_from_node{1.0f};
+
     const void* m_dbg_last_camera{nullptr};
     int         m_dbg_last_viewport_width {-1};
     int         m_dbg_last_viewport_height{-1};

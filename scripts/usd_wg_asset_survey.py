@@ -657,15 +657,6 @@ def gap_name(message: str) -> str:
     return text[:80]
 
 
-# The gap a file with no light of its own has. The survey adds one headlight
-# through frame_scene so the capture shows the geometry, and records the gap
-# from the light count the file itself produced.
-NO_LIGHT_GAP = (
-    "a USD scene that authors no lights renders black: erhe supplies no default light "
-    "(usdview supplies a camera light)"
-)
-
-
 # The prim types whose presence in a file means the editor should have
 # produced a mesh: UsdGeomMesh plus the implicit surfaces and the instancer.
 GEOMETRY_PRIM_TYPES = {
@@ -718,8 +709,6 @@ def provisional_verdict(record: dict) -> str:
     # Only now can an empty frame mean the render path: the meshes are there.
     if stats.get("available") and stats.get("flat"):
         return "works, gap: renders nothing"
-    if (record["meshes"] > 0) and (record["lights"] == 0):
-        return "works, gap: file authors no light"
     if errors:
         return f"works, gap: {gap_name(errors[0]['message'])}"
     if warnings:
@@ -761,10 +750,6 @@ def gather_gaps(records: list) -> list:
             add("no mesh loaded: " + no_mesh_cause(record), "failure", asset, "")
         if record["loaded"] and (record["meshes"] > 0) and stats.get("available") and stats.get("flat"):
             add("renders nothing: the framed viewport is empty although meshes loaded", "failure", asset, "")
-        # Independent of the two above: the file's own light count, which the
-        # survey's headlight does not change.
-        if record["loaded"] and (record["lights"] == 0):
-            add(NO_LIGHT_GAP, "failure", asset, "")
         # What the capture, compared against the repository's own reference
         # render, shows the editor getting wrong: a cause no log line states.
         if record.get("eye_gap"):
@@ -852,10 +837,7 @@ REMEDY = [
     (re.compile(r"primvar as un-indexed|no authored value"),
      "read an indexed primvar whose indices attribute is declared but carries no value"),
     (re.compile(r"light type has no erhe counterpart"),
-     "add the USD light schemas erhe has no counterpart for (DomeLight above all)"),
-    (re.compile(r"authors no lights renders black|authors no light"),
-     "light a scene whose file authors no light, the way usdview's camera light does; "
-     "erhe adds none, so such a scene renders as a black silhouette"),
+     "add the USD light schemas erhe has no counterpart for (the area lights import as point lights)"),
     (re.compile(r"^no mesh loaded"),
      "see the cause named in the parentheses; the file authors geometry that produced no mesh"),
     (re.compile(r"renders nothing"),
@@ -867,8 +849,8 @@ REMEDY = [
     # The causes the side-by-side comparison against the repository's own
     # reference renders names, each read back to the code that owns it.
     (re.compile(r"DomeLight is not imported"),
-     "import UsdLuxDomeLight; the light-type switch in usd_import.cpp maps distant, sphere, disk and rect "
-     "and skips the rest, so a stage lit only by a dome gets no light at all"),
+     "sample a DomeLight's inputs:texture:file; the dome's constant color reaches the scene as ambient "
+     "light, but erhe has no environment map, so a textured sky contributes one flat color"),
     (re.compile(r"normal map's bias and scale are ignored"),
      "apply a UsdUVTexture's inputs:bias and inputs:scale to the sampled normal (src/erhe/usd/notes.md, "
      "\"Not yet imported\"); without them a 0..1 normal map is never mapped back to -1..1"),
@@ -934,9 +916,10 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("Each capture is taken through `frame_scene`, which binds the opened scene")
     out.append("into a viewport, gives it a camera when the file authors none and places")
     out.append("that camera on the union world AABB of the scene's meshes. A scene whose")
-    out.append("file authors no light is lit by one directional headlight the survey adds,")
-    out.append("so the capture shows the geometry; the missing light is still recorded as a")
-    out.append("gap, and the `Lights` column is what the file itself authored.")
+    out.append("file authors no light is lit by the editor's own headlight - one white")
+    out.append("directional light along the viewport camera's axis, the way usdview lights")
+    out.append("a stage that authors none - so the capture shows the geometry. That light")
+    out.append("is no scene item, and the `Lights` column is what the file itself authored.")
     out.append("")
     out.append("The `Reference` column names the renders the repository ships beside each")
     out.append("asset (`screenshots/` first, then `thumbnails/`), repo-relative to")
@@ -1129,6 +1112,8 @@ def main() -> int:
     parser.add_argument("--self-test-file", default="src/erhe/usd/test/data/cube.usda", help="scene the self-test opens")
     parser.add_argument("--max-per-folder", type=int, default=4, help="cap on entries taken from one folder (0 = no cap)")
     parser.add_argument("--limit", type=int, default=0, help="survey only the first N entries")
+    parser.add_argument("--only", action="append", default=[],
+                        help="survey only entries whose repo-relative path contains this substring (repeatable)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
     parser.add_argument("--refresh-cameras", action="store_true",
@@ -1189,6 +1174,8 @@ def main() -> int:
         return 2
 
     entries = collect_entries(root, args.max_per_folder)
+    if args.only:
+        entries = [e for e in entries if any(fragment in e["path"] for fragment in args.only)]
     if args.limit > 0:
         entries = entries[:args.limit]
     if args.list_entries:

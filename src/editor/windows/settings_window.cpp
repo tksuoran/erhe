@@ -199,6 +199,10 @@ void Settings_window::imgui()
         ImGui::TextUnformatted(graphics.current_graphics_preset.name.c_str());
     });
     
+    add_entry("Headlight When Unlit", [&graphics]() {
+        ImGui::Checkbox("##", &graphics.headlight_when_unlit);
+    });
+
     auto& graphics_presets = graphics.graphics_presets;
     if (!graphics_presets.empty()) {
         m_graphics_preset_names.resize(graphics_presets.size());

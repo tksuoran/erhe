@@ -64,6 +64,12 @@ public:
     // Light UBO capacity (Renderer_config::max_light_count): bounds the sum of
     // a preset's per light type light counts.
     int                                max_light_count{32};
+    // A scene whose light layer is empty is rendered with one synthetic
+    // directional light along each viewport camera's axis, the way usdview
+    // lights a stage that authors no light
+    // (Shadow_render_node::resolve_headlight). Off renders such a scene
+    // black, which is what its file asks for.
+    bool                               headlight_when_unlit{true};
 
 private:
     // Set by Settings window preset edits; cleared when the preset file is

@@ -6752,5 +6752,18 @@
       "required": [],
       "type": "object"
     }
+  },
+  {
+    "description": "Set app-wide graphics settings that are not part of a graphics preset. 'headlight_when_unlit' (default true) lights a scene whose light layer is empty with one white directional light along each viewport camera's axis, the way usdview lights a stage that authors no light; false renders such a scene black. Returns the values in effect after the call.",
+    "inputSchema": {
+      "properties": {
+        "headlight_when_unlit": {
+          "description": "Light a scene that holds no light with a per-viewport camera headlight",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "name": "set_graphics_settings"
   }
 ]

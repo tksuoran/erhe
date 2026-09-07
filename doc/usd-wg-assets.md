@@ -24,9 +24,10 @@ pointer into the last run's output, not a committed file.
 Each capture is taken through `frame_scene`, which binds the opened scene
 into a viewport, gives it a camera when the file authors none and places
 that camera on the union world AABB of the scene's meshes. A scene whose
-file authors no light is lit by one directional headlight the survey adds,
-so the capture shows the geometry; the missing light is still recorded as a
-gap, and the `Lights` column is what the file itself authored.
+file authors no light is lit by the editor's own headlight - one white
+directional light along the viewport camera's axis, the way usdview lights
+a stage that authors none - so the capture shows the geometry. That light
+is no scene item, and the `Lights` column is what the file itself authored.
 
 The `Reference` column names the renders the repository ships beside each
 asset (`screenshots/` first, then `thumbnails/`), repo-relative to
@@ -49,10 +50,10 @@ log and the empty-viewport test decided.
 | --- | --- |
 | full_assets/CarbonFrameBike/CarbonFrameBike.usdz | bike geometry and its materials match the reference (whose render is an exploded view, so the framing differs) |
 | full_assets/ElephantWithMonochord/SoC-ElephantWithMonochord.usdc | the model is lit and textured as the reference render shows it |
-| full_assets/McUsd/McUsd.usda | the diorama is far darker than the reference: the file's DomeLight is the only light and the importer skips it |
-| full_assets/McUsd/McUsd.usdz | same as McUsd.usda: dome-lit scene renders far darker than the reference |
-| full_assets/McUsd/McUsd_10cm.usda | same as McUsd.usda at 10 cm scale: dome-lit scene renders far darker than the reference |
-| full_assets/McUsd/McUsd_10cm.usdz | same as McUsd.usda at 10 cm scale: dome-lit scene renders far darker than the reference |
+| full_assets/McUsd/McUsd.usda | the diorama is lit and reads like the reference; the file's DomeLight now supplies the scene's ambient light, but its `inputs:texture:file` is not sampled, so the sky's directional variation is one flat color |
+| full_assets/McUsd/McUsd.usdz | same as McUsd.usda: dome-lit, with the dome's texture reduced to its constant color |
+| full_assets/McUsd/McUsd_10cm.usda | same as McUsd.usda at 10 cm scale: dome-lit, with the dome's texture reduced to its constant color |
+| full_assets/McUsd/McUsd_10cm.usdz | same as McUsd.usda at 10 cm scale: dome-lit, with the dome's texture reduced to its constant color |
 | full_assets/OpenChessSet/chess_set.usda | empty where the reference shows the whole set: the PointInstancer prototypes produce no mesh |
 | full_assets/StandardShaderBall/standard_shader_ball_scene.usda | empty where the reference shows the shader ball: the variant that carries the geometry is not resolved |
 | full_assets/Teapot/Teapot.usd | empty where the reference shows the teapots: the referenced payload prim is not found |
@@ -243,7 +244,7 @@ assets it affects and what the editor would have to support to clear it.
 | 5 | error | Prefab '*' produced no nodes - not caching | instantiate a reference whose target prim path is absent from the target layer (Prefab_library::get_or_load, X1) |
 | 5 | error | Prefab '*': prim '*' is not in '*' | instantiate a reference whose target prim path is absent from the target layer (Prefab_library::get_or_load, X1) |
 | 5 | warning | TODO: Prim type Sphere | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |
-| 4 | appearance | UsdLuxDomeLight is not imported, so a dome-lit scene renders far darker than its reference render | import UsdLuxDomeLight; the light-type switch in usd_import.cpp maps distant, sphere, disk and rect and skips the rest, so a stage lit only by a dome gets no light at all |
+| 4 | appearance | a UsdLuxDomeLight's inputs:texture:file is not sampled, so a dome-lit scene is lit by one flat color | sample the dome's environment map; the dome's constant radiance already reaches the scene as ambient light (src/erhe/usd/notes.md), but erhe has no environment map |
 | 3 | warning | <path>'*'t authored; producing an unshaded material. (set material_config.strict_material_check=true to make this an error.) | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 3 | warning | PointInstancer <<path>> prototype <<path>> resolved to no RenderMesh; its instances are skipped. | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |
 | 3 | warning | TODO: Prim type PointInstancer | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |

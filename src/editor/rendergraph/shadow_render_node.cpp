@@ -22,6 +22,7 @@
 #include "erhe_graphics/texture.hpp"
 #include "erhe_scene_renderer/shadow_renderer.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/scene.hpp"
@@ -348,6 +349,47 @@ void Shadow_render_node::reconfigure(erhe::graphics::Device& graphics_device, er
     m_light_projections = erhe::scene_renderer::Light_projections{};
 }
 
+// One white directional light along the view camera's axis, standing in for
+// the lights a scene has none of. It is not a scene item: nothing owns it but
+// this render node, so it appears in no hierarchy, no save and no undo.
+auto Shadow_render_node::resolve_headlight(const erhe::scene::Camera& camera) -> erhe::scene_renderer::Light_set&
+{
+    if (!m_headlight) {
+        m_headlight = std::make_shared<erhe::scene::Light>("Headlight");
+        m_headlight->set_light_type(erhe::scene::Light_type::directional);
+        m_headlight->set_color(glm::vec3{1.0f, 1.0f, 1.0f});
+        // The intensity the default scene's sun and fill add up to: a white
+        // Lambert surface facing the camera reaches mid-gray at the default
+        // exposure.
+        m_headlight->set_intensity(4.0f);
+        m_headlight->set_range(0.0f);
+        m_headlight->set_cast_shadow(false);
+        m_headlight_lights[0] = m_headlight;
+    }
+
+    // The light frame takes its direction from the prim's +Z, which is the
+    // axis a camera looks down the negative of - so the direction from a lit
+    // surface toward the headlight is the camera's own +Z, and the camera's
+    // world transform is the headlight's. Written only when the camera moved:
+    // this is the whole per-frame cost of an unlit scene.
+    const glm::mat4 world_from_node = camera.world_from_node();
+    if (world_from_node != m_headlight_world_from_node) {
+        m_headlight_world_from_node = world_from_node;
+        m_headlight->set_parent_from_node(world_from_node);
+        m_headlight_set.invalidate();
+    }
+
+    // One unshadowed directional slot of its own: the headlight casts no
+    // shadow, and the active preset may hand out no unshadowed directional
+    // slot at all, which would leave it unshaded.
+    const erhe::scene_renderer::Light_count_limits headlight_limits{
+        .per_type_shadow     = {0, 0, 0, 0},
+        .per_type_unshadowed = {1, 0, 0, 0}
+    };
+    m_headlight_set.resolve(m_headlight_lights, headlight_limits);
+    return m_headlight_set;
+}
+
 void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer& command_buffer)
 {
     ERHE_PROFILE_FUNCTION();
@@ -411,8 +453,19 @@ void Shadow_render_node::execute_rendergraph_node(erhe::graphics::Command_buffer
     const erhe::scene_renderer::Light_count_limits light_count_limits = (m_context.app_settings != nullptr)
         ? get_light_count_limits(m_context.app_settings->graphics.current_graphics_preset)
         : erhe::scene_renderer::Light_count_limits{};
-    erhe::scene_renderer::Light_set& light_set = scene_root->get_light_set();
-    light_set.resolve(layers.light()->lights, light_count_limits);
+
+    // A scene whose light layer is empty is lit by this view's headlight
+    // instead (see resolve_headlight): a file that authors no light renders
+    // black otherwise, where usdview lights the stage with a camera light.
+    const bool use_headlight =
+        layers.light()->lights.empty() &&
+        ((m_context.app_settings == nullptr) || m_context.app_settings->graphics.headlight_when_unlit);
+    erhe::scene_renderer::Light_set& light_set = use_headlight
+        ? resolve_headlight(*camera.get())
+        : scene_root->get_light_set();
+    if (!use_headlight) {
+        light_set.resolve(layers.light()->lights, light_count_limits);
+    }
 
     // Shadows off for this view: the preset has shadow_enable off (no shadow
     // maps allocated), or the live per-view Visual Style shadow mode does not

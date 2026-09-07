@@ -94,6 +94,24 @@ namespace editor {
 
 using namespace mcp_server_detail;
 
+auto Mcp_server::action_set_graphics_settings(const json& args) -> std::string
+{
+    if (m_context.app_settings == nullptr) {
+        return make_error_content("Editor settings are not available");
+    }
+    Graphics_settings& graphics = m_context.app_settings->graphics;
+    if (args.contains("headlight_when_unlit")) {
+        const json& value = args["headlight_when_unlit"];
+        if (!value.is_boolean()) {
+            return make_error_content("headlight_when_unlit must be a boolean");
+        }
+        graphics.headlight_when_unlit = value.get<bool>();
+    }
+    return make_json_content({
+        {"headlight_when_unlit", graphics.headlight_when_unlit}
+    }).dump();
+}
+
 auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -3048,28 +3066,9 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
         framed = true;
     }
 
-    // A scene that authors no light renders black: erhe supplies no default
-    // light, where usdview lights the stage with a camera light. Give such a
-    // scene one directional headlight along the framing camera's view
-    // direction, so the capture shows the geometry rather than a silhouette.
-    // A scene that carries any light is left as its file authored it.
-    bool light_created = false;
-    if (scene_root->layers().light()->lights.empty()) {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock{scene_root->item_host_mutex};
-        std::shared_ptr<erhe::scene::Light> light = std::make_shared<erhe::scene::Light>("MCP frame light");
-        light->set_light_type(erhe::scene::Light::Type::directional);
-        light->set_color(glm::vec3{1.0f, 1.0f, 1.0f});
-        light->set_intensity(4.0f);   // the default scene's sun + fill total
-        light->set_range(0.0f);
-        light->set_cast_shadow(false);
-        light->layer_id = scene_root->layers().light()->id;
-        light->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-        light->set_parent_from_node(
-            erhe::math::create_look_at(eye, center, glm::vec3{0.0f, 1.0f, 0.0f})
-        );
-        light->set_parent(scene_root->get_scene().get_root_node());
-        light_created = true;
-    }
+    // A scene that authors no light is lit by the viewport's own headlight
+    // (Shadow_render_node::resolve_headlight), so framing adds no light: the
+    // scene stays exactly what its file authored.
 
     // The viewport that shows the scene: the named one, else one already bound
     // to this scene, else an empty one repurposed, else a new window.
@@ -3123,7 +3122,6 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
         {"viewport",       target_window->get_title()},
         {"camera",         camera->get_name()},
         {"camera_created", camera_created},
-        {"light_created",  light_created},
         {"meshes",         mesh_count},
         {"framed",         framed},
         {"bounds_min",     json::array({bounds.min.x, bounds.min.y, bounds.min.z})},
