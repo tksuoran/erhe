@@ -233,6 +233,12 @@ public:
     // The USD color space of the source asset says whether the texels are
     // sRGB-encoded; a normal / occlusion map is raw.
     bool                  srgb{true};
+    // The image file's bytes when it is packed inside the `.usdz` the stage
+    // was loaded from; empty when the image is a loose file, which `path`
+    // then names. A packed image has no file of its own, so `path` is where
+    // the archive-relative name would sit beside the archive and nothing
+    // opens it: the bytes are the only source.
+    std::vector<std::uint8_t> bytes;
 };
 
 // The five texture slots of erhe::primitive::Material_texture_samplers, in

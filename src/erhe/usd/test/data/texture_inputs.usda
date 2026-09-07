@@ -1,0 +1,91 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "root"
+{
+    def Mesh "quad"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </root/materials/Sampled>
+    }
+
+    def Scope "materials"
+    {
+        def Material "Sampled"
+        {
+            token outputs:surface.connect = </root/materials/Sampled/surface.outputs:surface>
+
+            def Shader "uv_reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "uv_transform"
+            {
+                uniform token info:id = "UsdTransform2d"
+                float2 inputs:in.connect = </root/materials/Sampled/uv_reader.outputs:result>
+                float inputs:rotation = 90
+                float2 inputs:scale = (2, 3)
+                float2 inputs:translation = (0.25, 0.5)
+                float2 outputs:result
+            }
+
+            def Shader "base_color_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Sampled/uv_transform.outputs:result>
+                token inputs:sourceColorSpace = "sRGB"
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "mirror"
+                float4 inputs:scale = (0.5, 0.25, 0.75, 1)
+                float3 outputs:rgb
+            }
+
+            def Shader "emissive_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Sampled/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "sRGB"
+                token inputs:wrapS = "clamp"
+                token inputs:wrapT = "clamp"
+                float3 outputs:rgb
+            }
+
+            def Shader "normal_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Sampled/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "raw"
+                float4 inputs:bias = (1, -1, 0, -1)
+                float4 inputs:scale = (-2, 2, 1, 2)
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </root/materials/Sampled/base_color_texture.outputs:rgb>
+                color3f inputs:emissiveColor.connect = </root/materials/Sampled/emissive_texture.outputs:rgb>
+                normal3f inputs:normal.connect = </root/materials/Sampled/normal_texture.outputs:rgb>
+                float inputs:metallic = 0
+                float inputs:roughness = 0.6
+                token outputs:surface
+            }
+        }
+    }
+}

@@ -1170,12 +1170,68 @@ private:
         return geom_mesh->subdivisionScheme.get_value() == lightusd::GeomMesh::SubdivisionScheme::SubdivisionSchemeNone;
     }
 
+    // The archive directory of the `.usdz` the stage was loaded from. A
+    // `.usdz` is a zip of stored, uncompressed entries, and LightUSD reads
+    // only the root layer out of it when it opens the stage, so the archive
+    // is read a second time here - once per import - for the entries the
+    // materials name.
+    [[nodiscard]] auto ensure_usdz_asset() -> bool
+    {
+        if (m_usdz_read) {
+            return m_usdz_ok;
+        }
+        m_usdz_read = true;
+        const std::string filename = m_arguments.path.string();
+        if (!lightusd::IsUSDZ(filename)) {
+            return false;
+        }
+        std::string warning;
+        std::string error;
+        m_usdz_ok = lightusd::ReadUSDZAssetInfoFromFile(filename, &m_usdz_asset, &warning, &error);
+        if (!warning.empty()) {
+            log_usd->warn("USD '{}': reading the usdz archive: {}", filename, warning);
+        }
+        if (!m_usdz_ok) {
+            log_usd->warn("USD '{}': the usdz archive could not be read: {}", filename, error);
+        }
+        return m_usdz_ok;
+    }
+
+    // The bytes of one archive entry, empty when the stage is no `.usdz` or
+    // the archive holds no such entry. USD writes a packaged asset path
+    // relative to the archive root, which is the key of the archive's own
+    // directory; a leading `./` is not part of that key.
+    [[nodiscard]] auto usdz_entry_bytes(const std::string& asset_identifier) -> std::vector<std::uint8_t>
+    {
+        if (asset_identifier.empty() || !ensure_usdz_asset()) {
+            return {};
+        }
+        std::string key = asset_identifier;
+        if (key.compare(0, 2, "./") == 0) {
+            key = key.substr(2);
+        }
+        const std::map<std::string, std::pair<std::size_t, std::size_t>>::const_iterator i = m_usdz_asset.asset_map.find(key);
+        if (i == m_usdz_asset.asset_map.end()) {
+            return {};
+        }
+        const std::size_t    begin = i->second.first;
+        const std::size_t    end   = i->second.second;
+        const std::uint8_t*  base  = m_usdz_asset.is_mmaped() ? m_usdz_asset.addr : m_usdz_asset.data.data();
+        const std::size_t    size  = m_usdz_asset.is_mmaped() ? m_usdz_asset.size : m_usdz_asset.data.size();
+        if ((base == nullptr) || (end <= begin) || (end > size)) {
+            log_usd->warn("USD image '{}': the usdz entry is out of the archive's range", asset_identifier);
+            return {};
+        }
+        return std::vector<std::uint8_t>{base + begin, base + end};
+    }
+
     void convert_images()
     {
         m_result.data.images.reserve(m_scene->images.size());
         const std::filesystem::path directory = m_arguments.path.parent_path();
         for (const lightusd::tydra::TextureImage& image : m_scene->images) {
             Usd_image usd_image{};
+            usd_image.bytes = usdz_entry_bytes(image.asset_identifier);
             // The asset identifier is the authored one: LightUSD resolves an
             // asset path only when it opens the asset, and its image loaders
             // are off. A relative path is resolved here, against the stage
@@ -1213,6 +1269,116 @@ private:
             return no_image;
         }
         return image_index;
+    }
+
+    // A value that equals the property's default is not written: a local
+    // value is an authored value (doc/property-system.md D32).
+    template <typename T>
+    static void set_or_clear_value(
+        erhe::primitive::Material&         material,
+        const erhe::property::Property<T>& property,
+        const T&                           value
+    )
+    {
+        if (erhe::property::make_value(value) == material.get_default_value(property.get())) {
+            static_cast<void>(material.clear_value(property.get()));
+        } else {
+            material.set_value(property, value);
+        }
+    }
+
+    // The inputs:scale component of the channel a scalar input is connected
+    // to: UsdPreviewSurface reads one channel of the texture, and USD scales
+    // per channel.
+    [[nodiscard]] static auto connected_scale(const lightusd::tydra::UVTexture& uv_texture) -> float
+    {
+        switch (uv_texture.connectedOutputChannel) {
+            case lightusd::tydra::UVTexture::Channel::R: return uv_texture.scale[0];
+            case lightusd::tydra::UVTexture::Channel::G: return uv_texture.scale[1];
+            case lightusd::tydra::UVTexture::Channel::B: return uv_texture.scale[2];
+            case lightusd::tydra::UVTexture::Channel::A: return uv_texture.scale[3];
+            default:                                    return uv_texture.scale[0];
+        }
+    }
+
+    // The UsdUVTexture behind one UsdPreviewSurface input, or null when the
+    // input carries a plain value.
+    [[nodiscard]] auto uv_texture_of(const std::int32_t texture_id) const -> const lightusd::tydra::UVTexture*
+    {
+        if (texture_id < 0) {
+            return nullptr;
+        }
+        const std::size_t texture_index = static_cast<std::size_t>(texture_id);
+        if (texture_index >= m_scene->textures.size()) {
+            return nullptr;
+        }
+        return &m_scene->textures[texture_index];
+    }
+
+    // UsdUVTexture's four wrap modes onto the three erhe address modes. erhe
+    // has no border color, so `black` (which USD maps onto clamp-to-border
+    // with a transparent black border) becomes clamp-to-edge: the closest
+    // mode erhe has, and the one Tydra already reports for the `useMetadata`
+    // default.
+    [[nodiscard]] static auto to_address_mode(const lightusd::tydra::UVTexture::WrapMode wrap) -> erhe::graphics::Sampler_address_mode
+    {
+        switch (wrap) {
+            case lightusd::tydra::UVTexture::WrapMode::REPEAT:          return erhe::graphics::Sampler_address_mode::repeat;
+            case lightusd::tydra::UVTexture::WrapMode::MIRROR:          return erhe::graphics::Sampler_address_mode::mirrored_repeat;
+            case lightusd::tydra::UVTexture::WrapMode::CLAMP_TO_EDGE:   return erhe::graphics::Sampler_address_mode::clamp_to_edge;
+            case lightusd::tydra::UVTexture::WrapMode::CLAMP_TO_BORDER: return erhe::graphics::Sampler_address_mode::clamp_to_edge;
+            default:                                                    return erhe::graphics::Sampler_address_mode::clamp_to_edge;
+        }
+    }
+
+    // The sampling parameters of one UsdUVTexture onto the erhe material
+    // slot they belong to: the wrap modes and the UsdTransform2d. USD
+    // composes a UV as `in * scale`, then the rotation, then the
+    // translation, which is the order the erhe slot transform applies
+    // (Material_texture_sampler: `rotation_scale * uv + offset`), so the
+    // three values map across unchanged apart from the degrees USD spells
+    // the rotation in.
+    static void apply_texture_sampling(
+        erhe::primitive::Material&                 material,
+        erhe::primitive::Material_texture_sampler& slot,
+        const lightusd::tydra::UVTexture&          uv_texture
+    )
+    {
+        erhe::primitive::Material_sampler_state sampler_state = slot.sampler;
+        sampler_state.wrap_u = to_address_mode(uv_texture.wrapS);
+        sampler_state.wrap_v = to_address_mode(uv_texture.wrapT);
+        material.set_slot_sampler(slot, sampler_state);
+        if (uv_texture.has_transform2d) {
+            material.set_slot_uv_transform(
+                slot,
+                glm::radians(uv_texture.tx_rotation),
+                glm::vec2{uv_texture.tx_translation[0], uv_texture.tx_translation[1]},
+                glm::vec2{uv_texture.tx_scale[0], uv_texture.tx_scale[1]}
+            );
+        }
+    }
+
+    // A UsdUVTexture reads its texels as `texel * scale + bias`. erhe carries
+    // that decode for the normal slot only (Material::normal_texture_decode_*)
+    // and, for a color slot, folds the scale into the factor the shader
+    // multiplies the texture with. Everything else - a bias on a color slot,
+    // and a scale or bias on a slot with no factor - is one warning naming
+    // the material and the input.
+    static void warn_about_texel_transform(
+        const std::string&                material_name,
+        const char*                       input_name,
+        const lightusd::tydra::UVTexture& uv_texture,
+        const bool                        scale_is_carried
+    )
+    {
+        const bool has_bias  = (uv_texture.bias[0]  != 0.0f) || (uv_texture.bias[1]  != 0.0f) || (uv_texture.bias[2]  != 0.0f);
+        const bool has_scale = (uv_texture.scale[0] != 1.0f) || (uv_texture.scale[1] != 1.0f) || (uv_texture.scale[2] != 1.0f);
+        if (has_bias) {
+            log_usd->warn("USD material '{}': inputs:bias of the '{}' texture is not carried", material_name, input_name);
+        }
+        if (has_scale && !scale_is_carried) {
+            log_usd->warn("USD material '{}': inputs:scale of the '{}' texture is not carried", material_name, input_name);
+        }
     }
 
     void bind_texture(const std::size_t material_index, const Usd_material_texture_slot slot, const std::int32_t texture_id)
@@ -1259,22 +1425,48 @@ private:
     )
     {
         using erhe::primitive::Material;
-        if (is_authored(shader_path, "inputs:diffuseColor")) {
+        // A connected input takes its value from the texture, so the erhe
+        // factor - which the shader multiplies the sampled texel with - is
+        // the UsdUVTexture's inputs:scale (white / one when the file authors
+        // none), never the plain value the input still carries. The factor
+        // is written only when it differs from the erhe default, so a
+        // material's local set stays what the file authors (I2).
+        const lightusd::tydra::UVTexture* diffuse_texture   = uv_texture_of(shader.diffuseColor.texture_id);
+        const lightusd::tydra::UVTexture* emissive_texture  = uv_texture_of(shader.emissiveColor.texture_id);
+        const lightusd::tydra::UVTexture* metallic_texture  = uv_texture_of(shader.metallic.texture_id);
+        const lightusd::tydra::UVTexture* roughness_texture = uv_texture_of(shader.roughness.texture_id);
+        const std::string&                material_name     = material.get_name();
+        if (diffuse_texture != nullptr) {
+            const glm::vec3 factor{diffuse_texture->scale[0], diffuse_texture->scale[1], diffuse_texture->scale[2]};
+            set_or_clear_value(material, Material::base_color_property, factor);
+            warn_about_texel_transform(material_name, "diffuseColor", *diffuse_texture, true);
+        } else if (is_authored(shader_path, "inputs:diffuseColor")) {
             material.set_value(
                 Material::base_color_property,
                 glm::vec3{shader.diffuseColor.value[0], shader.diffuseColor.value[1], shader.diffuseColor.value[2]}
             );
         }
-        if (is_authored(shader_path, "inputs:emissiveColor")) {
+        if (emissive_texture != nullptr) {
+            const glm::vec3 factor{emissive_texture->scale[0], emissive_texture->scale[1], emissive_texture->scale[2]};
+            set_or_clear_value(material, Material::emissive_property, factor);
+            warn_about_texel_transform(material_name, "emissiveColor", *emissive_texture, true);
+        } else if (is_authored(shader_path, "inputs:emissiveColor")) {
             material.set_value(
                 Material::emissive_property,
                 glm::vec3{shader.emissiveColor.value[0], shader.emissiveColor.value[1], shader.emissiveColor.value[2]}
             );
         }
-        if (is_authored(shader_path, "inputs:metallic")) {
+        if (metallic_texture != nullptr) {
+            set_or_clear_value(material, Material::metallic_property, connected_scale(*metallic_texture));
+            warn_about_texel_transform(material_name, "metallic", *metallic_texture, true);
+        } else if (is_authored(shader_path, "inputs:metallic")) {
             material.set_value(Material::metallic_property, shader.metallic.value);
         }
-        if (is_authored(shader_path, "inputs:roughness")) {
+        if (roughness_texture != nullptr) {
+            const float factor = connected_scale(*roughness_texture);
+            set_or_clear_value(material, Material::roughness_property, glm::vec2{factor, factor});
+            warn_about_texel_transform(material_name, "roughness", *roughness_texture, true);
+        } else if (is_authored(shader_path, "inputs:roughness")) {
             // erhe's roughness is anisotropic; UsdPreviewSurface has one value.
             material.set_value(Material::roughness_property, glm::vec2{shader.roughness.value, shader.roughness.value});
         }
@@ -1310,6 +1502,42 @@ private:
             ? shader.roughness.texture_id
             : shader.metallic.texture_id;
         bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, metallic_roughness_texture_id);
+
+        // How each bound texture is sampled: the wrap modes and the
+        // UsdTransform2d of its UsdUVTexture, on the erhe slot the texture
+        // was bound to.
+        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        if (diffuse_texture != nullptr) {
+            apply_texture_sampling(material, slots.base_color, *diffuse_texture);
+        }
+        if (emissive_texture != nullptr) {
+            apply_texture_sampling(material, slots.emissive, *emissive_texture);
+        }
+        const lightusd::tydra::UVTexture* occlusion_texture = uv_texture_of(shader.occlusion.texture_id);
+        if (occlusion_texture != nullptr) {
+            apply_texture_sampling(material, slots.occlusion, *occlusion_texture);
+            warn_about_texel_transform(material_name, "occlusion", *occlusion_texture, false);
+        }
+        const lightusd::tydra::UVTexture* metallic_roughness_texture = uv_texture_of(metallic_roughness_texture_id);
+        if (metallic_roughness_texture != nullptr) {
+            apply_texture_sampling(material, slots.metallic_roughness, *metallic_roughness_texture);
+        }
+        const lightusd::tydra::UVTexture* normal_texture = uv_texture_of(shader.normal.texture_id);
+        if (normal_texture != nullptr) {
+            apply_texture_sampling(material, slots.normal, *normal_texture);
+            // The normal slot is the one erhe carries the texel transform
+            // for: the shader decodes `texel * scale + bias`.
+            set_or_clear_value(
+                material,
+                Material::normal_texture_decode_scale_property,
+                glm::vec4{normal_texture->scale[0], normal_texture->scale[1], normal_texture->scale[2], normal_texture->scale[3]}
+            );
+            set_or_clear_value(
+                material,
+                Material::normal_texture_decode_bias_property,
+                glm::vec4{normal_texture->bias[0], normal_texture->bias[1], normal_texture->bias[2], normal_texture->bias[3]}
+            );
+        }
     }
 
     void convert_materials()
@@ -3612,6 +3840,11 @@ private:
     lightusd::Layer                              m_root_layer;
     bool                                         m_root_layer_read{false};
     bool                                         m_root_layer_ok  {false};
+    // The archive directory of the `.usdz` the stage was loaded from, read
+    // lazily by ensure_usdz_asset: what packed texture bytes are taken from.
+    lightusd::USDZAsset                          m_usdz_asset;
+    bool                                         m_usdz_read{false};
+    bool                                         m_usdz_ok  {false};
 };
 
 } // anonymous namespace

@@ -106,6 +106,7 @@ purple by layer, computed rows dim gray. Untinted rows are hand-written.
 | Property | Storage | Notes |
 |---|---|---|
 | base_color, opacity, roughness, metallic, reflectance, emissive, ior, transmission, normal_texture_scale, occlusion_texture_strength, alpha_cutoff | entry | scalars and colors; inherits (D30, from a content-library folder) |
+| normal_texture_decode_scale, normal_texture_decode_bias | entry | vec4; the normal texture's texel decode (`texel * scale + bias`); inherits |
 | normalmap_encoding, bxdf_model, blending_mode, circular_brushed_metal_texgen_mode | entry | enumerations; inherits |
 | double_sided, use_circular_brushed_metal, use_aniso_control | entry | booleans; inherits |
 | base_color_texture, metallic_roughness_texture, normal_texture, occlusion_texture, emissive_texture | entry | object references, texture or graph texture; inherits; mirrored into `Material_data` by `on_property_changed` |

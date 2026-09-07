@@ -135,15 +135,17 @@ The names are erhe / geogram's own:
 
 | erhe `Material` property | USD `UsdPreviewSurface` input / other | notes |
 |---|---|---|
-| `base_color`, `base_color_texture` | `diffuseColor` | |
+| `base_color`, `base_color_texture` | `diffuseColor` | a connected input takes its value from the texture, so the erhe factor - which the shader multiplies the texel with - is the texture's `inputs:scale` on the channels that input reads, in both directions. That is what makes a textured `emissiveColor` visible: erhe's emissive factor is zero by default |
 | `opacity`, `alpha_cutoff`, `blending_mode` | `opacity`, `opacityThreshold` | blend vs mask is a threshold in USD |
 | `roughness` (x), `metallic`, `emissive`, `ior` | `roughness`, `metallic`, `emissiveColor`, `ior` | erhe's anisotropic `roughness.y` has no PreviewSurface input |
-| `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | |
+| `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | `normal_texture_scale` is the bumpiness multiplier glTF's `normalTexture.scale` is, and has no USD carrier of its own |
+| `normal_texture_decode_scale`, `normal_texture_decode_bias` | the normal `UsdUVTexture`'s `inputs:scale` / `inputs:bias` | the texel decode, `texel * scale + bias`; the erhe defaults are USD's fallbacks for a normal map, and both are written for every bound normal texture because USD's own attribute fallbacks are not erhe's |
 | `occlusion_texture`, `occlusion_texture_strength` | `occlusion` | |
 | `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | erhe has one slot for the pair, so the importer takes the image the `roughness` input names and falls back to the `metallic` one |
 | `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes, in the form the qualified-name row of "Property system" gives |
-| `<slot>_texture_uv_*` | `UsdTransform2d` | |
-| `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | |
+| `<slot>_texture_uv_*` | `UsdTransform2d` | USD composes `in * scale`, then the rotation, then the translation, which is the order the erhe slot transform applies, so the values map across unchanged apart from the degrees USD spells the rotation in. Read on import; a save carries them as `erhe:` custom attributes, because the writer authors no `UsdTransform2d` prim yet |
+| `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | `repeat` and `mirror` map onto the erhe address mode of the same name; `clamp`, `black` and the `useMetadata` default all become clamp-to-edge, because erhe has no border color. Both are written for every bound texture; a wrap value on a slot with no texture has no `UsdUVTexture` to ride on. The filters ride as `erhe:` custom attributes |
+| a texture image | `UsdUVTexture` `inputs:file` | a file beside the layer, or an entry of the `.usdz` the stage was loaded from: the reader hands the archive entry's bytes over (`Usd_image::bytes`) and the caller decodes those. Radiance `.hdr` is not decoded by either erhe or LightUSD |
 | `double_sided` | `doubleSided` on the `Mesh` prim | a mesh flag in USD, a material flag in erhe, and one material can be bound by several meshes, so an authored `doubleSided` does not reach the erhe material; `erhe:Material:double_sided` on the `Material` prim is what carries the erhe flag |
 
 ## Lights

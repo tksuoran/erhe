@@ -422,6 +422,14 @@ void main()
 
 #  ifdef ERHE_USE_NORMAL_TEXTURE
     {
+        // The texels become a tangent space normal as
+        // `texel * normal_texture_decode_scale + normal_texture_decode_bias`
+        // (the UsdUVTexture inputs:scale and inputs:bias of the normal slot;
+        // the defaults (2,2,2,2) and (-1,-1,-1,-1) are the mapping glTF
+        // fixes). A two-channel encoding takes the .xy of both, which are
+        // the scale and bias of the decoded X and Y whichever channels
+        // store them.
+        //
         // ERHE_NORMAL_TEXTURE_ENCODING is an ERHE_NORMALMAP_ENCODING_*
         // value (see erhe_standard_variant.glsl). Two-channel encodings
         // (KTX2 normal-mode) store an X+Y map and Z is reconstructed from
@@ -436,14 +444,14 @@ void main()
             ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
             material.normal_rotation_scale,
             material.normal_offset
-        ).rg * 2.0 - vec2(1.0);
+        ).rg * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
 #      else
         vec2 nxy = sample_texture(
             material.normal_texture,
             ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
             material.normal_rotation_scale,
             material.normal_offset
-        ).ga * 2.0 - vec2(1.0);
+        ).ga * material.normal_texture_decode_scale.xy + material.normal_texture_decode_bias.xy;
 #      endif
         vec3 ntex = vec3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
 #    else
@@ -452,7 +460,7 @@ void main()
             ERHE_SELECT_TEXCOORD(ERHE_NORMAL_TEXGEN_MODE),
             material.normal_rotation_scale,
             material.normal_offset
-        ).xyz * 2.0 - vec3(1.0);
+        ).xyz * material.normal_texture_decode_scale.xyz + material.normal_texture_decode_bias.xyz;
 #    endif
 #    if ERHE_NORMALMAP_IS_LEFT_HANDED(ERHE_NORMAL_TEXTURE_ENCODING)
         ntex.y  = -ntex.y;
@@ -728,9 +736,14 @@ void main()
 #endif
 
 #if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_BLEND
-    // Premultiplied alpha: blend state combines with src_factor=ONE.
-    out_color.rgb = to_render_target_range(color * exposure * material.opacity, c_output_max);
-    out_color.a   = material.opacity;
+    // Premultiplied alpha: blend state combines with src_factor=ONE. The
+    // coverage is sampled_alpha - material.opacity times the vertex color
+    // alpha and the base color texture's alpha - which is where a blended
+    // material that carries its opacity in the texture (glTF BLEND with an
+    // alpha channel, UsdPreviewSurface with inputs:opacity connected to a
+    // texture's outputs:a) has its per-fragment coverage.
+    out_color.rgb = to_render_target_range(color * exposure * sampled_alpha, c_output_max);
+    out_color.a   = sampled_alpha;
 #else
     // opaque / alpha_test / screen_door / multiply / add / subtract:
     // emit straight lit color. The fixed-function Color_blend_state on

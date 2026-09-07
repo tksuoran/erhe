@@ -69,6 +69,11 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         .ior                        = material_struct.add_float("ior"                       )->get_offset_in_parent(),
         .transmission               = material_struct.add_float("transmission"              )->get_offset_in_parent(),
         .bxdf_model                 = material_struct.add_uint ("bxdf_model"                )->get_offset_in_parent(),
+
+        // The normal texture decode: `texel * scale + bias`, both vec4 and
+        // vec4-aligned, so the struct size stays a multiple of 16 bytes.
+        .normal_texture_decode_scale = material_struct.add_vec4 ("normal_texture_decode_scale")->get_offset_in_parent(),
+        .normal_texture_decode_bias  = material_struct.add_vec4 ("normal_texture_decode_bias" )->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -111,6 +116,8 @@ auto gather_material_record_inputs(
     inputs.ior                        = data.ior;
     inputs.transmission               = data.transmission;
     inputs.bxdf_model                 = static_cast<uint32_t>(data.bxdf_model);
+    inputs.normal_texture_decode_scale = data.normal_texture_decode_scale;
+    inputs.normal_texture_decode_bias  = data.normal_texture_decode_bias;
 
     const auto gather_texture = [&sampler_cache](
         const erhe::primitive::Material_texture_sampler& texture_sampler
@@ -230,6 +237,8 @@ void Material_buffer::write_record(
     write(gpu_data, write_offset + offsets.ior,                               as_span(inputs.ior));
     write(gpu_data, write_offset + offsets.transmission,                      as_span(inputs.transmission));
     write(gpu_data, write_offset + offsets.bxdf_model,                        as_span(inputs.bxdf_model));
+    write(gpu_data, write_offset + offsets.normal_texture_decode_scale,       as_span(inputs.normal_texture_decode_scale));
+    write(gpu_data, write_offset + offsets.normal_texture_decode_bias,        as_span(inputs.normal_texture_decode_bias));
 }
 
 void Material_buffer::write_records(

@@ -20,6 +20,7 @@ add_executable(${_target}
     test_usd_prims.cpp
     test_usd_references.cpp
     test_usd_styles.cpp
+    test_usd_texture_inputs.cpp
     test_usd_variants.cpp
     test_usd_xform_ops.cpp
 )

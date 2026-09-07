@@ -106,6 +106,27 @@ const Property<float> Material::transmission_property = Property<float>::registe
 const Property<float> Material::normal_texture_scale_property = Property<float>::register_property(
     "normal_texture_scale", c_owner, Property_metadata{.default_value = 1.0f, .inherits = true, .ui = slider(0.0f, 1.0f, "Normal Map Scale", "Strength of the bound normal texture")}
 );
+// The decode of a bound normal texture: `texel * scale + bias`. The
+// defaults are the UsdPreviewSurface ones and glTF's fixed mapping, so a
+// material that authors neither decodes a 0..1 map into -1..1. glTF has no
+// field for either, so neither is flagged native_gltf; USD writes them as
+// the normal slot's UsdUVTexture inputs:scale and inputs:bias.
+const Property<glm::vec4> Material::normal_texture_decode_scale_property = Property<glm::vec4>::register_property(
+    "normal_texture_decode_scale", c_owner,
+    Property_metadata{
+        .default_value = glm::vec4{2.0f, 2.0f, 2.0f, 2.0f},
+        .inherits      = true,
+        .ui            = Property_ui{.min = -4.0f, .max = 4.0f, .step = 0.01f, .tooltip = "Per-channel scale applied to the normal texture's texels before the bias", .label = "Normal Map Decode Scale"}
+    }
+);
+const Property<glm::vec4> Material::normal_texture_decode_bias_property = Property<glm::vec4>::register_property(
+    "normal_texture_decode_bias", c_owner,
+    Property_metadata{
+        .default_value = glm::vec4{-1.0f, -1.0f, -1.0f, -1.0f},
+        .inherits      = true,
+        .ui            = Property_ui{.min = -4.0f, .max = 4.0f, .step = 0.01f, .tooltip = "Per-channel bias added to the scaled normal texture texels", .label = "Normal Map Decode Bias"}
+    }
+);
 const Property<Normalmap_encoding> Material::normalmap_encoding_property = Property<Normalmap_encoding>::register_property(
     "normalmap_encoding", c_owner, c_normalmap_encoding_enum_info,
     Property_metadata{
@@ -456,6 +477,47 @@ void Material::set_slot_sampler(Material_texture_sampler& slot, const Material_s
     apply_sampler_state(*this, *properties, state);
 }
 
+namespace {
+
+// The three UV transform properties of one slot, for set_slot_uv_transform.
+class Slot_uv_transform_properties
+{
+public:
+    const Property<float>&     rotation;
+    const Property<glm::vec2>& offset;
+    const Property<glm::vec2>& scale;
+};
+
+auto uv_transform_properties_of(const Material_texture_samplers& samplers, const Material_texture_sampler& slot) -> const Slot_uv_transform_properties*
+{
+    static const Slot_uv_transform_properties c_base_color        {Material::base_color_texture_uv_rotation_property,         Material::base_color_texture_uv_offset_property,         Material::base_color_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_metallic_roughness{Material::metallic_roughness_texture_uv_rotation_property, Material::metallic_roughness_texture_uv_offset_property, Material::metallic_roughness_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_normal            {Material::normal_texture_uv_rotation_property,             Material::normal_texture_uv_offset_property,             Material::normal_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_occlusion         {Material::occlusion_texture_uv_rotation_property,          Material::occlusion_texture_uv_offset_property,          Material::occlusion_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_emissive          {Material::emissive_texture_uv_rotation_property,           Material::emissive_texture_uv_offset_property,           Material::emissive_texture_uv_scale_property};
+    if (&slot == &samplers.base_color)         { return &c_base_color; }
+    if (&slot == &samplers.metallic_roughness) { return &c_metallic_roughness; }
+    if (&slot == &samplers.normal)             { return &c_normal; }
+    if (&slot == &samplers.occlusion)          { return &c_occlusion; }
+    if (&slot == &samplers.emissive)           { return &c_emissive; }
+    return nullptr;
+}
+
+} // anonymous namespace
+
+void Material::set_slot_uv_transform(Material_texture_sampler& slot, const float rotation, const glm::vec2& offset, const glm::vec2& scale)
+{
+    const Slot_uv_transform_properties* properties = uv_transform_properties_of(data.texture_samplers, slot);
+    if (properties == nullptr) {
+        log_primitive->error("Material '{}': set_slot_uv_transform with a slot of another material", get_name());
+        return;
+    }
+    const erhe::property::Dependency_object::Change_batch batch{*this};
+    if (rotation != 0.0f)                { set_value(properties->rotation, rotation); } else { clear_value(properties->rotation); }
+    if (offset != glm::vec2{0.0f, 0.0f}) { set_value(properties->offset,   offset);   } else { clear_value(properties->offset);   }
+    if (scale  != glm::vec2{1.0f, 1.0f}) { set_value(properties->scale,    scale);    } else { clear_value(properties->scale);    }
+}
+
 Material::Material()                           = default;
 Material::Material(const Material&)            = default;
 Material& Material::operator=(const Material&) = default;
@@ -612,6 +674,8 @@ auto Material::get_values() const -> Material_values
         .ior                                = get_ior(),
         .transmission                       = get_transmission(),
         .normal_texture_scale               = get_normal_texture_scale(),
+        .normal_texture_decode_scale        = get_normal_texture_decode_scale(),
+        .normal_texture_decode_bias         = get_normal_texture_decode_bias(),
         .normalmap_encoding                 = get_normalmap_encoding(),
         .occlusion_texture_strength         = get_occlusion_texture_strength(),
         .bxdf_model                         = get_bxdf_model(),
@@ -656,6 +720,8 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, ior_property,                                values.ior);
     set_or_clear(*this, transmission_property,                       values.transmission);
     set_or_clear(*this, normal_texture_scale_property,               values.normal_texture_scale);
+    set_or_clear(*this, normal_texture_decode_scale_property,        values.normal_texture_decode_scale);
+    set_or_clear(*this, normal_texture_decode_bias_property,         values.normal_texture_decode_bias);
     set_or_clear(*this, normalmap_encoding_property,                 values.normalmap_encoding);
     set_or_clear(*this, occlusion_texture_strength_property,         values.occlusion_texture_strength);
     set_or_clear(*this, bxdf_model_property,                         values.bxdf_model);
@@ -680,6 +746,8 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(ior_property,                                make_value(values.ior));
     result.set(transmission_property,                       make_value(values.transmission));
     result.set(normal_texture_scale_property,               make_value(values.normal_texture_scale));
+    result.set(normal_texture_decode_scale_property,        make_value(values.normal_texture_decode_scale));
+    result.set(normal_texture_decode_bias_property,         make_value(values.normal_texture_decode_bias));
     result.set(normalmap_encoding_property,                 make_value(values.normalmap_encoding));
     result.set(occlusion_texture_strength_property,         make_value(values.occlusion_texture_strength));
     result.set(bxdf_model_property,                         make_value(values.bxdf_model));
@@ -735,6 +803,8 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.ior                                == rhs.ior                               ) &&
         (lhs.transmission                       == rhs.transmission                      ) &&
         (lhs.normal_texture_scale               == rhs.normal_texture_scale              ) &&
+        (lhs.normal_texture_decode_scale        == rhs.normal_texture_decode_scale       ) &&
+        (lhs.normal_texture_decode_bias         == rhs.normal_texture_decode_bias        ) &&
         (lhs.normalmap_encoding                 == rhs.normalmap_encoding                ) &&
         (lhs.occlusion_texture_strength         == rhs.occlusion_texture_strength        ) &&
         (lhs.bxdf_model                         == rhs.bxdf_model                        ) &&

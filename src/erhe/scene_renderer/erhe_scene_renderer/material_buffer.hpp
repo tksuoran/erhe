@@ -68,6 +68,11 @@ public:
     // Bxdf_model as uint, for shaders that select the BxDF at runtime (the
     // ray tracer); the raster path keeps its compile-time variant axis.
     std::size_t bxdf_model;                        // uint
+
+    // The normal texture decode (`texel * scale + bias`). Two vec4s, both
+    // vec4-aligned, keeping the struct size a multiple of 16 bytes.
+    std::size_t normal_texture_decode_scale;       // vec4
+    std::size_t normal_texture_decode_bias;        // vec4
 };
 
 // The texture half of one material record, resolved: the exact texture and
@@ -110,6 +115,8 @@ public:
     float     ior                       {0.0f};
     float     transmission              {0.0f};
     uint32_t  bxdf_model                {0};
+    glm::vec4 normal_texture_decode_scale{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec4 normal_texture_decode_bias {0.0f, 0.0f, 0.0f, 0.0f};
 
     Material_texture_record_inputs base_color_texture        {};
     Material_texture_record_inputs metallic_roughness_texture{};

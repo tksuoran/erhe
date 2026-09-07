@@ -102,8 +102,12 @@ namespace {
 {
     ERHE_PROFILE_FUNCTION();
 
+    // An image packed inside a `.usdz` has no file of its own: erhe::usd
+    // hands over the archive entry's bytes and the decode reads them
+    // directly (Usd_image::bytes).
+    const bool      packed = !image.bytes.empty();
     std::error_code error_code;
-    if (image.path.empty() || !std::filesystem::exists(image.path, error_code)) {
+    if (!packed && (image.path.empty() || !std::filesystem::exists(image.path, error_code))) {
         log_parsers->warn("USD image '{}' not found", image.path.generic_string());
         return {};
     }
@@ -115,7 +119,10 @@ namespace {
     // `linear` selects the non-color interpretation: a normal or occlusion
     // map carries data, everything else carries sRGB color. The USD source
     // color space says which (erhe::usd::Usd_image::srgb).
-    if (!loader.open(image.path, info, !image.srgb, transcode_format_preference)) {
+    const bool opened = packed
+        ? loader.open(std::span<const std::uint8_t>{image.bytes.data(), image.bytes.size()}, info, !image.srgb, transcode_format_preference)
+        : loader.open(image.path, info, !image.srgb, transcode_format_preference);
+    if (!opened) {
         log_parsers->warn("USD image '{}' could not be decoded", image.path.generic_string());
         return {};
     }

@@ -425,6 +425,22 @@ public:
         if (name == "normal_texture")             { return "surface.inputs:normal.connect"; }
         if (name == "occlusion_texture")          { return "surface.inputs:occlusion.connect"; }
         if (name == "emissive_texture")           { return "surface.inputs:emissiveColor.connect"; }
+        // The decode of the normal slot's texture and the wrap modes of
+        // every slot's are the UsdUVTexture's own inputs, written for a
+        // bound texture whatever the erhe value is: USD's fallbacks are not
+        // erhe's, so a value left unwritten would not read back.
+        if (name == "normal_texture_decode_scale") { return "normal_texture.inputs:scale"; }
+        if (name == "normal_texture_decode_bias")  { return "normal_texture.inputs:bias"; }
+        if (name == "base_color_texture_wrap_u")         { return "base_color_texture.inputs:wrapS"; }
+        if (name == "base_color_texture_wrap_v")         { return "base_color_texture.inputs:wrapT"; }
+        if (name == "metallic_roughness_texture_wrap_u") { return "metallic_roughness_texture.inputs:wrapS"; }
+        if (name == "metallic_roughness_texture_wrap_v") { return "metallic_roughness_texture.inputs:wrapT"; }
+        if (name == "normal_texture_wrap_u")             { return "normal_texture.inputs:wrapS"; }
+        if (name == "normal_texture_wrap_v")             { return "normal_texture.inputs:wrapT"; }
+        if (name == "occlusion_texture_wrap_u")          { return "occlusion_texture.inputs:wrapS"; }
+        if (name == "occlusion_texture_wrap_v")          { return "occlusion_texture.inputs:wrapT"; }
+        if (name == "emissive_texture_wrap_u")           { return "emissive_texture.inputs:wrapS"; }
+        if (name == "emissive_texture_wrap_v")           { return "emissive_texture.inputs:wrapT"; }
         return {};
     }
     if (owner == "Brush") {
@@ -854,6 +870,66 @@ private:
         return image_path.generic_string();
     }
 
+    // erhe's address modes onto UsdUVTexture's wrap tokens. erhe has no
+    // border color, so no erhe value spells `black`.
+    [[nodiscard]] static auto to_usd_wrap(const erhe::graphics::Sampler_address_mode mode) -> lightusd::UsdUVTexture::Wrap
+    {
+        switch (mode) {
+            case erhe::graphics::Sampler_address_mode::repeat:          return lightusd::UsdUVTexture::Wrap::Repeat;
+            case erhe::graphics::Sampler_address_mode::clamp_to_edge:   return lightusd::UsdUVTexture::Wrap::Clamp;
+            case erhe::graphics::Sampler_address_mode::mirrored_repeat: return lightusd::UsdUVTexture::Wrap::Mirror;
+            default:                                                    return lightusd::UsdUVTexture::Wrap::Clamp;
+        }
+    }
+
+    [[nodiscard]] static auto slot_of(
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot
+    ) -> const erhe::primitive::Material_texture_sampler&
+    {
+        const erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        switch (slot) {
+            case Usd_material_texture_slot::base_color:         return slots.base_color;
+            case Usd_material_texture_slot::metallic_roughness: return slots.metallic_roughness;
+            case Usd_material_texture_slot::normal:             return slots.normal;
+            case Usd_material_texture_slot::occlusion:          return slots.occlusion;
+            case Usd_material_texture_slot::emissive:           return slots.emissive;
+            default:                                            return slots.base_color;
+        }
+    }
+
+    // The inputs:scale one slot's UsdUVTexture is written with: the erhe
+    // factor of the surface input the slot feeds, on the channel that input
+    // reads. UsdPreviewSurface reads metallic from the blue channel and
+    // roughness from the green one of the one metallic-roughness image, so
+    // that slot carries both factors.
+    [[nodiscard]] static auto texel_scale_of(
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot
+    ) -> glm::vec4
+    {
+        using erhe::primitive::Material;
+        switch (slot) {
+            case Usd_material_texture_slot::base_color: {
+                const glm::vec3 base_color = material.get_value(Material::base_color_property);
+                return glm::vec4{base_color.x, base_color.y, base_color.z, 1.0f};
+            }
+            case Usd_material_texture_slot::emissive: {
+                const glm::vec3 emissive = material.get_value(Material::emissive_property);
+                return glm::vec4{emissive.x, emissive.y, emissive.z, 1.0f};
+            }
+            case Usd_material_texture_slot::metallic_roughness: {
+                return glm::vec4{1.0f, material.get_value(Material::roughness_property).x, material.get_value(Material::metallic_property), 1.0f};
+            }
+            case Usd_material_texture_slot::normal: {
+                return material.get_value(Material::normal_texture_decode_scale_property);
+            }
+            default: {
+                return glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
+            }
+        }
+    }
+
     [[nodiscard]] static auto texture_shader_name(const Usd_material_texture_slot slot) -> const char*
     {
         switch (slot) {
@@ -893,6 +969,20 @@ private:
 
         lightusd::UsdUVTexture uv_texture;
         uv_texture.file.set_value(lightusd::value::AssetPath{asset_path_of(texture->path)});
+        const erhe::primitive::Material_texture_sampler& slot_state = slot_of(material, slot);
+        uv_texture.wrapS.set_value(to_usd_wrap(slot_state.sampler.wrap_u));
+        uv_texture.wrapT.set_value(to_usd_wrap(slot_state.sampler.wrap_v));
+        // A connected UsdPreviewSurface input has no factor of its own: the
+        // erhe factor - which the shader multiplies the texel with - is
+        // written as the texture's own inputs:scale, on the channels the
+        // surface reads that slot through. The normal slot's scale and bias
+        // are the texel decode instead.
+        const glm::vec4 texel_scale = texel_scale_of(material, slot);
+        uv_texture.scale.set_value(lightusd::value::float4{texel_scale.x, texel_scale.y, texel_scale.z, texel_scale.w});
+        if (slot == Usd_material_texture_slot::normal) {
+            const glm::vec4 decode_bias = material.get_value(erhe::primitive::Material::normal_texture_decode_bias_property);
+            uv_texture.bias.set_value(lightusd::value::float4{decode_bias.x, decode_bias.y, decode_bias.z, decode_bias.w});
+        }
         uv_texture.sourceColorSpace.set_value(
             texture->srgb
                 ? lightusd::UsdUVTexture::SourceColorSpace::SRGB

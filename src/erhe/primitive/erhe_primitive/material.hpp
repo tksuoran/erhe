@@ -116,6 +116,15 @@ public:
     float                     ior                               {1.5f};
     float                     transmission                      {0.0f};
     float                     normal_texture_scale              {1.0f};
+    // How a bound normal texture's texels become a tangent-space normal:
+    // `texel * decode_scale + decode_bias`, the UsdUVTexture inputs:scale
+    // and inputs:bias of the normal slot. The defaults are the
+    // UsdPreviewSurface ones, which are also glTF's fixed mapping, so a
+    // material at the defaults decodes as it always did. The scalar
+    // normal_texture_scale above stays what glTF's normalTexture.scale is:
+    // the bumpiness multiplier applied to the decoded X and Y.
+    glm::vec4                 normal_texture_decode_scale       {2.0f, 2.0f, 2.0f, 2.0f};
+    glm::vec4                 normal_texture_decode_bias        {-1.0f, -1.0f, -1.0f, -1.0f};
     // Storage encoding of the bound normal texture (handedness and, for
     // X+Y maps, the channel layout). Authorable in the Properties window;
     // a KTX2 normal-mode texture overrides the channel layout at shader
@@ -181,6 +190,8 @@ public:
     static const erhe::property::Property<float>                  ior_property;
     static const erhe::property::Property<float>                  transmission_property;
     static const erhe::property::Property<float>                  normal_texture_scale_property;
+    static const erhe::property::Property<glm::vec4>              normal_texture_decode_scale_property;
+    static const erhe::property::Property<glm::vec4>              normal_texture_decode_bias_property;
     static const erhe::property::Property<Normalmap_encoding>     normalmap_encoding_property;
     static const erhe::property::Property<float>                  occlusion_texture_strength_property;
     static const erhe::property::Property<Bxdf_model>             bxdf_model_property;
@@ -263,6 +274,10 @@ public:
     // the slot's seven sampler properties in one change batch (a field at its
     // default clears the local value, as set_data does).
     void set_slot_sampler(Material_texture_sampler& slot, const Material_sampler_state& state);
+    // The UV transform of one of this material's own slots, written through
+    // the slot's rotation, offset and scale properties in one change batch
+    // (a field at its default clears the local value, as set_data does).
+    void set_slot_uv_transform(Material_texture_sampler& slot, float rotation, const glm::vec2& offset, const glm::vec2& scale);
 
     [[nodiscard]] auto get_base_color                        () const -> glm::vec3              { return get_value(base_color_property); }
     [[nodiscard]] auto get_opacity                           () const -> float                  { return get_value(opacity_property); }
@@ -273,6 +288,8 @@ public:
     [[nodiscard]] auto get_ior                               () const -> float                  { return get_value(ior_property); }
     [[nodiscard]] auto get_transmission                      () const -> float                  { return get_value(transmission_property); }
     [[nodiscard]] auto get_normal_texture_scale              () const -> float                  { return get_value(normal_texture_scale_property); }
+    [[nodiscard]] auto get_normal_texture_decode_scale       () const -> glm::vec4              { return get_value(normal_texture_decode_scale_property); }
+    [[nodiscard]] auto get_normal_texture_decode_bias        () const -> glm::vec4              { return get_value(normal_texture_decode_bias_property); }
     [[nodiscard]] auto get_normalmap_encoding                () const -> Normalmap_encoding     { return get_value(normalmap_encoding_property); }
     [[nodiscard]] auto get_occlusion_texture_strength        () const -> float                  { return get_value(occlusion_texture_strength_property); }
     [[nodiscard]] auto get_bxdf_model                        () const -> Bxdf_model             { return get_value(bxdf_model_property); }
@@ -297,6 +314,8 @@ public:
     void set_ior                               (float value)                 { set_value(ior_property, value); }
     void set_transmission                      (float value)                 { set_value(transmission_property, value); }
     void set_normal_texture_scale              (float value)                 { set_value(normal_texture_scale_property, value); }
+    void set_normal_texture_decode_scale       (const glm::vec4& value)      { set_value(normal_texture_decode_scale_property, value); }
+    void set_normal_texture_decode_bias        (const glm::vec4& value)      { set_value(normal_texture_decode_bias_property, value); }
     void set_normalmap_encoding                (Normalmap_encoding value)    { set_value(normalmap_encoding_property, value); }
     void set_occlusion_texture_strength        (float value)                 { set_value(occlusion_texture_strength_property, value); }
     void set_bxdf_model                        (Bxdf_model value)            { set_value(bxdf_model_property, value); }

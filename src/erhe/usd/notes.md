@@ -344,10 +344,46 @@ and image lists into the render scene, so an extra conversion fills them again
 from index zero: the new entries are appended and the ids shifted by what was
 already there, for the six UsdPreviewSurface texture slots erhe reads.
 
+How a bound texture is sampled and how its texels are read comes across with
+it:
+
+- `inputs:wrapS` / `inputs:wrapT` become the slot's `wrap_u` / `wrap_v`.
+  `repeat` and `mirror` map onto the erhe address mode of the same name;
+  `clamp`, `black` and the `useMetadata` default all become clamp-to-edge,
+  because erhe has no border color, so `black` samples the edge texel rather
+  than transparent black.
+- A `UsdTransform2d` feeding the texture's `st` becomes the slot's rotation,
+  offset and scale. USD composes `in * scale`, then the rotation, then the
+  translation, which is the order the erhe slot transform applies, so the
+  three values map across unchanged apart from the degrees USD spells the
+  rotation in.
+- A connected UsdPreviewSurface input takes its value from the texture, so
+  the erhe factor - which the shader multiplies the texel with - is the
+  texture's `inputs:scale`, on the channel the surface reads that input
+  through, and never the plain value the connected input still carries. That
+  is what makes a textured `emissiveColor` visible: erhe's emissive factor is
+  zero by default, so an emissive texture without it renders black.
+- The normal slot carries the texel decode itself:
+  `inputs:scale` and `inputs:bias` become `Material::normal_texture_decode_scale`
+  and `normal_texture_decode_bias`, which the shader applies as
+  `texel * scale + bias`.
+- A `bias` on any other slot, and a `scale` on a slot with no factor, is one
+  warning naming the material and the input.
+
+A texture packed inside a `.usdz` is read out of the archive: LightUSD takes
+only the root layer out of the package when it opens the stage, so the import
+reads the archive a second time (`ReadUSDZAssetInfoFromFile`) and hands the
+entry's bytes over in `Usd_image::bytes`. A packed image has no file of its
+own, so `Usd_image::path` names no existing file and the bytes are the only
+source; the caller decodes them with the memory overload of
+`erhe::graphics::Image_loader::open`.
+
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
 `PointInstancer` / instanceable prototypes beyond what Tydra flattens,
-volumes, MaterialX / OpenPBR shading networks, texture wrap and filter
-state, and `UsdTransform2d` UV transforms.
+volumes, MaterialX / OpenPBR shading networks, texture filter state, and the
+per-channel output selection of a `UsdUVTexture` (erhe reads roughness from
+green and metallic from blue, whichever channels the file's `outputs:*`
+connections name).
 
 ## Export
 
@@ -540,7 +576,14 @@ because the same spelling rule decides what an item is called on a stage.
   caller resolves each bound slot to a file (`Usd_save_texture`); the path is
   written relative to the `.usda`. A slot with a local texture value the
   caller could not resolve - a generated texture - is left out of the
-  network with one warning.
+  network with one warning. Each written `UsdUVTexture` carries the slot's
+  wrap modes and its `inputs:scale`: the scale is the erhe factor of the
+  surface input the slot feeds (base color and emissive on rgb, roughness on
+  green and metallic on blue), and for the normal slot it is the texel decode,
+  written with `inputs:bias`. All of them are written whatever the erhe value
+  is, because USD's fallbacks are not erhe's and an unwritten value would not
+  read back. A wrap value on a slot with no texture has no `UsdUVTexture` to
+  ride on and is not written.
 
 ## Dependency
 
@@ -762,9 +805,6 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written
   as `erhe:Light:color` but the import resolves neither the qualified nor the
   bare name against a node, so such a value does not come back.
-- An erhe material with both a texture and a factor in one slot writes the
-  connection alone: `UsdPreviewSurface` has no multiplier, and the factor
-  would have to ride on the texture's `scale`.
 - A camera's `infinite_z_far` has no USD form; the finite `clippingRange` is
   written and one warning says so.
 - The macOS and Linux configure wrappers still default to `none`; turning the
