@@ -640,6 +640,16 @@ private:
             const nonstd::optional<std::string> text = entry.second.get_value<std::string>();
             if (text.has_value()) {
                 m_result.data.custom_layer_data.emplace(entry.first, text.value());
+                continue;
+            }
+            // A value the ASCII parser read arrives as StringData - the type
+            // that also carries which quote form the layer spelled - while a
+            // value a writer put there is a plain std::string. Both are the
+            // same string entry to a reader.
+            const nonstd::optional<lightusd::value::StringData> string_data =
+                entry.second.get_value<lightusd::value::StringData>();
+            if (string_data.has_value()) {
+                m_result.data.custom_layer_data.emplace(entry.first, string_data.value().value);
             }
         }
     }
