@@ -881,6 +881,17 @@ REMEDY = [
      "read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage"),
     (re.compile(r"up axis .* has no erhe counterpart"),
      "carry a Z-up stage's up axis into the scene instead of importing it as Y-up"),
+    (re.compile(r"renders flat white when its bound material comes from another layer"),
+     "bind a material the file authors in a layer other than the mesh's own; the mesh loads and shades "
+     "with the default white material instead of the one the file binds"),
+    (re.compile(r"metersPerUnit does not scale the imported prims"),
+     "apply the stage's metersPerUnit to the imported prims, so a stage authored in another unit is the "
+     "size its own camera frames"),
+    (re.compile(r"no scene appeared within"),
+     "open a stage whose root layer is a MaterialX document reference; the load never produces a scene "
+     "and the open never answers"),
+    (re.compile(r"no mesh loaded: cause not in the log"),
+     "nothing: empty.usda authors a Mesh with no points, so producing no mesh is what the file asks for"),
     (re.compile(r"renders black when its bound material comes from another layer"),
      "bind a material the file authors in a layer other than the mesh's own; the binding survives the "
      "import (the log's 'has no converted material' line names the same prims) but the mesh shades black"),
