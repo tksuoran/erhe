@@ -676,6 +676,8 @@ erhe_target_sources_grouped(
     windows/properties.hpp
     windows/property_editor.cpp
     windows/property_editor.hpp
+    windows/property_origin.cpp
+    windows/property_origin.hpp
     windows/scene_view_config_window.cpp
     windows/scene_view_config_window.hpp
     windows/settings_window.cpp

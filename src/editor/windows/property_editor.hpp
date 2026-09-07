@@ -31,6 +31,11 @@ public:
     void add_entry          (std::string&& label, std::function<void()> editor, std::string&& tooltip = {}, std::optional<uint32_t> label_text_color = {});
     // Axis-style label: a small button in label_background_color.
     void add_entry          (std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor);
+    // Extra tooltip text for the entry just added, produced only while that
+    // row is hovered: the composition origin of a property value
+    // (doc/usd-compatibility-plan.md X5) costs an ancestor walk and a few
+    // strings, which no frame should pay for every row.
+    void set_entry_tooltip_extra(std::function<std::string()> provider);
     void show_entries       (const char* label = "##", ImVec2 cell_padding = ImVec2{0.0f, 0.0f});
     void use_state          (Editor_state* state);
     void set_dirty_editing  ();
@@ -44,6 +49,7 @@ protected:
         bool                    pop_group{false};
         std::string             label;
         std::string             tooltip;
+        std::function<std::string()> tooltip_extra;
         std::function<void()>   editor;
         ImGuiTreeNodeFlags      flags{ImGuiTreeNodeFlags_None};
         float                   indent{0.0f};
@@ -56,6 +62,7 @@ protected:
     int                      m_row   {0};
     Editor_state*            m_state {nullptr};
     std::vector<Entry>       m_entries;
+    std::string              m_tooltip_scratch; // built while a row with a tooltip_extra is hovered
 
     struct Stack_entry
     {

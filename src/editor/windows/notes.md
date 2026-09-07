@@ -18,6 +18,8 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Scene_view_config_window`** -- Configures scene view settings.
 
+- **`Property_origin`** (`property_origin.{hpp,cpp}`) -- where a property value comes from, in the terms of the file the scene was opened from (`doc/usd-compatibility-plan.md` X5): the layer, the prim path in it, the composition arc and its target, and the attribute the writer spells the value as. `Dependency_property_rows` appends it to a row's tooltip as `Layer:` / `Prim:` / `Arc:` / `Authored as:` lines, through `Property_editor::set_entry_tooltip_extra`, which runs the provider only while that row is hovered - the derivation walks the item's ancestors and formats strings, so no frame pays it per row. MCP `get_item_properties` reports the same values as each entry's `origin`.
+
 - **`Item_tree_window`** -- Generic tree view window used for both scene hierarchy browsing and content library browsing. Supports drag-and-drop, context menus, and custom item callbacks.
 
 ## Public API / Integration Points

@@ -345,6 +345,28 @@ Returns: `{dynamic_physics_enabled: true/false}`
 
 `instantiate_prefab` places a prefab (a glTF file, or a USD file at a prim) into a scene as a carrier prim with a `Prefab_instance` attachment and the template's content cloned below it; `reload_prefab` re-reads a prefab's file and refreshes every instance, keeping their overrides; `get_prefabs` lists the loaded templates. `set_prefab_template_property` sets (or, with a null value, clears) a local value on an item INSIDE a template - `source_path`, optional `prim_path`, `item_path` (the M1 path below the template root), `property`, `value` - which no scene lookup reaches otherwise; every instance reads the change live through its reference layer. It is not undoable, like `reload_prefab`. An item inside an instance is edited with `set_item_property` (a local value there is an override; a null value clears it and exposes the template's value) and reports `"source": "reference"` in `get_item_properties` for what the template supplies.
 
+### get_item_properties
+
+Lists the registered properties of one item. Beside the erhe value source
+(`source`, `local`, `default`, `inherits`, `style`) each property of the item
+carries `origin`, the same value's provenance in the terms of the file the
+scene was opened from (`doc/usd-compatibility-plan.md` X5, whose table in
+`doc/usd_compatibility.md` says what each source reports):
+
+- `layer` - the file the value is authored in, or `session` for a scene that
+  has no file yet;
+- `prim_path` - the prim path in that layer that authors it (an override
+  inside a reference instance reports the `over`'s collapsed path);
+- `arc` - `none`, `root layer`, `reference`, `payload` or `inherits`;
+- `arc_target` - the arc's `<file></prim>` target, or the class prim of a
+  style;
+- `authored_as` - the attribute a save spells the value as
+  (`erhe:Material:roughness`, `surface.inputs:diffuseColor`, `xformOp:*`, or
+  `properties["Owner.name"]` for a glTF-backed scene).
+
+The properties of a sub-object (a mesh primitive) carry no `origin`: no file
+spells a sub-object as a prim of its own.
+
 ### lock_items / unlock_items
 
 Lock or unlock items by ID. Locked items (`lock_edit` flag) cannot be deleted or have properties edited.

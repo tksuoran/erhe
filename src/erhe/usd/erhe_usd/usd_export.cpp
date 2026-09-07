@@ -384,20 +384,74 @@ public:
 // The erhe properties this writer carries in a USD attribute of the schema -
 // the exact inverse of what the importer reads back
 // (doc/usd-compatibility-plan.md I2, and the per-domain tables of
-// doc/usd_compatibility.md). Every other local value travels as an `erhe:`
-// custom attribute, so a property is listed here exactly once: writing both
-// forms would author one value twice.
-// Whether the prim being written carries the schema attributes a value could
-// travel in. A `Material`, `Camera` or UsdLux prim does - its own schema
-// spells `roughness`, `focalLength`, `intensity` - while a typeless prim (a
-// `class` prim of X3) has no schema at all, so every value of it travels as an
-// `erhe:Owner:name` custom attribute. `visible`, `purpose` and `active` are
-// carried natively either way: they are prim metadata and plain tokens, which
-// every prim has.
-enum class Native_property_form : unsigned int {
-    schema_attributes = 0,
-    custom_attributes = 1
-};
+// doc/usd_compatibility.md), and the USD spelling each of them gets. Every
+// other local value travels as an `erhe:` custom attribute, so a property is
+// listed here exactly once: writing both forms would author one value twice.
+// `Native_property_form` (usd.hpp) says which of the two a prim offers;
+// `visible`, `purpose` and `active` are carried natively either way, being
+// prim metadata and plain tokens every prim has. Every schema attribute below
+// is one the writer fills further down this file, and get_usd_authored_as()
+// hands the same list to the Properties window's origin line (X5).
+[[nodiscard]] auto native_usd_property_name(
+    const std::string_view     owner,
+    const std::string_view     name,
+    const Native_property_form form
+) -> std::string_view
+{
+    if (owner == "Item_base") {
+        if (name == "visible") { return "visibility"; }
+        if (name == "purpose") { return "purpose"; }
+        if (name == "active" ) { return "active (prim metadata)"; }
+        return {};
+    }
+    if (form == Native_property_form::custom_attributes) {
+        return {};
+    }
+    if (owner == "Material") {
+        // The values go on the `UsdPreviewSurface` shader prim below the
+        // material prim, which is named "surface" here.
+        if (name == "base_color")                 { return "surface.inputs:diffuseColor"; }
+        if (name == "emissive")                   { return "surface.inputs:emissiveColor"; }
+        if (name == "metallic")                   { return "surface.inputs:metallic"; }
+        if (name == "roughness")                  { return "surface.inputs:roughness"; }
+        if (name == "opacity")                    { return "surface.inputs:opacity"; }
+        if (name == "ior")                        { return "surface.inputs:ior"; }
+        if (name == "occlusion_texture_strength") { return "surface.inputs:occlusion"; }
+        if (name == "blending_mode")              { return "surface.inputs:opacityThreshold"; }
+        if (name == "alpha_cutoff")               { return "surface.inputs:opacityThreshold"; }
+        if (name == "base_color_texture")         { return "surface.inputs:diffuseColor.connect"; }
+        if (name == "metallic_roughness_texture") { return "surface.inputs:metallic.connect"; }
+        if (name == "normal_texture")             { return "surface.inputs:normal.connect"; }
+        if (name == "occlusion_texture")          { return "surface.inputs:occlusion.connect"; }
+        if (name == "emissive_texture")           { return "surface.inputs:emissiveColor.connect"; }
+        return {};
+    }
+    if (owner == "Camera") {
+        if (name == "projection_type") { return "projection"; }
+        if (name == "fov_x")           { return "horizontalAperture"; }
+        if (name == "fov_y")           { return "verticalAperture"; }
+        if (name == "ortho_left")      { return "horizontalAperture"; }
+        if (name == "ortho_width")     { return "horizontalAperture"; }
+        if (name == "ortho_bottom")    { return "verticalAperture"; }
+        if (name == "ortho_height")    { return "verticalAperture"; }
+        if (name == "z_near")          { return "clippingRange"; }
+        if (name == "z_far")           { return "clippingRange"; }
+        if (name == "infinite_z_far")  { return "clippingRange"; }
+        if (name == "exposure")        { return "exposure"; }
+        return {};
+    }
+    if (owner == "Light") {
+        if (name == "light_type")       { return "the prim type (DistantLight / SphereLight)"; }
+        if (name == "color")            { return "inputs:color"; }
+        if (name == "intensity")        { return "inputs:intensity"; }
+        if (name == "temperature")      { return "inputs:colorTemperature"; }
+        if (name == "inner_spot_angle") { return "inputs:shaping:coneSoftness"; }
+        if (name == "outer_spot_angle") { return "inputs:shaping:coneAngle"; }
+        if (name == "cast_shadow")      { return "inputs:shadow:enable"; }
+        return {};
+    }
+    return {};
+}
 
 [[nodiscard]] auto is_native_usd_property(
     const std::string_view     owner,
@@ -405,36 +459,7 @@ enum class Native_property_form : unsigned int {
     const Native_property_form form
 ) -> bool
 {
-    if (owner == "Item_base") {
-        return (name == "visible") || (name == "purpose") || (name == "active");
-    }
-    if (form == Native_property_form::custom_attributes) {
-        return false;
-    }
-    if (owner == "Material") {
-        return
-            (name == "base_color")                 || (name == "emissive")          ||
-            (name == "metallic")                   || (name == "roughness")         ||
-            (name == "opacity")                    || (name == "ior")               ||
-            (name == "occlusion_texture_strength") || (name == "blending_mode")     ||
-            (name == "alpha_cutoff")               || (name == "base_color_texture") ||
-            (name == "metallic_roughness_texture") || (name == "normal_texture")    ||
-            (name == "occlusion_texture")          || (name == "emissive_texture");
-    }
-    if (owner == "Camera") {
-        return
-            (name == "projection_type") || (name == "fov_x")       || (name == "fov_y")        ||
-            (name == "ortho_left")      || (name == "ortho_width") || (name == "ortho_bottom") ||
-            (name == "ortho_height")    || (name == "z_near")      || (name == "z_far")        ||
-            (name == "infinite_z_far")  || (name == "exposure");
-    }
-    if (owner == "Light") {
-        return
-            (name == "light_type")  || (name == "color")            || (name == "intensity")        ||
-            (name == "temperature") || (name == "inner_spot_angle") || (name == "outer_spot_angle") ||
-            (name == "cast_shadow");
-    }
-    return false;
+    return !native_usd_property_name(owner, name, form).empty();
 }
 
 // One `erhe:` custom attribute value. The USD type follows the erhe property
@@ -2399,6 +2424,15 @@ auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result
     Exporter        exporter{arguments, result};
     exporter.write();
     return result;
+}
+
+auto get_usd_authored_as(const std::string_view owner, const std::string_view name, const Native_property_form form) -> std::string
+{
+    const std::string_view native = native_usd_property_name(owner, name, form);
+    if (!native.empty()) {
+        return std::string{native};
+    }
+    return fmt::format("erhe:{}:{}", owner, name);
 }
 
 } // namespace erhe::usd

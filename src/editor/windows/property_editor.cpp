@@ -23,7 +23,7 @@ void Property_editor::resume()
 
 void Property_editor::push_group(std::string&& label, ImGuiTreeNodeFlags flags, float indent, bool* open_state)
 {
-    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, flags, indent, {}, {}, open_state});
+    m_entries.push_back(Entry{true, false, std::move(label), {}, {}, {}, flags, indent, {}, {}, open_state});
 }
 
 void Property_editor::pop_group()
@@ -33,12 +33,12 @@ void Property_editor::pop_group()
 
 void Property_editor::add_entry(std::string&& label, std::function<void()> editor, std::string&& tooltip, std::optional<uint32_t> label_text_color)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), std::move(tooltip), {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color});
+    m_entries.push_back(Entry{false, false, std::move(label), std::move(tooltip), {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color});
 }
 
 void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, uint32_t label_background_color, std::function<void()> editor)
 {
-    m_entries.push_back(Entry{false, false, std::move(label), {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
+    m_entries.push_back(Entry{false, false, std::move(label), {}, {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
 }
 
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
@@ -125,8 +125,15 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                     set_dirty_editing();
                 }
             }
-            if (row_hovered && !entry.tooltip.empty()) {
-                ImGui::SetTooltip("%s", entry.tooltip.c_str());
+            if (row_hovered && (!entry.tooltip.empty() || entry.tooltip_extra)) {
+                if (entry.tooltip_extra) {
+                    m_tooltip_scratch.clear(); // capacity kept; only a hovered row fills it
+                    m_tooltip_scratch += entry.tooltip;
+                    m_tooltip_scratch += entry.tooltip_extra();
+                    ImGui::SetTooltip("%s", m_tooltip_scratch.c_str());
+                } else {
+                    ImGui::SetTooltip("%s", entry.tooltip.c_str());
+                }
             }
         }
         ImGui::PopID();
@@ -137,6 +144,14 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
     ImGui::PopStyleVar(1);
 
     m_entries.clear();
+}
+
+void Property_editor::set_entry_tooltip_extra(std::function<std::string()> provider)
+{
+    if (m_entries.empty()) {
+        return;
+    }
+    m_entries.back().tooltip_extra = std::move(provider);
 }
 
 void Property_editor::use_state(Editor_state* state)

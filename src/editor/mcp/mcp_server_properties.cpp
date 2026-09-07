@@ -20,6 +20,7 @@
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "windows/attached_property_listing.hpp"
+#include "windows/property_origin.hpp"
 
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_property.hpp"
@@ -103,8 +104,16 @@ auto value_json(const erhe::property::Dependency_property& property, const erhe:
 }
 
 // One property of `object` as get_item_properties and
-// get_addable_item_properties list it.
-auto property_json(const erhe::property::Dependency_object& object, const erhe::property::Dependency_property& property) -> json
+// get_addable_item_properties list it. `origin_item` is the item whose
+// composition origin the entry reports (doc/usd-compatibility-plan.md X5);
+// it is null for the properties of a sub-object (D29), which no file spells
+// as a prim of its own.
+auto property_json(
+    App_context&                               context,
+    const erhe::property::Dependency_object&   object,
+    const erhe::property::Dependency_property& property,
+    const erhe::Item_base*                     origin_item
+) -> json
 {
     const erhe::property::Owner_type         owner_type = object.get_property_owner_type();
     const erhe::property::Property_registry& registry   = erhe::property::Property_registry::get();
@@ -154,19 +163,29 @@ auto property_json(const erhe::property::Dependency_object& object, const erhe::
         if (!metadata.ui.group.empty()) {
             entry["group"] = std::string{metadata.ui.group};
         }
+        if (origin_item != nullptr) {
+            const Property_origin origin = describe_property_origin(context, *origin_item, property);
+            entry["origin"] = {
+                {"layer",       origin.layer},
+                {"prim_path",   origin.prim_path},
+                {"arc",         std::string{c_str(origin.arc)}},
+                {"arc_target",  origin.arc_target},
+                {"authored_as", origin.authored_as}
+            };
+        }
         return entry;
     }
 }
 
 // The registered properties of `object` (an item or one of its sub-objects,
 // D29) as get_item_properties lists them.
-auto properties_json(const erhe::property::Dependency_object& object) -> json
+auto properties_json(App_context& context, const erhe::property::Dependency_object& object, const erhe::Item_base* origin_item) -> json
 {
     json properties = json::array();
     const erhe::property::Owner_type         owner_type = object.get_property_owner_type();
     const erhe::property::Property_registry& registry   = erhe::property::Property_registry::get();
     const auto add = [&](const erhe::property::Dependency_property& property) {
-        properties.push_back(property_json(object, property));
+        properties.push_back(property_json(context, object, property, origin_item));
     };
     registry.for_each_property_of_object(owner_type, add);
     // Attached properties: the D12 listing rule.
@@ -202,7 +221,7 @@ auto Mcp_server::query_item_properties(const json& args) -> std::string
         {"sealed", item->is_sealed()}, // lock_edit (D24): writes are refused
         {"style",  item->get_style() ? json(item->get_style()->get_reference_path()) : json(nullptr)} // D25
     };
-    json properties = properties_json(*item);
+    json properties = properties_json(m_context, *item, item.get());
     // Property sub-objects (D29): a mesh's primitives.
     json sub_objects = json::array();
     for (std::size_t i = 0, end = item->get_property_sub_object_count(); i < end; ++i) {
@@ -213,7 +232,7 @@ auto Mcp_server::query_item_properties(const json& args) -> std::string
         sub_objects.push_back({
             {"index",      i},
             {"label",      item->get_property_sub_object_label(i)},
-            {"properties", properties_json(*sub_object)}
+            {"properties", properties_json(m_context, *sub_object, nullptr)}
         });
     }
     // Attached properties with a local value on this item
@@ -259,7 +278,7 @@ auto Mcp_server::query_addable_item_properties(const json& args) -> std::string
     };
     json properties = json::array();
     for (const erhe::property::Dependency_property* property : candidates) {
-        properties.push_back(property_json(*item, *property));
+        properties.push_back(property_json(m_context, *item, *property, nullptr));
     }
     result["properties"] = properties;
     return make_json_content(result).dump();

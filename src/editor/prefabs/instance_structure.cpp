@@ -10,6 +10,10 @@
 
 #include <fmt/format.h>
 
+#include <memory>
+#include <string>
+#include <vector>
+
 namespace editor {
 
 namespace {
@@ -33,10 +37,9 @@ namespace {
     return nullptr;
 }
 
-// The Hierarchy an item's structural position is that of: the item itself,
-// or - for a Node_attachment, whose position in the tree is its prim's - the
-// prim it is attached to.
-[[nodiscard]] auto structural_hierarchy_of(const erhe::Item_base& item) -> const erhe::Hierarchy*
+} // anonymous namespace
+
+auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*
 {
     const erhe::Hierarchy* hierarchy = dynamic_cast<const erhe::Hierarchy*>(&item);
     if (hierarchy != nullptr) {
@@ -49,11 +52,9 @@ namespace {
     return nullptr;
 }
 
-} // anonymous namespace
-
 auto instance_structure_refusal(const erhe::Item_base& item) -> std::optional<std::string>
 {
-    const erhe::Hierarchy* hierarchy = structural_hierarchy_of(item);
+    const erhe::Hierarchy* hierarchy = get_structural_hierarchy(item);
     if (hierarchy == nullptr) {
         return {};
     }
@@ -92,7 +93,7 @@ auto instance_child_refusal(const erhe::Hierarchy& parent) -> std::optional<std:
 
 auto is_instance_structure_protected(const erhe::Item_base& item) -> bool
 {
-    const erhe::Hierarchy* hierarchy = structural_hierarchy_of(item);
+    const erhe::Hierarchy* hierarchy = get_structural_hierarchy(item);
     if (hierarchy == nullptr) {
         return false;
     }
@@ -105,6 +106,45 @@ auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool
 {
     std::shared_ptr<Prefab_instance> prefab_instance{};
     return find_carrier(&parent, prefab_instance) != nullptr;
+}
+
+auto find_instance_position(const erhe::Item_base& item) -> Instance_position
+{
+    Instance_position      result{};
+    const erhe::Hierarchy* hierarchy = get_structural_hierarchy(item);
+    if (hierarchy == nullptr) {
+        return result;
+    }
+    // Names are collected walking up to the carrier and joined in reverse;
+    // the LAST of them is the carrier's own child, the clone of the arc's
+    // target prim, which the USD writer collapses onto the carrier.
+    std::vector<const std::string*> names;
+    const erhe::Hierarchy*          walk = hierarchy;
+    while (walk != nullptr) {
+        const std::shared_ptr<erhe::Hierarchy> parent = walk->get_parent().lock();
+        if (!parent) {
+            return Instance_position{};
+        }
+        std::shared_ptr<Prefab_instance> prefab_instance{};
+        const erhe::scene::Xformable*    parent_prim = dynamic_cast<const erhe::scene::Xformable*>(parent.get());
+        if (parent_prim != nullptr) {
+            prefab_instance = erhe::scene::get_attachment<Prefab_instance>(parent_prim);
+        }
+        if (prefab_instance) {
+            result.carrier         = parent.get();
+            result.prefab_instance = prefab_instance;
+            for (std::size_t i = names.size(); i > 0; --i) {
+                if (!result.relative_path.empty()) {
+                    result.relative_path.push_back('/');
+                }
+                result.relative_path.append(*names[i - 1]);
+            }
+            return result;
+        }
+        names.push_back(&walk->get_name());
+        walk = parent.get();
+    }
+    return result;
 }
 
 auto is_sealed_prefab_instance(const Prefab_instance& prefab_instance) -> bool

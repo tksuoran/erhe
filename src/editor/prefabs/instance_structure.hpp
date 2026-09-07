@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -41,6 +42,28 @@ class Prefab_instance;
 // The same two questions, answered without formatting a message.
 [[nodiscard]] auto is_instance_structure_protected(const erhe::Item_base& item) -> bool;
 [[nodiscard]] auto refuses_instance_child(const erhe::Hierarchy& parent) -> bool;
+
+// The Hierarchy an item's position in the tree is that of: the item itself,
+// or - for a Node_attachment, whose position is its prim's - the prim it is
+// attached to. nullptr for an item that is in no tree.
+[[nodiscard]] auto get_structural_hierarchy(const erhe::Item_base& item) -> const erhe::Hierarchy*;
+
+// Where an item sits inside a prefab instance
+// (doc/usd-compatibility-plan.md X1, X5). `carrier` is the referencing prim
+// at or above the item and `prefab_instance` its first arc; `relative_path`
+// is the item's M1 path below the arc's target clone, which is the carrier's
+// own child - so an empty path means the item IS that clone, the level a USD
+// save collapses onto the carrier prim. Everything is null / empty when the
+// item is inside no instance.
+class Instance_position final
+{
+public:
+    const erhe::Hierarchy*           carrier{nullptr};
+    std::shared_ptr<Prefab_instance> prefab_instance{};
+    std::string                      relative_path{};
+};
+
+[[nodiscard]] auto find_instance_position(const erhe::Item_base& item) -> Instance_position;
 
 // Whether this instance's interior is sealed (lock_edit and the viewport
 // locks, seal_instance_subtree): the glTF prefab editing model of

@@ -359,6 +359,15 @@ because the same spelling rule decides what an item is called on a stage.
   traversal, but the Tydra render-scene conversion the importer walks does
   not prune them - the item is created inactive, which is what lets the
   opinion round-trip.
+- The name a value is authored under. `native_usd_property_name` is the one
+  list of the erhe properties a prim carries in an attribute of its schema and
+  of the USD spelling each of them gets (`surface.inputs:diffuseColor`,
+  `clippingRange`, `inputs:shaping:coneAngle`, ...); the writer's
+  custom-attribute pass asks it whether to spell a value `erhe:Owner:name`
+  instead. `get_usd_authored_as` is that question as a public answer, for the
+  Properties window's composition-provenance line
+  (`doc/usd-compatibility-plan.md` X5); `Native_property_form` says which of
+  the two forms the prim being written offers.
 - Name sanitizing. `sanitize_usd_identifier` replaces every character outside
   `[A-Za-z0-9_]` with `_` and prefixes `_` to a name starting with a digit.
   Sanitizing can map two distinct item names onto one spelling, so the writer

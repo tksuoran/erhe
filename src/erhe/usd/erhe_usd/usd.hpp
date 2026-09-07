@@ -355,6 +355,25 @@ public:
 // onto one spelling still yield two prims.
 [[nodiscard]] auto sanitize_usd_identifier(std::string_view name) -> std::string;
 
+// How the prim an item is written as carries a property value. A prim of a
+// USD schema - a Material, a Camera, a UsdLux light - spells the fields its
+// schema owns natively, while a typeless prim (an `over` of
+// doc/usd-compatibility-plan.md X2, a `class` of X3) has no schema at all, so
+// every value of it travels as an `erhe:Owner:name` custom attribute.
+enum class Native_property_form : unsigned int {
+    schema_attributes = 0,
+    custom_attributes = 1
+};
+
+// The name the writer authors the property `owner`.`name` under on such a
+// prim: the USD schema's own spelling where the prim carries the value
+// natively, and `erhe:<owner>:<name>` everywhere else. The Properties
+// window's composition-provenance line (doc/usd-compatibility-plan.md X5)
+// reads it, so the writer's naming rule is stated once, here. A bridged
+// property - the transform, the item name, the tags - is not asked: it
+// travels in the USD form that owns it, which the caller names.
+[[nodiscard]] auto get_usd_authored_as(std::string_view owner, std::string_view name, Native_property_form form) -> std::string;
+
 // One image the writer binds into a material's shading network. The caller
 // resolves the image to a file: erhe::usd creates no GPU object and decodes
 // nothing, so a texture without a source file (a generated one) has no entry

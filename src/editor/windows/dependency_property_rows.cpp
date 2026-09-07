@@ -4,6 +4,7 @@
 #include "windows/attached_property_listing.hpp"
 #include "windows/item_reference.hpp"
 #include "windows/property_editor.hpp"
+#include "windows/property_origin.hpp"
 
 #include "app_context.hpp"
 #include "editor_log.hpp"
@@ -677,6 +678,25 @@ void Dependency_property_rows::row(Property_editor& editor, const Dependency_pro
         },
         std::move(tooltip),
         c_property_row_label_color
+    );
+    // The composition origin (doc/usd-compatibility-plan.md X5) is appended
+    // to the tooltip only while the row is hovered: it walks the item's
+    // ancestors and formats strings, which no frame should pay per row. The
+    // item is captured by weak reference so a hovered row cannot keep the
+    // content of a closed scene alive. A sub-object row (D29) reads the
+    // sub-object's own layers, which no file spells as a prim of its own, so
+    // it gets no origin.
+    if (m_sub_object.has_value()) {
+        return;
+    }
+    editor.set_entry_tooltip_extra(
+        [this, item = std::weak_ptr<erhe::Item_base>{m_items->front()}, &property]() -> std::string {
+            const std::shared_ptr<erhe::Item_base> locked = item.lock();
+            if (!locked) {
+                return {};
+            }
+            return property_origin_tooltip(describe_property_origin(m_context, *locked.get(), property));
+        }
     );
 }
 

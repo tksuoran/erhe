@@ -290,6 +290,29 @@ record has the history.
   prim, a primitive named `<mesh path>#<index>`, the selection in the
   scene block (`src/erhe/gltf/notes.md`). Node subtree variants and
   opinions beyond material bindings are section 6.
+- X5 Composition provenance in the Properties window: erhe resolves every
+  arc itself - references and payloads as prefab instances with the
+  reference layer (X1, X2), `over` opinions as local values (X2), class
+  inherits as styles (X3), variant selections as bindings (X4) - so the
+  erhe value source IS the composition provenance, and a value's origin in
+  USD terms is a function of `Value_source` plus what the editor knows
+  about the item: its scene's file, its prim path, the `Prefab_instance`
+  carrier above it and the `Style` it uses.
+  `editor::describe_property_origin`
+  (`src/editor/windows/property_origin.hpp`) derives it on demand - layer,
+  prim path, arc, arc target and the attribute a save spells the value as,
+  the last from `erhe::usd::get_usd_authored_as`, which owns the writer's
+  naming rule - and keeps nothing alive: LightUSD's `ArcOrigin` is
+  prim-level and records implied inherits only, so a live `Layer` would add
+  nothing erhe cannot already say. A Properties row appends the origin to
+  its tooltip while it is hovered (`Property_editor::set_entry_tooltip_extra`)
+  and MCP `get_item_properties` reports it as each property's `origin`
+  (`doc/usd_compatibility.md` "Where a value comes from",
+  `src/editor/windows/notes.md`, `mcp_server_usage.md`). A glTF-backed
+  scene answers in the same shape with the glTF file as the layer and
+  `properties["Owner.name"]` of the item's `ERHE_*` extension as the
+  attribute. The `pcp` DAG engine stays the option for a full-stack case
+  (sublayers, section 5); live re-composition after an edit is not planned.
 
 ## 3. Remaining steps
 
@@ -297,15 +320,6 @@ Steps are grouped by what they touch: M = model generalization (no USD
 code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### X5 Composition provenance in the Properties window (M)
-
-What: an imported stage keeps its LightUSD `Layer` alive in `erhe::usd`;
-a property row shows, next to the erhe `Value_source`, the USD arc and
-layer the value came from (LightUSD `ArcOrigin`, or the `pcp` DAG engine
-when full provenance is wanted). This is the "composition in the editor"
-feature in its read-only form; live re-composition after an edit is the
-step after it and is not planned here.
 
 ### E4 Editor state in a USD file (M; completes G2)
 
@@ -341,11 +355,10 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. X5 composition provenance in the Properties window
-2. E4 editor state in a USD file (completes G2)
-3. E2 material fidelity
+1. E4 editor state in a USD file (completes G2)
+2. E2 material fidelity
 
-Dependencies: X5, E4 and E2 need nothing that has not landed.
+Dependencies: E4 and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 

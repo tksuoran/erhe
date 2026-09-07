@@ -217,4 +217,28 @@ mechanism composes as, and what has no erhe counterpart yet.
 | prefab instance from a `payload` arc | payloads (`P`) | read and written as the arc form it is; erhe's prefab library loads eagerly, so a payload is never deferred |
 | none | `specializes` (`S`) | |
 | none | sublayers, session layer | an undo stack is not a layer |
-| `Value_source` | opinion provenance | |
+| `Value_source` | opinion provenance | erhe resolves every arc itself, so the erhe value source IS the composition provenance; the table below restates each source as the USD origin the Properties window and MCP report (`doc/usd-compatibility-plan.md` X5) |
+
+### Where a value comes from
+
+`editor::describe_property_origin` derives this on demand from the item, its
+scene's file, the `Prefab_instance` carrier above it and the `Style` it uses;
+nothing is stored and no layer is kept alive. `layer` is the file the value is
+authored in ("session" for a scene with no file yet), `prim path` the path in
+that layer that authors it, `arc` the arc that brings it to the item's own
+prim, and `authored as` the attribute the writer spells it as
+(`erhe::usd::get_usd_authored_as` owns that naming rule).
+
+| `Value_source` | layer | prim path | arc | authored as |
+|---|---|---|---|---|
+| `local` | the scene's root layer | the item's own prim path; inside an instance, the `over`'s collapsed path below the carrier | `root layer`, or the carrier's `reference` / `payload` for an override | the native schema attribute, or `erhe:Owner:name` |
+| `expression` | the scene's root layer | as `local` | as `local` | not saved: a formula is session state (D14) |
+| `reference` | the arc's target file | the counterpart's path below the arc's target prim | `reference` / `payload`, naming the arc's target; a counterpart inside a nested instance appends its own arc after `->` | as `local` |
+| `style` | the scene's root layer | the class prim of the style in the chain (M7) that authors the value | `inherits`, targeting that class prim | `erhe:Owner:name` (a class prim is typeless) |
+| `inherited` | the ancestor's | the ancestor's | the ancestor's | the ancestor's |
+| `computed` | none | none | `none` | computed |
+| `default_value` | none | none | `none` | schema fallback |
+
+A glTF-backed scene answers in the same shape: the glTF file is the layer, the
+item's M1 path is the prim path, and a value is authored as
+`properties["Owner.name"]` of the `ERHE_*` extension that carries the item.
