@@ -62,6 +62,34 @@ translation units.
   Every other mesh becomes an `erhe::primitive::Triangle_soup` with one
   vertex per polygon corner and polygons fanned into triangles, the carrier
   glTF primitives use.
+- The UsdGeom primitive schemas - `Cube`, `Sphere`, `Cone`, `Cylinder`,
+  `Capsule` and the `Cylinder_1` / `Capsule_1` schema variants - import as
+  the meshes they describe, so the erhe item is an `erhe::scene::Mesh` and a
+  save writes `def Mesh` with points: the file's `Cube` spelling is not kept.
+  The geometry is built from the prim's own schema attributes by the erhe
+  generator of that shape (`erhe::geometry::shapes::make_box` /
+  `make_sphere` / `make_cone` / `make_cylinder` / `make_conical_frustum` /
+  `make_capsule`) rather than from Tydra's tessellation of the same prim,
+  which is a triangle list with no shared vertices and therefore no usable
+  topology. The tessellation is fixed and documented at the constants
+  (32 slices around the axis, 16 stacks for a sphere, 8 per capsule cap, one
+  along a cone or cylinder, whose side is ruled), the `axis` token is baked
+  into the geometry rather than into the node transform so the prim's own
+  xformOps stay what the file authored, and the geometry is normative the
+  way a `subdivisionScheme = none` mesh is, so the item carries a `Geometry`
+  and its edges. `Capsule_1` needs a tangent cone between its two cap
+  spheres, so radii further apart than the height cost one warning and
+  become a capsule of the larger radius. The prim binds a material the way
+  any Gprim does; it holds no `GeomSubset`, so the mesh has one primitive.
+  The first save is a change of representation, so the round trip is a fixed
+  point from the first reload on rather than from the first save.
+  `PointInstancer` remains an `erhe::Typed` prim (plan section 5).
+- Tydra's `GetPropertyNames` knows a fixed set of prim types and answers
+  "TODO: Prim type <name>" for the primitive schemas, so the authored
+  property names of one of those prims are read from the prim itself: the
+  attributes every `GPrim` carries and the custom properties of its `props`
+  map. That is what lets `visibility`, `purpose` and the `erhe:` custom
+  attributes of a `Cube` prim be read at all.
 - Every prim the conversion gives a transform to keeps the xformOp stack it
   was authored with, next to the transform Tydra composed for it
   (`doc/usd-compatibility-plan.md` M8, `src/erhe/scene/notes.md` "Authored
@@ -673,6 +701,16 @@ path in it, an internal reference to a prim of the same layer, a list-edited
 arcs are reported in the order they resolve to, with the right targets and
 kinds, that the carrier prims are imported with their own transforms, and that
 the prims the arcs name are not.
+
+`test/data/primitives.usda` holds one prim of each UsdGeom primitive schema -
+a `Cube`, a `Sphere`, a `Cone` and a `Capsule` on Z, a `Cylinder` on Y bound
+to a material, and a `Cylinder_1` with a radius per end.
+`test_usd_primitives.cpp` asserts that each becomes a `Mesh` prim with one
+primitive, facets and edges, that the size / radius / height / `axis`
+attributes land where the generator puts them, that the binding reaches the
+primitive, that a save writes `def Mesh` with points and no `Cube` or
+`Cylinder` spelling, and that the round trip settles after the first reload
+(save two and save three are byte-identical).
 
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test

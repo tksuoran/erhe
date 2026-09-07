@@ -16,6 +16,7 @@ add_executable(${_target}
     test_usd_export.cpp
     test_usd_import.cpp
     test_usd_materials.cpp
+    test_usd_primitives.cpp
     test_usd_prims.cpp
     test_usd_references.cpp
     test_usd_styles.cpp

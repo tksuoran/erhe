@@ -1,0 +1,84 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Looks"
+    {
+        def Material "Red"
+        {
+            token outputs:surface.connect = </World/Looks/Red/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.9, 0.1, 0.1)
+                token outputs:surface
+            }
+        }
+    }
+
+    def DistantLight "Sun"
+    {
+        color3f inputs:color = (1, 0.95, 0.9)
+        float inputs:intensity = 3
+        double3 xformOp:rotateXYZ = (-45, 30, 0)
+        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+    }
+
+    def Cube "Box"
+    {
+        double3 xformOp:translate = (-6, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        double size = 2
+    }
+
+    def Sphere "Ball"
+    {
+        double3 xformOp:translate = (-3.5, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        double radius = 1.5
+    }
+
+    def Cone "Spike"
+    {
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        uniform token axis = "Z"
+        double height = 2
+        double radius = 0.5
+    }
+
+    def Cylinder "Pipe"
+    {
+        double3 xformOp:translate = (3, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        uniform token axis = "Y"
+        double height = 3
+        double radius = 0.5
+        rel material:binding = </World/Looks/Red>
+    }
+
+    def Capsule "Pill"
+    {
+        double3 xformOp:translate = (5.5, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        uniform token axis = "Z"
+        double height = 1
+        double radius = 0.4
+    }
+
+    def Cylinder_1 "Taper"
+    {
+        double3 xformOp:translate = (8, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        uniform token axis = "Y"
+        double height = 2
+        double radiusBottom = 1
+        double radiusTop = 0.25
+    }
+}

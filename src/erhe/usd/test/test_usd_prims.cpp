@@ -102,12 +102,12 @@ TEST_F(Prim_import, scope_prim_is_a_scope)
 
 TEST_F(Prim_import, prim_without_an_erhe_class_is_typed)
 {
-    const std::shared_ptr<erhe::Hierarchy> box = find_prim(root, "Box");
-    ASSERT_TRUE(box.operator bool());
-    ASSERT_TRUE(erhe::is<erhe::Typed>(box.get()));
-    EXPECT_FALSE(erhe::is<erhe::Scope>(box.get()));
-    EXPECT_FALSE(erhe::is<erhe::scene::Node>(box.get()));
-    EXPECT_EQ(static_cast<const erhe::Typed*>(box.get())->get_prim_type_name(), "Cube");
+    const std::shared_ptr<erhe::Hierarchy> cloud = find_prim(root, "Cloud");
+    ASSERT_TRUE(cloud.operator bool());
+    ASSERT_TRUE(erhe::is<erhe::Typed>(cloud.get()));
+    EXPECT_FALSE(erhe::is<erhe::Scope>(cloud.get()));
+    EXPECT_FALSE(erhe::is<erhe::scene::Node>(cloud.get()));
+    EXPECT_EQ(static_cast<const erhe::Typed*>(cloud.get())->get_prim_type_name(), "Points");
 }
 
 TEST_F(Prim_import, typeless_def_is_typed_without_a_token)
@@ -134,7 +134,7 @@ TEST_F(Prim_import, prims_are_listed)
         }
     }
     EXPECT_EQ(scope_count, 1u);
-    EXPECT_EQ(typed_count, 2u); // the Cube prim and the typeless def
+    EXPECT_EQ(typed_count, 2u); // the Points prim and the typeless def
 }
 
 // A prim outside Xformable carries no transform, so the mesh under the scope
@@ -207,10 +207,10 @@ TEST_F(Prim_round_trip, every_class_comes_back)
     ASSERT_EQ(group->get_children().size(), 1u);
     EXPECT_TRUE(erhe::is<erhe::scene::Node>(group->get_children().front().get()));
 
-    const std::shared_ptr<erhe::Hierarchy> box = find_prim(reloaded_root, "Box");
-    ASSERT_TRUE(box.operator bool());
-    ASSERT_TRUE(erhe::is<erhe::Typed>(box.get()));
-    EXPECT_EQ(static_cast<const erhe::Typed*>(box.get())->get_prim_type_name(), "Cube");
+    const std::shared_ptr<erhe::Hierarchy> cloud = find_prim(reloaded_root, "Cloud");
+    ASSERT_TRUE(cloud.operator bool());
+    ASSERT_TRUE(erhe::is<erhe::Typed>(cloud.get()));
+    EXPECT_EQ(static_cast<const erhe::Typed*>(cloud.get())->get_prim_type_name(), "Points");
 
     const std::shared_ptr<erhe::Hierarchy> untyped = find_prim(reloaded_root, "Untyped");
     ASSERT_TRUE(untyped.operator bool());

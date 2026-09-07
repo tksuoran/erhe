@@ -4,6 +4,10 @@
 
 #include "erhe_dataformat/vertex_format.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_geometry/shapes/box.hpp"
+#include "erhe_geometry/shapes/capsule.hpp"
+#include "erhe_geometry/shapes/cone.hpp"
+#include "erhe_geometry/shapes/sphere.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
@@ -46,6 +50,7 @@
 #include "timesamples.hh"
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <fmt/format.h>
@@ -744,6 +749,13 @@ private:
         if ((result = as_xformable<lightusd::RectLight    >(prim)) != nullptr) { return result; }
         if ((result = as_xformable<lightusd::DiskLight    >(prim)) != nullptr) { return result; }
         if ((result = as_xformable<lightusd::CylinderLight>(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCube      >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomSphere    >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCone      >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCylinder  >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCylinder_1>(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCapsule   >(prim)) != nullptr) { return result; }
+        if ((result = as_xformable<lightusd::GeomCapsule_1 >(prim)) != nullptr) { return result; }
         return nullptr;
     }
 
@@ -784,6 +796,18 @@ private:
         return true;
     }
 
+    // Whether the render-scene conversion evaluated a transform for the prim.
+    // Tydra composes a local matrix only for the prim types it carries; for a
+    // prim it does not know - the `_1` primitive-schema variants, whose
+    // meshes erhe builds itself (S1) - it reports the identity, so the
+    // authored xformOp stack is the prim's transform and there is nothing to
+    // compare it against.
+    enum class Composed_transform
+    {
+        evaluated,
+        unevaluated
+    };
+
     // The local transform of an imported prim: its authored stack when it has
     // a readable one, else the matrix Tydra composed. `extra_transform` is the
     // stage's upAxis / metersPerUnit correction (make_stage_transform), which
@@ -791,9 +815,10 @@ private:
     // applies to writes a transform that is not what its ops say, so it keeps
     // the composed matrix and no stack.
     void apply_local_transform(
-        erhe::scene::Node& node,
-        const Tydra_node&  usd_node,
-        const glm::mat4&   extra_transform
+        erhe::scene::Node&       node,
+        const Tydra_node&        usd_node,
+        const glm::mat4&         extra_transform,
+        const Composed_transform composed_transform
     )
     {
         const glm::mat4 composed = to_glm(usd_node.local_matrix);
@@ -801,7 +826,7 @@ private:
             erhe::scene::Xform_op_stack stack{};
             if (read_xform_op_stack(usd_node.abs_path, stack)) {
                 const glm::mat4 stack_matrix{stack.compose()};
-                if (is_near_matrix(stack_matrix, composed)) {
+                if ((composed_transform == Composed_transform::unevaluated) || is_near_matrix(stack_matrix, composed)) {
                     node.set_xform_op_stack(std::move(stack));
                     return;
                 }
@@ -859,11 +884,47 @@ private:
                 for (std::string& name : name_list) {
                     names.insert(std::move(name));
                 }
-            } else if (!error.empty()) {
+            } else if (!read_gprim_property_names(*prim, names) && !error.empty()) {
                 log_usd->warn("USD prim '{}': {}", absolute_path, error);
             }
         }
         return m_authored_property_names.emplace(absolute_path, std::move(names)).first->second;
+    }
+
+    // The authored property names of one GPrim-derived prim, read from the
+    // prim itself: the attributes every GPrim carries, and the custom
+    // properties of its `props` map. Tydra's GetPropertyNames knows a fixed
+    // set of prim types and answers "TODO: Prim type <name>" for the UsdGeom
+    // primitive schemas (S1), so this is what lets a `Cube` prim's
+    // `visibility`, `purpose` and `erhe:` attributes be read at all.
+    template <typename T>
+    [[nodiscard]] static auto read_typed_gprim_property_names(const lightusd::Prim& prim, std::set<std::string>& names) -> bool
+    {
+        const T* typed = prim.as<T>();
+        if (typed == nullptr) {
+            return false;
+        }
+        if (typed->visibility.authored())  { names.insert("visibility");  }
+        if (typed->purpose.authored())     { names.insert("purpose");     }
+        if (typed->doubleSided.authored()) { names.insert("doubleSided"); }
+        if (typed->orientation.authored()) { names.insert("orientation"); }
+        if (typed->extent.authored())      { names.insert("extent");      }
+        for (const std::pair<const std::string, lightusd::Property>& property : typed->props) {
+            names.insert(property.first);
+        }
+        return true;
+    }
+
+    [[nodiscard]] static auto read_gprim_property_names(const lightusd::Prim& prim, std::set<std::string>& names) -> bool
+    {
+        return
+            read_typed_gprim_property_names<lightusd::GeomCube      >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomSphere    >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomCone      >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomCylinder  >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomCylinder_1>(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomCapsule   >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomCapsule_1 >(prim, names);
     }
 
     [[nodiscard]] auto is_authored(const std::string& absolute_path, const std::string& name) -> bool
@@ -914,7 +975,14 @@ private:
             read_visibility_and_purpose<lightusd::DistantLight >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::RectLight    >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::DiskLight    >(prim, visibility, purpose) ||
-            read_visibility_and_purpose<lightusd::CylinderLight>(prim, visibility, purpose);
+            read_visibility_and_purpose<lightusd::CylinderLight>(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCube      >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomSphere    >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCone      >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCylinder  >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCylinder_1>(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCapsule   >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomCapsule_1 >(prim, visibility, purpose);
     }
 
     // `visibility` and `purpose` land on the erhe item properties that carry
@@ -1636,15 +1704,22 @@ private:
                 ? fmt::format("mesh_{}", mesh_index)
                 : usd_mesh.prim_name;
 
-            std::shared_ptr<erhe::scene::Mesh> mesh = std::make_shared<erhe::scene::Mesh>(mesh_name);
-            mesh->set_source_path(m_arguments.path);
-            mesh->layer_id = m_arguments.mesh_layer_id;
-            mesh->enable_flag_bits(
-                erhe::Item_flags::content    |
-                erhe::Item_flags::show_in_ui |
-                erhe::Item_flags::id
-            );
-            mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
+            std::shared_ptr<erhe::scene::Mesh> mesh = make_mesh_shell(mesh_name);
+
+            // A primitive-schema prim is the shape its schema attributes
+            // describe, tessellated by the erhe generator of that shape
+            // (S1). Tydra converts one of these to a triangle list with no
+            // shared vertices, which carries no usable topology, so the
+            // schema attributes are read instead and Tydra's tessellation of
+            // this prim is left unused.
+            const std::string prim_type_name = read_prim_type_name(usd_mesh.abs_path);
+            if (is_primitive_schema_prim_type(prim_type_name)) {
+                add_primitive_schema_primitive(*mesh.get(), usd_mesh.abs_path, prim_type_name, material_at(usd_mesh.material_id));
+                m_mesh_group_names.push_back(std::vector<std::string>{std::string{}});
+                m_mesh_index_by_path.emplace(usd_mesh.abs_path, mesh_index);
+                m_result.data.meshes.push_back(mesh);
+                continue;
+            }
 
             const bool                       geometry_normative   = is_geometry_normative(usd_mesh.abs_path);
             const std::vector<std::uint32_t> facet_corner_offsets = make_facet_corner_offsets(usd_mesh);
@@ -1678,6 +1753,339 @@ private:
             m_mesh_index_by_path.emplace(usd_mesh.abs_path, mesh_index);
             m_result.data.meshes.push_back(mesh);
         }
+    }
+
+    // The UsdGeom primitive schemas erhe builds geometry for: a `Cube`,
+    // `Sphere`, `Cone`, `Cylinder`, `Capsule` or one of the `_1` schema
+    // variants is the mesh its schema attributes describe
+    // (doc/usd-compatibility-plan.md S1). Tydra converts no geometry for
+    // these types, so the conversion reads the raw prim and tessellates the
+    // analytic surface with the erhe generator of that shape.
+    [[nodiscard]] static auto is_primitive_schema_prim_type(const std::string& type_name) -> bool
+    {
+        return
+            (type_name == "Cube")       ||
+            (type_name == "Sphere")     ||
+            (type_name == "Cone")       ||
+            (type_name == "Cylinder")   ||
+            (type_name == "Cylinder_1") ||
+            (type_name == "Capsule")    ||
+            (type_name == "Capsule_1");
+    }
+
+    // A schema attribute's value at the default time. An unauthored
+    // attribute answers with the schema fallback the prim struct carries,
+    // and a time-sampled one with `fallback` - erhe reads no animation here.
+    [[nodiscard]] static auto read_schema_double(
+        const lightusd::TypedAttributeWithFallback<lightusd::Animatable<double>>& attribute,
+        const double                                                              fallback
+    ) -> double
+    {
+        double value = fallback;
+        if (attribute.get_value().get_default(&value)) {
+            return value;
+        }
+        return fallback;
+    }
+
+    // The rotation that takes the generator's own axis onto the prim's
+    // `axis` token. The rotation is baked into the geometry rather than into
+    // the node transform, so the prim's own xformOps stay what the file
+    // authored (M8).
+    [[nodiscard]] static auto rotation_from_x_axis(const lightusd::Axis axis) -> glm::mat4
+    {
+        switch (axis) {
+            case lightusd::Axis::X: return glm::mat4{1.0f};
+            case lightusd::Axis::Y: return glm::rotate(glm::mat4{1.0f},  glm::half_pi<float>(), glm::vec3{0.0f, 0.0f, 1.0f});
+            default:                return glm::rotate(glm::mat4{1.0f}, -glm::half_pi<float>(), glm::vec3{0.0f, 1.0f, 0.0f});
+        }
+    }
+
+    [[nodiscard]] static auto rotation_from_y_axis(const lightusd::Axis axis) -> glm::mat4
+    {
+        switch (axis) {
+            case lightusd::Axis::X: return glm::rotate(glm::mat4{1.0f}, -glm::half_pi<float>(), glm::vec3{0.0f, 0.0f, 1.0f});
+            case lightusd::Axis::Y: return glm::mat4{1.0f};
+            default:                return glm::rotate(glm::mat4{1.0f},  glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f});
+        }
+    }
+
+    // Fixed tessellation of the primitive schemas. A USD primitive is an
+    // analytic surface and an erhe Geometry is polygonal, so the conversion
+    // picks the subdivision: 32 slices around the axis reads as smooth at
+    // unit scale, 16 stacks give a sphere its latitude rings, 8 stacks per
+    // hemisphere do the same for a capsule's caps, and a cone or cylinder
+    // needs one stack along its axis because its side is ruled.
+    static constexpr int          c_schema_slice_count           = 32;
+    static constexpr int          c_schema_stack_count           = 1;
+    static constexpr unsigned int c_schema_sphere_slice_count    = 32;
+    static constexpr unsigned int c_schema_sphere_stack_count    = 16;
+    static constexpr int          c_schema_capsule_stack_count   = 8;
+
+    // The geometry one primitive-schema prim describes, in the prim's own
+    // local space: USD centers each of these shapes on the origin, so the
+    // generator output is centered too and only the axis rotation is baked
+    // in. Null when the prim is not of the type its `typeName` names.
+    [[nodiscard]] auto build_primitive_schema_geometry(
+        const lightusd::Prim& prim,
+        const std::string&    type_name,
+        const std::string&    absolute_path,
+        const std::string&    name
+    ) -> std::shared_ptr<erhe::geometry::Geometry>
+    {
+        std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(name);
+        GEO::Mesh&                                geo_mesh = geometry->get_mesh();
+        glm::mat4                                 rotation{1.0f};
+        if (type_name == "Cube") {
+            const lightusd::GeomCube* cube = prim.as<lightusd::GeomCube>();
+            if (cube == nullptr) {
+                return {};
+            }
+            const float size = static_cast<float>(read_schema_double(cube->size, 2.0));
+            erhe::geometry::shapes::make_box(geo_mesh, size, size, size);
+        } else if (type_name == "Sphere") {
+            const lightusd::GeomSphere* sphere = prim.as<lightusd::GeomSphere>();
+            if (sphere == nullptr) {
+                return {};
+            }
+            erhe::geometry::shapes::make_sphere(
+                geo_mesh,
+                static_cast<float>(read_schema_double(sphere->radius, 1.0)),
+                c_schema_sphere_slice_count,
+                c_schema_sphere_stack_count
+            );
+        } else if (type_name == "Cone") {
+            const lightusd::GeomCone* cone = prim.as<lightusd::GeomCone>();
+            if (cone == nullptr) {
+                return {};
+            }
+            const float height = static_cast<float>(read_schema_double(cone->height, 2.0));
+            const float radius = static_cast<float>(read_schema_double(cone->radius, 1.0));
+            erhe::geometry::shapes::make_cone(
+                geo_mesh,
+                -0.5f * height,
+                 0.5f * height,
+                radius,
+                true, // the base disc is part of the surface
+                c_schema_slice_count,
+                c_schema_stack_count
+            );
+            rotation = rotation_from_x_axis(cone->axis.get_value());
+        } else if (type_name == "Cylinder") {
+            const lightusd::GeomCylinder* cylinder = prim.as<lightusd::GeomCylinder>();
+            if (cylinder == nullptr) {
+                return {};
+            }
+            const float height = static_cast<float>(read_schema_double(cylinder->height, 2.0));
+            const float radius = static_cast<float>(read_schema_double(cylinder->radius, 1.0));
+            erhe::geometry::shapes::make_cylinder(
+                geo_mesh,
+                -0.5f * height,
+                 0.5f * height,
+                radius,
+                true,
+                true,
+                c_schema_slice_count,
+                c_schema_stack_count
+            );
+            rotation = rotation_from_x_axis(cylinder->axis.get_value());
+        } else if (type_name == "Cylinder_1") {
+            const lightusd::GeomCylinder_1* cylinder = prim.as<lightusd::GeomCylinder_1>();
+            if (cylinder == nullptr) {
+                return {};
+            }
+            const float height        = static_cast<float>(read_schema_double(cylinder->height,       2.0));
+            const float radius_top    = static_cast<float>(read_schema_double(cylinder->radiusTop,    1.0));
+            const float radius_bottom = static_cast<float>(read_schema_double(cylinder->radiusBottom, 1.0));
+            erhe::geometry::shapes::make_conical_frustum(
+                geo_mesh,
+                -0.5f * height,
+                 0.5f * height,
+                radius_bottom,
+                radius_top,
+                true,
+                true,
+                c_schema_slice_count,
+                c_schema_stack_count
+            );
+            rotation = rotation_from_x_axis(cylinder->axis.get_value());
+        } else if (type_name == "Capsule") {
+            const lightusd::GeomCapsule* capsule = prim.as<lightusd::GeomCapsule>();
+            if (capsule == nullptr) {
+                return {};
+            }
+            // USD's `height` is the length of the cylindrical mid-section,
+            // which is erhe's `length`; the total height is height + 2 *
+            // radius in both.
+            erhe::geometry::shapes::make_capsule(
+                geo_mesh,
+                static_cast<float>(read_schema_double(capsule->radius, 0.5)),
+                static_cast<float>(read_schema_double(capsule->height, 2.0)),
+                c_schema_slice_count,
+                c_schema_capsule_stack_count
+            );
+            rotation = rotation_from_y_axis(capsule->axis.get_value());
+        } else if (type_name == "Capsule_1") {
+            const lightusd::GeomCapsule_1* capsule = prim.as<lightusd::GeomCapsule_1>();
+            if (capsule == nullptr) {
+                return {};
+            }
+            const float height        = static_cast<float>(read_schema_double(capsule->height,       1.0));
+            const float radius_top    = static_cast<float>(read_schema_double(capsule->radiusTop,    0.5));
+            const float radius_bottom = static_cast<float>(read_schema_double(capsule->radiusBottom, 0.5));
+            // The tapered generator needs a tangent cone between the two cap
+            // spheres, which exists only while neither sphere contains the
+            // other. A prim that authors radii too far apart for its height
+            // is one warning and the larger radius as a plain capsule.
+            if ((radius_top != radius_bottom) && (std::abs(radius_top - radius_bottom) >= height)) {
+                const float radius = std::max(radius_top, radius_bottom);
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': radiusTop {} and radiusBottom {} are further apart than height {} - it becomes a capsule of radius {}",
+                        absolute_path,
+                        radius_top,
+                        radius_bottom,
+                        height,
+                        radius
+                    )
+                );
+                erhe::geometry::shapes::make_capsule(geo_mesh, radius, height, c_schema_slice_count, c_schema_capsule_stack_count);
+            } else if (radius_top == radius_bottom) {
+                erhe::geometry::shapes::make_capsule(geo_mesh, radius_top, height, c_schema_slice_count, c_schema_capsule_stack_count);
+            } else {
+                erhe::geometry::shapes::make_capsule(
+                    geo_mesh,
+                    radius_bottom,
+                    radius_top,
+                    height,
+                    c_schema_slice_count,
+                    c_schema_capsule_stack_count
+                );
+            }
+            rotation = rotation_from_y_axis(capsule->axis.get_value());
+        } else {
+            return {};
+        }
+
+        if (rotation != glm::mat4{1.0f}) {
+            erhe::geometry::transform(*geometry.get(), *geometry.get(), erhe::geometry::to_geo_mat4f(rotation));
+        }
+        // The same processing a geometry-normative USD mesh gets: facet
+        // adjacency, the edges and the smooth vertex normals the wide-line
+        // renderer needs. The generators write the shading normals - a
+        // vertex normal for the round shapes, a corner normal for the box -
+        // and leave the smooth ones to this pass.
+        geometry->process(
+            {
+                .flags =
+                    erhe::geometry::Geometry::process_flag_connect                  |
+                    erhe::geometry::Geometry::process_flag_build_edges              |
+                    erhe::geometry::Geometry::process_flag_compute_smooth_vertex_normals
+            }
+        );
+        return geometry;
+    }
+
+    // The erhe Mesh prim every converted mesh starts as: the flags, the
+    // layer and the source path a mesh of an imported file carries.
+    [[nodiscard]] auto make_mesh_shell(const std::string& name) -> std::shared_ptr<erhe::scene::Mesh>
+    {
+        std::shared_ptr<erhe::scene::Mesh> mesh = std::make_shared<erhe::scene::Mesh>(name);
+        mesh->set_source_path(m_arguments.path);
+        mesh->layer_id = m_arguments.mesh_layer_id;
+        mesh->enable_flag_bits(
+            erhe::Item_flags::content    |
+            erhe::Item_flags::show_in_ui |
+            erhe::Item_flags::id
+        );
+        mesh->set_value(erhe::scene::Mesh::shadow_cast_property, true);
+        return mesh;
+    }
+
+    // The USD `typeName` of the prim at `absolute_path`, empty for a typeless
+    // `def` and for a path the stage does not answer for.
+    [[nodiscard]] auto read_prim_type_name(const std::string& absolute_path) const -> std::string
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        return (prim == nullptr) ? std::string{} : get_usd_type_name(*prim);
+    }
+
+    // The single primitive of a primitive-schema prim: the geometry its
+    // schema attributes describe, with the material given. The geometry is
+    // normative, the way a `subdivisionScheme = none` mesh is, so the item
+    // carries a Geometry and its edges.
+    void add_primitive_schema_primitive(
+        erhe::scene::Mesh&                                mesh,
+        const std::string&                                absolute_path,
+        const std::string&                                type_name,
+        const std::shared_ptr<erhe::primitive::Material>& material
+    )
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        const std::shared_ptr<erhe::geometry::Geometry> geometry = (prim != nullptr)
+            ? build_primitive_schema_geometry(*prim, type_name, absolute_path, mesh.get_name())
+            : std::shared_ptr<erhe::geometry::Geometry>{};
+        if (!geometry) {
+            add_warning(
+                fmt::format(
+                    "USD prim '{}' of type '{}' carries no readable schema attributes - it becomes a mesh with no geometry",
+                    absolute_path,
+                    type_name
+                )
+            );
+            return;
+        }
+        mesh.add_primitive(std::make_shared<erhe::primitive::Primitive>(geometry), material);
+    }
+
+    // A primitive-schema prim the render-scene conversion did not reach: the
+    // `_1` schema variants are not among the types Tydra tessellates, so the
+    // prim reaches convert_node with no content and the mesh is made here.
+    // The material is the one the prim's own `material:binding` names -
+    // Tydra resolved none for a prim it did not convert.
+    [[nodiscard]] auto make_primitive_schema_mesh(
+        const std::string& absolute_path,
+        const std::string& type_name,
+        const std::string& name
+    ) -> std::shared_ptr<erhe::scene::Mesh>
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return {};
+        }
+        std::shared_ptr<erhe::scene::Mesh> mesh = make_mesh_shell(name);
+        add_primitive_schema_primitive(
+            *mesh.get(),
+            absolute_path,
+            type_name,
+            find_material_by_path(read_prim_material_binding(*prim))
+        );
+        if (mesh->get_primitives().empty()) {
+            return {};
+        }
+        m_result.data.meshes.push_back(mesh);
+        // The mesh holds one primitive and no GeomSubset, so a variant that
+        // binds a material at the prim's own path names that one primitive.
+        m_mesh_group_names.push_back(std::vector<std::string>{std::string{}});
+        m_mesh_by_path.emplace(
+            absolute_path,
+            Mesh_prim{.mesh = mesh, .template_index = m_mesh_group_names.size() - 1}
+        );
+        return mesh;
+    }
+
+    // The `material:binding` of one primitive-schema prim. Every one of these
+    // types derives from GPrim, which holds its relationships in `props`.
+    [[nodiscard]] static auto read_prim_material_binding(const lightusd::Prim& prim) -> std::string
+    {
+        if (const lightusd::GeomCube*       typed = prim.as<lightusd::GeomCube      >(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomSphere*     typed = prim.as<lightusd::GeomSphere    >(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomCone*       typed = prim.as<lightusd::GeomCone      >(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomCylinder*   typed = prim.as<lightusd::GeomCylinder  >(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomCylinder_1* typed = prim.as<lightusd::GeomCylinder_1>(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomCapsule*    typed = prim.as<lightusd::GeomCapsule   >(); typed != nullptr) { return read_material_binding(typed->props); }
+        if (const lightusd::GeomCapsule_1*  typed = prim.as<lightusd::GeomCapsule_1 >(); typed != nullptr) { return read_material_binding(typed->props); }
+        return std::string{};
     }
 
     // The geometry of every `Brush` prim the layer walk recorded: the prim's
@@ -1973,7 +2381,8 @@ private:
             (type_name == "RectLight")     ||
             (type_name == "DiskLight")     ||
             (type_name == "CylinderLight") ||
-            (type_name == "GeometryLight");
+            (type_name == "GeometryLight") ||
+            is_primitive_schema_prim_type(type_name);
     }
 
     // A prim that authors a `references` or `payload` arc is a carrier: the
@@ -2058,8 +2467,17 @@ private:
         // A `Mesh`, `Camera` or UsdLux prim IS the erhe prim of that class
         // (doc/usd-compatibility-plan.md C5): its own xformOps are its
         // transform, and a prim under an `Xform` composes with it.
-        std::shared_ptr<erhe::Item_base>   content = take_node_content(usd_node);
-        std::shared_ptr<erhe::scene::Node> node    = std::dynamic_pointer_cast<erhe::scene::Node>(content);
+        std::shared_ptr<erhe::Item_base> content             = take_node_content(usd_node);
+        Composed_transform               composed_transform  = Composed_transform::evaluated;
+        // A primitive-schema prim the render scene does not carry - the `_1`
+        // schema variants - is the mesh its schema attributes describe, built
+        // here from the raw prim (S1). Tydra evaluated no transform for such
+        // a prim either, so the authored stack is what it has.
+        if (!content && is_primitive_schema_prim_type(type_name)) {
+            content            = make_primitive_schema_mesh(usd_node.abs_path, type_name, node_name);
+            composed_transform = Composed_transform::unevaluated;
+        }
+        std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(content);
         if (!node) {
             node = std::make_shared<erhe::scene::Xform>(node_name);
         } else {
@@ -2068,7 +2486,7 @@ private:
         node->set_source_path(m_arguments.path);
         node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
         node->Hierarchy::set_parent(parent);
-        apply_local_transform(*node.get(), usd_node, extra_transform);
+        apply_local_transform(*node.get(), usd_node, extra_transform, composed_transform);
         node->update_world_from_node();
         node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         m_result.data.nodes.push_back(node);
@@ -2615,8 +3033,16 @@ private:
     // spec binds nothing.
     [[nodiscard]] static auto read_spec_material_binding(const lightusd::PrimSpec& spec) -> std::string
     {
-        const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find("material:binding");
-        if ((i == spec.props().end()) || !i->second.is_relationship()) {
+        return read_material_binding(spec.props());
+    }
+
+    // The absolute path the `material:binding` of one property map names,
+    // empty when the map binds nothing. A prim spec and a composed prim both
+    // hold their properties in a map of this shape.
+    [[nodiscard]] static auto read_material_binding(const std::map<std::string, lightusd::Property>& props) -> std::string
+    {
+        const std::map<std::string, lightusd::Property>::const_iterator i = props.find("material:binding");
+        if ((i == props.end()) || !i->second.is_relationship()) {
             return std::string{};
         }
         const lightusd::Relationship& relationship = i->second.get_relationship();

@@ -41,9 +41,9 @@ def Xform "World"
         }
     }
 
-    def Cube "Box"
+    def Points "Cloud"
     {
-        double size = 2
+        point3f[] points = [(0, 0, 0), (1, 0, 0)]
     }
 
     def "Untyped"
