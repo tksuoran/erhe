@@ -508,6 +508,11 @@ private:
     friend class Asset_reference;
     void register_user  (Asset_reference* reference);
     void unregister_user(Asset_reference* reference);
+    // Re-points a registration from a moved-from Asset_reference to the one
+    // that took its resolved item over. The registry is keyed by the item,
+    // and a moved-from reference no longer holds it, so unregister_user()
+    // cannot find its entry any more - this is what a move must call.
+    void replace_user   (Asset_reference* moved_from, Asset_reference* moved_to);
 
     void verify_main_thread() const;
 

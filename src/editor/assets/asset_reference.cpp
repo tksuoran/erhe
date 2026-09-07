@@ -68,11 +68,12 @@ Asset_reference::Asset_reference(Asset_reference&& other) noexcept
     , m_state     {other.m_state}
     , m_user_label{std::move(other.m_user_label)}
 {
-    // The manager tracks users by Asset_reference pointer: re-point the
-    // registration from the moved-from object to this one.
+    // The manager tracks users by Asset_reference pointer, in a table keyed
+    // by the resolved item - which `other` no longer holds, because the item
+    // was moved into this object. The registration is re-pointed through the
+    // item this object now holds.
     if ((m_state == Asset_resolve_state::resolved) && (m_manager != nullptr)) {
-        m_manager->unregister_user(&other);
-        m_manager->register_user(this);
+        m_manager->replace_user(&other, this);
     }
     other.m_manager = nullptr;
     other.m_state   = Asset_resolve_state::unresolved;
@@ -90,8 +91,7 @@ Asset_reference& Asset_reference::operator=(Asset_reference&& other) noexcept
     m_state      = other.m_state;
     m_user_label = std::move(other.m_user_label);
     if ((m_state == Asset_resolve_state::resolved) && (m_manager != nullptr)) {
-        m_manager->unregister_user(&other);
-        m_manager->register_user(this);
+        m_manager->replace_user(&other, this);
     }
     other.m_manager = nullptr;
     other.m_state   = Asset_resolve_state::unresolved;

@@ -2133,6 +2133,21 @@ void Asset_manager::register_user(Asset_reference* reference)
     m_users[item.get()].push_back(reference);
 }
 
+void Asset_manager::replace_user(Asset_reference* moved_from, Asset_reference* moved_to)
+{
+    ERHE_VERIFY(moved_from != nullptr);
+    ERHE_VERIFY(moved_to != nullptr);
+    const std::shared_ptr<erhe::Item_base>& item = moved_to->get();
+    ERHE_VERIFY(item);
+    std::vector<Asset_reference*>& references = m_users[item.get()];
+    const std::vector<Asset_reference*>::iterator i = std::find(references.begin(), references.end(), moved_from);
+    if (i != references.end()) {
+        *i = moved_to;
+        return;
+    }
+    references.push_back(moved_to);
+}
+
 void Asset_manager::unregister_user(Asset_reference* reference)
 {
     ERHE_VERIFY(reference != nullptr);
