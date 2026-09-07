@@ -252,6 +252,44 @@ record has the history.
   re-applies them. Attachments inside an instance (applied API schemas)
   are not walked for overrides (section 6). MCP
   `set_prefab_template_property` edits a template in place.
+- X3 Class inheritance: a `class` prim is a Style item. The reader takes
+  the class prims off the root layer's own prim specs (Tydra never walks
+  one) into `Usd_data::classes` with their `inherits` targets, authored
+  opinions and nested classes, and every other prim's `inherits` arcs into
+  `Usd_data::prim_inherits`; the editor makes one Style item per class at
+  the place the class prim has, applies the opinions
+  (`erhe::scene::apply_property_values`, shared with the X2 override
+  path) and gives each prim its first target that resolved to a Style as
+  its style, a second target, a non-class target and a dangling one being
+  one warning each (`src/editor/parsers/notes.md`). The writer inverts it:
+  a Style item (told by its class token) is a typeless `class` prim where
+  it sits, every value an `erhe:Owner:name` custom attribute since a class
+  prim carries no schema, and every prim with a style carries
+  `inherits = </path>` by the path the prim actually got
+  (`src/erhe/usd/notes.md`; the mapping's style rows). An `over` prim
+  inside an instance writes schema-named values the same custom way, for
+  the same reason. glTF keeps `ERHE_scene.styles` (C1).
+- X4 Variants, first slice: material-binding variant sets. The reader
+  records each prim spec's `variantSet` blocks (`Usd_data::variant_sets`:
+  the variants with their `material:binding` relationships by path below
+  the prim, the `variants` selection or the first variant) and binds the
+  selected variant's materials itself, converting a material only a
+  variant binds through Tydra's per-material converter; every other
+  opinion a variant authors is counted and reported once per set and is
+  not written back, so a save of such a set warns (`src/erhe/usd/notes.md`
+  "Variant sets"). The editor keeps one `Variant_table` per scene
+  (`Scene_root`; weak prim and materials, pruned on `items_removed`), the
+  selection in `Scene_settings::variant_selections`, and
+  `Scene_root::select_variant` switches as one undoable compound of a
+  selection record and one material assignment per binding; the Scene
+  section of the Properties window draws one combo per set, MCP has
+  `get_scene_variants` / `select_variant`, and a USD save writes the
+  blocks and the selection back (`src/editor/scene/notes.md`,
+  `doc/scene_serialization.md`). On the glTF side `KHR_materials_variants`
+  is the same table as one set named `materials` on the file's root
+  prim, a primitive named `<mesh path>#<index>`, the selection in the
+  scene block (`src/erhe/gltf/notes.md`). Node subtree variants and
+  opinions beyond material bindings are section 6.
 
 ## 3. Remaining steps
 
@@ -259,20 +297,6 @@ Steps are grouped by what they touch: M = model generalization (no USD
 code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### X3 Class inheritance (S)
-
-What: `class` prims with `inherits` arcs import as `Style` items with
-style chains (M7) instead of being flattened, and styles export as
-`class` prims with `inherits`.
-
-### X4 Variants (L)
-
-What: first slice: material-binding variant sets import as a per-scene
-variant selection the user can switch (re-import of the affected prims
-under the new selection through LightUSD); a `KHR_materials_variants`
-adoption on the glTF side keeps the selection across an erhe save. Node
-subtree variants follow the same path later.
 
 ### X5 Composition provenance in the Properties window (M)
 
@@ -317,13 +341,11 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. X3 class inheritance
-2. X4 variants
-3. X5 composition provenance in the Properties window
-4. E4 editor state in a USD file (completes G2)
-5. E2 material fidelity
+1. X5 composition provenance in the Properties window
+2. E4 editor state in a USD file (completes G2)
+3. E2 material fidelity
 
-Dependencies: X3, X4, X5, E4 and E2 need nothing that has not landed.
+Dependencies: X5, E4 and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 
@@ -370,6 +392,13 @@ named.
   (linear samples; `Ts` splines re-encoded to cubic samplers);
   `UsdSkel` `SkelAnimation` goes through the existing skin path. The
   matching save writes the channels back as time samples.
+- Variant sets beyond material bindings: node subtree variants (a variant
+  that adds, removes or re-transforms prims) and any other opinion a
+  variant authors. X4 counts and reports them per set and a USD save warns
+  that they are not written; taking them up means recording the variant's
+  spec as opinions the way X2 records an `over` and applying them on a
+  switch through the same `apply_property_values` path, with structure
+  changes going through the instance structure rules of section 5.
 - Overrides on applied API schemas inside an instance: the override walk
   of `erhe::scene::instance_override` visits prims only, so a local value
   on a `Node_physics`, `Node_joint` or other attachment below a carrier is
