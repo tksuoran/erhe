@@ -78,8 +78,9 @@ Constraints every step respects:
 
 ## 2. What holds today
 
-G1 holds for the schemas the importer covers, and G2 holds for scene
-content (editor state beyond the scene block is E4). Each landed step is
+G1 holds for the schemas the importer covers, G2 holds for scene
+content (editor state beyond the scene block is E4), and G3 holds for
+references (X2). Each landed step is
 listed with the record that now owns its behavior; `git log` on that
 record has the history.
 
@@ -220,8 +221,40 @@ record has the history.
   a reference is dropped with a warning naming it, and an arc inside a
   template is instantiated through the same library (a cycle is
   refused); `Prefab_library::reload` refreshes a carrier with several
-  arcs from its first attachment. X2 lifts the seal and carries the
-  opinions.
+  arcs from its first attachment.
+- X2 Editable instances with sparse overrides: a USD reference is a
+  composition arc, not a copy. Every item inside an instance names its
+  template counterpart as its reference source
+  (`doc/property-system.md` D33, R3 is coerced, local, style,
+  reference, inherited, default): the layer reads what the counterpart
+  supplies itself, local, style or its own reference, and not what it
+  inherits, so the instance's own tree provides inheritance and an
+  override on an instance ancestor reaches its descendants; a template
+  edit reaches every instance live. `attach_prefab_instance` links the
+  clones to the template in lockstep and clears the copied locals, so a
+  template value reads `reference` and a local inside an instance is an
+  override (`doc/gltf-prefabs-plan.md`). A reference protects structure
+  only: `src/editor/prefabs/instance_structure.hpp` owns the two
+  refusals every structural entry point asks (nothing added under a
+  carrier or inside one; nothing inside removed or reparented), while
+  every property inside is editable and clearing a local exposes the
+  reference value. USD seals nothing, so a USD-backed instance is not
+  sealed; the sealed editing model stays glTF-only. `Item_base::active`
+  (own opinion, default true) with the derived `Item_flags::active`
+  bit takes an item and its whole subtree out of rendering, picking,
+  simulation and every content walk and dims it in the hierarchy; USD
+  carries it as the prim's `active` metadatum, glTF in
+  `ERHE_node.properties`. Persistence: `erhe::scene::instance_override`
+  states once what an override is (`src/erhe/scene/notes.md`); a USD
+  save writes each overriding item as an `over` prim below the carrier
+  holding its local values and `active` only, the clone of the target
+  prim being the carrier prim itself, and the reader reads them off the
+  root layer's prim specs (`src/erhe/usd/notes.md`); glTF carries the
+  list as `ERHE_node.overrides` on the carrier
+  (`doc/gltf_extensions/ERHE_node.md`); a prefab reload captures and
+  re-applies them. Attachments inside an instance (applied API schemas)
+  are not walked for overrides (section 6). MCP
+  `set_prefab_template_property` edits a template in place.
 
 ## 3. Remaining steps
 
@@ -229,69 +262,6 @@ Steps are grouped by what they touch: M = model generalization (no USD
 code), E = export, X = composition; animation and physics are section 6, future work outside
 every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
-
-### X2 Editable instances with sparse overrides (L)
-
-What: a USD reference is a composition arc, not a copy: the referenced
-prims supply values in a layer weaker than the referencing layer's own
-opinions, and an `over` prim in the referencing layer holds the sparse
-local opinions that override them. The property system carries that
-directly once the values a reference supplies sit below local. Today
-instantiation is a deep clone, so a template's authored values arrive
-on the instance as local values and cannot be told from an override;
-the step changes that:
-
-- A reference layer in the property system, between style and
-  inherited (USD's `R` is weaker than `I`, so `doc/property-system.md`
-  R3 becomes coerced, local, style, reference, inherited, default). An
-  item inside an instance names its counterpart in the template (the
-  `Prefab_instance` carrier keeps the template, M1 paths below the
-  cloned target prim address the counterpart) and reads that
-  counterpart's effective value as its reference layer. The instance holds no local value of its own for a
-  value the template supplies; a template edit reaches every instance
-  live, the way a style edit reaches its users (D25).
-- What a reference protects is structure, not values: no prim is
-  added, removed or reparented under a referencing prim (section 5),
-  while every property of every item inside the instance is editable
-  and a local value there is an override. The `Value_source` shows
-  reference and local apart in the Properties window, and clearing a
-  local exposes the reference value. USD has no sealing of properties,
-  so a USD-backed instance never seals; the sealed instance editing
-  model of `doc/gltf-prefabs-plan.md` (`lock_edit` on the subtree)
-  remains available to glTF prefab instances only.
-- Deactivation is how a prim inside a reference is taken out: an
-  `Item_base::active` property (default true) whose false value
-  removes the item and its whole subtree from rendering, picking,
-  simulation and every consumer that walks content, and shows the
-  subtree dimmed in the hierarchy; it is an ordinary property, so
-  inside an instance it is an override like any other. USD carries it
-  as the prim's `active` metadata (`active = false` on the `over`),
-  glTF as an `ERHE_node` field. It applies to every prim, not only to
-  those inside a reference.
-- Persistence: in a USD-backed scene each item with local values inside
-  an instance is an `over` prim under the referencing prim, holding the
-  local values and the `active` metadata only, the file's native form
-  (C1); reading an `over` puts its opinions in the item's local layer,
-  exactly as authored opinions land elsewhere (M4). The X1 writer skips
-  every prim below a carrier and the X1 reader warns about such
-  opinions; both give way to this. LightUSD does not say which layer
-  authored an opinion, so the reader tells an `over` below a carrier
-  from the target's own opinions by reading the root layer's prim specs
-  (the X1 warning already does). In a glTF-backed
-  scene the list rides the carrier node in an `ERHE_*` extension as
-  (path inside the instance, property, value).
-
-This step retires the last remaining reason the old `ERHE_overrides`
-design existed: the property system's local layer is the override, and
-M1 paths are the addressing.
-
-Verification: `erhe_property_tests` for the reference layer order and
-live template edits; `erhe_usd_tests` round-trips a reference with an
-`over` on one prim (a local value and `active = false` on a child) and
-reads the same local set back; headless: an instance property edit
-shows source local, clear shows source reference, a template edit
-reaches the instance, a deactivated child disappears from the viewport
-and the pick, save and reload keep all of it.
 
 ### X3 Class inheritance (S)
 
@@ -350,15 +320,13 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. X2 editable instances (G3)
-2. X3 class inheritance
-3. X4 variants
-4. X5 composition provenance in the Properties window
-5. E4 editor state in a USD file (completes G2)
-6. E2 material fidelity
+1. X3 class inheritance
+2. X4 variants
+3. X5 composition provenance in the Properties window
+4. E4 editor state in a USD file (completes G2)
+5. E2 material fidelity
 
-Dependencies: X2, X3, X4, X5, E4 and E2 need nothing that has not
-landed.
+Dependencies: X3, X4, X5, E4 and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 
@@ -405,6 +373,13 @@ named.
   (linear samples; `Ts` splines re-encoded to cubic samplers);
   `UsdSkel` `SkelAnimation` goes through the existing skin path. The
   matching save writes the channels back as time samples.
+- Overrides on applied API schemas inside an instance: the override walk
+  of `erhe::scene::instance_override` visits prims only, so a local value
+  on a `Node_physics`, `Node_joint` or other attachment below a carrier is
+  neither written as part of the carrier's `over` prims nor kept across a
+  prefab reload. Taking it up means walking the attachments in the same
+  lockstep the counterpart link uses and giving each an `over` path
+  (USD authors an applied schema's attributes on the prim itself).
 - Physics on load: `UsdPhysics` API schemas become
   `Node_physics`, `Node_joint`, `Physics_material` and `Collision_filter`
   per the mapping's physics table, through a USD-filled sibling of
