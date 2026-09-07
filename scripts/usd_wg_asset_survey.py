@@ -944,6 +944,20 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("of those side by side under `logs/usd_wg_survey/compare/`, which is how the")
     out.append("appearance verdicts below were reached.")
     out.append("")
+    # What the importer makes of an authored camera, recorded because the
+    # survey's own capture camera hides it: --refresh-cameras reopens these
+    # entries and reads get_scene_cameras.
+    with_camera = [r for r in records if r.get("authored_cameras")]
+    if with_camera:
+        fovs = [c.get("fov_y") for r in with_camera for c in (r.get("imported_cameras") or [])]
+        usable = [f for f in fovs if isinstance(f, (int, float)) and (0.01 < f < 3.13)]
+        out.append(f"Authored cameras: {len(with_camera)} entries author a `UsdGeomCamera`; "
+                   f"{len(usable)} of {len(fovs)} imported cameras carry a field of view in "
+                   "(0.6, 179) degrees, so `convert_cameras` maps `focalLength`, "
+                   "`horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the "
+                   "files author them. No gap row: the survey's capture uses its own camera, "
+                   "not the authored one.")
+        out.append("")
     out.append(f"Run: {summary['run_date']}, {summary['entry_count']} entries, "
                f"{summary['wall_time_s']:.0f} s wall time, {summary['editor_launches']} editor launch(es).")
     out.append(f"Verdicts: {counts['works']} works, {counts['works, gap']} works with a gap, "
@@ -1007,6 +1021,46 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
 DEFAULT_EDITOR = pathlib.Path("build_vs2026_vulkan_headless/src/editor/Debug/editor.exe")
 DEFAULT_SHOTS = pathlib.Path("logs/usd_wg_survey")
 DEFAULT_DOC = pathlib.Path("doc/usd-wg-assets.md")
+
+
+def refresh_camera_fields(args, summary: dict) -> int:
+    """Fill in, for each entry whose file authors a UsdGeomCamera, what the
+    imported Camera reads: its projection type and field of view.
+
+    The survey's own capture camera hides this - `frame_scene` never reads an
+    authored camera - so the two facts are gathered on their own: the authored
+    count from `describe_usd_file`'s prim types (already recorded), and the
+    imported values from `get_scene_cameras` on a reopened scene.
+    """
+    root = pathlib.Path(args.root).resolve()
+    todo = [record for record in summary["entries"]
+            if any(t.get("type_name") == "Camera" for t in (record.get("authored_types") or []))]
+    if not todo:
+        return 0
+    editor = Editor(args.editor, args.port, pathlib.Path("logs/log.txt"))
+    editor.start(args.ready_timeout)
+    refreshed = 0
+    try:
+        for record in todo:
+            record["authored_cameras"] = sum(t.get("count", 0) for t in record["authored_types"]
+                                             if t.get("type_name") == "Camera")
+            before = scene_names(editor)
+            editor.mcp.call("open_scene", {"path": str((root / record["path"]).resolve())}, timeout=args.load_timeout)
+            scene = wait_for_new_scene(editor, before, args.load_timeout)
+            if not scene:
+                continue
+            cameras = editor.mcp.call("get_scene_cameras", {"scene_name": scene}, timeout=args.load_timeout).get("cameras", [])
+            record["imported_cameras"] = [
+                {"name": camera.get("name", ""), "fov_y": camera.get("fov_y")}
+                for camera in cameras
+            ]
+            refreshed += 1
+            editor.mcp.call("close_scene", {"scene_name": scene}, timeout=args.load_timeout)
+            wait_for_scene_gone(editor, scene, 30.0)
+            close_extra_scenes(editor, args.load_timeout)
+    finally:
+        editor.stop()
+    return refreshed
 
 
 def run_self_test(args) -> int:
@@ -1077,12 +1131,24 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="survey only the first N entries")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
+    parser.add_argument("--refresh-cameras", action="store_true",
+                        help="reopen the entries whose file authors a UsdGeomCamera and record what the imported Camera reads; needs --root")
     parser.add_argument("--compose-comparisons", action="store_true",
                         help="write logs/usd_wg_survey/compare/<entry>.png (capture beside the first reference render) and exit; needs --root")
     args = parser.parse_args()
 
     args.shots.mkdir(parents=True, exist_ok=True)
     summary_path = args.shots / "summary.json"
+
+    if args.refresh_cameras:
+        if not args.root:
+            print("--refresh-cameras needs --root", file=sys.stderr)
+            return 2
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        refreshed = refresh_camera_fields(args, summary)
+        summary_path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+        print(f"refreshed the camera fields of {refreshed} entry/entries")
+        return 0
 
     if args.compose_comparisons:
         if not args.root:

@@ -34,6 +34,8 @@ asset (`screenshots/` first, then `thumbnails/`), repo-relative to
 of those side by side under `logs/usd_wg_survey/compare/`, which is how the
 appearance verdicts below were reached.
 
+Authored cameras: 12 entries author a `UsdGeomCamera`; 12 of 12 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
+
 Run: 2026-09-07, 146 entries, 1378 s wall time, 1 editor launch(es).
 Verdicts: 30 works, 115 works with a gap, 1 fails, 0 crash.
 
