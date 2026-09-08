@@ -295,6 +295,11 @@ class Editor:
                 self.mcp.rpc("initialize", {}, timeout=10.0)
                 self.baseline_scenes = {s.get("name") for s in
                                         self.mcp.call("list_scenes", {}, timeout=120.0).get("scenes", [])}
+                # Captures are compared against the renders each asset ships,
+                # which hold neither of these. Session-only: the editor's
+                # stored settings are left alone.
+                self.mcp.call("set_graphics_settings",
+                              {"sky_enabled": False, "grid_visible": False}, timeout=30.0)
                 return
             except EditorDown:
                 if time.monotonic() >= deadline:
@@ -509,6 +514,39 @@ def wait_frames(editor: Editor, count: int, timeout: float) -> None:
         time.sleep(0.1)
 
 
+# get_async_status counters that must all read 0 before the scene is settled:
+# async workers pending / running, operations queued on the operation stack,
+# worker-prepared scene changes waiting for the main thread's flush, and asset
+# load tasks still in flight.
+IDLE_COUNTERS = ("pending", "running", "queued_operations", "pending_scene_commits", "asset_loads")
+
+
+def wait_until_idle(editor: Editor, timeout: float) -> tuple:
+    """Wait until the editor reports nothing in flight, so the capture shows the
+    finished asset instead of a half-materialized one. Returns (seconds waited,
+    "" or the message describing what was still in flight at the timeout)."""
+    started = time.monotonic()
+    idle_reads = 0
+    counters = {}
+    while True:
+        status = editor.mcp.call("get_async_status", {}, timeout=timeout)
+        counters = {name: int(status.get(name) or 0) for name in IDLE_COUNTERS}
+        if all(value == 0 for value in counters.values()):
+            # Two idle reads a poll apart: a worker publishing its result on the
+            # main thread queues its follow-up work between two reads, so a
+            # single idle read can fall into that gap.
+            idle_reads += 1
+            if idle_reads >= 2:
+                return time.monotonic() - started, ""
+        else:
+            idle_reads = 0
+        waited = time.monotonic() - started
+        if waited >= timeout:
+            in_flight = ", ".join(f"{name} {value}" for name, value in counters.items() if value > 0)
+            return waited, f"still in flight after {waited:.0f} s: {in_flight}"
+        time.sleep(0.2)
+
+
 def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pathlib.Path,
                  load_timeout: float, close_wait: float, settle_frames: int) -> dict:
     absolute = (root / entry["path"]).resolve()
@@ -526,6 +564,8 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
         "default_prim": "",
         "meters_per_unit": None,
         "describe_error": "",
+        "settle_error": "",
+        "settle_seconds": None,
         "loaded": False,
         "load_error": "",
         "scene_name": "",
@@ -573,6 +613,12 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
             else:
                 record["loaded"] = True
                 record["scene_name"] = scene
+                # An open_scene answers as soon as the scene exists; its meshes,
+                # textures and materials keep arriving on worker threads. Every
+                # count below, the framing AABB and the capture need the
+                # finished asset, so wait for the editor to report itself idle
+                # first.
+                record["settle_seconds"], record["settle_error"] = wait_until_idle(editor, load_timeout)
                 nodes = editor.mcp.call("get_scene_nodes", {"scene_name": scene}, timeout=load_timeout).get("nodes", [])
                 record["prims"] = len(nodes)
                 record["meshes"] = sum(1 for n in nodes if n.get("type") == "Mesh")
@@ -583,6 +629,10 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
                 # file authors no camera, so the capture must frame the scene
                 # first and then let the viewport render.
                 record["framing"] = editor.mcp.call("frame_scene", {"scene_name": scene}, timeout=load_timeout)
+                # Framing can itself queue work (the mesh AABBs it reads).
+                framing_wait, framing_error = wait_until_idle(editor, load_timeout)
+                record["settle_seconds"] = (record["settle_seconds"] or 0.0) + framing_wait
+                record["settle_error"] = record["settle_error"] or framing_error
                 wait_frames(editor, settle_frames, load_timeout)
                 editor.mcp.call("capture_screenshot", {"path": shot.as_posix()}, timeout=load_timeout)
                 record["screenshot_stats"] = screenshot_stats(shot)
@@ -715,6 +765,8 @@ def provisional_verdict(record: dict) -> str:
     if not record["loaded"]:
         cause = record["load_error"] or record["describe_error"] or "load did not produce a scene"
         return f"fails: {gap_name(cause)}"
+    if record.get("settle_error"):
+        return f"works, gap: the capture was taken before the load settled ({record['settle_error']})"
     errors = [d for d in record["diagnostics"] if d["level"] == "error"]
     warnings = [d for d in record["diagnostics"] if d["level"] == "warning"]
     stats = record.get("screenshot_stats") or {}
@@ -1090,6 +1142,14 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("Screenshot paths are under `logs/`, which is gitignored: the column is a")
     out.append("pointer into the last run's output, not a committed file.")
     out.append("")
+    out.append("A capture waits for the editor to report itself idle first")
+    out.append("(`get_async_status`: pending, running, queued_operations,")
+    out.append("pending_scene_commits and asset_loads all 0 over two reads), because")
+    out.append("`open_scene` answers as soon as the scene exists while its meshes and")
+    out.append("textures keep arriving on worker threads; the counts, the framing and the")
+    out.append("image all come from the finished asset. An entry whose load is still in")
+    out.append("flight after `--load-timeout` says so as its gap.")
+    out.append("")
     out.append("Each capture is taken through `frame_scene`, which binds the opened scene")
     out.append("into a viewport, gives it a camera when the file authors none and places")
     out.append("that camera on the union world AABB of the scene's meshes: three quarters")
@@ -1099,6 +1159,11 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("directional light along the viewport camera's axis, the way usdview lights")
     out.append("a stage that authors none - so the capture shows the geometry. That light")
     out.append("is no scene item, and the `Lights` column is what the file itself authored.")
+    out.append("The editor's own sky background and grid are off for every capture")
+    out.append("(`set_graphics_settings {\"sky_enabled\": false, \"grid_visible\": false}` once")
+    out.append("per editor launch, a session-only override that leaves the stored settings")
+    out.append("untouched), so an image holds only what the file authors and compares")
+    out.append("cleanly against the asset's own reference render.")
     out.append("")
     out.append("The `Reference` column names the renders the repository ships beside each")
     out.append("asset (`screenshots/` first, then `thumbnails/`), repo-relative to")
@@ -1302,7 +1367,9 @@ def run_self_test(args) -> int:
         if not scene:
             print(f"FAIL: {source.name} produced no scene")
             return 1
+        wait_until_idle(editor, args.load_timeout)
         framing = editor.mcp.call("frame_scene", {"scene_name": scene}, timeout=args.load_timeout)
+        wait_until_idle(editor, args.load_timeout)
         wait_frames(editor, args.settle_frames, args.load_timeout)
         editor.mcp.call("capture_screenshot", {"path": shot.as_posix()}, timeout=args.load_timeout)
         stats = screenshot_stats(shot)
@@ -1468,6 +1535,7 @@ def main() -> int:
                     "authored_prims": None, "authored_types": [], "verdict": "crash",
                     "log_tail": [], "scene_close": "", "screenshot_stats": {},
                     "load_error": "", "describe_error": "", "scene_name": "",
+                    "settle_error": "", "settle_seconds": None,
                 })
             record["surveyed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             record["survey_seconds"] = time.monotonic() - entry_started

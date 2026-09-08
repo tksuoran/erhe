@@ -107,8 +107,26 @@ auto Mcp_server::action_set_graphics_settings(const json& args) -> std::string
         }
         graphics.headlight_when_unlit = value.get<bool>();
     }
+    // Session-only render suppressions: they gate what the viewports draw for
+    // the rest of this editor run and leave editor_settings.json alone.
+    if (args.contains("sky_enabled")) {
+        const json& value = args["sky_enabled"];
+        if (!value.is_boolean()) {
+            return make_error_content("sky_enabled must be a boolean");
+        }
+        graphics.sky_enabled = value.get<bool>();
+    }
+    if (args.contains("grid_visible")) {
+        const json& value = args["grid_visible"];
+        if (!value.is_boolean()) {
+            return make_error_content("grid_visible must be a boolean");
+        }
+        graphics.grid_visible = value.get<bool>();
+    }
     return make_json_content({
-        {"headlight_when_unlit", graphics.headlight_when_unlit}
+        {"headlight_when_unlit", graphics.headlight_when_unlit},
+        {"sky_enabled",          graphics.sky_enabled},
+        {"grid_visible",         graphics.grid_visible}
     }).dump();
 }
 

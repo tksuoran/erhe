@@ -2,6 +2,7 @@
 
 #include "app_context.hpp"
 #include "app_rendering.hpp"
+#include "app_settings.hpp"
 #include "editor_settings_store.hpp"
 #include "config/generated/grid_config.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -303,7 +304,11 @@ void Grid::render(const Render_context& context)
             : &app_context.editor_settings->grid;
     }
 
-    const bool  visible       = (cfg != nullptr) ? cfg->visible             : is_visible();
+    // Graphics_settings::grid_visible is the session-only capture override
+    // (MCP set_graphics_settings); it hides the grid without touching the
+    // stored Grid_config.
+    const bool  session_grid  = (app_context.app_settings == nullptr) || app_context.app_settings->graphics.grid_visible;
+    const bool  visible       = session_grid && ((cfg != nullptr) ? cfg->visible : is_visible());
     const bool  label_enable  = (cfg != nullptr) ? cfg->label_enable        : m_label_enable;
     const float label_text_fr = (cfg != nullptr) ? cfg->label_text_fraction : m_label_text_fraction;
     const float label_spacing = (cfg != nullptr) ? cfg->label_spacing       : m_label_spacing;

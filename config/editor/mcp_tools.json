@@ -6754,11 +6754,19 @@
     }
   },
   {
-    "description": "Set app-wide graphics settings that are not part of a graphics preset. 'headlight_when_unlit' (default true) lights a scene whose light layer is empty with one white directional light along each viewport camera's axis, the way usdview lights a stage that authors no light; false renders such a scene black. Returns the values in effect after the call.",
+    "description": "Set app-wide graphics settings that are not part of a graphics preset. 'headlight_when_unlit' (default true) lights a scene whose light layer is empty with one white directional light along each viewport camera's axis, the way usdview lights a stage that authors no light; false renders such a scene black. 'sky_enabled' and 'grid_visible' (both default true) turn the editor's own sky background and grid off for the rest of this editor run, which is how automated capture flows get an image holding only what the scene file authors; they are session-only and leave the stored settings untouched. Returns the values in effect after the call.",
     "inputSchema": {
       "properties": {
         "headlight_when_unlit": {
           "description": "Light a scene that holds no light with a per-viewport camera headlight",
+          "type": "boolean"
+        },
+        "sky_enabled": {
+          "description": "Render the editor's sky background in every viewport (session only; the stored Sky setting is not modified)",
+          "type": "boolean"
+        },
+        "grid_visible": {
+          "description": "Render the editor's grid in every viewport (session only; the stored Grid setting is not modified)",
           "type": "boolean"
         }
       },

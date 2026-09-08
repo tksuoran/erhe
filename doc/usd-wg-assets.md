@@ -27,6 +27,14 @@ shows>" [--eye-gap "<cause>"]` is how one is recorded.
 Screenshot paths are under `logs/`, which is gitignored: the column is a
 pointer into the last run's output, not a committed file.
 
+A capture waits for the editor to report itself idle first
+(`get_async_status`: pending, running, queued_operations,
+pending_scene_commits and asset_loads all 0 over two reads), because
+`open_scene` answers as soon as the scene exists while its meshes and
+textures keep arriving on worker threads; the counts, the framing and the
+image all come from the finished asset. An entry whose load is still in
+flight after `--load-timeout` says so as its gap.
+
 Each capture is taken through `frame_scene`, which binds the opened scene
 into a viewport, gives it a camera when the file authors none and places
 that camera on the union world AABB of the scene's meshes: three quarters
@@ -36,6 +44,11 @@ file authors no light is lit by the editor's own headlight - one white
 directional light along the viewport camera's axis, the way usdview lights
 a stage that authors none - so the capture shows the geometry. That light
 is no scene item, and the `Lights` column is what the file itself authored.
+The editor's own sky background and grid are off for every capture
+(`set_graphics_settings {"sky_enabled": false, "grid_visible": false}` once
+per editor launch, a session-only override that leaves the stored settings
+untouched), so an image holds only what the file authors and compares
+cleanly against the asset's own reference render.
 
 The `Reference` column names the renders the repository ships beside each
 asset (`screenshots/` first, then `thumbnails/`), repo-relative to
@@ -45,7 +58,7 @@ appearance verdicts below were reached.
 
 Authored cameras: 30 entries author a `UsdGeomCamera`; 30 of 30 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
 
-Run: 2026-09-08, 146 entries, 1681 s of survey time.
+Run: 2026-09-08, 146 entries, 1693 s of survey time.
 Verdicts: 51 works, 94 works with a gap, 1 fails, 0 crash.
 
 ## Verdicts checked by eye
@@ -86,7 +99,7 @@ log and the empty-viewport test decided.
 | full_assets/McUsd | McUsd.usdz | ok | 174 | 129 | 23 | 23 | 1 | 108 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_McUsd_McUsd.usdz.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | full_assets/McUsd | McUsd_10cm.usda | ok | 174 | 129 | 23 | 23 | 1 | 108 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_McUsd_McUsd_10cm.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | full_assets/McUsd | McUsd_10cm.usdz | ok | 174 | 129 | 23 | 23 | 1 | 108 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_McUsd_McUsd_10cm.usdz.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
-| full_assets/OpenChessSet | chess_set.usda | ok | 26 | 125 | 21 | 0 | 0 | 49 warning; USD '*': PointInstancer <<path>> prototype <<path>> resolved | logs/usd_wg_survey/full_assets_OpenChessSet_chess_set.usda.png | works, gap: USD '*': PointInstancer <<path>> prototype <<path>> resolved to no RenderMesh; i |
+| full_assets/OpenChessSet | chess_set.usda | ok | 26 | 125 | 21 | 0 | 0 | 32 warning; USD '*': PointInstancer <<path>> prototype <<path>> resolved | logs/usd_wg_survey/full_assets_OpenChessSet_chess_set.usda.png | works, gap: USD '*': PointInstancer <<path>> prototype <<path>> resolved to no RenderMesh; i |
 | full_assets/StandardShaderBall | standard_shader_ball_scene.usda | ok | 101 | 55 | 10 | 13 | 5 | 111 warning; Attribute `*` does not exist in Prim <prim> | logs/usd_wg_survey/full_assets_StandardShaderBall_standard_shader_ball_scene.usda.png | works, gap: Attribute `*` does not exist in Prim <prim> |
 | full_assets/SubdivisionSurfaces | Creases_SpinningPyramids.usda | ok | 5 | 41 | 6 | 0 | 0 | 26 warning; USD prim '*': variant set '*' authors N opinion(s) that erhe | logs/usd_wg_survey/full_assets_SubdivisionSurfaces_Creases_SpinningPyramids.usda.png | works, gap: USD prim '*': variant set '*' authors N opinion(s) that erhe has no place for - |
 | full_assets/Teapot | DrawModes.usd | ok | 37 | 170 | 0 | 0 | 0 | 9 warning; USD prim '*': variant set '*' authors N opinion(s) that erhe | logs/usd_wg_survey/full_assets_Teapot_DrawModes.usd.png | works, gap: USD prim '*': variant set '*' authors N opinion(s) that erhe has no place for - |
@@ -304,9 +317,6 @@ assets it affects and what the editor would have to support to clear it.
 | 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: optimized variant | not a USD gap: editor-internal noise this survey happens to capture |
 | 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: take_optimizable_snapshot | not a USD gap: editor-internal noise this survey happens to capture |
 | 2 | warning | connection Path's property part must be `*`, `*`, `*`, `*` or `*` for UsdUVTexture, but got `*`(prim_part: <path>). | diagnose the message and add the support it asks for |
-| 2 | warning | scene-close leak: ... and N more surviving items of closed scene '*' | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | warning | scene-close leak: Scene_root '*' is still alive N frames after close | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | warning | scene-close leak: Xform '*' of closed scene '*' is still alive N frames after close (N holder(s)) | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | appearance | 16-bit, 32-bit and CMYK images do not load: their tiles render blank where the reference shows the same gradient the 8-bit tiles carry | decode the image depths and colour models the assets use beyond 8-bit RGB: 16-bit and 32-bit PNG and CMYK JPEG produce no texture, so their tiles render blank |
 | 1 | warning | <path> ()():N Skipping animated attribute '*' for <path> due to unsupported or inconsistent sample type. | diagnose the message and add the support it asks for |
 | 1 | warning | <path> Attribute `*`: `*` is not an allowed token. Ignore it. | diagnose the message and add the support it asks for |
@@ -403,8 +413,9 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | failure | no mesh loaded: cause not in the log | see the cause named in the parentheses; the file authors geometry that produced no mesh |
 | 1 | error | open_scene_usd '*' failed: Failed to parse USDA | read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage |
 | 1 | appearance | roughness does not reach the shaded surface: no band shows the reference's roughness-varying highlight | apply inputs:roughness and its texture to the shaded surface; the bands render with one matte response, so neither the constant nor the textured roughness reaches the shader |
+| 1 | warning | scene-close leak: ... and N more surviving items of closed scene '*' | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | warning | scene-close leak: Material '*' of closed scene '*' is still alive N frames after close (N holder(s)) | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | warning | scene-close leak: Mesh '*' of closed scene '*' is still alive N frames after close (N holder(s)) | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | warning | scene-close leak: Style '*' of closed scene '*' is still alive N frames after close (N holder(s)) | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | warning | scene-close leak: Scene_root '*' is still alive N frames after close | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | warning | scene-close leak: Xform '*' of closed scene '*' is still alive N frames after close (N holder(s)) | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | { | diagnose the message and add the support it asks for |
 

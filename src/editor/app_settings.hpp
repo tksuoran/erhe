@@ -70,6 +70,14 @@ public:
     // (Shadow_render_node::resolve_headlight). Off renders such a scene
     // black, which is what its file asks for.
     bool                               headlight_when_unlit{true};
+    // Session-only render suppressions for automated capture flows (the USD
+    // WG asset survey compares its captures against the renders each asset
+    // ships, which hold neither): false hides the sky background /
+    // the grid for every viewport of this run. They are ANDed with the
+    // effective Sky_config::enabled / Grid_config::visible, and are no part
+    // of editor_settings.json - the stored settings keep the user's values.
+    bool                               sky_enabled{true};
+    bool                               grid_visible{true};
 
 private:
     // Set by Settings window preset edits; cleared when the preset file is

@@ -1504,7 +1504,12 @@ void App_rendering::update_sky_parameters(const Render_context& context)
     // set_grid_visibility(). With the sky pass disabled the scene background
     // keeps the render pass clear value (transparent in the headset path, so
     // camera passthrough shows through; see Headset_view::render_headset()).
-    m_sky_composition_pass->data.enabled = sky.enabled;
+    // Graphics_settings::sky_enabled is the session-only capture override
+    // (MCP set_graphics_settings); it hides the sky without touching the
+    // stored Sky_config.
+    const bool sky_enabled_for_session =
+        (m_context.app_settings == nullptr) || m_context.app_settings->graphics.sky_enabled;
+    m_sky_composition_pass->data.enabled = sky.enabled && sky_enabled_for_session;
     erhe::scene_renderer::Sky_parameters& parameters = m_sky_composition_pass->data.sky_parameters;
     parameters.sky_checker          = glm::vec4{sky.checker_frequency.x, sky.checker_frequency.y, sky.checker_intensity_a, sky.checker_intensity_b};
     parameters.sky_horizon_color    = glm::vec4{glm::vec3{sky.sky_horizon_color},    sky.sky_power};
