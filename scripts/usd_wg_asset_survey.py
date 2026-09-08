@@ -1513,10 +1513,9 @@ REMEDY = [
      "so a file that only sublayers its content opens empty and says nothing about it"),
     (re.compile(r"bounds disagree with the composed stage"),
      "place, scale or instance the content the way OpenUSD composes it: compare the prim's world "
-     "transform with pxr's XformCache (scripts/usd_wg_pxr_stage.py reads the composed bounds). Measured "
-     "cause on the Vehicles kit: the reference target is a Mesh prim that authors its own "
-     "xformOp:transform (a 39.37 unit-conversion scale), which the reference instantiation drops "
-     "when the target is a Gprim rather than an Xform"),
+     "transform with pxr's XformCache (scripts/usd_wg_pxr_stage.py reads the composed bounds). Only "
+     "the root layer's upAxis / metersPerUnit apply to a stage, so a reference or payload target is "
+     "loaded with erhe::usd::Stage_metrics::referenced and contributes no correction of its own"),
     (re.compile(r"some composed meshes are not loaded"),
      "load every UsdGeomMesh the composed stage holds: the missing ones name the prim kind or the "
      "composition arc the importer skips"),

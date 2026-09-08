@@ -652,12 +652,27 @@ public:
     std::map<std::string, std::string> custom_layer_data;
 };
 
+// Whether the file being loaded is the root layer of the stage it belongs
+// to, or a file composed under another stage as a reference / payload target
+// (doc/usd_compatibility.md, stage-level constants). USD applies the root
+// stage's `upAxis` and `metersPerUnit` and no other layer's, so only a `root`
+// load turns those into the transform it puts on the top-level prims; a
+// `referenced` load applies the identity, and the composing stage's own
+// correction - which reaches the content through the carrier prim - is the
+// only one there is. `Usd_data::up_axis` / `meters_per_unit` report the
+// file's own values either way.
+enum class Stage_metrics : unsigned int {
+    root       = 0,
+    referenced = 1
+};
+
 class Usd_load_arguments final
 {
 public:
     std::filesystem::path                    path;
     std::shared_ptr<erhe::scene::Node>       root_node;
     erhe::scene::Layer_id                    mesh_layer_id{0};
+    Stage_metrics                            stage_metrics{Stage_metrics::root};
 };
 
 // Result of load_usd(). `error` is non-empty exactly when the load failed,

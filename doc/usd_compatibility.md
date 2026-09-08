@@ -29,6 +29,13 @@ an exporter writes and an importer converts to.
 |---|---|---|
 | `upAxis` | `Y` | glTF is Y-up; the importer rotates a `Z`-up stage by -90 degrees about X, as part of the one transform it applies to the top-level imported nodes. An `X`-up stage is imported unrotated with a warning |
 | `metersPerUnit` | `1` | glTF is metres; the importer scales by it in the same top-level transform as `upAxis` |
+
+Both are the ROOT layer's: USD composes a reference or payload target without
+re-applying the target file's own `upAxis` / `metersPerUnit`, and the composing
+stage's correction reaches the target's content through the carrier prim. A
+load of such a target passes `erhe::usd::Stage_metrics::referenced` and applies
+the identity, while `Usd_data::up_axis` / `meters_per_unit` still report the
+file's own values for the caller's log and UI.
 | `timeCodesPerSecond` | `1` (or the animation's sample rate) | glTF animation time is seconds |
 | `defaultPrim` | the scene root | erhe scenes have one root node, and the root itself is not a prim (its name is outside every item path), so the exporter names the single top-level prim; a scene with several gets one `World` `Xform` gathering them, which is then the default prim |
 

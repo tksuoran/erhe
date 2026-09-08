@@ -1722,7 +1722,12 @@ auto load_usd_prefab_template(
             .root_node     = container_node,
             // Instances are retargeted to the destination scene's content
             // layer when the template is cloned.
-            .mesh_layer_id = 0
+            .mesh_layer_id = 0,
+            // The file is composed under the scene's stage as a reference or
+            // payload target, so its own upAxis / metersPerUnit are not
+            // applied: the composing stage's correction reaches the template
+            // through the carrier prim the instance hangs from.
+            .stage_metrics = erhe::usd::Stage_metrics::referenced
         }
     );
     if (!result.error.empty()) {

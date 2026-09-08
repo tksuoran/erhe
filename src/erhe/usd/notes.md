@@ -33,6 +33,14 @@ code that uses the library is compiled under
 - `load_usd(Usd_load_arguments) -> Usd_load_result` - load a file and convert
   its composed stage into erhe scene content. `convert_stage(stage, arguments)`
   is the same conversion over a stage the caller already loaded.
+  `Usd_load_arguments::stage_metrics` says which of the two the file is: a
+  `Stage_metrics::root` load is the root layer of its stage and its `upAxis` /
+  `metersPerUnit` become the transform on the top-level prims, while a
+  `Stage_metrics::referenced` load is a file composed under another stage as a
+  reference or payload target, whose own `upAxis` / `metersPerUnit` USD never
+  re-applies - it gets the identity, and the composing stage's correction
+  reaches the content through the carrier prim. `Usd_data::up_axis` /
+  `meters_per_unit` report the file's own values either way.
 - `Usd_data` - what one USD file contributes: `nodes`, `meshes`, `cameras`,
   `lights`, `materials`, `images`, `material_texture_bindings`, plus the
   stage's `up_axis` and `meters_per_unit`. It is deliberately the shape of
@@ -111,11 +119,12 @@ translation units.
   stage evaluates by more than 1e-5 (one warning - the two agreeing is what
   `erhe_usd_tests` asserts for every prim of the fixtures). A stack that
   carries time samples skips that last comparison, for the reason "Time
-  samples" gives. The stage's
+  samples" gives. The root stage's
   `upAxis` / `metersPerUnit` correction reaches the top-level prims of a
   non-Y-up or non-metre stage; those prims write a transform that is not what
   their ops say, so they keep the composed matrix too (logged at debug
-  level).
+  level). A `Stage_metrics::referenced` load applies no correction, so the
+  prims of a reference or payload target keep their authored stacks.
 - The erhe class of a prim is the class its `typeName` names
   (`doc/usd-compatibility-plan.md` C5, the object-model table of
   `doc/usd_compatibility.md`): a `Mesh` prim becomes an

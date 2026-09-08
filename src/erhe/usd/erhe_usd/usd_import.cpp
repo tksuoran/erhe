@@ -3345,9 +3345,19 @@ private:
     // upAxis and metersPerUnit of the stage as one transform applied to the
     // top-level imported nodes (doc/usd_compatibility.md, stage-level
     // constants): erhe, like glTF, is Y-up and metres.
+    //
+    // Only the ROOT layer of a stage carries these: USD composes a reference
+    // or payload target without re-applying the target file's own upAxis and
+    // metersPerUnit, and the composing stage's correction already reaches the
+    // target's content through the carrier prim. A `referenced` load
+    // therefore applies the identity (Stage_metrics, usd.hpp), while
+    // Usd_data::up_axis / meters_per_unit still report the file's own values.
     [[nodiscard]] auto make_stage_transform() const -> glm::mat4
     {
         glm::mat4 transform{1.0f};
+        if (m_arguments.stage_metrics == Stage_metrics::referenced) {
+            return transform;
+        }
         if (m_result.data.up_axis == "Z") {
             transform = glm::rotate(transform, -glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f});
         } else if (m_result.data.up_axis == "X") {

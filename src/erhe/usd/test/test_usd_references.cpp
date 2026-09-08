@@ -12,6 +12,10 @@
 
 #include <gtest/gtest.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -158,6 +162,118 @@ TEST(Reference_target_import, target_file_loads)
     EXPECT_TRUE(find_node(result.data, "Widget").operator bool());
     EXPECT_TRUE(find_node(result.data, "Gadget").operator bool());
     EXPECT_TRUE(find_node(result.data, "bar").operator bool());
+}
+
+// ---------------------------------------------------------------------------
+// Stage metrics of an arc target (Usd_load_arguments::stage_metrics)
+// ---------------------------------------------------------------------------
+
+// Load one file as the root layer of its own stage, or as a file composed
+// under another stage.
+[[nodiscard]] auto load_target(const char* file_name, const erhe::usd::Stage_metrics stage_metrics) -> erhe::usd::Usd_load_result
+{
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_arguments arguments{
+        .path          = reference_test_data_path(file_name),
+        .root_node     = root,
+        .mesh_layer_id = 0,
+        .stage_metrics = stage_metrics
+    };
+    return erhe::usd::load_usd(arguments);
+}
+
+void expect_matrix_near(const glm::mat4& value, const glm::mat4& expected)
+{
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            EXPECT_NEAR(value[column][row], expected[column][row], 1e-5f) << "column " << column << " row " << row;
+        }
+    }
+}
+
+// USD applies the ROOT stage's upAxis and metersPerUnit and no other layer's:
+// a reference or payload target is composed without re-applying its own, and
+// the composing stage's correction reaches the target's content through the
+// carrier prim. So a `referenced` load leaves the target's authored transform
+// alone - applying the target's own metersPerUnit here would scale the content
+// a second time.
+TEST(Reference_target_metrics, a_referenced_target_keeps_its_authored_transform)
+{
+    const erhe::usd::Usd_load_result result = load_target("reftarget_units.usda", erhe::usd::Stage_metrics::referenced);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    // The file's own values are still reported, for the caller's log and UI.
+    EXPECT_EQ(result.data.up_axis, "Y");
+    EXPECT_DOUBLE_EQ(result.data.meters_per_unit, 0.01);
+
+    const std::shared_ptr<erhe::scene::Node> widget = find_node(result.data, "Widget");
+    ASSERT_TRUE(widget.operator bool());
+    expect_matrix_near(
+        widget->parent_from_node_transform().get_matrix(),
+        glm::scale(glm::mat4{1.0f}, glm::vec3{4.0f, 4.0f, 4.0f})
+    );
+}
+
+// The same file opened as a stage of its own: its metersPerUnit is the stage's
+// and reaches the top-level prims.
+TEST(Reference_target_metrics, a_root_load_applies_the_files_own_units)
+{
+    const erhe::usd::Usd_load_result result = load_target("reftarget_units.usda", erhe::usd::Stage_metrics::root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    const std::shared_ptr<erhe::scene::Node> widget = find_node(result.data, "Widget");
+    ASSERT_TRUE(widget.operator bool());
+    expect_matrix_near(
+        widget->parent_from_node_transform().get_matrix(),
+        glm::scale(glm::mat4{1.0f}, glm::vec3{0.04f, 0.04f, 0.04f})
+    );
+}
+
+TEST(Reference_target_metrics, a_referenced_z_up_target_is_not_rotated)
+{
+    const erhe::usd::Usd_load_result result = load_target("reftarget_zup.usda", erhe::usd::Stage_metrics::referenced);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    EXPECT_EQ(result.data.up_axis, "Z");
+
+    const std::shared_ptr<erhe::scene::Node> widget = find_node(result.data, "Widget");
+    ASSERT_TRUE(widget.operator bool());
+    expect_matrix_near(
+        widget->parent_from_node_transform().get_matrix(),
+        glm::scale(glm::mat4{1.0f}, glm::vec3{4.0f, 4.0f, 4.0f})
+    );
+}
+
+TEST(Reference_target_metrics, a_root_z_up_load_rotates_the_top_level_prims)
+{
+    const erhe::usd::Usd_load_result result = load_target("reftarget_zup.usda", erhe::usd::Stage_metrics::root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    const std::shared_ptr<erhe::scene::Node> widget = find_node(result.data, "Widget");
+    ASSERT_TRUE(widget.operator bool());
+    const glm::mat4 expected = glm::rotate(glm::mat4{1.0f}, -glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f}) *
+                               glm::scale(glm::mat4{1.0f}, glm::vec3{4.0f, 4.0f, 4.0f});
+    expect_matrix_near(widget->parent_from_node_transform().get_matrix(), expected);
+}
+
+// The composing stage of such a target: its own metersPerUnit is 1, and the
+// arc is reported for the caller to instantiate the target under the carrier.
+TEST(Reference_target_metrics, the_composing_stage_reports_the_arc)
+{
+    const erhe::usd::Usd_load_result result = load_target("reference_units.usda", erhe::usd::Stage_metrics::root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    EXPECT_DOUBLE_EQ(result.data.meters_per_unit, 1.0);
+
+    ASSERT_EQ(result.data.references.size(), 1u);
+    EXPECT_EQ(result.data.references[0].stage_path, "/World/UnitsRef");
+    ASSERT_EQ(result.data.references[0].references.size(), 1u);
+    EXPECT_EQ(result.data.references[0].references[0].asset_path, "reftarget_units.usda");
+
+    // The target's content is not imported here - the carrier is empty until
+    // the caller instantiates the template.
+    const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, "UnitsRef");
+    ASSERT_TRUE(carrier.operator bool());
+    EXPECT_TRUE(carrier->get_children().empty());
+    EXPECT_FLOAT_EQ(carrier->parent_from_node_transform().get_matrix()[3].x, 5.0f);
 }
 
 // ---------------------------------------------------------------------------
