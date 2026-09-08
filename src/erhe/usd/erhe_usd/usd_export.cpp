@@ -1850,7 +1850,27 @@ private:
         }
         std::vector<lightusd::XformOp> ops;
         set_transform(ops, *node, node->parent_from_node_transform().get_matrix());
+        write_xform_op_props(ops, props);
+    }
 
+    // The same, for a transform that travels as a value rather than on an
+    // item: the authored stack when there is one, a single `transform` op
+    // otherwise.
+    void write_value_xform_ops(
+        const erhe::scene::Instance_override&      entry,
+        std::map<std::string, lightusd::Property>& props
+    )
+    {
+        std::vector<lightusd::XformOp> ops;
+        set_transform(ops, entry.xform_op_stack.has_value() ? &entry.xform_op_stack.value() : nullptr, entry.transform);
+        write_xform_op_props(ops, props);
+    }
+
+    static void write_xform_op_props(
+        const std::vector<lightusd::XformOp>&      ops,
+        std::map<std::string, lightusd::Property>& props
+    )
+    {
         std::vector<lightusd::value::token> order;
         for (const lightusd::XformOp& op : ops) {
             std::string token_text;
@@ -1926,9 +1946,10 @@ private:
     class Variant_prim final
     {
     public:
-        std::string                      name;
-        const erhe::primitive::Material* material{nullptr};
-        std::vector<Variant_prim>        children;
+        std::string                           name;
+        const erhe::primitive::Material*      material      {nullptr};
+        const erhe::scene::Instance_override* override_entry{nullptr};
+        std::vector<Variant_prim>             children;
     };
 
     [[nodiscard]] static auto find_or_add_variant_prim(std::vector<Variant_prim>& prims, const std::string_view name) -> Variant_prim&
@@ -1983,10 +2004,40 @@ private:
     // One variant: the binding of the prim carrying the set as a property of
     // the variant itself, and every deeper binding as an `over` prim at its
     // relative path.
+    // The `Variant_prim` at one relative path below the prim carrying the
+    // set, made on the way down if it is not there yet. Null for the empty
+    // path, which names the carrying prim - the variant itself.
+    [[nodiscard]] static auto find_or_add_variant_path(std::vector<Variant_prim>& tree, const std::string& relative_path) -> Variant_prim*
+    {
+        std::vector<Variant_prim>* level = &tree;
+        Variant_prim*              prim  = nullptr;
+        std::size_t                start = 0;
+        while (start < relative_path.size()) {
+            const std::size_t      slash = relative_path.find('/', start);
+            const std::string_view name  = (slash == std::string::npos)
+                ? std::string_view{relative_path}.substr(start)
+                : std::string_view{relative_path}.substr(start, slash - start);
+            start = (slash == std::string::npos) ? relative_path.size() : (slash + 1);
+            prim  = &find_or_add_variant_prim(*level, name);
+            level = &prim->children;
+        }
+        return prim;
+    }
+
     [[nodiscard]] auto write_variant(const Usd_save_variant_set& set, const Usd_save_variant& variant) -> lightusd::Variant
     {
         lightusd::Variant         usd_variant;
         std::vector<Variant_prim> tree;
+        for (const erhe::scene::Instance_override& entry : variant.overrides) {
+            if (entry.relative_path.empty()) {
+                write_variant_values(entry, usd_variant.properties(), usd_variant.metas());
+                continue;
+            }
+            Variant_prim* const prim = find_or_add_variant_path(tree, entry.relative_path);
+            if (prim != nullptr) {
+                prim->override_entry = &entry;
+            }
+        }
         for (const Usd_save_variant_binding& binding : variant.bindings) {
             if (!binding.material) {
                 add_warning(
@@ -2003,18 +2054,7 @@ private:
                 add_material_binding(usd_variant.properties(), *binding.material.get());
                 continue;
             }
-            std::vector<Variant_prim>* level = &tree;
-            Variant_prim*              prim  = nullptr;
-            std::size_t                start = 0;
-            while (start < binding.relative_path.size()) {
-                const std::size_t      slash = binding.relative_path.find('/', start);
-                const std::string_view name  = (slash == std::string::npos)
-                    ? std::string_view{binding.relative_path}.substr(start)
-                    : std::string_view{binding.relative_path}.substr(start, slash - start);
-                start = (slash == std::string::npos) ? binding.relative_path.size() : (slash + 1);
-                prim  = &find_or_add_variant_prim(*level, name);
-                level = &prim->children;
-            }
+            Variant_prim* const prim = find_or_add_variant_path(tree, binding.relative_path);
             if (prim != nullptr) {
                 prim->material = binding.material.get();
             }
@@ -2030,6 +2070,9 @@ private:
         lightusd::Model model;
         model.name = variant_prim.name;
         model.spec = lightusd::Specifier::Over;
+        if (variant_prim.override_entry != nullptr) {
+            write_variant_values(*variant_prim.override_entry, model.props, model.meta);
+        }
         if (variant_prim.material != nullptr) {
             add_material_binding(model.props, *variant_prim.material);
         }
@@ -2057,6 +2100,90 @@ private:
         lightusd::Relationship relationship;
         relationship.set(lightusd::Path{i->second, ""});
         props.emplace("material:binding", lightusd::Property{std::move(relationship), false});
+    }
+
+    // The property opinions of one override entry, in the form a typeless
+    // prim carries them - the same form the X2 `over` writer uses, so the
+    // reader reads both back through one path: `visible` and `purpose` as the
+    // native tokens, `active` as prim metadata, everything else as an
+    // `erhe:Owner:name` custom attribute. The value travels as text, so the
+    // property registry is what types it again; a name that reaches no
+    // property, or text that does not parse, is one warning and no attribute.
+    void write_variant_values(
+        const erhe::scene::Instance_override&      entry,
+        std::map<std::string, lightusd::Property>& props,
+        lightusd::PrimMetas&                       metas
+    )
+    {
+        for (const erhe::scene::Instance_override_value& value : entry.values) {
+            if (value.state == erhe::scene::Instance_override_value_state::cleared) {
+                continue; // a base value, which is never written
+            }
+            if (value.name == "visible") {
+                add_token_attribute(
+                    props,
+                    "visibility",
+                    lightusd::to_string((value.text == "false") ? lightusd::Visibility::Invisible : lightusd::Visibility::Inherited)
+                );
+                continue;
+            }
+            if (value.name == "purpose") {
+                add_token_attribute(props, "purpose", to_usd_purpose_token(value.text));
+                continue;
+            }
+            if (value.name == "active") {
+                metas.set_active(value.text != "false");
+                continue;
+            }
+            const erhe::property::Dependency_property* property = find_property_by_qualified_name(value.name);
+            if (property == nullptr) {
+                add_warning(fmt::format("a variant authors '{}', which names no property - the opinion is not written", value.name));
+                continue;
+            }
+            const std::optional<erhe::property::Property_value> parsed = erhe::property::parse_value(*property, value.text);
+            if (!parsed.has_value()) {
+                add_warning(
+                    fmt::format("a variant authors '{}' as '{}', which does not parse - the opinion is not written", value.name, value.text)
+                );
+                continue;
+            }
+            const std::string attribute_name = fmt::format(
+                "erhe:{}:{}",
+                erhe::property::get_owner_type_name(property->get_owner_type()),
+                property->get_name()
+            );
+            props.emplace(attribute_name, lightusd::Property{make_custom_attribute(*property, parsed.value()), true});
+        }
+        if (entry.transform_overridden) {
+            write_value_xform_ops(entry, props);
+        }
+    }
+
+    // The property a qualified `Owner.name` names, without an object to ask:
+    // a variant's opinion is written from the text form alone, and the name
+    // the reader recorded is the one the property's own owner type gives it.
+    [[nodiscard]] static auto find_property_by_qualified_name(const std::string& name) -> const erhe::property::Dependency_property*
+    {
+        const std::size_t dot = name.find('.');
+        if (dot == std::string::npos) {
+            return nullptr;
+        }
+        const erhe::property::Property_registry&        registry = erhe::property::Property_registry::get();
+        const std::optional<erhe::property::Owner_type> owner    = registry.find_owner_type(std::string_view{name}.substr(0, dot));
+        if (!owner.has_value()) {
+            return nullptr;
+        }
+        return registry.find(owner.value(), std::string_view{name}.substr(dot + 1));
+    }
+
+    // The USD `purpose` token an erhe Purpose label spells (M3): the same
+    // vocabulary, uncapitalized.
+    [[nodiscard]] static auto to_usd_purpose_token(const std::string& text) -> std::string
+    {
+        if (text == "Render") { return "render"; }
+        if (text == "Proxy" ) { return "proxy";  }
+        if (text == "Guide" ) { return "guide";  }
+        return "default";
     }
 
     // The composition arcs of a carrier prim, as the `references` and
@@ -2255,7 +2382,15 @@ private:
     // op, so nothing about an editor-authored file changes.
     static void set_transform(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Node& node, const glm::mat4& matrix)
     {
-        const erhe::scene::Xform_op_stack* stack = node.get_xform_op_stack();
+        set_transform(xform_ops, node.get_xform_op_stack(), matrix);
+    }
+
+    static void set_transform(
+        std::vector<lightusd::XformOp>&    xform_ops,
+        const erhe::scene::Xform_op_stack* stack,
+        const glm::mat4&                   matrix
+    )
+    {
         if ((stack != nullptr) && is_near(glm::mat4{stack->compose()}, matrix)) {
             write_xform_op_stack(xform_ops, *stack);
             return;

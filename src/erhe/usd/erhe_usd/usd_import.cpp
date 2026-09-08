@@ -8,6 +8,7 @@
 #include "erhe_geometry/shapes/capsule.hpp"
 #include "erhe_geometry/shapes/cone.hpp"
 #include "erhe_geometry/shapes/sphere.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
@@ -22,6 +23,7 @@
 #include "erhe_property/property_value.hpp"
 #include "erhe_property/owner_type.hpp"
 #include "erhe_scene/camera.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -3645,7 +3647,7 @@ private:
             for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
                 Usd_variant variant{};
                 variant.name = variant_entry.first;
-                read_variant_opinions(variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
+                read_variant_opinions(path, variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
                 set.variants.push_back(std::move(variant));
             }
             const lightusd::VariantSelectionMap::const_iterator i = selection.find(entry.first);
@@ -3659,10 +3661,16 @@ private:
         m_variant_sets_by_path.emplace(path, std::move(sets));
     }
 
-    // One variant block: the `material:binding` relationships it authors, on
-    // the prim carrying the set (an empty relative path) and on the prims it
-    // holds. Anything else it authors is an opinion this slice does not carry.
-    static void read_variant_opinions(
+    // One variant block: the `material:binding` relationships it authors and
+    // the property opinions it authors, on the prim carrying the set (an empty
+    // relative path) and on the prims below it. An opinion is recorded exactly
+    // the way an `over` below a reference carrier is (X2), so both travel
+    // through the same apply. A property the value reader cannot express is
+    // counted for the set; `def` children contribute their opinions too, and a
+    // path that reaches no prim of the tree is dropped as structure when the
+    // base values are captured.
+    void read_variant_opinions(
+        const std::string&        stage_path,
         const lightusd::PrimSpec& spec,
         const std::string&        relative_path,
         Usd_variant&              variant,
@@ -3691,14 +3699,49 @@ private:
                     continue;
                 }
             }
-            ++unsupported_opinion_count;
+            if (!is_carried_spec_property(property.first, property.second)) {
+                ++unsupported_opinion_count;
+            }
+        }
+        erhe::scene::Instance_override entry{};
+        entry.relative_path = relative_path;
+        read_spec_values(spec, entry.values);
+        read_override_xform_ops(stage_path, spec, entry);
+        if (!entry.values.empty() || entry.transform_overridden) {
+            variant.overrides.push_back(std::move(entry));
         }
         for (const lightusd::PrimSpec& child : spec.children()) {
             const std::string child_path = relative_path.empty()
                 ? child.name()
                 : (relative_path + "/" + child.name());
-            read_variant_opinions(child, child_path, variant, unsupported_opinion_count);
+            read_variant_opinions(stage_path, child, child_path, variant, unsupported_opinion_count);
         }
+    }
+
+    // Whether one property of a prim spec reaches erhe at all: the material
+    // binding, the xformOps of a transform, the `erhe:Owner:name` custom
+    // attributes and the two native tokens read_spec_values reads. Everything
+    // else is an opinion the reader has no place for.
+    [[nodiscard]] static auto is_carried_spec_property(const std::string& name, const lightusd::Property& property) -> bool
+    {
+        if (property.is_relationship()) {
+            return name == "material:binding";
+        }
+        if (!property.is_attribute()) {
+            return false;
+        }
+        if (name == "xformOpOrder") {
+            return true;
+        }
+        static constexpr std::string_view xform_op_prefix{"xformOp:"};
+        static constexpr std::string_view erhe_prefix    {"erhe:"};
+        if (name.compare(0, xform_op_prefix.size(), xform_op_prefix) == 0) {
+            return true;
+        }
+        if (name.compare(0, erhe_prefix.size(), erhe_prefix) == 0) {
+            return true;
+        }
+        return (name == "visibility") || (name == "purpose");
     }
 
     // The variant sets of the prim at `absolute_path`, on the item the prim
@@ -3712,16 +3755,6 @@ private:
         for (const Usd_variant_set& set : i->second) {
             Usd_variant_set recorded = set;
             recorded.prim = item;
-            if (recorded.unsupported_opinion_count != 0) {
-                add_warning(
-                    fmt::format(
-                        "USD prim '{}': variant set '{}' authors {} opinion(s) that are not material bindings - only material bindings are carried",
-                        absolute_path,
-                        recorded.set_name,
-                        recorded.unsupported_opinion_count
-                    )
-                );
-            }
             m_result.data.variant_sets.push_back(std::move(recorded));
         }
     }
@@ -3742,10 +3775,24 @@ private:
 
     // The selected variant of every set, applied to the imported result: USD
     // resolves a variant selection in composition, and LightUSD composes
-    // nothing, so a material a variant binds only reaches a mesh through this.
+    // nothing, so what a variant authors only reaches the scene through this.
+    // The base values are captured first, before any opinion of the selected
+    // variant is applied, so a switch to another variant has what the file
+    // authored outside the variant blocks to go back to.
     void apply_variant_bindings()
     {
-        for (const Usd_variant_set& set : m_result.data.variant_sets) {
+        for (Usd_variant_set& set : m_result.data.variant_sets) {
+            capture_variant_base_values(set);
+            if (set.unsupported_opinion_count != 0) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': variant set '{}' authors {} opinion(s) that erhe has no place for - they are not carried",
+                        set.stage_path,
+                        set.set_name,
+                        set.unsupported_opinion_count
+                    )
+                );
+            }
             const Usd_variant* variant = nullptr;
             for (const Usd_variant& candidate : set.variants) {
                 if (candidate.name == set.selected) {
@@ -3756,7 +3803,7 @@ private:
             if (variant == nullptr) {
                 add_warning(
                     fmt::format(
-                        "USD prim '{}': variant set '{}' selects '{}', which the set does not hold - no binding of the set is applied",
+                        "USD prim '{}': variant set '{}' selects '{}', which the set does not hold - nothing of the set is applied",
                         set.stage_path,
                         set.set_name,
                         set.selected
@@ -3764,7 +3811,143 @@ private:
                 );
                 continue;
             }
+            apply_variant_overrides(set, *variant);
             apply_variant(set, *variant);
+        }
+    }
+
+    // The prim one relative path of a variant names: the prim carrying the set
+    // for the empty path, and the item at that path below it otherwise.
+    [[nodiscard]] static auto find_variant_target(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
+    {
+        return relative_path.empty() ? &carrier : erhe::find_by_path(carrier, relative_path);
+    }
+
+    // What the prims of one set hold before any opinion of the selected
+    // variant reaches them, for every path and property name any variant of
+    // the set authors. A property without a local value is a `cleared` entry,
+    // so restoring it clears rather than writes. An override whose path
+    // reaches no prim of the tree is a prim a variant adds - structure, which
+    // this slice does not create - so it is dropped and counted for the set.
+    void capture_variant_base_values(Usd_variant_set& set)
+    {
+        erhe::Hierarchy* carrier = dynamic_cast<erhe::Hierarchy*>(set.prim.get());
+        if (carrier == nullptr) {
+            for (Usd_variant& variant : set.variants) {
+                set.unsupported_opinion_count += variant.overrides.size();
+                variant.overrides.clear();
+            }
+            return;
+        }
+        std::vector<erhe::scene::Instance_override> base_values;
+        for (Usd_variant& variant : set.variants) {
+            std::vector<erhe::scene::Instance_override> kept;
+            for (erhe::scene::Instance_override& entry : variant.overrides) {
+                erhe::Hierarchy* target = find_variant_target(*carrier, entry.relative_path);
+                if (target == nullptr) {
+                    ++set.unsupported_opinion_count;
+                    continue;
+                }
+                capture_variant_base_entry(*target, entry, base_values);
+                kept.push_back(std::move(entry));
+            }
+            variant.overrides = std::move(kept);
+        }
+        set.base_values = std::move(base_values);
+    }
+
+    // The base entry for one override: every property name it authors that no
+    // earlier variant of the set already recorded, plus the item's transform
+    // when any variant authors one for it.
+    static void capture_variant_base_entry(
+        erhe::Hierarchy&                             target,
+        const erhe::scene::Instance_override&        entry,
+        std::vector<erhe::scene::Instance_override>& base_values
+    )
+    {
+        erhe::scene::Instance_override* base = nullptr;
+        for (erhe::scene::Instance_override& candidate : base_values) {
+            if (candidate.relative_path == entry.relative_path) {
+                base = &candidate;
+                break;
+            }
+        }
+        if (base == nullptr) {
+            erhe::scene::Instance_override new_base{};
+            new_base.relative_path = entry.relative_path;
+            base_values.push_back(std::move(new_base));
+            base = &base_values.back();
+        }
+        for (const erhe::scene::Instance_override_value& value : entry.values) {
+            bool already_recorded = false;
+            for (const erhe::scene::Instance_override_value& recorded : base->values) {
+                if (recorded.name == value.name) {
+                    already_recorded = true;
+                    break;
+                }
+            }
+            if (already_recorded) {
+                continue;
+            }
+            const erhe::property::Dependency_property* property = erhe::scene::find_override_property(target, value.name);
+            if (property == nullptr) {
+                continue; // apply_property_values warns about the name once
+            }
+            if (target.has_local_value(*property)) {
+                base->values.push_back(
+                    erhe::scene::Instance_override_value{
+                        .name  = value.name,
+                        .text  = erhe::property::to_string(*property, target.get_value(*property)),
+                        .state = erhe::scene::Instance_override_value_state::supplied
+                    }
+                );
+            } else {
+                base->values.push_back(
+                    erhe::scene::Instance_override_value{
+                        .name  = value.name,
+                        .text  = std::string{},
+                        .state = erhe::scene::Instance_override_value_state::cleared
+                    }
+                );
+            }
+        }
+        if (entry.transform_overridden && !base->transform_overridden) {
+            const erhe::scene::Xformable* xformable = dynamic_cast<const erhe::scene::Xformable*>(&target);
+            if (xformable != nullptr) {
+                base->transform_overridden = true;
+                base->transform            = xformable->parent_from_node_transform().get_matrix();
+                base->xform_op_stack       = xformable->copy_xform_op_stack();
+            }
+        }
+    }
+
+    // The property opinions of one variant, on the prims they name.
+    void apply_variant_overrides(const Usd_variant_set& set, const Usd_variant& variant)
+    {
+        erhe::Hierarchy* carrier = dynamic_cast<erhe::Hierarchy*>(set.prim.get());
+        if (carrier == nullptr) {
+            return;
+        }
+        const std::string owner = fmt::format("variant '{}' of set '{}' on '{}'", variant.name, set.set_name, set.stage_path);
+        for (const erhe::scene::Instance_override& entry : variant.overrides) {
+            erhe::Hierarchy* target = find_variant_target(*carrier, entry.relative_path);
+            if (target == nullptr) {
+                continue; // dropped as structure when the base values were captured
+            }
+            erhe::scene::apply_property_values(*target, entry.values, owner);
+            if (!entry.transform_overridden) {
+                continue;
+            }
+            erhe::scene::Xformable* xformable = dynamic_cast<erhe::scene::Xformable*>(target);
+            if (xformable == nullptr) {
+                add_warning(fmt::format("{}: '{}' carries no transform - the xformOps are dropped", owner, entry.relative_path));
+                continue;
+            }
+            if (entry.xform_op_stack.has_value()) {
+                xformable->set_xform_op_stack(entry.xform_op_stack.value());
+            } else {
+                xformable->set_parent_from_node(entry.transform);
+            }
         }
     }
 

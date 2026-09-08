@@ -19,7 +19,22 @@ namespace erhe::primitive {
     class Material;
 }
 
+namespace erhe::property {
+    class Dependency_object;
+    class Dependency_property;
+}
+
 namespace erhe::scene {
+
+// Whether an override entry supplies a value at all. `cleared` is the state
+// of a property that has no local value: an override list that describes what
+// a prim held before a variant's opinions were applied needs to say "this
+// property was not authored here", so restoring it clears the local value
+// instead of writing one.
+enum class Instance_override_value_state : unsigned int {
+    supplied = 0,
+    cleared  = 1
+};
 
 // One property value an instance item overrides, by the qualified name the
 // property registry gives it (`Owner.name`, or `name` for a property of the
@@ -27,8 +42,9 @@ namespace erhe::scene {
 class Instance_override_value final
 {
 public:
-    std::string name;
-    std::string text;
+    std::string                  name;
+    std::string                  text;
+    Instance_override_value_state state{Instance_override_value_state::supplied};
 };
 
 // One material binding an instance item overrides, as the item form carries
@@ -118,6 +134,17 @@ void apply_property_values(
     const std::vector<Instance_override_value>& values,
     std::string_view                            owner
 );
+
+// The property `name` addresses on `object`: the registry's own lookup for
+// the object, and a qualified `Owner.name` that a file spells for a property
+// the object holds under its bare name. Null when the name reaches no
+// property. This is how a file's spelling of a property is resolved, wherever
+// the spelling comes from - an instance override, a class prim's opinions, a
+// variant's opinions.
+[[nodiscard]] auto find_override_property(
+    const erhe::property::Dependency_object& object,
+    const std::string&                       name
+) -> const erhe::property::Dependency_property*;
 
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's

@@ -2,16 +2,137 @@
 
 #include "operations/compound_operation.hpp"
 #include "operations/mesh_material_assign_operation.hpp"
+#include "operations/node_transform_operation.hpp"
+#include "operations/property_set_operation.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 
+#include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_property/dependency_object.hpp"
+#include "erhe_property/dependency_property.hpp"
+#include "erhe_property/property_string.hpp"
+#include "erhe_scene/instance_override.hpp"
+#include "erhe_scene/node.hpp"
+#include "erhe_scene/transform.hpp"
 
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <cmath>
+#include <optional>
 
 namespace editor {
+
+namespace {
+
+// The entry of `variant` for one relative path, null when the variant authors
+// nothing there.
+[[nodiscard]] auto find_variant_override(
+    const Variant&     variant,
+    const std::string& relative_path
+) -> const erhe::scene::Instance_override*
+{
+    for (const erhe::scene::Instance_override& entry : variant.overrides) {
+        if (entry.relative_path == relative_path) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto find_override_value(
+    const erhe::scene::Instance_override& entry,
+    const std::string&                    name
+) -> const erhe::scene::Instance_override_value*
+{
+    for (const erhe::scene::Instance_override_value& value : entry.values) {
+        if (value.name == name) {
+            return &value;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto is_near(const glm::mat4& lhs, const glm::mat4& rhs) -> bool
+{
+    constexpr float tolerance = 1e-5f;
+    for (int j = 0; j < 4; ++j) {
+        for (int i = 0; i < 4; ++i) {
+            if (std::abs(lhs[j][i] - rhs[j][i]) > tolerance) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The property writes one switch performs. The set's base values name every
+// path and property name any of its variants authors, so this visits exactly
+// the opinions a switch can leave standing: the chosen variant's value where
+// it authors one, the base value - a local value or none at all - where it
+// does not.
+void append_variant_property_operations(
+    const Variant_set&                       set,
+    const Variant&                           variant,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    for (const erhe::scene::Instance_override& base : set.base_values) {
+        const std::shared_ptr<erhe::Item_base> item = resolve_variant_prim(set, base.relative_path);
+        if (!item) {
+            continue; // the prim the opinion names is no longer in the scene
+        }
+        const erhe::scene::Instance_override* const authored = find_variant_override(variant, base.relative_path);
+        for (const erhe::scene::Instance_override_value& base_value : base.values) {
+            const erhe::property::Dependency_property* const property =
+                erhe::scene::find_override_property(*item.get(), base_value.name);
+            if (property == nullptr) {
+                continue;
+            }
+            const erhe::scene::Instance_override_value* const authored_value =
+                (authored != nullptr) ? find_override_value(*authored, base_value.name) : nullptr;
+            const erhe::scene::Instance_override_value& wanted =
+                (authored_value != nullptr) ? *authored_value : base_value;
+            std::optional<erhe::property::Property_value> after;
+            if (wanted.state == erhe::scene::Instance_override_value_state::supplied) {
+                after = erhe::property::parse_value(*item.get(), *property, wanted.text);
+            }
+            std::optional<erhe::property::Property_value> before;
+            if (item->has_local_value(*property)) {
+                before = item->get_value(*property);
+            }
+            if (before == after) {
+                continue;
+            }
+            operations.push_back(
+                std::make_shared<Property_set_operation>(item, *property, before, after)
+            );
+        }
+        if (!base.transform_overridden) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Xformable> xformable = std::dynamic_pointer_cast<erhe::scene::Xformable>(item);
+        if (!xformable) {
+            continue;
+        }
+        const glm::mat4 wanted = ((authored != nullptr) && authored->transform_overridden)
+            ? authored->transform
+            : base.transform;
+        const glm::mat4 current = xformable->parent_from_node_transform().get_matrix();
+        if (is_near(current, wanted)) {
+            continue;
+        }
+        Node_transform_operation::Parameters parameters{};
+        parameters.node                    = xformable;
+        parameters.parent_from_node_before = erhe::scene::Transform{current};
+        parameters.parent_from_node_after  = erhe::scene::Transform{wanted};
+        parameters.xform_op_stack_before   = xformable->copy_xform_op_stack();
+        operations.push_back(std::make_shared<Node_transform_operation>(parameters));
+    }
+}
+
+} // anonymous namespace
 
 Variant_select_operation::Variant_select_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
@@ -109,6 +230,8 @@ auto make_select_variant_operation(
     ) ? Variant_select_operation::Entry_state::present
       : Variant_select_operation::Entry_state::absent;
     operations.push_back(std::make_shared<Variant_select_operation>(std::move(parameters)));
+
+    append_variant_property_operations(*set, *variant, operations);
 
     for (const Variant_binding& binding : variant->bindings) {
         const Variant_binding_target target   = resolve_variant_binding(*set, *variant, binding);

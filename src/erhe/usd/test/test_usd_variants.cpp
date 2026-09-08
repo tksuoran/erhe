@@ -1,14 +1,17 @@
-// Material-binding variant sets (doc/usd-compatibility-plan.md X4). LightUSD
-// composes nothing, so a variant contributes no opinion to the composed prim:
-// the reader takes the `variantSet` blocks off the root layer's own prim
-// specs, records what each variant binds, and applies the selected variant's
-// bindings to the meshes itself. The writer puts the whole table back, so a
-// stage that came in with a selection goes out with it.
+// Variant sets (doc/usd-compatibility-plan.md X4). LightUSD composes nothing,
+// so a variant contributes no opinion to the composed prim: the reader takes
+// the `variantSet` blocks off the root layer's own prim specs, records what
+// each variant binds and what it authors as property opinions, and applies
+// the selected variant to the imported result itself. The writer puts the
+// whole table back, so a stage that came in with a selection goes out with
+// it.
 
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_property/dependency_property.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
@@ -88,6 +91,40 @@ namespace {
     return {};
 }
 
+// The opinion `variant` authors for one relative path and property name, or
+// an empty string when it authors none.
+[[nodiscard]] auto opinion_of(
+    const erhe::usd::Usd_variant& variant,
+    const std::string&            relative_path,
+    const std::string&            name
+) -> std::string
+{
+    for (const erhe::scene::Instance_override& entry : variant.overrides) {
+        if (entry.relative_path != relative_path) {
+            continue;
+        }
+        for (const erhe::scene::Instance_override_value& value : entry.values) {
+            if (value.name == name) {
+                return value.text;
+            }
+        }
+    }
+    return {};
+}
+
+[[nodiscard]] auto override_of(
+    const std::vector<erhe::scene::Instance_override>& overrides,
+    const std::string&                                 relative_path
+) -> const erhe::scene::Instance_override*
+{
+    for (const erhe::scene::Instance_override& entry : overrides) {
+        if (entry.relative_path == relative_path) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]] auto material_at(
     const std::shared_ptr<erhe::scene::Node>& root,
     const std::string&                        path
@@ -143,7 +180,8 @@ namespace {
         save_set.selected = set.selected;
         for (const erhe::usd::Usd_variant& variant : set.variants) {
             erhe::usd::Usd_save_variant save_variant{};
-            save_variant.name = variant.name;
+            save_variant.name      = variant.name;
+            save_variant.overrides = variant.overrides;
             for (const erhe::usd::Usd_variant_binding& binding : variant.bindings) {
                 save_variant.bindings.push_back(
                     erhe::usd::Usd_save_variant_binding{
@@ -212,18 +250,83 @@ TEST_F(Variant_import, the_selected_variant_is_what_the_meshes_bind)
     EXPECT_EQ(material_bound_to_primitive(*mesh, 1), blue);
 }
 
-// A variant that authors anything but a material binding is the later slice
-// (node subtree variants): the set says how much it left out, once.
-TEST_F(Variant_import, a_non_binding_opinion_is_reported_once_for_the_set)
+// The property opinions a variant authors are recorded the way an `over`
+// below a reference carrier is: by the path below the prim carrying the set,
+// an empty path being that prim itself.
+TEST_F(Variant_import, the_property_opinions_are_recorded)
 {
     const erhe::usd::Usd_variant_set* detail = find_set(result.data, "/World/Extra", "detail");
     ASSERT_NE(detail, nullptr);
     EXPECT_EQ(detail->selected, "low");
-    EXPECT_EQ(detail->unsupported_opinion_count, 2u);
-    for (const erhe::usd::Usd_variant& variant : detail->variants) {
-        EXPECT_TRUE(variant.bindings.empty()) << variant.name;
-    }
-    EXPECT_NE(result.warning.find("variant set 'detail' authors 2 opinion(s)"), std::string::npos) << result.warning;
+    EXPECT_EQ(detail->unsupported_opinion_count, 0u);
+
+    const erhe::usd::Usd_variant* high = find_variant(*detail, "high");
+    const erhe::usd::Usd_variant* low  = find_variant(*detail, "low");
+    ASSERT_NE(high, nullptr);
+    ASSERT_NE(low,  nullptr);
+
+    // An attribute on the prim carrying the set.
+    EXPECT_EQ(opinion_of(*high, "",     "visible"), "true");
+    EXPECT_EQ(opinion_of(*low,  "",     "visible"), "false");
+    // An attribute on an `over` child.
+    EXPECT_EQ(opinion_of(*low,  "part", "visible"), "false");
+    EXPECT_EQ(opinion_of(*high, "part", "visible"), "");
+
+    // The xformOps of an `over` child.
+    const erhe::scene::Instance_override* high_part = override_of(high->overrides, "part");
+    ASSERT_NE(high_part, nullptr);
+    EXPECT_TRUE(high_part->transform_overridden);
+    EXPECT_FLOAT_EQ(high_part->transform[3][0], 3.0f);
+    ASSERT_TRUE(high_part->xform_op_stack.has_value());
+    ASSERT_EQ(high_part->xform_op_stack.value().ops.size(), 1u);
+
+    // An `erhe:Owner:name` custom attribute of a deeper `over`.
+    const erhe::usd::Usd_variant_set* look = find_set(result.data, "/World/Holder", "look");
+    ASSERT_NE(look, nullptr);
+    const erhe::usd::Usd_variant* red = find_variant(*look, "red");
+    ASSERT_NE(red, nullptr);
+    // A USD `bool` prints as 0 / 1, which is one of the two spellings the D16
+    // parse accepts for a boolean.
+    EXPECT_EQ(opinion_of(*red, "quad", "Mesh.shadow_cast"), "0");
+    EXPECT_EQ(look->unsupported_opinion_count, 0u);
+}
+
+// The base values are what the prims held before the selected variant's
+// opinions reached them, for every path and name any variant authors: what a
+// switch to another variant restores.
+TEST_F(Variant_import, the_base_values_are_captured)
+{
+    const erhe::usd::Usd_variant_set* detail = find_set(result.data, "/World/Extra", "detail");
+    ASSERT_NE(detail, nullptr);
+
+    const erhe::scene::Instance_override* base_root = override_of(detail->base_values, "");
+    ASSERT_NE(base_root, nullptr);
+    ASSERT_EQ(base_root->values.size(), 1u);
+    EXPECT_EQ(base_root->values[0].name, "visible");
+    // The stage authors no visibility on `/World/Extra` outside the variants.
+    EXPECT_EQ(base_root->values[0].state, erhe::scene::Instance_override_value_state::cleared);
+
+    const erhe::scene::Instance_override* base_part = override_of(detail->base_values, "part");
+    ASSERT_NE(base_part, nullptr);
+    EXPECT_TRUE(base_part->transform_overridden);
+    EXPECT_FLOAT_EQ(base_part->transform[3][0], 0.0f);
+}
+
+// The selected variant's opinions are applied to the imported items, the way
+// its bindings are.
+TEST_F(Variant_import, the_selected_variant_opinions_are_applied)
+{
+    erhe::Hierarchy* extra = erhe::find_by_path(*root.get(), "World/Extra");
+    erhe::Hierarchy* part  = erhe::find_by_path(*root.get(), "World/Extra/part");
+    ASSERT_NE(extra, nullptr);
+    ASSERT_NE(part,  nullptr);
+    EXPECT_FALSE(extra->get_value(erhe::Item_base::visible_property));
+    EXPECT_FALSE(part->get_value(erhe::Item_base::visible_property));
+
+    // `blue` is selected and authors no shadow_cast, so the mesh keeps its own.
+    const erhe::scene::Mesh* mesh = mesh_at(root, "World/Holder/quad");
+    ASSERT_NE(mesh, nullptr);
+    EXPECT_TRUE(mesh->get_value(erhe::scene::Mesh::shadow_cast_property));
 }
 
 class Variant_round_trip : public testing::Test
@@ -267,6 +370,45 @@ TEST_F(Variant_round_trip, the_variant_lines_are_written)
     EXPECT_NE(written.find("\"red\" {"),                       std::string::npos) << written;
     EXPECT_NE(written.find("rel material:binding = </World/Looks/Blue>"), std::string::npos) << written;
     EXPECT_NE(written.find("rel material:binding = </World/Looks/Red>"),  std::string::npos) << written;
+    // The property opinions of the variants, in the same form the reader reads
+    // them back: the native tokens, the erhe custom attribute, the xformOps.
+    EXPECT_NE(written.find("append variantSets = \"detail\""), std::string::npos) << written;
+    EXPECT_NE(written.find("token visibility = \"invisible\""), std::string::npos) << written;
+    EXPECT_NE(written.find("token visibility = \"inherited\""), std::string::npos) << written;
+    EXPECT_NE(written.find("erhe:Mesh:shadow_cast"),             std::string::npos) << written;
+    EXPECT_NE(written.find("xformOp:translate"),                 std::string::npos) << written;
+}
+
+// The opinions survive the round trip as values, and the selected variant is
+// applied to the reloaded scene exactly as it was to the source.
+TEST_F(Variant_round_trip, the_opinions_come_back_as_they_went_out)
+{
+    for (std::size_t index = 0, end = source.data.variant_sets.size(); index < end; ++index) {
+        const erhe::usd::Usd_variant_set& before = source.data.variant_sets[index];
+        const erhe::usd::Usd_variant_set& after  = reloaded.data.variant_sets[index];
+        ASSERT_EQ(after.variants.size(), before.variants.size()) << before.set_name;
+        for (std::size_t variant = 0, variant_end = before.variants.size(); variant < variant_end; ++variant) {
+            const erhe::usd::Usd_variant& before_variant = before.variants[variant];
+            const erhe::usd::Usd_variant& after_variant  = after.variants[variant];
+            ASSERT_EQ(after_variant.overrides.size(), before_variant.overrides.size())
+                << before.set_name << " " << before_variant.name;
+            for (std::size_t entry = 0, entry_end = before_variant.overrides.size(); entry < entry_end; ++entry) {
+                const erhe::scene::Instance_override& before_entry = before_variant.overrides[entry];
+                const erhe::scene::Instance_override& after_entry  = after_variant.overrides[entry];
+                EXPECT_EQ(after_entry.relative_path,        before_entry.relative_path);
+                EXPECT_EQ(after_entry.transform_overridden, before_entry.transform_overridden);
+                ASSERT_EQ(after_entry.values.size(),        before_entry.values.size()) << before_entry.relative_path;
+                for (std::size_t value = 0, value_end = before_entry.values.size(); value < value_end; ++value) {
+                    EXPECT_EQ(after_entry.values[value].name, before_entry.values[value].name);
+                    EXPECT_EQ(after_entry.values[value].text, before_entry.values[value].text);
+                }
+            }
+        }
+    }
+
+    erhe::Hierarchy* part = erhe::find_by_path(*reloaded_root.get(), "World/Extra/part");
+    ASSERT_NE(part, nullptr);
+    EXPECT_FALSE(part->get_value(erhe::Item_base::visible_property));
 }
 
 TEST_F(Variant_round_trip, the_table_comes_back_as_it_went_out)

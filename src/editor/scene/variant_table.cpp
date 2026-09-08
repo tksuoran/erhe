@@ -171,6 +171,16 @@ void Variant_table::drop_expired_sets()
     );
 }
 
+auto resolve_variant_prim(const Variant_set& set, const std::string& relative_path) -> std::shared_ptr<erhe::Item_base>
+{
+    const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+    if (!prim) {
+        return {};
+    }
+    erhe::Hierarchy* const item = find_binding_item(prim, relative_path);
+    return (item != nullptr) ? item->shared_from_this() : std::shared_ptr<erhe::Item_base>{};
+}
+
 auto make_variant_binding_path(
     const erhe::Hierarchy&   carrier,
     const erhe::scene::Mesh& mesh,

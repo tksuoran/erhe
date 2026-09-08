@@ -169,37 +169,6 @@ void collect_item(
     }
 }
 
-// The property one override value names. A collected override spells the name
-// the way the registry does (`Owner.name` only where the object holds the
-// value for another class), while a file can spell it qualified whatever the
-// object is - `erhe:Mesh:shadow_cast` on a Mesh prim - so a qualified name
-// that resolves to nothing is retried as the bare name, with the owner type
-// it names checked against the property's own.
-[[nodiscard]] auto find_override_property(
-    const erhe::property::Dependency_object& object,
-    const std::string&                       name
-) -> const erhe::property::Dependency_property*
-{
-    const erhe::property::Property_registry&   registry = erhe::property::Property_registry::get();
-    const erhe::property::Dependency_property* property = registry.find_for_object(object, name);
-    if (property != nullptr) {
-        return property;
-    }
-    const std::size_t dot = name.find('.');
-    if (dot == std::string::npos) {
-        return nullptr;
-    }
-    const std::optional<erhe::property::Owner_type> named_owner = registry.find_owner_type(std::string_view{name}.substr(0, dot));
-    if (!named_owner.has_value()) {
-        return nullptr;
-    }
-    property = registry.find_for_object(object, std::string_view{name}.substr(dot + 1));
-    if ((property != nullptr) && (property->get_owner_type() != named_owner.value())) {
-        return nullptr;
-    }
-    return property;
-}
-
 // The item `relative_path` names below a carrier: an entry names the item at
 // its path below the first of the carrier's children that has one. An empty
 // path is that child itself.
@@ -390,6 +359,37 @@ void apply_material_binding(
 
 } // anonymous namespace
 
+// The property one override value names. A collected override spells the name
+// the way the registry does (`Owner.name` only where the object holds the
+// value for another class), while a file can spell it qualified whatever the
+// object is - `erhe:Mesh:shadow_cast` on a Mesh prim - so a qualified name
+// that resolves to nothing is retried as the bare name, with the owner type
+// it names checked against the property's own.
+auto find_override_property(
+    const erhe::property::Dependency_object& object,
+    const std::string&                       name
+) -> const erhe::property::Dependency_property*
+{
+    const erhe::property::Property_registry&   registry = erhe::property::Property_registry::get();
+    const erhe::property::Dependency_property* property = registry.find_for_object(object, name);
+    if (property != nullptr) {
+        return property;
+    }
+    const std::size_t dot = name.find('.');
+    if (dot == std::string::npos) {
+        return nullptr;
+    }
+    const std::optional<erhe::property::Owner_type> named_owner = registry.find_owner_type(std::string_view{name}.substr(0, dot));
+    if (!named_owner.has_value()) {
+        return nullptr;
+    }
+    property = registry.find_for_object(object, std::string_view{name}.substr(dot + 1));
+    if ((property != nullptr) && (property->get_owner_type() != named_owner.value())) {
+        return nullptr;
+    }
+    return property;
+}
+
 void apply_property_values(
     erhe::Item_base&                            item,
     const std::vector<Instance_override_value>& values,
@@ -400,6 +400,10 @@ void apply_property_values(
         const erhe::property::Dependency_property* property = find_override_property(item, value.name);
         if (property == nullptr) {
             log->warn("'{}': the value '{}' names no property of '{}'", owner, value.name, item.get_name());
+            continue;
+        }
+        if (value.state == Instance_override_value_state::cleared) {
+            item.clear_value(*property);
             continue;
         }
         const std::optional<erhe::property::Property_value> parsed =

@@ -229,14 +229,20 @@ public:
     std::string material_path;
 };
 
-// One variant of a variant set: its name and the material bindings it
-// authors. Only material bindings are read in this slice - a variant that
-// authors anything else has that counted and reported once for the set.
+// One variant of a variant set: the material bindings and the property
+// opinions it authors (doc/usd-compatibility-plan.md X4). An opinion is
+// recorded the way an `over` below a reference carrier is (X2): by the path
+// it has below the prim carrying the set, an empty path being that prim
+// itself, in the neutral name / text form. `material:binding` is not among
+// the values - `bindings` is what carries it - and a variant that adds a prim
+// the tree has no counterpart for is structure, which is counted for the set
+// rather than recorded.
 class Usd_variant final
 {
 public:
-    std::string                      name;
-    std::vector<Usd_variant_binding> bindings;
+    std::string                                 name;
+    std::vector<Usd_variant_binding>            bindings;
+    std::vector<erhe::scene::Instance_override> overrides;
 };
 
 // One `variantSet` a prim of the stage authors, and the erhe item that prim
@@ -252,9 +258,17 @@ public:
     std::string                      set_name;
     std::vector<Usd_variant>         variants;
     std::string                      selected;
-    // How many opinions of the set this slice does not carry: an attribute or
-    // a relationship that is not a `material:binding`. Reported once for the
-    // set, because a node-subtree variant is the later slice.
+    // What the prims held before the selected variant's opinions were applied,
+    // for every path and property name any variant of the set authors: a
+    // switch to another variant restores these first, so a property the new
+    // variant leaves unsaid goes back to what the file authored outside the
+    // variant blocks. A property that had no local value there is a `cleared`
+    // entry.
+    std::vector<erhe::scene::Instance_override> base_values;
+    // How many opinions of the set this slice does not carry: a property the
+    // value reader cannot express, and a prim a variant adds that the tree has
+    // no counterpart for (node-subtree variants are the later slice). Reported
+    // once for the set.
     std::size_t                      unsupported_opinion_count{0};
 };
 
@@ -565,18 +579,23 @@ public:
     std::shared_ptr<const erhe::primitive::Material> material;
 };
 
+// One variant the writer authors: its material bindings and the property
+// opinions it holds, in the same neutral form the reader recorded them in.
 class Usd_save_variant final
 {
 public:
-    std::string                           name;
-    std::vector<Usd_save_variant_binding> bindings;
+    std::string                                 name;
+    std::vector<Usd_save_variant_binding>       bindings;
+    std::vector<erhe::scene::Instance_override> overrides;
 };
 
 // One `variantSet` the writer authors on a prim: the `variantSets` list op,
-// the `variants` selection and the variant blocks, whose bindings become
-// `over` prims at the relative paths holding a `material:binding`
-// relationship. The prim's plain binding stays what the writer writes for the
-// material bound today, which the selected variant's bindings equal.
+// the `variants` selection and the variant blocks. A binding or an opinion at
+// the empty relative path is written on the variant itself and a deeper one
+// as an `over` prim at its relative path, the way X2 writes an override below
+// a reference carrier. The prim's own attributes stay what the writer writes
+// for the state the scene holds today, which the selected variant's opinions
+// equal.
 class Usd_save_variant_set final
 {
 public:

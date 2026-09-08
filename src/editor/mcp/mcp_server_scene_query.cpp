@@ -956,10 +956,25 @@ auto Mcp_server::query_scene_variants(const json& args) -> std::string
                     }
                 );
             }
+            json overrides = json::array();
+            for (const erhe::scene::Instance_override& entry : variant.overrides) {
+                json values = json::array();
+                for (const erhe::scene::Instance_override_value& value : entry.values) {
+                    values.push_back(json{{"name", value.name}, {"text", value.text}});
+                }
+                overrides.push_back(
+                    json{
+                        {"relative_path",        entry.relative_path},
+                        {"values",               values},
+                        {"transform_overridden", entry.transform_overridden}
+                    }
+                );
+            }
             variants.push_back(
                 json{
-                    {"name",     variant.name},
-                    {"bindings", bindings}
+                    {"name",      variant.name},
+                    {"bindings",  bindings},
+                    {"overrides", overrides}
                 }
             );
         }

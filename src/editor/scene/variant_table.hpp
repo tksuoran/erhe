@@ -2,6 +2,8 @@
 
 #include "app_message.hpp"
 
+#include "erhe_scene/instance_override.hpp"
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -25,18 +27,25 @@ public:
     std::weak_ptr<erhe::primitive::Material> material;
 };
 
-// One variant of a variant set: its name and the bindings it authors.
+// One variant of a variant set: its name, the bindings it authors and the
+// property opinions it authors (doc/usd-compatibility-plan.md X4). An opinion
+// names the prim it is for by its path below the prim carrying the set, an
+// empty path being that prim itself, and carries the value in the neutral
+// text form the file reader recorded it in - so a variant nobody selected
+// still has its opinions, which no item of the scene holds.
 class Variant
 {
 public:
-    std::string                  name;
-    std::vector<Variant_binding> bindings;
+    std::string                                 name;
+    std::vector<Variant_binding>                bindings;
+    std::vector<erhe::scene::Instance_override> overrides;
 };
 
 // One variant set of a scene: the prim carrying it, the set's name, its
-// variants and which one is selected. Only material-binding variants are
-// carried in this slice; `unsupported_opinion_count` is how many other
-// opinions the file's variants authored, which a save does not write.
+// variants and which one is selected. `unsupported_opinion_count` is how many
+// opinions the file's variants authored that erhe has no place for - a prim a
+// variant adds, a property the reader could not express - which a save does
+// not write.
 class Variant_set
 {
 public:
@@ -44,6 +53,12 @@ public:
     std::string                    set_name;
     std::vector<Variant>           variants;
     std::string                    selected;
+    // What the prims held for every path and property name any variant of the
+    // set authors, before the selected variant's opinions were applied at
+    // load. A switch restores these first, so a property the chosen variant
+    // leaves unsaid goes back to what the file authored outside the variant
+    // blocks; an entry in the `cleared` state had no local value there.
+    std::vector<erhe::scene::Instance_override> base_values;
     std::size_t                    unsupported_opinion_count{0};
 
     // The M1 path of the carrying prim, empty when the prim is gone. Built
@@ -51,6 +66,14 @@ public:
     [[nodiscard]] auto get_prim_path() const -> std::string;
     [[nodiscard]] auto find_variant(const std::string& variant_name) const -> const Variant*;
 };
+
+// The prim one relative path of a variant set names: the carrying prim itself
+// for the empty path, and the item at that path below it otherwise. Null when
+// the carrying prim is gone or the path reaches no item.
+[[nodiscard]] auto resolve_variant_prim(
+    const Variant_set& set,
+    const std::string& relative_path
+) -> std::shared_ptr<erhe::Item_base>;
 
 // Which primitives of which mesh one binding names: the mesh the binding's
 // path reached and either one primitive of it (a GeomSubset binding) or all

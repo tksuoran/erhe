@@ -461,17 +461,38 @@ A variant set is resolved in composition, and LightUSD composes nothing, so a
 variant contributes no property to the composed prim: the `variantSet` blocks
 are read off the root layer's own prim specs the same walk takes the class
 prims from, and the reader is what applies the selection
-(doc/usd-compatibility-plan.md X4). This slice carries material bindings only.
+(doc/usd-compatibility-plan.md X4). Material bindings and property opinions
+are carried; a prim a variant adds is not.
 
 `Usd_data::variant_sets` holds one `Usd_variant_set` per set: the erhe item
 the carrying prim became, the prim's stage path, the set name, one
-`Usd_variant` per variant with the `material:binding` relationships it
-authors - each as the M1 path of the bound prim below the carrying prim and
-the absolute stage path of the `Material` prim - and the selection, which is
-the prim's `variants` metadatum or the first variant when the layer authors
-none. Every other opinion a variant authors is counted in
-`unsupported_opinion_count` and reported once for the set, because node
-subtree variants are the later slice.
+`Usd_variant` per variant, and the selection, which is the prim's `variants`
+metadatum or the first variant when the layer authors none.
+
+A `Usd_variant` carries two things. Its `bindings` are the
+`material:binding` relationships it authors, each as the M1 path of the bound
+prim below the carrying prim and the absolute stage path of the `Material`
+prim. Its `overrides` are the property opinions it authors, recorded exactly
+the way an `over` below a reference carrier is (X2): one
+`erhe::scene::Instance_override` per path, an empty path being the carrying
+prim itself, holding the `erhe:Owner:name` custom attributes, `visibility`,
+`purpose`, the `active` metadatum and the authored xformOps in the neutral
+name / text form. `material:binding` is never among the values - `bindings`
+is what carries it, so nothing binds a material twice - and both `over` and
+`def` children of a variant contribute their opinions.
+
+`Usd_variant_set::base_values` is what the prims held for every path and
+property name any variant of the set authors, read before the selected
+variant's opinions were applied. A property with no local value there is a
+`cleared` entry, so putting it back clears rather than writes. This is what
+a switch to another variant restores first: a property the chosen variant
+leaves unsaid goes back to what the file authored outside the variant blocks.
+
+`unsupported_opinion_count` is what stays uncarried, reported once for the
+set: a property the value reader has no place for, and a prim a variant adds
+that the tree has no counterpart for - node subtree variants are the later
+slice, so an override whose path reaches no prim is dropped when the base
+values are captured.
 
 The reader then binds the selected variant's materials itself: a binding at a
 `Mesh` prim's path covers the mesh's primitives that the same variant does not
@@ -711,14 +732,19 @@ because the same spelling rule decides what an item is called on a stage.
   plus the path the material has below the arc's target clone - the path the
   composed stage gives it.
 - Variant sets. `Usd_save_arguments::variant_sets` names the prim carrying
-  each set, its variants and their material bindings, and the selection; the
-  writer gives the prim an `append variantSets` list op, a `variants`
-  selection and one `variantSet` block per set. A binding of the carrying prim
-  itself is a `material:binding` relationship of the variant, and a deeper one
-  an `over` prim at its relative path holding that relationship, bound by the
-  path the writer gave the material's prim (U4 2g). The prim's own binding
-  outside the variants is what the writer writes for the material bound today,
-  which the selected variant's bindings equal.
+  each set, its variants with their material bindings and property opinions,
+  and the selection; the writer gives the prim an `append variantSets` list
+  op, a `variants` selection and one `variantSet` block per set. A binding or
+  an opinion of the carrying prim itself is written on the variant, and a
+  deeper one on an `over` prim at its relative path, exactly as the X2
+  override writer spells them: `visibility` and `purpose` as the native
+  tokens, `active` as prim metadata, the xformOps of an overridden transform,
+  and every other value as an `erhe:Owner:name` custom attribute. An opinion
+  travels as text, so the property registry is what types it again; a name
+  that reaches no property, or text that does not parse, is one warning and
+  no attribute. The prim's own attributes outside the variants are what the
+  writer writes for the state the scene holds today, which the selected
+  variant's opinions equal.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
 - `Usd_save_arguments::custom_layer_data` is written verbatim as the root

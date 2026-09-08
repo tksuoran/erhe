@@ -72,6 +72,7 @@ def Xform "World"
             "red" {
                 over "quad"
                 {
+                    bool erhe:Mesh:shadow_cast = 0
                     rel material:binding = </World/Looks/Red>
 
                     over "half"
@@ -90,12 +91,28 @@ def Xform "World"
         append variantSets = "detail"
     )
     {
+        def Xform "part"
+        {
+        }
         variantSet "detail" = {
             "high" {
                 token visibility = "inherited"
+
+                over "part"
+                {
+                    double3 xformOp:translate = (3, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
             }
             "low" {
                 token visibility = "invisible"
+
+                over "part"
+                {
+                    token visibility = "invisible"
+                    double3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
             }
         }
     }

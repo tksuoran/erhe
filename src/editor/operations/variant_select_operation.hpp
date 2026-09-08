@@ -55,12 +55,15 @@ private:
     Parameters m_parameters;
 };
 
-// The undoable compound one variant switch is: the selection entry above and
-// one material assignment per binding of the chosen variant, so a single undo
-// puts both the selection and the materials back. Null when the scene has no
-// such set or the set has no such variant. Selecting the variant a set is
-// already on records the selection entry and assigns nothing, which is how a
-// scene pins the selection a file authored.
+// The undoable compound one variant switch is: the selection entry above, one
+// property write per opinion any variant of the set authors, and one material
+// assignment per binding of the chosen variant, so a single undo puts all
+// three back. A property the chosen variant does not author goes back to the
+// set's base value - what the file authored outside the variant blocks - so
+// switching never leaves the previous variant's opinion standing. Null when
+// the scene has no such set or the set has no such variant. Selecting the
+// variant a set is already on records the selection entry and changes
+// nothing, which is how a scene pins the selection a file authored.
 [[nodiscard]] auto make_select_variant_operation(
     const std::shared_ptr<Scene_root>& scene_root,
     const std::string&                 prim_path,

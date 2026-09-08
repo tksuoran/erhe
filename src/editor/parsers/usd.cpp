@@ -805,9 +805,11 @@ void fill_variant_table(
         set.set_name                  = usd_set.set_name;
         set.selected                  = usd_set.selected;
         set.unsupported_opinion_count = usd_set.unsupported_opinion_count;
+        set.base_values = usd_set.base_values;
         for (const erhe::usd::Usd_variant& usd_variant : usd_set.variants) {
             Variant variant{};
-            variant.name = usd_variant.name;
+            variant.name      = usd_variant.name;
+            variant.overrides = usd_variant.overrides;
             for (const erhe::usd::Usd_variant_binding& usd_binding : usd_variant.bindings) {
                 const std::shared_ptr<erhe::primitive::Material> material =
                     find_material_by_stage_path(container_node, usd_binding.material_path);
@@ -1425,10 +1427,11 @@ void collect_usd_brushes(
 }
 
 // The scene's variant sets as the writer's table (X4): the selection the
-// scene holds today, and every variant's bindings with the material each
-// binds. A set whose carrying prim is gone is dropped before this runs. An
-// opinion this slice does not carry - a variant that authors anything but a
-// material binding - is not written, so the loss is named once per set.
+// scene holds today, every variant's bindings with the material each binds,
+// and the property opinions each variant authors. A set whose carrying prim
+// is gone is dropped before this runs. An opinion erhe has no place for - a
+// prim a variant adds, a property the reader could not express - is not
+// written, so the loss is named once per set.
 void collect_usd_variant_sets(
     Scene_root&                                        scene_root,
     const std::filesystem::path&                       path,
@@ -1444,7 +1447,7 @@ void collect_usd_variant_sets(
         }
         if (set.unsupported_opinion_count > 0) {
             log_parsers->warn(
-                "save_scene_usd '{}': variant set '{}' on '{}': {} opinions beyond material bindings are not written",
+                "save_scene_usd '{}': variant set '{}' on '{}': {} opinions erhe has no place for are not written",
                 erhe::file::to_string(path), set.set_name, set.get_prim_path(), set.unsupported_opinion_count
             );
         }
@@ -1454,7 +1457,8 @@ void collect_usd_variant_sets(
         save_set.selected = set.selected;
         for (const Variant& variant : set.variants) {
             erhe::usd::Usd_save_variant save_variant{};
-            save_variant.name = variant.name;
+            save_variant.name      = variant.name;
+            save_variant.overrides = variant.overrides;
             for (const Variant_binding& binding : variant.bindings) {
                 const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
                 if (!material) {
