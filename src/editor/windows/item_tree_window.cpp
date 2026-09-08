@@ -1493,6 +1493,14 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         if (!selected_or_hierarchy) {
             ImGui::EndDisabled();
         }
+        ImGui::Separator();
+        // The M1 namespace path (doc/usd-compatibility-plan.md), the form the
+        // MCP tools and the ERHE_scene entries address items by; a root is
+        // named by its name.
+        if (ImGui::MenuItem("Copy Path")) {
+            const std::string path = hierarchy->get_reference_path();
+            ImGui::SetClipboardText(path.c_str());
+        }
         } // if (hierarchy)
 
         ImGui::EndPopup();
