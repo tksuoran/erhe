@@ -203,6 +203,59 @@ translation units.
   and a value that fails to parse or to validate, are skipped with one
   warning each.
 
+### Texture coordinates
+
+USD's `st` primvar has its origin at the bottom-left of the image (the
+OpenGL convention); erhe's texture coordinates - and its image loading and
+sampling - follow glTF, whose origin is the top-left. The two spaces differ
+by `v' = 1 - v` alone, so one involution converts either way and
+`flip_texcoord_v` is used by the importer on every texcoord it reads and by
+the writer on every texcoord it writes. A vec2 primvar the file authors
+under another name follows the same rule wherever it is used as a texcoord.
+
+A `UsdTransform2d` composes `st_out = R(r) * (st_in * scale) + T`, with `r`
+in degrees counter-clockwise; the erhe slot transform composes
+`uv_out = R(rotation) * S(scale) * uv_in + offset`, with `rotation` in
+radians. The erhe transform acts on the already-flipped texcoord, so with
+`F(x) = (x.u, 1 - x.v)` the requirement is `M * F(st) + O = F(R * S * st + T)`
+for every `st`, whose solution is
+
+    rotation = -radians(r)
+    scale    = scale
+    offset   = (Tx - sin(r) * scale.y, 1 - Ty - cos(r) * scale.y)
+
+and, the other way (`r = -rotation`),
+
+    T        = (offset.x + sin(r) * scale.y, 1 - offset.y - cos(r) * scale.y)
+
+`to_erhe_uv_transform` / `to_usd_uv_transform_2d` are these two formulas and
+nothing else. The USD identity maps onto the erhe identity, so a texture with
+no `UsdTransform2d` leaves the slot at its defaults, and the writer authors a
+`UsdTransform2d` prim only for a slot whose transform is not the identity.
+
+### UsdPreviewSurface fallbacks and channel outputs
+
+An unauthored UsdPreviewSurface input is the schema fallback, not an erhe
+default (`doc/usd-compatibility-plan.md` I2). Of the inputs erhe carries only
+`diffuseColor` differs: USD's fallback is the 0.18 grey usdview shows against
+erhe's white `base_color` (`roughness` 0.5, `metallic` 0, `opacity` 1, `ior`
+1.5, `emissiveColor` black all agree). So `c_usd_diffuse_color_fallback` is
+written as a local value when the file authors no `diffuseColor`, and the
+writer authors `inputs:diffuseColor` from the effective value whenever that
+differs from the fallback - an erhe default white included, which is also
+what makes a save reproduce itself.
+
+A scalar input is connected through a named output of its `UsdUVTexture`
+(`outputs:r` / `g` / `b` / `a`), and that names the channel to read.
+`erhe::primitive::Texture_channel` carries it per scalar slot on the material
+(`metallic_channel`, `roughness_channel`, `occlusion_channel`,
+`opacity_channel`); the defaults are glTF's fixed packing, so a glTF-derived
+file leaves them all at the default. A scalar input connected to a
+multi-channel output names no channel, so the default stands and the material
+is named in one warning. erhe takes its fragment alpha from the base color
+texture, so an `inputs:opacity` that reads an image of its own is one warning
+and no channel.
+
 ### Sublayers
 
 A root layer's `subLayers` are the weakest layers of its layer stack (the `L`

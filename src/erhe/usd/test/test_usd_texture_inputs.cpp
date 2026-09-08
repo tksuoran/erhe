@@ -80,12 +80,17 @@ TEST_F(Texture_inputs_import, wrap_modes_reach_the_slot_sampler)
 
 TEST_F(Texture_inputs_import, transform2d_reaches_the_slot_transform)
 {
+    // The slot transform acts on the flipped texcoord the importer stores, so
+    // the UsdTransform2d (rotation 90 degrees, scale (2, 3), translation
+    // (0.25, 0.5)) is converted through `v' = 1 - v`: the rotation negates
+    // and the offset becomes
+    // (tx - sin(r) * sy, 1 - ty - cos(r) * sy) = (-2.75, 0.5).
     const erhe::primitive::Material_texture_sampler& slot = material->data.texture_samplers.base_color;
-    EXPECT_NEAR(slot.rotation, glm::radians(90.0f), 1e-5f);
+    EXPECT_NEAR(slot.rotation, glm::radians(-90.0f), 1e-5f);
     EXPECT_NEAR(slot.scale.x,  2.0f,  1e-5f);
     EXPECT_NEAR(slot.scale.y,  3.0f,  1e-5f);
-    EXPECT_NEAR(slot.offset.x, 0.25f, 1e-5f);
-    EXPECT_NEAR(slot.offset.y, 0.5f,  1e-5f);
+    EXPECT_NEAR(slot.offset.x, -2.75f, 1e-5f);
+    EXPECT_NEAR(slot.offset.y,  0.5f,  1e-5f);
     // A texture with no UsdTransform2d leaves the slot at the identity.
     const erhe::primitive::Material_texture_sampler& emissive = material->data.texture_samplers.emissive;
     EXPECT_NEAR(emissive.rotation, 0.0f, 1e-5f);

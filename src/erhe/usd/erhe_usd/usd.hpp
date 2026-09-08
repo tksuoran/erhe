@@ -33,6 +33,48 @@ namespace erhe::scene {
 
 namespace erhe::usd {
 
+// The `UsdPreviewSurface` schema fallback for `inputs:diffuseColor`. erhe's
+// own `base_color` default is white, so this is the one surface input whose
+// unauthored value the importer has to write as a local value for the
+// composed result to be the one USD specifies (doc/usd-compatibility-plan.md
+// I2), and the one the writer authors even for an erhe default.
+inline const glm::vec3 c_usd_diffuse_color_fallback{0.18f, 0.18f, 0.18f};
+
+// USD's `st` primvar has its origin at the bottom-left of the image; erhe's
+// texture coordinates follow glTF, whose origin is the top-left. The two
+// spaces differ by `v' = 1 - v` alone, so one involution converts either way
+// (src/erhe/usd/notes.md, "Texture coordinates").
+[[nodiscard]] auto flip_texcoord_v(const glm::vec2& uv) -> glm::vec2;
+
+// A `UsdTransform2d` shader: `st_out = R(rotation) * (st_in * scale) +
+// translation`, with the rotation in degrees, counter-clockwise about the st
+// origin.
+class Usd_uv_transform_2d final
+{
+public:
+    float     rotation_degrees{0.0f};
+    glm::vec2 scale           {1.0f, 1.0f};
+    glm::vec2 translation     {0.0f, 0.0f};
+};
+
+// An erhe texture slot transform: `uv_out = R(rotation) * S(scale) * uv_in +
+// offset`, with the rotation in radians (Material_texture_sampler, and the
+// `rotation_scale` / `offset` the material record carries to the shader).
+class Erhe_uv_transform final
+{
+public:
+    float     rotation{0.0f};
+    glm::vec2 scale   {1.0f, 1.0f};
+    glm::vec2 offset  {0.0f, 0.0f};
+};
+
+// The two transforms across the `v` flip, so that sampling composes to the
+// same texel: the erhe transform applies to the flipped texcoord the importer
+// stores, the USD one to the `st` the file authors. The formula is stated
+// once in src/erhe/usd/notes.md, "Texture coordinates".
+[[nodiscard]] auto to_erhe_uv_transform  (const Usd_uv_transform_2d& usd)  -> Erhe_uv_transform;
+[[nodiscard]] auto to_usd_uv_transform_2d(const Erhe_uv_transform&   erhe) -> Usd_uv_transform_2d;
+
 // One composed USD stage. The USD library that produced it is an
 // implementation detail: nothing in this header names a LightUSD type, and
 // erhe::usd is the only erhe library that includes LightUSD headers.

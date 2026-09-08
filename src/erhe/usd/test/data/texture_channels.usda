@@ -1,0 +1,86 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "root"
+{
+    def Mesh "quad"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 0.25), (0, 0.25)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </root/materials/Channels>
+    }
+
+    def Mesh "plain"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(2, 0, 0), (3, 0, 0), (3, 1, 0), (2, 1, 0)]
+        rel material:binding = </root/materials/Fallbacks>
+    }
+
+    def Scope "materials"
+    {
+        def Material "Channels"
+        {
+            token outputs:surface.connect = </root/materials/Channels/surface.outputs:surface>
+
+            def Shader "uv_reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "metallic_roughness_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Channels/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "raw"
+                float outputs:r
+                float outputs:a
+            }
+
+            def Shader "occlusion_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Channels/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "raw"
+                float outputs:g
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 1, 1)
+                float inputs:roughness.connect = </root/materials/Channels/metallic_roughness_texture.outputs:r>
+                float inputs:metallic.connect = </root/materials/Channels/metallic_roughness_texture.outputs:a>
+                float inputs:occlusion.connect = </root/materials/Channels/occlusion_texture.outputs:g>
+                token outputs:surface
+            }
+        }
+
+        def Material "Fallbacks"
+        {
+            token outputs:surface.connect = </root/materials/Fallbacks/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness = 0.4
+                token outputs:surface
+            }
+        }
+    }
+}

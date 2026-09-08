@@ -1304,6 +1304,33 @@ private:
         }
     }
 
+    // The erhe channel selector for the output a scalar UsdPreviewSurface
+    // input is connected through. A scalar input connected to `outputs:rgb`
+    // or `outputs:rgba` names no single channel; USD leaves that undefined,
+    // so the erhe default for the slot stands and the material is named in
+    // one warning.
+    [[nodiscard]] static auto connected_channel(
+        const lightusd::tydra::UVTexture&      uv_texture,
+        const erhe::primitive::Texture_channel default_channel,
+        const std::string&                     material_name,
+        const char*                            input_name
+    ) -> erhe::primitive::Texture_channel
+    {
+        switch (uv_texture.connectedOutputChannel) {
+            case lightusd::tydra::UVTexture::Channel::R: return erhe::primitive::Texture_channel::r;
+            case lightusd::tydra::UVTexture::Channel::G: return erhe::primitive::Texture_channel::g;
+            case lightusd::tydra::UVTexture::Channel::B: return erhe::primitive::Texture_channel::b;
+            case lightusd::tydra::UVTexture::Channel::A: return erhe::primitive::Texture_channel::a;
+            default: {
+                log_usd->warn(
+                    "USD material '{}': the '{}' input is connected to a multi-channel output - the '{}' channel is read",
+                    material_name, input_name, erhe::primitive::c_str(default_channel)
+                );
+                return default_channel;
+            }
+        }
+    }
+
     // The UsdUVTexture behind one UsdPreviewSurface input, or null when the
     // input carries a plain value.
     [[nodiscard]] auto uv_texture_of(const std::int32_t texture_id) const -> const lightusd::tydra::UVTexture*
@@ -1351,13 +1378,19 @@ private:
         sampler_state.wrap_u = to_address_mode(uv_texture.wrapS);
         sampler_state.wrap_v = to_address_mode(uv_texture.wrapT);
         material.set_slot_sampler(slot, sampler_state);
+        // The slot transform applies to the flipped texcoord the importer
+        // stores, so a UsdTransform2d is converted through the flip
+        // (src/erhe/usd/notes.md, "Texture coordinates"). The USD identity
+        // maps onto the erhe identity, so a texture without one keeps the
+        // slot's defaults.
         if (uv_texture.has_transform2d) {
-            material.set_slot_uv_transform(
-                slot,
-                glm::radians(uv_texture.tx_rotation),
-                glm::vec2{uv_texture.tx_translation[0], uv_texture.tx_translation[1]},
-                glm::vec2{uv_texture.tx_scale[0], uv_texture.tx_scale[1]}
-            );
+            const Usd_uv_transform_2d usd_transform{
+                .rotation_degrees = uv_texture.tx_rotation,
+                .scale            = glm::vec2{uv_texture.tx_scale[0], uv_texture.tx_scale[1]},
+                .translation      = glm::vec2{uv_texture.tx_translation[0], uv_texture.tx_translation[1]}
+            };
+            const Erhe_uv_transform erhe_transform = to_erhe_uv_transform(usd_transform);
+            material.set_slot_uv_transform(slot, erhe_transform.rotation, erhe_transform.offset, erhe_transform.scale);
         }
     }
 
@@ -1448,6 +1481,15 @@ private:
                 Material::base_color_property,
                 glm::vec3{shader.diffuseColor.value[0], shader.diffuseColor.value[1], shader.diffuseColor.value[2]}
             );
+        } else {
+            // An unauthored input is the schema fallback, and the effective
+            // value must be the one USD composes (I2). UsdPreviewSurface's
+            // diffuseColor fallback is the 0.18 grey usdview shows; erhe's
+            // base_color default is white, so the fallback is written as a
+            // local value. Every other input erhe carries has the same
+            // fallback in both (roughness 0.5, metallic 0, opacity 1, ior
+            // 1.5, emissiveColor black), so none of those is written.
+            material.set_value(Material::base_color_property, c_usd_diffuse_color_fallback);
         }
         if (emissive_texture != nullptr) {
             const glm::vec3 factor{emissive_texture->scale[0], emissive_texture->scale[1], emissive_texture->scale[2]};
@@ -1525,6 +1567,45 @@ private:
         if (metallic_roughness_texture != nullptr) {
             apply_texture_sampling(material, slots.metallic_roughness, *metallic_roughness_texture);
         }
+        // Which channel of the bound texture each scalar input reads. USD
+        // names it in the connection; erhe's defaults are glTF's packing, so
+        // a file that follows glTF writes no local value here.
+        if (metallic_texture != nullptr) {
+            set_or_clear_value(
+                material, Material::metallic_channel_property,
+                connected_channel(*metallic_texture, erhe::primitive::Texture_channel::b, material_name, "metallic")
+            );
+        }
+        if (roughness_texture != nullptr) {
+            set_or_clear_value(
+                material, Material::roughness_channel_property,
+                connected_channel(*roughness_texture, erhe::primitive::Texture_channel::g, material_name, "roughness")
+            );
+        }
+        if (occlusion_texture != nullptr) {
+            set_or_clear_value(
+                material, Material::occlusion_channel_property,
+                connected_channel(*occlusion_texture, erhe::primitive::Texture_channel::r, material_name, "occlusion")
+            );
+        }
+        // erhe's fragment alpha comes from the base color texture, so an
+        // opacity input is carried only when it reads that same image; an
+        // opacity map of its own has no erhe slot to live in.
+        const lightusd::tydra::UVTexture* opacity_texture = uv_texture_of(shader.opacity.texture_id);
+        if (opacity_texture != nullptr) {
+            if (image_of(shader.opacity.texture_id) == image_of(shader.diffuseColor.texture_id)) {
+                set_or_clear_value(
+                    material, Material::opacity_channel_property,
+                    connected_channel(*opacity_texture, erhe::primitive::Texture_channel::a, material_name, "opacity")
+                );
+            } else {
+                log_usd->warn(
+                    "USD material '{}': inputs:opacity reads an image of its own - erhe takes the alpha of the base color texture",
+                    material_name
+                );
+            }
+        }
+
         const lightusd::tydra::UVTexture* normal_texture = uv_texture_of(shader.normal.texture_id);
         if (normal_texture != nullptr) {
             apply_texture_sampling(material, slots.normal, *normal_texture);
@@ -1726,7 +1807,10 @@ private:
                 texcoord,
                 attribute_element_index(texcoord, usd_vertex, usd_facet, usd_corner)
             );
-            attributes.corner_texcoord(slot).set(corner, GEO::vec2f{uv.x, uv.y});
+            // USD's `st` origin is the image's bottom-left corner, erhe's the
+            // top-left one (src/erhe/usd/notes.md, "Texture coordinates").
+            const glm::vec2 flipped = flip_texcoord_v(glm::vec2{uv.x, uv.y});
+            attributes.corner_texcoord(slot).set(corner, GEO::vec2f{flipped.x, flipped.y});
         }
         if (!usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3)) {
             const glm::vec4 color = read_attribute(
@@ -1900,7 +1984,8 @@ private:
                         texcoord_i->second,
                         attribute_element_index(texcoord_i->second, usd_vertex, facet, usd_corner)
                     );
-                    const float uv_values[2] = {uv.x, uv.y};
+                    const glm::vec2 flipped   = flip_texcoord_v(glm::vec2{uv.x, uv.y});
+                    const float     uv_values[2] = {flipped.x, flipped.y};
                     std::memcpy(destination + offset, uv_values, sizeof(uv_values));
                     offset += sizeof(uv_values);
                 }

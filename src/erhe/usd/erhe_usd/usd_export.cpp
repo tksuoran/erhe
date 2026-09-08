@@ -935,7 +935,15 @@ private:
                 return glm::vec4{emissive.x, emissive.y, emissive.z, 1.0f};
             }
             case Usd_material_texture_slot::metallic_roughness: {
-                return glm::vec4{1.0f, material.get_value(Material::roughness_property).x, material.get_value(Material::metallic_property), 1.0f};
+                // The two factors sit on the channels the surface reads them
+                // through, which the material names (Material::
+                // roughness_channel_property / metallic_channel_property).
+                glm::vec4 scale{1.0f, 1.0f, 1.0f, 1.0f};
+                scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(material.get_roughness_channel()))] =
+                    material.get_value(Material::roughness_property).x;
+                scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(material.get_metallic_channel()))] =
+                    material.get_value(Material::metallic_property);
+                return scale;
             }
             case Usd_material_texture_slot::normal: {
                 return material.get_value(Material::normal_texture_decode_scale_property);
@@ -943,6 +951,19 @@ private:
             default: {
                 return glm::vec4{1.0f, 1.0f, 1.0f, 1.0f};
             }
+        }
+    }
+
+    // The `outputs:<channel>` name a scalar UsdPreviewSurface input connects
+    // to: the channel the erhe material reads that input from.
+    [[nodiscard]] static auto channel_output_name(const erhe::primitive::Texture_channel channel) -> const char*
+    {
+        switch (channel) {
+            case erhe::primitive::Texture_channel::r: return "outputs:r";
+            case erhe::primitive::Texture_channel::g: return "outputs:g";
+            case erhe::primitive::Texture_channel::b: return "outputs:b";
+            case erhe::primitive::Texture_channel::a: return "outputs:a";
+            default:                                  return "outputs:r";
         }
     }
 
@@ -1004,7 +1025,21 @@ private:
                 ? lightusd::UsdUVTexture::SourceColorSpace::SRGB
                 : lightusd::UsdUVTexture::SourceColorSpace::Raw
         );
-        uv_texture.st.set_connection(lightusd::Path{material_path + "/uv_reader", "outputs:result"});
+        // The slot's UV transform, back in USD's `st` space. An erhe
+        // identity maps onto the USD identity, so a slot at its defaults
+        // reads the primvar reader directly and no UsdTransform2d prim is
+        // written (src/erhe/usd/notes.md, "Texture coordinates").
+        const Erhe_uv_transform erhe_transform{
+            .rotation = slot_state.rotation,
+            .scale    = slot_state.scale,
+            .offset   = slot_state.offset
+        };
+        const std::string transform_name = add_uv_transform(material_prim, material_path, texture_shader_name(slot), erhe_transform);
+        uv_texture.st.set_connection(
+            transform_name.empty()
+                ? lightusd::Path{material_path + "/uv_reader", "outputs:result"}
+                : lightusd::Path{material_path + "/" + transform_name, "outputs:result"}
+        );
         uv_texture.outputsR.set_authored(true);
         uv_texture.outputsG.set_authored(true);
         uv_texture.outputsB.set_authored(true);
@@ -1021,6 +1056,44 @@ private:
             return {};
         }
         m_texture_shader_names[key] = shader.name;
+        return shader.name;
+    }
+
+    // The `UsdTransform2d` prim one slot's texture reads its UVs through, or
+    // an empty name when the slot's transform is the identity. The prim sits
+    // between the material's primvar reader and the slot's UsdUVTexture.
+    [[nodiscard]] auto add_uv_transform(
+        lightusd::Prim&          material_prim,
+        const std::string&       material_path,
+        const char*              slot_shader_name,
+        const Erhe_uv_transform& erhe_transform
+    ) -> std::string
+    {
+        const Usd_uv_transform_2d usd_transform = to_usd_uv_transform_2d(erhe_transform);
+        const bool is_identity =
+            (usd_transform.rotation_degrees == 0.0f)                  &&
+            (usd_transform.scale            == glm::vec2{1.0f, 1.0f}) &&
+            (usd_transform.translation      == glm::vec2{0.0f, 0.0f});
+        if (is_identity) {
+            return {};
+        }
+        lightusd::UsdTransform2d transform2d;
+        transform2d.rotation.set_value(usd_transform.rotation_degrees);
+        transform2d.scale.set_value(lightusd::value::float2{usd_transform.scale.x, usd_transform.scale.y});
+        transform2d.translation.set_value(lightusd::value::float2{usd_transform.translation.x, usd_transform.translation.y});
+        transform2d.in.set_connection(lightusd::Path{material_path + "/uv_reader", "outputs:result"});
+        transform2d.result.set_authored(true);
+
+        lightusd::Shader shader;
+        shader.name    = std::string{slot_shader_name} + "_transform";
+        shader.info_id = "UsdTransform2d";
+        shader.value   = std::move(transform2d);
+
+        std::string error;
+        if (!material_prim.add_child(lightusd::Prim{shader}, false, &error)) {
+            add_warning(fmt::format("uv transform shader '{}' could not be added: {}", shader.name, error));
+            return {};
+        }
         return shader.name;
     }
 
@@ -1104,9 +1177,19 @@ private:
         lightusd::UsdPreviewSurface surface;
         surface.outputsSurface.set_authored(true);
 
-        if (is_local(material, Material::base_color_property.get())) {
+        // `diffuseColor` is the one input whose UsdPreviewSurface fallback
+        // (c_usd_diffuse_color_fallback) is not the erhe default, so leaving
+        // an erhe default unauthored would mean 0.18 grey to every other
+        // reader. It is written from the effective value whenever that
+        // differs from the fallback - which is also what makes a save
+        // reproduce itself, since the importer writes the fallback back as a
+        // local value. Every other input is written only where it is local
+        // (D32), the two fallbacks agreeing.
+        {
             const glm::vec3 base_color = material.get_value(Material::base_color_property);
-            surface.diffuseColor.set_value(lightusd::value::color3f{base_color.x, base_color.y, base_color.z});
+            if (base_color != c_usd_diffuse_color_fallback) {
+                surface.diffuseColor.set_value(lightusd::value::color3f{base_color.x, base_color.y, base_color.z});
+            }
         }
         if (is_local(material, Material::emissive_property.get())) {
             const glm::vec3 emissive = material.get_value(Material::emissive_property);
@@ -1139,12 +1222,32 @@ private:
         connect_texture(material_prim, material_path, material, Usd_material_texture_slot::base_color, "outputs:rgb", surface.diffuseColor);
         connect_texture(material_prim, material_path, material, Usd_material_texture_slot::emissive,   "outputs:rgb", surface.emissiveColor);
         connect_texture(material_prim, material_path, material, Usd_material_texture_slot::normal,     "outputs:rgb", surface.normal);
-        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::occlusion,  "outputs:r",   surface.occlusion);
+        connect_texture(
+            material_prim, material_path, material, Usd_material_texture_slot::occlusion,
+            channel_output_name(material.get_occlusion_channel()), surface.occlusion
+        );
         // erhe has one metallic-roughness slot; UsdPreviewSurface reads the
-        // two channels through separate inputs of the one texture, in the
-        // glTF channel layout the importer expects back.
-        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness, "outputs:g", surface.roughness);
-        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness, "outputs:b", surface.metallic);
+        // two scalars through separate inputs of the one texture, each on the
+        // channel the material names (the glTF packing by default).
+        connect_texture(
+            material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+            channel_output_name(material.get_roughness_channel()), surface.roughness
+        );
+        connect_texture(
+            material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+            channel_output_name(material.get_metallic_channel()), surface.metallic
+        );
+        // erhe's fragment alpha is a channel of the base color texture. The
+        // opacity input is connected only where the material names a channel
+        // of its own: alpha is what a reader assumes anyway, and connecting
+        // it unasked would make every textured material's opacity
+        // texture-driven.
+        if (is_local(material, Material::opacity_channel_property.get())) {
+            connect_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::base_color,
+                channel_output_name(material.get_opacity_channel()), surface.opacity
+            );
+        }
 
         lightusd::Shader shader;
         shader.name    = "surface";
@@ -2317,10 +2420,15 @@ private:
                 );
                 out.has_normals = out.has_normals || normal.has_value();
 
+                // Back to USD's bottom-left `st` origin
+                // (src/erhe/usd/notes.md, "Texture coordinates").
                 const std::optional<GEO::vec2f> texcoord = attributes.corner_texcoord_0.try_get(corner);
+                const glm::vec2 st = texcoord.has_value()
+                    ? flip_texcoord_v(glm::vec2{texcoord.value().x, texcoord.value().y})
+                    : glm::vec2{0.0f, 0.0f};
                 out.texcoords.push_back(
                     texcoord.has_value()
-                        ? lightusd::value::texcoord2f{texcoord.value().x, texcoord.value().y}
+                        ? lightusd::value::texcoord2f{st.x, st.y}
                         : lightusd::value::texcoord2f{0.0f, 0.0f}
                 );
                 out.has_texcoords = out.has_texcoords || texcoord.has_value();
@@ -2411,10 +2519,13 @@ private:
                 out.has_normals = out.has_normals || has_normal;
 
                 value = glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-                const bool has_texcoord = read_soup_attribute(soup, texcoord, stride, vertex_index, value);
+                const bool      has_texcoord = read_soup_attribute(soup, texcoord, stride, vertex_index, value);
+                const glm::vec2 st           = has_texcoord
+                    ? flip_texcoord_v(glm::vec2{value.x, value.y})
+                    : glm::vec2{0.0f, 0.0f};
                 out.texcoords.push_back(
                     has_texcoord
-                        ? lightusd::value::texcoord2f{value.x, value.y}
+                        ? lightusd::value::texcoord2f{st.x, st.y}
                         : lightusd::value::texcoord2f{0.0f, 0.0f}
                 );
                 out.has_texcoords = out.has_texcoords || has_texcoord;

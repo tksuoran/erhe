@@ -16,6 +16,7 @@
 #include "stage.hh"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <map>
@@ -25,6 +26,37 @@
 #include <vector>
 
 namespace erhe::usd {
+
+auto flip_texcoord_v(const glm::vec2& uv) -> glm::vec2
+{
+    return glm::vec2{uv.x, 1.0f - uv.y};
+}
+
+auto to_erhe_uv_transform(const Usd_uv_transform_2d& usd) -> Erhe_uv_transform
+{
+    const float rotation = glm::radians(usd.rotation_degrees);
+    Erhe_uv_transform result{};
+    result.rotation = -rotation;
+    result.scale    = usd.scale;
+    result.offset   = glm::vec2{
+        usd.translation.x - (std::sin(rotation) * usd.scale.y),
+        1.0f - usd.translation.y - (std::cos(rotation) * usd.scale.y)
+    };
+    return result;
+}
+
+auto to_usd_uv_transform_2d(const Erhe_uv_transform& erhe) -> Usd_uv_transform_2d
+{
+    const float rotation = -erhe.rotation;
+    Usd_uv_transform_2d result{};
+    result.rotation_degrees = glm::degrees(rotation);
+    result.scale            = erhe.scale;
+    result.translation      = glm::vec2{
+        erhe.offset.x + (std::sin(rotation) * erhe.scale.y),
+        1.0f - erhe.offset.y - (std::cos(rotation) * erhe.scale.y)
+    };
+    return result;
+}
 
 Stage::Stage(std::unique_ptr<Impl>&& impl)
     : m_impl{std::move(impl)}
