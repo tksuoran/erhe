@@ -407,23 +407,26 @@ light, a typeless or `Scope` prim that authors arcs is an `Xform`
 carrier, any prim is a reference target and a `class` prim's `def`
 descendants are prototypes held abstract, a root layer's subLayers are
 composed (the save writes one flattened layer), every `Material` prim
-converts, the `UsdGeom` primitive schemas import as the meshes they
-describe, and a `UsdUVTexture`'s wrap, transform, scale and per-channel
-normal decode reach the material, with a texture packed in a `.usdz`
-read out of the archive. The current run (146 entries, 42 work as they
-are, none crash) puts these at the top of the list, in the order the
-fixes are taken: a material a prefab template supplies is reported as
-unowned (its owner is the prefab library's holding scene) and a binding
-whose target lives in another layer does not reach the mesh; a
-`PointInstancer` is not instanced; node-subtree variants (X4's later
-slice; Teapot.usd's geometry sits behind one); the appearance gaps the
-repository's renders show (USD `st` sampled without the V flip,
-Radiance `.hdr` decoded nowhere, a `UsdUVTexture`'s per-channel output
-selection ignored, an unauthored `diffuseColor` white where USD's
-fallback is 0.18, a time-sampled transform not evaluated at the
-reference's sample); a prim a sublayer authors contributing no authored
-opinion, class prim or xformOp stack; a 4000-prim scene tripping the
-main-loop stall watchdog on load; MaterialX documents.
+converts, a material binding authored as an `over` is an instance
+override and a template's material has an owner, the `UsdGeom`
+primitive schemas import as the meshes they describe, USD `st` crosses
+the V flip with `UsdTransform2d` carried through it, a scalar input
+reads the texture channel the file connects, an unauthored
+`diffuseColor` is USD's 0.18, and a `UsdUVTexture`'s wrap, transform,
+scale and per-channel normal decode reach the material, with a texture
+packed in a `.usdz` read out of the archive. The current run (146
+entries, 45 work as they are, none crash) leaves, in the order the
+fixes are taken: a `PointInstancer` not instanced; node-subtree
+variants (X4's later slice; Teapot.usd's geometry sits behind one); a
+time-sampled transform not evaluated at the reference's sample; 16-bit,
+32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
+stained glass opaque and its cards missing; the transform test's lower
+row, where a `UsdTransform2d` rotate and translate compose to a
+different placement; RoughnessTest's missing specular response; a prim
+a sublayer authors contributing no authored opinion, class prim or
+xformOp stack; a 4000-prim scene tripping the main-loop stall watchdog
+on load; MaterialX documents as reference targets; the draw list's
+null-material fallback for an unbound mesh.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.

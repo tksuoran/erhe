@@ -92,7 +92,9 @@
 ✓S1-survey-rerun-2{42-works/103-gap/1-fails/0-crash;1578s;chess_set=works;teapotScene-slow-success+stall-watchdog;failure-rows-gone;doc-'stage-scale-not-applied'-row-WRONG{metersPerUnit=1-in-both-layers;framing}}
 ✓S1-F7{992669e6f:material-binding=3rd-override-kind{Instance_override::material_path;subset=last-path-segment;resolve-below-carrier-then-ancestors;writer:rel-material:binding+MaterialBindingAPI-on-over/subset-over/carrier;glTF-overrides[].material;ShapingAPI:ShapingAPI-spelling-fixed}|c1ae23a81:material-owned-if-in-a-prim-tree-or-Prefab_library::owns_material{warning-states-only-true-case};usd155→163,scene105→112;Vehicles-render-in-reference-colors;subset-40:0-unowned}
 ✓S1-F8{74d924401:Texture_channel-per-scalar-input{Material-props;uvec4-texture_channels-in-UBO;standard.frag+erhe_ray_hit.glsl}|1278c330b:st-V-flip{v'=1-v-on-read+write;UsdTransform2d-through-flip:rotation=-r,offset=(Tx-sin(r)*sy,1-Ty-cos(r)*sy);writer-authors-UsdTransform2d-prim};outputs:<c>-read/written;diffuseColor-fallback-0.18-local;usd163→173,primitive42→44;roundtrip-296/297-flake;labels-read-correctly-everywhere;OPEN:null-material-fallback-color-for-unbound-USD-meshes}
-?S1-survey-rerun-3{IN-PROGRESS}→then{PointInstancer;node-subtree-variants;animation-time-sample;sublayer-authored-opinions;load-perf-4000-prims;MaterialX;16/32-bit+CMYK-images;.hdr}
+✓S1-survey-rerun-3{45-works/100-gap/1-fails/0-crash;mirroring-gone-everywhere;unowned-row-gone;tractor/wheel/TextureCoordinateTest/chess_set/UsdCookie=works}
+  S1-FIX-ROUND-DONE-2026-09-08{13-commits:F1-F8+crash;usd-tests-107→173;works-30→45;plan-section-3-S1-lists-remaining-in-order}
+?S1-remaining{PointInstancer;node-subtree-variants;animation-time-sample;16/32-bit+CMYK+.hdr-images;McUsd-alpha+cards;UsdTransform2d-compose-lower-row;RoughnessTest-specular;sublayer-authored-opinions;load-perf-4000-prims;MaterialX;null-material-fallback}→E4c
   traps::save_usda-writes-/Materials-from-index{would-duplicate-kind-scope};Xformable::node_sanity_check-static_casts-Item_host->Scene_host{palette-prims-must-not-reach};kind-scopes+resource-prims-carry-no-content-flag{glTF-node-export-skips}
 
 
