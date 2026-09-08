@@ -58,7 +58,7 @@ appearance verdicts below were reached.
 
 Authored cameras: 30 entries author a `UsdGeomCamera`; 30 of 30 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
 
-Run: 2026-09-08, 146 entries, 1693 s of survey time.
+Run: 2026-09-08, 146 entries, 1694 s of survey time.
 Verdicts: 51 works, 94 works with a gap, 1 fails, 0 crash.
 
 ## Verdicts checked by eye
@@ -73,7 +73,7 @@ log and the empty-viewport test decided.
 | full_assets/McUsd/McUsd.usdz | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
 | full_assets/McUsd/McUsd_10cm.usda | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
 | full_assets/McUsd/McUsd_10cm.usdz | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
-| full_assets/OpenChessSet/chess_set.usda | the whole set loads and its pieces stand where the reference puts them |
+| full_assets/OpenChessSet/chess_set.usda | the whole set loads and its pieces stand where the reference puts them, lit and legible; every mesh renders in the unbound default grey because the file's meshes reach erhe with no material bound at all, where the reference shows dark and light stone with green and gold accents |
 | full_assets/UsdCookie/UsdCookie.usdz | the cookie carries its baked texture from inside the .usdz and matches the reference, at a brighter tone |
 | full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/tractor/asset/tractorFullAsset.usda | the tractor renders in the reference's red and grey; the material bound from the kit's own material layer now reaches the meshes |
 | full_assets/Vehicles/USD_Mini_Car_Kit/assets/wheels/wheelNormal/asset/wheelNormalAsset.usda | the wheel carries a material and its shape matches the reference |
@@ -253,45 +253,44 @@ assets it affects and what the editor would have to support to clear it.
 | 7 | warning | Failed to load texture image: `*`. Skip loading. reason = Failed to resolve asset path: N<path> | resolve a texture asset path against the layer that authored it, including inside a .usdz package |
 | 6 | warning | MCP server: dropped expired '*' before processing | not a USD gap: editor-internal noise this survey happens to capture |
 | 5 | warning | USD prim '*' references '*': a MaterialX document is not a USD layer - the arc is not instantiated | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
-| 4 | error | Main loop STALLED: tick has not progressed for N s. Stuck in phase: '*' (tick thread Nxce13ed1011795b2a). | not a USD gap: editor-internal noise this survey happens to capture |
 | 4 | warning | PointInstancer <<path>> prototype <<path>> resolved to no RenderMesh; its instances are skipped. | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |
 | 4 | warning | TODO: Prim type PointInstancer | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |
 | 4 | warning | USD '*': PointInstancer <<path>> prototype <<path>> resolved to no RenderMesh; its instances are skipped. | build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, Cylinder, Capsule, PointInstancer): the prim loads with no mesh (lightusd src/tydra/scene-access.cc) |
 | 4 | warning | USD light '*': DomeLight texture '*' is not sampled - erhe has no environment map, so the dome contributes its constant color only | sample a DomeLight's texture as an environment map; erhe takes only the light's intensity and colour, so an HDRI-lit stage loses the image |
 | 4 | warning | USD prim '*': variant set '*' authors N opinion(s) that erhe has no place for - they are not carried | carry variant opinions beyond material bindings; X4 reads bindings only (src/erhe/usd/notes.md, Variant sets) |
 | 4 | appearance | a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint | render a material whose opacity is below one as translucent; the stained-glass cube hides what is behind it where the reference shows through |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Brdf_slice_rendergraph_node | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Overlay for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Overlay for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Post processing for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Post processing for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Viewport window | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: config<path> | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: shadow_maps | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: asset loads | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: ddgi | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: draw_imgui_windows | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: fixed_step (physics) | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: flush_draw_lists | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: hotbar update | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: imgui process_events + commands | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: lightmap stream | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: rendergraph execute | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: scene_commit_queue flush | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: submit + end_frame | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: texture file loads | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: thumbnails update | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_hover_info | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_layout_nodes | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_material_sets | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_transforms | not a USD gap: editor-internal noise this survey happens to capture |
-| 4 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: wait_frame | not a USD gap: editor-internal noise this survey happens to capture |
 | 3 | warning | <path>'*'t authored; producing an unshaded material. (set material_config.strict_material_check=true to make this an error.) | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
+| 3 | error | Main loop STALLED: tick has not progressed for N s. Stuck in phase: '*' (tick thread Nxce13ed1011795b2a). | not a USD gap: editor-internal noise this survey happens to capture |
 | 3 | error | Prefab source file not found: <path> | resolve a reference asset path relative to the layer that authored it before opening it as a prefab template |
 | 3 | warning | USD prim '*': the referencing layer defines prims over the reference (mtl) - a reference protects its structure, so they are dropped | diagnose the message and add the support it asks for |
 | 3 | warning | USD prim '*': variant '*' of set '*' binds '*' to material '*', which the file has no prim for - the binding is dropped | diagnose the message and add the support it asks for |
 | 3 | warning | `*` is declared with no authored value; treating the primvar as un-indexed. | read an indexed primvar whose indices attribute is declared but carries no value |
-| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Brdf_slice_rendergraph_node | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Overlay for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Overlay for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Post processing for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Post processing for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: Viewport window | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: config<path> | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: shadow_maps | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: asset loads | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: ddgi | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: draw_imgui_windows | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: fixed_step (physics) | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: flush_draw_lists | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: hotbar update | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: imgui process_events + commands | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: lightmap stream | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: rendergraph execute | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: scene_commit_queue flush | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: submit + end_frame | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: texture file loads | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: thumbnails update | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_hover_info | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_layout_nodes | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_material_sets | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: update_transforms | not a USD gap: editor-internal noise this survey happens to capture |
+| 3 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: tick: wait_frame | not a USD gap: editor-internal noise this survey happens to capture |
 | 2 | warning | ) [Not a NodeGraph]; using the parameter default instead. | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 2 | warning | Failed to convert UsdPreviewSurface : <path> | diagnose the message and add the support it asks for |
 | 2 | warning | MaterialX connection for normal could not be resolved to a texture or constant (<path> is not a NodeGraph, prim_type: Material | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
@@ -305,17 +304,7 @@ assets it affects and what the editor would have to support to clear it.
 | 2 | error | USD prim '*': failed to load reference target '*' (missing file, no prims, or a reference cycle - see log) | load a reference target that names a missing file, holds no prims, or closes a cycle (X1, src/editor/parsers/usd.cpp) |
 | 2 | error | USD prim '*': failed to load reference target '*'<path> (missing file, no prims, or a reference cycle - see log) | load a reference target that names a missing file, holds no prims, or closes a cycle (X1, src/editor/parsers/usd.cpp) |
 | 2 | warning | USD prim '*': variant '*' of set '*' binds material '*', which the file has no prim for - the binding is dropped | diagnose the message and add the support it asks for |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: compute_smooth_vertex_normals | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: facets.connect | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: process | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: update_connectivity + build_edges | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_centroid_points | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_edge_lines | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_expanded_polygon_fill | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: optimized variant | not a USD gap: editor-internal noise this survey happens to capture |
-| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: take_optimizable_snapshot | not a USD gap: editor-internal noise this survey happens to capture |
+| 2 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
 | 2 | warning | connection Path's property part must be `*`, `*`, `*`, `*` or `*` for UsdUVTexture, but got `*`(prim_part: <path>). | diagnose the message and add the support it asks for |
 | 1 | appearance | 16-bit, 32-bit and CMYK images do not load: their tiles render blank where the reference shows the same gradient the 8-bit tiles carry | decode the image depths and colour models the assets use beyond 8-bit RGB: 16-bit and 32-bit PNG and CMYK JPEG produce no texture, so their tiles render blank |
 | 1 | warning | <path> ()():N Skipping animated attribute '*' for <path> due to unsupported or inconsistent sample type. | diagnose the message and add the support it asks for |
@@ -336,6 +325,7 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | warning | Ignore unknown `*` value. Must be "*", "*" or "*", but got "*"(Note: Case sensitive). Use default upAxis `*`. | diagnose the message and add the support it asks for |
 | 1 | error | Loading USD stage '*' failed: Failed to parse USDA | read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage |
 | 1 | warning | Loading USD stage '*': <path> Attribute `*`: `*` is not an allowed token. Ignore it. | diagnose the message and add the support it asks for |
+| 1 | error | Main loop STALLED: tick has not progressed for N s. Stuck in phase: '*' (tick thread Nx30fae0e3500302bb). | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | warning | MaterialX connection for base_diffuse_roughness could not be resolved to a texture or constant (<path> is not a NodeGraph, prim_type: Material | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 1 | warning | MaterialX connection for clearcoat could not be resolved to a texture or constant (<path> is not a NodeGraph, prim_type: Material | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 1 | warning | MaterialX connection for clearcoatRoughness could not be resolved to a texture or constant (<path> is not a NodeGraph, prim_type: Material | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
@@ -392,14 +382,64 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | error | ^ | diagnose the message and add the support it asks for |
 | 1 | warning | `*` is authored, but hole face removal is only applied when triangulation is enabled. Hole faces are kept in the polygonal output. | diagnose the message and add the support it asks for |
 | 1 | appearance | a UsdUVTexture's colour reaches only one row of the colour-space chart; the other four render white | sample a UsdUVTexture through every colour-space path the file exercises (raw / sRGB / auto / omit / lin_ap1_scene); only one row reaches the surface, the rest render white |
-| 1 | error | breadcrumb t=Ns thread=Nx6cd4900c4a49df16: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx6cd4900c4a49df16: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx6cd4900c4a49df16: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx6cd4900c4a49df16: raytrace: build_buffer_mesh facets=N verts=N | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx8a40ab453d876713: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx8a40ab453d876713: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx8a40ab453d876713: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
-| 1 | error | breadcrumb t=Ns thread=Nx8a40ab453d876713: raytrace: build_buffer_mesh facets=N verts=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | appearance | a file whose meshes arrive with no material binding renders in the unbound default grey: the chess set imports 21 meshes and 0 materials | diagnose the message and add the support it asks for |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Brdf_slice_rendergraph_node | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Overlay for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Overlay for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Post processing for Default Viewport | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Post processing for Viewport_scene_view N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: Viewport window | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: config<path> | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: geometry: compute_smooth_vertex_normals | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: geometry: facets.connect | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: geometry: process | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: geometry: update_connectivity + build_edges | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: build_centroid_points | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: build_edge_lines | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: build_expanded_polygon_fill | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: optimized variant | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: primitive: take_optimizable_snapshot | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: shadow_maps | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: asset loads | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: ddgi | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: draw_imgui_windows | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: fixed_step (physics) | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: flush_draw_lists | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: hotbar update | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: imgui process_events + commands | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: lightmap stream | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: rendergraph execute | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: scene_commit_queue flush | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: submit + end_frame | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: texture file loads | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: thumbnails update | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: update_hover_info | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: update_layout_nodes | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: update_material_sets | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: update_transforms | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx30fae0e3500302bb: tick: wait_frame | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx3581c9d91c7b48a5: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx3581c9d91c7b48a5: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx3581c9d91c7b48a5: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx3581c9d91c7b48a5: raytrace: build_buffer_mesh facets=N verts=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx9eec240eaaa939ea: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx9eec240eaaa939ea: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx9eec240eaaa939ea: raytrace: BVH commit | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nx9eec240eaaa939ea: raytrace: build_buffer_mesh facets=N verts=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: compute_smooth_vertex_normals | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: facets.connect | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: process | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: geometry: update_connectivity + build_edges | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_centroid_points | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_edge_lines | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_expanded_polygon_fill | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: optimized variant | not a USD gap: editor-internal noise this survey happens to capture |
+| 1 | error | breadcrumb t=Ns thread=Nxce13ed1011795b2a: primitive: take_optimizable_snapshot | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nxd776d549a26bfd2: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nxd776d549a26bfd2: primitive: build_centroid_points | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nxd776d549a26bfd2: primitive: build_edge_lines | not a USD gap: editor-internal noise this survey happens to capture |

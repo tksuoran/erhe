@@ -35,16 +35,47 @@ void sync_library(Material_set& set, const Material_list& materials)
 
 } // anonymous namespace
 
+// Every primitive with no material of its own names
+// default_material_slot_index, so that slot must exist from construction and
+// must never come to hold a material.
+TEST(Material_set, default_slot_is_reserved)
+{
+    Material_set set;
+    EXPECT_EQ(set.get_slot_count(), 1u) << "the reserved default slot must be covered by the GPU write";
+    EXPECT_EQ(set.get_live_count(), 0u) << "the reserved slot holds no material";
+    const std::span<const Material_slot> slots = set.get_materials();
+    ASSERT_GE(slots.size(), 1u);
+    EXPECT_TRUE(slots[Material_set::default_material_slot_index].alive);
+    EXPECT_EQ(slots[Material_set::default_material_slot_index].material, nullptr);
+}
+
+TEST(Material_set, default_slot_is_never_assigned)
+{
+    Material_set set;
+    const Material_list materials{make_material("a"), make_material("b")};
+    sync_library(set, materials);
+    const std::shared_ptr<Material> referenced = make_material("referenced");
+    static_cast<void>(set.add_ref(referenced));
+
+    // Freeing every material must not make the reserved slot reusable either.
+    sync_library(set, Material_list{});
+    set.release(referenced.get());
+    const std::shared_ptr<Material> after = make_material("after");
+    EXPECT_NE(set.add_ref(after).index, Material_set::default_material_slot_index);
+}
+
 TEST(Material_set, library_sync_assigns_slots_in_order)
 {
     Material_set set;
     const Material_list materials{make_material("a"), make_material("b"), make_material("c")};
     sync_library(set, materials);
 
-    EXPECT_EQ(set.get_slot(materials[0].get()), 0u);
-    EXPECT_EQ(set.get_slot(materials[1].get()), 1u);
-    EXPECT_EQ(set.get_slot(materials[2].get()), 2u);
-    EXPECT_EQ(set.get_slot_count(), 3u);
+    // Slot 0 is the reserved default-material slot, so library materials
+    // start at slot 1.
+    EXPECT_EQ(set.get_slot(materials[0].get()), 1u);
+    EXPECT_EQ(set.get_slot(materials[1].get()), 2u);
+    EXPECT_EQ(set.get_slot(materials[2].get()), 3u);
+    EXPECT_EQ(set.get_slot_count(), 4u);
 }
 
 TEST(Material_set, slot_is_stable_across_sync)
@@ -57,18 +88,18 @@ TEST(Material_set, slot_is_stable_across_sync)
     EXPECT_EQ(set.get_slot(materials[1].get()), before);
 }
 
-// The property that makes cached records safe: a record naming slot 2 must
+// The property that makes cached records safe: a record naming slot 3 must
 // still mean the same material after unrelated membership changes.
 TEST(Material_set, unrelated_removal_does_not_shift)
 {
     Material_set set;
     const Material_list materials{make_material("a"), make_material("b"), make_material("c")};
     sync_library(set, materials);
-    ASSERT_EQ(set.get_slot(materials[2].get()), 2u);
+    ASSERT_EQ(set.get_slot(materials[2].get()), 3u);
 
     sync_library(set, Material_list{materials[0], materials[2]});
-    EXPECT_EQ(set.get_slot(materials[2].get()), 2u);
-    EXPECT_EQ(set.get_slot(materials[0].get()), 0u);
+    EXPECT_EQ(set.get_slot(materials[2].get()), 3u);
+    EXPECT_EQ(set.get_slot(materials[0].get()), 1u);
     EXPECT_FALSE(set.get_slot(materials[1].get()).has_value());
 }
 
@@ -80,9 +111,9 @@ TEST(Material_set, unrelated_addition_does_not_shift)
 
     const std::shared_ptr<Material> added = make_material("c");
     sync_library(set, Material_list{materials[0], added, materials[1]});
-    EXPECT_EQ(set.get_slot(materials[0].get()), 0u);
-    EXPECT_EQ(set.get_slot(materials[1].get()), 1u);
-    EXPECT_EQ(set.get_slot(added.get()),        2u);
+    EXPECT_EQ(set.get_slot(materials[0].get()), 1u);
+    EXPECT_EQ(set.get_slot(materials[1].get()), 2u);
+    EXPECT_EQ(set.get_slot(added.get()),        3u);
 }
 
 // The unit-level statement of the reported bug: what one set does to a
@@ -94,15 +125,15 @@ TEST(Material_set, two_sets_are_independent)
 
     Material_set a;
     Material_set b;
-    sync_library(a, Material_list{other, shared});  // shared -> slot 1
-    sync_library(b, Material_list{shared});         // shared -> slot 0
+    sync_library(a, Material_list{other, shared});  // shared -> slot 2
+    sync_library(b, Material_list{shared});         // shared -> slot 1
 
-    EXPECT_EQ(a.get_slot(shared.get()), 1u);
-    EXPECT_EQ(b.get_slot(shared.get()), 0u);
+    EXPECT_EQ(a.get_slot(shared.get()), 2u);
+    EXPECT_EQ(b.get_slot(shared.get()), 1u);
 
     sync_library(b, Material_list{shared, other});
-    EXPECT_EQ(a.get_slot(shared.get()), 1u) << "one set's sync moved another set's slot";
-    EXPECT_EQ(a.get_slot(other.get()),  0u);
+    EXPECT_EQ(a.get_slot(shared.get()), 2u) << "one set's sync moved another set's slot";
+    EXPECT_EQ(a.get_slot(other.get()),  1u);
 }
 
 // A lookup must never assign: record writers are handed a const Material_set
@@ -117,7 +148,7 @@ TEST(Material_set, get_slot_never_assigns)
     const Material_set&             const_set = set;
     EXPECT_FALSE(const_set.get_slot(stranger.get()).has_value());
     EXPECT_FALSE(const_set.find(stranger.get()).is_valid());
-    EXPECT_EQ(const_set.get_slot_count(), 1u);
+    EXPECT_EQ(const_set.get_slot_count(), 2u); // the reserved slot and the library material
     EXPECT_EQ(const_set.get_live_count(), 1u);
 }
 
@@ -165,7 +196,7 @@ TEST(Material_set, freed_slot_is_reused)
     Material_set set;
     const std::shared_ptr<Material> first = make_material("first");
     const Material_slot_id first_id = set.add_ref(first);
-    ASSERT_EQ(first_id.index, 0u);
+    ASSERT_EQ(first_id.index, 1u);
 
     set.release(first.get());
     EXPECT_FALSE(set.is_valid(first_id)) << "a handle to a freed slot must not validate";
@@ -217,13 +248,14 @@ TEST(Material_set, slot_count_covers_holes)
     sync_library(set, materials);
     sync_library(set, Material_list{materials[0], materials[2]});
 
-    EXPECT_EQ(set.get_slot_count(), 3u) << "the GPU write has to cover the hole at slot 1";
+    EXPECT_EQ(set.get_slot_count(), 4u) << "the GPU write has to cover the hole at slot 2";
     EXPECT_EQ(set.get_live_count(), 2u);
     const std::span<const Material_slot> slots = set.get_materials();
-    ASSERT_GE(slots.size(), 3u);
-    EXPECT_TRUE (slots[0].alive);
-    EXPECT_FALSE(slots[1].alive);
-    EXPECT_TRUE (slots[2].alive);
+    ASSERT_GE(slots.size(), 4u);
+    EXPECT_TRUE (slots[0].alive); // the reserved default slot
+    EXPECT_TRUE (slots[1].alive);
+    EXPECT_FALSE(slots[2].alive);
+    EXPECT_TRUE (slots[3].alive);
 }
 
 TEST(Material_set, set_releases_material_reference_when_slot_freed)
@@ -289,7 +321,7 @@ TEST(Material_set, object_churn_does_not_grow_the_slot_table)
     // released - the ordering that keeps a material shared between the two
     // lists from ever reaching zero - so both hold a slot for an instant. What
     // matters is that the table does not grow with the number of rounds.
-    EXPECT_LE(set.get_slot_count(), 2u) << "slots accumulated across preview renders";
+    EXPECT_LE(set.get_slot_count(), 3u) << "slots accumulated across preview renders";
     EXPECT_EQ(set.get_live_count(), 1u);
 
     previous.reset();

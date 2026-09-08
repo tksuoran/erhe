@@ -429,9 +429,10 @@ override and a template's material has an owner, the `UsdGeom`
 primitive schemas import as the meshes they describe, USD `st` crosses
 the V flip with `UsdTransform2d` carried through it, a scalar input
 reads the texture channel the file connects, an unauthored
-`diffuseColor` is USD's 0.18, and a `UsdUVTexture`'s wrap, transform,
+`diffuseColor` is USD's 0.18, a `UsdUVTexture`'s wrap, transform,
 scale and per-channel normal decode reach the material, with a texture
-packed in a `.usdz` read out of the archive. A `UsdTransform2d` places
+packed in a `.usdz` read out of the archive, and a mesh with no material
+of its own renders erhe's default look. A `UsdTransform2d` places
 its texture where usdview does, measured face on against the
 reference render and pinned by the placement case of
 `src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
@@ -441,8 +442,7 @@ time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
 stained glass opaque and its cards missing; RoughnessTest's missing
 specular response; a 4000-prim scene tripping the main-loop stall watchdog
-on load; MaterialX documents as reference targets; the draw list's
-null-material fallback for an unbound mesh.
+on load; MaterialX documents as reference targets.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.

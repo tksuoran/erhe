@@ -253,6 +253,13 @@ writer authors `inputs:diffuseColor` from the effective value whenever that
 differs from the fallback - an erhe default white included, which is also
 what makes a save reproduce itself.
 
+A mesh with no material binding at all is not given a `Material` - that would
+author a binding the file never had - and renders through the scene renderer's
+reserved default material slot, whose base color is the same 0.18 grey (see
+`src/erhe/scene_renderer/notes.md`). A mesh's `primvars:displayColor` arrives
+through Tydra as vertex colors and multiplies into the base color in the
+fragment shader, bound material or not.
+
 A scalar input is connected through a named output of its `UsdUVTexture`
 (`outputs:r` / `g` / `b` / `a`), and that names the channel to read.
 `erhe::primitive::Texture_channel` carries it per scalar slot on the material

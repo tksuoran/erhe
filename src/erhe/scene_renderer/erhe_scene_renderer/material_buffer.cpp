@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "erhe_scene_renderer/material_buffer.hpp"
+#include "erhe_scene_renderer/material_set.hpp"
 #include "erhe_scene_renderer/buffer_binding_points.hpp"
 #include "erhe_renderer/renderer_config.hpp"
 
@@ -163,6 +164,38 @@ auto gather_material_record_inputs(
     return inputs;
 }
 
+auto get_default_material_record_inputs() -> Material_record_inputs
+{
+    // Built from the Material_values defaults so the unbound look tracks
+    // erhe's own material defaults; only the base color differs from them.
+    const erhe::primitive::Material_values defaults{};
+
+    Material_record_inputs inputs{};
+    inputs.roughness                   = defaults.roughness;
+    inputs.metallic                    = defaults.metallic;
+    inputs.reflectance                 = defaults.reflectance;
+    inputs.base_color                  = glm::vec3{0.18f, 0.18f, 0.18f};
+    inputs.opacity                     = defaults.opacity;
+    inputs.emissive                    = defaults.emissive;
+    inputs.normal_texture_scale        = defaults.normal_texture_scale;
+    inputs.alpha_cutoff                = defaults.alpha_cutoff;
+    inputs.occlusion_texture_strength  = defaults.occlusion_texture_strength;
+    inputs.ior                         = defaults.ior;
+    inputs.transmission                = defaults.transmission;
+    inputs.bxdf_model                  = static_cast<uint32_t>(defaults.bxdf_model);
+    inputs.normal_texture_decode_scale = defaults.normal_texture_decode_scale;
+    inputs.normal_texture_decode_bias  = defaults.normal_texture_decode_bias;
+    inputs.texture_channels            = glm::uvec4{
+        erhe::primitive::to_uint32(defaults.metallic_channel),
+        erhe::primitive::to_uint32(defaults.roughness_channel),
+        erhe::primitive::to_uint32(defaults.occlusion_channel),
+        erhe::primitive::to_uint32(defaults.opacity_channel)
+    };
+    // Every texture slot stays empty, so the handles resolve to
+    // invalid_texture_handle and no heap allocation is made.
+    return inputs;
+}
+
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
     : m_graphics_device {graphics_device}
     , m_material_interface{material_interface}
@@ -267,6 +300,14 @@ void Material_buffer::write_records(
     // that is not live reads as an all-zero record rather than as whatever the
     // previous payload written into this copy left behind.
     std::memset(gpu_data.data(), 0, gpu_data.size());
+
+    // The reserved default slot, written once per update from the shared
+    // default inputs; every other null entry is a hole and stays zeroed.
+    if (!slot_materials.empty()) {
+        ERHE_VERIFY(slot_materials[Material_set::default_material_slot_index] == nullptr);
+        const Material_record_inputs default_inputs = get_default_material_record_inputs();
+        write_record(gpu_data, Material_set::default_material_slot_index * entry_size, default_inputs, texture_heap);
+    }
 
     std::size_t write_offset = 0;
     for (const erhe::primitive::Material* material : slot_materials) {

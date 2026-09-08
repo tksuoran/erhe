@@ -228,8 +228,8 @@ TEST_F(Material_set_gpu_test, two_sets_same_material_distinct_slots)
 
     const uint32_t slot_a = set_a.get_slot(shared_material.get()).value();
     const uint32_t slot_b = set_b.get_slot(shared_material.get()).value();
-    EXPECT_EQ(slot_a, 0u);
-    EXPECT_EQ(slot_b, 1u);
+    EXPECT_EQ(slot_a, 1u);
+    EXPECT_EQ(slot_b, 2u);
 
     update(set_a);
     update(set_b);
@@ -256,7 +256,7 @@ TEST_F(Material_set_gpu_test, record_survives_foreign_update)
     update(set_a);
     update(set_b);
 
-    EXPECT_EQ(read_base_color(set_a, 0u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set_a, 1u).r, 1.0f);
 }
 
 // V2.3. R2: an addition never renumbers, and the first material's record stays
@@ -270,15 +270,15 @@ TEST_F(Material_set_gpu_test, stable_slot_after_material_added)
     const Material_list list_1{first};
     set.sync_library(std::span<const std::shared_ptr<Material>>{list_1});
     update(set);
-    EXPECT_EQ(read_base_color(set, 0u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
 
     const Material_list list_2{first, second};
     set.sync_library(std::span<const std::shared_ptr<Material>>{list_2});
     update(set);
 
-    EXPECT_EQ(set.get_slot(first.get()).value(), 0u);
-    EXPECT_EQ(read_base_color(set, 0u).r, 1.0f);
-    EXPECT_EQ(read_base_color(set, 1u).g, 1.0f);
+    EXPECT_EQ(set.get_slot(first.get()).value(), 1u);
+    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 2u).g, 1.0f);
 }
 
 // V2.4. R3: membership is by reference, not by library listing. A material
@@ -319,7 +319,7 @@ TEST_F(Material_set_gpu_test, clean_update_writes_nothing)
     EXPECT_EQ(set.get_write_count(), after_first);
 
     // And what is still bound is the record from the first write.
-    EXPECT_EQ(read_base_color(set, 0u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
 }
 
 // V2.8. R5, and the reason invalidation is a content hash rather than a
@@ -341,7 +341,7 @@ TEST_F(Material_set_gpu_test, material_data_edit_dirties_the_set)
 
     update(set);
     EXPECT_GT(set.get_write_count(), after_first);
-    const glm::vec3 base_color = read_base_color(set, 0u);
+    const glm::vec3 base_color = read_base_color(set, 1u);
     EXPECT_EQ(base_color.r, 0.0f);
     EXPECT_EQ(base_color.b, 1.0f);
 }
@@ -417,7 +417,7 @@ TEST_F(Material_set_gpu_test, material_set_alone_updates_and_binds)
     set.sync_library(std::span<const std::shared_ptr<Material>>{library});
     update(set);
 
-    const glm::vec3 base_color = read_base_color(set, 0u);
+    const glm::vec3 base_color = read_base_color(set, 1u);
     EXPECT_FLOAT_EQ(base_color.r, 0.25f);
     EXPECT_FLOAT_EQ(base_color.g, 0.5f);
     EXPECT_FLOAT_EQ(base_color.b, 0.75f);
@@ -440,6 +440,36 @@ TEST_F(Material_set_gpu_test, invalidate_forces_a_rewrite)
     set.invalidate();
     update(set);
     EXPECT_GT(set.get_write_count(), after_first);
+}
+
+// The record every primitive with no material of its own reads: the reserved
+// slot carries erhe's default look (UsdPreviewSurface's unbound 0.18 grey),
+// not a zeroed record and not the first library material.
+TEST_F(Material_set_gpu_test, default_slot_carries_the_default_material)
+{
+    const std::shared_ptr<Material> material = make_material("Library", glm::vec3{1.0f, 0.0f, 0.0f});
+
+    Material_set set{make_create_info("set")};
+    const Material_list library{material};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{library});
+    update(set);
+
+    const glm::vec3 base_color = read_base_color(set, Material_set::default_material_slot_index);
+    EXPECT_FLOAT_EQ(base_color.r, 0.18f);
+    EXPECT_FLOAT_EQ(base_color.g, 0.18f);
+    EXPECT_FLOAT_EQ(base_color.b, 0.18f);
+}
+
+// A set with no members at all still writes the reserved record, which is what
+// a file that binds no material anywhere (an unbound-mesh USD scene) renders
+// through.
+TEST_F(Material_set_gpu_test, default_slot_is_written_for_an_empty_set)
+{
+    Material_set set{make_create_info("empty")};
+    update(set);
+
+    const glm::vec3 base_color = read_base_color(set, Material_set::default_material_slot_index);
+    EXPECT_FLOAT_EQ(base_color.r, 0.18f);
 }
 
 } // namespace erhe::scene_renderer::test

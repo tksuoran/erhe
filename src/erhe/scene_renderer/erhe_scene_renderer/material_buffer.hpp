@@ -157,6 +157,15 @@ private:
     Material_sampler_cache&          sampler_cache
 ) -> Material_record_inputs;
 
+// The record inputs a primitive with no material of its own renders with:
+// erhe::primitive::Material_values at its defaults - roughness 0.5,
+// metallic 0, opaque, no textures - with UsdPreviewSurface's unbound
+// diffuseColor 0.18 grey as the base color. This is what slot
+// Material_set::default_material_slot_index carries, so an unbound mesh is
+// lit like any other surface instead of reading a zeroed record (black) or
+// whichever material happened to hold slot 0.
+[[nodiscard]] auto get_default_material_record_inputs() -> Material_record_inputs;
+
 class Material_interface
 {
 public:

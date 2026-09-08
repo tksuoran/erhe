@@ -58,10 +58,26 @@ public:
     std::size_t                                       written_byte_count{0};
 };
 
-Material_set::Material_set() = default;
+// Reserves default_material_slot_index. The slot is alive - so it is covered
+// by every GPU write and by get_slot_count() - carries no Material, and is
+// reachable by no lookup: it is in neither m_index_by_material nor
+// m_free_slots, which is what keeps allocate_slot() from ever handing it out
+// and release_slot_if_unreferenced() from ever freeing it.
+void Material_set::reserve_default_slot()
+{
+    ERHE_VERIFY(m_materials.empty());
+    Material_slot& slot = m_materials.emplace_back();
+    slot.alive = true;
+}
+
+Material_set::Material_set()
+{
+    reserve_default_slot();
+}
 
 Material_set::Material_set(const Material_set_create_info& create_info)
 {
+    reserve_default_slot();
     ERHE_VERIFY(create_info.graphics_device    != nullptr);
     ERHE_VERIFY(create_info.material_interface != nullptr);
     ERHE_VERIFY(create_info.fallback_texture   != nullptr);
@@ -104,7 +120,7 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     // failure a version counter cannot see.
     bool dirty = m_gpu->force_dirty || m_membership_dirty;
     for (Material_slot& slot : m_materials) {
-        if (!slot.alive) {
+        if (!slot.alive || (slot.material == nullptr)) {
             continue;
         }
         const uint64_t content_hash = m_gpu->material_buffer.get_content_hash(slot.material.get());
@@ -121,6 +137,7 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     m_gpu->force_dirty = false;
 
     const std::size_t slot_count = get_slot_count();
+    ERHE_VERIFY(slot_count > 0); // the reserved default slot is always live
     m_gpu->slot_materials.clear();
     m_gpu->slot_materials.resize(slot_count, nullptr);
     for (std::size_t i = 0; i < slot_count; ++i) {
@@ -133,10 +150,6 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     // The heap is repopulated by the record write that follows, and by nothing
     // else, so it is reset here and only here.
     m_gpu->texture_heap.reset_heap(command_buffer);
-    if (slot_count == 0) {
-        ++m_gpu->write_count;
-        return;
-    }
 
     const std::size_t entry_byte_count = m_gpu->material_buffer.get_record_byte_count();
     const std::size_t byte_count       = slot_count * entry_byte_count;
@@ -230,7 +243,7 @@ void Material_set::sync_library(const std::span<const std::shared_ptr<erhe::prim
         m_materials[index].in_library = true;
     }
 
-    for (std::size_t i = 0, end = m_materials.size(); i < end; ++i) {
+    for (std::size_t i = default_material_slot_index + 1, end = m_materials.size(); i < end; ++i) {
         Material_slot& slot = m_materials[i];
         if (!slot.alive || !slot.in_library) {
             continue;

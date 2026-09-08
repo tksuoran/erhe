@@ -21,8 +21,8 @@
  },
  {
   "path": "full_assets/OpenChessSet/chess_set.usda",
-  "note": "the whole set loads and its pieces stand where the reference puts them",
-  "gap": ""
+  "note": "the whole set loads and its pieces stand where the reference puts them, lit and legible; every mesh renders in the unbound default grey because the file's meshes reach erhe with no material bound at all, where the reference shows dark and light stone with green and gold accents",
+  "gap": "a file whose meshes arrive with no material binding renders in the unbound default grey: the chess set imports 21 meshes and 0 materials"
  },
  {
   "path": "full_assets/UsdCookie/UsdCookie.usdz",

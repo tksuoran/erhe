@@ -115,6 +115,15 @@ public:
 class Material_set final
 {
 public:
+    // The slot every primitive with no material of its own names. It is
+    // reserved at construction, holds no Material and is never handed out by
+    // allocate_slot(), and update() writes
+    // get_default_material_record_inputs() into it - so an unbound primitive
+    // renders erhe's default look instead of a zeroed record or whichever
+    // material would otherwise have landed at slot 0. Slots for materials
+    // therefore start at 1.
+    static constexpr uint32_t default_material_slot_index = 0;
+
     // Membership-only. No device, no buffer, no heap: the slot table is pure
     // bookkeeping and is tested that way (R16).
     Material_set();
@@ -191,7 +200,8 @@ public:
     // What a record writer resolves an object's own slot ids through.
     [[nodiscard]] auto get_material   (const Material_slot_id& id) const -> const erhe::primitive::Material*;
     // Highest live slot + 1, i.e. how many slots the GPU write covers. Holes
-    // inside it are zero-filled.
+    // inside it are zero-filled. Never zero: the reserved default slot is
+    // always live.
     [[nodiscard]] auto get_slot_count() const -> std::size_t;
     // How many slots are actually live, holes excluded.
     [[nodiscard]] auto get_live_count() const -> std::size_t;
@@ -207,6 +217,8 @@ public:
     void               clear_membership_dirty();
 
 private:
+    void reserve_default_slot();
+
     class Gpu;
 
     class Pending_op
