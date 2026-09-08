@@ -56,9 +56,9 @@ asset (`screenshots/` first, then `thumbnails/`), repo-relative to
 of those side by side under `logs/usd_wg_survey/compare/`, which is how the
 appearance verdicts below were reached.
 
-Authored cameras: 28 entries author a `UsdGeomCamera`; 28 of 28 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
+Authored cameras: 24 entries author a `UsdGeomCamera`; 24 of 24 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
 
-Run: 2026-09-08, 146 entries, 2594 s of survey time.
+Run: 2026-09-08, 146 entries, 2596 s of survey time.
 Verdicts: 51 works, 94 works with a gap, 1 fails, 0 crash.
 
 ## Verdicts checked by eye
@@ -69,10 +69,10 @@ log and the empty-viewport test decided.
 
 | Entry file | What the capture shows |
 | --- | --- |
-| full_assets/McUsd/McUsd.usda | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
-| full_assets/McUsd/McUsd.usdz | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
-| full_assets/McUsd/McUsd_10cm.usda | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
-| full_assets/McUsd/McUsd_10cm.usdz | matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing |
+| full_assets/McUsd/McUsd.usda | the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import |
+| full_assets/McUsd/McUsd.usdz | the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import |
+| full_assets/McUsd/McUsd_10cm.usda | the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import |
+| full_assets/McUsd/McUsd_10cm.usdz | the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import |
 | full_assets/OpenChessSet/chess_set.usda | the whole set loads and its pieces stand where the reference puts them, lit and legible; every mesh renders in the unbound default grey because the file's meshes reach erhe with no material bound at all, where the reference shows dark and light stone with green and gold accents |
 | full_assets/UsdCookie/UsdCookie.usdz | the cookie carries its baked texture from inside the .usdz and matches the reference, at a brighter tone |
 | full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/tractor/asset/tractorFullAsset.usda | the tractor renders in the reference's red and grey; the material bound from the kit's own material layer now reaches the meshes |
@@ -255,7 +255,7 @@ assets it affects and what the editor would have to support to clear it.
 | 5 | warning | USD prim '*' references '*': a MaterialX document is not a USD layer - the arc is not instantiated | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 4 | warning | USD light '*': DomeLight texture '*' is not sampled - erhe has no environment map, so the dome contributes its constant color only | sample a DomeLight's texture as an environment map; erhe takes only the light's intensity and colour, so an HDRI-lit stage loses the image |
 | 4 | warning | USD prim '*': variant set '*' authors N opinion(s) that erhe has no place for - they are not carried | carry variant opinions beyond material bindings; X4 reads bindings only (src/erhe/usd/notes.md, Variant sets) |
-| 4 | appearance | a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint | render a material whose opacity is below one as translucent; the stained-glass cube hides what is behind it where the reference shows through |
+| 4 | appearance | the grid composition pass is ordered between the opaque and the translucent content fill and writes depth over the ground plane, so every translucent primitive fails the depth test; its stencil guard never rejects anything because the not-selected content fill pipeline writes no stencil bit | diagnose the message and add the support it asks for |
 | 3 | warning | <path>'*'t authored; producing an unshaded material. (set material_config.strict_material_check=true to make this an error.) | convert MaterialX and non-UsdPreviewSurface shading networks (plan step E2) |
 | 3 | error | Main loop STALLED: tick has not progressed for N s. Stuck in phase: '*' (tick thread Nx95c2c9d6bacae8d7). | not a USD gap: editor-internal noise this survey happens to capture |
 | 3 | error | Prefab source file not found: <path> | resolve a reference asset path relative to the layer that authored it before opening it as a prefab template |

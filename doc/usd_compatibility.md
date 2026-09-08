@@ -130,6 +130,7 @@ The names are erhe / geogram's own:
 | `tangent`, `bitangent` | `primvars:tangents`, `primvars:bitangents` | USD has no schema slot; primvar by convention |
 | `joint_indices_n` / `joint_weights_n` | `primvars:skel:jointIndices` / `primvars:skel:jointWeights` (`elementSize`) | |
 | `edge_sharpness` (edge) | `creaseIndices` / `creaseLengths` / `creaseSharpnesses` | the one edge attribute with a USD form |
+| `Gprim.double_sided` (a prim property, not an attribute of the geometry) | `doubleSided` on the geometry prim | the prim's own opinion, read as a local value when authored and written back when local. It is one half of the rule `erhe::scene::is_double_sided()` spells: a primitive is drawn from both sides when the prim asks for it or when its material does (the `double_sided` row of "Materials"). Both directions carry the value in the schema attribute, so it never also rides as an `erhe:` custom attribute |
 | (geometry-normative polygon mesh) | `subdivisionScheme = none` | Catmull-Clark is an erhe operation, not a render-time scheme. The importer builds erhe geometry for exactly this value; every other scheme (including USD's `catmullClark` fallback) imports as a triangle soup |
 
 ## Materials
@@ -148,7 +149,7 @@ The names are erhe / geogram's own:
 | `<slot>_texture_uv_*` | `UsdTransform2d` | USD composes `in * scale`, then the rotation, then the translation, which is the order the erhe slot transform applies. The erhe transform acts on the flipped texcoord, so the two are converted through `v' = 1 - v` in both directions (`src/erhe/usd/notes.md`, "Texture coordinates"). A save authors a `UsdTransform2d` prim between the material's primvar reader and the slot's `UsdUVTexture` for exactly the slots whose transform is not the identity |
 | `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | `repeat` and `mirror` map onto the erhe address mode of the same name; `clamp`, `black` and the `useMetadata` default all become clamp-to-edge, because erhe has no border color. Both are written for every bound texture; a wrap value on a slot with no texture has no `UsdUVTexture` to ride on. The filters ride as `erhe:` custom attributes |
 | a texture image | `UsdUVTexture` `inputs:file` | a file beside the layer, or an entry of the `.usdz` the stage was loaded from: the reader hands the archive entry's bytes over (`Usd_image::bytes`) and the caller decodes those. Radiance `.hdr` is not decoded by either erhe or LightUSD |
-| `double_sided` | `doubleSided` on the `Mesh` prim | a mesh flag in USD, a material flag in erhe, and one material can be bound by several meshes, so an authored `doubleSided` does not reach the erhe material; `erhe:Material:double_sided` on the `Material` prim is what carries the erhe flag |
+| `double_sided` | `erhe:Material:double_sided` on the `Material` prim | the erhe material's own flag (glTF `material.doubleSided`), which USD has no material input for: `doubleSided` in USD is a property of the geometry prim, and one material can be bound by several prims. The prim's own opinion travels in the geometry `doubleSided` attribute instead (the `Gprim.double_sided` row of "Geometry attributes"), and the renderers take either one as asking for both faces |
 
 ## Lights
 

@@ -16,6 +16,7 @@ add_executable(${_target}
     test_attachment_inheritance.cpp
     test_camera_light_prims.cpp
     test_camera_properties.cpp
+    test_gprim_double_sided.cpp
     test_imported_defaults.cpp
     test_instance_override_material.cpp
     test_layout_properties.cpp

@@ -1257,9 +1257,9 @@ void bucket_primitives(
             }
             const uint64_t shader_key_hash = shader_key.get_hash();
 
-            // glTF material.doubleSided: no material means erhe's own default
-            // material behavior, which is single sided like the glTF default.
-            const bool primitive_double_sided = (material != nullptr) && material->get_double_sided();
+            // glTF material.doubleSided or USD UsdGeomGprim.doubleSided,
+            // through the one helper the draw lists ask as well.
+            const bool primitive_double_sided = erhe::scene::is_double_sided(*mesh.get(), mesh_primitive);
 
             bool done = false;
             for (Render_bucket& b : buckets) {

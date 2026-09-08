@@ -209,6 +209,11 @@ public:
     float                 point_size{3.0f};
     float                 line_width{1.0f};
 
+protected:
+    // Implements Gprim: a `double_sided` change moves the mesh's primitives
+    // between the single- and double-sided draw lists.
+    void handle_gprim_render_state_changed() override;
+
 private:
     static void on_render_flag_property_changed(erhe::property::Dependency_object& object, const erhe::property::Property_changed_args& args);
     void        rederive_render_flag_bits();
@@ -238,6 +243,14 @@ private:
 };
 
 [[nodiscard]] auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool;
+
+// Whether one primitive of `mesh` is drawn from both sides: the single place
+// that rule is spelled, so no two render passes can disagree. A primitive is
+// double sided when its material asks for it (glTF `material.doubleSided`)
+// or when the prim itself does (USD `UsdGeomGprim.doubleSided`). No material
+// means erhe's own default material behavior, which is single sided like the
+// glTF default.
+[[nodiscard]] auto is_double_sided(const Mesh& mesh, const Mesh_primitive& mesh_primitive) -> bool;
 
 // The one mesh of a prim: the prim itself when it is a Mesh, else its first
 // Mesh child. The convenience for the one-mesh case; a consumer that needs

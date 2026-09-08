@@ -445,16 +445,26 @@ the V flip with `UsdTransform2d` carried through it, a scalar input
 reads the texture channel the file connects, an unauthored
 `diffuseColor` is USD's 0.18, a `UsdUVTexture`'s wrap, transform,
 scale and per-channel normal decode reach the material, with a texture
-packed in a `.usdz` read out of the archive, and a mesh with no material
-of its own renders erhe's default look. A `UsdTransform2d` places
+packed in a `.usdz` read out of the archive, a mesh with no material
+of its own renders erhe's default look, and a prim's `doubleSided`
+opinion is a `Gprim.double_sided` property the renderers take together
+with the material's own flag, so a cross-shaped card shows both of its
+faces. A `UsdTransform2d` places
 its texture where usdview does, measured face on against the
 reference render and pinned by the placement case of
 `src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
 entries, 51 work as they are, none crash) leaves, in the order the
 fixes are taken: 16-bit, 32-bit and CMYK images and Radiance `.hdr`
-not decoded; McUsd's
-stained glass opaque and its cards missing; RoughnessTest's missing
-specular response; a scene whose load blocks the main loop long enough to
+not decoded; every alpha-blended and alpha-tested primitive invisible in
+a viewport that draws the grid, which is what leaves McUsd's stained
+glass and its sunflower and fern cards out of the render (the grid
+composition pass is ordered between the opaque and the translucent
+content fill and writes depth over the whole ground plane, and its
+stencil guard - "draw only where content did not" - never rejects
+anything because the not-selected content fill pipeline writes no
+stencil; this is a renderer bug, not a USD one, and the repro is
+`set_graphics_settings {"grid_visible": false}`, which makes all of it
+appear); RoughnessTest's missing specular response; a scene whose load blocks the main loop long enough to
 trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
 at a time once their point instancers are expanded into several thousand
 prims. MaterialX is section 6.

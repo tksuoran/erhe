@@ -660,6 +660,7 @@ private:
             if (opinions.visibility_target != nullptr) {
                 apply_visibility_and_purpose(opinions.absolute_path, *opinions.visibility_target);
                 apply_active(opinions.absolute_path, *opinions.visibility_target);
+                apply_double_sided(opinions.absolute_path, *opinions.visibility_target);
             }
             apply_erhe_custom_attributes(opinions.absolute_path, opinions.primary, opinions.secondary);
         }
@@ -1302,6 +1303,60 @@ private:
             read_visibility_and_purpose<lightusd::GeomCylinder_1>(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomCapsule   >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomCapsule_1 >(prim, visibility, purpose);
+    }
+
+    // `doubleSided` of the composed prim. Like `visibility` and `purpose` it
+    // is a GPrim attribute rather than one of the concrete schema, so it is
+    // read from the concrete prim class; every GPrim-derived type the
+    // conversion makes geometry for is listed.
+    template <typename T>
+    [[nodiscard]] static auto read_double_sided(const lightusd::Prim& prim, bool& double_sided) -> bool
+    {
+        const T* typed = prim.as<T>();
+        if (typed == nullptr) {
+            return false;
+        }
+        double_sided = typed->doubleSided.get_value();
+        return true;
+    }
+
+    [[nodiscard]] static auto get_double_sided(const lightusd::Prim& prim, bool& double_sided) -> bool
+    {
+        return
+            read_double_sided<lightusd::GeomMesh     >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCube     >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomSphere   >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCone     >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCylinder >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCylinder_1>(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCapsule  >(prim, double_sided) ||
+            read_double_sided<lightusd::GeomCapsule_1>(prim, double_sided);
+    }
+
+    // `doubleSided` (doc/usd_compatibility.md, geometry attributes) lands on
+    // the geometry prim's own `Gprim.double_sided` property. An unauthored
+    // attribute writes nothing, so the property keeps its default; the erhe
+    // default and the USD fallback are both false, so a file that authors
+    // none reads back as none (M4).
+    void apply_double_sided(const std::string& absolute_path, erhe::Item_base& item)
+    {
+        erhe::scene::Gprim* gprim = dynamic_cast<erhe::scene::Gprim*>(&item);
+        if (gprim == nullptr) {
+            return;
+        }
+        if (!is_authored(absolute_path, "doubleSided")) {
+            return;
+        }
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return;
+        }
+        bool double_sided = false;
+        if (!get_double_sided(*prim, double_sided)) {
+            log_usd->warn("USD prim '{}': doubleSided is not readable from a '{}' prim", absolute_path, prim->type_name());
+            return;
+        }
+        gprim->set_double_sided(double_sided);
     }
 
     // `visibility` and `purpose` land on the erhe item properties that carry

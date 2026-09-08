@@ -155,6 +155,11 @@ void Mesh::rederive_render_flag_bits()
     set_derived_flag_bit(Item_flags::lightmapped, get_value(lightmapped_property));
 }
 
+void Mesh::handle_gprim_render_state_changed()
+{
+    notify_primitives_changed();
+}
+
 void Mesh::notify_primitives_changed()
 {
     // The computed world bounds (D26) follow the primitives.
@@ -613,6 +618,15 @@ auto Mesh::get_aabb_world() const -> erhe::math::Aabb
 auto operator<(const Mesh& lhs, const Mesh& rhs) -> bool
 {
     return lhs.get_id() < rhs.get_id();
+}
+
+auto is_double_sided(const Mesh& mesh, const Mesh_primitive& mesh_primitive) -> bool
+{
+    if (mesh.get_double_sided()) {
+        return true;
+    }
+    const erhe::primitive::Material* material = mesh_primitive.material.get();
+    return (material != nullptr) && material->get_double_sided();
 }
 
 auto get_mesh(const std::shared_ptr<erhe::Item_base>& item) -> std::shared_ptr<Mesh>

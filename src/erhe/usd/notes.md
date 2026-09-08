@@ -173,7 +173,8 @@ translation units.
   opinion arriving over a reference or a sublayer is authored on the
   composed prim, so it counts. `Importer::is_authored` gates every field the
   conversion writes: `visibility` and `purpose` (M3, onto the node the prim
-  becomes); the `UsdPreviewSurface` inputs `diffuseColor`, `emissiveColor`,
+  becomes); `doubleSided`, onto the geometry prim's `Gprim.double_sided`
+  property; the `UsdPreviewSurface` inputs `diffuseColor`, `emissiveColor`,
   `metallic`, `roughness`, `opacity`, `opacityThreshold`, `ior` and
   `occlusion`, read from the Shader prim the material's `outputs:surface`
   connects to; the camera's `clippingRange`, `focalLength`, the apertures
@@ -784,6 +785,13 @@ because the same spelling rule decides what an item is called on a stage.
   properties are skipped: the node transform, the item name and the tags have
   a USD form that owns them. `visible` and `purpose` are read from the node,
   which is where the import puts them.
+- `doubleSided` of a geometry prim. `Gprim.double_sided` is written into the
+  `Mesh` prim's own `doubleSided` attribute when the value is local, which is
+  the authored-only rule every native attribute follows, so a prim erhe never
+  made double sided carries no `doubleSided` line. `is_native_usd_property`
+  lists it under the `Gprim` owner, so it never also travels as an
+  `erhe:Gprim:double_sided` custom attribute - except on an `over` prim, which
+  is typeless and carries no schema attribute at all.
 - Prim `active` metadata (`doc/usd-compatibility-plan.md` X2). The item's
   `active` property is USD's prim `active` metadatum: written through
   `PrimMeta::set_active` when the value is local, so a prim erhe never
@@ -1055,6 +1063,14 @@ that the inactive prim still becomes an item, that the metadatum lands as a
 local `active` value, that the child of an inactive prim is inactive without
 a local value of its own, that a prim without the metadatum has none, and
 that all of it survives a `save_usda` / `load_usd` round trip.
+
+`test/data/double_sided.usda` covers `doubleSided`: three `Mesh` prims, one
+authoring `1`, one authoring `0` and one authoring nothing.
+`test_usd_double_sided.cpp` asserts that both authored opinions land as local
+`Gprim.double_sided` values (including the `0` that equals the default), that
+the unauthored prim has none, that a save writes exactly the two attributes
+and no `erhe:Gprim:double_sided`, that the values survive a reload, and that
+a second save is byte-identical.
 
 `test/data/looks.usda` covers where materials sit: two `Scope`s below one
 `Xform` holding three materials, two of them named alike, each bound by a

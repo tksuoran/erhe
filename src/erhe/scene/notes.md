@@ -42,10 +42,22 @@ owns the rest:
   menu, the MCP `create_node` tool, the import of a transform-only node - so
   `Xformable` itself is never instantiated.
 - **`Boundable`** (USD `UsdGeomBoundable`, base `Xformable`) is the level with
-  an extent, and **`Gprim`** (USD `UsdGeomGprim`, base `Boundable`) the level
-  that draws geometry, so `doubleSided` and `displayColor` belong to it. Both
-  hold nothing until a step moves those values here. **`Mesh`** (USD `Mesh`,
-  base `Gprim`) is the geometric prim erhe draws.
+  an extent, and holds nothing until a step moves those values here.
+  **`Gprim`** (USD `UsdGeomGprim`, base `Boundable`) is the level that draws
+  geometry, and holds `double_sided` (USD `doubleSided`): an entry-store
+  property, default false, that inherits, so a holding prim or a style can
+  carry `Gprim.double_sided` for the geometry below it. `displayColor` belongs
+  to this level too and is not held yet. **`Mesh`** (USD `Mesh`, base `Gprim`)
+  is the geometric prim erhe draws.
+- `erhe::scene::is_double_sided(mesh, mesh_primitive)` (`mesh.hpp`) is the one
+  place the double-sided rule is spelled, so no two render passes can
+  disagree: a primitive is drawn from both sides when its material asks for it
+  (`Material.double_sided`, glTF `material.doubleSided`) or when the prim
+  itself does (`Gprim.double_sided`). Both draw-list classification
+  (`draw_list_scene.cpp`) and bucket classification (`mesh_memory.cpp`) ask it,
+  and a `double_sided` write reaches them through
+  `Mesh::notify_primitives_changed()`, which re-registers the mesh's draw list
+  entries - nothing polls the flag per frame.
 
 Any prim may parent any other prim, so the rules that walk the tree take it as
 the tree of prims it is:

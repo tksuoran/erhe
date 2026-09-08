@@ -94,9 +94,9 @@ public:
         (material->get_blending_mode() == erhe::primitive::Material_blending_mode::opaque);
     result.blending = is_opaque ? Draw_blending::opaque : Draw_blending::translucent;
 
-    // glTF material.doubleSided. No material means erhe's own default
-    // material behavior, which is single sided like the glTF default.
-    result.double_sided = (material != nullptr) && material->get_double_sided();
+    // glTF material.doubleSided or USD UsdGeomGprim.doubleSided, through the
+    // one helper both the draw lists and the render buckets ask.
+    result.double_sided = erhe::scene::is_double_sided(mesh, mesh_primitive);
 
     // Shadow lists take opaque casters only (Shadow_renderer uses
     // opaque_primitives_only today).

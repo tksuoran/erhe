@@ -515,6 +515,10 @@ public:
         if (name == "emissive_texture_wrap_v")           { return "emissive_texture.inputs:wrapT"; }
         return {};
     }
+    if (owner == "Gprim") {
+        if (name == "double_sided") { return "doubleSided"; }
+        return {};
+    }
     if (owner == "Brush") {
         // The material a placed instance gets is the brush prim's own
         // material binding (doc/usd-compatibility-plan.md E4a).
@@ -925,6 +929,17 @@ private:
             typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
         }
         write_active(item, typed_prim);
+    }
+
+    // `doubleSided` of a geometry prim (doc/usd_compatibility.md, geometry
+    // attributes). Written when the value is local, the authored-only rule
+    // every native attribute follows (M4).
+    template <typename T>
+    void write_double_sided(const erhe::scene::Gprim& gprim, T& typed_prim)
+    {
+        if (is_local(gprim, erhe::scene::Gprim::double_sided_property.get())) {
+            typed_prim.doubleSided.set_value(gprim.get_double_sided());
+        }
     }
 
     // The `active` prim metadatum (doc/usd-compatibility-plan.md X2): an
@@ -3110,6 +3125,7 @@ private:
         fill_geom_mesh(geom_mesh, accumulator);
 
         write_visibility_and_purpose(node, geom_mesh);
+        write_double_sided(mesh, geom_mesh);
         write_erhe_properties(node, geom_mesh);
         write_erhe_properties(mesh, geom_mesh);
         write_instance_root_override(node, override_root, geom_mesh);
