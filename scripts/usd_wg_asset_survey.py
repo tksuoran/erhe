@@ -150,8 +150,10 @@ class Usd_tools:
             return f"usdrecord timed out after {timeout:.0f} s"
         if out_png.is_file() and (out_png.stat().st_size > 0):
             return ""
-        lines = [l for l in (done.stderr + done.stdout).splitlines()
-                 if l.strip() and (not l.lstrip().startswith("REM")) and ("Warning" not in l)]
+        # The env batch echoes its own comment lines (`<cwd>>REM ...`) and
+        # blank prompts; the tool's own error lines are what is kept.
+        lines = [l.strip() for l in (done.stderr + done.stdout).splitlines()
+                 if l.strip() and (">REM" not in l) and (not l.strip().endswith(">")) and ("Warning" not in l)]
         return "usdrecord produced no image: " + " | ".join(lines[-3:])[:300]
 
 
@@ -171,6 +173,7 @@ def composed_facts(stats: dict) -> dict:
         "composed_meters_per_unit": stats.get("meters_per_unit"),
         "composed_bounds_min": stats.get("bounds_min"),
         "composed_bounds_max": stats.get("bounds_max"),
+        "composed_skinned": bool(stats.get("skinned")),
         "composed_errors": stats.get("errors", [])[:5],
     }
 
@@ -186,6 +189,10 @@ def bounds_deviation(record: dict):
     stage_min = record.get("composed_bounds_min")
     stage_max = record.get("composed_bounds_max")
     if not (erhe_min and erhe_max and stage_min and stage_max) or (framing.get("meshes", 0) == 0):
+        return None
+    if record.get("composed_skinned"):
+        # pxr's bounds cache reports the rest pose of a skinned mesh, which
+        # the editor's skinned bounds are not: no comparison to make.
         return None
     scale = float(record.get("composed_meters_per_unit") or 1.0) or 1.0
     corners = []
@@ -990,10 +997,19 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
                 # The rect the 3D view occupies in the capture and the camera
                 # it was rendered through, read after the frames above so the
                 # window has its final size.
-                for viewport in editor.mcp.call("get_viewports", {}, timeout=load_timeout).get("viewports", []):
+                # By the title frame_scene named, else by the scene the
+                # viewport shows (the first framed window can be retitled
+                # between the two calls).
+                viewports = editor.mcp.call("get_viewports", {}, timeout=load_timeout).get("viewports", [])
+                for viewport in viewports:
                     if viewport.get("title") == record["framing"].get("viewport"):
                         record["view"] = viewport
                         break
+                if not record["view"]:
+                    for viewport in viewports:
+                        if viewport.get("scene") == scene:
+                            record["view"] = viewport
+                            break
                 record["screenshot_stats"] = screenshot_stats(shot)
         except EditorDown as error:
             record["crash"] = True
@@ -1493,6 +1509,17 @@ REMEDY = [
     (re.compile(r"subLayers are not composed"),
      "compose the root layer's subLayers before the prim walk: the stage loads the root layer alone, "
      "so a file that only sublayers its content opens empty and says nothing about it"),
+    (re.compile(r"bounds disagree with the composed stage"),
+     "place, scale or instance the content the way OpenUSD composes it: compare the prim's world "
+     "transform with pxr's XformCache (scripts/usd_wg_pxr_stage.py reads the composed bounds). Measured "
+     "cause on the Vehicles kit: the reference target is a Mesh prim that authors its own "
+     "xformOp:transform (a 39.37 unit-conversion scale), which the reference instantiation drops "
+     "when the target is a Gprim rather than an Xform"),
+    (re.compile(r"some composed meshes are not loaded"),
+     "load every UsdGeomMesh the composed stage holds: the missing ones name the prim kind or the "
+     "composition arc the importer skips"),
+    (re.compile(r"differs from the Storm render of the same view"),
+     "read the comparison composite (capture | Storm | reference) and name the appearance difference"),
     (re.compile(r"crash", re.I),
      "find and fix the crash before anything else in this list"),
     # The causes the side-by-side comparison against the repository's own

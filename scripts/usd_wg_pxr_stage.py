@@ -18,6 +18,9 @@ Output fields:
   cameras          UsdGeomCamera prims, in traversal order (paths)
   bounds_min/max   world-space AABB of the default and render purposes at the
                    stage's start time code, in stage units and stage up axis
+  skinned          whether any prim is a SkelRoot or carries UsdSkel BindingAPI;
+                   the bounds cache does not apply skinning, so such bounds are
+                   the rest pose and no basis for a comparison
   up_axis, meters_per_unit, start_time_code, has_authored_time_codes
   errors           what pxr reported while opening, if anything
 """
@@ -30,7 +33,7 @@ def main() -> int:
         print(__doc__, file=sys.stderr)
         return 2
     path = sys.argv[1]
-    from pxr import Tf, Usd, UsdGeom, UsdLux, UsdShade
+    from pxr import Tf, Usd, UsdGeom, UsdLux, UsdShade, UsdSkel
 
     errors = []
     delegate = None
@@ -60,6 +63,7 @@ def main() -> int:
         "default_prim": str(stage.GetDefaultPrim().GetPath()) if stage.GetDefaultPrim() else "",
         "bounds_min": None,
         "bounds_max": None,
+        "skinned": False,
         "errors": [],
     }
     try:
@@ -87,6 +91,8 @@ def main() -> int:
             result["lights"] += 1
         if prim.IsA(UsdGeom.Camera):
             result["cameras"].append(str(prim.GetPath()))
+        if prim.IsA(UsdSkel.Root) or prim.HasAPI(UsdSkel.BindingAPI):
+            result["skinned"] = True
     if delegate is not None:
         for diagnostic in delegate.TakeUncoalescedDiagnostics():
             errors.append(str(diagnostic.commentary)[:300])
