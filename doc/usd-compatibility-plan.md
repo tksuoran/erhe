@@ -343,8 +343,8 @@ record has the history.
 ## 3. Remaining steps
 
 Steps are grouped by what they touch: M = model generalization (no USD
-code), E = export, X = composition; animation and physics are section 6, future work outside
-every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
+code), E = export, X = composition, K = skinning; animation beyond the
+skeleton and physics are section 6, future work outside every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
 week or more.
 
 ### E4 Editor state in a USD file (M; completes G2)
@@ -356,9 +356,9 @@ The resources are prims (U4), so each kind is written and read as a
 prim where it sits in the tree, one custom `typeName` per kind (the
 class token `Typed` already fixes) with attributes named as the glTF
 fields are; `erhe::usd` records what the layer authors and the editor
-creates the item, as X3 does for a class prim. Animations, skins and
-the physics API schemas on nodes (section 6) stay listed as not
-carried. A save no longer logs a kind it carries; the open side reads
+creates the item, as X3 does for a class prim. Animations and the
+physics API schemas on nodes (section 6) stay listed as not carried;
+skins are K1. A save no longer logs a kind it carries; the open side reads
 every kind it writes. `.usdc` output follows once the `.usda` output
 round-trips through E3 with all of it. The parts below land
 independently, in the order E4a, S1, E4c, E4b, E4d.
@@ -491,6 +491,86 @@ A folder holding nothing the file carries is still written as the
 `Scope` it is, and an empty `Scope` on reload is a folder in its place,
 so the folder tree survives a save whatever it holds.
 
+### K1 Skinning (M)
+
+What: a `Mesh` with the `SkelBindingAPI` is skinned the way a glTF mesh
+with a skin is, so it renders where UsdSkel puts it, and a skinned scene
+saves back with its `Skeleton`, its bindings and its `SkelAnimation`.
+The survey's CarbonFrameBike is the case: its node transform chain
+matches pxr to every digit, and its four skinned cable meshes sit 16 cm
+from where pxr's `ComputeSkinnedPoints` puts them because the skeleton's
+rest pose differs from its bind pose. The mapping's `Skin` and joint
+primvar rows name the schemas; the glTF skin path is the shape:
+`erhe::scene::Skin` (joints, inverse bind matrices, pivot node) on
+`Mesh::skin`, `Scene_root::register_skin` and the skinned build info in
+`src/editor/parsers/gltf.cpp`, `Joint_buffer` computing
+`world_from_joint * inverse_bind` per joint. Tydra already converts a
+`Skeleton` into a joint tree with bind and rest transforms
+(`RenderScene::skeletons`), gives a skinned `RenderMesh` its
+`joint_and_weights` and `skel_id`, and turns `SkelAnimation` into joint
+channels.
+
+Model: UsdSkel skins a point as `skelLocalToWorld * sum_j w_j *
+jointSkelSpace_j * inverse(bind_j) * geomBindTransform * p`, and the
+mesh's own transform plays no part; glTF and `Joint_buffer` skin it as
+`sum_j w_j * world_from_joint_j * inverse_bind_j * p`. The two agree
+when every joint is a `Node` whose world transform is
+`skelLocalToWorld * jointSkelSpace_j` and the mesh's inverse bind matrix
+for joint `j` is `inverse(bind_j) * geomBindTransform`. So:
+
+- The `Skeleton` prim is an `Xform` prim where it sits (its
+  `typeName` recorded, as U1 records a `Model`), and each joint of
+  `joints` is an `Xform` child under it along the joint path
+  (`Bone_1/Bone_001_1` is `Bone_001_1` under `Bone_1`), with the joint's
+  `restTransforms` entry as its local transform and the `bone` flag
+  (`mark_skin_joints`) once registered. The `SkelRoot` stays the
+  `Typed` prim it is (U1): it carries no transform of its own in the
+  files surveyed and encapsulates nothing erhe needs.
+- A skinned `Mesh` prim gets an `erhe::scene::Skin` whose `joints` are
+  those nodes in `joints` order, whose `inverse_bind_matrices[j]` is
+  `inverse(bind_j) * geomBindTransform` and whose pivot is the
+  `Skeleton` node. Meshes bound to one skeleton with the same
+  `geomBindTransform` share one `Skin`; a differing `geomBindTransform`
+  makes a `Skin` of its own. The mesh's `primvars:skel:jointIndices` /
+  `jointWeights` (`elementSize` weights per vertex, unnormalized) become
+  the `joint_indices_n` / `joint_weights_n` vertex attributes the glTF
+  path fills, four per set, normalized, the strongest kept and one
+  warning per mesh when a vertex carries more than the sets hold.
+- A `SkelAnimation` (Tydra's joint channels) becomes channels of the
+  file's `erhe::scene::Animation` (M8 time samples, "Time samples" in
+  `src/erhe/usd/notes.md`) targeting the joint nodes, so joint animation
+  is node animation as it is for glTF. A skinned mesh whose skeleton has
+  no animation source renders in the rest pose, which is what pxr does.
+- Export writes the `Skeleton` prim back from the joint nodes (`joints`
+  paths from the node tree, `restTransforms` from the joint locals,
+  `bindTransforms` recomputed as `inverse(inverse_bind_j *
+  inverse(geomBindTransform))`, with `geomBindTransform` identity for a
+  skin erhe made), the `SkelBindingAPI` on each skinned mesh with
+  `skel:skeleton`, `primvars:skel:jointIndices` / `jointWeights` and
+  `geomBindTransform`, the `SkelRoot` as the typeless prim it was read
+  as, and the joint channels of the animation as a `SkelAnimation` prim
+  under the skeleton with `skel:animationSource` on the skeleton. A file
+  reloaded and saved again is byte-identical (E3 fixed point).
+
+Commits, in order:
+
+1. `erhe::usd` import: `Usd_data::skins`, joint prims, the `Skin`, the
+   joint vertex attributes, the `SkelAnimation` channels. Tests: a
+   `.usda` fixture with a two-joint skeleton, a bound mesh and a
+   `geomBindTransform` whose rest pose differs from its bind pose,
+   asserting joint node placement, `inverse_bind_matrices` and the
+   attribute values; a fixture with a `SkelAnimation` asserting the
+   channels.
+2. Editor: `import_usd` / `open_scene_usd` route `Usd_data::skins`
+   through the attach and `register_skin` path glTF uses and build the
+   skinned meshes with the skinned build info. Verified headless on
+   CarbonFrameBike: `get_node_details` reports the cable meshes skinned,
+   `frame_scene` + `capture_screenshot` against `usdrecord`'s render, and
+   the survey re-run with `--only` on that entry.
+3. Export and the round-trip: the writer's `Skeleton`, `SkelBindingAPI`
+   and `SkelAnimation` output, the E3 `usd-roundtrip` leg gaining a
+   skinned fixture, `usdchecker` passing on it.
+
 ### E2 Material fidelity (M)
 
 What: erhe-only material fields that `UsdPreviewSurface` cannot carry
@@ -503,12 +583,11 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. S1 fixes, in the order the survey lists them
+1. K1 skinning
 2. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
 3. E2 material fidelity
 
-Dependencies: S1, E4b to E4d and E2 need nothing that has not landed;
-the fixes S1 lists are taken up in the order of the assets they block.
+Dependencies: K1, E4b to E4d and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 
@@ -582,9 +661,8 @@ section 3 except where named.
   arbitrary properties, so it pays for itself without USD.
 - Time samples beyond the transform: a time-sampled `xformOp:*` attribute
   is carried as authored and played as an `erhe::scene::Animation`
-  (`src/erhe/usd/notes.md`, "Time samples"), which leaves `UsdSkel`
-  `SkelAnimation` - it would go through the existing skin path - time
-  samples on any other attribute, and `Ts` splines re-encoded as cubic
+  (`src/erhe/usd/notes.md`, "Time samples") and `SkelAnimation` joint
+  channels are K1, which leaves time samples on any other attribute, and `Ts` splines re-encoded as cubic
   samplers. A stack the TRS channels cannot drive keeps its samples and
   its start-time pose and is named in one warning; driving it needs a
   transform channel that composes ops rather than a TRS.
@@ -610,14 +688,6 @@ section 3 except where named.
   prefab reload. Taking it up means walking the attachments in the same
   lockstep the counterpart link uses and giving each an `over` path
   (USD authors an applied schema's attributes on the prim itself).
-- Skinning on load: a `Mesh` with the `SkelBindingAPI` is imported as a
-  plain mesh at its bind position (`SkelRoot` is a `Typed` prim, the
-  `Skeleton` and the primvars are not read), so wherever the skeleton's
-  rest pose differs from its bind pose the mesh sits where USD does not
-  put it. The survey's CarbonFrameBike shows it: its node transform chain
-  matches pxr to every digit, and its four skinned cable meshes are 16 cm
-  off. The mapping's `Skin` row names the schemas; the glTF skin path
-  (`Skin`, joint primvars, `SkelAnimation` as the animation) is the shape.
 - Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
   the `texCoord2f` typing of `UsdUVTexture` `inputs:st`, and a texture
   packed in a `.usdz` written as a path that names no file.
