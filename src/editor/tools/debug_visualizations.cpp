@@ -2410,8 +2410,8 @@ void Debug_visualizations::style_imgui(Property_editor& p, App_context& context,
             );
         }
     });
-    p.add_entry("Bone Width", [&style, &context]() {
-        if (ImGui::DragFloat("##", &style.bone_width_scale, 0.005f, 0.005f, 2.0f, "%.3f")) {
+    p.add_entry("Bone Aspect Ratio", [&style, &context]() {
+        if (ImGui::DragFloat("##", &style.bone_aspect_ratio, 0.005f, 0.005f, 2.0f, "%.3f")) {
             if (context.bone_visualization != nullptr) {
                 context.bone_visualization->apply_style_shape();
             }

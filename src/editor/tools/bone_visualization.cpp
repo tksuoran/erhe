@@ -43,7 +43,11 @@ constexpr float c_ring_position = 0.1f;
 
 // Smallest half-width a bone proxy may have, in world units. A zero-length or
 // hairline bone would otherwise collapse to a degenerate shape that cannot be
-// clicked; picking has to stay possible for every joint.
+// clicked; picking has to stay possible for every joint. The proxy's scale is
+// expressed in the joint's local space, so set_proxy_transform divides this by
+// the joint's world scale: a skeleton under a 100x parent (CarbonFrameBike's
+// armatures) has bones 0.0002 units long locally, and a local-space clamp of
+// 0.002 made every one of them ten times wider than long.
 constexpr float c_min_half_width = 0.002f;
 
 // Unit bone: head at the origin, tail at +Y, square ring at y = c_ring_position
@@ -304,8 +308,8 @@ void Bone_visualization::ensure_primitive()
     // apply_style_shape(), called from the settings UI at the edit.
     {
         const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
-        m_width_scale = style.bone_width_scale;
-        m_solid       = style.bone_solid;
+        m_aspect_ratio = style.bone_aspect_ratio;
+        m_solid        = style.bone_solid;
     }
 
     auto render_geometry   = std::make_shared<erhe::geometry::Geometry>();
@@ -427,18 +431,25 @@ auto Bone_visualization::make_proxy(const std::shared_ptr<erhe::scene::Node>& jo
 void Bone_visualization::set_proxy_transform(Proxy& proxy, const glm::vec3 tail_local)
 {
     const float length = glm::length(tail_local);
-    const float half_width = std::max(m_width_scale * length, c_min_half_width);
+
+    // c_min_half_width is a world-space floor; the proxy is scaled in the
+    // joint's local space, so the floor is brought into that space through
+    // the joint's world scale (the length of one axis of world_from_node).
+    const std::shared_ptr<erhe::scene::Node> joint       = proxy.joint.lock();
+    const float                              world_scale = joint ? glm::length(glm::vec3{joint->world_from_node()[0]}) : 1.0f;
+    const float                              min_local   = (world_scale > 0.0f) ? (c_min_half_width / world_scale) : c_min_half_width;
+    const float                              half_width  = std::max(m_aspect_ratio * length, min_local);
 
     glm::mat4 transform{1.0f};
     if (length > 0.0f) {
         transform = orient_y_to(tail_local / length);
     }
-    transform = glm::scale(transform, glm::vec3{half_width, std::max(length, c_min_half_width), half_width});
+    transform = glm::scale(transform, glm::vec3{half_width, std::max(length, min_local), half_width});
 
     // Head is the joint origin, so the proxy's local translation stays zero.
     proxy.node->set_parent_from_node(transform);
-    proxy.tail_local  = tail_local;
-    proxy.width_scale = m_width_scale;
+    proxy.tail_local   = tail_local;
+    proxy.aspect_ratio = m_aspect_ratio;
 }
 
 void Bone_visualization::refresh_proxy_shape(Proxy& proxy)
@@ -452,7 +463,7 @@ void Bone_visualization::refresh_proxy_shape(Proxy& proxy)
     // is constant, so this is a compare and nothing else; the joint's own
     // animation reaches the proxy through the parent link.
     const glm::vec3 tail_local = bone_tail_in_joint_space(*skin, proxy.joint_index);
-    if ((tail_local != proxy.tail_local) || (m_width_scale != proxy.width_scale)) {
+    if ((tail_local != proxy.tail_local) || (m_aspect_ratio != proxy.aspect_ratio)) {
         set_proxy_transform(proxy, tail_local);
     }
 }
@@ -667,8 +678,8 @@ void Bone_visualization::on_mode_changed()
 void Bone_visualization::apply_style_shape()
 {
     const Debug_visualizations_style& style = m_context.editor_settings->debug_visualizations_style;
-    if (style.bone_width_scale != m_width_scale) {
-        m_width_scale = style.bone_width_scale;
+    if (style.bone_aspect_ratio != m_aspect_ratio) {
+        m_aspect_ratio = style.bone_aspect_ratio;
         for (auto& [joint_ptr, proxy] : m_proxies) {
             refresh_proxy_shape(proxy);
         }

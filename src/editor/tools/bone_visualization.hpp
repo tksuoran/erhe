@@ -92,7 +92,7 @@ public:
     // moment a bone color is edited - not polled per frame.
     void apply_style_colors();
 
-    // Re-read Debug_visualizations_style bone width and solid style. Called
+    // Re-read Debug_visualizations_style bone aspect ratio and solid style. Called
     // from the settings UI at the moment either value is edited (the same
     // pattern as apply_style_colors). Width rebuilds the proxy transforms;
     // solid re-derives visibility. In bone selection mode the proxies are
@@ -125,9 +125,9 @@ private:
         std::shared_ptr<erhe::scene::Node> node      {};
         std::shared_ptr<erhe::scene::Mesh> mesh      {};
         glm::vec3                          tail_local{0.0f}; // shape the transform was built from
-        // Negative sentinel: width is never negative, so a fresh proxy always
+        // Negative sentinel: the ratio is never negative, so a fresh proxy always
         // fails the "shape unchanged" compare and gets its first transform.
-        float                              width_scale{-1.0f};
+        float                              aspect_ratio{-1.0f};
         bool                               selected  {false}; // material currently applied
         bool                               hovered   {false}; // material currently applied
     };
@@ -157,7 +157,7 @@ private:
     std::shared_ptr<erhe::primitive::Material>  m_material         {};
     std::shared_ptr<erhe::primitive::Material>  m_selected_material{};
     std::shared_ptr<erhe::primitive::Material>  m_hover_material   {};
-    float                                      m_width_scale{0.1f};
+    float                                      m_aspect_ratio{0.1f};
     bool                                       m_solid      {false};
     bool                                       m_bone_mode  {false};
 

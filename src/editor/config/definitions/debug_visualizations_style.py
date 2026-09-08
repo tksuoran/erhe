@@ -69,7 +69,7 @@ struct("Debug_visualizations_style",
         # Bone_visualization, which is editor-global (one set of proxies for all
         # scene views), so a per-view copy had the last view to render win.
         field("bone_solid",                        Bool,  added_in=1, default="false", short_desc="Solid Bones", long_desc="Draw skeleton bones as N.V shaded solid octahedra (the pickable bone proxies) instead of lines"),
-        field("bone_width_scale",                  Float, added_in=1, default="0.1f",  short_desc="Bone Width",  long_desc="Bone half-width as a fraction of bone length; also the click target size in bone selection mode"),
+        field("bone_aspect_ratio",                 Float, added_in=1, default="0.1f",  short_desc="Bone Aspect Ratio",  long_desc="Bone half-width as a fraction of bone length, so a short bone is drawn as thin as it is short; also the click target size in bone selection mode"),
         field("skin_bone_xray",                    Bool,  added_in=1, default="true",   short_desc="Skin Bone X-Ray", long_desc="Draw bones occluded by geometry at full strength instead of the dim hidden-line look; bone visibility is then the bone colors' alpha"),
 
         field("mesh_primitive_box_color",          Vec4,  added_in=1, default="0.0f, 0.8f, 1.0f, 1.0f", short_desc="Primitive Box Color"),
