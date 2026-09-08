@@ -534,6 +534,112 @@ void compose_variant_prims(
     layer = std::move(hoisted_layer);
 }
 
+// The absolute paths of the marked `NodeGraph` prims one layer authors
+// (doc/usd-texture-graphs-plan.md 2.1): an erhe texture graph, as opposed to a
+// foreign shading network (R5).
+void collect_node_graph_paths(
+    const std::string&         path,
+    const lightusd::PrimSpec&  spec,
+    std::set<std::string>&     out_paths
+)
+{
+    if (
+        (spec.typeName() == c_node_graph_prim_type_name) &&
+        (spec.props().find(std::string{c_node_graph_format_attribute}) != spec.props().end())
+    ) {
+        out_paths.insert(path);
+        return;
+    }
+    for (const lightusd::PrimSpec& child : spec.children()) {
+        collect_node_graph_paths(path + "/" + child.name(), child, out_paths);
+    }
+}
+
+void collect_node_graph_paths(const lightusd::Layer& layer, std::set<std::string>& out_paths)
+{
+    for (const std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
+        collect_node_graph_paths("/" + entry.first, entry.second, out_paths);
+    }
+}
+
+// Whether a connection target lies inside one of the graphs.
+[[nodiscard]] auto targets_node_graph(
+    const lightusd::Attribute&   attribute,
+    const std::set<std::string>& graph_paths
+) -> bool
+{
+    for (const lightusd::Path& connection : attribute.connections()) {
+        const lightusd::tstring_view prim_part = connection.prim_part();
+        const std::string            target{prim_part.data(), prim_part.size()};
+        for (const std::string& graph_path : graph_paths) {
+            if ((target == graph_path) || (target.compare(0, graph_path.size() + 1, graph_path + "/") == 0)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Take every connection into one of the graphs out of `spec` and its subtree.
+// A `UsdPreviewSurface` input wired to a `NodeGraph` output is what R2 spells,
+// and Tydra's render-scene conversion fails the whole material over it: the
+// connection resolves to no `UsdUVTexture`, which is a hard error there. erhe
+// resolves the graph itself, off the layer this strips a copy of, so the stage
+// Tydra sees carries the graph prims without the wiring and the material takes
+// its schema fallback for that input - which is what the caller then rebinds
+// to the rebuilt graph asset.
+void strip_node_graph_connections(lightusd::PrimSpec& spec, const std::set<std::string>& graph_paths)
+{
+    std::vector<std::string> removed;
+    for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
+        if (property.second.is_attribute() && targets_node_graph(property.second.get_attribute(), graph_paths)) {
+            removed.push_back(property.first);
+        }
+    }
+    for (const std::string& name : removed) {
+        spec.props().erase(name);
+    }
+    for (lightusd::PrimSpec& child : spec.children()) {
+        strip_node_graph_connections(child, graph_paths);
+    }
+}
+
+// Replace `stage` with `layer` stripped of its texture-graph wiring and built
+// into a stage, the way compose_variant_prims replaces it with the hoisted
+// layer. `layer` itself keeps the wiring: it is what the importer reads the
+// graphs and the material slot bindings off. A stage that cannot be built
+// leaves `stage` as it was and is reported.
+void compose_node_graph_stage(
+    const std::filesystem::path& path,
+    const lightusd::Layer&       layer,
+    lightusd::Stage&             stage,
+    const std::set<std::string>& graph_paths,
+    std::string&                 warning
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::string filename = path.generic_string();
+    lightusd::Layer   stripped = layer;
+    for (std::pair<const std::string, lightusd::PrimSpec>& entry : stripped.primspecs()) {
+        strip_node_graph_connections(entry.second, graph_paths);
+    }
+
+    std::string     load_warning;
+    std::string     load_error;
+    lightusd::Stage composed_stage;
+    if (!lightusd::LayerToStage(std::move(stripped), &composed_stage, &load_warning, &load_error)) {
+        log_usd->warn("USD '{}': the texture graph wiring could not be resolved: {}", filename, load_error);
+        warning += load_error;
+        return;
+    }
+    if (!load_warning.empty()) {
+        warning += load_warning;
+        log_usd->warn("USD '{}': texture graphs: {}", filename, load_warning);
+    }
+    stage = std::move(composed_stage);
+}
+
 } // anonymous namespace
 
 auto load_stage(const std::filesystem::path& path) -> Load_stage_result
@@ -612,6 +718,21 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
         }
         if (!impl->variant_prims.empty()) {
             log_usd->info("USD '{}': {} prim(s) of variant blocks are in the tree", filename, impl->variant_prims.size());
+        }
+        // An erhe texture graph is wiring Tydra cannot follow, so the stage it
+        // converts is built without it (doc/usd-texture-graphs-plan.md 2.3).
+        std::set<std::string> node_graph_paths;
+        collect_node_graph_paths(impl->layer, node_graph_paths);
+        if (!node_graph_paths.empty()) {
+            if (path.extension() == ".usdz") {
+                log_usd->warn(
+                    "USD '{}': {} texture graph(s) inside a .usdz archive are not resolved",
+                    filename, node_graph_paths.size()
+                );
+            } else {
+                compose_node_graph_stage(path, impl->layer, impl->stage, node_graph_paths, result.warning);
+                log_usd->info("USD '{}': resolved {} texture graph(s)", filename, node_graph_paths.size());
+            }
         }
     }
 

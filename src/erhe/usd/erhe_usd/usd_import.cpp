@@ -2284,12 +2284,14 @@ private:
             m_material_by_path[usd_material.abs_path] = material_index;
 
             if (usd_material.surfaceShader.has_value()) {
+                const std::string shader_path = find_surface_shader_path(usd_material.abs_path);
                 apply_preview_surface(
                     usd_material.surfaceShader.value(),
-                    find_surface_shader_path(usd_material.abs_path),
+                    shader_path,
                     material_index,
                     *material.get()
                 );
+                read_material_graph_bindings(material_index, shader_path);
             } else {
                 log_usd->warn(
                     "USD material '{}' has no UsdPreviewSurface shader - erhe material defaults are used",
@@ -3498,6 +3500,13 @@ private:
         if (m_brush_paths.count(usd_node.abs_path) != 0) {
             return;
         }
+        // A marked `NodeGraph` prim is a texture graph asset
+        // (doc/usd-texture-graphs-plan.md R1): the caller rebuilds it from the
+        // record, and its `Shader` children are the graph's nodes, so the
+        // whole subtree is left out here.
+        if (m_node_graph_paths.count(usd_node.abs_path) != 0) {
+            return;
+        }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
         // A `Skeleton` prim carries a transform and holds one `Xform` prim
@@ -4507,6 +4516,16 @@ private:
             read_brush_prim(path, spec);
             return;
         }
+        // A marked `NodeGraph` prim is an erhe texture graph
+        // (doc/usd-texture-graphs-plan.md R1): its `Shader` children are the
+        // graph's nodes rather than a shading network of the scene, so the
+        // walk stops here the way it stops at a `Brush` prim. An unmarked
+        // `NodeGraph` is a foreign network and is walked like any other prim
+        // (R5).
+        if ((spec.typeName() == c_node_graph_prim_type_name) && spec_has_node_graph_marker(spec)) {
+            read_node_graph_prim(path, spec);
+            return;
+        }
         record_spec_inherits(path, spec);
         record_spec_variant_sets(path, spec);
         for (const lightusd::PrimSpec& child : spec.children()) {
@@ -4567,6 +4586,271 @@ private:
         record.values        = std::move(other_values);
         record.material_path = read_spec_material_binding(spec);
         m_result.data.brushes.push_back(std::move(record));
+    }
+
+    // Whether a `NodeGraph` prim spec carries the marker that says it is an
+    // erhe texture graph (doc/usd-texture-graphs-plan.md 2.1).
+    [[nodiscard]] static auto spec_has_node_graph_marker(const lightusd::PrimSpec& spec) -> bool
+    {
+        const std::map<std::string, lightusd::Property>::const_iterator i =
+            spec.props().find(std::string{c_node_graph_format_attribute});
+        return (i != spec.props().end()) && i->second.is_attribute();
+    }
+
+    // The scalar text of an attribute exactly as USD spells it, the quotes of
+    // a string or a token kept: what a node parameter travels as
+    // (doc/usd-texture-graphs-plan.md 2.2).
+    [[nodiscard]] static auto attribute_literal(const lightusd::Attribute& attribute) -> std::string
+    {
+        return lightusd::value::pprint_value(attribute.get_var().value_raw());
+    }
+
+    // The same text with a leading and trailing quote removed: the token of
+    // the graph marker and of a node's `info:id`.
+    [[nodiscard]] static auto unquote(const std::string& text) -> std::string
+    {
+        if ((text.size() >= 2) && (text.front() == '"') && (text.back() == '"')) {
+            return text.substr(1, text.size() - 2);
+        }
+        return text;
+    }
+
+    // The node name and output pin one connection names, given the path of
+    // the graph the connection has to stay inside. A connection leaving the
+    // graph is one warning and no link.
+    [[nodiscard]] auto read_node_graph_link(
+        const std::string&                 graph_path,
+        const std::string&                 owner,
+        const std::vector<lightusd::Path>& connections,
+        Usd_node_graph_pin&                pin
+    ) -> bool
+    {
+        if (connections.empty()) {
+            return false;
+        }
+        const lightusd::tstring_view prim_part = connections[0].prim_part();
+        const lightusd::tstring_view prop_part = connections[0].prop_part();
+        const std::string            source_prim{prim_part.data(), prim_part.size()};
+        const std::string            source_prop{prop_part.data(), prop_part.size()};
+        const std::string            prefix = graph_path + "/";
+        if (
+            (source_prim.size() <= prefix.size())                ||
+            (source_prim.compare(0, prefix.size(), prefix) != 0) ||
+            (source_prim.find('/', prefix.size()) != std::string::npos)
+        ) {
+            log_usd->warn(
+                "USD node graph '{}': '{}' connects to '{}', which is no node of the graph - the link is dropped",
+                graph_path, owner, source_prim
+            );
+            return false;
+        }
+        if (source_prop.compare(0, c_node_graph_output_prefix.size(), c_node_graph_output_prefix) != 0) {
+            log_usd->warn(
+                "USD node graph '{}': '{}' connects to '{}', which is no output pin - the link is dropped",
+                graph_path, owner, source_prop
+            );
+            return false;
+        }
+        pin.source_node = source_prim.substr(prefix.size());
+        pin.source_pin  = source_prop.substr(c_node_graph_output_prefix.size());
+        return true;
+    }
+
+    // One `Shader` child of a marked `NodeGraph` as one node of the graph
+    // (doc/usd-texture-graphs-plan.md 2.3). An `inputs:` attribute carrying a
+    // value is a parameter, one carrying a connection or nothing at all is an
+    // input pin, and every `outputs:` attribute is an output pin. A shader
+    // whose `info:id` is not an erhe texture node is one warning and no node.
+    [[nodiscard]] auto read_node_graph_node(
+        const std::string&        graph_path,
+        const lightusd::PrimSpec& spec,
+        Usd_node_graph_node&      node
+    ) -> bool
+    {
+        const std::map<std::string, lightusd::Property>&                props   = spec.props();
+        const std::map<std::string, lightusd::Property>::const_iterator info_id =
+            props.find(std::string{c_node_graph_info_id_attribute});
+        const std::string type_id = ((info_id != props.end()) && info_id->second.is_attribute())
+            ? unquote(attribute_literal(info_id->second.get_attribute()))
+            : std::string{};
+        if (
+            (type_id.size() <= c_node_graph_node_id_prefix.size()) ||
+            (type_id.compare(0, c_node_graph_node_id_prefix.size(), c_node_graph_node_id_prefix) != 0)
+        ) {
+            log_usd->warn(
+                "USD node graph '{}': the Shader '{}' has info:id '{}', which is no erhe texture node - it becomes no node",
+                graph_path, spec.name(), type_id
+            );
+            return false;
+        }
+        node.name      = spec.name();
+        node.type_name = type_id.substr(c_node_graph_node_id_prefix.size());
+        for (const std::pair<const std::string, lightusd::Property>& property : props) {
+            if (!property.second.is_attribute()) {
+                continue;
+            }
+            const std::string&         name      = property.first;
+            const lightusd::Attribute& attribute = property.second.get_attribute();
+            if (name == c_node_graph_position_attribute) {
+                lightusd::value::float2 position{0.0f, 0.0f};
+                if (attribute.get_value<lightusd::value::float2>(&position)) {
+                    node.has_position = true;
+                    node.position_x   = position[0];
+                    node.position_y   = position[1];
+                }
+                continue;
+            }
+            if (name.compare(0, c_node_graph_output_prefix.size(), c_node_graph_output_prefix) == 0) {
+                node.outputs.push_back(
+                    Usd_node_graph_pin{
+                        .name       = name.substr(c_node_graph_output_prefix.size()),
+                        .value_type = attribute.type_name()
+                    }
+                );
+                continue;
+            }
+            if (name.compare(0, c_node_graph_input_prefix.size(), c_node_graph_input_prefix) != 0) {
+                continue;
+            }
+            const std::string pin_name = name.substr(c_node_graph_input_prefix.size());
+            if (attribute.has_value()) {
+                node.parameters.push_back(
+                    Usd_node_graph_parameter{
+                        .name     = pin_name,
+                        .usd_type = attribute.type_name(),
+                        .value    = attribute_literal(attribute)
+                    }
+                );
+                continue;
+            }
+            Usd_node_graph_pin pin{.name = pin_name, .value_type = attribute.type_name()};
+            static_cast<void>(read_node_graph_link(graph_path, spec.name() + "." + name, attribute.connections(), pin));
+            node.inputs.push_back(std::move(pin));
+        }
+        return true;
+    }
+
+    // A link into a node the graph does not hold - a `Shader` the reader
+    // rejected - goes with that node, and an interface output that named it
+    // goes with it too (doc/usd-texture-graphs-plan.md 2.1).
+    static void drop_dangling_node_graph_links(Usd_node_graph& record)
+    {
+        std::set<std::string> node_names;
+        for (const Usd_node_graph_node& node : record.nodes) {
+            node_names.insert(node.name);
+        }
+        for (Usd_node_graph_node& node : record.nodes) {
+            for (Usd_node_graph_pin& pin : node.inputs) {
+                if (!pin.source_node.empty() && (node_names.count(pin.source_node) == 0)) {
+                    pin.source_node.clear();
+                    pin.source_pin.clear();
+                }
+            }
+        }
+        std::vector<Usd_node_graph_pin> outputs;
+        outputs.reserve(record.outputs.size());
+        for (Usd_node_graph_pin& pin : record.outputs) {
+            if (node_names.count(pin.source_node) != 0) {
+                outputs.push_back(std::move(pin));
+            }
+        }
+        record.outputs = std::move(outputs);
+    }
+
+    // One marked `NodeGraph` prim as the record the caller rebuilds the graph
+    // asset from (doc/usd-texture-graphs-plan.md 2.3).
+    void read_node_graph_prim(const std::string& path, const lightusd::PrimSpec& spec)
+    {
+        m_node_graph_paths.insert(path);
+        Usd_node_graph record{};
+        record.stage_path = path;
+        record.name       = spec.name();
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            if (child.typeName() != c_node_graph_shader_prim_type_name) {
+                continue;
+            }
+            Usd_node_graph_node node{};
+            if (read_node_graph_node(path, child, node)) {
+                record.nodes.push_back(std::move(node));
+            }
+        }
+        for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
+            if (!property.second.is_attribute()) {
+                continue;
+            }
+            const std::string&         name      = property.first;
+            const lightusd::Attribute& attribute = property.second.get_attribute();
+            if (name == c_node_graph_format_attribute) {
+                record.format = unquote(attribute_literal(attribute));
+                continue;
+            }
+            if (name.compare(0, c_node_graph_output_prefix.size(), c_node_graph_output_prefix) != 0) {
+                continue;
+            }
+            Usd_node_graph_pin pin{
+                .name       = name.substr(c_node_graph_output_prefix.size()),
+                .value_type = attribute.type_name()
+            };
+            if (read_node_graph_link(path, name, attribute.connections(), pin)) {
+                record.outputs.push_back(std::move(pin));
+            }
+        }
+        drop_dangling_node_graph_links(record);
+        m_result.data.node_graphs.push_back(std::move(record));
+    }
+
+    // The material slots a marked `NodeGraph` feeds
+    // (doc/usd-texture-graphs-plan.md R2). Tydra leaves such a slot unset -
+    // the connection targets no `UsdUVTexture` - so the surface shader's own
+    // prim spec is where the connection is read from.
+    void read_material_graph_bindings(const std::size_t material_index, const std::string& shader_path)
+    {
+        if (shader_path.empty() || m_node_graph_paths.empty()) {
+            return;
+        }
+        const lightusd::PrimSpec* spec = find_layer_primspec(shader_path);
+        if (spec == nullptr) {
+            return;
+        }
+        static constexpr std::pair<std::string_view, Usd_material_texture_slot> inputs[] = {
+            {std::string_view{"inputs:diffuseColor"},  Usd_material_texture_slot::base_color},
+            {std::string_view{"inputs:emissiveColor"}, Usd_material_texture_slot::emissive},
+            {std::string_view{"inputs:normal"},        Usd_material_texture_slot::normal},
+            {std::string_view{"inputs:occlusion"},     Usd_material_texture_slot::occlusion},
+            {std::string_view{"inputs:metallic"},      Usd_material_texture_slot::metallic_roughness},
+            {std::string_view{"inputs:roughness"},     Usd_material_texture_slot::metallic_roughness}
+        };
+        for (const std::pair<std::string_view, Usd_material_texture_slot>& input : inputs) {
+            const std::map<std::string, lightusd::Property>::const_iterator i = spec->props().find(std::string{input.first});
+            if ((i == spec->props().end()) || !i->second.is_attribute()) {
+                continue;
+            }
+            const std::vector<lightusd::Path>& connections = i->second.get_attribute().connections();
+            if (connections.empty()) {
+                continue;
+            }
+            const lightusd::tstring_view prim_part = connections[0].prim_part();
+            const std::string            graph_path{prim_part.data(), prim_part.size()};
+            if (m_node_graph_paths.count(graph_path) == 0) {
+                continue;
+            }
+            bool already_bound = false;
+            for (const Usd_material_graph_binding& binding : m_result.data.material_graph_bindings) {
+                if ((binding.material_index == material_index) && (binding.slot == input.second)) {
+                    already_bound = true;
+                    break;
+                }
+            }
+            if (!already_bound) {
+                m_result.data.material_graph_bindings.push_back(
+                    Usd_material_graph_binding{
+                        .material_index = material_index,
+                        .slot           = input.second,
+                        .graph_path     = graph_path
+                    }
+                );
+            }
+        }
     }
 
     // The absolute path a prim spec's `material:binding` names, empty when the
@@ -5397,6 +5681,11 @@ private:
     // read_layer_composition: what convert_node skips
     // (doc/usd-compatibility-plan.md E4a).
     std::set<std::string>                          m_brush_paths;
+
+    // The absolute path of every marked `NodeGraph` prim of the layer, filled
+    // by read_layer_composition: what the scene conversion stops at, and what
+    // a material connection is recognized as a graph binding by.
+    std::set<std::string>                          m_node_graph_paths;
     // The converted mesh of every `Mesh` prim of the stage, by the prim's
     // absolute path, as an index into Usd_data::meshes: what a brush prim's
     // geometry child is looked up by. Filled by convert_meshes, which runs

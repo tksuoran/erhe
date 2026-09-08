@@ -55,6 +55,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include <set>
@@ -700,6 +701,43 @@ public:
     return attribute;
 }
 
+// A node parameter travels as a (USD type, literal text) pair
+// (doc/usd-texture-graphs-plan.md 2.2), so the writer parses the text back
+// into the value the type names. `text` is USD's own spelling, quotes of a
+// string or a token included.
+[[nodiscard]] auto strip_usd_quotes(const std::string& text) -> std::string
+{
+    if ((text.size() >= 2) && (text.front() == '"') && (text.back() == '"')) {
+        return text.substr(1, text.size() - 2);
+    }
+    return text;
+}
+
+// The components of a USD tuple literal `(a, b, c)`, zero-filled to `count`.
+[[nodiscard]] auto parse_usd_float_tuple(const std::string& text, const std::size_t count) -> std::vector<float>
+{
+    std::vector<float> values(count, 0.0f);
+    std::size_t        index = 0;
+    std::size_t        begin = text.find_first_of("([");
+    begin = (begin == std::string::npos) ? 0 : (begin + 1);
+    while ((index < count) && (begin < text.size())) {
+        const char* const first = text.c_str() + begin;
+        char*             last  = nullptr;
+        const float       value = std::strtof(first, &last);
+        if (last == first) {
+            break;
+        }
+        values[index] = value;
+        ++index;
+        const std::size_t separator = text.find(',', static_cast<std::size_t>(last - text.c_str()));
+        if (separator == std::string::npos) {
+            break;
+        }
+        begin = separator + 1;
+    }
+    return values;
+}
+
 class Exporter final
 {
 public:
@@ -751,6 +789,11 @@ public:
         for (const Usd_save_brush& entry : m_arguments.brushes) {
             if (entry.item) {
                 m_brushes[entry.item.get()] = &entry;
+            }
+        }
+        for (const Usd_save_node_graph& entry : m_arguments.node_graphs) {
+            if (entry.item) {
+                m_node_graphs[entry.item.get()] = &entry;
             }
         }
         for (const Usd_save_point_instancer& entry : m_arguments.point_instancers) {
@@ -1435,6 +1478,57 @@ private:
         }
     }
 
+    // The path of the graph interface output one slot reads, empty when the
+    // slot reads no graph (doc/usd-texture-graphs-plan.md R2). The pin is the
+    // graph's first interface output: that is the value the graph has, and a
+    // graph without one is one warning and no connection.
+    [[nodiscard]] auto find_graph_output(
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot,
+        lightusd::Path&                  out_path
+    ) -> bool
+    {
+        if (m_arguments.material_graph_bindings.empty()) {
+            return false;
+        }
+        const std::map<const erhe::primitive::Material*, std::size_t>::const_iterator index = m_material_indices.find(&material);
+        if (index == m_material_indices.end()) {
+            return false;
+        }
+        for (const Usd_save_material_graph_binding& binding : m_arguments.material_graph_bindings) {
+            if ((binding.material_index != index->second) || (binding.slot != slot) || !binding.graph) {
+                continue;
+            }
+            const std::map<const erhe::Item_base*, std::string>::const_iterator path = m_node_graph_paths.find(binding.graph.get());
+            const std::map<const erhe::Item_base*, const Usd_save_node_graph*>::const_iterator record =
+                m_node_graphs.find(binding.graph.get());
+            if ((path == m_node_graph_paths.end()) || (record == m_node_graphs.end())) {
+                add_warning(
+                    fmt::format(
+                        "material '{}' reads a texture graph that is no prim of the stage - the slot is not connected",
+                        material.get_name()
+                    )
+                );
+                return false;
+            }
+            if (record->second->outputs.empty()) {
+                add_warning(
+                    fmt::format(
+                        "material '{}' reads texture graph '{}', which has no interface output - the slot is not connected",
+                        material.get_name(), binding.graph->get_name()
+                    )
+                );
+                return false;
+            }
+            out_path = lightusd::Path{
+                path->second,
+                std::string{c_node_graph_output_prefix} + record->second->outputs.front().name
+            };
+            return true;
+        }
+        return false;
+    }
+
     template <typename T>
     void connect_texture(
         lightusd::Prim&                  material_prim,
@@ -1445,6 +1539,14 @@ private:
         T&                               input
     )
     {
+        // A slot fed by a texture node graph reads the graph's interface
+        // output; no `UsdUVTexture` is written for it (R2).
+        lightusd::Path graph_output;
+        if (find_graph_output(material, slot, graph_output)) {
+            input.set_connection(graph_output);
+            input.set_value_empty();
+            return;
+        }
         const std::string shader_name = get_texture_shader(material_prim, material_path, material, slot);
         if (shader_name.empty()) {
             return;
@@ -1794,13 +1896,29 @@ private:
         return prim.get_class_type_name() == c_brush_prim_type_name;
     }
 
+    // A texture node graph item (doc/usd-texture-graphs-plan.md), which is a
+    // marked `NodeGraph` prim on the stage. erhe::usd names no editor type
+    // (R6) and a graph carries no class token of its own the way a brush
+    // does, so what makes an item a graph prim is being named in
+    // Usd_save_arguments::node_graphs: the record is both the recognition and
+    // everything the prim holds.
+    [[nodiscard]] auto is_node_graph_prim(const erhe::Typed& prim) const -> bool
+    {
+        return m_node_graphs.find(&prim) != m_node_graphs.end();
+    }
+
     // A resource prim a USD file carries, or a prim on the way down to one.
     // A resource is not content, so this is what widens the content filter;
-    // today the file carries materials, styles and brushes, and plan steps
-    // E4b to E4d add the other kinds.
-    [[nodiscard]] static auto holds_carried_resource(const erhe::Typed& prim) -> bool
+    // today the file carries materials, styles, brushes and texture node
+    // graphs, and plan steps E4b and E4d add the other kinds.
+    [[nodiscard]] auto holds_carried_resource(const erhe::Typed& prim) const -> bool
     {
-        if (erhe::is<erhe::primitive::Material>(&prim) || is_style_prim(prim) || is_brush_prim(prim)) {
+        if (
+            erhe::is<erhe::primitive::Material>(&prim) ||
+            is_style_prim(prim)                        ||
+            is_brush_prim(prim)                        ||
+            is_node_graph_prim(prim)
+        ) {
             return true;
         }
         for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
@@ -1848,6 +1966,9 @@ private:
             if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
                 m_style_paths[prim.item] = prim.path;
             }
+            if ((prim.item != nullptr) && is_node_graph_prim(*prim.item)) {
+                m_node_graph_paths[prim.item] = prim.path;
+            }
             if ((prim.item != nullptr) && (m_skeletons.count(prim.item) != 0)) {
                 m_skeleton_paths[prim.item] = prim.path;
             }
@@ -1868,6 +1989,9 @@ private:
         }
         if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
             m_style_paths[prim.item] = prim.path;
+        }
+        if ((prim.item != nullptr) && is_node_graph_prim(*prim.item)) {
+            m_node_graph_paths[prim.item] = prim.path;
         }
         if ((prim.item != nullptr) && (m_skeletons.count(prim.item) != 0)) {
             m_skeleton_paths[prim.item] = prim.path;
@@ -2580,6 +2704,9 @@ private:
         if (is_brush_prim(*plan_prim.item)) {
             return write_brush_prim(*plan_prim.item, plan_prim.name);
         }
+        if (is_node_graph_prim(*plan_prim.item)) {
+            return write_node_graph_prim(*plan_prim.item, plan_prim.name, plan_prim.path);
+        }
         return erhe::is<erhe::Scope>(plan_prim.item)
             ? write_scope_prim(*plan_prim.item, plan_prim.name)
             : write_typed_prim(*plan_prim.item, plan_prim.name);
@@ -2669,6 +2796,176 @@ private:
         std::string error;
         if (!prim.add_child(write_geometry_mesh_prim(*brush.geometry.get(), std::string{c_brush_geometry_prim_name}), false, &error)) {
             add_warning(fmt::format("the geometry of brush '{}' could not be added: {}", prim_name, error));
+        }
+        return prim;
+    }
+
+    // One node parameter as the attribute its recorded USD type names
+    // (doc/usd-texture-graphs-plan.md 2.2). A type the writer has no USD form
+    // for is one warning and a `string` carrying the text as it stands, which
+    // is the same rule a gradient or a curve travels by.
+    [[nodiscard]] auto make_node_graph_attribute(
+        const std::string& usd_type,
+        const std::string& text,
+        const std::string& owner
+    ) -> lightusd::Attribute
+    {
+        lightusd::Attribute attribute;
+        if (usd_type == "float") {
+            attribute.set_value(std::strtof(text.c_str(), nullptr));
+        } else if (usd_type == "int") {
+            attribute.set_value(static_cast<std::int32_t>(std::strtol(text.c_str(), nullptr, 10)));
+        } else if (usd_type == "bool") {
+            attribute.set_value((text == "true") || (text == "1"));
+        } else if (usd_type == "token") {
+            attribute.set_value(lightusd::value::token{strip_usd_quotes(text)});
+        } else if (usd_type == "float2") {
+            const std::vector<float> v = parse_usd_float_tuple(text, 2);
+            attribute.set_value(lightusd::value::float2{v[0], v[1]});
+        } else if (usd_type == "color3f") {
+            const std::vector<float> v = parse_usd_float_tuple(text, 3);
+            attribute.set_value(lightusd::value::color3f{v[0], v[1], v[2]});
+        } else if (usd_type == "color4f") {
+            const std::vector<float> v = parse_usd_float_tuple(text, 4);
+            attribute.set_value(lightusd::value::color4f{v[0], v[1], v[2], v[3]});
+        } else {
+            if (usd_type != "string") {
+                add_warning(
+                    fmt::format("'{}' has no USD form for type '{}' - it is written as a string", owner, usd_type)
+                );
+            }
+            attribute.set_value(strip_usd_quotes(text));
+        }
+        return attribute;
+    }
+
+    // One pin as the `inputs:` / `outputs:` attribute it is: the pin's value
+    // type, and a `.connect` to the source node's output when the pin carries
+    // a link. An unlinked pin is the typed attribute alone, so the pin exists
+    // in the file (doc/usd-texture-graphs-plan.md 2.1).
+    [[nodiscard]] static auto make_node_graph_pin_attribute(
+        const Usd_node_graph_pin&                   pin,
+        const std::string&                          graph_path,
+        const std::map<std::string, std::string>&   node_prim_names
+    ) -> lightusd::Attribute
+    {
+        lightusd::Attribute attribute;
+        attribute.set_type_name(pin.value_type);
+        if (pin.source_node.empty()) {
+            return attribute;
+        }
+        const std::map<std::string, std::string>::const_iterator i = node_prim_names.find(pin.source_node);
+        if (i == node_prim_names.end()) {
+            return attribute;
+        }
+        attribute.set_connection(
+            lightusd::Path{
+                graph_path + "/" + i->second,
+                std::string{c_node_graph_output_prefix} + pin.source_pin
+            }
+        );
+        return attribute;
+    }
+
+    // One node of a graph as the generic `Shader` prim it is: `info:id` the
+    // node's type name under the `erhe:texture:` prefix, the editor position
+    // as one custom attribute, and the parameters and pins as its
+    // `inputs:` / `outputs:` properties.
+    [[nodiscard]] auto write_node_graph_node_prim(
+        const Usd_node_graph_node&                node,
+        const std::string&                        prim_name,
+        const std::string&                        graph_path,
+        const std::map<std::string, std::string>& node_prim_names
+    ) -> lightusd::Prim
+    {
+        lightusd::ShaderNode shader_node;
+        if (node.has_position) {
+            lightusd::Attribute position;
+            position.set_value(lightusd::value::float2{node.position_x, node.position_y});
+            shader_node.props.emplace(
+                std::string{c_node_graph_position_attribute},
+                lightusd::Property{std::move(position), true}
+            );
+        }
+        for (const Usd_node_graph_parameter& parameter : node.parameters) {
+            const std::string name = std::string{c_node_graph_input_prefix} + parameter.name;
+            shader_node.props.emplace(
+                name,
+                lightusd::Property{make_node_graph_attribute(parameter.usd_type, parameter.value, prim_name + "." + name), false}
+            );
+        }
+        for (const Usd_node_graph_pin& pin : node.inputs) {
+            shader_node.props.emplace(
+                std::string{c_node_graph_input_prefix} + pin.name,
+                lightusd::Property{make_node_graph_pin_attribute(pin, graph_path, node_prim_names), false}
+            );
+        }
+        for (const Usd_node_graph_pin& pin : node.outputs) {
+            lightusd::Attribute attribute;
+            attribute.set_type_name(pin.value_type);
+            shader_node.props.emplace(
+                std::string{c_node_graph_output_prefix} + pin.name,
+                lightusd::Property{std::move(attribute), false}
+            );
+        }
+
+        lightusd::Shader shader;
+        shader.name    = prim_name;
+        shader.info_id = std::string{c_node_graph_node_id_prefix} + node.type_name;
+        shader.value   = std::move(shader_node);
+        return lightusd::Prim{shader};
+    }
+
+    // A texture graph asset as the marked `NodeGraph` prim it is
+    // (doc/usd-texture-graphs-plan.md 2.4): the marker attribute, the
+    // interface outputs as connections into the nodes, and one generic
+    // `Shader` child per node, in the record's order so a second save spells
+    // the same file (R4).
+    [[nodiscard]] auto write_node_graph_prim(
+        const erhe::Typed& item,
+        const std::string& prim_name,
+        const std::string& prim_path
+    ) -> lightusd::Prim
+    {
+        const std::map<const erhe::Item_base*, const Usd_save_node_graph*>::const_iterator i = m_node_graphs.find(&item);
+        const Usd_save_node_graph& record = *i->second;
+
+        // The node prim names: the node name by the identifier rule, made
+        // sibling-unique by the M2 rule the writer uses everywhere.
+        Name_scope                         node_names;
+        std::map<std::string, std::string> node_prim_names;
+        std::vector<std::string>           prim_names;
+        prim_names.reserve(record.nodes.size());
+        for (const Usd_node_graph_node& node : record.nodes) {
+            const std::string name = node_names.make_unique(node.name);
+            prim_names.push_back(name);
+            node_prim_names[node.name] = name;
+        }
+
+        lightusd::NodeGraph graph;
+        graph.name = prim_name;
+        lightusd::Attribute format;
+        format.set_value(lightusd::value::token{record.format});
+        graph.props.emplace(std::string{c_node_graph_format_attribute}, lightusd::Property{std::move(format), true});
+        for (const Usd_node_graph_pin& output : record.outputs) {
+            graph.props.emplace(
+                std::string{c_node_graph_output_prefix} + output.name,
+                lightusd::Property{make_node_graph_pin_attribute(output, prim_path, node_prim_names), false}
+            );
+        }
+
+        lightusd::Prim prim{graph};
+        for (std::size_t index = 0, end = record.nodes.size(); index < end; ++index) {
+            std::string error;
+            if (
+                !prim.add_child(
+                    write_node_graph_node_prim(record.nodes[index], prim_names[index], prim_path, node_prim_names),
+                    false,
+                    &error
+                )
+            ) {
+                add_warning(fmt::format("node '{}' of graph '{}' could not be added: {}", prim_names[index], prim_name, error));
+            }
         }
         return prim;
     }
@@ -4094,6 +4391,11 @@ private:
     // What every brush prim of the tree holds, by the item the caller named
     // (doc/usd-compatibility-plan.md E4a).
     std::map<const erhe::Item_base*, const Usd_save_brush*>                  m_brushes;
+
+    // What every texture node graph prim of the tree holds, by the item the
+    // caller named, and where each one landed on the stage.
+    std::map<const erhe::Item_base*, const Usd_save_node_graph*>             m_node_graphs;
+    std::map<const erhe::Item_base*, std::string>                           m_node_graph_paths;
     // The point instancers of the scene, and the prims that are their
     // expansion (doc/usd-compatibility-plan.md S1): an instance prim is not
     // planned, and an instancer reads its instances' transforms back out of

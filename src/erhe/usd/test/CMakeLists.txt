@@ -18,6 +18,7 @@ add_executable(${_target}
     test_usd_export.cpp
     test_usd_import.cpp
     test_usd_materials.cpp
+    test_usd_node_graphs.cpp
     test_usd_primitives.cpp
     test_usd_point_instancers.cpp
     test_usd_prims.cpp

@@ -1,0 +1,92 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Graph_Textures"
+    {
+        def NodeGraph "Rust"
+        {
+            custom token erhe:graph:format = "erhe_texture_graph"
+            color3f outputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>
+
+            def Shader "Noise"
+            {
+                uniform token info:id = "erhe:texture:noise"
+                custom float2 erhe:ui:position = (120, 40)
+                int inputs:octaves = 3
+                float inputs:scale = 4
+                float outputs:grayscale
+            }
+
+            def Shader "Colorize"
+            {
+                uniform token info:id = "erhe:texture:colorize"
+                custom float2 erhe:ui:position = (320, 40)
+                string inputs:gradient = "0 (0, 0, 0) 1 (1, 0.5, 0.2)"
+                float inputs:value.connect = </World/Graph_Textures/Rust/Noise.outputs:grayscale>
+                color3f outputs:rgb
+            }
+
+            def Shader "Output"
+            {
+                uniform token info:id = "erhe:texture:output"
+                custom float2 erhe:ui:position = (520, 40)
+                color3f inputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>
+            }
+        }
+
+        def NodeGraph "Mixed"
+        {
+            custom token erhe:graph:format = "erhe_texture_graph"
+            color3f outputs:rgb.connect = </World/Graph_Textures/Mixed/Constant.outputs:rgb>
+
+            def Shader "Alien"
+            {
+                uniform token info:id = "UsdUVTexture"
+                float outputs:r
+            }
+
+            def Shader "Constant"
+            {
+                uniform token info:id = "erhe:texture:constant"
+                custom float2 erhe:ui:position = (80, 80)
+                float inputs:amount.connect = </World/Graph_Textures/Mixed/Alien.outputs:r>
+                color3f outputs:rgb
+            }
+        }
+
+        def NodeGraph "Foreign"
+        {
+            color3f outputs:rgb
+        }
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Iron"
+        {
+            token outputs:surface.connect = </World/Looks/Iron/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgb>
+                token outputs:surface
+            }
+        }
+    }
+
+    def Mesh "Plane"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        rel material:binding = </World/Looks/Iron>
+    }
+}

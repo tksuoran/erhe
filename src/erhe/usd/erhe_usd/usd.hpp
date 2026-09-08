@@ -409,6 +409,88 @@ public:
     std::vector<erhe::scene::Instance_override_value> values;
 };
 
+// One pin of a texture node graph (doc/usd-texture-graphs-plan.md 2.2). A pin
+// is an `inputs:<name>` / `outputs:<name>` attribute of a `Shader` prim, and
+// the graph's interface outputs have the same shape. `source_node` and
+// `source_pin` name the link into an input pin - the source node's name below
+// the graph and the output pin of it the connection targets - and are empty
+// when the pin carries no link.
+class Usd_node_graph_pin final
+{
+public:
+    std::string name;
+    // The USD value type of the pin: `float`, `color3f` or `color4f`.
+    std::string value_type;
+    std::string source_node;
+    std::string source_pin;
+};
+
+// One parameter of a texture graph node: an `inputs:<name>` attribute
+// carrying a value. `usd_type` is one of `float`, `int`, `bool`, `token`,
+// `string`, `float2`, `color3f`, `color4f`, and `value` is the USD literal
+// spelling of the value in that type (`1.5`, `3`, `true`, `"name"`,
+// `(1, 2)`, `(0.1, 0.2, 0.3)`). A type with no USD form - a gradient, a
+// curve - travels as its D16 text in a `string`, which is one rule for both:
+// erhe::usd needs no node vocabulary (R6), so the caller decides the mapping
+// and the writer authors exactly the (type, text) pair it is given.
+class Usd_node_graph_parameter final
+{
+public:
+    std::string name;
+    std::string usd_type;
+    std::string value;
+};
+
+// One node of a texture node graph: a `Shader` child of the `NodeGraph` prim.
+// `type_name` is the `info:id` with the `erhe:texture:` prefix stripped, which
+// is the factory type name the caller makes the node with.
+class Usd_node_graph_node final
+{
+public:
+    std::string                           name;
+    std::string                           type_name;
+    // The `erhe:ui:position` of the node in the graph editor, present exactly
+    // when the prim authors the attribute.
+    bool                                  has_position{false};
+    float                                 position_x  {0.0f};
+    float                                 position_y  {0.0f};
+    std::vector<Usd_node_graph_parameter> parameters;
+    std::vector<Usd_node_graph_pin>       inputs;
+    std::vector<Usd_node_graph_pin>       outputs;
+};
+
+// One texture node graph a USD file carries as a `NodeGraph` prim marked with
+// `erhe:graph:format` (doc/usd-texture-graphs-plan.md R1). erhe::usd creates
+// no item - the caller rebuilds the graph asset from this record, as it makes
+// the Brush of a `Brush` prim - and a `NodeGraph` without the marker is left
+// to the material conversion (R5).
+class Usd_node_graph final
+{
+public:
+    std::string                        stage_path;
+    std::string                        name;
+    // The `erhe:graph:format` token: which kind of graph this is, spelled the
+    // way the glTF `ERHE_node_graphs` `format` field spells it.
+    std::string                        format;
+    // The graph's interface outputs, each connected to an output pin of one
+    // of its nodes: the value a material slot can name (R2).
+    std::vector<Usd_node_graph_pin>    outputs;
+    std::vector<Usd_node_graph_node>   nodes;
+};
+
+// A material slot fed by a texture node graph instead of by an image
+// (doc/usd-texture-graphs-plan.md R2): the material's own `UsdPreviewSurface`
+// input connects to the marked `NodeGraph`'s interface output. The keying is
+// the one Usd_material_texture_binding uses; `graph_path` is the stage path of
+// the `NodeGraph` prim, which is the `Usd_node_graph` of that path.
+class Usd_material_graph_binding final
+{
+public:
+    std::size_t               material_index{0};
+    Usd_material_texture_slot slot          {Usd_material_texture_slot::base_color};
+    std::string               graph_path;
+};
+
 // One `DomeLight` prim the file authors. erhe has no environment map, so a
 // dome is imported as the scene's ambient light
 // (`color * intensity * 2^exposure`, see Usd_data::ambient_light) and the
@@ -509,6 +591,17 @@ public:
     // scene content, and the caller makes one Brush item per record at the
     // path the prim has.
     std::vector<Usd_brush_prim>                             brushes;
+    // The marked `NodeGraph` prims of the composed layer, in the order the
+    // layer spells them (doc/usd-texture-graphs-plan.md R1). A graph prim is
+    // never a prim of the lists above: the conversion stops at it, so its
+    // `Shader` children are no scene content, and the caller rebuilds one
+    // graph asset per record at the path the prim has.
+    std::vector<Usd_node_graph>                             node_graphs;
+    // Which material slot reads which graph (R2), keyed the way
+    // `material_texture_bindings` is keyed. The slot is left unset by the
+    // material conversion - the connection targets no `UsdUVTexture` - and
+    // the caller binds it to the graph it rebuilt.
+    std::vector<Usd_material_graph_binding>                 material_graph_bindings;
 
     // Stage constants the import consumed (see load_usd): the up axis and
     // metersPerUnit are applied to the top-level nodes as a root transform,
@@ -724,6 +817,39 @@ public:
     std::shared_ptr<const erhe::primitive::Material> material;
 };
 
+// One texture node graph of the scene the writer authors as a marked
+// `NodeGraph` prim (doc/usd-texture-graphs-plan.md 2.4). erhe::usd names no
+// editor type (R6), so the caller hands the graph over as a neutral record:
+// `item` is the graph asset prim itself, whose place in the tree decides where
+// the `NodeGraph` prim goes, and the rest is what the prim carries. Being
+// named here is what makes the item a graph prim to the writer, so a graph the
+// caller does not list is written as the plain prim its class says it is.
+class Usd_save_node_graph final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    // The `erhe:graph:format` marker token.
+    std::string                            format;
+    std::vector<Usd_node_graph_pin>        outputs;
+    // The nodes in the order they are written, which is the order a reload
+    // reads them back in (R4).
+    std::vector<Usd_node_graph_node>       nodes;
+};
+
+// One material slot the writer feeds from a texture node graph instead of
+// from an image (doc/usd-texture-graphs-plan.md R2): the slot's
+// `UsdPreviewSurface` input is connected to the graph's first interface
+// output and no `UsdUVTexture` is written for it. The keying is the one
+// Usd_save_texture uses, and `graph` is the item of the Usd_save_node_graph
+// entry the connection names.
+class Usd_save_material_graph_binding final
+{
+public:
+    std::size_t                            material_index{0};
+    Usd_material_texture_slot              slot          {Usd_material_texture_slot::base_color};
+    std::shared_ptr<const erhe::Item_base> graph;
+};
+
 // One instance prim of a point instancer the writer is handed
 // (doc/usd-compatibility-plan.md S1): the prim, and which of the instancer's
 // prototypes it instances - the index into the prototypes the writer names in
@@ -787,6 +913,11 @@ public:
     std::vector<Usd_save_variant_set>                       variant_sets;
     // The brushes the scene's tree holds, one entry per brush prim.
     std::vector<Usd_save_brush>                             brushes;
+    // The texture node graphs the scene's tree holds, one entry per graph
+    // asset prim (doc/usd-texture-graphs-plan.md).
+    std::vector<Usd_save_node_graph>                        node_graphs;
+    // The material slots fed by one of those graphs.
+    std::vector<Usd_save_material_graph_binding>            material_graph_bindings;
     // The scene's animations (doc/usd-compatibility-plan.md K1). The writer
     // takes the channels of them that drive a joint prim of a skeleton it
     // writes and authors those as that skeleton's `SkelAnimation` prim; every

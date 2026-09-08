@@ -556,6 +556,65 @@ the prim becomes no `Typed` item; a `Brush` prim without a `geometry` child is
 one warning and no brush record. `erhe::usd` creates no item: the caller makes
 the editor Brush at the path the prim has.
 
+### Texture node graphs
+
+A texture graph is a `NodeGraph` prim carrying the custom attribute
+`erhe:graph:format`, which is the marker that says the network is erhe's
+(doc/usd-texture-graphs-plan.md). A `NodeGraph` without it is a foreign
+shading network and is left to the material conversion. Each node of the graph
+is a generic `Shader` child whose `info:id` is `erhe:texture:<type name>` -
+the factory type name the caller makes the node with - carrying its editor
+position as `custom float2 erhe:ui:position`, and each link is an attribute
+connection. The spellings are `usd_impl.hpp` constants, which the reader and
+the writer share.
+
+- The `inputs:` / `outputs:` properties of a node are read by one rule: an
+  `inputs:` attribute carrying a value is a parameter, an `inputs:` attribute
+  carrying a connection or nothing at all is an input pin, and every
+  `outputs:` attribute is an output pin. So a pin without a link is still in
+  the file, as the typed attribute alone.
+- A parameter travels as its USD type and the USD literal spelling of its
+  value (`float` `1.5`, `int` `3`, `bool` `true`, `token` / `string`
+  `"name"`, `float2` `(1, 2)`, `color3f` / `color4f`). `erhe::usd` knows no
+  node vocabulary: the caller decides which USD type a parameter takes, and
+  the writer authors exactly the (type, text) pair it is handed. A value with
+  no USD form - a gradient, a curve - travels as its text in a `string`, one
+  rule for both.
+- The graph's own `outputs:<pin>` connections are its interface outputs: the
+  value a material can name. A `UsdPreviewSurface` input connected to one is
+  recorded in `Usd_data::material_graph_bindings` as (material, slot, graph
+  path), keyed the way a texture binding is, and the writer connects a slot
+  named in `Usd_save_arguments::material_graph_bindings` to the graph's first
+  interface output instead of writing a `UsdUVTexture` for it. The baked image
+  is not written: a graph loads born dirty and the first evaluation re-bakes
+  it.
+- The same composed-layer walk that takes the class prims records a marked
+  `NodeGraph` into `Usd_data::node_graphs`, and the scene conversion stops at
+  the prim the way it stops at a `Brush` prim, so no node becomes a scene prim.
+  A `Shader` child whose `info:id` is not under the `erhe:texture:` prefix is
+  one warning and no node, and the links into it are dropped with it, as is a
+  connection that leaves the graph.
+- Tydra's render-scene conversion fails a whole material over a
+  `UsdPreviewSurface` input whose connection resolves to no `UsdUVTexture`, so
+  the stage it converts is built without that wiring: `load_stage` strips every
+  connection into a marked graph from a copy of the composed layer and builds
+  the stage from that copy (`compose_node_graph_stage`), while the kept layer
+  - which is what the graphs and the slot bindings are read off - keeps it.
+  The material then takes its schema fallback for the stripped input, and the
+  caller binds the slot to the rebuilt graph asset. A graph inside a `.usdz`
+  archive is not resolved that way, for the reason a sublayer inside one is
+  not composed, and is named in one warning. The strip is a downstream
+  answer to a LightUSD limit: once the `tksuoran/LightUSD` fork's Tydra
+  leaves an input whose connection is no `UsdUVTexture` unset instead of
+  failing the material, `compose_node_graph_stage` goes and the stage is
+  built from the composed layer as it stands (future work).
+- `erhe::usd` creates no graph asset: the caller rebuilds it from the record,
+  and hands the writer one `Usd_save_node_graph` per graph prim. Being named
+  in that list is what makes an item a graph prim to the writer - a graph
+  carries no class token of its own, the way a brush does - and the node prims
+  are named by the identifier rule and the M2 sibling-unique rule, in the
+  record's order, so a second save spells the same file.
+
 ### Variant sets
 
 A variant set is resolved in composition, and LightUSD composes nothing, so a
