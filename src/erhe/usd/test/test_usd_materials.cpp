@@ -169,6 +169,24 @@ TEST_F(Looks_round_trip, material_prims_are_written_where_they_sit)
     EXPECT_NE(material_at(reloaded_root, "World/Other/Shared"), nullptr);
 }
 
+// A prim that binds a material applies the MaterialBindingAPI: the three
+// bound panels each carry the applied schema next to their relationship
+// (usdchecker's MaterialBindingAPIAppliedChecker fails one without it).
+TEST_F(Looks_round_trip, every_bound_prim_applies_the_material_binding_api)
+{
+    const std::string written = read_file(written_path);
+    std::size_t binding_count = 0;
+    std::size_t applied_count = 0;
+    for (std::size_t at = written.find("rel material:binding"); at != std::string::npos; at = written.find("rel material:binding", at + 1)) {
+        ++binding_count;
+    }
+    for (std::size_t at = written.find("apiSchemas = [\"MaterialBindingAPI\"]"); at != std::string::npos; at = written.find("apiSchemas = [\"MaterialBindingAPI\"]", at + 1)) {
+        ++applied_count;
+    }
+    EXPECT_EQ(binding_count, 3u) << written;
+    EXPECT_EQ(applied_count, binding_count) << written;
+}
+
 TEST_F(Looks_round_trip, bindings_survive_the_round_trip)
 {
     erhe::primitive::Material* looks_shared = material_at(reloaded_root, "World/Looks/Shared");

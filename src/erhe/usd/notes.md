@@ -751,7 +751,13 @@ because the same spelling rule decides what an item is called on a stage.
   with one primitive binds its material directly; several primitives become
   one `materialBind` `GeomSubset` each, over the concatenated `points` /
   `faceVertexCounts` / `faceVertexIndices` of every primitive, with the
-  primvars written `faceVarying`. `subdivisionScheme` is always `none`: the
+  primvars written `faceVarying`. Every prim the writer gives a
+  `material:binding` - a mesh, a subset, a brush, an `over`, a variant block -
+  also applies the `MaterialBindingAPI` in its `apiSchemas`
+  (`apply_material_binding_api`, called wherever `bind_material` /
+  `add_material_binding` reports a binding written): usdchecker's
+  `MaterialBindingAPIAppliedChecker` fails a prim that has the relationship
+  without the applied schema. `subdivisionScheme` is always `none`: the
   authored polygons are the mesh. A material is written as a `Material` prim
   where the material sits in the scene tree, holding its
   `UsdPreviewSurface` `Shader`, one `UsdUVTexture` shader per bound slot and
@@ -1032,6 +1038,25 @@ renders the repository ships beside the asset, and a verdict per asset, with
 the gaps that list orders by how many assets each affects;
 `scripts/usd_wg_asset_survey.py` regenerates it against a local clone.
 
+The OpenUSD binary distribution (NVIDIA's pre-built OpenUSD, unpacked to a
+folder the docs call `<usd_root>`, its wrappers under `<usd_root>/scripts/`)
+is the reference implementation to compare against, and every tool below
+runs headless on Windows:
+
+- `usdrecord.bat <file> <out.png>` renders the composed stage with Storm
+  (skinning, instancing and variants applied), which is the reference image
+  for an asset that ships none, and the image a capture is compared with
+  when the shipped screenshot was made from another version of the file.
+- `usdchecker.bat <file>` validates a file erhe wrote; the round-trip script
+  runs it when `ERHE_USDCHECKER` names the wrapper.
+- `set_usd_env.bat && python <script.py>` runs a script against the `pxr`
+  module: `UsdGeom.XformCache` gives every prim's local and world matrix,
+  `UsdSkel.Cache` / `SkinningQuery.ComputeSkinnedPoints` the skinned
+  points, which is how a "wrong transform" report is split into the node
+  chain (compare per prim with `get_node_details`) and the deformation.
+- `usdtree.bat`, `usdcat.bat` (also `.usdz` and `.usdc` to text),
+  `usddiff.bat` and `usdview.bat` for the rest.
+
 ## Configurations
 
 `scripts\configure_ninja_win_vulkan.bat`, `scripts\configure_ninja_win_clang.bat`
@@ -1198,6 +1223,15 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   bare name against a node, so such a value does not come back.
 - A camera's `infinite_z_far` has no USD form; the finite `clippingRange` is
   written and one warning says so.
+- usdchecker on a written file reports two things the writer still does:
+  `UsdUVTexture` `inputs:st` is typed `texCoord2f` where the schema says
+  `float2` (LightUSD's `UsdUVTexture::st` member is a `texcoord2f`
+  attribute, so the spelling is the dependency's and a fork change fixes it),
+  and a texture that came out of a `.usdz` archive is written with the path
+  the archive authored, resolved against the written file's directory,
+  which names no file on disk (`MissingReferenceChecker`); writing such a
+  scene needs the packed bytes extracted next to the file, or the
+  `archive.usdz[entry]` form.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
 - The Quest launch with the option on - the editor coming up on the headset

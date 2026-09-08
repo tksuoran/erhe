@@ -1403,21 +1403,24 @@ private:
         input.set_value_empty();
     }
 
-    void bind_material(lightusd::MaterialBinding& binding, const erhe::primitive::Material* material)
+    // Returns whether a binding was written; the caller then applies the
+    // MaterialBindingAPI on the prim (apply_material_binding_api).
+    [[nodiscard]] auto bind_material(lightusd::MaterialBinding& binding, const erhe::primitive::Material* material) -> bool
     {
         if (material == nullptr) {
-            return;
+            return false;
         }
         const std::map<const erhe::primitive::Material*, std::string>::const_iterator i = m_material_paths.find(material);
         if (i == m_material_paths.end()) {
             add_warning(
                 fmt::format("material '{}' is used but was not offered to the writer - the binding is dropped", material->get_name())
             );
-            return;
+            return false;
         }
         lightusd::Relationship relationship;
         relationship.set(lightusd::Path{i->second, ""});
         binding.set_materialBinding(relationship);
+        return true;
     }
 
     // -------------------------------------------------------------------
@@ -2020,15 +2023,10 @@ private:
                 write_override_xform_ops(*override_prim.item, model.props);
             }
         }
-        if (override_prim.material != nullptr) {
-            add_material_binding(model.props, *override_prim.material);
-        }
+        const bool override_bound = (override_prim.material != nullptr) && add_material_binding(model.props, *override_prim.material);
         lightusd::Prim prim{model};
-        if (override_prim.material != nullptr) {
-            // A prim that binds a material applies the MaterialBindingAPI:
-            // the relationship alone is what USD reads, and the applied
-            // schema is what says the prim carries one.
-            apply_api_schema(prim, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
+        if (override_bound) {
+            apply_material_binding_api(prim);
         }
         for (const Override_prim& child : override_prim.children) {
             std::string error;
@@ -2284,7 +2282,9 @@ private:
                 continue;
             }
             if (binding.relative_path.empty()) {
-                add_material_binding(usd_variant.properties(), *binding.material.get());
+                if (add_material_binding(usd_variant.properties(), *binding.material.get())) {
+                    apply_material_binding_api(usd_variant.metas());
+                }
                 continue;
             }
             Variant_prim* const prim = find_or_add_variant_path(tree, binding.relative_path);
@@ -2322,10 +2322,11 @@ private:
         if (variant_prim.override_entry != nullptr) {
             write_variant_values(*variant_prim.override_entry, model.props, model.meta);
         }
-        if (variant_prim.material != nullptr) {
-            add_material_binding(model.props, *variant_prim.material);
-        }
+        const bool variant_bound = (variant_prim.material != nullptr) && add_material_binding(model.props, *variant_prim.material);
         lightusd::Prim prim{model};
+        if (variant_bound) {
+            apply_material_binding_api(prim);
+        }
         for (const Variant_prim& child : variant_prim.children) {
             std::string error;
             if (!prim.add_child(write_variant_prim(child), false, &error)) {
@@ -2337,18 +2338,33 @@ private:
 
     // `rel material:binding = </path>`, by the path the writer gave the
     // material's prim - the same path a mesh's own binding names (U4 2g).
-    void add_material_binding(std::map<std::string, lightusd::Property>& props, const erhe::primitive::Material& material)
+    [[nodiscard]] auto add_material_binding(std::map<std::string, lightusd::Property>& props, const erhe::primitive::Material& material) -> bool
     {
         const std::map<const erhe::primitive::Material*, std::string>::const_iterator i = m_material_paths.find(&material);
         if (i == m_material_paths.end()) {
             add_warning(
                 fmt::format("material '{}' is bound by a variant but was not written - the binding is dropped", material.get_name())
             );
-            return;
+            return false;
         }
         lightusd::Relationship relationship;
         relationship.set(lightusd::Path{i->second, ""});
         props.emplace("material:binding", lightusd::Property{std::move(relationship), false});
+        return true;
+    }
+
+    // A prim that binds a material applies the MaterialBindingAPI: the
+    // relationship alone is what USD reads, and the applied schema is what
+    // says the prim carries one (usdchecker's MaterialBindingAPIAppliedChecker
+    // fails a prim that has the one without the other).
+    static void apply_material_binding_api(lightusd::PrimMeta& meta)
+    {
+        apply_api_schema(meta, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
+    }
+
+    static void apply_material_binding_api(lightusd::Prim& prim)
+    {
+        apply_material_binding_api(prim.metas());
     }
 
     // The property opinions of one override entry, in the form a typeless
@@ -2566,11 +2582,12 @@ private:
             normal_style.set_value(lightusd::value::token{brush.normal_style});
             model.props.emplace(std::string{c_brush_normal_style_attribute}, lightusd::Property{std::move(normal_style), true});
         }
-        if (brush.material) {
-            add_material_binding(model.props, *brush.material.get());
-        }
+        const bool brush_bound = brush.material && add_material_binding(model.props, *brush.material.get());
 
         lightusd::Prim prim{model};
+        if (brush_bound) {
+            apply_material_binding_api(prim);
+        }
         if (!brush.geometry) {
             add_warning(fmt::format("brush '{}' has no geometry - the prim is written without its Mesh child", prim_name));
             return prim;
@@ -2619,9 +2636,6 @@ private:
             light           ? write_light_prim          (node, *light.get(),  prim_name, matrix, override_root) :
             point_instancer ? write_point_instancer_prim(plan_prim,           prim_name, matrix, override_root) :
                               write_xform_prim          (node,                prim_name, matrix, override_root);
-        if (override_root.material != nullptr) {
-            apply_api_schema(prim, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
-        }
         return prim;
     }
 
@@ -2801,7 +2815,9 @@ private:
     {
         if (override_root.material != nullptr) {
             if constexpr (std::is_base_of_v<lightusd::MaterialBinding, T>) {
-                bind_material(typed_prim, override_root.material);
+                if (bind_material(typed_prim, override_root.material)) {
+                    apply_material_binding_api(typed_prim.meta);
+                }
             } else {
                 add_warning(
                     fmt::format(
@@ -3148,10 +3164,11 @@ private:
         // One primitive needs no subset: the importer's remainder group is
         // the whole mesh and reproduces it. Several primitives become one
         // materialBind GeomSubset each.
-        if (groups.size() == 1) {
-            bind_material(geom_mesh, groups.front().material);
-        }
+        const bool mesh_bound = (groups.size() == 1) && bind_material(geom_mesh, groups.front().material);
         lightusd::Prim prim{geom_mesh};
+        if (mesh_bound) {
+            apply_material_binding_api(prim);
+        }
         if (groups.size() > 1) {
             Name_scope subset_names;
             for (const Facet_group& group : groups) {
@@ -3165,9 +3182,13 @@ private:
                     indices.push_back(group.first_facet + facet);
                 }
                 subset.indices.set_value(std::move(indices));
-                bind_material(subset, group.material);
+                const bool subset_bound = bind_material(subset, group.material);
+                lightusd::Prim subset_prim{subset};
+                if (subset_bound) {
+                    apply_material_binding_api(subset_prim);
+                }
                 std::string error;
-                if (!prim.add_child(lightusd::Prim{subset}, false, &error)) {
+                if (!prim.add_child(std::move(subset_prim), false, &error)) {
                     add_warning(fmt::format("subset '{}' of '{}' could not be added: {}", subset.name, prim_name, error));
                 }
             }
@@ -3328,13 +3349,22 @@ private:
     // multi-apply schema as `Schema:instance`, so `instance_name` is that
     // instance and stays empty for a single-apply schema.
     static void apply_api_schema(
+        lightusd::PrimMeta&                 meta,
+        const lightusd::APISchemas::APIName name,
+        const std::string&                  instance_name
+    )
+    {
+        lightusd::APISchemas& schemas = meta.get_apiSchemas_mutable();
+        schemas.names.emplace_back(name, instance_name);
+    }
+
+    static void apply_api_schema(
         lightusd::Prim&                     prim,
         const lightusd::APISchemas::APIName name,
         const std::string&                  instance_name
     )
     {
-        lightusd::APISchemas& schemas = prim.metas().get_apiSchemas_mutable();
-        schemas.names.emplace_back(name, instance_name);
+        apply_api_schema(prim.metas(), name, instance_name);
     }
 
     // -------------------------------------------------------------------
