@@ -70,6 +70,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/scene.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "erhe_usd/usd.hpp"
@@ -241,8 +242,9 @@ namespace {
     return textures;
 }
 
-// The content-library attaches for the textures and materials one USD file
-// contributed, in the order the glTF import builds them.
+// The content-library attaches for the textures, materials, skins and
+// animations one USD file contributed, in the order the glTF import builds
+// them.
 void append_usd_content_library_operations(
     App_context&                                                 context,
     const std::shared_ptr<Content_library>&                      content_library,
@@ -292,6 +294,31 @@ void append_usd_content_library_operations(
         }
         operations.push_back(
             make_library_attach_operation(context, content_library, material, gltf_source)
+        );
+    }
+    // The skins the file's skinned meshes bind, attached the way a glTF
+    // file's skins are (doc/usd-compatibility-plan.md K1). A skin is a
+    // library resource with no place in the prim tree, so it always gets an
+    // attach of its own; the skinned meshes already name it, and
+    // Scene_root::register_mesh registers it with the scene when the tree
+    // enters it.
+    for (std::size_t i = 0, end = usd_data.skins.size(); i < end; ++i) {
+        const std::shared_ptr<erhe::scene::Skin>& skin = usd_data.skins[i];
+        if (!skin) {
+            continue;
+        }
+        operations.push_back(
+            make_library_attach_operation(
+                context,
+                content_library,
+                skin,
+                Gltf_source_reference{
+                    .gltf_path  = path_string,
+                    .item_name  = skin->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "skin",
+                }
+            )
         );
     }
     // The animation the file's time-sampled xformOps became, attached the way

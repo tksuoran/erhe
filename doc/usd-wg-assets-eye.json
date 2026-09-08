@@ -1,8 +1,8 @@
 [
  {
   "path": "full_assets/CarbonFrameBike/CarbonFrameBike.usdz",
-  "note": "the frame, wheels and parts sit where the usdrecord render puts them, but the four Schlauch cable meshes (skinned, SkelBindingAPI to a Skeleton whose rest pose differs from its bind pose) sit 16 cm off, at their unskinned bind position; the node transform chain root-to-leaf matches pxr to every digit",
-  "gap": "UsdSkel skinning is not applied: a skinned mesh renders at its bind position"
+  "note": "the frame, wheels and parts sit where the usdrecord render puts them, and the four Schlauch cable meshes are skinned: their world bounds match pxr's UsdSkel ComputeSkinnedPoints to 4 mm, and they run along the fork and the swingarm as they do in the reference render",
+  "gap": ""
  },
  {
   "path": "full_assets/McUsd/McUsd.usda",

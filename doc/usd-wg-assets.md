@@ -58,7 +58,7 @@ appearance verdicts below were reached.
 
 Authored cameras: 23 entries author a `UsdGeomCamera`; 23 of 23 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
 
-Run: 2026-09-08, 146 entries, 2629 s of survey time.
+Run: 2026-09-08, 146 entries, 2623 s of survey time.
 Verdicts: 51 works, 94 works with a gap, 1 fails, 0 crash.
 
 ## Verdicts checked by eye
@@ -69,7 +69,7 @@ log and the empty-viewport test decided.
 
 | Entry file | What the capture shows |
 | --- | --- |
-| full_assets/CarbonFrameBike/CarbonFrameBike.usdz | the frame, wheels and parts sit where the usdrecord render puts them, but the four Schlauch cable meshes (skinned, SkelBindingAPI to a Skeleton whose rest pose differs from its bind pose) sit 16 cm off, at their unskinned bind position; the node transform chain root-to-leaf matches pxr to every digit |
+| full_assets/CarbonFrameBike/CarbonFrameBike.usdz | the frame, wheels and parts sit where the usdrecord render puts them, and the four Schlauch cable meshes are skinned: their world bounds match pxr's UsdSkel ComputeSkinnedPoints to 4 mm, and they run along the fork and the swingarm as they do in the reference render |
 | full_assets/McUsd/McUsd.usda | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
 | full_assets/McUsd/McUsd.usdz | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
 | full_assets/McUsd/McUsd_10cm.usda | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
@@ -94,7 +94,7 @@ log and the empty-viewport test decided.
 
 | Folder | Entry file | Load | Authored | Prims | Meshes | Mats | Lights | Warnings and errors | Screenshot | Verdict |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| full_assets/CarbonFrameBike | CarbonFrameBike.usdz | ok | 844 | 795 | 331 | 31 | 0 | 340 warning; Failed to get texture coordinate for `*` : | logs/usd_wg_survey/full_assets_CarbonFrameBike_CarbonFrameBike.usdz.png | works, gap: Failed to get texture coordinate for `*` : |
+| full_assets/CarbonFrameBike | CarbonFrameBike.usdz | ok | 844 | 969 | 386 | 34 | 0 | 339 warning; Failed to get texture coordinate for `*` : | logs/usd_wg_survey/full_assets_CarbonFrameBike_CarbonFrameBike.usdz.png | works, gap: Failed to get texture coordinate for `*` : |
 | full_assets/ElephantWithMonochord | SoC-ElephantWithMonochord.usdc | ok | 23 | 18 | 3 | 2 | 0 | 17 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_ElephantWithMonochord_SoC-ElephantWithMonochord.usdc.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | full_assets/McUsd | McUsd.usda | ok | 174 | 129 | 23 | 23 | 1 | 108 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_McUsd_McUsd.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | full_assets/McUsd | McUsd.usdz | ok | 174 | 129 | 23 | 23 | 1 | 108 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/full_assets_McUsd_McUsd.usdz.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
@@ -375,7 +375,6 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | warning | USD prim '*': the referencing layer defines prims over the reference (source) - a reference protects its structure, so they are dropped | diagnose the message and add the support it asks for |
 | 1 | warning | USD prim '*': visibility and purpose are not readable from a '*' prim | diagnose the message and add the support it asks for |
 | 1 | warning | USD stage up axis '*' has no erhe counterpart - imported as Y-up | carry a Z-up stage's up axis into the scene instead of importing it as Y-up |
-| 1 | appearance | UsdSkel skinning is not applied: a skinned mesh renders at its bind position | diagnose the message and add the support it asks for |
 | 1 | warning | [InternalError] Attribute is invalid.); using default (false). | diagnose the message and add the support it asks for |
 | 1 | error | ^ | diagnose the message and add the support it asks for |
 | 1 | warning | `*` is authored, but hole face removal is only applied when triangulation is enabled. Hole faces are kept in the polygonal output. | diagnose the message and add the support it asks for |
