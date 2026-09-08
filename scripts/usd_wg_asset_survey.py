@@ -154,7 +154,9 @@ class Usd_tools:
         # blank prompts; the tool's own error lines are what is kept.
         lines = [l.strip() for l in (done.stderr + done.stdout).splitlines()
                  if l.strip() and (">REM" not in l) and (not l.strip().endswith(">")) and ("Warning" not in l)]
-        return "usdrecord produced no image: " + " | ".join(lines[-3:])[:300]
+        # pxr's own error lines say what failed; the exception trailer does not.
+        errors = [l for l in lines if ("Error" in l) or ("error" in l) or ("invalid" in l)]
+        return "usdrecord produced no image: " + " | ".join((errors or lines)[-2:])[:300]
 
 
 def composed_facts(stats: dict) -> dict:
