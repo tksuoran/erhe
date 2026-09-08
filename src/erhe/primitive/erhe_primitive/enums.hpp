@@ -128,11 +128,20 @@ enum class Texgen_mode : uint16_t {
 // metallic in B, roughness in G, occlusion in R, opacity in A. The value is
 // the component index the shader indexes the sampled vec4 with, so it
 // travels to the GPU as it stands.
+//
+// `none` is the input that reads no channel of the slot's texture: its
+// factor stands on its own. One slot carries the metallic-roughness image
+// that UsdPreviewSurface reads through two separate inputs, so a file that
+// textures one of them and gives the other a plain value names `none` for
+// that other input; the shader multiplies by one where it stands. It is the
+// index one past the sampled vec4's components, which is how the shader
+// recognizes it.
 enum class Texture_channel : uint16_t {
-    r = 0,
-    g = 1,
-    b = 2,
-    a = 3
+    r    = 0,
+    g    = 1,
+    b    = 2,
+    a    = 3,
+    none = 4
 };
 
 enum class Normalmap_encoding : uint16_t {

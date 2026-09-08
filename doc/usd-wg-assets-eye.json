@@ -61,8 +61,8 @@
  },
  {
   "path": "test_assets/RoughnessTest/RoughnessTest.usdz",
-  "note": "the bands carry their Texture / Constant labels the right way round but show no specular highlight, where the reference's highlight varies with roughness 0.00 / 0.33 / 0.66",
-  "gap": "roughness does not reach the shaded surface: no band shows the reference's roughness-varying highlight"
+  "note": "the six bands read the same across the Texture / Constant seam, and a front view puts the specular highlight on the 0.33 band and none on 0.00, as the reference does; the survey's three-quarter framing keeps that highlight off the card",
+  "gap": ""
  },
  {
   "path": "test_assets/TextureCoordinateTest/TextureCoordinateTest.usda",

@@ -1048,11 +1048,20 @@ private:
                 // The two factors sit on the channels the surface reads them
                 // through, which the material names (Material::
                 // roughness_channel_property / metallic_channel_property).
+                // An input that names Texture_channel::none reads no channel
+                // of this image - it is not connected below - so its factor
+                // stays on the surface input and off the texture.
                 glm::vec4 scale{1.0f, 1.0f, 1.0f, 1.0f};
-                scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(material.get_roughness_channel()))] =
-                    material.get_value(Material::roughness_property).x;
-                scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(material.get_metallic_channel()))] =
-                    material.get_value(Material::metallic_property);
+                const erhe::primitive::Texture_channel roughness_channel = material.get_roughness_channel();
+                const erhe::primitive::Texture_channel metallic_channel  = material.get_metallic_channel();
+                if (roughness_channel != erhe::primitive::Texture_channel::none) {
+                    scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(roughness_channel))] =
+                        material.get_value(Material::roughness_property).x;
+                }
+                if (metallic_channel != erhe::primitive::Texture_channel::none) {
+                    scale[static_cast<glm::length_t>(erhe::primitive::to_uint32(metallic_channel))] =
+                        material.get_value(Material::metallic_property);
+                }
                 return scale;
             }
             case Usd_material_texture_slot::normal: {
@@ -1338,15 +1347,21 @@ private:
         );
         // erhe has one metallic-roughness slot; UsdPreviewSurface reads the
         // two scalars through separate inputs of the one texture, each on the
-        // channel the material names (the glTF packing by default).
-        connect_texture(
-            material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
-            channel_output_name(material.get_roughness_channel()), surface.roughness
-        );
-        connect_texture(
-            material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
-            channel_output_name(material.get_metallic_channel()), surface.metallic
-        );
+        // channel the material names (the glTF packing by default). An input
+        // that names Texture_channel::none reads no channel of the image and
+        // keeps the plain value written above.
+        if (material.get_roughness_channel() != erhe::primitive::Texture_channel::none) {
+            connect_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+                channel_output_name(material.get_roughness_channel()), surface.roughness
+            );
+        }
+        if (material.get_metallic_channel() != erhe::primitive::Texture_channel::none) {
+            connect_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+                channel_output_name(material.get_metallic_channel()), surface.metallic
+            );
+        }
         // erhe's fragment alpha is a channel of the base color texture. The
         // opacity input is connected only where the material names a channel
         // of its own: alpha is what a reader assumes anyway, and connecting

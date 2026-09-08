@@ -83,16 +83,19 @@ protected:
         root   = std::make_shared<erhe::scene::Xform>("import_root");
         result = load(test_data_path("texture_channels.usda"), root);
         ASSERT_TRUE(result.error.empty()) << result.error;
-        channels  = material_at(root, "root/materials/Channels");
-        fallbacks = material_at(root, "root/materials/Fallbacks");
-        ASSERT_NE(channels,  nullptr);
-        ASSERT_NE(fallbacks, nullptr);
+        channels       = material_at(root, "root/materials/Channels");
+        fallbacks      = material_at(root, "root/materials/Fallbacks");
+        roughness_only = material_at(root, "root/materials/RoughnessOnly");
+        ASSERT_NE(channels,       nullptr);
+        ASSERT_NE(fallbacks,      nullptr);
+        ASSERT_NE(roughness_only, nullptr);
     }
 
     std::shared_ptr<erhe::scene::Node> root;
     erhe::usd::Usd_load_result         result;
-    erhe::primitive::Material*         channels {nullptr};
-    erhe::primitive::Material*         fallbacks{nullptr};
+    erhe::primitive::Material*         channels      {nullptr};
+    erhe::primitive::Material*         fallbacks     {nullptr};
+    erhe::primitive::Material*         roughness_only{nullptr};
 };
 
 TEST_F(Texture_channels_import, a_named_output_becomes_the_slot_channel)
@@ -110,6 +113,31 @@ TEST_F(Texture_channels_import, a_gltf_packed_material_keeps_the_defaults)
     EXPECT_EQ(fallbacks->get_metallic_channel(),  erhe::primitive::Texture_channel::b);
     EXPECT_EQ(fallbacks->get_occlusion_channel(), erhe::primitive::Texture_channel::r);
     EXPECT_EQ(fallbacks->get_opacity_channel(),   erhe::primitive::Texture_channel::a);
+}
+
+TEST_F(Texture_channels_import, an_input_that_names_no_texture_reads_no_channel)
+{
+    // UsdPreviewSurface reads metallic and roughness through separate inputs
+    // of what erhe holds in one slot. This material textures roughness only,
+    // so metallic reads no channel of that image and keeps its own value.
+    EXPECT_EQ(roughness_only->get_roughness_channel(), erhe::primitive::Texture_channel::g);
+    EXPECT_EQ(roughness_only->get_metallic_channel(),  erhe::primitive::Texture_channel::none);
+    EXPECT_NEAR(roughness_only->get_value(erhe::primitive::Material::metallic_property), 0.6f, 1e-5f);
+    // The image the roughness input names is bound to the shared slot.
+    std::size_t material_index = result.data.materials.size();
+    for (std::size_t index = 0; index < result.data.materials.size(); ++index) {
+        if (result.data.materials[index].get() == roughness_only) {
+            material_index = index;
+        }
+    }
+    ASSERT_LT(material_index, result.data.materials.size());
+    bool slot_is_bound = false;
+    for (const erhe::usd::Usd_material_texture_binding& binding : result.data.material_texture_bindings) {
+        if ((binding.material_index == material_index) && (binding.slot == erhe::usd::Usd_material_texture_slot::metallic_roughness)) {
+            slot_is_bound = true;
+        }
+    }
+    EXPECT_TRUE(slot_is_bound);
 }
 
 TEST_F(Texture_channels_import, an_unauthored_diffuse_color_is_the_schema_fallback)
@@ -195,6 +223,15 @@ TEST_F(Texture_channels_round_trip, the_channels_are_written_back)
     EXPECT_EQ(channels->get_roughness_channel(), erhe::primitive::Texture_channel::r);
     EXPECT_EQ(channels->get_metallic_channel(),  erhe::primitive::Texture_channel::a);
     EXPECT_EQ(channels->get_occlusion_channel(), erhe::primitive::Texture_channel::g);
+}
+
+TEST_F(Texture_channels_round_trip, an_input_that_reads_no_channel_stays_unconnected)
+{
+    erhe::primitive::Material* roughness_only = material_at(reloaded_root, "root/materials/RoughnessOnly");
+    ASSERT_NE(roughness_only, nullptr);
+    EXPECT_EQ(roughness_only->get_roughness_channel(), erhe::primitive::Texture_channel::g);
+    EXPECT_EQ(roughness_only->get_metallic_channel(),  erhe::primitive::Texture_channel::none);
+    EXPECT_NEAR(roughness_only->get_value(erhe::primitive::Material::metallic_property), 0.6f, 1e-5f);
 }
 
 TEST_F(Texture_channels_round_trip, the_diffuse_color_fallback_reproduces_itself)

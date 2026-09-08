@@ -459,7 +459,7 @@ fern cards back into the render: the grid is a blended overlay and
 writes no depth (`doc/editor_rendering.md`, Grid). The current run (146
 entries, 51 work as they are, none crash) leaves, in the order the
 fixes are taken: 16-bit, 32-bit and CMYK images and Radiance `.hdr`
-not decoded; RoughnessTest's missing specular response; a scene whose load blocks the main loop long enough to
+not decoded; a scene whose load blocks the main loop long enough to
 trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
 at a time once their point instancers are expanded into several thousand
 prims. MaterialX is section 6.

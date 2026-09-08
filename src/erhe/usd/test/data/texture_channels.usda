@@ -28,6 +28,15 @@ def Xform "root"
         rel material:binding = </root/materials/Fallbacks>
     }
 
+    def Mesh "roughness_only"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(4, 0, 0), (5, 0, 0), (5, 1, 0), (4, 1, 0)]
+        rel material:binding = </root/materials/RoughnessOnly>
+    }
+
     def Scope "materials"
     {
         def Material "Channels"
@@ -67,6 +76,28 @@ def Xform "root"
                 float inputs:roughness.connect = </root/materials/Channels/metallic_roughness_texture.outputs:r>
                 float inputs:metallic.connect = </root/materials/Channels/metallic_roughness_texture.outputs:a>
                 float inputs:occlusion.connect = </root/materials/Channels/occlusion_texture.outputs:g>
+                token outputs:surface
+            }
+        }
+
+        def Material "RoughnessOnly"
+        {
+            token outputs:surface.connect = </root/materials/RoughnessOnly/surface.outputs:surface>
+
+            def Shader "roughness_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                token inputs:sourceColorSpace = "raw"
+                float outputs:g
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 1, 1)
+                float inputs:metallic = 0.6
+                float inputs:roughness.connect = </root/materials/RoughnessOnly/roughness_texture.outputs:g>
                 token outputs:surface
             }
         }

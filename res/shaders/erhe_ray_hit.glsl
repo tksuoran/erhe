@@ -299,10 +299,13 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
         m.metallic_roughness_offset
     );
     // m.texture_channels: the component index of (metallic, roughness,
-    // occlusion, opacity); see standard.frag.
-    metallic    = metallic * metallic_roughness[m.texture_channels.x];
-    roughness_x = max(roughness_x * metallic_roughness[m.texture_channels.y], 1e-4);
-    roughness_y = max(roughness_y * metallic_roughness[m.texture_channels.y], 1e-4);
+    // occlusion, opacity); see standard.frag. The index 4 is the input that
+    // reads no channel of this texture and keeps its factor.
+    float mr_metallic  = texture_channel_value(metallic_roughness, m.texture_channels.x);
+    float mr_roughness = texture_channel_value(metallic_roughness, m.texture_channels.y);
+    metallic    = metallic * mr_metallic;
+    roughness_x = max(roughness_x * mr_roughness, 1e-4);
+    roughness_y = max(roughness_y * mr_roughness, 1e-4);
 
     vec3 color = light_block.ambient_light.rgb * base_color;
     color += m.emissive.rgb;

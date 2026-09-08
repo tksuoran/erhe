@@ -272,6 +272,16 @@ is named in one warning. erhe takes its fragment alpha from the base color
 texture, so an `inputs:opacity` that reads an image of its own is one warning
 and no channel.
 
+`inputs:metallic` and `inputs:roughness` are separate UsdPreviewSurface
+inputs of what erhe holds in one metallic-roughness slot, so a file may
+texture one of them and give the other a plain value. The input that names no
+texture then reads `Texture_channel::none`: it takes no channel of the bound
+image and its own factor stands (the shader multiplies by one, and the writer
+leaves that input unconnected and off the texture's `inputs:scale`). Without
+it, a roughness map would modulate a constant metallic through whatever the
+image holds in the channel the glTF default names - which is what
+`test_assets/RoughnessTest` authors.
+
 ### Sublayers
 
 A root layer's `subLayers` are the weakest layers of its layer stack (the `L`
@@ -653,11 +663,16 @@ own, so `Usd_image::path` names no existing file and the bytes are the only
 source; the caller decodes them with the memory overload of
 `erhe::graphics::Image_loader::open`.
 
+The archive key is the packaged asset path exactly as the file authors it,
+relative to the archive root and directory components included, so a texture
+packed under `0/` is the entry `0/texture.png` (a leading `./` is not part of
+the key). The Tydra converter resolves that path against the file system,
+where it does not exist, and reports it as a texture it could not load; that
+line is dropped from the converter's warning for every path the archive holds
+(`filter_converter_warning`), because the image does reach the material.
+
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
-volumes, MaterialX / OpenPBR shading networks, texture filter state, and the
-per-channel output selection of a `UsdUVTexture` (erhe reads roughness from
-green and metallic from blue, whichever channels the file's `outputs:*`
-connections name).
+volumes, MaterialX / OpenPBR shading networks, and texture filter state.
 
 ### Time samples
 

@@ -407,8 +407,12 @@ void main()
     // reads: (metallic, roughness, occlusion, opacity). glTF's fixed packing
     // is the default (metallic in B, roughness in G); a UsdPreviewSurface
     // names the channel in its connection, so the index is per material.
-    float mr_metallic  = metallic_roughness[material.texture_channels.x];
-    float mr_roughness = metallic_roughness[material.texture_channels.y];
+    // The index 4 (Texture_channel::none) is the input that reads no channel
+    // of this slot's texture - the file gave it a plain value while the other
+    // input of the shared metallic-roughness slot is textured - so it is
+    // multiplied by one and keeps its factor.
+    float mr_metallic  = texture_channel_value(metallic_roughness, material.texture_channels.x);
+    float mr_roughness = texture_channel_value(metallic_roughness, material.texture_channels.y);
     float metallic    = material.metallic * mr_metallic;
     float roughness_x = max(material.roughness.x * mr_roughness, c_roughness_floor);
     float roughness_y = max(material.roughness.y * mr_roughness, c_roughness_floor);
@@ -501,12 +505,15 @@ void main()
 #  endif
 
 #  ifdef ERHE_USE_OCCLUSION_TEXTURE
-    float occlusion = sample_texture(
-        material.occlusion_texture,
-        ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE),
-        material.occlusion_rotation_scale,
-        material.occlusion_offset
-    )[material.texture_channels.z];
+    float occlusion = texture_channel_value(
+        sample_texture(
+            material.occlusion_texture,
+            ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE),
+            material.occlusion_rotation_scale,
+            material.occlusion_offset
+        ),
+        material.texture_channels.z
+    );
 #  else
     const float occlusion = 1.0;
 #  endif
@@ -691,7 +698,7 @@ void main()
     sampled_alpha *= v_color.a;
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
-    sampled_alpha *= base_color_sample[material.texture_channels.w];
+    sampled_alpha *= texture_channel_value(base_color_sample, material.texture_channels.w);
 #endif
 
 #if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST

@@ -1205,8 +1205,11 @@ private:
     // for itself. A `PointInstancer` prototype "resolved to no RenderMesh"
     // says the render-scene conversion did not expand the instancer, which is
     // exactly what erhe does not want it to do: the expansion is
-    // convert_point_instancer's (S1), off the raw prim.
-    [[nodiscard]] static auto filter_converter_warning(const std::string& warning) -> std::string
+    // convert_point_instancer's (S1), off the raw prim. A texture the stage's
+    // own `.usdz` archive holds is read straight out of the archive by
+    // convert_images, so Tydra's failure to resolve its packaged path names
+    // an image that does reach the material.
+    [[nodiscard]] auto filter_converter_warning(const std::string& warning) -> std::string
     {
         std::string       filtered;
         std::size_t       start = 0;
@@ -1221,6 +1224,18 @@ private:
                 (line.find("resolved to no RenderMesh") != std::string_view::npos)
             ) {
                 continue;
+            }
+            constexpr std::string_view texture_load_failure{"Failed to load texture image: `"};
+            const std::size_t          failure_position = line.find(texture_load_failure);
+            if (failure_position != std::string_view::npos) {
+                const std::size_t name_begin = failure_position + texture_load_failure.size();
+                const std::size_t name_end   = line.find('`', name_begin);
+                if (
+                    (name_end != std::string_view::npos) &&
+                    usdz_has_entry(std::string{line.substr(name_begin, name_end - name_begin)})
+                ) {
+                    continue;
+                }
             }
             if (line.empty() && filtered.empty()) {
                 continue;
@@ -1571,19 +1586,34 @@ private:
         return m_usdz_ok;
     }
 
+    // Whether the archive holds an entry of that name. USD writes a packaged
+    // asset path relative to the archive root, which is the key of the
+    // archive's own directory - directory components and all, so a texture
+    // packed under `0/` is the key `0/texture.png`; a leading `./` is not
+    // part of that key.
+    [[nodiscard]] auto usdz_has_entry(const std::string& asset_identifier) -> bool
+    {
+        if (asset_identifier.empty() || !ensure_usdz_asset()) {
+            return false;
+        }
+        return m_usdz_asset.asset_map.find(usdz_entry_key(asset_identifier)) != m_usdz_asset.asset_map.end();
+    }
+
+    [[nodiscard]] static auto usdz_entry_key(const std::string& asset_identifier) -> std::string
+    {
+        return (asset_identifier.compare(0, 2, "./") == 0)
+            ? asset_identifier.substr(2)
+            : asset_identifier;
+    }
+
     // The bytes of one archive entry, empty when the stage is no `.usdz` or
-    // the archive holds no such entry. USD writes a packaged asset path
-    // relative to the archive root, which is the key of the archive's own
-    // directory; a leading `./` is not part of that key.
+    // the archive holds no such entry.
     [[nodiscard]] auto usdz_entry_bytes(const std::string& asset_identifier) -> std::vector<std::uint8_t>
     {
         if (asset_identifier.empty() || !ensure_usdz_asset()) {
             return {};
         }
-        std::string key = asset_identifier;
-        if (key.compare(0, 2, "./") == 0) {
-            key = key.substr(2);
-        }
+        const std::string key = usdz_entry_key(asset_identifier);
         const std::map<std::string, std::pair<std::size_t, std::size_t>>::const_iterator i = m_usdz_asset.asset_map.find(key);
         if (i == m_usdz_asset.asset_map.end()) {
             return {};
@@ -1941,17 +1971,27 @@ private:
         // Which channel of the bound texture each scalar input reads. USD
         // names it in the connection; erhe's defaults are glTF's packing, so
         // a file that follows glTF writes no local value here.
+        // The two inputs share one erhe slot, so an input that names no
+        // texture of its own while the other one does reads no channel of
+        // the bound image: its plain value stands alone (Texture_channel::
+        // none). Without that, a file that textures roughness and gives
+        // metallic a constant would have metallic modulated by whatever the
+        // roughness image holds in the channel the erhe default names.
         if (metallic_texture != nullptr) {
             set_or_clear_value(
                 material, Material::metallic_channel_property,
                 connected_channel(*metallic_texture, erhe::primitive::Texture_channel::b, material_name, "metallic")
             );
+        } else if (metallic_roughness_texture != nullptr) {
+            material.set_value(Material::metallic_channel_property, erhe::primitive::Texture_channel::none);
         }
         if (roughness_texture != nullptr) {
             set_or_clear_value(
                 material, Material::roughness_channel_property,
                 connected_channel(*roughness_texture, erhe::primitive::Texture_channel::g, material_name, "roughness")
             );
+        } else if (metallic_roughness_texture != nullptr) {
+            material.set_value(Material::roughness_channel_property, erhe::primitive::Texture_channel::none);
         }
         if (occlusion_texture != nullptr) {
             set_or_clear_value(

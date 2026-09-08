@@ -129,6 +129,7 @@ constexpr erhe::property::Enum_entry c_texture_channel_entries[] = {
     {"Green", static_cast<int32_t>(Texture_channel::g)},
     {"Blue",  static_cast<int32_t>(Texture_channel::b)},
     {"Alpha", static_cast<int32_t>(Texture_channel::a)},
+    {"None",  static_cast<int32_t>(Texture_channel::none)},
 };
 
 } // anonymous namespace
@@ -224,6 +225,7 @@ auto c_str(const Texgen_mode texgen_mode) -> const char*
         case Texture_channel::g: return "Green";
         case Texture_channel::b: return "Blue";
         case Texture_channel::a: return "Alpha";
+        case Texture_channel::none: return "None";
         default: {
             ERHE_FATAL("Bad Texture_channel");
         }
@@ -237,6 +239,7 @@ auto to_uint32(const Texture_channel texture_channel) -> uint32_t
         case Texture_channel::g: return 1u;
         case Texture_channel::b: return 2u;
         case Texture_channel::a: return 3u;
+        case Texture_channel::none: return 4u;
         default: {
             ERHE_FATAL("Bad Texture_channel");
         }

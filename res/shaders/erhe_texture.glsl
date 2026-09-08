@@ -125,4 +125,14 @@ vec2 get_texture_size(uvec2 texture_handle) {
     return v;
 }
 
+// One channel of a sampled texel, by the component index a material carries
+// for a scalar input (erhe::primitive::Texture_channel). The index 4 is
+// `none`: the input reads no channel of that texture and keeps its own
+// factor, so the value is one. Indexing the vec4 with 4 is out of range, so
+// every read of a material channel index goes through this.
+float texture_channel_value(vec4 texel, uint channel)
+{
+    return (channel < 4u) ? texel[channel] : 1.0;
+}
+
 #endif // ERHE_TEXTURE_GLSL
