@@ -970,11 +970,21 @@ auto Mcp_server::query_scene_variants(const json& args) -> std::string
                     }
                 );
             }
+            json prims = json::array();
+            for (const Variant_prim& prim : variant.prims) {
+                prims.push_back(
+                    json{
+                        {"relative_path", prim.relative_path},
+                        {"authored_name", prim.authored_name}
+                    }
+                );
+            }
             variants.push_back(
                 json{
                     {"name",      variant.name},
                     {"bindings",  bindings},
-                    {"overrides", overrides}
+                    {"overrides", overrides},
+                    {"prims",     prims}
                 }
             );
         }

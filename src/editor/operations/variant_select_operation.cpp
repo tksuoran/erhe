@@ -132,6 +132,48 @@ void append_variant_property_operations(
     }
 }
 
+// The prims a switch turns on and off (doc/usd-compatibility-plan.md X4).
+// Every variant's prims are in
+// the scene: the chosen variant's are active - by holding no local `active`
+// value at all, which is the state the file's own selection loads in - and
+// every other variant's are inactive, which prunes each one and its subtree
+// from the render, the pick and the simulation (X2).
+void append_variant_prim_operations(
+    const Variant_set&                       set,
+    const Variant&                           variant,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    for (const Variant& candidate : set.variants) {
+        const bool is_chosen = (candidate.name == variant.name);
+        for (const Variant_prim& prim : candidate.prims) {
+            const std::shared_ptr<erhe::Item_base> item = resolve_variant_prim(set, prim.relative_path);
+            if (!item) {
+                continue; // the prim is no longer in the scene
+            }
+            const erhe::property::Dependency_property* const property =
+                erhe::scene::find_override_property(*item.get(), "active");
+            if (property == nullptr) {
+                continue;
+            }
+            std::optional<erhe::property::Property_value> before;
+            if (item->has_local_value(*property)) {
+                before = item->get_value(*property);
+            }
+            std::optional<erhe::property::Property_value> after;
+            if (!is_chosen) {
+                after = erhe::property::Property_value{false};
+            }
+            if (before == after) {
+                continue;
+            }
+            operations.push_back(
+                std::make_shared<Property_set_operation>(item, *property, before, after)
+            );
+        }
+    }
+}
+
 } // anonymous namespace
 
 Variant_select_operation::Variant_select_operation(Parameters&& parameters)
@@ -232,6 +274,7 @@ auto make_select_variant_operation(
     operations.push_back(std::make_shared<Variant_select_operation>(std::move(parameters)));
 
     append_variant_property_operations(*set, *variant, operations);
+    append_variant_prim_operations(*set, *variant, operations);
 
     for (const Variant_binding& binding : variant->bindings) {
         const Variant_binding_target target   = resolve_variant_binding(*set, *variant, binding);

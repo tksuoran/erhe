@@ -229,20 +229,33 @@ public:
     std::string material_path;
 };
 
-// One variant of a variant set: the material bindings and the property
-// opinions it authors (doc/usd-compatibility-plan.md X4). An opinion is
+// One prim a variant adds (doc/usd-compatibility-plan.md X4). The prim is in
+// the tree whichever variant is selected - a switch flips `active`, it does not build or destroy prims -
+// so `relative_path` is where it sits below the prim carrying the set, and
+// `authored_name` is the name the variant block gave it, which the two
+// variants of one set are free to share and the tree is not.
+class Usd_variant_prim final
+{
+public:
+    std::string relative_path;
+    std::string authored_name;
+};
+
+// One variant of a variant set: the material bindings, the property opinions
+// and the prims it adds (doc/usd-compatibility-plan.md X4). An opinion is
 // recorded the way an `over` below a reference carrier is (X2): by the path
 // it has below the prim carrying the set, an empty path being that prim
 // itself, in the neutral name / text form. `material:binding` is not among
-// the values - `bindings` is what carries it - and a variant that adds a prim
-// the tree has no counterpart for is structure, which is counted for the set
-// rather than recorded.
+// the values - `bindings` is what carries it - and the `def` children of the
+// variant are not among the opinions either: each is a prim of the tree of
+// its own, listed in `prims`, carrying its own attributes.
 class Usd_variant final
 {
 public:
     std::string                                 name;
     std::vector<Usd_variant_binding>            bindings;
     std::vector<erhe::scene::Instance_override> overrides;
+    std::vector<Usd_variant_prim>               prims;
 };
 
 // One `variantSet` a prim of the stage authors, and the erhe item that prim
@@ -265,10 +278,10 @@ public:
     // variant blocks. A property that had no local value there is a `cleared`
     // entry.
     std::vector<erhe::scene::Instance_override> base_values;
-    // How many opinions of the set this slice does not carry: a property the
-    // value reader cannot express, and a prim a variant adds that the tree has
-    // no counterpart for (node-subtree variants are the later slice). Reported
-    // once for the set.
+    // How many opinions of the set are not carried: a property the value
+    // reader cannot express, and a `def` prim a variant authors somewhere the
+    // hoist does not reach (below an `over` child of the variant, or in a
+    // file whose layer could not be re-read). Reported once for the set.
     std::size_t                      unsupported_opinion_count{0};
 };
 
@@ -579,14 +592,26 @@ public:
     std::shared_ptr<const erhe::primitive::Material> material;
 };
 
-// One variant the writer authors: its material bindings and the property
-// opinions it holds, in the same neutral form the reader recorded them in.
+// One prim of the tree that belongs to one variant, written inside that
+// variant's block as a `def` under `authored_name` and left out of the
+// carrying prim's plain children. Its subtree goes with it.
+class Usd_save_variant_prim final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::string                            authored_name;
+};
+
+// One variant the writer authors: its material bindings, the property
+// opinions it holds in the same neutral form the reader recorded them in, and
+// the prims it adds.
 class Usd_save_variant final
 {
 public:
     std::string                                 name;
     std::vector<Usd_save_variant_binding>       bindings;
     std::vector<erhe::scene::Instance_override> overrides;
+    std::vector<Usd_save_variant_prim>          prims;
 };
 
 // One `variantSet` the writer authors on a prim: the `variantSets` list op,

@@ -262,8 +262,8 @@ A root layer's `subLayers` are the weakest layers of its layer stack (the `L`
 of USD's LIVRPS), and LightUSD composes nothing at load, so the stage its
 reader builds holds the root layer alone - a file whose content lives in a
 sublayer would arrive empty. `erhe::usd::load_stage` composes the stack itself
-before anything converts the stage: it re-reads the file as a
-`lightusd::Layer`, hands it to LightUSD's `CompositeSublayers` (which resolves
+before anything converts the stage: it reads the file as a `lightusd::Layer`
+(once, and keeps it - see below), hands it to LightUSD's `CompositeSublayers` (which resolves
 each asset path against its own layer's directory, follows nested `subLayers`,
 detects cycles and merges per property, so an `over` in a stronger layer lands
 on the `def` of a weaker one as one prim) and turns the composed layer back
@@ -291,10 +291,13 @@ same function - sees that one composed stage.
   no single authored top-level order - each layer authors its own - and
   `lightusd::Layer` holds its prim specs in a hash map, so sorting is what
   makes the composed tree the same on every run and every platform.
-- The reads that ask which layer authored a thing keep reading the root layer
-  alone: the class prims and `inherits` arcs of X3, the `Brush` prims of E4a,
-  the authored-opinion pass of I2 and the `xformOp` stacks of M8 all go
-  through `find_root_layer_primspec`. A prim a sublayer authors is therefore
+- The root layer is read once, by `load_stage`, and kept on the stage
+  (`Stage::Impl::root_layer`). It is the source of everything LightUSD does
+  not compose, so every read that asks which layer authored a thing goes to it
+  rather than parsing the file again: the class prims and `inherits` arcs of
+  X3, the `Brush` prims of E4a, the authored-opinion pass of I2, the `xformOp`
+  stacks of M8 and the `variantSet` blocks of X4 all go through
+  `find_root_layer_primspec` or walk the layer directly. A prim a sublayer authors is therefore
   content of the composed tree but contributes none of those: its transform
   arrives as the single composed matrix Tydra reports rather than as the op
   stack the sublayer spells, and a `class` prim of a sublayer is a prim like
@@ -372,9 +375,9 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   absolute stage path its `material:binding` relationship names. What an
   override is - and so what the writer authors - is stated once, in
   `src/erhe/scene/erhe_scene/instance_override.hpp`. LightUSD does not report
-  which layer an opinion on a composed prim came from, so the root layer is
-  re-read once per file and its prim specs below the referencing prim are what
-  is read: the specifier is what tells an `over` from a `def`. A prim spec is what a layer authored, so every property it
+  which layer an opinion on a composed prim came from, so the prim specs of
+  the root layer below the referencing prim are what is read: the specifier is
+  what tells an `over` from a `def`. A prim spec is what a layer authored, so every property it
   carries is an authored opinion and no `authored()` test is needed; the
   `erhe:Owner:name` custom attributes, `visibility`, `purpose`, the `active`
   metadatum, the xformOps (through LightUSD's own
@@ -458,11 +461,27 @@ the editor Brush at the path the prim has.
 ### Variant sets
 
 A variant set is resolved in composition, and LightUSD composes nothing, so a
-variant contributes no property to the composed prim: the `variantSet` blocks
-are read off the root layer's own prim specs the same walk takes the class
-prims from, and the reader is what applies the selection
-(doc/usd-compatibility-plan.md X4). Material bindings and property opinions
-are carried; a prim a variant adds is not.
+variant contributes nothing to the composed prim: the `variantSet` blocks are
+read off the root layer's own prim specs the same walk takes the class prims
+from, and the reader is what applies the selection
+(doc/usd-compatibility-plan.md X4). Material bindings, property opinions and
+the prims a variant adds are all carried.
+
+The prims come across at load: `load_stage` copies the `def` children of every
+variant block into the prim carrying the set - `hoist_variant_prims`, on the
+root layer before it is built into a stage, so Tydra and everything downstream
+see ordinary prims - and gives each the sibling-unique name of the M2 rule,
+because two variants of one set are free to author the same name and the tree
+is not. The prims of the variant that is not selected are marked
+`active = false`, which prunes each one and its subtree from the render, the
+pick and the simulation the way USD's own `active` does (X2). So every
+variant's prims are in the tree whichever variant is selected, and a switch is
+a property write like every other one rather than a rebuild of the tree.
+`Stage::Impl::variant_prims` records what was hoisted where, and `Usd_variant`
+carries it as `prims`: the name below the carrier and the name the file gave
+it. A `def` the hoist does not reach - one below an `over` child of a variant,
+or any of them in a `.usdz` archive, whose asset paths resolve through the
+archive rather than the file system - is counted for the set instead.
 
 `Usd_data::variant_sets` holds one `Usd_variant_set` per set: the erhe item
 the carrying prim became, the prim's stage path, the set name, one
@@ -478,8 +497,9 @@ the way an `over` below a reference carrier is (X2): one
 prim itself, holding the `erhe:Owner:name` custom attributes, `visibility`,
 `purpose`, the `active` metadatum and the authored xformOps in the neutral
 name / text form. `material:binding` is never among the values - `bindings`
-is what carries it, so nothing binds a material twice - and both `over` and
-`def` children of a variant contribute their opinions.
+is what carries it, so nothing binds a material twice - and only the `over`
+children of a variant contribute opinions: a `def` child is a prim of the tree
+carrying its own attributes.
 
 `Usd_variant_set::base_values` is what the prims held for every path and
 property name any variant of the set authors, read before the selected
@@ -489,10 +509,9 @@ a switch to another variant restores first: a property the chosen variant
 leaves unsaid goes back to what the file authored outside the variant blocks.
 
 `unsupported_opinion_count` is what stays uncarried, reported once for the
-set: a property the value reader has no place for, and a prim a variant adds
-that the tree has no counterpart for - node subtree variants are the later
-slice, so an override whose path reaches no prim is dropped when the base
-values are captured.
+set: a property the value reader has no place for, and a `def` prim of a
+variant the hoist did not reach. An override whose path reaches no prim of the
+tree is dropped when the base values are captured, and counted the same way.
 
 The reader then binds the selected variant's materials itself: a binding at a
 `Mesh` prim's path covers the mesh's primitives that the same variant does not
@@ -744,7 +763,16 @@ because the same spelling rule decides what an item is called on a stage.
   that reaches no property, or text that does not parse, is one warning and
   no attribute. The prim's own attributes outside the variants are what the
   writer writes for the state the scene holds today, which the selected
-  variant's opinions equal.
+  variant's opinions equal. A prim a variant adds
+  (`Usd_save_variant::prims`) is written inside that variant's block as the
+  `def` it is, with its whole subtree, under the name the file gave it rather
+  than the name it has in the tree, and is not among the plain children of the
+  prim carrying the set. Its `active` metadatum is written only for the
+  selected variant's prims: a prim of another variant is inactive because its
+  variant is not the selection, which USD says by not building the prim at
+  all. glTF has no counterpart for any of this: a scene saved to glTF writes
+  those prims as plain children with their `active` flags, and the membership
+  is lost.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one
   per tag, whose `includes` names every prim carrying it.
 - `Usd_save_arguments::custom_layer_data` is written verbatim as the root

@@ -2,6 +2,7 @@
 #include "erhe_usd/usd_impl.hpp"
 #include "erhe_usd/usd_log.hpp"
 
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_profile/profile.hpp"
 
 // LightUSD headers. Together with usd_import.cpp this is the only place in
@@ -285,15 +286,130 @@ void fill_stage_metas_from_sublayers(
     }
 }
 
-// Replace `stage` with the composition of the root layer at `path` and its
-// `subLayers` (the L of USD's LIVRPS). Returns false when the root layer or
-// the composition could not be built, leaving `stage` as it was - a file whose
-// sublayers cannot be resolved still opens with the root layer's own content,
-// as it does in USD.
+// Whether any prim spec below `spec` carries a variant block with a `def`
+// child: what hoist_variant_prims has work to do for.
+[[nodiscard]] auto has_variant_prims(const lightusd::PrimSpec& spec) -> bool
+{
+    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec.variantSets()) {
+        for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
+            for (const lightusd::PrimSpec& child : variant.second.children()) {
+                if (child.specifier() == lightusd::Specifier::Def) {
+                    return true;
+                }
+            }
+        }
+    }
+    for (const lightusd::PrimSpec& child : spec.children()) {
+        if (has_variant_prims(child)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] auto has_variant_prims(const lightusd::Layer& layer) -> bool
+{
+    for (const std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
+        if (has_variant_prims(entry.second)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The name a hoisted prim gets below `spec`, by the M2 sibling-unique rule
+// over the child prim specs `spec` already holds.
+[[nodiscard]] auto make_unique_child_name(const lightusd::PrimSpec& spec, const std::string& wanted_name) -> std::string
+{
+    return erhe::Hierarchy::make_unique_name(
+        wanted_name,
+        [&spec](const std::string_view candidate) -> bool {
+            for (const lightusd::PrimSpec& child : spec.children()) {
+                if (child.name() == candidate) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    );
+}
+
+// Copy the `def` children of every variant block of `spec` into `spec` itself
+// (doc/usd-compatibility-plan.md X4). Every variant's prims end up in the
+// tree, whichever variant is selected: the selected variant's are left as
+// they are, and the rest are marked `active = false`, which prunes them from
+// the render, the pick and the simulation the way USD's own `active` does
+// (X2). A switch is then a property write like every other one, not a rebuild
+// of the tree.
+//
+// The block itself is left where it is, so nothing about the variant set is
+// lost: the importer reads the blocks off the same layer for the property
+// opinions and the material bindings, and the writer puts each prim back
+// inside its own variant block under the name recorded here.
+void hoist_variant_prims(
+    const std::string&                path,
+    lightusd::PrimSpec&               spec,
+    std::vector<Variant_prim_record>& records
+)
+{
+    const lightusd::VariantSelectionMap& selection = spec.get_variant_selection_map();
+    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec.variantSets()) {
+        const lightusd::VariantSelectionMap::const_iterator i = selection.find(set.first);
+        // The same selection rule the importer applies: the layer's own
+        // `variants` opinion, or the first variant when it authors none.
+        const std::string selected = (i != selection.end())
+            ? i->second
+            : (set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first);
+        for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
+            for (const lightusd::PrimSpec& child : variant.second.children()) {
+                if (child.specifier() != lightusd::Specifier::Def) {
+                    continue; // an `over` child is an opinion on a prim the tree already has
+                }
+                lightusd::PrimSpec hoisted     = child;
+                const std::string  unique_name = make_unique_child_name(spec, child.name());
+                hoisted.name() = unique_name;
+                if (variant.first != selected) {
+                    hoisted.metas().set_active(false);
+                }
+                records.push_back(
+                    Variant_prim_record{
+                        .carrier_path  = path,
+                        .set_name      = set.first,
+                        .variant_name  = variant.first,
+                        .prim_name     = unique_name,
+                        .authored_name = child.name()
+                    }
+                );
+                spec.children().push_back(std::move(hoisted));
+            }
+        }
+    }
+    // By index: the loop above appended to this same vector, and a hoisted
+    // prim can carry variant sets of its own.
+    for (std::size_t index = 0; index < spec.children().size(); ++index) {
+        hoist_variant_prims(path + "/" + spec.children()[index].name(), spec.children()[index], records);
+    }
+}
+
+void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record>& records)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    for (std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
+        hoist_variant_prims("/" + entry.first, entry.second, records);
+    }
+}
+
+// Replace `stage` with the composition of `root_layer` and its `subLayers`
+// (the L of USD's LIVRPS). Returns false when the composition could not be
+// built, leaving `stage` as it was - a file whose sublayers cannot be
+// resolved still opens with the root layer's own content, as it does in USD.
 [[nodiscard]] auto compose_sublayers(
-    const std::filesystem::path& path,
-    lightusd::Stage&             stage,
-    std::string&                 warning
+    const std::filesystem::path&      path,
+    const lightusd::Layer&            root_layer,
+    lightusd::Stage&                  stage,
+    std::vector<Variant_prim_record>& variant_prims,
+    std::string&                      warning
 ) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -311,16 +427,8 @@ void fill_stage_metas_from_sublayers(
     asset_handler.read_fun    = &read_asset_handler;
     resolver.register_wildcard_asset_resolution_handler(asset_handler);
 
-    lightusd::USDLoadOptions load_options{};
-    std::string              load_warning;
-    std::string              load_error;
-    lightusd::Layer          root_layer;
-    if (!lightusd::LoadLayerFromFile(filename, &root_layer, &load_warning, &load_error, load_options)) {
-        log_usd->warn("USD '{}': the root layer could not be re-read for subLayer composition: {}", filename, load_error);
-        warning += load_error;
-        return false;
-    }
-    root_layer.set_asset_resolution_state(base_dir, std::vector<std::string>{base_dir});
+    std::string load_warning;
+    std::string load_error;
 
     lightusd::Layer                       composed_layer;
     lightusd::SublayersCompositionOptions sublayer_options{};
@@ -343,6 +451,8 @@ void fill_stage_metas_from_sublayers(
     std::set<std::string> visited;
     fill_stage_metas_from_sublayers(resolver, root_layer, metas, visited, 0);
     composed_layer.metas() = metas;
+
+    hoist_variant_prims(composed_layer, variant_prims);
 
     lightusd::Stage composed_stage;
     if (!lightusd::LayerToStage(std::move(composed_layer), &composed_stage, &load_warning, &load_error)) {
@@ -373,6 +483,41 @@ void fill_stage_metas_from_sublayers(
     return true;
 }
 
+// Replace `stage` with `root_layer` built into a stage with the prims of
+// every variant block hoisted into the tree: what a file without subLayers
+// needs, the composition above doing it for one that has them. A stage that
+// cannot be built leaves `stage` as the loader built it - with the variants'
+// prims absent, as they were before this - and is reported.
+void compose_variant_prims(
+    const std::filesystem::path&      path,
+    const lightusd::Layer&            root_layer,
+    lightusd::Stage&                  stage,
+    std::vector<Variant_prim_record>& variant_prims,
+    std::string&                      warning
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    const std::string filename = path.generic_string();
+    lightusd::Layer   layer    = root_layer;
+    hoist_variant_prims(layer, variant_prims);
+
+    std::string     load_warning;
+    std::string     load_error;
+    lightusd::Stage composed_stage;
+    if (!lightusd::LayerToStage(std::move(layer), &composed_stage, &load_warning, &load_error)) {
+        log_usd->warn("USD '{}': the prims of the variant blocks could not be built into a stage: {}", filename, load_error);
+        warning += load_error;
+        variant_prims.clear();
+        return;
+    }
+    if (!load_warning.empty()) {
+        warning += load_warning;
+        log_usd->warn("USD '{}': variant prims: {}", filename, load_warning);
+    }
+    stage = std::move(composed_stage);
+}
+
 } // anonymous namespace
 
 auto load_stage(const std::filesystem::path& path) -> Load_stage_result
@@ -400,26 +545,53 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
         return result;
     }
 
-    // A root layer's `subLayers` are the weakest opinions of its layer stack
-    // and LightUSD composes nothing at load, so the stage the reader built
-    // holds the root layer alone. Compose the stack here, before anything
-    // converts the stage: everything downstream - the Tydra conversion, the
-    // prim tree, a referenced file loaded through this same function - sees
-    // one composed stage. The re-read costs one extra parse of the root layer
-    // and is paid only by a file that has sublayers.
-    if (!impl->stage.metas().subLayers.empty()) {
+    // LightUSD composes nothing at load, so the stage the reader built holds
+    // the root layer alone, unresolved: its `subLayers` are not merged in and
+    // the prims its variant blocks author are absent. Both are erhe's own
+    // composition, and both happen here, before anything converts the stage,
+    // so everything downstream - the Tydra conversion, the prim tree, a
+    // referenced file loaded through this same function - sees one composed
+    // stage.
+    //
+    // The layer is read once and kept: the importer takes the `class` prims,
+    // the `over` opinions and the `variantSet` blocks off it rather than
+    // parsing the file a third time.
+    const std::string base_dir = path.has_parent_path() ? path.parent_path().generic_string() : std::string{"."};
+    std::string       layer_warning;
+    std::string       layer_error;
+    impl->root_layer_ok = lightusd::LoadLayerFromFile(filename, &impl->root_layer, &layer_warning, &layer_error, options);
+    if (!impl->root_layer_ok) {
+        log_usd->info("USD '{}': the root layer could not be read for composition: {}", filename, layer_error);
+    } else {
+        impl->root_layer.set_asset_resolution_state(base_dir, std::vector<std::string>{base_dir});
         const std::size_t sublayer_count = impl->stage.metas().subLayers.size();
         // A `.usdz` archive resolves its asset paths through the archive
         // rather than through the file system, and the composition resolver
-        // reaches the file system only, so a sublayer inside an archive is
-        // named rather than composed.
+        // reaches the file system only, so an archive keeps the stage the
+        // loader built: a sublayer inside one is named rather than composed,
+        // and the prims of a variant block inside one stay uncarried.
         if (path.extension() == ".usdz") {
-            log_usd->warn(
-                "USD '{}': {} subLayer(s) inside a .usdz archive are not composed - the stage holds the root layer alone",
-                filename, sublayer_count
-            );
-        } else if (compose_sublayers(path, impl->stage, result.warning)) {
-            log_usd->info("USD '{}': composed {} subLayer(s)", filename, sublayer_count);
+            if (sublayer_count > 0) {
+                log_usd->warn(
+                    "USD '{}': {} subLayer(s) inside a .usdz archive are not composed - the stage holds the root layer alone",
+                    filename, sublayer_count
+                );
+            }
+            if (has_variant_prims(impl->root_layer)) {
+                log_usd->warn(
+                    "USD '{}': the prims a variant block inside a .usdz archive adds are not carried",
+                    filename
+                );
+            }
+        } else if (sublayer_count > 0) {
+            if (compose_sublayers(path, impl->root_layer, impl->stage, impl->variant_prims, result.warning)) {
+                log_usd->info("USD '{}': composed {} subLayer(s)", filename, sublayer_count);
+            }
+        } else if (has_variant_prims(impl->root_layer)) {
+            compose_variant_prims(path, impl->root_layer, impl->stage, impl->variant_prims, result.warning);
+        }
+        if (!impl->variant_prims.empty()) {
+            log_usd->info("USD '{}': {} prim(s) of variant blocks are in the tree", filename, impl->variant_prims.size());
         }
     }
 

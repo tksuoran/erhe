@@ -27,25 +27,41 @@ public:
     std::weak_ptr<erhe::primitive::Material> material;
 };
 
-// One variant of a variant set: its name, the bindings it authors and the
-// property opinions it authors (doc/usd-compatibility-plan.md X4). An opinion
-// names the prim it is for by its path below the prim carrying the set, an
-// empty path being that prim itself, and carries the value in the neutral
-// text form the file reader recorded it in - so a variant nobody selected
-// still has its opinions, which no item of the scene holds.
+// One prim of the scene that belongs to one variant
+// (doc/usd-compatibility-plan.md X4). Every variant's prims are in the scene
+// whichever variant is
+// selected - a switch flips their `active`, it does not build or destroy them
+// - so `relative_path` is where the prim sits below the prim carrying the
+// set, and `authored_name` is the name the file's variant block gave it,
+// which is what a save writes back.
+class Variant_prim
+{
+public:
+    std::string relative_path;
+    std::string authored_name;
+};
+
+// One variant of a variant set: its name, the bindings it authors, the
+// property opinions it authors and the prims it adds
+// (doc/usd-compatibility-plan.md X4). An opinion names the prim it is for by
+// its path below the prim carrying the set, an empty path being that prim
+// itself, and carries the value in the neutral text form the file reader
+// recorded it in - so a variant nobody selected still has its opinions, which
+// no item of the scene holds.
 class Variant
 {
 public:
     std::string                                 name;
     std::vector<Variant_binding>                bindings;
     std::vector<erhe::scene::Instance_override> overrides;
+    std::vector<Variant_prim>                   prims;
 };
 
 // One variant set of a scene: the prim carrying it, the set's name, its
 // variants and which one is selected. `unsupported_opinion_count` is how many
-// opinions the file's variants authored that erhe has no place for - a prim a
-// variant adds, a property the reader could not express - which a save does
-// not write.
+// opinions the file's variants authored that erhe has no place for - a
+// property the reader could not express, a prim a variant adds somewhere the
+// reader's hoist does not reach - which a save does not write.
 class Variant_set
 {
 public:

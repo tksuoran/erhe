@@ -810,6 +810,14 @@ void fill_variant_table(
             Variant variant{};
             variant.name      = usd_variant.name;
             variant.overrides = usd_variant.overrides;
+            for (const erhe::usd::Usd_variant_prim& usd_prim : usd_variant.prims) {
+                variant.prims.push_back(
+                    Variant_prim{
+                        .relative_path = usd_prim.relative_path,
+                        .authored_name = usd_prim.authored_name
+                    }
+                );
+            }
             for (const erhe::usd::Usd_variant_binding& usd_binding : usd_variant.bindings) {
                 const std::shared_ptr<erhe::primitive::Material> material =
                     find_material_by_stage_path(container_node, usd_binding.material_path);
@@ -1428,10 +1436,9 @@ void collect_usd_brushes(
 
 // The scene's variant sets as the writer's table (X4): the selection the
 // scene holds today, every variant's bindings with the material each binds,
-// and the property opinions each variant authors. A set whose carrying prim
-// is gone is dropped before this runs. An opinion erhe has no place for - a
-// prim a variant adds, a property the reader could not express - is not
-// written, so the loss is named once per set.
+// the property opinions each variant authors and the prims each variant adds.
+// A set whose carrying prim is gone is dropped before this runs. An opinion
+// erhe has no place for is not written, so the loss is named once per set.
 void collect_usd_variant_sets(
     Scene_root&                                        scene_root,
     const std::filesystem::path&                       path,
@@ -1459,6 +1466,22 @@ void collect_usd_variant_sets(
             erhe::usd::Usd_save_variant save_variant{};
             save_variant.name      = variant.name;
             save_variant.overrides = variant.overrides;
+            for (const Variant_prim& variant_prim : variant.prims) {
+                const std::shared_ptr<erhe::Item_base> item = resolve_variant_prim(set, variant_prim.relative_path);
+                if (!item) {
+                    log_parsers->warn(
+                        "save_scene_usd '{}': variant '{}' of set '{}' on '{}' adds '{}', which is no longer in the scene - the prim is not written",
+                        erhe::file::to_string(path), variant.name, set.set_name, set.get_prim_path(), variant_prim.authored_name
+                    );
+                    continue;
+                }
+                save_variant.prims.push_back(
+                    erhe::usd::Usd_save_variant_prim{
+                        .item          = item,
+                        .authored_name = variant_prim.authored_name
+                    }
+                );
+            }
             for (const Variant_binding& binding : variant.bindings) {
                 const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
                 if (!material) {

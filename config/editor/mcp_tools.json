@@ -2433,7 +2433,7 @@
     "name": "get_scene_settings"
   },
   {
-    "description": "List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): per set the path of the prim carrying it, the set name, the selected variant, every variant with its material bindings, and how many opinions beyond material bindings the file's variants authored (those are not carried and are not written back).",
+    "description": "List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): per set the path of the prim carrying it, the set name, the selected variant, every variant with its material bindings, property opinions and the prims it adds (every variant's prims are in the scene; a switch flips their active property), and how many opinions the file's variants authored that are not carried and are not written back.",
     "inputSchema": {
       "properties": {
         "scene_name": {

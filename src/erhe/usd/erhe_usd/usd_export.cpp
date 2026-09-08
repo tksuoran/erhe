@@ -343,6 +343,30 @@ public:
     const erhe::primitive::Material* material{nullptr};
 };
 
+class Plan_prim;
+
+// Which variant of which set one prim of the tree belongs to.
+class Variant_prim_membership final
+{
+public:
+    const Usd_save_variant_set* set{nullptr};
+    std::string                 variant_name;
+    std::string                 authored_name;
+};
+
+// One prim of the tree that belongs to one variant of one of its parent's
+// variant sets (doc/usd-compatibility-plan.md X4). It is planned like every
+// other prim, and written
+// inside its variant block under the name the file authored rather than among
+// the plain children of the prim carrying the set.
+class Plan_variant_prim final
+{
+public:
+    const Usd_save_variant_set* set{nullptr};
+    std::string                 variant_name;
+    std::unique_ptr<Plan_prim>  prim;
+};
+
 class Plan_prim final
 {
 public:
@@ -376,6 +400,9 @@ public:
     // prim and changes nothing else about it, so a prim carrying one is
     // written and walked the way it otherwise would be.
     std::vector<const Usd_save_variant_set*> variant_sets;
+    // The prims a variant of one of `variant_sets` adds. They are not among
+    // `children`: each is written inside its own variant block.
+    std::vector<Plan_variant_prim>   variant_prims;
     std::vector<Plan_prim>           children;
 };
 
@@ -628,8 +655,20 @@ public:
         }
 
         for (const Usd_save_variant_set& entry : m_arguments.variant_sets) {
-            if (entry.item && !entry.variants.empty()) {
-                m_prim_variant_sets[entry.item.get()].push_back(&entry);
+            if (!entry.item || entry.variants.empty()) {
+                continue;
+            }
+            m_prim_variant_sets[entry.item.get()].push_back(&entry);
+            for (const Usd_save_variant& variant : entry.variants) {
+                for (const Usd_save_variant_prim& prim : variant.prims) {
+                    if (prim.item) {
+                        m_variant_prims[prim.item.get()] = Variant_prim_membership{
+                            .set           = &entry,
+                            .variant_name  = variant.name,
+                            .authored_name = prim.authored_name
+                        };
+                    }
+                }
             }
         }
 
@@ -1319,11 +1358,12 @@ private:
     // the way down to one are planned as well
     // (doc/usd-compatibility-plan.md U4).
     void plan_children(
-        const erhe::Hierarchy&  parent,
-        const glm::mat4&        pre_transform,
-        Name_scope&             names,
-        std::vector<Plan_prim>& out_prims,
-        const Prim_holder       holder = Prim_holder::tree
+        const erhe::Hierarchy&          parent,
+        const glm::mat4&                pre_transform,
+        Name_scope&                     names,
+        std::vector<Plan_prim>&         out_prims,
+        std::vector<Plan_variant_prim>* out_variant_prims = nullptr,
+        const Prim_holder               holder            = Prim_holder::tree
     )
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
@@ -1352,12 +1392,19 @@ private:
             ) {
                 continue;
             }
+            // A prim one variant of the parent's sets adds is written
+            // inside that block, under the name the file authored: the name
+            // it has in the tree is what keeps two variants' prims apart
+            // there, and the block is a namespace of its own.
+            const Variant_prim_membership* const membership = find_variant_prim_membership(*child_prim, parent);
             Plan_prim plan_prim{};
             plan_prim.item          = child_prim;
             plan_prim.node          = child_node;
             plan_prim.material      = dynamic_cast<const erhe::primitive::Material*>(child.get());
             plan_prim.pre_transform = pre_transform;
-            plan_prim.name          = names.make_unique(child_prim->get_name());
+            plan_prim.name          = (membership != nullptr)
+                ? sanitize_usd_identifier(membership->authored_name)
+                : names.make_unique(child_prim->get_name());
             plan_prim.references    = find_prim_references(*child_prim);
             plan_prim.variant_sets  = find_prim_variant_sets(*child_prim);
             if (plan_prim.references != nullptr) {
@@ -1372,11 +1419,37 @@ private:
                     (child_node != nullptr) ? glm::mat4{1.0f} : pre_transform,
                     child_names,
                     plan_prim.children,
+                    &plan_prim.variant_prims,
                     is_style_prim(*child_prim) ? Prim_holder::class_prim : Prim_holder::tree
                 );
             }
+            if ((membership != nullptr) && (out_variant_prims != nullptr)) {
+                out_variant_prims->push_back(
+                    Plan_variant_prim{
+                        .set          = membership->set,
+                        .variant_name = membership->variant_name,
+                        .prim         = std::make_unique<Plan_prim>(std::move(plan_prim))
+                    }
+                );
+                continue;
+            }
             out_prims.push_back(std::move(plan_prim));
         }
+    }
+
+    // The variant of `parent`'s sets `prim` belongs to, null when it belongs
+    // to none: a prim listed by a set some other prim carries is a prim of
+    // the tree like any other here.
+    [[nodiscard]] auto find_variant_prim_membership(
+        const erhe::Typed&     prim,
+        const erhe::Hierarchy& parent
+    ) const -> const Variant_prim_membership*
+    {
+        const std::map<const erhe::Item_base*, Variant_prim_membership>::const_iterator i = m_variant_prims.find(&prim);
+        if (i == m_variant_prims.end()) {
+            return nullptr;
+        }
+        return (i->second.set->item.get() == &parent) ? &i->second : nullptr;
     }
 
     // The arcs the caller named for this prim, null when it named none.
@@ -1550,6 +1623,13 @@ private:
         for (Plan_prim& prim : prims) {
             prim.path = parent_path + "/" + prim.name;
             assign_paths(prim.children, prim.path);
+            // A prim inside a variant block has the path it would have as a
+            // child of the prim carrying the set, which is the path it has
+            // while its variant is selected.
+            for (Plan_variant_prim& variant_prim : prim.variant_prims) {
+                variant_prim.prim->path = prim.path + "/" + variant_prim.prim->name;
+                assign_paths(variant_prim.prim->children, variant_prim.prim->path);
+            }
         }
     }
 
@@ -1569,6 +1649,23 @@ private:
                 record_instance_content_material_paths(*prim.item, prim.path);
             }
             record_resource_paths(prim.children);
+            for (const Plan_variant_prim& variant_prim : prim.variant_prims) {
+                record_resource_paths_of(*variant_prim.prim.get());
+            }
+        }
+    }
+
+    void record_resource_paths_of(const Plan_prim& prim)
+    {
+        if (prim.material != nullptr) {
+            m_material_paths[prim.material] = prim.path;
+        }
+        if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
+            m_style_paths[prim.item] = prim.path;
+        }
+        record_resource_paths(prim.children);
+        for (const Plan_variant_prim& variant_prim : prim.variant_prims) {
+            record_resource_paths_of(*variant_prim.prim.get());
         }
     }
 
@@ -1978,7 +2075,7 @@ private:
             lightusd::VariantSet usd_set;
             usd_set.name = set->set_name;
             for (const Usd_save_variant& variant : set->variants) {
-                usd_set.variantSet.emplace(variant.name, write_variant(*set, variant));
+                usd_set.variantSet.emplace(variant.name, write_variant(*set, variant, plan_prim));
             }
             if (usd_set.variantSet.empty()) {
                 continue;
@@ -2024,7 +2121,11 @@ private:
         return prim;
     }
 
-    [[nodiscard]] auto write_variant(const Usd_save_variant_set& set, const Usd_save_variant& variant) -> lightusd::Variant
+    [[nodiscard]] auto write_variant(
+        const Usd_save_variant_set& set,
+        const Usd_save_variant&     variant,
+        const Plan_prim&            plan_prim
+    ) -> lightusd::Variant
     {
         lightusd::Variant         usd_variant;
         std::vector<Variant_prim> tree;
@@ -2061,6 +2162,22 @@ private:
         }
         for (const Variant_prim& variant_prim : tree) {
             usd_variant.primChildren().push_back(write_variant_prim(variant_prim));
+        }
+        // The prims this variant adds, each the `def` it is, with its whole
+        // subtree (doc/usd-compatibility-plan.md X4).
+        for (const Plan_variant_prim& added : plan_prim.variant_prims) {
+            if ((added.set != &set) || (added.variant_name != variant.name)) {
+                continue;
+            }
+            lightusd::Prim prim = write_plan_prim(*added.prim.get());
+            if (variant.name != set.selected) {
+                // A prim of an unselected variant is inactive in the scene
+                // because its variant is not the selection, which USD says
+                // by not building the prim at all. Its own `active` opinion
+                // is what the selected variant's prims write.
+                prim.metas().remove_active();
+            }
+            usd_variant.primChildren().push_back(std::move(prim));
         }
         return usd_variant;
     }
@@ -3065,6 +3182,10 @@ private:
     // The variant sets the caller named, by the item carrying them; one item
     // can carry more than one set (doc/usd-compatibility-plan.md X4).
     std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>> m_prim_variant_sets;
+    // Which variant of which set each prim a variant adds belongs to, by the
+    // item: what tells plan_children to write it inside the block instead of
+    // among the carrying prim's children.
+    std::map<const erhe::Item_base*, Variant_prim_membership>                  m_variant_prims;
     std::size_t                                              m_node_count{0};
     std::size_t                                              m_mesh_count{0};
 };

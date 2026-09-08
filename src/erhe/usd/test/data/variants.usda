@@ -84,6 +84,46 @@ def Xform "World"
         }
     }
 
+    def Xform "Swap" (
+        variants = {
+            string shape = "first"
+        }
+        append variantSets = "shape"
+    )
+    {
+        variantSet "shape" = {
+            "first" {
+                def Mesh "tri"
+                {
+                    uniform token subdivisionScheme = "none"
+                    int[] faceVertexCounts = [3]
+                    int[] faceVertexIndices = [0, 1, 2]
+                    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0, 1)]
+                    double3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+            }
+            "second" {
+                def Mesh "tri"
+                {
+                    uniform token subdivisionScheme = "none"
+                    int[] faceVertexCounts = [3]
+                    int[] faceVertexIndices = [0, 1, 2]
+                    point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0, 1)]
+                    double3 xformOp:translate = (5, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+
+                def Xform "group"
+                {
+                    def Xform "inner"
+                    {
+                    }
+                }
+            }
+        }
+    }
+
     def Xform "Extra" (
         variants = {
             string detail = "low"

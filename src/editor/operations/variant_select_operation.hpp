@@ -56,9 +56,11 @@ private:
 };
 
 // The undoable compound one variant switch is: the selection entry above, one
-// property write per opinion any variant of the set authors, and one material
-// assignment per binding of the chosen variant, so a single undo puts all
-// three back. A property the chosen variant does not author goes back to the
+// property write per opinion any variant of the set authors, one `active`
+// write per prim any variant of the set adds - the chosen variant's prims
+// active, every other variant's inactive - and one material assignment per
+// binding of the chosen variant, so a single undo puts all of them back. A
+// property the chosen variant does not author goes back to the
 // set's base value - what the file authored outside the variant blocks - so
 // switching never leaves the previous variant's opinion standing. Null when
 // the scene has no such set or the set has no such variant. Selecting the

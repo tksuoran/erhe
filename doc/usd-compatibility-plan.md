@@ -278,9 +278,14 @@ record has the history.
   every path and name any variant authors). It binds the selected
   variant's materials itself, converting a material only a variant binds
   through Tydra's per-material converter, and applies its opinions
-  through `apply_property_values`. What stays uncarried is a prim a
-  variant adds that the tree has no counterpart for: counted per set,
-  reported once, and named by the save warning
+  through `apply_property_values`. The prims a variant adds are in the
+  tree whichever variant is selected: `load_stage` copies the `def`
+  children of every variant block into the prim carrying the set, under
+  sibling-unique names (M2), and marks the unselected variants' prims
+  `active = false`, so a switch is a property write rather than a rebuild
+  of the tree. What stays uncarried is a property the value reader cannot
+  express and a `def` the hoist does not reach: counted per set, reported
+  once, and named by the save warning
   (`src/erhe/usd/notes.md` "Variant sets"). The editor keeps one
   `Variant_table` per scene (`Scene_root`; weak prim and materials,
   pruned on `items_removed`), the selection in
@@ -288,7 +293,8 @@ record has the history.
   switches as one undoable compound of a selection record, one property
   write per opinion any variant of the set authors - the chosen variant's
   value where it authors one, the set's base value where it does not -
-  and one material assignment per binding; the Scene section of the
+  one `active` write per prim any variant of the set adds, and one
+  material assignment per binding; the Scene section of the
   Properties window draws one combo per set, MCP has
   `get_scene_variants` / `select_variant`, and a USD save writes the
   blocks and the selection back (`src/editor/scene/notes.md`,
@@ -296,8 +302,9 @@ record has the history.
   is the same table as one set named `materials` on the file's root
   prim, a primitive named `<mesh path>#<index>`, the selection in the
   scene block (`src/erhe/gltf/notes.md`); it carries bindings only, so a
-  variant's property opinions are a USD feature. The prims a variant adds
-  are section 6.
+  variant's property opinions and the prims it adds are USD features: a
+  scene saved to glTF writes those prims as plain children with their
+  `active` flags and loses the membership.
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -424,8 +431,7 @@ reads the texture channel the file connects, an unauthored
 scale and per-channel normal decode reach the material, with a texture
 packed in a `.usdz` read out of the archive. The current run (146
 entries, 45 work as they are, none crash) leaves, in the order the
-fixes are taken: a `PointInstancer` not instanced; the prims a variant
-adds (X4's later slice; Teapot.usd's geometry sits behind one); a
+fixes are taken: a `PointInstancer` not instanced; a
 time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
 stained glass opaque and its cards missing; the transform test's lower
@@ -527,17 +533,16 @@ named.
   (linear samples; `Ts` splines re-encoded to cubic samplers);
   `UsdSkel` `SkelAnimation` goes through the existing skin path. The
   matching save writes the channels back as time samples.
-- Variant sets that add or remove prims: a variant whose `def` children
-  the tree has no counterpart for. The property opinions a variant
-  authors - values, visibility, purpose, active and the transform - are
-  carried: the reader records them the way X2 records an `over`, applies
-  the selected variant's through `apply_property_values`, and a switch
-  restores the set's base values before applying the chosen variant's, all
-  in one undoable compound. What stays uncarried is structure: such a
-  `def` child is counted in `Usd_variant_set::unsupported_opinion_count`,
-  reported per set, and named by the save warning. Taking it up means
-  creating those prims on a switch and removing them again on the other
-  one, through the instance structure rules of section 5.
+- Variant opinions a variant set does not carry: the `def` children of a
+  variant block that the hoist does not reach - one authored below an
+  `over` child of the variant, and any of them in a `.usdz` archive, whose
+  asset paths resolve through the archive rather than the file system -
+  and a property the value reader cannot express. Each is counted in
+  `Usd_variant_set::unsupported_opinion_count`, reported per set, and
+  named by the save warning. (`GeomModelAPI` draw-mode cards are the
+  common case: Teapot.usd's two variants author nothing else.) Taking the
+  first up means hoisting through the `over` children too; the second is
+  the value reader's own coverage.
 - Overrides on applied API schemas inside an instance: the override walk
   of `erhe::scene::instance_override` visits prims only, so a local value
   on a `Node_physics`, `Node_joint` or other attachment below a carrier is

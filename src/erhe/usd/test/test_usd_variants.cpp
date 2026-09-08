@@ -190,6 +190,21 @@ namespace {
                     }
                 );
             }
+            erhe::Hierarchy* const carrier = dynamic_cast<erhe::Hierarchy*>(set.prim.get());
+            for (const erhe::usd::Usd_variant_prim& variant_prim : variant.prims) {
+                erhe::Hierarchy* const item = (carrier != nullptr)
+                    ? erhe::find_by_path(*carrier, variant_prim.relative_path)
+                    : nullptr;
+                if (item == nullptr) {
+                    continue;
+                }
+                save_variant.prims.push_back(
+                    erhe::usd::Usd_save_variant_prim{
+                        .item          = item->shared_from_this(),
+                        .authored_name = variant_prim.authored_name
+                    }
+                );
+            }
             save_set.variants.push_back(std::move(save_variant));
         }
         save_sets.push_back(std::move(save_set));
@@ -213,7 +228,7 @@ protected:
 
 TEST_F(Variant_import, the_sets_and_their_bindings_are_recorded)
 {
-    ASSERT_EQ(result.data.variant_sets.size(), 2u);
+    ASSERT_EQ(result.data.variant_sets.size(), 3u);
 
     const erhe::usd::Usd_variant_set* look = find_set(result.data, "/World/Holder", "look");
     ASSERT_NE(look, nullptr);
@@ -329,6 +344,59 @@ TEST_F(Variant_import, the_selected_variant_opinions_are_applied)
     EXPECT_TRUE(mesh->get_value(erhe::scene::Mesh::shadow_cast_property));
 }
 
+// A variant's `def` children are prims of the tree, whichever variant is
+// selected: the loader hoists every variant's prims below the prim carrying
+// the set and gives them sibling-unique names, so the two `tri` meshes the
+// two variants of `shape` author are `tri` and `tri_1`
+// (doc/usd-compatibility-plan.md X4).
+TEST_F(Variant_import, the_prims_a_variant_adds_are_in_the_tree)
+{
+    const erhe::usd::Usd_variant_set* shape = find_set(result.data, "/World/Swap", "shape");
+    ASSERT_NE(shape, nullptr);
+    EXPECT_EQ(shape->selected, "first");
+    EXPECT_EQ(shape->unsupported_opinion_count, 0u);
+
+    const erhe::usd::Usd_variant* first  = find_variant(*shape, "first");
+    const erhe::usd::Usd_variant* second = find_variant(*shape, "second");
+    ASSERT_NE(first,  nullptr);
+    ASSERT_NE(second, nullptr);
+
+    ASSERT_EQ(first->prims.size(), 1u);
+    EXPECT_EQ(first->prims[0].relative_path, "tri");
+    EXPECT_EQ(first->prims[0].authored_name, "tri");
+
+    // In the order the variant block authors them.
+    ASSERT_EQ(second->prims.size(), 2u);
+    // The name the file gave it is held by the other variant's prim, so the
+    // tree gives it the next free one by the M2 rule.
+    EXPECT_EQ(second->prims[0].relative_path, "tri_1");
+    EXPECT_EQ(second->prims[0].authored_name, "tri");
+    EXPECT_EQ(second->prims[1].relative_path, "group");
+    EXPECT_EQ(second->prims[1].authored_name, "group");
+
+    EXPECT_NE(mesh_at(root, "World/Swap/tri"),          nullptr);
+    EXPECT_NE(mesh_at(root, "World/Swap/tri_1"),        nullptr);
+    EXPECT_NE(erhe::find_by_path(*root.get(), "World/Swap/group/inner"), nullptr);
+}
+
+// The selected variant's prims are active and every other variant's are not,
+// which is what prunes them from the render, the pick and the simulation.
+TEST_F(Variant_import, only_the_selected_variants_prims_are_active)
+{
+    erhe::Hierarchy* const selected   = erhe::find_by_path(*root.get(), "World/Swap/tri");
+    erhe::Hierarchy* const unselected = erhe::find_by_path(*root.get(), "World/Swap/tri_1");
+    erhe::Hierarchy* const group      = erhe::find_by_path(*root.get(), "World/Swap/group");
+    ASSERT_NE(selected,   nullptr);
+    ASSERT_NE(unselected, nullptr);
+    ASSERT_NE(group,      nullptr);
+    EXPECT_TRUE (selected  ->get_value(erhe::Item_base::active_property));
+    EXPECT_FALSE(unselected->get_value(erhe::Item_base::active_property));
+    EXPECT_FALSE(group     ->get_value(erhe::Item_base::active_property));
+    // The selected variant's prim holds no opinion of its own: it is active
+    // because its variant is the selection.
+    EXPECT_FALSE(selected->has_local_value(erhe::Item_base::active_property.get()));
+}
+
 class Variant_round_trip : public testing::Test
 {
 protected:
@@ -377,6 +445,52 @@ TEST_F(Variant_round_trip, the_variant_lines_are_written)
     EXPECT_NE(written.find("token visibility = \"inherited\""), std::string::npos) << written;
     EXPECT_NE(written.find("erhe:Mesh:shadow_cast"),             std::string::npos) << written;
     EXPECT_NE(written.find("xformOp:translate"),                 std::string::npos) << written;
+}
+
+// A prim a variant adds goes back inside that variant's block, under the name
+// the file gave it, and is not among the plain children of the prim carrying
+// the set.
+TEST_F(Variant_round_trip, the_prims_a_variant_adds_are_written_inside_their_block)
+{
+    const std::string written = read_file(written_path);
+    const std::size_t variant_set = written.find("variantSet \"shape\" = {");
+    ASSERT_NE(variant_set, std::string::npos) << written;
+
+    const std::size_t first_tri = written.find("def Mesh \"tri\"");
+    ASSERT_NE(first_tri, std::string::npos) << written;
+    const std::size_t second_tri = written.find("def Mesh \"tri\"", first_tri + 1);
+    ASSERT_NE(second_tri, std::string::npos) << written;
+    EXPECT_GT(first_tri,  variant_set) << written;
+    EXPECT_GT(second_tri, variant_set) << written;
+    // The name the tree gave the second one is the tree's, not the file's.
+    EXPECT_EQ(written.find("\"tri_1\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Xform \"group\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Xform \"inner\""), std::string::npos) << written;
+}
+
+// The reloaded scene holds the same prims, with the same names and the same
+// active states: what makes a save of a switched scene a fixed point.
+TEST_F(Variant_round_trip, the_prims_come_back_as_they_went_out)
+{
+    const erhe::usd::Usd_variant_set* shape = find_set(reloaded.data, "/World/Swap", "shape");
+    ASSERT_NE(shape, nullptr);
+    EXPECT_EQ(shape->selected, "first");
+    const erhe::usd::Usd_variant* first  = find_variant(*shape, "first");
+    const erhe::usd::Usd_variant* second = find_variant(*shape, "second");
+    ASSERT_NE(first,  nullptr);
+    ASSERT_NE(second, nullptr);
+    ASSERT_EQ(first->prims.size(),  1u);
+    ASSERT_EQ(second->prims.size(), 2u);
+    EXPECT_EQ(first->prims[0].relative_path,  "tri");
+    EXPECT_EQ(second->prims[0].relative_path, "tri_1");
+    EXPECT_EQ(second->prims[0].authored_name, "tri");
+
+    erhe::Hierarchy* const selected   = erhe::find_by_path(*reloaded_root.get(), "World/Swap/tri");
+    erhe::Hierarchy* const unselected = erhe::find_by_path(*reloaded_root.get(), "World/Swap/tri_1");
+    ASSERT_NE(selected,   nullptr);
+    ASSERT_NE(unselected, nullptr);
+    EXPECT_TRUE (selected  ->get_value(erhe::Item_base::active_property));
+    EXPECT_FALSE(unselected->get_value(erhe::Item_base::active_property));
 }
 
 // The opinions survive the round trip as values, and the selected variant is

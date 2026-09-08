@@ -394,15 +394,24 @@ auto Hierarchy::make_sibling_unique_name(
         return std::string{wanted_name};
     }
 
-    const auto is_taken = [parent, exclude](const std::string_view candidate) -> bool {
-        for (const std::shared_ptr<Hierarchy>& child : parent->m_children) {
-            if (child && (child.get() != exclude) && (child->get_name() == candidate)) {
-                return true;
+    return make_unique_name(
+        wanted_name,
+        [parent, exclude](const std::string_view candidate) -> bool {
+            for (const std::shared_ptr<Hierarchy>& child : parent->m_children) {
+                if (child && (child.get() != exclude) && (child->get_name() == candidate)) {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
-    };
+    );
+}
 
+auto Hierarchy::make_unique_name(
+    const std::string_view                       wanted_name,
+    const std::function<bool(std::string_view)>& is_taken
+) -> std::string
+{
     if (!is_taken(wanted_name)) {
         return std::string{wanted_name};
     }

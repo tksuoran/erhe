@@ -521,9 +521,12 @@ public:
     {
     }
 
-    void convert(const lightusd::Stage& stage)
+    void convert(const Stage::Impl& impl)
     {
         ERHE_PROFILE_FUNCTION();
+
+        m_impl = &impl;
+        const lightusd::Stage& stage = impl.stage;
 
         report_skipped_physics(stage);
 
@@ -3278,38 +3281,22 @@ private:
     // opinion came from and Tydra's render-scene conversion never walks a
     // `class` prim, so the layer's own prim specs are what the reader asks for
     // the `over` prims of X2 and the `class` prims and `inherits` arcs of X3.
-    [[nodiscard]] auto ensure_root_layer() -> bool
+    // load_stage read it and the stage keeps it, so nothing here parses the
+    // file again.
+    [[nodiscard]] auto has_root_layer() const -> bool
     {
-        if (!m_root_layer_read) {
-            m_root_layer_read = true;
-            std::string warning;
-            std::string error;
-            m_root_layer_ok = lightusd::LoadLayerFromFile(
-                m_arguments.path.generic_string(),
-                &m_root_layer,
-                &warning,
-                &error
-            );
-            if (!m_root_layer_ok) {
-                log_usd->info(
-                    "USD '{}': the root layer could not be re-read for composition reporting: {}",
-                    m_arguments.path.generic_string(),
-                    error
-                );
-            }
-        }
-        return m_root_layer_ok;
+        return (m_impl != nullptr) && m_impl->root_layer_ok;
     }
 
     // The root layer's prim spec at the given path, or null.
     [[nodiscard]] auto find_root_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
     {
-        if (!ensure_root_layer()) {
+        if (!has_root_layer()) {
             return nullptr;
         }
         const lightusd::PrimSpec* spec = nullptr;
         std::string               error;
-        if (!m_root_layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error)) {
+        if (!m_impl->root_layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error)) {
             return nullptr;
         }
         return spec;
@@ -3324,17 +3311,17 @@ private:
     void read_layer_composition()
     {
         ERHE_PROFILE_FUNCTION();
-        if (!ensure_root_layer()) {
+        if (!has_root_layer()) {
             return;
         }
         std::vector<std::string> root_names;
-        root_names.reserve(m_root_layer.primspecs().size());
-        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_root_layer.primspecs()) {
+        root_names.reserve(m_impl->root_layer.primspecs().size());
+        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_impl->root_layer.primspecs()) {
             root_names.push_back(entry.first);
         }
         std::sort(root_names.begin(), root_names.end());
         for (const std::string& root_name : root_names) {
-            const lightusd::PrimSpec& spec = m_root_layer.primspecs().at(root_name);
+            const lightusd::PrimSpec& spec = m_impl->root_layer.primspecs().at(root_name);
             collect_layer_composition("/" + root_name, spec);
         }
     }
@@ -3630,9 +3617,9 @@ private:
     // The `variantSet` blocks one prim spec authors. LightUSD composes
     // nothing, so a variant contributes no property to the composed prim: the
     // layer's own spec is where the blocks are, and applying the selection is
-    // the reader's job (apply_variant_bindings). Only material bindings are
-    // carried in this slice; every other opinion of the set is counted and
-    // reported once.
+    // the reader's job (apply_variant_bindings). The prims a variant adds are
+    // already in the tree - load_stage hoisted them there - and this is where
+    // each variant learns which of them are its own.
     void record_spec_variant_sets(const std::string& path, const lightusd::PrimSpec& spec)
     {
         if (spec.variantSets().empty()) {
@@ -3647,6 +3634,7 @@ private:
             for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
                 Usd_variant variant{};
                 variant.name = variant_entry.first;
+                read_variant_prims(path, entry.first, variant);
                 read_variant_opinions(path, variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
                 set.variants.push_back(std::move(variant));
             }
@@ -3661,14 +3649,34 @@ private:
         m_variant_sets_by_path.emplace(path, std::move(sets));
     }
 
+    // The prims of one variant, as load_stage hoisted them into the tree
+    // below the prim carrying the set (doc/usd-compatibility-plan.md X4).
+    void read_variant_prims(const std::string& path, const std::string& set_name, Usd_variant& variant)
+    {
+        if (m_impl == nullptr) {
+            return;
+        }
+        for (const Variant_prim_record& record : m_impl->variant_prims) {
+            if ((record.carrier_path == path) && (record.set_name == set_name) && (record.variant_name == variant.name)) {
+                variant.prims.push_back(
+                    Usd_variant_prim{
+                        .relative_path = record.prim_name,
+                        .authored_name = record.authored_name
+                    }
+                );
+            }
+        }
+    }
+
     // One variant block: the `material:binding` relationships it authors and
     // the property opinions it authors, on the prim carrying the set (an empty
-    // relative path) and on the prims below it. An opinion is recorded exactly
-    // the way an `over` below a reference carrier is (X2), so both travel
-    // through the same apply. A property the value reader cannot express is
-    // counted for the set; `def` children contribute their opinions too, and a
-    // path that reaches no prim of the tree is dropped as structure when the
-    // base values are captured.
+    // relative path) and on the `over` prims below it. An opinion is recorded
+    // exactly the way an `over` below a reference carrier is (X2), so both
+    // travel through the same apply. A property the value reader cannot
+    // express is counted for the set; a `def` child of the variant is a prim
+    // of the tree carrying its own attributes, so its opinions are not the
+    // variant's, and a path that reaches no prim of the tree is dropped as
+    // structure when the base values are captured.
     void read_variant_opinions(
         const std::string&        stage_path,
         const lightusd::PrimSpec& spec,
@@ -3711,11 +3719,32 @@ private:
             variant.overrides.push_back(std::move(entry));
         }
         for (const lightusd::PrimSpec& child : spec.children()) {
+            if (child.specifier() == lightusd::Specifier::Def) {
+                // A prim the variant adds. It is in the tree with its own
+                // attributes when the hoist reached it, and an opinion the
+                // set does not carry when it did not - a `def` below an
+                // `over` child, or a variant block inside a `.usdz` archive.
+                if (!is_hoisted_variant_prim(variant, child.name())) {
+                    ++unsupported_opinion_count;
+                }
+                continue;
+            }
             const std::string child_path = relative_path.empty()
                 ? child.name()
                 : (relative_path + "/" + child.name());
             read_variant_opinions(stage_path, child, child_path, variant, unsupported_opinion_count);
         }
+    }
+
+    // Whether the variant's prim of that authored name is in the tree.
+    [[nodiscard]] static auto is_hoisted_variant_prim(const Usd_variant& variant, const std::string& authored_name) -> bool
+    {
+        for (const Usd_variant_prim& prim : variant.prims) {
+            if (prim.authored_name == authored_name) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Whether one property of a prim spec reaches erhe at all: the material
@@ -4201,10 +4230,9 @@ private:
     // The mesh each `Mesh` prim of the stage became, by the prim's absolute
     // path: what a variant binding resolves against.
     std::map<std::string, Mesh_prim>               m_mesh_by_path;
-    // The root layer, read lazily by ensure_root_layer.
-    lightusd::Layer                              m_root_layer;
-    bool                                         m_root_layer_read{false};
-    bool                                         m_root_layer_ok  {false};
+    // The stage being converted, with the root layer load_stage read and the
+    // prims it hoisted out of the variant blocks.
+    const Stage::Impl*                           m_impl{nullptr};
     // The archive directory of the `.usdz` the stage was loaded from, read
     // lazily by ensure_usdz_asset: what packed texture bytes are taken from.
     lightusd::USDZAsset                          m_usdz_asset;
@@ -4220,7 +4248,7 @@ auto convert_stage(const Stage& stage, const Usd_load_arguments& arguments) -> U
 
     Usd_load_result result{};
     Importer        importer{arguments, result};
-    importer.convert(stage.get_impl().stage);
+    importer.convert(stage.get_impl());
     return result;
 }
 

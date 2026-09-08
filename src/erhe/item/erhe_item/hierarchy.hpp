@@ -4,6 +4,7 @@
 #include "erhe_property/dependency_property.hpp"
 
 #include <concepts>
+#include <functional>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -72,6 +73,16 @@ public:
         const Hierarchy* parent,
         std::string_view wanted_name,
         const Hierarchy* exclude
+    ) -> std::string;
+
+    // The same rule over an arbitrary namespace: `is_taken` says whether a
+    // candidate name is held there. This is where the rule lives; the
+    // sibling form above is this one over the children of `parent`, and the
+    // USD reader uses it over the child prim specs of a layer's prim, so a
+    // prim hoisted out of a variant block gets the name the tree gives it.
+    [[nodiscard]] static auto make_unique_name(
+        std::string_view                             wanted_name,
+        const std::function<bool(std::string_view)>& is_taken
     ) -> std::string;
 
     // Overrides Item_base: an item in a hierarchy shares one namespace with
