@@ -94,12 +94,30 @@ constexpr std::array<std::string_view, 5> c_prim_payload_types{
     return false;
 }
 
+// True when the payload is named for an erhe item class (Item_type::c_bit_labels),
+// which is how every item drag in the editor names its payload. Only such a
+// payload carries an Item_base*: ImGui's own docking drag ("_IMWINDOW") carries
+// an ImGuiWindow* of the same size, so the pointer must never be read before
+// this check passes.
+[[nodiscard]] auto is_item_payload(const ImGuiPayload* const payload) -> bool
+{
+    if (payload == nullptr) {
+        return false;
+    }
+    for (uint64_t i = 1; i < erhe::Item_type::count; ++i) {
+        if (payload->IsDataType(erhe::Item_type::c_bit_labels[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // The item the drag payload carries, when the payload is one of the item
 // tree's own (the tree names a payload for the dragged item's class, see
 // SetDragDropPayload below).
 [[nodiscard]] auto peek_prim_payload(const ImGuiPayload* const payload_peek) -> std::shared_ptr<erhe::Item_base>
 {
-    if ((payload_peek == nullptr) || (payload_peek->Data == nullptr) || (payload_peek->DataSize != sizeof(erhe::Item_base*))) {
+    if (!is_item_payload(payload_peek) || (payload_peek->Data == nullptr) || (payload_peek->DataSize != sizeof(erhe::Item_base*))) {
         return {};
     }
     erhe::Item_base* const raw = *static_cast<erhe::Item_base**>(payload_peek->Data);
