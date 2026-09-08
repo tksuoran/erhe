@@ -24,6 +24,9 @@ namespace erhe {
     class Item_base;
     class Item_host;
 }
+namespace erhe::primitive {
+    class Material;
+}
 namespace erhe::scene {
     class Xformable; using Node = Xformable;
 }
@@ -385,6 +388,11 @@ public:
     // True when the item is known to the manager: a builtin, a loaded
     // container's asset, or a scene record's entry.
     [[nodiscard]] auto is_managed(const erhe::Item_base& item) const -> bool;
+    // True when a loaded prefab template supplies the material: the prefab
+    // library owns what its templates supply and the manager does not, so
+    // this is the second live home a material an instance's mesh binds can
+    // have (Prefab_library::owns_material).
+    [[nodiscard]] auto is_prefab_template_material(const erhe::primitive::Material& material) const -> bool;
     // Cross-scene use rule (plan resolution 11): referencing an asset
     // defined in another scene is accepted when the defining container is
     // path-bound - exactly the condition under which a durable file-scope

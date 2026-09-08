@@ -215,6 +215,27 @@ auto Prefab_library::get_prefabs() const -> const std::map<Prefab_key, std::shar
     return m_prefabs;
 }
 
+auto Prefab_library::owns_material(const erhe::primitive::Material& material) const -> bool
+{
+    const erhe::primitive::Material*                          item = &material;
+    std::shared_ptr<const erhe::property::Dependency_object>  counterpart;
+    while (item != nullptr) {
+        for (const std::pair<const Prefab_key, std::shared_ptr<Prefab>>& entry : m_prefabs) {
+            if (!entry.second) {
+                continue;
+            }
+            for (const std::shared_ptr<erhe::primitive::Material>& candidate : entry.second->materials) {
+                if (candidate.get() == item) {
+                    return true;
+                }
+            }
+        }
+        counterpart = item->get_reference();
+        item        = dynamic_cast<const erhe::primitive::Material*>(counterpart.get());
+    }
+    return false;
+}
+
 namespace {
 
 [[nodiscard]] auto canonical_prefab_path(const std::filesystem::path& path) -> std::filesystem::path

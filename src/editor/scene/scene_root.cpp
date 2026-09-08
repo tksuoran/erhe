@@ -1377,11 +1377,17 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     // nobody here: it renders because the mesh binding gives it a slot in
     // this scene's Material_set (enqueue_mesh_materials below), and its
     // membership stays with its owner (doc/usd-compatibility-plan.md U4). A
-    // material with NO live home at all (not managed, not listed anywhere)
-    // means a missing explicit registration at its creation site (R5.2b
-    // removed the implicit adoption): warn loudly; rendering keeps working,
-    // but nothing claims ownership (a definition must never appear as a side
-    // effect of mesh registration).
+    // material has a live home when this scene defines it, when the asset
+    // manager knows it, when it sits in a prim tree (U4: a resource is a prim
+    // where it sits, and the tree that holds it is what owns it - this
+    // scene's own tree for a material a USD file placed, another scene's for
+    // a mesh that migrated), when the prefab library's templates supply it,
+    // or when this library lists it. A material with NO live home at all -
+    // placed nowhere and known to nobody - means a missing explicit
+    // registration at its creation site (R5.2b removed the implicit
+    // adoption): warn loudly; rendering keeps working, but nothing claims
+    // ownership (a definition must never appear as a side effect of mesh
+    // registration).
     Asset_manager* const asset_manager = get_content_library()->get_asset_manager();
     Content_library& material_library = *get_content_library().get();
     for (const auto& primitive : mesh->get_primitives()) {
@@ -1391,7 +1397,16 @@ void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
         if (is_asset_definition(*primitive.material)) {
             material_library.add(primitive.material);
         } else {
-            const bool has_live_home = (asset_manager != nullptr) && asset_manager->is_managed(*primitive.material);
+            const bool sits_in_a_tree = primitive.material->get_parent().lock().operator bool();
+            const bool has_live_home =
+                sits_in_a_tree ||
+                (
+                    (asset_manager != nullptr) &&
+                    (
+                        asset_manager->is_managed(*primitive.material) ||
+                        asset_manager->is_prefab_template_material(*primitive.material)
+                    )
+                );
             if (!has_live_home && !material_library.has_item(*primitive.material)) {
                 log_scene->warn(
                     "Material '{}' on mesh '{}' entered scene '{}' unowned and unregistered;"

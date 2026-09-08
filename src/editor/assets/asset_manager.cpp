@@ -13,6 +13,7 @@
 #include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
+#include "prefabs/prefab_library.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_file/file.hpp"
@@ -2049,6 +2050,11 @@ auto Asset_manager::is_hosted_or_defined_by(const erhe::Item_base& item, const e
         return static_cast<const erhe::Item_host*>(record->scene_root_identity) == host;
     }
     return item.get_item_host() == host;
+}
+
+auto Asset_manager::is_prefab_template_material(const erhe::primitive::Material& material) const -> bool
+{
+    return (m_context.prefab_library != nullptr) && m_context.prefab_library->owns_material(material);
 }
 
 auto Asset_manager::is_managed(const erhe::Item_base& item) const -> bool

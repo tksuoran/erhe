@@ -126,6 +126,19 @@ public:
 
     [[nodiscard]] auto get_prefabs() const -> const std::map<Prefab_key, std::shared_ptr<Prefab>>&;
 
+    // True when a loaded template supplies `material`, or supplies the
+    // material `material` is an instance's clone of (its counterpart, and so
+    // on up the chain). The materials a template supplies live in the
+    // template's holding scene, so no scene lists them and no container
+    // record defines them (doc/usd-compatibility-plan.md U4 2e), and a clone
+    // of one exists only because the template supplies it. A scene an
+    // instance's meshes enter asks this to tell an owned material from a
+    // material nobody owns. Linear in the number of loaded templates and
+    // their materials, which is what a mesh registration can afford; a
+    // pointer-keyed set maintained at template load and unload is the form to
+    // take if it ever becomes hot.
+    [[nodiscard]] auto owns_material(const erhe::primitive::Material& material) const -> bool;
+
 private:
     // Parse the prefab's source file into a fresh holding scene / template
     // root inside the (already constructed) Prefab, finalize meshes and
@@ -227,11 +240,11 @@ void attach_prefab_instance(
 // glTF 2.1 spec) and clone its template under the carrier node, which is
 // marked with a Prefab_instance attachment. Cloned meshes are pointed at
 // content_layer_id and appended to out_mesh_node_items when non-null.
-// content_library, when non-null, receives the template's textures and
-// materials as REFERENCE entries (same listing the interactive
-// instantiate_prefab creates) - without them, instance meshes registering
-// into the scene would mis-adopt the unhosted template materials as
-// scene-OWNED entries and the scene-close watchdog would report them.
+// The instancing scene lists nothing of the template: a material a template
+// supplies is owned by the prefab library (Prefab_library::owns_material) and
+// stays there, and the scene renders it through the binding its meshes carry
+// (doc/usd-compatibility-plan.md U4 2e). `content_library` is accepted for
+// that reason alone and is not written to.
 // Used by import_gltf / open_scene_gltf (destination scene's content layer
 // and library) and by Prefab_library itself when the loaded template
 // contains nested external assets (layer 0, null library; instances
