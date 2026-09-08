@@ -331,6 +331,18 @@ private:
 // the stage path that name gives it. The writer needs the paths before it
 // writes anything, because a mesh binds a material by the path the material
 // prim ends up at (doc/usd-compatibility-plan.md U4).
+// What the clone of an arc's target contributes to the carrier prim it is
+// written as (doc/usd-compatibility-plan.md X2): the item whose local values
+// are authored on the carrier - the clone and the carrier are one prim in USD
+// - and the material its mesh binds when the mesh is one group of facets,
+// which the carrier binds as its own.
+class Instance_root_override final
+{
+public:
+    const erhe::Item_base*           item    {nullptr};
+    const erhe::primitive::Material* material{nullptr};
+};
+
 class Plan_prim final
 {
 public:
@@ -353,8 +365,12 @@ public:
     // the carrier prim itself - the clone and the carrier are one prim in USD
     // - and `overrides` holds every deeper item, each an `over` prim below
     // the carrier.
-    const erhe::Item_base*                 override_root{nullptr};
+    Instance_root_override                 override_root;
     std::vector<erhe::scene::Instance_override_item> overrides;
+    // The bindings the clone of an arc's target holds for its groups of
+    // facets: one `over` prim below the carrier per group, by the name of the
+    // GeomSubset prim the group is written as.
+    std::vector<std::pair<std::string, const erhe::primitive::Material*>> root_subset_bindings;
     // The variant sets the caller named for this prim
     // (doc/usd-compatibility-plan.md X4). A set adds variant blocks to the
     // prim and changes nothing else about it, so a prim carrying one is
@@ -1303,7 +1319,7 @@ private:
                 continue;
             }
             if (entry.relative_path.empty()) {
-                plan_prim.override_root = entry.item;
+                plan_prim.override_root.item = entry.item;
                 if (entry.transform_overridden) {
                     add_warning(
                         fmt::format(
@@ -1312,9 +1328,42 @@ private:
                         )
                     );
                 }
+                plan_root_bindings(entry, plan_prim);
                 continue;
             }
             plan_prim.overrides.push_back(std::move(entry));
+        }
+    }
+
+    // The material bindings the clone of an arc's target holds. The clone and
+    // the carrier are one prim in USD, so a mesh of one group of facets binds
+    // on the carrier itself and a mesh of several binds on the `over` prim of
+    // each group.
+    void plan_root_bindings(const erhe::scene::Instance_override_item& entry, Plan_prim& plan_prim)
+    {
+        if (entry.materials.empty()) {
+            return;
+        }
+        const erhe::scene::Mesh* mesh = dynamic_cast<const erhe::scene::Mesh*>(entry.item);
+        if (mesh == nullptr) {
+            add_warning(
+                fmt::format("prim '{}': an arc's target binds a material and is no mesh - the binding is not written", plan_prim.name)
+            );
+            return;
+        }
+        for (const erhe::scene::Instance_override_material& material : entry.materials) {
+            if (mesh->get_primitives().size() == 1) {
+                plan_prim.override_root.material = material.material.get();
+                continue;
+            }
+            const std::string subset_name = override_subset_name(*mesh, material.primitive_index);
+            if (subset_name.empty()) {
+                add_warning(
+                    fmt::format("prim '{}': an arc's target binds a group of facets that has no name - the binding is not written", plan_prim.name)
+                );
+                continue;
+            }
+            plan_prim.root_subset_bindings.emplace_back(subset_name, material.material.get());
         }
     }
 
@@ -1413,7 +1462,42 @@ private:
             if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
                 m_style_paths[prim.item] = prim.path;
             }
+            if ((prim.references != nullptr) && (prim.item != nullptr)) {
+                record_instance_content_material_paths(*prim.item, prim.path);
+            }
             record_resource_paths(prim.children);
+        }
+    }
+
+    // The materials an instance's content supplies, by the path they have in
+    // the composed stage: the carrier prim's path plus the path the item has
+    // below the arc's target clone, the clone itself standing at the
+    // carrier's own path (X1's one extra level, collapsed the way the writer
+    // collapses it). The content of an instance is not written, so this is
+    // what lets an override that rebinds one of its materials name it.
+    void record_instance_content_material_paths(const erhe::Item_base& carrier_item, const std::string& carrier_path)
+    {
+        const erhe::Hierarchy* carrier = dynamic_cast<const erhe::Hierarchy*>(&carrier_item);
+        if (carrier == nullptr) {
+            return;
+        }
+        for (const std::shared_ptr<erhe::Hierarchy>& clone : carrier->get_children()) {
+            if (clone) {
+                record_content_material_paths(*clone.get(), carrier_path);
+            }
+        }
+    }
+
+    void record_content_material_paths(const erhe::Hierarchy& item, const std::string& path)
+    {
+        const erhe::primitive::Material* material = dynamic_cast<const erhe::primitive::Material*>(&item);
+        if ((material != nullptr) && (m_material_paths.find(material) == m_material_paths.end())) {
+            m_material_paths[material] = path;
+        }
+        for (const std::shared_ptr<erhe::Hierarchy>& child : item.get_children()) {
+            if (child) {
+                record_content_material_paths(*child.get(), path + "/" + child->get_name());
+            }
         }
     }
 
@@ -1461,10 +1545,14 @@ private:
     class Override_prim final
     {
     public:
-        std::string                name;
-        const erhe::Item_base*     item                {nullptr};
-        bool                       transform_overridden{false};
-        std::vector<Override_prim> children;
+        std::string                      name;
+        const erhe::Item_base*           item                {nullptr};
+        bool                             transform_overridden{false};
+        // The material the `over` binds, null when it binds none. A binding
+        // that covers one group of facets is written on the GeomSubset prim
+        // of the group, which is a child `over` of the mesh's.
+        const erhe::primitive::Material* material            {nullptr};
+        std::vector<Override_prim>       children;
     };
 
     [[nodiscard]] static auto find_or_add_override_prim(std::vector<Override_prim>& prims, const std::string_view name) -> Override_prim&
@@ -1480,10 +1568,13 @@ private:
 
     void write_override_prims(const Plan_prim& plan_prim, std::vector<lightusd::Prim>& out_prims)
     {
-        if (plan_prim.overrides.empty()) {
+        if (plan_prim.overrides.empty() && plan_prim.root_subset_bindings.empty()) {
             return;
         }
         std::vector<Override_prim> tree;
+        for (const std::pair<std::string, const erhe::primitive::Material*>& binding : plan_prim.root_subset_bindings) {
+            find_or_add_override_prim(tree, binding.first).material = binding.second;
+        }
         for (const erhe::scene::Instance_override_item& entry : plan_prim.overrides) {
             std::vector<Override_prim>* level = &tree;
             Override_prim*              prim  = nullptr;
@@ -1500,11 +1591,78 @@ private:
             if (prim != nullptr) {
                 prim->item                 = entry.item;
                 prim->transform_overridden = entry.transform_overridden;
+                plan_override_bindings(entry, *prim);
             }
         }
         for (const Override_prim& prim : tree) {
             out_prims.push_back(write_override_prim(prim));
         }
+    }
+
+    // The material bindings of one override item, on the `over` prims that
+    // carry them: a mesh with one primitive binds on its own `over`, and a
+    // mesh whose groups of facets bind separately binds on a child `over`
+    // named after the group - the GeomSubset prim write_geometry_mesh_prim
+    // gives the group.
+    void plan_override_bindings(const erhe::scene::Instance_override_item& entry, Override_prim& prim)
+    {
+        if (entry.materials.empty()) {
+            return;
+        }
+        const erhe::scene::Mesh* mesh = dynamic_cast<const erhe::scene::Mesh*>(entry.item);
+        if (mesh == nullptr) {
+            add_warning(
+                fmt::format("the override of '{}' binds a material to an item that is no mesh - the binding is not written", prim.name)
+            );
+            return;
+        }
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        for (const erhe::scene::Instance_override_material& material : entry.materials) {
+            if (primitives.size() == 1) {
+                prim.material = material.material.get();
+                continue;
+            }
+            const std::string subset_name = override_subset_name(*mesh, material.primitive_index);
+            if (subset_name.empty()) {
+                add_warning(
+                    fmt::format(
+                        "the override of '{}' binds a group of facets that has no name - the binding is not written",
+                        prim.name
+                    )
+                );
+                continue;
+            }
+            Override_prim& subset_prim = find_or_add_override_prim(prim.children, subset_name);
+            subset_prim.material = material.material.get();
+        }
+    }
+
+    // The name of the GeomSubset prim one primitive of a mesh is written as.
+    // The mesh's own name is what prefixes the primitive's geometry name, so
+    // that is what is dropped again here - the prim name the writer gives the
+    // mesh can have been made unique and would not match.
+    [[nodiscard]] static auto override_subset_name(
+        const erhe::scene::Mesh& mesh,
+        const std::size_t        primitive_index
+    ) -> std::string
+    {
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh.get_primitives();
+        if (primitive_index >= primitives.size()) {
+            return std::string{};
+        }
+        const erhe::primitive::Primitive* primitive = primitives[primitive_index].primitive.get();
+        if (primitive == nullptr) {
+            return std::string{};
+        }
+        const erhe::primitive::Primitive_render_shape* render_shape = primitive->render_shape.get();
+        if (render_shape == nullptr) {
+            return std::string{};
+        }
+        const std::shared_ptr<erhe::geometry::Geometry>& geometry = render_shape->get_geometry_const();
+        if (!geometry) {
+            return std::string{};
+        }
+        return subset_name_of(geometry->get_name(), mesh.get_name());
     }
 
     // One `over` prim: a prim with no typeName, so it contributes opinions
@@ -1530,7 +1688,16 @@ private:
                 write_override_xform_ops(*override_prim.item, model.props);
             }
         }
+        if (override_prim.material != nullptr) {
+            add_material_binding(model.props, *override_prim.material);
+        }
         lightusd::Prim prim{model};
+        if (override_prim.material != nullptr) {
+            // A prim that binds a material applies the MaterialBindingAPI:
+            // the relationship alone is what USD reads, and the applied
+            // schema is what says the prim carries one.
+            apply_api_schema(prim, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
+        }
         for (const Override_prim& child : override_prim.children) {
             std::string error;
             if (!prim.add_child(write_override_prim(child), false, &error)) {
@@ -1962,12 +2129,16 @@ private:
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
 
-        const erhe::Item_base* override_root = plan_prim.override_root;
-        return
+        const Instance_root_override& override_root = plan_prim.override_root;
+        lightusd::Prim prim =
             mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix, override_root) :
             camera ? write_camera_prim(node, *camera.get(), prim_name, matrix, override_root) :
             light  ? write_light_prim (node, *light.get(),  prim_name, matrix, override_root) :
                      write_xform_prim (node,                prim_name, matrix, override_root);
+        if (override_root.material != nullptr) {
+            apply_api_schema(prim, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
+        }
+        return prim;
     }
 
     // The prim's transform (doc/usd-compatibility-plan.md M8): the ops it was
@@ -2018,7 +2189,7 @@ private:
         const erhe::scene::Node& node,
         const std::string&       prim_name,
         const glm::mat4&         matrix,
-        const erhe::Item_base*   override_root
+        const Instance_root_override& override_root
     ) -> lightusd::Prim
     {
         lightusd::Xform xform;
@@ -2037,27 +2208,40 @@ private:
     // carrier prim, below the carrier's own: an attribute both author is the
     // carrier's, and saying so is the only notice the user gets.
     template <typename T>
-    void write_instance_root_override(const erhe::Item_base& carrier, const erhe::Item_base* override_root, T& typed_prim)
+    void write_instance_root_override(const erhe::Item_base& carrier, const Instance_root_override& override_root, T& typed_prim)
     {
-        if (override_root == nullptr) {
+        if (override_root.material != nullptr) {
+            if constexpr (std::is_base_of_v<lightusd::MaterialBinding, T>) {
+                bind_material(typed_prim, override_root.material);
+            } else {
+                add_warning(
+                    fmt::format(
+                        "prim '{}': an arc's target binds a material and is written as a prim that carries no binding - the binding is not written",
+                        carrier.get_name()
+                    )
+                );
+            }
+        }
+        if (override_root.item == nullptr) {
             return;
         }
-        if (is_override_available(carrier, *override_root, erhe::Item_base::visible_property.get())) {
+        const erhe::Item_base& item = *override_root.item;
+        if (is_override_available(carrier, item, erhe::Item_base::visible_property.get())) {
             typed_prim.visibility.set_value(
-                override_root->get_value(erhe::Item_base::visible_property)
+                item.get_value(erhe::Item_base::visible_property)
                     ? lightusd::Visibility::Inherited
                     : lightusd::Visibility::Invisible
             );
         }
-        if (is_override_available(carrier, *override_root, erhe::Item_base::purpose_property.get())) {
-            typed_prim.purpose.set_value(to_usd_purpose(override_root->get_value(erhe::Item_base::purpose_property)));
+        if (is_override_available(carrier, item, erhe::Item_base::purpose_property.get())) {
+            typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
         }
-        if (is_override_available(carrier, *override_root, erhe::Item_base::active_property.get())) {
-            typed_prim.meta.set_active(override_root->get_value(erhe::Item_base::active_property));
+        if (is_override_available(carrier, item, erhe::Item_base::active_property.get())) {
+            typed_prim.meta.set_active(item.get_value(erhe::Item_base::active_property));
         }
         // A name an `erhe:` attribute of the carrier already carries is
         // reported and dropped by write_erhe_properties itself.
-        write_erhe_properties(*override_root, typed_prim);
+        write_erhe_properties(item, typed_prim);
     }
 
     // True when the target clone's local value of `property` is what the
@@ -2313,7 +2497,7 @@ private:
         const erhe::scene::Mesh& mesh,
         const std::string&       prim_name,
         const glm::mat4&         matrix,
-        const erhe::Item_base*   override_root
+        const Instance_root_override& override_root
     ) -> lightusd::Prim
     {
         ++m_mesh_count;
@@ -2411,7 +2595,7 @@ private:
         const erhe::scene::Camera& camera,
         const std::string&         prim_name,
         const glm::mat4&           matrix,
-        const erhe::Item_base*     override_root
+        const Instance_root_override& override_root
     ) -> lightusd::Prim
     {
         using erhe::scene::Camera;
@@ -2496,7 +2680,7 @@ private:
         const erhe::scene::Light& light,
         const std::string&        prim_name,
         const glm::mat4&          matrix,
-        const erhe::Item_base*    override_root
+        const Instance_root_override& override_root
     ) -> lightusd::Prim
     {
         using erhe::scene::Light;
@@ -2537,12 +2721,19 @@ private:
             // The applied ShapingAPI, not the cone attributes, is what makes
             // an imported sphere light a spot light (doc/usd_compatibility.md,
             // lights).
-            apply_api_schema(prim, lightusd::APISchemas::APIName::ShapingAPI, "ShapingAPI");
+            apply_api_schema(prim, lightusd::APISchemas::APIName::ShapingAPI, std::string{});
         }
         return prim;
     }
 
-    static void apply_api_schema(lightusd::Prim& prim, const lightusd::APISchemas::APIName name, const std::string& instance_name)
+    // One API schema applied to a prim. USD spells an instance of a
+    // multi-apply schema as `Schema:instance`, so `instance_name` is that
+    // instance and stays empty for a single-apply schema.
+    static void apply_api_schema(
+        lightusd::Prim&                     prim,
+        const lightusd::APISchemas::APIName name,
+        const std::string&                  instance_name
+    )
     {
         lightusd::APISchemas& schemas = prim.metas().get_apiSchemas_mutable();
         schemas.names.emplace_back(name, instance_name);

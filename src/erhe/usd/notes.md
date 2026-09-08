@@ -315,7 +315,8 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   the sparse override of one instance item (doc/usd-compatibility-plan.md X2),
   reported in `Usd_prim_references::overrides` as an
   `erhe::scene::Instance_override`: the item's path below the carrier, its
-  values as name / D16 text pairs, and its authored xformOp stack. What an
+  values as name / D16 text pairs, its authored xformOp stack, and the
+  absolute stage path its `material:binding` relationship names. What an
   override is - and so what the writer authors - is stated once, in
   `src/erhe/scene/erhe_scene/instance_override.hpp`. LightUSD does not report
   which layer an opinion on a composed prim came from, so the root layer is
@@ -323,10 +324,16 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   is read: the specifier is what tells an `over` from a `def`. A prim spec is what a layer authored, so every property it
   carries is an authored opinion and no `authored()` test is needed; the
   `erhe:Owner:name` custom attributes, `visibility`, `purpose`, the `active`
-  metadatum and the xformOps (through LightUSD's own
-  `ReconstructXformOpsFromProperties` and then the M8 reader) are what is
-  taken. The reader applies nothing: the instance content does not exist until
-  the caller attaches the arcs' targets.
+  metadatum, the xformOps (through LightUSD's own
+  `ReconstructXformOpsFromProperties` and then the M8 reader) and the
+  `material:binding` relationship are what is taken. The `MaterialBindingAPI`
+  the `over` applies is what makes the relationship a binding and carries no
+  value of its own, so it is not read as one. An `over` on a GeomSubset is an
+  entry whose path ends in the subset's name, which is how the group of facets
+  a binding covers is named. The reader applies nothing: the instance content
+  does not exist until the caller attaches the arcs' targets, and a binding
+  can name a material another carrier's arc supplies, so the caller applies
+  every carrier's overrides once every arc of the file is instantiated.
 - A `def` below a referencing prim adds a prim to a reference, which a
   reference does not allow (plan section 5): it is named in one warning and
   dropped.
@@ -639,9 +646,17 @@ because the same spelling rule decides what an item is called on a stage.
   `over` is written as a prim with no typeName, which contributes opinions and
   defines nothing: the local values as the same `erhe:Owner:name` custom
   attributes an authored prim carries, `visibility` and `purpose` as the plain
-  token attributes they are, `active` as the prim metadatum, and an overridden
+  token attributes they are, `active` as the prim metadatum, an overridden
   transform as the `xformOp:*` attributes and `xformOpOrder` a typed prim
-  writes from its `xformOps`.
+  writes from its `xformOps`, and an overridden material as a
+  `material:binding` relationship with the `MaterialBindingAPI` applied. A
+  mesh of several groups of facets binds on the `over` of the GeomSubset prim
+  of each group, and a mesh of one group binds on its own `over`; a binding
+  the clone of an arc's target holds is the carrier prim's own the same way
+  its values are. The material is named by the path the writer planned for it,
+  which for a material an instance's content supplies is the carrier's path
+  plus the path the material has below the arc's target clone - the path the
+  composed stage gives it.
 - Variant sets. `Usd_save_arguments::variant_sets` names the prim carrying
   each set, its variants and their material bindings, and the selection; the
   writer gives the prim an `append variantSets` list op, a `variants`

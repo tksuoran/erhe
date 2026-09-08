@@ -60,6 +60,11 @@ Carries the erhe Item state of a node that core glTF cannot express:
   - `transform` (optional): the item's local transform as 16 floats in
     erhe's column-major order, written only when it differs from the
     template counterpart's.
+  - `material` (optional): the path of the material item the entry binds,
+    in the same path form `path` uses, written only when the item's mesh
+    binds a material the template counterpart's mesh does not. A binding
+    that covers one group of facets rather than the whole mesh is an entry
+    of its own whose `path` ends in the name of the group.
 
   The reader records them and the editor applies them to the fresh clones
   while they are still writable, which is what lets a sealed glTF instance
@@ -81,7 +86,8 @@ Carries the erhe Item state of a node that core glTF cannot express:
     "style": "Warm lights",
     "overrides": [
         {"path": "arm", "properties": {"visible": "false"}, "transform": [1,0,0,0, 0,1,0,0, 0,0,1,0, 1,2,3,1]},
-        {"path": "arm/plate", "properties": {"active": "false"}}
+        {"path": "arm/plate", "properties": {"active": "false"}},
+        {"path": "arm/plate/front", "properties": {}, "material": "Materials/Copper"}
     ],
     "mesh_flags": ["content", "visible", "shadow_cast", "id", "show_in_ui"]
 }

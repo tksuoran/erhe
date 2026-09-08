@@ -17,6 +17,7 @@ add_executable(${_target}
     test_camera_light_prims.cpp
     test_camera_properties.cpp
     test_imported_defaults.cpp
+    test_instance_override_material.cpp
     test_layout_properties.cpp
     test_light_frame.cpp
     test_light_properties.cpp

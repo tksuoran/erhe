@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -12,6 +13,10 @@
 namespace erhe {
     class Hierarchy;
     class Item_base;
+}
+
+namespace erhe::primitive {
+    class Material;
 }
 
 namespace erhe::scene {
@@ -26,6 +31,18 @@ public:
     std::string text;
 };
 
+// One material binding an instance item overrides, as the item form carries
+// it: the index of the primitive in Mesh::get_primitives() whose material
+// differs from the counterpart's, and the material bound there. A writer
+// names the group of facets the index stands for the way it names the mesh's
+// own groups (a USD GeomSubset, one per primitive).
+class Instance_override_material final
+{
+public:
+    std::size_t                                primitive_index{0};
+    std::shared_ptr<erhe::primitive::Material> material;
+};
+
 // The overrides one item inside a prefab instance holds
 // (doc/usd-compatibility-plan.md X2). `relative_path` is the M1 path of the
 // item below the arc's target clone, so an empty path is the target clone
@@ -38,6 +55,14 @@ public:
     std::vector<Instance_override_value> values;
     bool                                 transform_overridden{false};
     glm::mat4                            transform           {1.0f};
+    // The material the item's mesh binds, by the path of the material item -
+    // an absolute stage path in a USD file, the M1 path of the material item
+    // in a glTF file. Empty when the override binds nothing. A binding that
+    // covers one group of facets rather than the whole mesh is an entry of
+    // its own whose relative path ends in the name of the group, the way a
+    // USD GeomSubset is a prim below its mesh and X4's variant bindings name
+    // one.
+    std::string                          material_path;
     // The authored xformOp stack of the transform, when the item carries one
     // (doc/usd-compatibility-plan.md M8). An item without one is described by
     // `transform` alone.
@@ -52,6 +77,9 @@ public:
     std::string            relative_path;
     const erhe::Item_base* item                {nullptr};
     bool                   transform_overridden{false};
+    // The primitives of the item's mesh whose material differs from the
+    // counterpart's.
+    std::vector<Instance_override_material> materials;
 };
 
 // What an override of an instance item is (doc/usd-compatibility-plan.md X2,
@@ -61,7 +89,9 @@ public:
 //   without an expression: it shadows what the reference layer supplies;
 // - a local transform that differs from the counterpart's. The transform is
 //   bridged, so it always has a local value and only a difference is an
-//   override.
+//   override;
+// - a material bound to a primitive of the item's mesh that differs from the
+//   material the counterpart's primitive at the same index binds.
 //
 // The item name is structure rather than value and is never an override.
 //
@@ -91,8 +121,12 @@ void apply_property_values(
 
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's
-// children that has one. An entry naming no item, a value naming no property
-// and a value that does not parse cost one warning each.
+// children that has one, except an entry whose path ends in the name of a
+// group of facets, which names a primitive of the mesh the rest of the path
+// names. A material binding is resolved below the carrier first and in the
+// scene tree the carrier stands in otherwise. An entry naming no item, a
+// binding naming no material, a value naming no property and a value that
+// does not parse cost one warning each.
 void apply_instance_overrides(erhe::Hierarchy& carrier, const std::vector<Instance_override>& overrides);
 
 } // namespace erhe::scene

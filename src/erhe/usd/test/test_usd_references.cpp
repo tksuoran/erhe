@@ -1,7 +1,10 @@
+#include "erhe_geometry/geometry.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
 #include "erhe_scene/instance_override.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene/xform_op.hpp"
@@ -673,6 +676,238 @@ TEST(Override_export, written_overrides_read_back_the_same)
     const std::string* active = find_override_value(*plate, "active");
     ASSERT_NE(active, nullptr);
     EXPECT_EQ(*active, "false");
+}
+
+// ---------------------------------------------------------------------------
+// A material binding authored as an override (doc/usd-compatibility-plan.md
+// X2): the binding of a mesh inside an instance, and the binding of one group
+// of that mesh's facets.
+// ---------------------------------------------------------------------------
+
+class Binding_override_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = reference_test_data_path("references_binding_override.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Binding_override_import, an_over_that_binds_a_material_carries_the_binding)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    EXPECT_EQ(result.data.references[0].stage_path, "/World/Carrier");
+    const erhe::scene::Instance_override* plate = find_override(result.data.references[0].overrides, "arm/plate");
+    ASSERT_NE(plate, nullptr);
+    EXPECT_EQ(plate->material_path, "/World/materials/grey");
+    EXPECT_TRUE(plate->values.empty());
+}
+
+// A GeomSubset is a prim below its mesh, so the group of facets the binding
+// covers is the last name of the override's path.
+TEST_F(Binding_override_import, a_binding_on_a_subset_names_the_group_in_its_path)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.references.size(), 2u);
+    EXPECT_EQ(result.data.references[1].stage_path, "/World/SubsetCarrier");
+    const erhe::scene::Instance_override* front = find_override(result.data.references[1].overrides, "arm/plate/front");
+    ASSERT_NE(front, nullptr);
+    EXPECT_EQ(front->material_path, "/World/materials/red");
+    EXPECT_TRUE(front->values.empty());
+    EXPECT_FALSE(front->transform_overridden);
+}
+
+// One carrier holding one instance whose mesh rebinds a material: with one
+// group of facets the binding is the mesh's own, and with two it covers one
+// group.
+class Binding_override_scene final
+{
+public:
+    explicit Binding_override_scene(const std::size_t primitive_count)
+    {
+        root    = std::make_shared<erhe::scene::Xform>("export_root");
+        carrier = make_prim("Carrier");
+        carrier->set_parent(root);
+
+        grey = std::make_shared<erhe::primitive::Material>("grey");
+        grey->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        grey->set_parent(root);
+        base = std::make_shared<erhe::primitive::Material>("base");
+
+        template_widget = make_template_prim("Widget");
+        clone_widget    = make_instance_content_prim("Widget", template_widget);
+        clone_widget->set_parent(carrier);
+
+        template_plate = std::make_shared<erhe::scene::Mesh>("plate");
+        clone_plate    = std::make_shared<erhe::scene::Mesh>("plate");
+        for (std::size_t index = 0; index < primitive_count; ++index) {
+            const std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(
+                (primitive_count == 1) ? "plate" : ((index == 0) ? "plate.front" : "plate.back")
+            );
+            template_plate->add_primitive(std::make_shared<erhe::primitive::Primitive>(geometry), base);
+            clone_plate->add_primitive(std::make_shared<erhe::primitive::Primitive>(geometry), base);
+        }
+        clone_plate->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        clone_plate->set_reference(template_plate);
+        clone_plate->set_parent(clone_widget);
+        // The one thing this instance overrides: the material of its last
+        // group of facets.
+        clone_plate->set_primitive_material(primitive_count - 1, grey);
+    }
+
+    std::shared_ptr<erhe::scene::Node>         root;
+    std::shared_ptr<erhe::scene::Node>         carrier;
+    std::shared_ptr<erhe::scene::Xform>        template_widget;
+    std::shared_ptr<erhe::scene::Xform>        clone_widget;
+    std::shared_ptr<erhe::scene::Mesh>         template_plate;
+    std::shared_ptr<erhe::scene::Mesh>         clone_plate;
+    std::shared_ptr<erhe::primitive::Material> grey;
+    std::shared_ptr<erhe::primitive::Material> base;
+};
+
+[[nodiscard]] auto binding_save_references(const std::shared_ptr<erhe::scene::Node>& carrier) -> std::vector<erhe::usd::Usd_save_prim_references>
+{
+    return std::vector<erhe::usd::Usd_save_prim_references>{
+        erhe::usd::Usd_save_prim_references{
+            .item       = carrier,
+            .references = {
+                erhe::usd::Usd_save_reference{.source_path = reference_temporary_directory() / "binding_widget.usda"}
+            }
+        }
+    };
+}
+
+TEST(Binding_override_export, a_rebound_mesh_writes_the_relationship_and_the_api_schema)
+{
+    const Binding_override_scene scene{1};
+    const Reference_export       exported{scene.root, binding_save_references(scene.carrier), "written_binding_override.usda"};
+    EXPECT_TRUE(exported.save.error.empty()) << exported.save.error;
+    EXPECT_TRUE(exported.save.warning.empty()) << exported.save.warning;
+
+    const std::string written = read_text_file(exported.written_path);
+    EXPECT_NE(written.find("over \"plate\""), std::string::npos) << written;
+    EXPECT_NE(written.find("rel material:binding = </World/grey>"), std::string::npos) << written;
+    EXPECT_NE(written.find("MaterialBindingAPI"), std::string::npos) << written;
+}
+
+TEST(Binding_override_export, a_rebound_group_of_facets_writes_the_binding_on_the_group)
+{
+    const Binding_override_scene scene{2};
+    const Reference_export       exported{scene.root, binding_save_references(scene.carrier), "written_binding_subset_override.usda"};
+    EXPECT_TRUE(exported.save.error.empty()) << exported.save.error;
+    EXPECT_TRUE(exported.save.warning.empty()) << exported.save.warning;
+
+    const std::string written = read_text_file(exported.written_path);
+    EXPECT_NE(written.find("over \"back\""), std::string::npos) << written;
+    EXPECT_NE(written.find("rel material:binding = </World/grey>"), std::string::npos) << written;
+}
+
+TEST(Binding_override_export, a_written_binding_reads_back_the_same)
+{
+    const Binding_override_scene scene{2};
+    const Reference_export       exported{scene.root, binding_save_references(scene.carrier), "written_binding_reload.usda"};
+    ASSERT_TRUE(exported.reloaded.error.empty()) << exported.reloaded.error;
+    ASSERT_EQ(exported.reloaded.data.references.size(), 1u);
+    const erhe::scene::Instance_override* back = find_override(exported.reloaded.data.references[0].overrides, "plate/back");
+    ASSERT_NE(back, nullptr);
+    EXPECT_EQ(back->material_path, "/World/grey");
+}
+
+// The arc's target is the mesh itself, which erhe keeps as the carrier's one
+// child and USD composes into the carrier prim (X1): a binding of the whole
+// mesh is then the carrier's own, and a binding of one group of facets is an
+// `over` below the carrier - the shape the Vehicles body assets author.
+class Root_binding_scene final
+{
+public:
+    explicit Root_binding_scene(const std::size_t primitive_count)
+    {
+        root    = std::make_shared<erhe::scene::Xform>("export_root");
+        carrier = make_prim("geo");
+        carrier->set_parent(root);
+
+        grey = std::make_shared<erhe::primitive::Material>("grey");
+        grey->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        grey->set_parent(root);
+
+        template_plate = std::make_shared<erhe::scene::Mesh>("plate");
+        clone_plate    = std::make_shared<erhe::scene::Mesh>("plate");
+        for (std::size_t index = 0; index < primitive_count; ++index) {
+            const std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(
+                (primitive_count == 1) ? "plate" : ((index == 0) ? "plate.front" : "plate.back")
+            );
+            template_plate->add_primitive(std::make_shared<erhe::primitive::Primitive>(geometry));
+            clone_plate->add_primitive(std::make_shared<erhe::primitive::Primitive>(geometry));
+        }
+        clone_plate->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        clone_plate->set_reference(template_plate);
+        clone_plate->set_parent(carrier);
+        clone_plate->set_primitive_material(primitive_count - 1, grey);
+    }
+
+    std::shared_ptr<erhe::scene::Node>         root;
+    std::shared_ptr<erhe::scene::Node>         carrier;
+    std::shared_ptr<erhe::scene::Mesh>         template_plate;
+    std::shared_ptr<erhe::scene::Mesh>         clone_plate;
+    std::shared_ptr<erhe::primitive::Material> grey;
+};
+
+TEST(Binding_override_export, an_arc_target_that_rebinds_its_mesh_binds_on_the_carrier)
+{
+    const Root_binding_scene scene{1};
+    const Reference_export   exported{scene.root, binding_save_references(scene.carrier), "written_root_binding.usda"};
+    EXPECT_TRUE(exported.save.error.empty()) << exported.save.error;
+    EXPECT_TRUE(exported.save.warning.empty()) << exported.save.warning;
+
+    const std::string written = read_text_file(exported.written_path);
+    EXPECT_NE(written.find("rel material:binding = </World/grey>"), std::string::npos) << written;
+    EXPECT_NE(written.find("MaterialBindingAPI"), std::string::npos) << written;
+    EXPECT_EQ(written.find("over \""), std::string::npos) << written;
+}
+
+TEST(Binding_override_export, an_arc_target_that_rebinds_one_group_writes_an_over_for_it)
+{
+    const Root_binding_scene scene{2};
+    const Reference_export   exported{scene.root, binding_save_references(scene.carrier), "written_root_subset_binding.usda"};
+    EXPECT_TRUE(exported.save.error.empty()) << exported.save.error;
+    EXPECT_TRUE(exported.save.warning.empty()) << exported.save.warning;
+
+    const std::string written = read_text_file(exported.written_path);
+    EXPECT_NE(written.find("over \"back\""), std::string::npos) << written;
+    EXPECT_NE(written.find("rel material:binding = </World/grey>"), std::string::npos) << written;
+
+    ASSERT_TRUE(exported.reloaded.error.empty()) << exported.reloaded.error;
+    ASSERT_EQ(exported.reloaded.data.references.size(), 1u);
+    const erhe::scene::Instance_override* back = find_override(exported.reloaded.data.references[0].overrides, "back");
+    ASSERT_NE(back, nullptr);
+    EXPECT_EQ(back->material_path, "/World/grey");
+}
+
+TEST(Binding_override_export, a_second_binding_save_is_byte_identical)
+{
+    const Binding_override_scene scene{2};
+    const std::filesystem::path  first  = reference_temporary_directory() / "binding_double_save_1.usda";
+    const std::filesystem::path  second = reference_temporary_directory() / "binding_double_save_2.usda";
+    for (const std::filesystem::path& path : {first, second}) {
+        const erhe::usd::Usd_save_arguments save_arguments{
+            .path       = path,
+            .root_node  = scene.root,
+            .references = binding_save_references(scene.carrier)
+        };
+        const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+        ASSERT_TRUE(save.error.empty()) << save.error;
+    }
+    EXPECT_EQ(read_text_file(first), read_text_file(second));
 }
 
 TEST(Override_export, a_second_save_is_byte_identical)

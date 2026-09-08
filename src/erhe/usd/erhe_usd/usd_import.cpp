@@ -3038,7 +3038,7 @@ private:
             erhe::scene::Instance_override entry{};
             entry.relative_path = child_path;
             read_override_spec(absolute_path, child, entry);
-            if (!entry.values.empty() || entry.transform_overridden) {
+            if (!entry.values.empty() || entry.transform_overridden || !entry.material_path.empty()) {
                 overrides.push_back(std::move(entry));
             }
             read_override_children(absolute_path, child, child_path, overrides);
@@ -3054,9 +3054,12 @@ private:
 
     // One `over` prim spec as the override of one instance item: the
     // `erhe:Owner:name` custom attributes, `visibility` and `purpose`, the
-    // `active` metadatum and the authored xformOps. A prim spec is what the
-    // layer authored, so every property it carries is an authored opinion -
-    // no `authored()` test is needed here.
+    // `active` metadatum, the authored xformOps and the `material:binding`
+    // relationship. A prim spec is what the layer authored, so every property
+    // it carries is an authored opinion - no `authored()` test is needed
+    // here. The `MaterialBindingAPI` the `over` applies is what the
+    // relationship needs to be read as a binding, so the schema itself
+    // carries no value of its own.
     void read_override_spec(
         const std::string&              absolute_path,
         const lightusd::PrimSpec&       spec,
@@ -3065,6 +3068,7 @@ private:
     {
         read_spec_values(spec, entry.values);
         read_override_xform_ops(absolute_path, spec, entry);
+        entry.material_path = read_spec_material_binding(spec);
     }
 
     // The authored opinions of one prim spec in the neutral name / text form:

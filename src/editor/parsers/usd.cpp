@@ -453,6 +453,12 @@ void resolve_usd_references(
 )
 {
     static_cast<void>(context);
+    // The overrides of every carrier, applied once every arc of the file is
+    // instantiated: a binding an override authors can name a material another
+    // carrier's arc supplies (a body asset that takes its geometry from one
+    // arc and its materials from another), which is only in the tree once
+    // that carrier has its content.
+    std::vector<std::pair<std::shared_ptr<erhe::scene::Node>, const std::vector<erhe::scene::Instance_override>*>> pending_overrides;
     for (const erhe::usd::Usd_prim_references& entry : usd_data.references) {
         if (!is_under_prim_path(entry.stage_path, prim_path_prefix)) {
             continue;
@@ -503,11 +509,15 @@ void resolve_usd_references(
             );
         }
         // The overrides the referencing layer authored over the arcs
-        // (doc/usd-compatibility-plan.md X2), once every arc's content is
-        // under the carrier: an entry names the item at its relative path
-        // below the first arc that has one. A USD instance is not sealed, so
-        // this needs no help from the attach.
-        erhe::scene::apply_instance_overrides(*carrier.get(), entry.overrides);
+        // (doc/usd-compatibility-plan.md X2): an entry names the item at its
+        // relative path below the first arc that has one. A USD instance is
+        // not sealed, so this needs no help from the attach.
+        if (!entry.overrides.empty()) {
+            pending_overrides.emplace_back(carrier, &entry.overrides);
+        }
+    }
+    for (const std::pair<std::shared_ptr<erhe::scene::Node>, const std::vector<erhe::scene::Instance_override>*>& entry : pending_overrides) {
+        erhe::scene::apply_instance_overrides(*entry.first.get(), *entry.second);
     }
 }
 

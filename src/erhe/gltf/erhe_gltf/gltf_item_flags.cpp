@@ -146,6 +146,10 @@ auto instance_overrides_to_json(const erhe::Hierarchy& carrier) -> std::string
             value_separator = ",";
         }
         out += "}";
+        if (!entry.material_path.empty()) {
+            out += ",\"material\":";
+            append_json_string(out, entry.material_path);
+        }
         if (entry.transform_overridden) {
             out += ",\"transform\":[";
             for (int column = 0; column < 4; ++column) {

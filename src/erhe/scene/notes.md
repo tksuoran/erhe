@@ -135,8 +135,10 @@ save writes the composed TRS, and a glTF scene has no stack to start with.
 `instance_override.hpp` owns what an override of a prefab instance item is
 (`doc/usd-compatibility-plan.md` X2, `doc/property-system.md` D33): a local
 value of a serializable, non-bridged, non-computed property without an
-expression, or a local transform that differs from the template counterpart's.
-The name is structure and is never an override. The walk starts at the
+expression, a local transform that differs from the template counterpart's, or
+a material bound to a primitive of the item's mesh that differs from the one
+the counterpart's primitive at the same index binds. The name is structure and
+is never an override. The walk starts at the
 referencing item (the carrier): its children are the arcs' clones of the
 target prims, and every item below one that names a counterpart
 (`Dependency_object::get_reference`) is instance content - an item that names
@@ -146,10 +148,22 @@ collector.
 `collect_instance_override_items` reports the items, for a writer that reads
 the values in its own file format (`erhe::usd`);
 `collect_instance_overrides` reports the same set with the values read out as
-qualified name / D16 text pairs and the transform as a matrix plus the
-authored xformOp stack, so it survives the items it came from - that form is
-what `erhe::gltf` writes, what a file reader produces, and what
-`apply_instance_overrides` puts back on a freshly attached instance.
+qualified name / D16 text pairs, the transform as a matrix plus the authored
+xformOp stack, and a material binding as the path of the material item, so it
+survives the items it came from - that form is what `erhe::gltf` writes, what
+a file reader produces, and what `apply_instance_overrides` puts back on a
+freshly attached instance.
+
+A binding that covers one group of facets rather than the whole mesh is an
+entry of its own whose relative path ends in the name of the group, the way a
+USD GeomSubset is a prim below its mesh; the group of a primitive is named by
+the primitive's geometry, which the importer names `<mesh name>.<subset
+name>`. Applying a binding resolves its path below the carrier first (a path
+a file authors starts at the arc's target prim, which is the clone the carrier
+holds) and then from the carrier's ancestors, with the extra level an instance
+keeps treated as transparent: USD composes an arc's content directly under the
+referencing prim, while erhe keeps the target clone as a level of its own
+(`doc/usd-compatibility-plan.md` X1).
 
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.

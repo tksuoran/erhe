@@ -674,6 +674,10 @@ void read_instance_overrides(
                 );
             }
         }
+        std::string_view material_path;
+        if (override_object.at_key("material").get_string().get(material_path) == simdjson::SUCCESS) {
+            entry.material_path = std::string{material_path};
+        }
         simdjson::dom::array transform_array;
         if (override_object.at_key("transform").get_array().get(transform_array) == simdjson::SUCCESS) {
             std::size_t index = 0;
