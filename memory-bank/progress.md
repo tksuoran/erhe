@@ -1,4 +1,4 @@
-﻿Â§MBEL:5.0
+Â§MBEL:5.0
 
 [TASK::style-library]{DONE-2026-09-04}
 âœ“style-source-generalization{9132674f2}+Style-item+style-property{a88dd405c}+persistence+docs
