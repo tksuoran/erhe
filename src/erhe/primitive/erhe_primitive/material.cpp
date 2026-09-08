@@ -139,6 +139,25 @@ const Property<Normalmap_encoding> Material::normalmap_encoding_property = Prope
 const Property<float> Material::occlusion_texture_strength_property = Property<float>::register_property(
     "occlusion_texture_strength", c_owner, Property_metadata{.default_value = 1.0f, .inherits = true, .ui = slider(0.0f, 1.0f, "Occlusion Strength")}, unit_range
 );
+// Which channel of the slot's texture each scalar input reads. The visible
+// rows follow the slot that supplies the channel, so a material with no
+// texture in that slot does not offer a channel to pick.
+const Property<Texture_channel> Material::metallic_channel_property = Property<Texture_channel>::register_property(
+    "metallic_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::b), .inherits = true, .ui = Property_ui{.tooltip = "Channel of the metallic roughness texture the metallic factor multiplies", .label = "Metallic Channel", .visible_when = is_lit}}
+);
+const Property<Texture_channel> Material::roughness_channel_property = Property<Texture_channel>::register_property(
+    "roughness_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::g), .inherits = true, .ui = Property_ui{.tooltip = "Channel of the metallic roughness texture the roughness factor multiplies", .label = "Roughness Channel", .visible_when = is_lit}}
+);
+const Property<Texture_channel> Material::occlusion_channel_property = Property<Texture_channel>::register_property(
+    "occlusion_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::r), .inherits = true, .ui = Property_ui{.tooltip = "Channel of the occlusion texture the occlusion strength applies to", .label = "Occlusion Channel", .visible_when = is_lit}}
+);
+const Property<Texture_channel> Material::opacity_channel_property = Property<Texture_channel>::register_property(
+    "opacity_channel", c_owner, c_texture_channel_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Texture_channel::a), .inherits = true, .ui = Property_ui{.tooltip = "Channel of the base color texture the fragment alpha comes from", .label = "Opacity Channel"}}
+);
 const Property<Bxdf_model> Material::bxdf_model_property = Property<Bxdf_model>::register_property(
     "bxdf_model", c_owner, c_bxdf_model_enum_info,
     Property_metadata{.default_value = erhe::property::make_value(Bxdf_model::isotropic_brdf), .inherits = true, .flags = c_partition_variant_native, .ui = Property_ui{.label = "BxDF Model"}}
@@ -678,6 +697,10 @@ auto Material::get_values() const -> Material_values
         .normal_texture_decode_bias         = get_normal_texture_decode_bias(),
         .normalmap_encoding                 = get_normalmap_encoding(),
         .occlusion_texture_strength         = get_occlusion_texture_strength(),
+        .metallic_channel                   = get_metallic_channel(),
+        .roughness_channel                  = get_roughness_channel(),
+        .occlusion_channel                  = get_occlusion_channel(),
+        .opacity_channel                    = get_opacity_channel(),
         .bxdf_model                         = get_bxdf_model(),
         .blending_mode                      = get_blending_mode(),
         .double_sided                       = get_double_sided(),
@@ -724,6 +747,10 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, normal_texture_decode_bias_property,         values.normal_texture_decode_bias);
     set_or_clear(*this, normalmap_encoding_property,                 values.normalmap_encoding);
     set_or_clear(*this, occlusion_texture_strength_property,         values.occlusion_texture_strength);
+    set_or_clear(*this, metallic_channel_property,                   values.metallic_channel);
+    set_or_clear(*this, roughness_channel_property,                  values.roughness_channel);
+    set_or_clear(*this, occlusion_channel_property,                  values.occlusion_channel);
+    set_or_clear(*this, opacity_channel_property,                    values.opacity_channel);
     set_or_clear(*this, bxdf_model_property,                         values.bxdf_model);
     set_or_clear(*this, blending_mode_property,                      values.blending_mode);
     set_or_clear(*this, double_sided_property,                       values.double_sided);
@@ -750,6 +777,10 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(normal_texture_decode_bias_property,         make_value(values.normal_texture_decode_bias));
     result.set(normalmap_encoding_property,                 make_value(values.normalmap_encoding));
     result.set(occlusion_texture_strength_property,         make_value(values.occlusion_texture_strength));
+    result.set(metallic_channel_property,                   make_value(values.metallic_channel));
+    result.set(roughness_channel_property,                  make_value(values.roughness_channel));
+    result.set(occlusion_channel_property,                  make_value(values.occlusion_channel));
+    result.set(opacity_channel_property,                    make_value(values.opacity_channel));
     result.set(bxdf_model_property,                         make_value(values.bxdf_model));
     result.set(blending_mode_property,                      make_value(values.blending_mode));
     result.set(double_sided_property,                       make_value(values.double_sided));
@@ -807,6 +838,10 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.normal_texture_decode_bias         == rhs.normal_texture_decode_bias        ) &&
         (lhs.normalmap_encoding                 == rhs.normalmap_encoding                ) &&
         (lhs.occlusion_texture_strength         == rhs.occlusion_texture_strength        ) &&
+        (lhs.metallic_channel                   == rhs.metallic_channel                  ) &&
+        (lhs.roughness_channel                  == rhs.roughness_channel                 ) &&
+        (lhs.occlusion_channel                  == rhs.occlusion_channel                 ) &&
+        (lhs.opacity_channel                    == rhs.opacity_channel                   ) &&
         (lhs.bxdf_model                         == rhs.bxdf_model                        ) &&
         (lhs.blending_mode                      == rhs.blending_mode                     ) &&
         (lhs.double_sided                       == rhs.double_sided                      ) &&

@@ -74,6 +74,10 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         // vec4-aligned, so the struct size stays a multiple of 16 bytes.
         .normal_texture_decode_scale = material_struct.add_vec4 ("normal_texture_decode_scale")->get_offset_in_parent(),
         .normal_texture_decode_bias  = material_struct.add_vec4 ("normal_texture_decode_bias" )->get_offset_in_parent(),
+
+        // The channel each scalar input reads out of its slot's texture:
+        // (metallic, roughness, occlusion, opacity). uvec4, vec4-aligned.
+        .texture_channels            = material_struct.add_uvec4("texture_channels"           )->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -118,6 +122,12 @@ auto gather_material_record_inputs(
     inputs.bxdf_model                 = static_cast<uint32_t>(data.bxdf_model);
     inputs.normal_texture_decode_scale = data.normal_texture_decode_scale;
     inputs.normal_texture_decode_bias  = data.normal_texture_decode_bias;
+    inputs.texture_channels            = glm::uvec4{
+        erhe::primitive::to_uint32(data.metallic_channel),
+        erhe::primitive::to_uint32(data.roughness_channel),
+        erhe::primitive::to_uint32(data.occlusion_channel),
+        erhe::primitive::to_uint32(data.opacity_channel)
+    };
 
     const auto gather_texture = [&sampler_cache](
         const erhe::primitive::Material_texture_sampler& texture_sampler
@@ -239,6 +249,7 @@ void Material_buffer::write_record(
     write(gpu_data, write_offset + offsets.bxdf_model,                        as_span(inputs.bxdf_model));
     write(gpu_data, write_offset + offsets.normal_texture_decode_scale,       as_span(inputs.normal_texture_decode_scale));
     write(gpu_data, write_offset + offsets.normal_texture_decode_bias,        as_span(inputs.normal_texture_decode_bias));
+    write(gpu_data, write_offset + offsets.texture_channels,                  as_span(inputs.texture_channels));
 }
 
 void Material_buffer::write_records(

@@ -403,9 +403,15 @@ void main()
         material.metallic_roughness_rotation_scale,
         material.metallic_roughness_offset
     );
-    float metallic    = material.metallic * metallic_roughness.b;
-    float roughness_x = max(material.roughness.x * metallic_roughness.g, c_roughness_floor);
-    float roughness_y = max(material.roughness.y * metallic_roughness.g, c_roughness_floor);
+    // material.texture_channels holds the component index each scalar input
+    // reads: (metallic, roughness, occlusion, opacity). glTF's fixed packing
+    // is the default (metallic in B, roughness in G); a UsdPreviewSurface
+    // names the channel in its connection, so the index is per material.
+    float mr_metallic  = metallic_roughness[material.texture_channels.x];
+    float mr_roughness = metallic_roughness[material.texture_channels.y];
+    float metallic    = material.metallic * mr_metallic;
+    float roughness_x = max(material.roughness.x * mr_roughness, c_roughness_floor);
+    float roughness_y = max(material.roughness.y * mr_roughness, c_roughness_floor);
 #  else
     float metallic    = material.metallic;
     // Apply the same floor on the no-texture path so the BRDF
@@ -500,7 +506,7 @@ void main()
         ERHE_SELECT_TEXCOORD(ERHE_OCCLUSION_TEXGEN_MODE),
         material.occlusion_rotation_scale,
         material.occlusion_offset
-    ).r;
+    )[material.texture_channels.z];
 #  else
     const float occlusion = 1.0;
 #  endif
@@ -685,7 +691,7 @@ void main()
     sampled_alpha *= v_color.a;
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
-    sampled_alpha *= base_color_sample.a;
+    sampled_alpha *= base_color_sample[material.texture_channels.w];
 #endif
 
 #if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST

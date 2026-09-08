@@ -292,15 +292,17 @@ vec3 shade_surface(Hit_surface surface, vec3 V)
     float roughness_x = max(m.roughness.x, 1e-4);
     float roughness_y = max(m.roughness.y, 1e-4);
 
-    vec3 metallic_roughness = sample_texture_lod0(
+    vec4 metallic_roughness = sample_texture_lod0(
         m.metallic_roughness_texture,
         surface.texcoord,
         m.metallic_roughness_rotation_scale,
         m.metallic_roughness_offset
-    ).rgb;
-    metallic    = metallic * metallic_roughness.b;
-    roughness_x = max(roughness_x * metallic_roughness.g, 1e-4);
-    roughness_y = max(roughness_y * metallic_roughness.g, 1e-4);
+    );
+    // m.texture_channels: the component index of (metallic, roughness,
+    // occlusion, opacity); see standard.frag.
+    metallic    = metallic * metallic_roughness[m.texture_channels.x];
+    roughness_x = max(roughness_x * metallic_roughness[m.texture_channels.y], 1e-4);
+    roughness_y = max(roughness_y * metallic_roughness[m.texture_channels.y], 1e-4);
 
     vec3 color = light_block.ambient_light.rgb * base_color;
     color += m.emissive.rgb;

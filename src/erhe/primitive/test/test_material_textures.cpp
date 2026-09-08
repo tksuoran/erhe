@@ -212,3 +212,44 @@ TEST(Material_textures, sampler_state_inherits_from_a_folder)
     EXPECT_EQ(material->data.texture_samplers.normal.sampler.wrap_v, erhe::graphics::Sampler_address_mode::mirrored_repeat);
     material->set_inheritance_container(nullptr);
 }
+
+// Which channel of a slot's texture each scalar input reads. The defaults are
+// glTF's fixed packing; USD names the channel in the shading network, so the
+// selectors are ordinary material properties (a value, a local set, a folder
+// to inherit from).
+TEST(Material_textures, texture_channels_default_to_the_gltf_packing)
+{
+    std::shared_ptr<Material> material = std::make_shared<Material>("m");
+    EXPECT_EQ(material->get_metallic_channel(),  erhe::primitive::Texture_channel::b);
+    EXPECT_EQ(material->get_roughness_channel(), erhe::primitive::Texture_channel::g);
+    EXPECT_EQ(material->get_occlusion_channel(), erhe::primitive::Texture_channel::r);
+    EXPECT_EQ(material->get_opacity_channel(),   erhe::primitive::Texture_channel::a);
+    EXPECT_EQ(material->get_value_source(Material::roughness_channel_property.get()), Value_source::default_value);
+
+    material->set_value(Material::roughness_channel_property, erhe::primitive::Texture_channel::r);
+    EXPECT_EQ(material->get_roughness_channel(), erhe::primitive::Texture_channel::r);
+    EXPECT_EQ(material->get_value_source(Material::roughness_channel_property.get()), Value_source::local);
+
+    // A whole-values snapshot carries them, and a value equal to the default
+    // clears the local one (D32).
+    erhe::primitive::Material_values values = material->get_values();
+    EXPECT_EQ(values.roughness_channel, erhe::primitive::Texture_channel::r);
+    values.roughness_channel = erhe::primitive::Texture_channel::g;
+    values.occlusion_channel = erhe::primitive::Texture_channel::a;
+    material->set_values(values);
+    EXPECT_EQ(material->get_value_source(Material::roughness_channel_property.get()), Value_source::default_value);
+    EXPECT_EQ(material->get_occlusion_channel(), erhe::primitive::Texture_channel::a);
+}
+
+TEST(Material_textures, texture_channels_inherit_from_a_folder)
+{
+    Folder folder;
+    std::shared_ptr<Material> material = std::make_shared<Material>("m");
+    folder.materials.push_back(material.get());
+    material->set_inheritance_container(&folder);
+
+    folder.set_value(Material::metallic_channel_property, erhe::primitive::Texture_channel::a);
+    EXPECT_EQ(material->get_value_source(Material::metallic_channel_property.get()), Value_source::inherited);
+    EXPECT_EQ(material->get_metallic_channel(), erhe::primitive::Texture_channel::a);
+    material->set_inheritance_container(nullptr);
+}

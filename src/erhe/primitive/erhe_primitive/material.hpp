@@ -132,6 +132,15 @@ public:
     // authored handedness.
     Normalmap_encoding        normalmap_encoding                {Normalmap_encoding::right_handed_three_channel};
     float                     occlusion_texture_strength        {1.0f};
+    // Which channel of the bound texture each scalar input reads. The
+    // defaults are glTF's fixed packing; a USD file names the channel in
+    // the UsdPreviewSurface connection. metallic and roughness read the
+    // metallic-roughness slot, occlusion the occlusion slot, and opacity
+    // the base color slot (which is where erhe's alpha comes from).
+    Texture_channel           metallic_channel                  {Texture_channel::b};
+    Texture_channel           roughness_channel                 {Texture_channel::g};
+    Texture_channel           occlusion_channel                 {Texture_channel::r};
+    Texture_channel           opacity_channel                   {Texture_channel::a};
     Bxdf_model                bxdf_model                        {Bxdf_model::isotropic_brdf};
     Material_blending_mode    blending_mode                     {Material_blending_mode::opaque};
     bool                      double_sided                      {false};
@@ -194,6 +203,10 @@ public:
     static const erhe::property::Property<glm::vec4>              normal_texture_decode_bias_property;
     static const erhe::property::Property<Normalmap_encoding>     normalmap_encoding_property;
     static const erhe::property::Property<float>                  occlusion_texture_strength_property;
+    static const erhe::property::Property<Texture_channel>        metallic_channel_property;
+    static const erhe::property::Property<Texture_channel>        roughness_channel_property;
+    static const erhe::property::Property<Texture_channel>        occlusion_channel_property;
+    static const erhe::property::Property<Texture_channel>        opacity_channel_property;
     static const erhe::property::Property<Bxdf_model>             bxdf_model_property;
     static const erhe::property::Property<Material_blending_mode> blending_mode_property;
     static const erhe::property::Property<bool>                   double_sided_property;
@@ -292,6 +305,10 @@ public:
     [[nodiscard]] auto get_normal_texture_decode_bias        () const -> glm::vec4              { return get_value(normal_texture_decode_bias_property); }
     [[nodiscard]] auto get_normalmap_encoding                () const -> Normalmap_encoding     { return get_value(normalmap_encoding_property); }
     [[nodiscard]] auto get_occlusion_texture_strength        () const -> float                  { return get_value(occlusion_texture_strength_property); }
+    [[nodiscard]] auto get_metallic_channel                  () const -> Texture_channel        { return get_value(metallic_channel_property); }
+    [[nodiscard]] auto get_roughness_channel                 () const -> Texture_channel        { return get_value(roughness_channel_property); }
+    [[nodiscard]] auto get_occlusion_channel                 () const -> Texture_channel        { return get_value(occlusion_channel_property); }
+    [[nodiscard]] auto get_opacity_channel                   () const -> Texture_channel        { return get_value(opacity_channel_property); }
     [[nodiscard]] auto get_bxdf_model                        () const -> Bxdf_model             { return get_value(bxdf_model_property); }
     [[nodiscard]] auto get_blending_mode                     () const -> Material_blending_mode { return get_value(blending_mode_property); }
     [[nodiscard]] auto get_double_sided                      () const -> bool                   { return get_value(double_sided_property); }

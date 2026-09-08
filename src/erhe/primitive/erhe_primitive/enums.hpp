@@ -122,6 +122,19 @@ enum class Texgen_mode : uint16_t {
     tangent  = ERHE_TEXGEN_MODE_TANGENT 
 };
 
+// Which channel of a bound texture a scalar material input reads. USD's
+// UsdPreviewSurface names the channel in the connection (`outputs:r`,
+// `outputs:g`, ...); glTF fixes the packing, and the defaults are glTF's:
+// metallic in B, roughness in G, occlusion in R, opacity in A. The value is
+// the component index the shader indexes the sampled vec4 with, so it
+// travels to the GPU as it stands.
+enum class Texture_channel : uint16_t {
+    r = 0,
+    g = 1,
+    b = 2,
+    a = 3
+};
+
 enum class Normalmap_encoding : uint16_t {
     right_handed_three_channel  = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_THREE_CHANNEL,
     right_handed_two_channel_ga = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_TWO_CHANNEL_GA,
@@ -194,6 +207,7 @@ extern const erhe::property::Enum_info c_bxdf_model_enum_info;
 extern const erhe::property::Enum_info c_material_blending_mode_enum_info;
 extern const erhe::property::Enum_info c_texgen_mode_enum_info;
 extern const erhe::property::Enum_info c_normalmap_encoding_enum_info;
+extern const erhe::property::Enum_info c_texture_channel_enum_info;
 // The erhe::graphics sampler enums, for the Material slot sampler properties.
 extern const erhe::property::Enum_info c_sampler_address_mode_enum_info;
 extern const erhe::property::Enum_info c_filter_enum_info;
@@ -206,7 +220,9 @@ extern const erhe::property::Enum_info c_sampler_mipmap_mode_enum_info;
 [[nodiscard]] auto c_str(Material_blending_mode blending_mode) -> const char*;
 [[nodiscard]] auto c_str(Texgen_mode texgen_mode) -> const char*;
 [[nodiscard]] auto c_str(Normalmap_encoding normalmap_encoding) -> const char*;
+[[nodiscard]] auto c_str(Texture_channel texture_channel) -> const char*;
 [[nodiscard]] auto to_uint32(Texgen_mode texgen_mode) -> uint32_t;
 [[nodiscard]] auto to_uint32(Normalmap_encoding normalmap_encoding) -> uint32_t;
+[[nodiscard]] auto to_uint32(Texture_channel texture_channel) -> uint32_t;
 
 } // namespace erhe::primitive

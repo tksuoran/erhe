@@ -122,6 +122,19 @@ const erhe::property::Enum_info c_material_blending_mode_enum_info{"Material_ble
 const erhe::property::Enum_info c_texgen_mode_enum_info           {"Texgen_mode",            c_texgen_mode_entries};
 const erhe::property::Enum_info c_normalmap_encoding_enum_info    {"Normalmap_encoding",     c_normalmap_encoding_entries};
 
+namespace {
+
+constexpr erhe::property::Enum_entry c_texture_channel_entries[] = {
+    {"Red",   static_cast<int32_t>(Texture_channel::r)},
+    {"Green", static_cast<int32_t>(Texture_channel::g)},
+    {"Blue",  static_cast<int32_t>(Texture_channel::b)},
+    {"Alpha", static_cast<int32_t>(Texture_channel::a)},
+};
+
+} // anonymous namespace
+
+const erhe::property::Enum_info c_texture_channel_enum_info{"Texture_channel", c_texture_channel_entries};
+
 constexpr erhe::property::Enum_entry c_sampler_address_mode_entries[] = {
     {"Repeat",          static_cast<int32_t>(erhe::graphics::Sampler_address_mode::repeat)},
     {"Clamp to Edge",   static_cast<int32_t>(erhe::graphics::Sampler_address_mode::clamp_to_edge)},
@@ -200,6 +213,32 @@ auto c_str(const Texgen_mode texgen_mode) -> const char*
         case Normalmap_encoding::left_handed_two_channel_rg : return "Left Handed X+Y (RG)";
         default: {
             ERHE_FATAL("Bad Normalmap_encoding");
+        }
+    }
+}
+
+[[nodiscard]] auto c_str(const Texture_channel texture_channel) -> const char*
+{
+    switch (texture_channel) {
+        case Texture_channel::r: return "Red";
+        case Texture_channel::g: return "Green";
+        case Texture_channel::b: return "Blue";
+        case Texture_channel::a: return "Alpha";
+        default: {
+            ERHE_FATAL("Bad Texture_channel");
+        }
+    }
+}
+
+auto to_uint32(const Texture_channel texture_channel) -> uint32_t
+{
+    switch (texture_channel) {
+        case Texture_channel::r: return 0u;
+        case Texture_channel::g: return 1u;
+        case Texture_channel::b: return 2u;
+        case Texture_channel::a: return 3u;
+        default: {
+            ERHE_FATAL("Bad Texture_channel");
         }
     }
 }
