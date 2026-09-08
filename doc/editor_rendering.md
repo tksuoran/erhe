@@ -118,7 +118,7 @@ conditional no-ops per frame, noted below):
 | 13 | Content polygon centroids selected | polygon_centroids | as above, selected |
 | 14 | Content outline opaque selected | edge_lines | selection/hover outline (outline pipeline, constant colors) |
 | 15 | Sky | polygon_fill | fullscreen (3 vertices), depth==far, stencil==0; `Sky_composition_pass` subclass switches between the gradient/checker shader and the physically-based atmosphere (`doc/procedural_sky.md`) |
-| 16 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp |
+| 16 | Grid | polygon_fill | fullscreen infinite plane (12 vertices), depth clamp, blended overlay that leaves the depth buffer to the content |
 | 17 | Content fill translucent not selected | polygon_fill | translucent buckets of pass 1 |
 | 18 | Content fill translucent selected | polygon_fill | translucent buckets of pass 2 |
 | 19 | Brush | polygon_fill | brush layer, `VARIANT_BRUSH_PREVIEW` variant, two pipelines in sequence (cull back then cull front), premultiplied alpha |
@@ -208,10 +208,24 @@ Key pipelines and their depth/stencil/blend configuration:
 ### Grid
 
 - Shader: `grid`
-- Depth: test less_or_equal, write enabled, depth clamp enabled
+- Depth: test less_or_equal, write DISABLED, depth clamp enabled
 - Stencil: function=not_equal 0x80, test_mask=0x80, write_mask=0x80, z_pass_op=keep
-- Blend: disabled
+- Blend: premultiplied alpha
 - Renders where bit 7 is not set (skips pixels covered by selected geometry outline)
+
+The grid is an overlay guide, not a surface: it composites its line coverage
+over the content phase and leaves the depth buffer to the content. Depth writes
+stay off for two independent reasons. A partially covered, blended fragment has
+no single depth to claim; and the grid's depth does not agree with the
+content's -- the infinite plane is rendered through `clip_from_world_for_grid`
+and passes the depth test over opaque content at every pixel below the horizon,
+which is why grid lines cross objects that stand in front of the plane. Writing
+depth therefore stamped a depth the content disagrees with across the whole
+plane, and every pass ordered after the grid -- passes 17-20, the translucent
+content fill first of all -- was rejected by it, so no alpha-blended or
+alpha-tested primitive reached the frame while the grid was visible. The
+disagreement itself is still open: the grid should not draw over content that
+stands in front of the plane.
 
 ### Brush preview
 

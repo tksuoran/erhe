@@ -130,6 +130,7 @@
     "erhe.scene.log_frame": "info",
     "erhe.scene.mesh_raytrace": "info",
     "erhe.scene_renderer.draw": "info",
+    "erhe.scene_renderer.draw_list": "info",
     "erhe.scene_renderer.forward_renderer": "info",
     "erhe.scene_renderer.log_program_interface": "info",
     "erhe.scene_renderer.material_buffer": "info",

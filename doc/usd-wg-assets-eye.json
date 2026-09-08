@@ -1,23 +1,23 @@
 [
  {
   "path": "full_assets/McUsd/McUsd.usda",
-  "note": "the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import",
-  "gap": "the grid composition pass is ordered between the opaque and the translucent content fill and writes depth over the ground plane, so every translucent primitive fails the depth test; its stencil guard never rejects anything because the not-selected content fill pipeline writes no stencil bit"
+  "note": "the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces",
+  "gap": ""
  },
  {
   "path": "full_assets/McUsd/McUsd.usdz",
-  "note": "the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import",
-  "gap": "the grid composition pass is ordered between the opaque and the translucent content fill and writes depth over the ground plane, so every translucent primitive fails the depth test; its stencil guard never rejects anything because the not-selected content fill pipeline writes no stencil bit"
+  "note": "the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces",
+  "gap": ""
  },
  {
   "path": "full_assets/McUsd/McUsd_10cm.usda",
-  "note": "the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import",
-  "gap": "the grid composition pass is ordered between the opaque and the translucent content fill and writes depth over the ground plane, so every translucent primitive fails the depth test; its stencil guard never rejects anything because the not-selected content fill pipeline writes no stencil bit"
+  "note": "the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces",
+  "gap": ""
  },
  {
   "path": "full_assets/McUsd/McUsd_10cm.usdz",
-  "note": "the opaque blocks match the reference; the purple stained glass cube and the sunflower and fern cards are absent. They are present and correct - see-through purple glass, both faces of each cross-shaped card - once the viewport grid is turned off (set_graphics_settings grid_visible=false), so what is missing is every alpha-blended and alpha-tested primitive, not the USD import",
-  "gap": "the grid composition pass is ordered between the opaque and the translucent content fill and writes depth over the ground plane, so every translucent primitive fails the depth test; its stencil guard never rejects anything because the not-selected content fill pipeline writes no stencil bit"
+  "note": "the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces",
+  "gap": ""
  },
  {
   "path": "full_assets/OpenChessSet/chess_set.usda",

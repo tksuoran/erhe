@@ -1140,6 +1140,17 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             }
         }
     }
+    // The grid is a blended overlay guide, not a surface: it composites its
+    // line coverage over the content phase and leaves the depth buffer to the
+    // content. Depth writes are therefore off - a partially covered, blended
+    // fragment has no single depth to claim, and the grid's own depth does not
+    // agree with the content's anyway (an infinite plane rendered through
+    // clip_from_world_for_grid passes the depth test over opaque content at
+    // every pixel below the horizon). With depth writes on, the grid stamped
+    // that disagreeing depth across the whole plane and every pass ordered
+    // after it - the translucent content fill first of all - was rejected by
+    // it, so no alpha-blended or alpha-tested primitive reached the frame
+    // while the grid was visible.
     , grid{
         graphics_device,
         erhe::graphics::Base_render_pipeline_create_info{
@@ -1148,9 +1159,15 @@ Pipeline_renderpasses::Pipeline_renderpasses(
             .rasterization  = Rasterization_state::cull_mode_none_depth_clamp,
             .depth_stencil = {
                 .depth_test_enable   = true,
-                .depth_write_enable  = true,
+                .depth_write_enable  = false,
                 .depth_compare_op    = erhe::graphics::get_depth_function(erhe::graphics::Compare_operation::less_or_equal, reverse_depth),
-                .stencil_test_enable = true, // Conditionally render fragments where bit 7 is not set, without modifying the stencil buffer
+                // Draw only where bit 7 is clear, without modifying the stencil
+                // buffer: bit 7 is the selection silhouette written by the
+                // selected fill / selection stencil mask passes and extended
+                // over the outline ring by the outline pass, all of which run
+                // before the grid, so the grid stays off selected content and
+                // off its outline.
+                .stencil_test_enable = true,
                 .stencil_front = {
                     .stencil_fail_op = erhe::graphics::Stencil_op::keep,
                     .z_fail_op       = erhe::graphics::Stencil_op::keep,
