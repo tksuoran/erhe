@@ -457,7 +457,7 @@ stained glass opaque and its cards missing; RoughnessTest's missing
 specular response; a scene whose load blocks the main loop long enough to
 trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
 at a time once their point instancers are expanded into several thousand
-prims; MaterialX documents as reference targets.
+prims. MaterialX is section 6.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.
@@ -536,6 +536,14 @@ until the items below are taken up, and E1 writes no `UsdPhysics`
 schemas. Each item is independent of the others and of every step in
 section 3 except where named.
 
+- MaterialX: a `.mtlx` document as a reference target (the editor refuses
+  the arc), a `Material` whose surface is a `ND_standard_surface_surfaceshader`
+  or `ND_open_pbr_surface_surfaceshader` network (Tydra converts it into
+  `RenderMaterial::openPBRShader`, which the importer does not read; import
+  prefers that network when both are present, per E2), and the LightUSD usda
+  reader's rejection of `colorSpace` metadata on a shader attribute (the
+  survey's one failing entry). The `.mtlx` reader is behind
+  `LIGHTUSD_WITH_USDMTLX`, off in erhe's build.
 - Animated value layer: the property-system section 6 item, an animated
   value between coerced and local in R3, set by `Animation_sampler::apply`
   and cleared when playback stops, so playback never overwrites the
