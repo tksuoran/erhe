@@ -83,7 +83,6 @@ translation units.
   any Gprim does; it holds no `GeomSubset`, so the mesh has one primitive.
   The first save is a change of representation, so the round trip is a fixed
   point from the first reload on rather than from the first save.
-  `PointInstancer` remains an `erhe::Typed` prim (plan section 5).
 - Tydra's `GetPropertyNames` knows a fixed set of prim types and answers
   "TODO: Prim type <name>" for the primitive schemas, so the authored
   property names of one of those prims are read from the prim itself: the
@@ -462,6 +461,66 @@ The list-edit rule is the one the arc reader repeats, over target paths.
 the caller makes the Style items, applies the values with
 `erhe::scene::apply_property_values` and sets the styles.
 
+### Point instancers
+
+A `PointInstancer` prim is expanded into prims
+(doc/usd-compatibility-plan.md S1). The prim itself is an
+`erhe::scene::Point_instancer` - a boundable prim, which is what USD's
+`UsdGeomPointInstancer` is - carrying its own transform, and below it:
+
+- every prototype the prim's `rel prototypes` names, converted where the file
+  put it and held abstract with `Item_flags::content` clear, the way a class
+  prim's prototype is;
+- one child `Xform` per instance, named `<prototype name>_<index>` (or
+  `<prototype name>_<id>` when the prim authors `ids`), carrying the instance
+  transform and an INTERNAL reference to its prototype - an entry of
+  `Usd_data::references` with an empty asset path. The caller instantiates it
+  the way it instantiates every other arc, so every instance of one prototype
+  shares one prefab template and the clones share their GPU primitives.
+
+`Usd_data::point_instancers` records what the expansion made: the instancer
+item and its stage path, the prototype paths, and one entry per instance with
+its prototype index and its transform. The transforms come from LightUSD's own
+`ComputeInstanceTransformsAtTime` at the default time, so the composition is
+USD's (scale, then orientation, then position) and an `invisibleIds` /
+`inactiveIds` entry is skipped.
+
+The instance prims are the only record of `positions`, `orientations`,
+`scales` and `protoIndices`: a save recomputes all four from them - the first
+three from their local transforms and the fourth from the prototype each one
+references - so an instance the user moved, deleted, duplicated or reordered
+persists and no copy of an array can drift out of step with the tree.
+`erhe::scene::Point_instancer` therefore holds no array of its own.
+`orientations` and `scales` are written when any instance needs them, so an
+instancer of plain translations stays as compact as the file that authored it.
+
+Which prototype an instance references is read off its `Prefab_instance`
+attachment: the arc target ends with the prototype's path below the
+instancer (`Prototypes/teapot`, `Pawn`), longest match first. An instance
+whose arc names none of the instancer's prototypes is one warning and is not
+written.
+
+`rel prototypes` is written from the tree: the prims below the instancer that
+carry no content, in tree order. That is exactly what the load holds abstract,
+so the two agree - and it is why the load remaps the authored `protoIndices`
+onto the tree order rather than keeping the relationship's. A prototype the
+stage does not answer for is one warning and its instances are left out; a
+prototype the instancer does not hold is one warning saying that a save
+relocates it under the instancer.
+
+The prototype's own arcs are instantiated where the prototype sits, so the
+prim keeps them and a save writes them back, but the content they bring in is
+held abstract with the rest of the prototype - only the instances' clones of
+it draw. The editor tells an instance from a prototype by those two facts: an
+instance is a content child of the instancer carrying a `Prefab_instance`
+attachment, and a prototype is an abstract one.
+
+Not carried: time-sampled instancer arrays (the arrays are read at the default
+time), `velocities` / `accelerations` / `angularVelocities`, per-instance
+primvars, and `ids` beyond naming the instance prims. erhe draws one instance
+per prim - there is no GPU instancing - so a large instancer costs one draw
+per instance over one shared set of GPU primitives.
+
 ### Brush prims
 
 A brush is editor state a USD file carries as a prim of its own type
@@ -593,7 +652,6 @@ source; the caller decodes them with the memory overload of
 `erhe::graphics::Image_loader::open`.
 
 Not yet imported: skeletons and skinning, blend shapes, animation clips,
-`PointInstancer` / instanceable prototypes beyond what Tydra flattens,
 volumes, MaterialX / OpenPBR shading networks, texture filter state, and the
 per-channel output selection of a `UsdUVTexture` (erhe reads roughness from
 green and metallic from blue, whichever channels the file's `outputs:*`
@@ -994,6 +1052,18 @@ primitive, that a save writes `def Mesh` with points and no `Cube` or
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test
 input.
+
+`test/data/point_instancer.usda` holds one `PointInstancer` with two
+prototypes - an `Xform` holding a `Cube` and one holding a `Sphere` - and four
+instances with per-instance scales. `test_usd_point_instancers.cpp` asserts
+that the prim becomes an `erhe::scene::Point_instancer` carrying no array of
+its own, that the record names the prototypes and the four instance
+transforms, that every instance is a child prim carrying an internal reference
+to its prototype, that the prototype subtree is held abstract while the
+instances are content, that a save writes the arrays back with the prototypes
+as plain children and the instance prims left out, that a moved instance
+persists through the save, and that the round trip settles after the first
+reload the way the primitive-schema one does.
 
 `test/data/brushes.usda` holds a `Brushes` scope with two `Brush` prims - one
 binding a material from a `Looks` scope, one not - and a third without a

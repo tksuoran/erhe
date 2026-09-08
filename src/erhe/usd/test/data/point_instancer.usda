@@ -1,0 +1,40 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def PointInstancer "Scatter"
+    {
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (0, 0, 2), (2, 0, 2)]
+        int[] protoIndices = [0, 1, 0, 1]
+        quath[] orientations = [(1, 0, 0, 0), (1, 0, 0, 0), (1, 0, 0, 0), (1, 0, 0, 0)]
+        float3[] scales = [(1, 1, 1), (2, 2, 2), (0.5, 0.5, 0.5), (1, 1, 1)]
+        rel prototypes = [
+            </World/Scatter/Prototypes/BoxProto>,
+            </World/Scatter/Prototypes/BallProto>,
+        ]
+
+        def "Prototypes"
+        {
+            def Xform "BoxProto"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+
+            def Xform "BallProto"
+            {
+                def Sphere "ball"
+                {
+                    double radius = 0.5
+                }
+            }
+        }
+    }
+}

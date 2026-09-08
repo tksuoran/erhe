@@ -67,6 +67,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
@@ -436,6 +437,66 @@ void enable_prim_content(
     return {};
 }
 
+// True when `prim_path` is a prototype of one of the file's point instancers
+// (doc/usd-compatibility-plan.md S1), or a prim below one. A prototype is
+// held abstract where it sits, so the prim a reference names is content-less
+// until the reference clones it.
+[[nodiscard]] auto is_point_instancer_prototype_path(
+    const erhe::usd::Usd_data& usd_data,
+    const std::string&         prim_path
+) -> bool
+{
+    for (const erhe::usd::Usd_point_instancer& instancer : usd_data.point_instancers) {
+        for (const std::string& prototype_path : instancer.prototype_paths) {
+            if (is_under_prim_path(prim_path, prototype_path)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Take the content flag off one subtree. The counterpart of
+// enable_prim_content: what a prim held abstract gets, and what the clone of
+// an arc a point instancer's prototype authors gets - the prototype's own
+// content draws nowhere, only the instances' clones of it do.
+void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
+{
+    item->disable_flag_bits(erhe::Item_flags::content);
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item->get_children()) {
+        if (child) {
+            disable_prim_content(child);
+        }
+    }
+}
+
+// True when an arc at `stage_path` is inside a point instancer's prototype
+// and is not the arc of the template being loaded, which makes what it brings
+// in abstract. Such an arc IS
+// instantiated - the prototype prim keeps it, so a save writes it back - but
+// the content it brings in is held abstract like the rest of the prototype,
+// so the prototype draws nothing at the instancer's origin. A template load
+// rooted AT the prototype is the one case that keeps the content: that load
+// is what builds the instances' shared content.
+[[nodiscard]] auto is_abstract_prototype_arc(
+    const erhe::usd::Usd_data& usd_data,
+    const std::string&         stage_path,
+    const std::string&         prim_path_prefix
+) -> bool
+{
+    for (const erhe::usd::Usd_point_instancer& instancer : usd_data.point_instancers) {
+        for (const std::string& prototype_path : instancer.prototype_paths) {
+            if (prim_path_prefix == prototype_path) {
+                continue;
+            }
+            if (is_under_prim_path(stage_path, prototype_path)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Instantiate every composition arc the file's prims author
 // (doc/usd-compatibility-plan.md X1): one Prefab_instance attachment per arc,
 // in the order the arcs resolved to, each with a clone of the template the arc
@@ -463,6 +524,7 @@ void resolve_usd_references(
         if (!is_under_prim_path(entry.stage_path, prim_path_prefix)) {
             continue;
         }
+        const bool abstract_arc = is_abstract_prototype_arc(usd_data, entry.stage_path, prim_path_prefix);
         const std::shared_ptr<erhe::scene::Node> carrier = std::dynamic_pointer_cast<erhe::scene::Node>(entry.item);
         if (!carrier) {
             // A typeless or `Scope` carrier is imported as an `Xform`
@@ -488,6 +550,7 @@ void resolve_usd_references(
                 );
                 continue;
             }
+            const std::size_t children_before = carrier->get_children().size();
             const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(target_path, reference.prim_path);
             if (!prefab) {
                 log_parsers->error(
@@ -502,11 +565,17 @@ void resolve_usd_references(
                 prefab,
                 carrier,
                 content_layer_id,
-                out_mesh_node_items,
+                abstract_arc ? nullptr : out_mesh_node_items,
                 (reference.kind == erhe::usd::Usd_reference_kind::payload)
                     ? Prefab_arc_kind::payload
                     : Prefab_arc_kind::reference
             );
+            if (abstract_arc) {
+                const std::vector<std::shared_ptr<erhe::Hierarchy>>& children = carrier->get_children();
+                for (std::size_t index = children_before, end = children.size(); index < end; ++index) {
+                    disable_prim_content(children[index]);
+                }
+            }
         }
         // The overrides the referencing layer authored over the arcs
         // (doc/usd-compatibility-plan.md X2): an entry names the item at its
@@ -1128,7 +1197,9 @@ auto load_usd_prefab_template(
     // A prototype held abstract by a `class` prim (X3) is content-less where
     // it sits; a reference materializes it, so the template it becomes is
     // content.
-    if (prototype) {
+    // A prototype of a point instancer (S1) is held abstract the same way,
+    // and the template it becomes is content for the same reason.
+    if (prototype || is_point_instancer_prototype_path(usd_data, root_prim_path)) {
         enable_prim_content(target, collect_file_prims(usd_data));
     }
 
@@ -1362,6 +1433,152 @@ void log_uncarried_editor_state(const Content_library& content_library, const st
     );
 }
 
+// One instance of a point instancer (doc/usd-compatibility-plan.md S1): a
+// content child prim of the instancer carrying a Prefab_instance attachment.
+// That is what the load makes of an instance - a content prim holding an
+// internal reference to its prototype. The content flag is what separates it
+// from a prototype, which is held abstract and carries an arc of its own, and
+// the attachment is what separates it from a prim the user parented under the
+// instancer by hand. The writer reads the same two facts off the tree.
+[[nodiscard]] auto is_point_instancer_instance(const std::shared_ptr<erhe::Hierarchy>& prim) -> bool
+{
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
+    if (!node) {
+        return false;
+    }
+    if ((node->get_flag_bits() & erhe::Item_flags::content) == 0) {
+        return false;
+    }
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : node->get_attachments()) {
+        if (std::dynamic_pointer_cast<Prefab_instance>(attachment)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void collect_usd_references(
+    const std::shared_ptr<erhe::Hierarchy>&                 prim,
+    std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
+    std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
+);
+
+// The prototypes one instancer holds, in the order a save writes
+// `rel prototypes` in (doc/usd-compatibility-plan.md S1): a child prim that
+// carries no content is a prototype and the walk stops there, and a content
+// child that is not an instance is walked for the prototypes below it (the
+// `Prototypes` scope such a file usually puts them in). This is the rule the
+// writer applies to the planned prims, read off the same tree.
+void collect_point_instancer_prototypes(
+    const erhe::Hierarchy&                          prim,
+    std::vector<std::shared_ptr<erhe::Hierarchy>>&  out_prototypes
+)
+{
+    for (const std::shared_ptr<erhe::Hierarchy>& child : prim.get_children()) {
+        if (!child || is_point_instancer_instance(child)) {
+            continue;
+        }
+        if ((child->get_flag_bits() & erhe::Item_flags::content) == 0) {
+            out_prototypes.push_back(child);
+            continue;
+        }
+        collect_point_instancer_prototypes(*child.get(), out_prototypes);
+    }
+}
+
+// The path one prototype has below the instancer holding it, as prim names
+// joined by '/' - `Prototypes/teapot` for a prototype in a scope, `Pawn` for
+// a direct child. It is what an instance's arc target ends with, and it
+// survives a rename of anything above the instancer.
+[[nodiscard]] auto prototype_path_below(
+    const erhe::Hierarchy& instancer,
+    const erhe::Hierarchy& prototype
+) -> std::string
+{
+    std::string             path;
+    const erhe::Hierarchy*  item = &prototype;
+    while ((item != nullptr) && (item != &instancer)) {
+        path = path.empty() ? item->get_name() : (item->get_name() + "/" + path);
+        item = item->get_parent().lock().get();
+    }
+    return (item == &instancer) ? path : std::string{};
+}
+
+// Which of `prototypes` one instance prim instances: the prototype whose path
+// below the instancer the instance's arc target ends with, longest match
+// first, so a prototype named `Pawn` and one named `spare/Pawn` stay apart.
+// The size of `prototypes` means "no prototype of this instancer".
+[[nodiscard]] auto find_instance_prototype_index(
+    const erhe::Hierarchy&                               instancer,
+    const std::vector<std::shared_ptr<erhe::Hierarchy>>& prototypes,
+    const erhe::scene::Node&                             instance
+) -> std::size_t
+{
+    std::string target_path;
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : instance.get_attachments()) {
+        const std::shared_ptr<Prefab_instance> prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(attachment);
+        if (prefab_instance) {
+            target_path = prefab_instance->get_prefab_prim_path();
+            break;
+        }
+    }
+    std::size_t best_index  = prototypes.size();
+    std::size_t best_length = 0;
+    for (std::size_t index = 0, end = prototypes.size(); index < end; ++index) {
+        const std::string suffix = "/" + prototype_path_below(instancer, *prototypes[index].get());
+        if (suffix.size() <= 1) {
+            continue;
+        }
+        const bool matches =
+            (target_path.size() >= suffix.size()) &&
+            (target_path.compare(target_path.size() - suffix.size(), suffix.size(), suffix) == 0);
+        if (matches && (suffix.size() > best_length)) {
+            best_index  = index;
+            best_length = suffix.size();
+        }
+    }
+    return best_index;
+}
+
+// One point instancer as the writer's record (doc/usd-compatibility-plan.md
+// S1): its instance children in tree order, each with the prototype it
+// references. Nothing of the instancer is carried by the item itself - the
+// arrays a save writes are all read back off these prims - so an instance
+// added, removed or reordered in the tree is what the file gets.
+void collect_usd_point_instancers(
+    const std::shared_ptr<erhe::scene::Point_instancer>&    instancer,
+    std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
+    std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
+)
+{
+    std::vector<std::shared_ptr<erhe::Hierarchy>> prototypes;
+    collect_point_instancer_prototypes(*instancer.get(), prototypes);
+
+    erhe::usd::Usd_save_point_instancer entry{};
+    entry.item = instancer;
+    for (const std::shared_ptr<erhe::Hierarchy>& child : instancer->get_children()) {
+        if (!is_point_instancer_instance(child)) {
+            // A prototype: a prim of its own, and its arcs are written.
+            collect_usd_references(child, out_references, out_point_instancers);
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> instance = std::dynamic_pointer_cast<erhe::scene::Node>(child);
+        const std::size_t proto_index = find_instance_prototype_index(*instancer.get(), prototypes, *instance.get());
+        if (proto_index >= prototypes.size()) {
+            log_parsers->warn(
+                "point instancer '{}': instance '{}' does not reference any of its prototypes - it is not written",
+                instancer->get_name(),
+                instance->get_name()
+            );
+            continue;
+        }
+        entry.instances.push_back(
+            erhe::usd::Usd_save_point_instance{.item = instance, .proto_index = proto_index}
+        );
+    }
+    out_point_instancers.push_back(std::move(entry));
+}
+
 // The composition arcs the scene carries, one entry per carrier prim: a node
 // with Prefab_instance attachments is a referencing prim, and each attachment
 // is one arc, in the order the attachments hold (doc/usd-compatibility-plan.md
@@ -1369,9 +1586,21 @@ void log_uncarried_editor_state(const Content_library& content_library, const st
 // target file, the target prim and the arc form.
 void collect_usd_references(
     const std::shared_ptr<erhe::Hierarchy>&                 prim,
-    std::vector<erhe::usd::Usd_save_prim_references>&       out_references
+    std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
+    std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
 )
 {
+    // A point instancer's instance children are its expansion, not carriers
+    // of their own (doc/usd-compatibility-plan.md S1): the instancer writes
+    // them as its instance arrays, so their internal references are not
+    // written and nothing below them is walked.
+    const std::shared_ptr<erhe::scene::Point_instancer> point_instancer =
+        std::dynamic_pointer_cast<erhe::scene::Point_instancer>(prim);
+    if (point_instancer) {
+        collect_usd_point_instancers(point_instancer, out_references, out_point_instancers);
+        return;
+    }
+
     const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(prim);
     if (node) {
         erhe::usd::Usd_save_prim_references entry{};
@@ -1397,7 +1626,7 @@ void collect_usd_references(
         }
     }
     for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
-        collect_usd_references(child, out_references);
+        collect_usd_references(child, out_references, out_point_instancers);
     }
 }
 
@@ -1523,7 +1752,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     };
 
     for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
-        collect_usd_references(child, save_arguments.references);
+        collect_usd_references(child, save_arguments.references, save_arguments.point_instancers);
     }
     // The domes the file this scene was opened from authored: written back as
     // the `DomeLight` prims they were. A scene that read none writes none -

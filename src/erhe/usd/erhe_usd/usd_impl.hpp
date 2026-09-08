@@ -28,6 +28,11 @@ constexpr std::string_view c_brush_normal_style_attribute   {"erhe:Brush:normal_
 constexpr std::string_view c_brush_density_value_name       {"Brush.density"};
 constexpr std::string_view c_brush_normal_style_value_name  {"Brush.normal_style"};
 
+// The USD schema token of a point instancer (doc/usd-compatibility-plan.md
+// S1). The reader dispatches on it and the writer spells it, so both name it
+// from here; the erhe class is erhe::scene::Point_instancer.
+constexpr std::string_view c_point_instancer_prim_type_name {"PointInstancer"};
+
 // One prim a variant block authors as a `def` child and the loader hoisted
 // out of it, into the tree below the prim carrying the set
 // (doc/usd-compatibility-plan.md X4). USD builds such a prim when its variant

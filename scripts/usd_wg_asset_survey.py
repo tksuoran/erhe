@@ -212,6 +212,15 @@ class EditorDown(Exception):
     """The editor process is gone or stopped answering."""
 
 
+def is_unanswered(error: Exception) -> bool:
+    """True when the editor is up but its main thread is inside a load that
+    outlasted the wait: the MCP server answers "Request timed out" / "Server
+    busy" from its own queue. The entry cannot be surveyed, and the run goes
+    on."""
+    text = str(error)
+    return ("Request timed out" in text) or ("Server busy" in text)
+
+
 class Mcp:
     def __init__(self, port: int) -> None:
         self.url = f"http://127.0.0.1:{port}/mcp"
@@ -469,8 +478,8 @@ def screenshot_stats(path: pathlib.Path) -> dict:
 # One entry
 # --------------------------------------------------------------------------
 
-def scene_names(editor: Editor) -> set:
-    scenes = editor.mcp.call("list_scenes", {}, timeout=60.0)
+def scene_names(editor: Editor, timeout: float = 120.0) -> set:
+    scenes = editor.mcp.call("list_scenes", {}, timeout=timeout)
     return {s.get("name") for s in scenes.get("scenes", [])}
 
 
@@ -479,7 +488,7 @@ def wait_for_new_scene(editor: Editor, before: set, timeout: float) -> str:
     while time.monotonic() < deadline:
         if not editor.alive():
             raise EditorDown("editor process exited during open_scene")
-        added = scene_names(editor) - before
+        added = scene_names(editor, timeout) - before
         if added:
             return sorted(added)[0]
         time.sleep(0.25)
@@ -489,7 +498,7 @@ def wait_for_new_scene(editor: Editor, before: set, timeout: float) -> str:
 def wait_for_scene_gone(editor: Editor, name: str, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if name not in scene_names(editor):
+        if name not in scene_names(editor, timeout):
             return True
         time.sleep(0.25)
     return False
@@ -497,8 +506,14 @@ def wait_for_scene_gone(editor: Editor, name: str, timeout: float) -> bool:
 
 def close_extra_scenes(editor: Editor, timeout: float) -> None:
     """A failed entry can still have left a scene behind (the load answered
-    after the wait gave up); the next entry must start from the baseline."""
-    for name in sorted(scene_names(editor) - editor.baseline_scenes):
+    after the wait gave up); the next entry must start from the baseline. An
+    editor that does not answer at all is the caller's business: the entry is
+    already recorded, and the run goes on with a fresh editor."""
+    try:
+        leftovers = sorted(scene_names(editor, timeout) - editor.baseline_scenes)
+    except RuntimeError:
+        return
+    for name in leftovers:
         try:
             editor.mcp.call("close_scene", {"scene_name": name}, timeout=timeout)
             wait_for_scene_gone(editor, name, 30.0)
@@ -1404,7 +1419,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=int(os.environ.get("ERHE_MCP_PORT", "3743")), help="MCP port")
     parser.add_argument("--doc", type=pathlib.Path, default=DEFAULT_DOC, help="document to write")
     parser.add_argument("--shots", type=pathlib.Path, default=DEFAULT_SHOTS, help="screenshot and summary directory")
-    parser.add_argument("--load-timeout", type=float, default=120.0, help="seconds a single load may take")
+    parser.add_argument("--load-timeout", type=float, default=400.0, help="seconds a single load may take")
     parser.add_argument("--ready-timeout", type=float, default=300.0, help="seconds to wait for a launched editor")
     parser.add_argument("--close-wait", type=float, default=7.0, help="seconds to wait for the scene-close leak watchdog")
     parser.add_argument("--settle-frames", type=int, default=6, help="frames to render after framing, before the capture")
@@ -1523,19 +1538,34 @@ def main() -> int:
                 editor.start(args.ready_timeout)
             print(f"[{index}/{len(entries)}] {entry['path']}", flush=True)
             entry_started = time.monotonic()
+            entry_log_position = editor.log_size()
             try:
                 record = survey_entry(editor, root, entry, args.shots, args.load_timeout,
                                       args.close_wait, args.settle_frames)
             except (RuntimeError, EditorDown) as error:
+                # An editor that stops answering while a load holds the main
+                # thread has not crashed: the entry is recorded as a failure
+                # naming the wait, and the editor is replaced below so the
+                # next entry starts from a fresh one either way.
+                unanswered = is_unanswered(error)
+                detail = (
+                    f"the editor did not answer within {args.load_timeout:.0f} s while loading"
+                    if unanswered else str(error)[:300]
+                )
                 record = dict(entry)
                 record.update({
-                    "slug": entry_slug(entry["path"]), "screenshot": "", "crash": True,
-                    "crash_detail": str(error)[:300], "loaded": False, "prims": 0, "meshes": 0,
+                    "slug": entry_slug(entry["path"]), "screenshot": "", "crash": not unanswered,
+                    "crash_detail": "" if unanswered else detail, "loaded": False,
+                    "prims": 0, "meshes": 0,
                     "materials": 0, "lights": 0, "cameras": 0, "diagnostics": [],
-                    "authored_prims": None, "authored_types": [], "verdict": "crash",
-                    "log_tail": [], "scene_close": "", "screenshot_stats": {},
-                    "load_error": "", "describe_error": "", "scene_name": "",
+                    "authored_prims": None, "authored_types": [],
+                    "verdict": (f"fails: {detail}" if unanswered else "crash"),
+                    "log_tail": [l[-300:] for l in editor.log_since(entry_log_position)[-25:]],
+                    "scene_close": "", "screenshot_stats": {},
+                    "load_error": detail if unanswered else "",
+                    "describe_error": "", "scene_name": "",
                     "settle_error": "", "settle_seconds": None,
+                    "unanswered": unanswered,
                 })
             record["surveyed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             record["survey_seconds"] = time.monotonic() - entry_started
@@ -1548,7 +1578,7 @@ def main() -> int:
                     record["crash"] = True
                     record["crash_detail"] = "editor died while closing leftover scenes"
                     record["verdict"] = "crash"
-            if record["crash"] or (not editor.alive()):
+            if record["crash"] or record.get("unanswered", False) or (not editor.alive()):
                 print("      editor down; restarting", flush=True)
                 editor.stop()
                 editor.start(args.ready_timeout)

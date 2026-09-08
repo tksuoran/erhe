@@ -426,7 +426,10 @@ composed layer stack carries its authored opinions, `class` prims and
 `xformOp` stacks whichever layer authored it, every `Material` prim
 converts, a material binding authored as an `over` is an instance
 override and a template's material has an owner, the `UsdGeom`
-primitive schemas import as the meshes they describe, USD `st` crosses
+primitive schemas import as the meshes they describe, a `PointInstancer`
+is expanded into a prototype held abstract and one prim per instance
+holding an internal reference to it, with the instance prims the only
+record of what a save writes back, USD `st` crosses
 the V flip with `UsdTransform2d` carried through it, a scalar input
 reads the texture channel the file connects, an unauthored
 `diffuseColor` is USD's 0.18, a `UsdUVTexture`'s wrap, transform,
@@ -437,12 +440,14 @@ its texture where usdview does, measured face on against the
 reference render and pinned by the placement case of
 `src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
 entries, 51 work as they are, none crash) leaves, in the order the
-fixes are taken: a `PointInstancer` not instanced; a
+fixes are taken: a
 time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
 stained glass opaque and its cards missing; RoughnessTest's missing
-specular response; a 4000-prim scene tripping the main-loop stall watchdog
-on load; MaterialX documents as reference targets.
+specular response; a scene whose load blocks the main loop long enough to
+trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
+at a time once their point instancers are expanded into several thousand
+prims; MaterialX documents as reference targets.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.

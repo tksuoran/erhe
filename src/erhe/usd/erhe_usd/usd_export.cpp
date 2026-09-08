@@ -23,6 +23,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform_op.hpp"
@@ -675,6 +676,17 @@ public:
         for (const Usd_save_brush& entry : m_arguments.brushes) {
             if (entry.item) {
                 m_brushes[entry.item.get()] = &entry;
+            }
+        }
+        for (const Usd_save_point_instancer& entry : m_arguments.point_instancers) {
+            if (!entry.item) {
+                continue;
+            }
+            m_point_instancers[entry.item.get()] = &entry;
+            for (const Usd_save_point_instance& instance : entry.instances) {
+                if (instance.item) {
+                    m_point_instancer_instances.insert(instance.item.get());
+                }
             }
         }
 
@@ -1343,10 +1355,19 @@ private:
     // holds abstract (doc/usd-compatibility-plan.md X3). A prototype carries
     // no `content` - that is what keeps it out of the render - and is written
     // back as the ordinary `def` prim it is.
+    // A point instancer's prototypes are held abstract the same way
+    // (doc/usd-compatibility-plan.md S1), so the whole subtree below an
+    // instancer is planned whatever the content flag says.
     enum class Prim_holder : unsigned int {
-        tree        = 0,
-        class_prim  = 1
+        tree            = 0,
+        class_prim      = 1,
+        point_instancer = 2
     };
+
+    [[nodiscard]] static auto plans_contentless_prims(const Prim_holder holder) -> bool
+    {
+        return (holder == Prim_holder::class_prim) || (holder == Prim_holder::point_instancer);
+    }
 
     // Pass one over the children of `parent`. The filter is the glTF
     // exporter's - an import_root container is unwrapped with its transform
@@ -1385,9 +1406,16 @@ private:
             if ((flags & erhe::Item_flags::render_proxy) != 0) {
                 continue;
             }
+            // An instance of a point instancer is the instancer's expansion,
+            // not a prim of its own: the instancer writes it as one entry of
+            // `positions` / `orientations` / `scales`
+            // (doc/usd-compatibility-plan.md S1).
+            if (m_point_instancer_instances.count(child_prim) != 0) {
+                continue;
+            }
             if (
                 ((flags & erhe::Item_flags::content) == 0) &&
-                (holder != Prim_holder::class_prim)        &&
+                !plans_contentless_prims(holder)           &&
                 !holds_carried_resource(*child_prim)
             ) {
                 continue;
@@ -1420,7 +1448,7 @@ private:
                     child_names,
                     plan_prim.children,
                     &plan_prim.variant_prims,
-                    is_style_prim(*child_prim) ? Prim_holder::class_prim : Prim_holder::tree
+                    child_prim_holder(*child_prim, holder)
                 );
             }
             if ((membership != nullptr) && (out_variant_prims != nullptr)) {
@@ -1434,6 +1462,36 @@ private:
                 continue;
             }
             out_prims.push_back(std::move(plan_prim));
+        }
+    }
+
+    // What holds the children of `prim`, given what holds `prim` itself: a
+    // style item holds prototypes (X3), a point instancer holds prototypes
+    // and instances (S1), and everything below an instancer stays inside it.
+    [[nodiscard]] auto child_prim_holder(const erhe::Typed& prim, const Prim_holder holder) const -> Prim_holder
+    {
+        if (is_style_prim(prim)) {
+            return Prim_holder::class_prim;
+        }
+        if ((holder == Prim_holder::point_instancer) || (m_point_instancers.count(&prim) != 0)) {
+            return Prim_holder::point_instancer;
+        }
+        return Prim_holder::tree;
+    }
+
+    // The prototypes one planned instancer holds, in tree order: a planned
+    // prim below it that carries no content is one, and the walk stops
+    // there. That is exactly what the load makes of `rel prototypes` - the
+    // prototype subtrees are the abstract ones - and `proto_indices` indexes
+    // this order, which is why the load remaps the authored array onto it.
+    static void collect_prototype_paths(const Plan_prim& plan_prim, std::vector<std::string>& out_paths)
+    {
+        for (const Plan_prim& child : plan_prim.children) {
+            if ((child.item != nullptr) && ((child.item->get_flag_bits() & erhe::Item_flags::content) == 0)) {
+                out_paths.push_back(child.path);
+                continue;
+            }
+            collect_prototype_paths(child, out_paths);
         }
     }
 
@@ -2476,12 +2534,17 @@ private:
             const_cast<erhe::scene::Node&>(node).shared_from_this()
         );
 
+        const std::shared_ptr<erhe::scene::Point_instancer> point_instancer = std::dynamic_pointer_cast<erhe::scene::Point_instancer>(
+            const_cast<erhe::scene::Node&>(node).shared_from_this()
+        );
+
         const Instance_root_override& override_root = plan_prim.override_root;
         lightusd::Prim prim =
-            mesh   ? write_mesh_prim  (node, *mesh.get(),   prim_name, matrix, override_root) :
-            camera ? write_camera_prim(node, *camera.get(), prim_name, matrix, override_root) :
-            light  ? write_light_prim (node, *light.get(),  prim_name, matrix, override_root) :
-                     write_xform_prim (node,                prim_name, matrix, override_root);
+            mesh            ? write_mesh_prim           (node, *mesh.get(),   prim_name, matrix, override_root) :
+            camera          ? write_camera_prim         (node, *camera.get(), prim_name, matrix, override_root) :
+            light           ? write_light_prim          (node, *light.get(),  prim_name, matrix, override_root) :
+            point_instancer ? write_point_instancer_prim(plan_prim,           prim_name, matrix, override_root) :
+                              write_xform_prim          (node,                prim_name, matrix, override_root);
         if (override_root.material != nullptr) {
             apply_api_schema(prim, lightusd::APISchemas::APIName::MaterialBindingAPI, std::string{});
         }
@@ -2538,6 +2601,94 @@ private:
             set_xform_op_value(usd_op, op);
             xform_ops.push_back(usd_op);
         }
+    }
+
+    // One point instancer as the `PointInstancer` prim it is
+    // (doc/usd-compatibility-plan.md S1). The prototypes are the children the
+    // plan holds - the instances are not among them - named by `rel
+    // prototypes` in tree order, and `positions`, `orientations` and `scales`
+    // and `protoIndices` are recomputed from the instance prims - their own
+    // transforms and the prototype each one references - so an instance the
+    // user moved, deleted or duplicated persists. `orientations` and `scales`
+    // are written when any instance needs them: a rotation or a scale of the
+    // tree is never dropped, and an instancer of plain translations stays as
+    // compact as the file that authored it.
+    [[nodiscard]] auto write_point_instancer_prim(
+        const Plan_prim&              plan_prim,
+        const std::string&            prim_name,
+        const glm::mat4&              matrix,
+        const Instance_root_override& override_root
+    ) -> lightusd::Prim
+    {
+        const erhe::scene::Node& node = *plan_prim.node;
+        lightusd::GeomPointInstancer instancer;
+        instancer.name = prim_name;
+        set_transform(instancer.xformOps, node, matrix);
+        write_visibility_and_purpose(node, instancer);
+        write_erhe_properties(node, instancer);
+        write_instance_root_override(node, override_root, instancer);
+
+        std::vector<std::string> prototype_paths;
+        collect_prototype_paths(plan_prim, prototype_paths);
+        if (!prototype_paths.empty()) {
+            std::vector<lightusd::Path> usd_prototype_paths;
+            usd_prototype_paths.reserve(prototype_paths.size());
+            for (const std::string& prototype_path : prototype_paths) {
+                usd_prototype_paths.push_back(lightusd::Path{prototype_path, ""});
+            }
+            lightusd::Relationship prototypes;
+            prototypes.set(std::move(usd_prototype_paths));
+            instancer.prototypes = prototypes;
+        }
+
+        const std::map<const erhe::Item_base*, const Usd_save_point_instancer*>::const_iterator i =
+            m_point_instancers.find(plan_prim.item);
+        if (i == m_point_instancers.end()) {
+            add_warning(
+                fmt::format("point instancer '{}' was not offered to the writer - it is written without its instances", prim_name)
+            );
+            return lightusd::Prim{instancer};
+        }
+
+        std::vector<lightusd::value::point3f> positions;
+        std::vector<lightusd::value::quath>   orientations;
+        std::vector<lightusd::value::float3>  scales;
+        std::vector<int32_t>                  usd_proto_indices;
+        bool                                  any_rotation{false};
+        bool                                  any_scale   {false};
+        for (const Usd_save_point_instance& instance : i->second->instances) {
+            const erhe::scene::Node* instance_node = dynamic_cast<const erhe::scene::Node*>(instance.item.get());
+            if (instance_node == nullptr) {
+                continue;
+            }
+            const erhe::scene::Trs_transform transform   = instance_node->parent_from_node_transform();
+            const glm::vec3                  translation = transform.get_translation();
+            const glm::quat                  rotation    = transform.get_rotation();
+            const glm::vec3                  scale       = transform.get_scale();
+            positions.push_back(lightusd::value::point3f{translation.x, translation.y, translation.z});
+            orientations.push_back(
+                lightusd::value::quath{
+                    {to_usd_half(rotation.x), to_usd_half(rotation.y), to_usd_half(rotation.z)},
+                    to_usd_half(rotation.w)
+                }
+            );
+            scales.push_back(lightusd::value::float3{scale.x, scale.y, scale.z});
+            any_rotation = any_rotation || (rotation != glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
+            any_scale    = any_scale    || (scale    != glm::vec3{1.0f, 1.0f, 1.0f});
+            usd_proto_indices.push_back(static_cast<int32_t>(instance.proto_index));
+        }
+        if (positions.empty()) {
+            return lightusd::Prim{instancer};
+        }
+        instancer.positions.set_value(positions);
+        instancer.protoIndices.set_value(usd_proto_indices);
+        if (any_rotation) {
+            instancer.orientations.set_value(orientations);
+        }
+        if (any_scale) {
+            instancer.scales.set_value(scales);
+        }
+        return lightusd::Prim{instancer};
     }
 
     [[nodiscard]] auto write_xform_prim(
@@ -3179,6 +3330,12 @@ private:
     // What every brush prim of the tree holds, by the item the caller named
     // (doc/usd-compatibility-plan.md E4a).
     std::map<const erhe::Item_base*, const Usd_save_brush*>                  m_brushes;
+    // The point instancers of the scene, and the prims that are their
+    // expansion (doc/usd-compatibility-plan.md S1): an instance prim is not
+    // planned, and an instancer reads its instances' transforms back out of
+    // the tree.
+    std::map<const erhe::Item_base*, const Usd_save_point_instancer*>        m_point_instancers;
+    std::set<const erhe::Item_base*>                                         m_point_instancer_instances;
     // The variant sets the caller named, by the item carrying them; one item
     // can carry more than one set (doc/usd-compatibility-plan.md X4).
     std::map<const erhe::Item_base*, std::vector<const Usd_save_variant_set*>> m_prim_variant_sets;

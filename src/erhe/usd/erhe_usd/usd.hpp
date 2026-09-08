@@ -216,6 +216,39 @@ public:
     std::vector<std::string>         inherits;
 };
 
+// One instance a `PointInstancer` prim expands to
+// (doc/usd-compatibility-plan.md S1). `transform` is the instance's transform
+// in the instancer's own space, composed the way USD composes it (scale, then
+// orientation, then position); `proto_index` indexes
+// Usd_point_instancer::prototype_paths.
+class Usd_point_instance final
+{
+public:
+    std::size_t proto_index{0};
+    glm::mat4   transform  {1.0f};
+};
+
+// One `PointInstancer` prim of the file, and what it instances
+// (doc/usd-compatibility-plan.md S1). erhe expands an instancer into prims:
+// each prototype subtree stays where the file put it and is held abstract
+// (`Item_flags::content` clear, the way a `class` prim's prototype is held,
+// X3), and each instance becomes a child `Xform` of the instancer carrying an
+// internal reference to its prototype - one entry of `references`, which the
+// caller instantiates as it does every other arc. This record is what says
+// which prims those are, so a caller can tell an instancer's expansion from
+// prims a user parented under it.
+class Usd_point_instancer final
+{
+public:
+    std::shared_ptr<erhe::Item_base>              item;
+    std::string                                   stage_path;
+    // The absolute stage paths the prim's `rel prototypes` names, in order.
+    std::vector<std::string>                      prototype_paths;
+    std::vector<Usd_point_instance>               instances;
+    // The instance prims, one per entry of `instances`, in the same order.
+    std::vector<std::shared_ptr<erhe::Item_base>> instance_items;
+};
+
 // One material binding a variant authors (doc/usd-compatibility-plan.md X4).
 // `relative_path` is the M1 path of the bound prim below the prim carrying
 // the variant set, and is empty when the binding is on that prim itself;
@@ -446,6 +479,11 @@ public:
     // bindings are already applied to the meshes above; the entry is what
     // lets the caller offer the other selections.
     std::vector<Usd_variant_set>                            variant_sets;
+    // The `PointInstancer` prims the file authors, one entry per instancer,
+    // in the order the prims were visited (doc/usd-compatibility-plan.md S1).
+    // The instance prims of an entry are prims of `nodes` like any other and
+    // their internal references are entries of `references`.
+    std::vector<Usd_point_instancer>                        point_instancers;
     // The `Brush` prims the root layer authors, in the order the layer spells
     // them (doc/usd-compatibility-plan.md E4a). A brush prim is never a prim
     // of the lists above: the conversion stops at it, so its child mesh is no
@@ -647,6 +685,37 @@ public:
     std::shared_ptr<const erhe::primitive::Material> material;
 };
 
+// One instance prim of a point instancer the writer is handed
+// (doc/usd-compatibility-plan.md S1): the prim, and which of the instancer's
+// prototypes it instances - the index into the prototypes the writer names in
+// `rel prototypes`, which is the abstract children in tree order. The caller
+// derives it from what the instance actually references, so it follows the
+// tree the way the transform does.
+class Usd_save_point_instance final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::size_t                            proto_index{0};
+};
+
+// One `PointInstancer` prim of the scene and the prims that are its
+// expansion (doc/usd-compatibility-plan.md S1). `instances` names the
+// instancer's instance children, in instance order: the writer leaves them
+// out of the prims it writes and recomputes `positions`, `orientations`,
+// `scales` and `protoIndices` from them, so an instance a user moved,
+// deleted or duplicated persists. Every other child of the instancer is a
+// prototype, written where it sits and named by `rel prototypes` in tree
+// order. erhe::usd names no editor type, so the caller is what decides which
+// children are instances and which prototype each one instances (the editor:
+// the children carrying a Prefab_instance attachment, resolved against the
+// prototype children).
+class Usd_save_point_instancer final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::vector<Usd_save_point_instance>   instances;
+};
+
 // What save_usda() writes. The content is erhe's own - the writer is handed
 // the scene it is to write, not a Usd_data - and the stage constants are the
 // caller's choice (the defaults are what erhe means: Y up, metres).
@@ -679,6 +748,11 @@ public:
     std::vector<Usd_save_variant_set>                       variant_sets;
     // The brushes the scene's tree holds, one entry per brush prim.
     std::vector<Usd_save_brush>                             brushes;
+    // The point instancers the scene's tree holds, one entry per instancer
+    // prim. An instancer prim of the tree the list does not name is written
+    // with its children as plain prims and no instance arrays, and named in a
+    // warning.
+    std::vector<Usd_save_point_instancer>                   point_instancers;
     // Written verbatim as the root layer's `customLayerData`, one string
     // entry per pair: how the editor carries its own scene state in a USD
     // file (doc/scene_serialization.md, USD-backed scenes).

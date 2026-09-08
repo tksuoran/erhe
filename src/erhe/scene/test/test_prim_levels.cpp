@@ -7,6 +7,7 @@
 #include "erhe_scene/gprim.hpp"
 #include "erhe_scene/imageable.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_item/scope.hpp"
 #include "erhe_item/typed.hpp"
@@ -70,4 +71,31 @@ TEST(Prim_levels, cloning_an_xform_produces_an_xform)
     EXPECT_EQ(clone->get_name(), "x");
     ASSERT_EQ(clone->get_child_count(), 1);
     EXPECT_TRUE(std::dynamic_pointer_cast<erhe::scene::Xform>(clone->get_children().front()).operator bool());
+}
+
+// A point instancer is a boundable prim (doc/usd-compatibility-plan.md S1):
+// it carries a transform, it is written as its USD schema token, and the one
+// array it holds is the prototype each instance uses.
+TEST(Prim_levels, a_point_instancer_is_a_boundable_prim)
+{
+    std::shared_ptr<erhe::scene::Point_instancer> instancer =
+        std::make_shared<erhe::scene::Point_instancer>("scatter");
+    EXPECT_EQ(
+        erhe::scene::Point_instancer::get_static_type(),
+        erhe::scene::Boundable::get_static_type() | erhe::Item_type::point_instancer
+    );
+    EXPECT_TRUE (erhe::is<erhe::scene::Boundable>(instancer));
+    EXPECT_TRUE (erhe::is<erhe::scene::Xformable>(instancer));
+    EXPECT_FALSE(erhe::is<erhe::scene::Gprim>    (instancer));
+    EXPECT_EQ(instancer->get_type_name(), "Point_instancer");
+    EXPECT_EQ(instancer->get_class_type_name(), "PointInstancer");
+}
+
+TEST(Prim_levels, cloning_a_point_instancer_produces_a_point_instancer)
+{
+    std::shared_ptr<erhe::scene::Point_instancer> instancer =
+        std::make_shared<erhe::scene::Point_instancer>("scatter");
+    std::shared_ptr<erhe::Item_base> clone = instancer->clone();
+    ASSERT_TRUE(std::dynamic_pointer_cast<erhe::scene::Point_instancer>(clone).operator bool());
+    EXPECT_EQ(clone->get_name(), "scatter");
 }

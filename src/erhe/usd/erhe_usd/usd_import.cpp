@@ -27,6 +27,7 @@
 #include "erhe_scene/light.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene/xform_op.hpp"
@@ -553,9 +554,10 @@ public:
         lightusd::tydra::RenderSceneConverter converter;
         Tydra_scene                           scene;
         const bool converted = converter.ConvertToRenderScene(env, &scene);
-        if (!converter.GetWarning().empty()) {
-            m_result.warning = converter.GetWarning();
-            log_usd->warn("USD '{}': {}", env.usd_filename, converter.GetWarning());
+        const std::string converter_warning = filter_converter_warning(converter.GetWarning());
+        if (!converter_warning.empty()) {
+            m_result.warning = converter_warning;
+            log_usd->warn("USD '{}': {}", env.usd_filename, converter_warning);
         }
         if (!converted) {
             m_result.error = converter.GetError().empty()
@@ -923,6 +925,39 @@ private:
         return true;
     }
 
+    // Tydra's warning text, minus the lines that report something erhe reads
+    // for itself. A `PointInstancer` prototype "resolved to no RenderMesh"
+    // says the render-scene conversion did not expand the instancer, which is
+    // exactly what erhe does not want it to do: the expansion is
+    // convert_point_instancer's (S1), off the raw prim.
+    [[nodiscard]] static auto filter_converter_warning(const std::string& warning) -> std::string
+    {
+        std::string       filtered;
+        std::size_t       start = 0;
+        while (start < warning.size()) {
+            const std::size_t      end  = warning.find('\n', start);
+            const std::string_view line = (end == std::string::npos)
+                ? std::string_view{warning}.substr(start)
+                : std::string_view{warning}.substr(start, end - start);
+            start = (end == std::string::npos) ? warning.size() : (end + 1);
+            if (
+                (line.find("PointInstancer") != std::string_view::npos) &&
+                (line.find("resolved to no RenderMesh") != std::string_view::npos)
+            ) {
+                continue;
+            }
+            if (line.empty() && filtered.empty()) {
+                continue;
+            }
+            filtered.append(line);
+            filtered.push_back('\n');
+        }
+        while (!filtered.empty() && (filtered.back() == '\n')) {
+            filtered.pop_back();
+        }
+        return filtered;
+    }
+
     [[nodiscard]] static auto read_gprim_property_names(const lightusd::Prim& prim, std::set<std::string>& names) -> bool
     {
         return
@@ -932,7 +967,8 @@ private:
             read_typed_gprim_property_names<lightusd::GeomCylinder  >(prim, names) ||
             read_typed_gprim_property_names<lightusd::GeomCylinder_1>(prim, names) ||
             read_typed_gprim_property_names<lightusd::GeomCapsule   >(prim, names) ||
-            read_typed_gprim_property_names<lightusd::GeomCapsule_1 >(prim, names);
+            read_typed_gprim_property_names<lightusd::GeomCapsule_1 >(prim, names) ||
+            read_typed_gprim_property_names<lightusd::GeomPointInstancer>(prim, names);
     }
 
     [[nodiscard]] auto is_authored(const std::string& absolute_path, const std::string& name) -> bool
@@ -2703,6 +2739,7 @@ private:
             (type_name == "DiskLight")     ||
             (type_name == "CylinderLight") ||
             (type_name == "GeometryLight") ||
+            (type_name == c_point_instancer_prim_type_name) ||
             is_primitive_schema_prim_type(type_name);
     }
 
@@ -2755,6 +2792,25 @@ private:
         const glm::mat4&                        extra_transform
     )
     {
+        // A point instancer's prototype is held abstract for the reason a
+        // `class` prim's is (doc/usd-compatibility-plan.md S1, X3): the
+        // subtree converts with `Item_flags::content` clear, so it draws
+        // nothing where the instancer sits and only the instances' clones do.
+        if (m_point_instancer_prototype_paths.count(usd_node.abs_path) != 0) {
+            ++m_prototype_depth;
+            convert_tree_node(usd_node, parent, extra_transform);
+            --m_prototype_depth;
+            return;
+        }
+        convert_tree_node(usd_node, parent, extra_transform);
+    }
+
+    void convert_tree_node(
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
+    )
+    {
         // A `class` prim defines nothing: it is a style, and the caller makes
         // the Style item from the record read_layer_composition made
         // (doc/usd-compatibility-plan.md X3). Tydra reports it as a transform
@@ -2802,7 +2858,9 @@ private:
         }
         std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(content);
         if (!node) {
-            node = std::make_shared<erhe::scene::Xform>(node_name);
+            node = (type_name == c_point_instancer_prim_type_name)
+                ? std::static_pointer_cast<erhe::scene::Node>(std::make_shared<erhe::scene::Point_instancer>(node_name))
+                : std::static_pointer_cast<erhe::scene::Node>(std::make_shared<erhe::scene::Xform>(node_name));
         } else {
             node->set_name(node_name);
         }
@@ -2834,10 +2892,249 @@ private:
             return; // the prims below came from the arcs; the targets supply them
         }
 
+        // A `PointInstancer` converts its children itself: the prototypes
+        // among them are held abstract, and the instances are prims it adds
+        // (doc/usd-compatibility-plan.md S1).
+        if (type_name == c_point_instancer_prim_type_name) {
+            convert_point_instancer(usd_node, node);
+            return;
+        }
+
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
             convert_node(usd_child, node, child_transform);
         }
+    }
+
+    // The paths one relationship names, in the order it spells them.
+    static void read_relationship_paths(
+        const nonstd::optional<lightusd::Relationship>& relationship,
+        std::vector<std::string>&                       out_paths
+    )
+    {
+        if (!relationship.has_value()) {
+            return;
+        }
+        if (relationship.value().is_path()) {
+            out_paths.push_back(relationship.value().targetPath.full_path_name());
+            return;
+        }
+        if (relationship.value().is_pathvector()) {
+            for (const lightusd::Path& path : relationship.value().targetPathVector) {
+                out_paths.push_back(path.full_path_name());
+            }
+        }
+    }
+
+    // The prototype paths of one instancer in the order the prims sit below
+    // it, depth first.
+    static void collect_prototype_tree_order(
+        const Tydra_node&               usd_node,
+        const std::vector<std::string>& prototype_paths,
+        std::vector<std::string>&       out_paths
+    )
+    {
+        for (const Tydra_node& usd_child : usd_node.children) {
+            if (std::find(prototype_paths.begin(), prototype_paths.end(), usd_child.abs_path) != prototype_paths.end()) {
+                out_paths.push_back(usd_child.abs_path);
+                continue;
+            }
+            collect_prototype_tree_order(usd_child, prototype_paths, out_paths);
+        }
+    }
+
+    // True when `path` is `prefix` or a prim below it.
+    [[nodiscard]] static auto is_descendant_path(const std::string& path, const std::string& prefix) -> bool
+    {
+        if (path == prefix) {
+            return true;
+        }
+        return (path.size() > prefix.size()) &&
+               (path.compare(0, prefix.size(), prefix) == 0) &&
+               (path[prefix.size()] == '/');
+    }
+
+    // One `PointInstancer` prim as prims (doc/usd-compatibility-plan.md S1).
+    // The prototypes are held abstract where the file put them - the `class`
+    // abstraction of X3, applied to the same effect - and every instance
+    // becomes a child `Xform` carrying an internal reference to its
+    // prototype, so the caller instantiates it exactly as it instantiates
+    // every other arc and every instance of one prototype shares one
+    // template.
+    //
+    // Time-sampled arrays, `velocities` and per-instance primvars are not
+    // read: the arrays are sampled at the default time
+    // (src/erhe/usd/notes.md, PointInstancer).
+    void convert_point_instancer(const Tydra_node& usd_node, const std::shared_ptr<erhe::scene::Node>& node)
+    {
+        const lightusd::Prim*               prim      = find_prim(usd_node.abs_path);
+        const lightusd::GeomPointInstancer* instancer = (prim != nullptr)
+            ? prim->as<lightusd::GeomPointInstancer>()
+            : nullptr;
+
+        Usd_point_instancer record{};
+        record.item       = node;
+        record.stage_path = usd_node.abs_path;
+        if (instancer != nullptr) {
+            read_relationship_paths(instancer->prototypes, record.prototype_paths);
+        }
+        // The prototype subtrees convert with `Item_flags::content` clear, so
+        // nothing of them renders where the instancer sits; a reference that
+        // names one gives its clone the flag back.
+        for (const std::string& prototype_path : record.prototype_paths) {
+            m_point_instancer_prototype_paths.insert(prototype_path);
+        }
+
+        const glm::mat4 child_transform{1.0f};
+        for (const Tydra_node& usd_child : usd_node.children) {
+            convert_node(usd_child, node, child_transform);
+        }
+
+        // The prototypes are put in the order they sit in the tree, which is
+        // the order a save writes `rel prototypes` back in: the writer has
+        // the tree and not the relationship, so the two agree only if the
+        // load adopts the tree's order. `protoIndices` is remapped onto it
+        // below.
+        std::vector<std::string> authored_prototype_paths = record.prototype_paths;
+        std::vector<std::string> tree_order;
+        collect_prototype_tree_order(usd_node, authored_prototype_paths, tree_order);
+        for (const std::string& prototype_path : authored_prototype_paths) {
+            if (std::find(tree_order.begin(), tree_order.end(), prototype_path) == tree_order.end()) {
+                tree_order.push_back(prototype_path); // not held by the instancer; warned below
+            }
+        }
+        record.prototype_paths = tree_order;
+
+        if (instancer == nullptr) {
+            add_warning(
+                fmt::format(
+                    "USD prim '{}' of type 'PointInstancer' carries no readable schema attributes - it instances nothing",
+                    usd_node.abs_path
+                )
+            );
+            m_result.data.point_instancers.push_back(std::move(record));
+            return;
+        }
+
+        // The authored `protoIndices` index the authored `prototypes`; the
+        // record indexes the tree order, and so does the writer.
+        std::vector<int32_t> proto_indices = instancer->get_protoIndices();
+        for (int32_t& proto_index : proto_indices) {
+            const std::size_t authored = static_cast<std::size_t>(std::max(proto_index, 0));
+            if (authored >= authored_prototype_paths.size()) {
+                continue;
+            }
+            const std::vector<std::string>& tree_paths = record.prototype_paths;
+            const std::vector<std::string>::const_iterator i = std::find(
+                tree_paths.cbegin(),
+                tree_paths.cend(),
+                authored_prototype_paths[authored]
+            );
+            proto_index = static_cast<int32_t>(std::distance(tree_paths.cbegin(), i));
+        }
+
+        std::vector<lightusd::value::matrix4d> matrices;
+        std::string                            error;
+        if (!lightusd::ComputeInstanceTransformsAtTime(
+                *instancer,
+                lightusd::value::TimeCode::Default(),
+                lightusd::value::TimeSampleInterpolationType::Linear,
+                &matrices,
+                &error
+            )
+        ) {
+            add_warning(
+                fmt::format(
+                    "USD prim '{}': the instance transforms could not be computed ({}) - it instances nothing",
+                    usd_node.abs_path,
+                    error
+                )
+            );
+            m_result.data.point_instancers.push_back(std::move(record));
+            return;
+        }
+        std::vector<bool> mask;
+        if (!lightusd::ComputeMaskAtTime(*instancer, lightusd::value::TimeCode::Default(), &mask, &error)) {
+            mask.clear();
+        }
+        const std::vector<int64_t> ids = instancer->get_ids();
+
+        // A prototype the stage does not answer for names nothing to
+        // instance: one warning per prototype, and its instances are left
+        // out.
+        std::vector<bool> prototype_ok;
+        prototype_ok.reserve(record.prototype_paths.size());
+        for (const std::string& prototype_path : record.prototype_paths) {
+            const bool resolved = (find_prim(prototype_path) != nullptr);
+            if (!resolved) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': prototype '{}' is not a prim of the stage - its instances are left out",
+                        usd_node.abs_path,
+                        prototype_path
+                    )
+                );
+            } else if (!is_descendant_path(prototype_path, usd_node.abs_path)) {
+                add_warning(
+                    fmt::format(
+                        "USD prim '{}': prototype '{}' is not held by the instancer - a save writes it as a child of the instancer",
+                        usd_node.abs_path,
+                        prototype_path
+                    )
+                );
+            }
+            prototype_ok.push_back(resolved);
+        }
+
+        for (std::size_t instance = 0, end = matrices.size(); instance < end; ++instance) {
+            if ((instance < mask.size()) && !mask[instance]) {
+                continue; // `invisibleIds` / `inactiveIds`
+            }
+            const std::size_t proto_index = (instance < proto_indices.size())
+                ? static_cast<std::size_t>(std::max(proto_indices[instance], 0))
+                : 0;
+            if ((proto_index >= prototype_ok.size()) || !prototype_ok[proto_index]) {
+                continue;
+            }
+            const std::string& prototype_path = record.prototype_paths[proto_index];
+            const std::size_t  separator      = prototype_path.rfind('/');
+            const std::string  prototype_name = (separator == std::string::npos)
+                ? prototype_path
+                : prototype_path.substr(separator + 1);
+            const std::string  instance_name  = (instance < ids.size())
+                ? fmt::format("{}_{}", prototype_name, ids[instance])
+                : fmt::format("{}_{}", prototype_name, instance);
+
+            std::shared_ptr<erhe::scene::Node> instance_node = std::make_shared<erhe::scene::Xform>(instance_name);
+            instance_node->set_source_path(m_arguments.path);
+            apply_prim_flags(*instance_node.get());
+            instance_node->Hierarchy::set_parent(node);
+            const glm::mat4 transform = to_glm(matrices[instance]);
+            instance_node->set_parent_from_node(transform);
+            instance_node->update_world_from_node();
+            instance_node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+            m_result.data.nodes.push_back(instance_node);
+
+            // The instance is a referencing prim: an internal reference - an
+            // empty asset path is the same layer - that names the prototype.
+            m_result.data.references.push_back(
+                Usd_prim_references{
+                    .item       = instance_node,
+                    .stage_path = fmt::format("{}/{}", usd_node.abs_path, instance_node->get_name()),
+                    .references = std::vector<Usd_reference>{
+                        Usd_reference{
+                            .asset_path = std::string{},
+                            .prim_path  = prototype_path,
+                            .kind       = Usd_reference_kind::reference
+                        }
+                    },
+                    .overrides  = std::vector<erhe::scene::Instance_override>{}
+                }
+            );
+            record.instances.push_back(Usd_point_instance{.proto_index = proto_index, .transform = transform});
+            record.instance_items.push_back(instance_node);
+        }
+        m_result.data.point_instancers.push_back(std::move(record));
     }
 
     // The prototypes one `class` prim holds (doc/usd-compatibility-plan.md
@@ -4205,6 +4502,10 @@ private:
     std::set<std::string>                          m_class_paths;
     // The `def` descendants of the class prims: the prototypes they hold (X3).
     std::set<std::string>                          m_class_prototype_paths;
+    // The prototypes the file's `PointInstancer` prims name (S1), filled as
+    // each instancer is reached and before its children convert: what makes
+    // the subtree abstract.
+    std::set<std::string>                          m_point_instancer_prototype_paths;
     // Non-zero while a prototype subtree is converted, which is what clears
     // `Item_flags::content` on the prims it makes.
     int                                            m_prototype_depth{0};
