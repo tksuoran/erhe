@@ -457,12 +457,12 @@ an alpha-tested primitive reach the frame in a viewport that draws the
 grid, which is what puts McUsd's stained glass and its sunflower and
 fern cards back into the render: the grid is a blended overlay and
 writes no depth (`doc/editor_rendering.md`, Grid). The current run (146
-entries, 51 work as they are, none crash) leaves, in the order the
-fixes are taken: 16-bit, 32-bit and CMYK images and Radiance `.hdr`
-not decoded; a scene whose load blocks the main loop long enough to
-trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
-at a time once their point instancers are expanded into several thousand
-prims. MaterialX is section 6.
+entries, 51 work as they are, none crash) leaves nothing in the S1 order:
+what it still shows - 16-bit and CMYK images undecoded, the intent-vfx
+teapot scenes tripping the stall watchdog on load, grid lines crossing
+opaque objects, a keyed animation edit not written back, MaterialX - is
+section 6. The document's rows are what the subset re-runs after each fix
+merged in; the next full run regenerates it whole.
 
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.
@@ -541,6 +541,28 @@ until the items below are taken up, and E1 writes no `UsdPhysics`
 schemas. Each item is independent of the others and of every step in
 section 3 except where named.
 
+- 16-bit PNG and CMYK JPEG decoding: the survey's TextureFileFormatTests
+  tiles for them render blank. wuffs can decode both to 8-bit RGBA, so this
+  is a failure in erhe's use of it that no log names per file yet
+  (`src/erhe/graphics/erhe_graphics/image_loader_wuffs.cpp`); diagnose with a
+  per-file decode-failure log line first. Radiance `.hdr` needs a decoder
+  erhe does not build (`stb_image.h` sits in the CPM cache of fpng and
+  LightUSD); no surveyed asset in that folder needs it.
+- Load performance of a scene holding thousands of prims (the intent-vfx
+  teapot scenes, several minutes with the stall watchdog firing): each queued
+  raytrace commit scans every mesh of every layer
+  (`collect_meshes_sharing_primitives`, O(N) per commit, N commits per
+  load), hover traces the linear path every frame while the TLAS cannot
+  settle, and `finalize_imported_meshes` builds the per-shape BVHs serially
+  on the tick thread. A shape-to-meshes index maintained at the change
+  sites, a hover that does not trace while a load is in flight, and the
+  proxy build on the deferred path are the fixes, in that order.
+- Grid depth: the grid's depth does not agree with the content's, so grid
+  lines cross opaque objects below the horizon (`doc/editor_rendering.md`,
+  Grid). Needs a RenderDoc session on the windowed build.
+- Animation edits written back: a keyed edit made in erhe changes the
+  Animation channels and the pose but not the `Xform_op` samples a USD save
+  writes, so an edited clip saves as the file's original samples.
 - MaterialX: a `.mtlx` document as a reference target (the editor refuses
   the arc), a `Material` whose surface is a `ND_standard_surface_surfaceshader`
   or `ND_open_pbr_surface_surfaceshader` network (Tydra converts it into
