@@ -942,6 +942,9 @@ REMEDY = [
     (re.compile(r"normal map's bias and scale are (ignored|still not applied)"),
      "apply a UsdUVTexture's inputs:bias and inputs:scale to the sampled normal (src/erhe/usd/notes.md, "
      "\"Not yet imported\"); without them a 0..1 normal map is never mapped back to -1..1"),
+    (re.compile(r"UsdTransform2d rotate and translate do not compose"),
+     "compose a UsdTransform2d's rotation and translation the way UsdPreviewSurface specifies: the colour "
+     "variants match the reference, the transformed quads do not"),
     (re.compile(r"UsdTransform2d is (not applied|applied wrongly)"),
      "read the UsdTransform2d node between a primvar reader and a texture and fold its translate, rotate "
      "and scale into the sampled coordinates (src/erhe/usd/notes.md names it as not imported)"),
