@@ -579,7 +579,12 @@ the writer share.
   node vocabulary: the caller decides which USD type a parameter takes, and
   the writer authors exactly the (type, text) pair it is handed. A value with
   no USD form - a gradient, a curve - travels as its text in a `string`, one
-  rule for both.
+  rule for both. A text with a double quote of its own does not survive a
+  round trip: LightUSD's USDA parser hands an escaped quote back with its
+  backslash, so the value grows a level of escaping on every save. Callers
+  therefore hand over a quote-free spelling - the editor writes a nested JSON
+  value with a single quote in place of the double quote - until the parser
+  round-trips an escaped quote (future work).
 - The graph's own `outputs:<pin>` connections are its interface outputs: the
   value a material can name. A `UsdPreviewSurface` input connected to one is
   recorded in `Usd_data::material_graph_bindings` as (material, slot, graph

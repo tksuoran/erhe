@@ -355,6 +355,7 @@ private:
     auto action_create_graph_texture          (const nlohmann::json& args) -> std::string;
     auto action_set_material_texture_source    (const nlohmann::json& args) -> std::string;
     auto query_graph_textures                 (const nlohmann::json& args) -> std::string;
+    auto query_scene_node_graphs              (const nlohmann::json& args) -> std::string;
     auto action_create_graph_mesh             (const nlohmann::json& args) -> std::string;
     auto action_set_node_graph_mesh           (const nlohmann::json& args) -> std::string;
     auto query_graph_meshes                   (const nlohmann::json& args) -> std::string;

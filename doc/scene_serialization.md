@@ -349,14 +349,18 @@ the instance content below it is not written - the arcs' targets hold it. An
 arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 
-The editor-state kinds a USD file does not carry yet are the geometry and
-texture node graphs and the content-library folder tree (a style is a `class`
-prim, [`usd-compatibility-plan.md`](usd-compatibility-plan.md) X3; a brush is
-a `Brush` prim holding its geometry as a child `Mesh`, E4a). A save logs one line per kind the scene actually holds,
-so nothing disappears silently; carrying them is future work recorded in
-`src/erhe/usd/notes.md`. Textures are named by their source image file: a
-generated texture has no bytes on disk, so its slot is left out of the
-material's shading network with a warning.
+The editor-state kinds a USD file does not carry yet are the geometry node
+graphs and the content-library folder tree (a style is a `class` prim,
+[`usd-compatibility-plan.md`](usd-compatibility-plan.md) X3; a brush is a
+`Brush` prim holding its geometry as a child `Mesh`, E4a; a texture node graph
+is a marked `NodeGraph` prim holding one `Shader` per node,
+[`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)). A save logs one
+line per kind the scene actually holds, so nothing disappears silently;
+carrying them is future work recorded in `src/erhe/usd/notes.md`. Textures are
+named by their source image file: a generated texture has no bytes on disk, so
+its slot is left out of the material's shading network with a warning - except
+a slot fed by a texture graph, which is written as a connection to that
+graph's `NodeGraph` prim and needs no image.
 
 ## Verifying round-trips
 

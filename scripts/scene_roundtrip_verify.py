@@ -1611,6 +1611,63 @@ def usd_snapshot(scene_name):
         key=lambda b: json.dumps(b, sort_keys=True),
     )
 
+    # The texture node graphs the scene carries
+    # (doc/usd-texture-graphs-plan.md): every graph asset with its nodes,
+    # parameters and node positions, the links between them by name, and the
+    # material slots fed from it. Names rather than ids, because a reload
+    # reshuffles ids. The graph's own path is not diffed: a save of a scene
+    # opened from USD writes one wrapper prim around the file's top-level
+    # prims, so every prim of a reloaded save sits one level deeper - a trait
+    # of the writer, not of graphs (a saved material's path gains the same
+    # level). The save after that is byte-identical, so the depth is stable.
+    node_graphs = call("get_scene_node_graphs", {"scene_name": scene_name}).get("node_graphs", [])
+    snap["node_graphs"] = sorted(
+        (
+            {
+                "name":   g.get("name"),
+                "format": g.get("format"),
+                "nodes":  sorted(
+                    (
+                        {
+                            "name":       n.get("name"),
+                            "type":       n.get("type"),
+                            "x":          round(float(n.get("x", 0.0)), 3),
+                            "y":          round(float(n.get("y", 0.0)), 3),
+                            # The output node names its holding scene, which
+                            # the round trip renames by construction (the
+                            # reload opens the saved file as its own scene),
+                            # so that one key is not diffable.
+                            "parameters": json.dumps(
+                                {k: v for k, v in n.get("parameters", {}).items() if k != "scene"},
+                                sort_keys=True,
+                            ),
+                        }
+                        for n in g.get("nodes", [])
+                    ),
+                    key=lambda n: n["name"],
+                ),
+                "links": sorted(
+                    (
+                        {
+                            "source_node": l.get("source_node"),
+                            "source_pin":  l.get("source_pin"),
+                            "sink_node":   l.get("sink_node"),
+                            "sink_pin":    l.get("sink_pin"),
+                        }
+                        for l in g.get("links", [])
+                    ),
+                    key=lambda l: json.dumps(l, sort_keys=True),
+                ),
+                "material_bindings": sorted(
+                    ({"material": b.get("material"), "slot": b.get("slot")} for b in g.get("material_bindings", [])),
+                    key=lambda b: (b["material"], b["slot"]),
+                ),
+            }
+            for g in node_graphs
+        ),
+        key=lambda g: g["name"],
+    )
+
     # The variant sets the scene carries (doc/usd-compatibility-plan.md X4):
     # which variant each set has selected and what each variant binds. The
     # count of opinions beyond material bindings is deliberately NOT diffed -
@@ -1973,6 +2030,11 @@ def section_usd_round_trip(usdchecker_arg):
     # written as an entry of `joints`, so the reload must not find a second
     # set of them - and the mesh keeps its binding.
     skinning_saved = usd_round_trip_leg(S, "skinning.usda", "skinning", edits=[], extra_keys=[])
+    # texture_graph.usda holds a marked NodeGraph the material samples in
+    # place of an image (doc/usd-texture-graphs-plan.md): the graph must come
+    # back node for node, parameter for parameter and link for link, at the
+    # place it had, with the material slot still fed from it.
+    usd_round_trip_leg(S, "texture_graph.usda", "texture_graph", edits=[], extra_keys=["node_graphs"])
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 

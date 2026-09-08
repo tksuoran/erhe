@@ -34,6 +34,10 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "content_library/style.hpp"
 #include "geometry_graph/graph_mesh.hpp"
 #include "texture_graph/graph_texture.hpp"
+#include "texture_graph/texture_graph.hpp"
+#include "texture_graph/texture_graph_node.hpp"
+#include "texture_graph/texture_graph_node_factory.hpp"
+#include "texture_graph/texture_payload.hpp"
 #include "operations/async_raytrace_kickoff_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/library_attach_operation.hpp"
@@ -55,6 +59,10 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_graph/graph.hpp"
+#include "erhe_graph/link.hpp"
+#include "erhe_graph/node.hpp"
+#include "erhe_graph/pin.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_gltf/image_transfer.hpp"
 #include "erhe_graphics/device.hpp"
@@ -84,6 +92,8 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include <fmt/format.h>
 
 #include <chrono>
+#include <cstdlib>
+#include <map>
 #include <set>
 #include <span>
 #include <vector>
@@ -903,6 +913,541 @@ void resolve_usd_brushes(
     }
 }
 
+// --------------------------------------------------------------------------
+// Texture node graphs (doc/usd-texture-graphs-plan.md)
+// --------------------------------------------------------------------------
+
+// The material slots a USD file carries an image or a node graph for, in the
+// order a save writes them.
+class Usd_save_slot
+{
+public:
+    erhe::primitive::Material_texture_sampler erhe::primitive::Material_texture_samplers::* member;
+    erhe::usd::Usd_material_texture_slot                                                          slot;
+    const char*                                                                                   name;
+};
+
+constexpr Usd_save_slot c_usd_save_slots[] = {
+    {&erhe::primitive::Material_texture_samplers::base_color,         erhe::usd::Usd_material_texture_slot::base_color,         "base_color"},
+    {&erhe::primitive::Material_texture_samplers::metallic_roughness, erhe::usd::Usd_material_texture_slot::metallic_roughness, "metallic_roughness"},
+    {&erhe::primitive::Material_texture_samplers::normal,             erhe::usd::Usd_material_texture_slot::normal,             "normal"},
+    {&erhe::primitive::Material_texture_samplers::occlusion,          erhe::usd::Usd_material_texture_slot::occlusion,          "occlusion"},
+    {&erhe::primitive::Material_texture_samplers::emissive,           erhe::usd::Usd_material_texture_slot::emissive,           "emissive"}
+};
+
+// The `erhe:graph:format` token a texture graph prim carries. glTF spells the
+// graph kind as the array a graph rides in (`graph_textures` of
+// ERHE_node_graphs) rather than as a field of its own, so this token is the
+// one spelling of "an erhe texture graph" a file carries.
+constexpr const char* c_usd_texture_graph_format = "erhe_texture_graph";
+
+// The USD value type of a texture graph pin, from the pin key each
+// erhe::texgen::Value_type has (doc/usd-texture-graphs-plan.md 2.1).
+[[nodiscard]] auto usd_texture_pin_type(const std::size_t pin_key, const std::string& owner) -> std::string
+{
+    switch (pin_key) {
+        case Texture_pin_key::grayscale: return "float";
+        case Texture_pin_key::rgb:       return "color3f";
+        case Texture_pin_key::rgba:      return "color4f";
+        default: break;
+    }
+    log_parsers->warn(
+        "save_scene_usd: texture graph pin '{}' has value kind {}, which has no USD type - it is written as a token",
+        owner, pin_key
+    );
+    return "token";
+}
+
+// The shortest text that reads back as the same float, which is what keeps a
+// save byte-identical to the one before it (R4).
+[[nodiscard]] auto usd_float_text(const float value) -> std::string
+{
+    return fmt::format("{}", value);
+}
+
+// A nested parameter value - a gradient object, a curve array - travels as its
+// JSON text with a single quote in place of the double quote. LightUSD's USDA
+// parser does not carry an escaped double quote through a string literal, so a
+// JSON text keeping its own quotes grows a level of escaping on every save;
+// the read side puts the double quotes back before parsing. The rule goes once
+// the parser round-trips an escaped quote (src/erhe/usd/notes.md future work).
+[[nodiscard]] auto usd_nested_json_text(const nlohmann::json& value) -> std::string
+{
+    std::string text = value.dump();
+    std::replace(text.begin(), text.end(), '\"', '\'');
+    return text;
+}
+
+// The scalar text of a USD string literal: the outer quotes removed.
+[[nodiscard]] auto usd_string_literal_text(const std::string& literal) -> std::string
+{
+    if ((literal.size() >= 2) && (literal.front() == '\"') && (literal.back() == '\"')) {
+        return literal.substr(1, literal.size() - 2);
+    }
+    return literal;
+}
+
+// The components of a USD tuple literal `(a, b, c)` as a JSON array of that
+// many numbers.
+[[nodiscard]] auto usd_float_tuple_json(const std::string& text, const std::size_t count) -> nlohmann::json
+{
+    nlohmann::json values   = nlohmann::json::array();
+    std::size_t    position = 0;
+    for (std::size_t index = 0; index < count; ++index) {
+        while ((position < text.size()) && ((text[position] == '(') || (text[position] == ',') || (text[position] == ' '))) {
+            ++position;
+        }
+        values.push_back(std::strtof(text.c_str() + position, nullptr));
+        while ((position < text.size()) && (text[position] != ',') && (text[position] != ')')) {
+            ++position;
+        }
+    }
+    return values;
+}
+
+// One node parameter of the editor's JSON as the (USD type, USD literal text)
+// pair the record carries (doc/usd-texture-graphs-plan.md 2.2).
+void append_usd_node_graph_parameter(
+    const std::string&                                name,
+    const nlohmann::json&                             value,
+    std::vector<erhe::usd::Usd_node_graph_parameter>& out_parameters
+)
+{
+    const auto is_number_array = [&value](const std::size_t size) -> bool {
+        if (!value.is_array() || (value.size() != size)) {
+            return false;
+        }
+        for (const nlohmann::json& element : value) {
+            if (!element.is_number()) {
+                return false;
+            }
+        }
+        return true;
+    };
+    const auto tuple_text = [&value](const std::size_t size) -> std::string {
+        std::string text = "(";
+        for (std::size_t index = 0; index < size; ++index) {
+            if (index > 0) {
+                text += ", ";
+            }
+            text += usd_float_text(value[index].get<float>());
+        }
+        text += ")";
+        return text;
+    };
+
+    std::string usd_type;
+    std::string text;
+    if (value.is_boolean()) {
+        usd_type = "bool";
+        text     = value.get<bool>() ? "true" : "false";
+    } else if (value.is_number_integer() || value.is_number_unsigned()) {
+        usd_type = "int";
+        text     = std::to_string(value.get<int>());
+    } else if (value.is_number()) {
+        usd_type = "float";
+        text     = usd_float_text(value.get<float>());
+    } else if (value.is_string()) {
+        usd_type = "string";
+        text     = value.get<std::string>();
+    } else if (is_number_array(2)) {
+        usd_type = "float2";
+        text     = tuple_text(2);
+    } else if (is_number_array(3)) {
+        usd_type = "color3f";
+        text     = tuple_text(3);
+    } else if (is_number_array(4)) {
+        usd_type = "color4f";
+        text     = tuple_text(4);
+    } else {
+        usd_type = "string";
+        text     = usd_nested_json_text(value);
+    }
+    out_parameters.push_back(
+        erhe::usd::Usd_node_graph_parameter{.name = name, .usd_type = usd_type, .value = text}
+    );
+}
+
+// The inverse: one recorded parameter back into the JSON kind the node's
+// read_parameters takes.
+void insert_usd_node_graph_parameter(
+    const erhe::usd::Usd_node_graph_parameter& parameter,
+    nlohmann::json&                            out_parameters
+)
+{
+    if (parameter.usd_type == "float") {
+        out_parameters[parameter.name] = std::strtof(parameter.value.c_str(), nullptr);
+        return;
+    }
+    if (parameter.usd_type == "int") {
+        out_parameters[parameter.name] = static_cast<int>(std::strtol(parameter.value.c_str(), nullptr, 10));
+        return;
+    }
+    if (parameter.usd_type == "bool") {
+        out_parameters[parameter.name] = (parameter.value == "true") || (parameter.value == "1");
+        return;
+    }
+    if (parameter.usd_type == "float2") {
+        out_parameters[parameter.name] = usd_float_tuple_json(parameter.value, 2);
+        return;
+    }
+    if (parameter.usd_type == "color3f") {
+        out_parameters[parameter.name] = usd_float_tuple_json(parameter.value, 3);
+        return;
+    }
+    if (parameter.usd_type == "color4f") {
+        out_parameters[parameter.name] = usd_float_tuple_json(parameter.value, 4);
+        return;
+    }
+    const std::string text = usd_string_literal_text(parameter.value);
+    if (!text.empty() && ((text.front() == '{') || (text.front() == '['))) {
+        std::string json_text = text;
+        std::replace(json_text.begin(), json_text.end(), '\'', '\"');
+        const nlohmann::json parsed = nlohmann::json::parse(json_text, nullptr, false);
+        if (!parsed.is_discarded()) {
+            out_parameters[parameter.name] = parsed;
+            return;
+        }
+    }
+    out_parameters[parameter.name] = text;
+}
+
+// The pin of a node that carries a given name, or null when the node has no
+// such pin.
+[[nodiscard]] auto find_texture_graph_pin(
+    etl::vector<erhe::graph::Pin, erhe::graph::max_pin_count>& pins,
+    const std::string&                                               name
+) -> erhe::graph::Pin*
+{
+    for (erhe::graph::Pin& pin : pins) {
+        if (pin.get_name() == name) {
+            return &pin;
+        }
+    }
+    return nullptr;
+}
+
+// One node graph record as the Graph_texture it is
+// (doc/usd-texture-graphs-plan.md 2.5): the nodes through the factory in the
+// record's order, each parameter back from its USD text, and the links by node
+// and pin name. A node the factory does not make, and a link naming a node or
+// a pin the rebuilt graph has not got, is one warning and is left out. The
+// graph is left dirty, so the next frame's evaluation bakes it - which is how
+// the glTF path leaves a loaded graph too (R3).
+void rebuild_usd_graph_texture(
+    App_context&                          context,
+    const std::shared_ptr<Graph_texture>& graph_texture,
+    const erhe::usd::Usd_node_graph&      record
+)
+{
+    constexpr uint64_t flags = erhe::Item_flags::content | erhe::Item_flags::show_in_ui;
+    std::map<std::string, std::shared_ptr<Texture_graph_node>> nodes_by_name;
+    for (const erhe::usd::Usd_node_graph_node& node_record : record.nodes) {
+        const std::shared_ptr<Texture_graph_node> node = make_texture_graph_node(context, node_record.type_name);
+        if (!node) {
+            log_parsers->warn(
+                "USD node graph '{}': node '{}' has type '{}', which the texture node factory does not make - it becomes no node",
+                record.stage_path, node_record.name, node_record.type_name
+            );
+            continue;
+        }
+        nlohmann::json parameters = nlohmann::json::object();
+        for (const erhe::usd::Usd_node_graph_parameter& parameter : node_record.parameters) {
+            insert_usd_node_graph_parameter(parameter, parameters);
+        }
+        try {
+            node->read_parameters(parameters);
+        } catch (const std::exception& exception) {
+            log_parsers->warn(
+                "USD node graph '{}': node '{}' authors a parameter value the node does not take ({}) - the node's defaults stand",
+                record.stage_path, node_record.name, exception.what()
+            );
+        }
+        node->set_name(node_record.name);
+        if (node_record.has_position) {
+            node->set_canvas_position(node_record.position_x, node_record.position_y);
+        }
+        node->enable_flag_bits(flags);
+        node->set_owning_graph_texture(graph_texture);
+        graph_texture->nodes().push_back(node);
+        graph_texture->graph().register_node(node.get());
+        node->mark_dirty();
+        nodes_by_name[node_record.name] = node;
+    }
+
+    for (const erhe::usd::Usd_node_graph_node& node_record : record.nodes) {
+        const std::map<std::string, std::shared_ptr<Texture_graph_node>>::const_iterator sink =
+            nodes_by_name.find(node_record.name);
+        if (sink == nodes_by_name.end()) {
+            continue;
+        }
+        for (const erhe::usd::Usd_node_graph_pin& pin_record : node_record.inputs) {
+            if (pin_record.source_node.empty()) {
+                continue;
+            }
+            const std::map<std::string, std::shared_ptr<Texture_graph_node>>::const_iterator source =
+                nodes_by_name.find(pin_record.source_node);
+            if (source == nodes_by_name.end()) {
+                log_parsers->warn(
+                    "USD node graph '{}': '{}.{}' names source node '{}', which the graph has not got - the link is dropped",
+                    record.stage_path, node_record.name, pin_record.name, pin_record.source_node
+                );
+                continue;
+            }
+            erhe::graph::Pin* const source_pin = find_texture_graph_pin(source->second->get_output_pins(), pin_record.source_pin);
+            erhe::graph::Pin* const sink_pin   = find_texture_graph_pin(sink->second->get_input_pins(), pin_record.name);
+            if ((source_pin == nullptr) || (sink_pin == nullptr)) {
+                log_parsers->warn(
+                    "USD node graph '{}': '{}.{}' names pin '{}.{}', which the rebuilt nodes have not got - the link is dropped",
+                    record.stage_path, node_record.name, pin_record.name, pin_record.source_node, pin_record.source_pin
+                );
+                continue;
+            }
+            if (graph_texture->graph().connect(source_pin, sink_pin) == nullptr) {
+                log_parsers->warn(
+                    "USD node graph '{}': the link '{}.{}' -> '{}.{}' was refused (a cycle?)",
+                    record.stage_path, pin_record.source_node, pin_record.source_pin, node_record.name, pin_record.name
+                );
+            }
+        }
+    }
+    graph_texture->graph().mark_dirty();
+    log_parsers->info(
+        "USD node graph '{}' loaded ({} nodes)", record.stage_path, graph_texture->nodes().size()
+    );
+}
+
+// The `NodeGraph` prims the file marked, as the Graph_texture assets they are
+// (doc/usd-texture-graphs-plan.md 2.5), and the material slots the file feeds
+// from them. A graph whose holding prim is in the loaded tree is parented
+// there, the way a brush is; a graph the file gave no place gets an attach
+// operation of its own, which is what creates the `Graph Textures` kind scope.
+// Runs after the materials exist, so a slot binding finds the material it
+// names.
+void resolve_usd_node_graphs(
+    App_context&                              context,
+    const std::shared_ptr<Content_library>&   content_library,
+    const erhe::usd::Usd_data&                usd_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    const std::string&                        path_string,
+    std::vector<std::shared_ptr<Operation>>&  operations
+)
+{
+    if (usd_data.node_graphs.empty() || !content_library) {
+        return;
+    }
+    std::map<std::string, std::shared_ptr<Graph_texture>> graphs_by_path;
+    int                                                   graph_index = 0;
+    for (const erhe::usd::Usd_node_graph& record : usd_data.node_graphs) {
+        if (record.format != c_usd_texture_graph_format) {
+            log_parsers->warn(
+                "USD node graph '{}' is marked '{}', which is no graph kind erhe reads - it becomes no asset",
+                record.stage_path, record.format
+            );
+            continue;
+        }
+        const std::shared_ptr<Graph_texture> graph_texture = std::make_shared<Graph_texture>(record.name);
+        rebuild_usd_graph_texture(context, graph_texture, record);
+        graphs_by_path[record.stage_path] = graph_texture;
+
+        const Gltf_source_reference gltf_source{
+            .gltf_path  = path_string,
+            .item_name  = record.name,
+            .item_index = graph_index,
+            .item_type  = "graph_texture",
+        };
+        ++graph_index;
+        const std::string                      parent_path = parent_prim_path(record.stage_path);
+        const std::shared_ptr<erhe::Hierarchy> parent      = parent_path.empty()
+            ? std::static_pointer_cast<erhe::Hierarchy>(container_node)
+            : find_prim_hierarchy(container_node, parent_path);
+        if (parent) {
+            graph_texture->set_parent(parent);
+            content_library->set_gltf_source(graph_texture, gltf_source);
+            continue;
+        }
+        operations.push_back(make_library_attach_operation(context, content_library, graph_texture, gltf_source));
+    }
+
+    for (const erhe::usd::Usd_material_graph_binding& binding : usd_data.material_graph_bindings) {
+        const std::map<std::string, std::shared_ptr<Graph_texture>>::const_iterator graph =
+            graphs_by_path.find(binding.graph_path);
+        if ((graph == graphs_by_path.end()) || (binding.material_index >= usd_data.materials.size())) {
+            log_parsers->warn(
+                "USD material slot binding to node graph '{}' is not resolved - the slot stays unbound",
+                binding.graph_path
+            );
+            continue;
+        }
+        const std::shared_ptr<erhe::primitive::Material>& material = usd_data.materials[binding.material_index];
+        if (!material) {
+            continue;
+        }
+        for (const Usd_save_slot& slot : c_usd_save_slots) {
+            if (slot.slot != binding.slot) {
+                continue;
+            }
+            erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            material->set_slot_texture(sampler, graph->second);
+            break;
+        }
+    }
+}
+
+// The scene's texture graphs as the writer's records
+// (doc/usd-texture-graphs-plan.md 2.5): the nodes in the graph's own order,
+// each with its parameters as (USD type, text) pairs and its pins with the
+// links into them, and the graph's interface output taken from the `output`
+// sink node's linked input - the value a material slot names (R2). The
+// material slots fed from one of these graphs are recorded alongside, so the
+// writer connects them to the graph instead of writing a `UsdUVTexture`.
+void collect_usd_node_graphs(
+    const Content_library&                                         content_library,
+    const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials,
+    std::vector<erhe::usd::Usd_save_node_graph>&                   out_node_graphs,
+    std::vector<erhe::usd::Usd_save_material_graph_binding>&       out_bindings
+)
+{
+    std::map<const erhe::graphics::Texture_reference*, std::shared_ptr<const erhe::Item_base>> written_graphs;
+    for (const std::shared_ptr<Graph_texture>& graph_texture : content_library.get_all<Graph_texture>()) {
+        if (!graph_texture) {
+            continue;
+        }
+        erhe::usd::Usd_save_node_graph record{};
+        record.item   = graph_texture;
+        record.format = c_usd_texture_graph_format;
+
+        // The record's node names are what its links name, so they are made
+        // unique here rather than by the writer's prim naming (M2).
+        std::set<std::string>                             taken_names;
+        std::map<const erhe::graph::Node*, std::string>   names_by_node;
+        for (const std::shared_ptr<Texture_graph_node>& node : graph_texture->nodes()) {
+            const std::string base = std::string{node->get_name()};
+            std::string       name = base;
+            int               suffix = 1;
+            while (taken_names.count(name) != 0) {
+                name = fmt::format("{}_{}", base, suffix);
+                ++suffix;
+            }
+            taken_names.insert(name);
+            names_by_node[node.get()] = name;
+        }
+
+        const auto pin_source = [&names_by_node](const erhe::graph::Pin& pin, erhe::usd::Usd_node_graph_pin& out_pin) {
+            for (const erhe::graph::Link* link : pin.get_links()) {
+                const erhe::graph::Pin* const source = link->get_source();
+                if ((source == nullptr) || (source == &pin)) {
+                    continue;
+                }
+                const std::map<const erhe::graph::Node*, std::string>::const_iterator i =
+                    names_by_node.find(source->get_owner_node());
+                if (i == names_by_node.end()) {
+                    continue;
+                }
+                out_pin.source_node = i->second;
+                out_pin.source_pin  = std::string{source->get_name()};
+                return;
+            }
+        };
+
+        for (const std::shared_ptr<Texture_graph_node>& node : graph_texture->nodes()) {
+            erhe::usd::Usd_node_graph_node node_record{};
+            node_record.name      = names_by_node[node.get()];
+            node_record.type_name = node->get_factory_type_name();
+            if (node->has_canvas_position()) {
+                node_record.has_position = true;
+                node_record.position_x   = node->get_canvas_x();
+                node_record.position_y   = node->get_canvas_y();
+            }
+            nlohmann::json parameters = nlohmann::json::object();
+            node->write_parameters(parameters);
+            for (
+                nlohmann::json::const_iterator entry = parameters.cbegin(), end = parameters.cend();
+                entry != end;
+                ++entry
+            ) {
+                // The output node names the scene it assigns its bake into,
+                // which it picks among the open scenes and otherwise derives
+                // from the graph's own host. A USD file is one scene, so the
+                // name is both meaningless in the file and a value a save of a
+                // reloaded scene would spell differently (R4); the reload
+                // derives it from the host instead.
+                if (entry.key() == "scene") {
+                    continue;
+                }
+                append_usd_node_graph_parameter(entry.key(), entry.value(), node_record.parameters);
+            }
+            for (const erhe::graph::Pin& pin : node->get_input_pins()) {
+                erhe::usd::Usd_node_graph_pin pin_record{
+                    .name       = std::string{pin.get_name()},
+                    .value_type = usd_texture_pin_type(pin.get_key(), fmt::format("{}.{}", node_record.name, pin.get_name()))
+                };
+                pin_source(pin, pin_record);
+                node_record.inputs.push_back(std::move(pin_record));
+            }
+            for (const erhe::graph::Pin& pin : node->get_output_pins()) {
+                node_record.outputs.push_back(
+                    erhe::usd::Usd_node_graph_pin{
+                        .name       = std::string{pin.get_name()},
+                        .value_type = usd_texture_pin_type(pin.get_key(), fmt::format("{}.{}", node_record.name, pin.get_name()))
+                    }
+                );
+            }
+            record.nodes.push_back(std::move(node_record));
+        }
+
+        // The interface output: the linked input of the graph's `output` sink
+        // node, which is the value a material slot can name.
+        for (std::size_t index = 0, end = record.nodes.size(); index < end; ++index) {
+            if (record.nodes[index].type_name != "output") {
+                continue;
+            }
+            for (const erhe::usd::Usd_node_graph_pin& pin : record.nodes[index].inputs) {
+                if (pin.source_node.empty()) {
+                    continue;
+                }
+                record.outputs.push_back(pin);
+                break;
+            }
+            if (!record.outputs.empty()) {
+                break;
+            }
+        }
+        written_graphs[static_cast<const erhe::graphics::Texture_reference*>(graph_texture.get())] = graph_texture;
+        out_node_graphs.push_back(std::move(record));
+    }
+
+    for (std::size_t material_index = 0, end = materials.size(); material_index < end; ++material_index) {
+        const std::shared_ptr<erhe::primitive::Material>& material = materials[material_index];
+        if (!material) {
+            continue;
+        }
+        for (const Usd_save_slot& slot : c_usd_save_slots) {
+            const erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            const std::map<const erhe::graphics::Texture_reference*, std::shared_ptr<const erhe::Item_base>>::const_iterator graph =
+                written_graphs.find(sampler.texture_reference.get());
+            if (graph == written_graphs.end()) {
+                continue;
+            }
+            out_bindings.push_back(
+                erhe::usd::Usd_save_material_graph_binding{
+                    .material_index = material_index,
+                    .slot           = slot.slot,
+                    .graph          = graph->second
+                }
+            );
+        }
+    }
+}
+
+// Whether a material slot is fed by a texture graph rather than by an image:
+// such a slot is written as a connection to the graph's `NodeGraph` prim, so
+// the image pass leaves it alone (R2).
+[[nodiscard]] auto is_graph_texture_slot(const erhe::primitive::Material_texture_sampler& sampler) -> bool
+{
+    return dynamic_cast<const Graph_texture*>(sampler.texture_reference.get()) != nullptr;
+}
+
 // The variant sets the file authored, as the scene's own table
 // (doc/usd-compatibility-plan.md X4): the carrying prim and the bound
 // materials are the items the import made, so a later switch assigns them
@@ -1112,6 +1657,7 @@ auto make_import_usd_operation(
     std::vector<std::shared_ptr<Operation>> operations;
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
     resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
+    resolve_usd_node_graphs(context, content_library, usd_data, root_node, path_string, operations);
 
     erhe::scene::Scene* scene = scene_root->get_hosted_scene();
     operations.push_back(
@@ -1408,6 +1954,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     std::vector<std::shared_ptr<Operation>> operations;
     append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
     resolve_usd_brushes(context, content_library, usd_data, container_node, path.generic_string(), operations);
+    resolve_usd_node_graphs(context, content_library, usd_data, container_node, path.generic_string(), operations);
     for (const std::shared_ptr<Operation>& operation : operations) {
         operation->execute(context);
     }
@@ -1446,22 +1993,6 @@ namespace {
 
 // The five erhe texture slots in the order erhe::usd names them, so the save
 // can walk a material's slots and the writer's slot enumeration together.
-class Usd_save_slot
-{
-public:
-    const erhe::primitive::Material_texture_sampler erhe::primitive::Material_texture_samplers::* member;
-    erhe::usd::Usd_material_texture_slot                                                          slot;
-    const char*                                                                                   name;
-};
-
-constexpr Usd_save_slot c_usd_save_slots[] = {
-    {&erhe::primitive::Material_texture_samplers::base_color,         erhe::usd::Usd_material_texture_slot::base_color,         "base_color"},
-    {&erhe::primitive::Material_texture_samplers::metallic_roughness, erhe::usd::Usd_material_texture_slot::metallic_roughness, "metallic_roughness"},
-    {&erhe::primitive::Material_texture_samplers::normal,             erhe::usd::Usd_material_texture_slot::normal,             "normal"},
-    {&erhe::primitive::Material_texture_samplers::occlusion,          erhe::usd::Usd_material_texture_slot::occlusion,          "occlusion"},
-    {&erhe::primitive::Material_texture_samplers::emissive,           erhe::usd::Usd_material_texture_slot::emissive,           "emissive"}
-};
-
 // The editor-state kinds a USD file does not carry yet. Each is reported
 // once per save, so a scene that holds any of them says what the written
 // file leaves behind (src/erhe/usd/notes.md future work).
@@ -1484,7 +2015,6 @@ void log_uncarried_editor_state_kind(
 void log_uncarried_editor_state(const Content_library& content_library, const std::filesystem::path& path)
 {
     log_uncarried_editor_state_kind<Graph_mesh>   (content_library, "node graph mesh",    path);
-    log_uncarried_editor_state_kind<Graph_texture>(content_library, "node graph texture", path);
     // A folder is a Scope of the scene tree, so it is written when it holds a
     // resource the file carries (a material, or a style since X3); a folder holding only
     // kinds listed above, or nothing at all, is left out
@@ -1860,6 +2390,12 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         // other channel travels as the sampled xformOps of its prim.
         save_arguments.animations = content_library->get_all<erhe::scene::Animation>();
         collect_usd_brushes(*content_library.get(), path, save_arguments.brushes);
+        collect_usd_node_graphs(
+            *content_library.get(),
+            save_arguments.materials,
+            save_arguments.node_graphs,
+            save_arguments.material_graph_bindings
+        );
     }
     for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {
         const std::shared_ptr<erhe::primitive::Material>& material = save_arguments.materials[material_index];
@@ -1869,6 +2405,12 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         for (const Usd_save_slot& slot : c_usd_save_slots) {
             const erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
             if (!sampler.texture_reference) {
+                continue;
+            }
+            // A slot fed by a texture graph is written as a connection to the
+            // graph's NodeGraph prim (doc/usd-texture-graphs-plan.md R2), not
+            // as an image.
+            if (is_graph_texture_slot(sampler)) {
                 continue;
             }
             const erhe::graphics::Texture* texture = sampler.texture_reference->get_referenced_texture();

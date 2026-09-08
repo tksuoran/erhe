@@ -50,6 +50,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <span>
 #include <string>
@@ -1077,6 +1078,115 @@ auto Mcp_server::query_graph_textures(const json& args) -> std::string
     }
     json result;
     result["graph_textures"] = graph_textures;
+    return make_json_content(result).dump();
+}
+
+// The texture node graphs a scene's content library holds, as the file
+// carries them (doc/usd-texture-graphs-plan.md): every graph asset with its
+// nodes, the links between them by name, and the material slots fed from it.
+// This is what the scene round-trip harness diffs a saved and reloaded file
+// with, so it names nodes and pins rather than ids, which a reload reshuffles.
+auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    json              node_graphs = json::array();
+
+    const auto append_from = [&node_graphs](Scene_root& scene_root) {
+        const std::shared_ptr<Content_library> library = scene_root.get_content_library();
+        if (!library) {
+            return;
+        }
+        for (const std::shared_ptr<Graph_texture>& graph_texture : library->get_all<Graph_texture>()) {
+            if (!graph_texture) {
+                continue;
+            }
+            std::map<const erhe::graph::Node*, std::string> names_by_node;
+            json nodes = json::array();
+            for (const std::shared_ptr<Texture_graph_node>& node : graph_texture->nodes()) {
+                names_by_node[node.get()] = std::string{node->get_name()};
+                json parameters = json::object();
+                node->write_parameters(parameters);
+                json node_json{
+                    {"name",       std::string{node->get_name()}},
+                    {"type",       node->get_factory_type_name()},
+                    {"parameters", parameters}
+                };
+                if (node->has_canvas_position()) {
+                    node_json["x"] = node->get_canvas_x();
+                    node_json["y"] = node->get_canvas_y();
+                }
+                nodes.push_back(std::move(node_json));
+            }
+            json links = json::array();
+            for (const std::unique_ptr<erhe::graph::Link>& link : graph_texture->graph().get_links()) {
+                const erhe::graph::Pin* const source = link->get_source();
+                const erhe::graph::Pin* const sink   = link->get_sink();
+                if ((source == nullptr) || (sink == nullptr)) {
+                    continue;
+                }
+                const std::map<const erhe::graph::Node*, std::string>::const_iterator source_node =
+                    names_by_node.find(source->get_owner_node());
+                const std::map<const erhe::graph::Node*, std::string>::const_iterator sink_node =
+                    names_by_node.find(sink->get_owner_node());
+                if ((source_node == names_by_node.end()) || (sink_node == names_by_node.end())) {
+                    continue;
+                }
+                links.push_back({
+                    {"source_node", source_node->second},
+                    {"source_pin",  std::string{source->get_name()}},
+                    {"sink_node",   sink_node->second},
+                    {"sink_pin",    std::string{sink->get_name()}}
+                });
+            }
+            json material_bindings = json::array();
+            for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
+                if (!material) {
+                    continue;
+                }
+                const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+                const std::pair<const char*, const erhe::primitive::Material_texture_sampler*> slots[] = {
+                    {"base_color",         &samplers.base_color        },
+                    {"metallic_roughness", &samplers.metallic_roughness},
+                    {"normal",             &samplers.normal            },
+                    {"occlusion",          &samplers.occlusion         },
+                    {"emissive",           &samplers.emissive          }
+                };
+                for (const std::pair<const char*, const erhe::primitive::Material_texture_sampler*>& slot : slots) {
+                    if (slot.second->texture_reference.get() != static_cast<const erhe::graphics::Texture_reference*>(graph_texture.get())) {
+                        continue;
+                    }
+                    material_bindings.push_back({
+                        {"material", material->get_name()},
+                        {"slot",     slot.first}
+                    });
+                }
+            }
+            node_graphs.push_back({
+                {"name",              graph_texture->get_name()},
+                {"path",              std::string{graph_texture->get_reference_path()}},
+                {"scene",             scene_root.get_name()},
+                {"format",            std::string{"erhe_texture_graph"}},
+                {"nodes",             nodes},
+                {"links",             links},
+                {"material_bindings", material_bindings}
+            });
+        }
+    };
+
+    if (!scene_name.empty()) {
+        Scene_root* scene_root = find_scene(scene_name);
+        if (scene_root == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        append_from(*scene_root);
+    } else if (m_context.app_scenes != nullptr) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            append_from(*scene_root);
+        }
+    }
+
+    json result;
+    result["node_graphs"] = node_graphs;
     return make_json_content(result).dump();
 }
 

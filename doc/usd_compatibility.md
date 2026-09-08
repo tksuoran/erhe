@@ -64,7 +64,8 @@ node attachments. The mapping an exporter applies and an importer inverts:
 | `Node_physics` / `Node_joint` attachments | `UsdPhysics` API schemas / joint prims, see "Physics" | |
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | the skin's pivot is the `Skeleton` prim and its joints are `Xform` prims below it, so a joint animates the way any prim does; `inverse_bind_j` is `inverse(bind_j) * geomBindTransform` and a save splits it back with an identity `geomBindTransform` for the skeleton's first skin (`src/erhe/usd/notes.md`, "Skinning") |
 | `editor::Brush` | `Brush` (custom `typeName`, no USD schema) | a brush is a prim where it sits: `erhe:Brush:density` and `erhe:Brush:normal_style` custom attributes, `material:binding` for the material a placed instance gets, and the geometry as a child `def Mesh "geometry"` with `subdivisionScheme = none` (`src/erhe/usd/notes.md`, "Brush prims"). `purpose` is derived from the brush flag (M3), so it is not authored |
-| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes / textures | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
+| `editor::Graph_texture` | `NodeGraph` marked with `erhe:graph:format` | a texture graph is a prim where it sits, holding one generic `Shader` child per node; see "Texture node graphs" |
+| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
 | prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` (or `payload`) composition arc | one attachment per arc, in the authored order; the arc's target file, prim path and form are what the attachment records, and a save writes them back |
 | item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) on the default prim, one collection per tag | |
 | per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
@@ -150,6 +151,24 @@ The names are erhe / geogram's own:
 | `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | `repeat` and `mirror` map onto the erhe address mode of the same name; `clamp`, `black` and the `useMetadata` default all become clamp-to-edge, because erhe has no border color. Both are written for every bound texture; a wrap value on a slot with no texture has no `UsdUVTexture` to ride on. The filters ride as `erhe:` custom attributes |
 | a texture image | `UsdUVTexture` `inputs:file` | a file beside the layer, or an entry of the `.usdz` the stage was loaded from: the reader hands the archive entry's bytes over (`Usd_image::bytes`) and the caller decodes those. Radiance `.hdr` is not decoded by either erhe or LightUSD |
 | `double_sided` | `erhe:Material:double_sided` on the `Material` prim | the erhe material's own flag (glTF `material.doubleSided`), which USD has no material input for: `doubleSided` in USD is a property of the geometry prim, and one material can be bound by several prims. The prim's own opinion travels in the geometry `doubleSided` attribute instead (the `Gprim.double_sided` row of "Geometry attributes"), and the renderers take either one as asking for both faces |
+
+
+## Texture node graphs
+
+An erhe texture graph (`editor::Graph_texture`, `doc/texture-graph-plan.md`)
+rides a USD file as the `UsdShade` network it is
+([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)); the design
+document owns the rules, this table owns the mapping rows.
+
+| erhe | USD | notes |
+|---|---|---|
+| a `Graph_texture` asset | `NodeGraph` prim carrying `custom token erhe:graph:format = "erhe_texture_graph"` | the marker is what makes the network erhe's; a `NodeGraph` without it is a foreign shading network, left to the material conversion. The token is the graph kind, spelled the way the glTF `ERHE_node_graphs` payload spells its graph arrays |
+| one graph node | a `Shader` child, `uniform token info:id = "erhe:texture:<factory type>"` | the type name is the one `make_texture_graph_node` takes; a `Shader` whose `info:id` lacks the prefix, or names a type the factory does not make, is one warning and no node |
+| the node's editor position | `custom float2 erhe:ui:position` | authored exactly when the node has a canvas position |
+| a node parameter | `inputs:<name>` carrying a value | typed from the parameter's own kind: `float`, `int`, `bool`, `float2` (a size), `color3f` / `color4f` (a color), `string` for a name. A value with no USD form - a gradient, a curve - travels as its JSON text in a `string`, with a single quote in place of the double quote, one rule for both |
+| a node pin | `inputs:<pin>` / `outputs:<pin>` typed from the pin's `erhe::texgen::Value_type` (`float`, `color3f`, `color4f`) | an input pin with a link is the attribute with a `.connect` to the source node's output; an unlinked pin is the typed attribute alone, so the pin is still in the file |
+| the graph's result | the `NodeGraph`'s own `outputs:<pin>` connection | taken from the linked input of the graph's `output` sink node: the value a material slot can name |
+| a material slot sampling the graph | the slot's `UsdPreviewSurface` input connected to that interface output | in place of a `UsdUVTexture`, so no image is written for the slot. The baked image is not written at all: a graph loads born dirty and the first evaluation re-bakes it |
 
 ## Lights
 

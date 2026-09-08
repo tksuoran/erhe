@@ -12,38 +12,38 @@ def Xform "World"
         def NodeGraph "Rust"
         {
             custom token erhe:graph:format = "erhe_texture_graph"
-            color3f outputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>
+            color4f outputs:rgba.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgba>
 
             def Shader "Noise"
             {
                 uniform token info:id = "erhe:texture:noise"
                 custom float2 erhe:ui:position = (120, 40)
-                int inputs:octaves = 3
-                float inputs:scale = 4
-                float outputs:grayscale
+                float inputs:density = 0.35
+                int inputs:size = 5
+                float outputs:f
             }
 
             def Shader "Colorize"
             {
                 uniform token info:id = "erhe:texture:colorize"
                 custom float2 erhe:ui:position = (320, 40)
-                string inputs:gradient = "0 (0, 0, 0) 1 (1, 0.5, 0.2)"
-                float inputs:value.connect = </World/Graph_Textures/Rust/Noise.outputs:grayscale>
-                color3f outputs:rgb
+                string inputs:gradient = "{'interpolation':0,'stops':[{'color':[0.0,0.0,0.0,1.0],'pos':0.0},{'color':[1.0,0.5,0.2,1.0],'pos':1.0}]}"
+                float inputs:input.connect = </World/Graph_Textures/Rust/Noise.outputs:f>
+                color4f outputs:rgba
             }
 
             def Shader "Output"
             {
                 uniform token info:id = "erhe:texture:output"
                 custom float2 erhe:ui:position = (520, 40)
-                color3f inputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>
+                color4f inputs:rgba.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgba>
             }
         }
 
         def NodeGraph "Mixed"
         {
             custom token erhe:graph:format = "erhe_texture_graph"
-            color3f outputs:rgb.connect = </World/Graph_Textures/Mixed/Constant.outputs:rgb>
+            color4f outputs:rgba.connect = </World/Graph_Textures/Mixed/Constant.outputs:rgba>
 
             def Shader "Alien"
             {
@@ -53,10 +53,10 @@ def Xform "World"
 
             def Shader "Constant"
             {
-                uniform token info:id = "erhe:texture:constant"
+                uniform token info:id = "erhe:texture:uniform"
                 custom float2 erhe:ui:position = (80, 80)
                 float inputs:amount.connect = </World/Graph_Textures/Mixed/Alien.outputs:r>
-                color3f outputs:rgb
+                color4f outputs:rgba
             }
         }
 
@@ -75,7 +75,7 @@ def Xform "World"
             def Shader "surface"
             {
                 uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgb>
+                color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgba>
                 token outputs:surface
             }
         }
@@ -85,7 +85,10 @@ def Xform "World"
     {
         uniform token subdivisionScheme = "none"
         int[] faceVertexCounts = [4]
-        int[] faceVertexIndices = [0, 1, 2, 3]
+        int[] faceVertexIndices = [3, 2, 1, 0]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
         point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
         rel material:binding = </World/Looks/Iron>
     }

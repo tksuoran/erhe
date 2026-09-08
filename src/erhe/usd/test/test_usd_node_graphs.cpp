@@ -248,14 +248,14 @@ TEST_F(Node_graphs_import, an_input_with_a_value_is_a_parameter_of_its_authored_
     const erhe::usd::Usd_node_graph_node* noise = find_node(*graph, "Noise");
     ASSERT_NE(noise, nullptr);
     ASSERT_EQ(noise->parameters.size(), 2u);
-    const erhe::usd::Usd_node_graph_parameter* scale = find_parameter(*noise, "scale");
-    ASSERT_NE(scale, nullptr);
-    EXPECT_EQ(scale->usd_type, "float");
-    EXPECT_EQ(scale->value,    "4");
-    const erhe::usd::Usd_node_graph_parameter* octaves = find_parameter(*noise, "octaves");
-    ASSERT_NE(octaves, nullptr);
-    EXPECT_EQ(octaves->usd_type, "int");
-    EXPECT_EQ(octaves->value,    "3");
+    const erhe::usd::Usd_node_graph_parameter* density = find_parameter(*noise, "density");
+    ASSERT_NE(density, nullptr);
+    EXPECT_EQ(density->usd_type, "float");
+    EXPECT_EQ(density->value,    "0.35");
+    const erhe::usd::Usd_node_graph_parameter* size = find_parameter(*noise, "size");
+    ASSERT_NE(size, nullptr);
+    EXPECT_EQ(size->usd_type, "int");
+    EXPECT_EQ(size->value,    "5");
 
     // A type with no USD form travels as its text in a `string`, which is how
     // a gradient rides the file (doc/usd-texture-graphs-plan.md 2.1).
@@ -264,7 +264,11 @@ TEST_F(Node_graphs_import, an_input_with_a_value_is_a_parameter_of_its_authored_
     const erhe::usd::Usd_node_graph_parameter* gradient = find_parameter(*colorize, "gradient");
     ASSERT_NE(gradient, nullptr);
     EXPECT_EQ(gradient->usd_type, "string");
-    EXPECT_EQ(gradient->value,    "\"0 (0, 0, 0) 1 (1, 0.5, 0.2)\"");
+    EXPECT_EQ(
+        gradient->value,
+        "\"{'interpolation':0,'stops':[{'color':[0.0,0.0,0.0,1.0],'pos':0.0},"
+        "{'color':[1.0,0.5,0.2,1.0],'pos':1.0}]}\""
+    );
 }
 
 TEST_F(Node_graphs_import, a_connected_input_records_the_source_node_and_pin)
@@ -274,23 +278,23 @@ TEST_F(Node_graphs_import, a_connected_input_records_the_source_node_and_pin)
 
     const erhe::usd::Usd_node_graph_node* colorize = find_node(*graph, "Colorize");
     ASSERT_NE(colorize, nullptr);
-    const erhe::usd::Usd_node_graph_pin* value = find_pin(colorize->inputs, "value");
+    const erhe::usd::Usd_node_graph_pin* value = find_pin(colorize->inputs, "input");
     ASSERT_NE(value, nullptr);
     EXPECT_EQ(value->value_type,  "float");
     EXPECT_EQ(value->source_node, "Noise");
-    EXPECT_EQ(value->source_pin,  "grayscale");
+    EXPECT_EQ(value->source_pin,  "f");
 
     const erhe::usd::Usd_node_graph_node* output = find_node(*graph, "Output");
     ASSERT_NE(output, nullptr);
-    const erhe::usd::Usd_node_graph_pin* rgb = find_pin(output->inputs, "rgb");
-    ASSERT_NE(rgb, nullptr);
-    EXPECT_EQ(rgb->value_type,  "color3f");
-    EXPECT_EQ(rgb->source_node, "Colorize");
-    EXPECT_EQ(rgb->source_pin,  "rgb");
+    const erhe::usd::Usd_node_graph_pin* rgba = find_pin(output->inputs, "rgba");
+    ASSERT_NE(rgba, nullptr);
+    EXPECT_EQ(rgba->value_type,  "color4f");
+    EXPECT_EQ(rgba->source_node, "Colorize");
+    EXPECT_EQ(rgba->source_pin,  "rgba");
 
-    const erhe::usd::Usd_node_graph_pin* grayscale = find_pin(find_node(*graph, "Noise")->outputs, "grayscale");
-    ASSERT_NE(grayscale, nullptr);
-    EXPECT_EQ(grayscale->value_type, "float");
+    const erhe::usd::Usd_node_graph_pin* f = find_pin(find_node(*graph, "Noise")->outputs, "f");
+    ASSERT_NE(f, nullptr);
+    EXPECT_EQ(f->value_type, "float");
 }
 
 TEST_F(Node_graphs_import, the_graph_records_its_interface_output)
@@ -298,10 +302,10 @@ TEST_F(Node_graphs_import, the_graph_records_its_interface_output)
     const erhe::usd::Usd_node_graph* graph = find_graph(loaded.data, "/World/Graph_Textures/Rust");
     ASSERT_NE(graph, nullptr);
     ASSERT_EQ(graph->outputs.size(), 1u);
-    EXPECT_EQ(graph->outputs[0].name,        "rgb");
-    EXPECT_EQ(graph->outputs[0].value_type,  "color3f");
+    EXPECT_EQ(graph->outputs[0].name,        "rgba");
+    EXPECT_EQ(graph->outputs[0].value_type,  "color4f");
     EXPECT_EQ(graph->outputs[0].source_node, "Colorize");
-    EXPECT_EQ(graph->outputs[0].source_pin,  "rgb");
+    EXPECT_EQ(graph->outputs[0].source_pin,  "rgba");
 }
 
 TEST_F(Node_graphs_import, a_material_input_connected_to_a_graph_is_a_slot_binding)
@@ -380,7 +384,7 @@ TEST_F(Node_graphs_export, a_graph_record_is_written_as_a_marked_node_graph_prim
 {
     EXPECT_TRUE(has_line_with(lines, "def NodeGraph \"Rust\""));
     EXPECT_TRUE(has_line_with(lines, "custom token erhe:graph:format = \"erhe_texture_graph\""));
-    EXPECT_TRUE(has_line_with(lines, "color3f outputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>"));
+    EXPECT_TRUE(has_line_with(lines, "color4f outputs:rgba.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgba>"));
 }
 
 TEST_F(Node_graphs_export, a_node_is_written_as_a_generic_shader_prim_with_its_pins)
@@ -388,22 +392,22 @@ TEST_F(Node_graphs_export, a_node_is_written_as_a_generic_shader_prim_with_its_p
     EXPECT_TRUE(has_line_with(lines, "def Shader \"Noise\""));
     EXPECT_TRUE(has_line_with(lines, "uniform token info:id = \"erhe:texture:noise\""));
     EXPECT_TRUE(has_line_with(lines, "custom float2 erhe:ui:position = (120, 40)"));
-    EXPECT_TRUE(has_line_with(lines, "float inputs:scale = 4"));
-    EXPECT_TRUE(has_line_with(lines, "int inputs:octaves = 3"));
-    EXPECT_TRUE(has_line_with(lines, "float outputs:grayscale"));
-    EXPECT_TRUE(has_line_with(lines, "string inputs:gradient = \"0 (0, 0, 0) 1 (1, 0.5, 0.2)\""));
+    EXPECT_TRUE(has_line_with(lines, "float inputs:density = 0.35"));
+    EXPECT_TRUE(has_line_with(lines, "int inputs:size = 5"));
+    EXPECT_TRUE(has_line_with(lines, "float outputs:f"));
+    EXPECT_TRUE(has_line_with(lines, "string inputs:gradient = "));
     EXPECT_TRUE(
-        has_line_with(lines, "float inputs:value.connect = </World/Graph_Textures/Rust/Noise.outputs:grayscale>")
+        has_line_with(lines, "float inputs:input.connect = </World/Graph_Textures/Rust/Noise.outputs:f>")
     );
     EXPECT_TRUE(
-        has_line_with(lines, "color3f inputs:rgb.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgb>")
+        has_line_with(lines, "color4f inputs:rgba.connect = </World/Graph_Textures/Rust/Colorize.outputs:rgba>")
     );
 }
 
 TEST_F(Node_graphs_export, a_graph_bound_material_slot_connects_to_the_graph_output)
 {
     EXPECT_TRUE(
-        has_line_with(lines, "color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgb>")
+        has_line_with(lines, "color3f inputs:diffuseColor.connect = </World/Graph_Textures/Rust.outputs:rgba>")
     );
     EXPECT_FALSE(has_line_with(lines, "UsdUVTexture"));
 }

@@ -189,6 +189,19 @@
     "name": "get_scene_brushes"
   },
   {
+    "description": "List the texture node graphs (Graph_texture assets) a scene's content library holds: each graph's name, its content-library path, its format token, its nodes (name, factory type, canvas x / y, parameters), the links between them named by node and pin, and the material slots fed from the graph. Names rather than ids, so a saved and reloaded scene compares directly.",
+    "inputSchema": {
+      "properties": {
+        "scene_name": {
+          "description": "Name of the scene (default: every open scene)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "get_scene_node_graphs"
+  },
+  {
     "description": "List viewport windows: window title, bound scene name, camera name, the pixel rectangle (x, y, width, height; top-left origin, the space of a capture_screenshot PNG) the 3D view occupies in the editor window, and the camera frame (camera_path, camera_world_from_camera as 16 column-major floats, camera_projection_type, camera_fov_y / fov_x in radians, camera_z_near / z_far). Use to verify which scene/camera each viewport shows, to crop a capture to the 3D view, or to reproduce the view in another renderer.",
     "inputSchema": {
       "properties": {},

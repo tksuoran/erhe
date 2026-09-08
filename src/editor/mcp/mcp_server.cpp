@@ -663,6 +663,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "create_graph_texture",           &Mcp_server::action_create_graph_texture          },
         { "set_material_texture_source",    &Mcp_server::action_set_material_texture_source   },
         { "get_graph_textures",             &Mcp_server::query_graph_textures                 },
+        { "get_scene_node_graphs",          &Mcp_server::query_scene_node_graphs              },
         { "create_graph_mesh",              &Mcp_server::action_create_graph_mesh             },
         { "set_node_graph_mesh",            &Mcp_server::action_set_node_graph_mesh           },
         { "get_graph_meshes",               &Mcp_server::query_graph_meshes                   },
