@@ -566,6 +566,22 @@ until the items below are taken up, and E1 writes no `UsdPhysics`
 schemas. Each item is independent of the others and of every step in
 section 3 except where named.
 
+- Stale world bounds on the first framing after a prefab instantiation:
+  `frame_scene` on the first scene a session opens through a reference or
+  payload reads the pre-instantiation bounds (the survey's
+  `payload_child_folder.usda` row at 4950% is this; a second framing reads
+  the right ones). The same load-settle family as the load-performance item.
+- The bounds rows the survey still shows after the root-layer-metrics fix
+  (`doc/usd-wg-assets.md`, "bounds disagree"): Creases_SpinningPyramids
+  (8.3x, node-subtree variants), all_files, active.usda and over.usda
+  (inactive or overridden prims still framed), the four internal-reference
+  tests (0.19), scaled_extent, vehicleVariants (0.11). Each is measured
+  against pxr's composed bounds and not yet diagnosed.
+- Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
+  "Texture node graphs"): Tydra fails a material whose input connects to a
+  `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
+  the USDA parser does not round-trip an escaped double quote, so nested
+  parameter text travels with single quotes. Both go with a fork fix.
 - 16-bit PNG and CMYK JPEG decoding: the survey's TextureFileFormatTests
   tiles for them render blank. wuffs can decode both to 8-bit RGBA, so this
   is a failure in erhe's use of it that no log names per file yet

@@ -132,5 +132,7 @@
 ✓phase-2{e88ec1d8e:collect/resolve_usd_node_graphs-in-parsers/usd.cpp;JSON-params→(usd_type,literal)-by-value-kind{nested=JSON-text-with-single-quotes:LightUSD-escaped-quote-defect→fork-future-work};links-by-name;output-sink-linked-input=interface-output;`scene`-param-not-written;MCP-get_scene_node_graphs;roundtrip-leg-17/17{330-total,1=P6-dynamic-flake};headless:plane-shows-noise→gradient;byte-identical-2nd-save;close-clean}
   E4c-DONE-2026-09-08|?user-interactive{Hierarchy-shows-graph-under-holding-prim;Texture-Graph-window-opens-USD-loaded-graph}
 ✓full-survey-with-OpenUSD-leg{2026-09-08:146-entries/3164s/0-crash;21-works/124-gap/1-fails;Storm-match-high=animated-usdz-0.98,low=Vehicles-kit-negative;bounds-gap-47→43-after-skinned-skip{5608ad117}}
-!FOUND-vehicle-kit-gap{MEASURED-via-pxr-XformCache:reference-target=Mesh-prim-authoring-own-xformOp:transform{39.3701-scale,4wdGeo.usd}→erhe-drops-target-Mesh's-own-xform;~30-entries;References/*-0.495-rows-likely-same-class}→NEXT=fix-via-harness{©User-2026-09-08:then-STOP;E4b/E4d/E2-stay-queued}
+!FOUND-vehicle-kit-gap{MEASURED-via-pxr-XformCache:reference-target=Mesh-prim-authoring-own-xformOp:transform{39.3701-scale,4wdGeo.usd}→erhe-drops-target-Mesh's-own-xform;~30-entries;References/*-0.495-rows-likely-same-class}→ROOT-CAUSE-WAS-DIFFERENT{scout-measured:prefab-template-load-applied-TARGET-file's-own-upAxis/metersPerUnit-a-second-time;0.0254*39.37=1}
+✓fix{976a56adf:Usd_load_arguments::stage_metrics{root|referenced};load_usd_prefab_template→referenced;usd245→250;4wdBody-bounds==pxr;bounds-rows-41→11;roundtrip-331/332}
+  STOPPED-2026-09-08{©User};left=11-bounds-rows+stale-first-framing-bounds{plan-section-6};queue=E4b→E4d→E2
 
