@@ -54,13 +54,17 @@ class Stage::Impl final
 public:
     lightusd::Stage       stage;
     std::filesystem::path source_path;
-    // The root layer of `source_path`, read once by load_stage: the source of
-    // everything LightUSD does not compose - the `class` prims, the `over`
-    // opinions, the `variantSet` blocks - which the importer reads back off
-    // it rather than re-reading the file for itself.
-    lightusd::Layer       root_layer;
-    bool                  root_layer_ok{false};
-    // The prims the variant blocks of `root_layer` authored, in the tree of
+    // The layer `stage` was built from, kept by load_stage: the root layer of
+    // `source_path` composed with its `subLayers`, with the prims of every
+    // variant block hoisted into it - exactly the spec tree behind the prims
+    // of `stage`. It is the source of everything LightUSD does not compose -
+    // the `class` prims, the `over` opinions, the `variantSet` blocks - which
+    // the importer reads back off it rather than re-reading the file for
+    // itself, so a prim any layer of the stack authors contributes those the
+    // way a root-layer prim does.
+    lightusd::Layer       layer;
+    bool                  layer_ok{false};
+    // The prims the variant blocks of `layer` authored, in the tree of
     // `stage` since load_stage hoisted them there.
     std::vector<Variant_prim_record> variant_prims;
 };

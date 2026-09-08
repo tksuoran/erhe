@@ -246,14 +246,14 @@ record has the history.
   save writes each overriding item as an `over` prim below the carrier
   holding its local values and `active` only, the clone of the target
   prim being the carrier prim itself, and the reader reads them off the
-  root layer's prim specs (`src/erhe/usd/notes.md`); glTF carries the
+  composed layer's prim specs (`src/erhe/usd/notes.md`); glTF carries the
   list as `ERHE_node.overrides` on the carrier
   (`doc/gltf_extensions/ERHE_node.md`); a prefab reload captures and
   re-applies them. Attachments inside an instance (applied API schemas)
   are not walked for overrides (section 6). MCP
   `set_prefab_template_property` edits a template in place.
 - X3 Class inheritance: a `class` prim is a Style item. The reader takes
-  the class prims off the root layer's own prim specs (Tydra never walks
+  the class prims off the composed layer's own prim specs (Tydra never walks
   one) into `Usd_data::classes` with their `inherits` targets, authored
   opinions and nested classes, and every other prim's `inherits` arcs into
   `Usd_data::prim_inherits`; the editor makes one Style item per class at
@@ -421,7 +421,9 @@ usdview's camera light lights it, a `DomeLight` is the scene's ambient
 light, a typeless or `Scope` prim that authors arcs is an `Xform`
 carrier, any prim is a reference target and a `class` prim's `def`
 descendants are prototypes held abstract, a root layer's subLayers are
-composed (the save writes one flattened layer), every `Material` prim
+composed (the save writes one flattened layer) and every prim of the
+composed layer stack carries its authored opinions, `class` prims and
+`xformOp` stacks whichever layer authored it, every `Material` prim
 converts, a material binding authored as an `over` is an instance
 override and a template's material has an owner, the `UsdGeom`
 primitive schemas import as the meshes they describe, USD `st` crosses
@@ -438,8 +440,7 @@ fixes are taken: a `PointInstancer` not instanced; a
 time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
 stained glass opaque and its cards missing; RoughnessTest's missing
-specular response; a prim a sublayer authors contributing no authored opinion, class prim or
-xformOp stack; a 4000-prim scene tripping the main-loop stall watchdog
+specular response; a 4000-prim scene tripping the main-loop stall watchdog
 on load; MaterialX documents as reference targets; the draw list's
 null-material fallback for an unbound mesh.
 

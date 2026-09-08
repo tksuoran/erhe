@@ -3091,14 +3091,14 @@ private:
     // contributed (doc/usd-compatibility-plan.md X2): an `over` prim below
     // the referencing prim is the sparse override of one instance item, at
     // the path it has below the carrier. LightUSD does not report which layer
-    // an opinion on a composed prim came from, so the root layer's own prim
+    // an opinion on a composed prim came from, so the composed layer's own prim
     // specs are what is asked; a `def` below a referencing prim adds structure
     // to a reference, which is out of scope (plan section 5), so it is named
     // in a warning and dropped.
     [[nodiscard]] auto read_instance_overrides(const std::string& absolute_path) -> std::vector<erhe::scene::Instance_override>
     {
         std::vector<erhe::scene::Instance_override> overrides;
-        const lightusd::PrimSpec* spec = find_root_layer_primspec(absolute_path);
+        const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
         if (spec == nullptr) {
             return overrides;
         }
@@ -3277,32 +3277,33 @@ private:
         return "Default";
     }
 
-    // The root layer, read once. A composed prim does not say which layer an
-    // opinion came from and Tydra's render-scene conversion never walks a
-    // `class` prim, so the layer's own prim specs are what the reader asks for
-    // the `over` prims of X2 and the `class` prims and `inherits` arcs of X3.
-    // load_stage read it and the stage keeps it, so nothing here parses the
-    // file again.
-    [[nodiscard]] auto has_root_layer() const -> bool
+    // The layer the stage was built from - the root layer composed with its
+    // `subLayers`, variant prims hoisted in - read once by load_stage. A
+    // composed prim does not say which layer an opinion came from and Tydra's
+    // render-scene conversion never walks a `class` prim, so the layer's own
+    // prim specs are what the reader asks for the `over` prims of X2 and the
+    // `class` prims and `inherits` arcs of X3. The stage keeps it, so nothing
+    // here parses the file again.
+    [[nodiscard]] auto has_layer() const -> bool
     {
-        return (m_impl != nullptr) && m_impl->root_layer_ok;
+        return (m_impl != nullptr) && m_impl->layer_ok;
     }
 
-    // The root layer's prim spec at the given path, or null.
-    [[nodiscard]] auto find_root_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
+    // The layer's prim spec at the given path, or null.
+    [[nodiscard]] auto find_layer_primspec(const std::string& absolute_path) -> const lightusd::PrimSpec*
     {
-        if (!has_root_layer()) {
+        if (!has_layer()) {
             return nullptr;
         }
         const lightusd::PrimSpec* spec = nullptr;
         std::string               error;
-        if (!m_impl->root_layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error)) {
+        if (!m_impl->layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error)) {
             return nullptr;
         }
         return spec;
     }
 
-    // The `class` prims and the `inherits` arcs the root layer authors
+    // The `class` prims and the `inherits` arcs the layer authors
     // (doc/usd-compatibility-plan.md X3), read before the prims are converted
     // so a prim's arcs are one map lookup once its item exists. The layer
     // holds its top-level prim specs in a hash map and the ascii reader fills
@@ -3311,22 +3312,22 @@ private:
     void read_layer_composition()
     {
         ERHE_PROFILE_FUNCTION();
-        if (!has_root_layer()) {
+        if (!has_layer()) {
             return;
         }
         std::vector<std::string> root_names;
-        root_names.reserve(m_impl->root_layer.primspecs().size());
-        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_impl->root_layer.primspecs()) {
+        root_names.reserve(m_impl->layer.primspecs().size());
+        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_impl->layer.primspecs()) {
             root_names.push_back(entry.first);
         }
         std::sort(root_names.begin(), root_names.end());
         for (const std::string& root_name : root_names) {
-            const lightusd::PrimSpec& spec = m_impl->root_layer.primspecs().at(root_name);
+            const lightusd::PrimSpec& spec = m_impl->layer.primspecs().at(root_name);
             collect_layer_composition("/" + root_name, spec);
         }
     }
 
-    // One prim spec of the root layer: a `class` prim is recorded whole (its
+    // One prim spec of the layer: a `class` prim is recorded whole (its
     // descendants are classes of their own), and every other prim contributes
     // its `inherits` arcs and is walked for the classes below it.
     void collect_layer_composition(const std::string& path, const lightusd::PrimSpec& spec)
@@ -4199,7 +4200,7 @@ private:
     std::map<std::string, std::size_t> m_material_by_path;
     // Authored property names per prim path, see authored_property_names.
     std::map<std::string, std::set<std::string>> m_authored_property_names;
-    // The absolute path of every `class` prim of the root layer, nested ones
+    // The absolute path of every `class` prim of the layer, nested ones
     // included, filled by read_layer_composition: what convert_node skips.
     std::set<std::string>                          m_class_paths;
     // The `def` descendants of the class prims: the prototypes they hold (X3).
@@ -4207,7 +4208,7 @@ private:
     // Non-zero while a prototype subtree is converted, which is what clears
     // `Item_flags::content` on the prims it makes.
     int                                            m_prototype_depth{0};
-    // The absolute path of every `Brush` prim of the root layer, filled by
+    // The absolute path of every `Brush` prim of the layer, filled by
     // read_layer_composition: what convert_node skips
     // (doc/usd-compatibility-plan.md E4a).
     std::set<std::string>                          m_brush_paths;
@@ -4216,10 +4217,10 @@ private:
     // geometry child is looked up by. Filled by convert_meshes, which runs
     // before any prim is placed.
     std::map<std::string, std::size_t>             m_mesh_index_by_path;
-    // The `inherits` targets of every non-class prim spec of the root layer,
+    // The `inherits` targets of every non-class prim spec of the layer,
     // by absolute path, filled by read_layer_composition.
     std::map<std::string, std::vector<std::string>> m_inherits_by_path;
-    // The variant sets of every non-class prim spec of the root layer, by
+    // The variant sets of every non-class prim spec of the layer, by
     // absolute path, filled by read_layer_composition
     // (doc/usd-compatibility-plan.md X4).
     std::map<std::string, std::vector<Usd_variant_set>> m_variant_sets_by_path;
@@ -4230,8 +4231,8 @@ private:
     // The mesh each `Mesh` prim of the stage became, by the prim's absolute
     // path: what a variant binding resolves against.
     std::map<std::string, Mesh_prim>               m_mesh_by_path;
-    // The stage being converted, with the root layer load_stage read and the
-    // prims it hoisted out of the variant blocks.
+    // The stage being converted, with the composed layer load_stage kept and
+    // the prims it hoisted out of the variant blocks.
     const Stage::Impl*                           m_impl{nullptr};
     // The archive directory of the `.usdz` the stage was loaded from, read
     // lazily by ensure_usdz_asset: what packed texture bytes are taken from.

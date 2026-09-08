@@ -401,13 +401,17 @@ void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record
 }
 
 // Replace `stage` with the composition of `root_layer` and its `subLayers`
-// (the L of USD's LIVRPS). Returns false when the composition could not be
-// built, leaving `stage` as it was - a file whose sublayers cannot be
+// (the L of USD's LIVRPS), and hand the composed layer back in
+// `composed_layer_out`: it is the spec tree behind the composed prims, and
+// every read that asks which layer authored a thing goes to it. Returns false
+// when the composition could not be built, leaving `stage` and
+// `composed_layer_out` as they were - a file whose sublayers cannot be
 // resolved still opens with the root layer's own content, as it does in USD.
 [[nodiscard]] auto compose_sublayers(
     const std::filesystem::path&      path,
     const lightusd::Layer&            root_layer,
     lightusd::Stage&                  stage,
+    lightusd::Layer&                  composed_layer_out,
     std::vector<Variant_prim_record>& variant_prims,
     std::string&                      warning
 ) -> bool
@@ -454,6 +458,11 @@ void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record
 
     hoist_variant_prims(composed_layer, variant_prims);
 
+    // LayerToStage consumes the layer it builds from, so the layer the
+    // importer reads is a copy taken here. It is the same tree the prims come
+    // from: one copy of the composed spec tree per load.
+    lightusd::Layer kept_layer = composed_layer;
+
     lightusd::Stage composed_stage;
     if (!lightusd::LayerToStage(std::move(composed_layer), &composed_stage, &load_warning, &load_error)) {
         log_usd->warn("USD '{}': the composed subLayer stack could not be built into a stage: {}", filename, load_error);
@@ -479,18 +488,20 @@ void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record
         }
     );
 
-    stage = std::move(composed_stage);
+    stage              = std::move(composed_stage);
+    composed_layer_out = std::move(kept_layer);
     return true;
 }
 
-// Replace `stage` with `root_layer` built into a stage with the prims of
-// every variant block hoisted into the tree: what a file without subLayers
-// needs, the composition above doing it for one that has them. A stage that
-// cannot be built leaves `stage` as the loader built it - with the variants'
-// prims absent, as they were before this - and is reported.
+// Replace `stage` with `layer` built into a stage with the prims of every
+// variant block hoisted into the tree, and make `layer` that hoisted layer:
+// what a file without subLayers needs, the composition above doing it for one
+// that has them. A stage that cannot be built leaves `stage` as the loader
+// built it and `layer` as it was read - with the variants' prims absent, as
+// they were before this - and is reported.
 void compose_variant_prims(
     const std::filesystem::path&      path,
-    const lightusd::Layer&            root_layer,
+    lightusd::Layer&                  layer,
     lightusd::Stage&                  stage,
     std::vector<Variant_prim_record>& variant_prims,
     std::string&                      warning
@@ -499,13 +510,17 @@ void compose_variant_prims(
     ERHE_PROFILE_FUNCTION();
 
     const std::string filename = path.generic_string();
-    lightusd::Layer   layer    = root_layer;
-    hoist_variant_prims(layer, variant_prims);
+    lightusd::Layer   hoisted_layer = layer;
+    hoist_variant_prims(hoisted_layer, variant_prims);
+
+    // LayerToStage consumes the layer it builds from, and the hoisted layer is
+    // what the importer reads afterwards, so the stage is built from a copy.
+    lightusd::Layer build_layer = hoisted_layer;
 
     std::string     load_warning;
     std::string     load_error;
     lightusd::Stage composed_stage;
-    if (!lightusd::LayerToStage(std::move(layer), &composed_stage, &load_warning, &load_error)) {
+    if (!lightusd::LayerToStage(std::move(build_layer), &composed_stage, &load_warning, &load_error)) {
         log_usd->warn("USD '{}': the prims of the variant blocks could not be built into a stage: {}", filename, load_error);
         warning += load_error;
         variant_prims.clear();
@@ -516,6 +531,7 @@ void compose_variant_prims(
         log_usd->warn("USD '{}': variant prims: {}", filename, load_warning);
     }
     stage = std::move(composed_stage);
+    layer = std::move(hoisted_layer);
 }
 
 } // anonymous namespace
@@ -553,17 +569,19 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
     // referenced file loaded through this same function - sees one composed
     // stage.
     //
-    // The layer is read once and kept: the importer takes the `class` prims,
-    // the `over` opinions and the `variantSet` blocks off it rather than
-    // parsing the file a third time.
+    // The layer is read once and kept, and what is kept is the composed layer:
+    // the importer takes the `class` prims, the `over` opinions and the
+    // `variantSet` blocks off it rather than parsing the file a third time,
+    // and a prim any layer of the stack authors carries them the way a
+    // root-layer prim does.
     const std::string base_dir = path.has_parent_path() ? path.parent_path().generic_string() : std::string{"."};
     std::string       layer_warning;
     std::string       layer_error;
-    impl->root_layer_ok = lightusd::LoadLayerFromFile(filename, &impl->root_layer, &layer_warning, &layer_error, options);
-    if (!impl->root_layer_ok) {
+    impl->layer_ok = lightusd::LoadLayerFromFile(filename, &impl->layer, &layer_warning, &layer_error, options);
+    if (!impl->layer_ok) {
         log_usd->info("USD '{}': the root layer could not be read for composition: {}", filename, layer_error);
     } else {
-        impl->root_layer.set_asset_resolution_state(base_dir, std::vector<std::string>{base_dir});
+        impl->layer.set_asset_resolution_state(base_dir, std::vector<std::string>{base_dir});
         const std::size_t sublayer_count = impl->stage.metas().subLayers.size();
         // A `.usdz` archive resolves its asset paths through the archive
         // rather than through the file system, and the composition resolver
@@ -577,18 +595,20 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
                     filename, sublayer_count
                 );
             }
-            if (has_variant_prims(impl->root_layer)) {
+            if (has_variant_prims(impl->layer)) {
                 log_usd->warn(
                     "USD '{}': the prims a variant block inside a .usdz archive adds are not carried",
                     filename
                 );
             }
         } else if (sublayer_count > 0) {
-            if (compose_sublayers(path, impl->root_layer, impl->stage, impl->variant_prims, result.warning)) {
+            lightusd::Layer composed_layer;
+            if (compose_sublayers(path, impl->layer, impl->stage, composed_layer, impl->variant_prims, result.warning)) {
+                impl->layer = std::move(composed_layer);
                 log_usd->info("USD '{}': composed {} subLayer(s)", filename, sublayer_count);
             }
-        } else if (has_variant_prims(impl->root_layer)) {
-            compose_variant_prims(path, impl->root_layer, impl->stage, impl->variant_prims, result.warning);
+        } else if (has_variant_prims(impl->layer)) {
+            compose_variant_prims(path, impl->layer, impl->stage, impl->variant_prims, result.warning);
         }
         if (!impl->variant_prims.empty()) {
             log_usd->info("USD '{}': {} prim(s) of variant blocks are in the tree", filename, impl->variant_prims.size());

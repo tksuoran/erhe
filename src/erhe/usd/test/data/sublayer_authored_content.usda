@@ -1,0 +1,76 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Styles"
+    {
+        class "Metal"
+        {
+            custom bool erhe:Mesh:shadow_cast = false
+        }
+    }
+
+    def Xform "Shared"
+    {
+        double3 xformOp:translate = (1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Mesh "quad" (
+        inherits = </World/Styles/Metal>
+    )
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        custom bool erhe:Mesh:lightmapped = 1
+    }
+
+    def Xform "Instance" (
+        references = @reftarget.usda@
+    )
+    {
+        over "plate"
+        {
+            custom bool erhe:Mesh:shadow_cast = 0
+        }
+    }
+
+    def Xform "Stacked"
+    {
+        double3 xformOp:translate = (2, 0, 0)
+        float3 xformOp:rotateXYZ = (0, 45, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    }
+
+    def Xform "Swap" (
+        variants = {
+            string shape = "first"
+        }
+        append variantSets = "shape"
+    )
+    {
+        variantSet "shape" = {
+            "first" {
+                def Xform "tri"
+                {
+                    double3 xformOp:translate = (0, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+            }
+            "second" {
+                def Xform "tri"
+                {
+                    double3 xformOp:translate = (5, 0, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+            }
+        }
+    }
+}

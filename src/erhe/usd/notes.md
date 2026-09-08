@@ -271,11 +271,12 @@ of USD's LIVRPS), and LightUSD composes nothing at load, so the stage its
 reader builds holds the root layer alone - a file whose content lives in a
 sublayer would arrive empty. `erhe::usd::load_stage` composes the stack itself
 before anything converts the stage: it reads the file as a `lightusd::Layer`
-(once, and keeps it - see below), hands it to LightUSD's `CompositeSublayers` (which resolves
+(once), hands it to LightUSD's `CompositeSublayers` (which resolves
 each asset path against its own layer's directory, follows nested `subLayers`,
 detects cycles and merges per property, so an `over` in a stronger layer lands
 on the `def` of a weaker one as one prim) and turns the composed layer back
-into the stage with `LayerToStage`. Everything downstream - the Tydra
+into the stage with `LayerToStage`, keeping a copy of that composed layer as
+the one layer the importer reads (see below). Everything downstream - the Tydra
 conversion, the prim tree, a referenced or payload file loaded through this
 same function - sees that one composed stage.
 
@@ -299,17 +300,28 @@ same function - sees that one composed stage.
   no single authored top-level order - each layer authors its own - and
   `lightusd::Layer` holds its prim specs in a hash map, so sorting is what
   makes the composed tree the same on every run and every platform.
-- The root layer is read once, by `load_stage`, and kept on the stage
-  (`Stage::Impl::root_layer`). It is the source of everything LightUSD does
+- The layer the stage was built from is kept on the stage
+  (`Stage::Impl::layer`): the composed layer stack, with the prims of the
+  variant blocks hoisted into it. It is the source of everything LightUSD does
   not compose, so every read that asks which layer authored a thing goes to it
   rather than parsing the file again: the class prims and `inherits` arcs of
-  X3, the `Brush` prims of E4a, the authored-opinion pass of I2, the `xformOp`
-  stacks of M8 and the `variantSet` blocks of X4 all go through
-  `find_root_layer_primspec` or walk the layer directly. A prim a sublayer authors is therefore
-  content of the composed tree but contributes none of those: its transform
-  arrives as the single composed matrix Tydra reports rather than as the op
-  stack the sublayer spells, and a `class` prim of a sublayer is a prim like
-  any other.
+  X3, the `Brush` prims of E4a and the `variantSet` blocks of X4 all go
+  through `find_layer_primspec` or walk the layer directly. A prim any layer of
+  the stack authors therefore contributes those the way a root-layer prim does
+  - a sublayer's `class` prim is a style, its `over` below a reference carrier
+  is an instance override, its `Brush` prim is a brush, and its `variantSet`
+  block gets its table entry. (The `xformOp` stacks of M8 and the
+  authored-opinion pass of I2 read the composed prims of the stage instead, so
+  they see every layer either way.)
+- `LayerToStage` consumes the layer it builds from, so the kept layer is one
+  copy of the composed spec tree, taken per load. On the largest sublayer
+  stack of the survey (`intent-vfx/scenes/teapotScene.usd`, four sublayers,
+  ~4000 prim specs) the copy is ~14 ms of a ~32 s open in a Debug build.
+- Provenance (X5) names the scene's own file as the layer of a value the
+  composed layer supplies. `CompositeSublayers` merges per property and keeps
+  no per-property source layer, so which layer of the stack authored a value
+  is not recoverable without walking the stack again, which the tooltip does
+  not do.
 - A sublayer's asset path is resolved the way a `references` asset path is,
   parent-relative segments included: the composition resolver is given an
   erhe asset-resolution handler that anchors the path against the layer's
@@ -384,7 +396,7 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   override is - and so what the writer authors - is stated once, in
   `src/erhe/scene/erhe_scene/instance_override.hpp`. LightUSD does not report
   which layer an opinion on a composed prim came from, so the prim specs of
-  the root layer below the referencing prim are what is read: the specifier is
+  the composed layer below the referencing prim are what is read: the specifier is
   what tells an `over` from a `def`. A prim spec is what a layer authored, so every property it
   carries is an authored opinion and no `authored()` test is needed; the
   `erhe:Owner:name` custom attributes, `visibility`, `purpose`, the `active`
@@ -408,7 +420,7 @@ A `class` prim defines no scene content: it holds the opinions its `inherits`
 arcs hand to the prims that name it, which is what an erhe style holds
 (`doc/style-library.md` D25). Tydra's render-scene conversion reports a class
 prim as a transform node all the same, so the reader takes the class prims off
-the root layer's own prim specs and the conversion skips the class prims
+the composed layer's own prim specs and the conversion skips the class prims
 themselves (doc/usd-compatibility-plan.md X3).
 
 A class prim's `def` descendants are prototypes: prims the class holds
@@ -422,7 +434,7 @@ Style, which is what gives it the path the stage spells. A reference into a
 prototype clones it, and the clone carries `content` again. A `class`
 descendant of a class prim is a class of its own.
 
-`read_layer_composition()` walks the root layer once, before the prims are
+`read_layer_composition()` walks the composed layer once, before the prims are
 converted, and fills two things:
 
 - `Usd_data::classes`, one `Usd_class_prim` per `class` prim: its stage path,
@@ -454,7 +466,7 @@ its geometry as a child `def Mesh "geometry"` written with
 type with a mesh below it. The spellings are `usd_impl.hpp` constants, which
 the reader and the writer share.
 
-The same root-layer walk that takes the class prims records a `Brush`-typed
+The same composed-layer walk that takes the class prims records a `Brush`-typed
 prim into `Usd_data::brushes`: the stage path and name, the density and the
 normal-style token pulled out of the neutral value list, the absolute path the
 `material:binding` names, and every other authored opinion in the neutral
@@ -470,15 +482,17 @@ the editor Brush at the path the prim has.
 
 A variant set is resolved in composition, and LightUSD composes nothing, so a
 variant contributes nothing to the composed prim: the `variantSet` blocks are
-read off the root layer's own prim specs the same walk takes the class prims
-from, and the reader is what applies the selection
+read off the composed layer's own prim specs the same walk takes the class
+prims from - so a set any layer of the stack authors is in the table - and the
+reader is what applies the selection
 (doc/usd-compatibility-plan.md X4). Material bindings, property opinions and
 the prims a variant adds are all carried.
 
 The prims come across at load: `load_stage` copies the `def` children of every
 variant block into the prim carrying the set - `hoist_variant_prims`, on the
-root layer before it is built into a stage, so Tydra and everything downstream
-see ordinary prims - and gives each the sibling-unique name of the M2 rule,
+composed layer before it is built into a stage, so Tydra and everything
+downstream see ordinary prims - and gives each the sibling-unique name of the
+M2 rule,
 because two variants of one set are free to author the same name and the tree
 is not. The prims of the variant that is not selected are marked
 `active = false`, which prunes each one and its subtree from the render, the

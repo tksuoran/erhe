@@ -1,6 +1,9 @@
 #include "erhe_item/item.hpp"
+#include "erhe_scene/instance_override.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_scene/xform_op.hpp"
 #include "erhe_usd/usd.hpp"
 
 #include <gtest/gtest.h>
@@ -50,6 +53,73 @@ namespace {
 {
     const glm::mat4 parent_from_node = node->parent_from_node();
     return glm::vec3{parent_from_node[3]};
+}
+
+[[nodiscard]] auto find_class(
+    const std::vector<erhe::usd::Usd_class_prim>& classes,
+    const std::string&                            stage_path
+) -> const erhe::usd::Usd_class_prim*
+{
+    for (const erhe::usd::Usd_class_prim& class_prim : classes) {
+        if (class_prim.stage_path == stage_path) {
+            return &class_prim;
+        }
+        const erhe::usd::Usd_class_prim* found = find_class(class_prim.children, stage_path);
+        if (found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto find_value(const erhe::usd::Usd_class_prim& class_prim, const std::string& name) -> std::string
+{
+    for (const erhe::scene::Instance_override_value& value : class_prim.values) {
+        if (value.name == name) {
+            return value.text;
+        }
+    }
+    return {};
+}
+
+[[nodiscard]] auto find_inherits(
+    const erhe::usd::Usd_data& data,
+    const std::string&         stage_path
+) -> const erhe::usd::Usd_prim_inherits*
+{
+    for (const erhe::usd::Usd_prim_inherits& entry : data.prim_inherits) {
+        if (entry.stage_path == stage_path) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto find_references(
+    const erhe::usd::Usd_data& data,
+    const std::string&         stage_path
+) -> const erhe::usd::Usd_prim_references*
+{
+    for (const erhe::usd::Usd_prim_references& entry : data.references) {
+        if (entry.stage_path == stage_path) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] auto find_variant_set(
+    const erhe::usd::Usd_data& data,
+    const std::string&         stage_path,
+    const std::string&         set_name
+) -> const erhe::usd::Usd_variant_set*
+{
+    for (const erhe::usd::Usd_variant_set& set : data.variant_sets) {
+        if ((set.stage_path == stage_path) && (set.set_name == set_name)) {
+            return &set;
+        }
+    }
+    return nullptr;
 }
 
 // `sublayers.usda` lists two sublayers that disagree, and overrides one of
@@ -186,6 +256,114 @@ TEST_F(Sublayers_import, a_save_writes_one_layer_and_is_a_fixed_point)
     ASSERT_TRUE(second_save_result.error.empty()) << second_save_result.error;
 
     EXPECT_EQ(read_file(second_path), written);
+}
+
+// A sublayer's prims are prims of the composed layer, not just of the composed
+// stage: `sublayer_authored.usda` authors nothing but one `over` and lets its
+// sublayer author a `class` prim, an `inherits` arc, an `over` below a
+// reference carrier, an `xformOp` stack, an `erhe:` custom attribute and a
+// `variantSet` (doc/usd-compatibility-plan.md S1).
+class Sublayer_authored_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments load_arguments{
+            .path          = test_data_path("sublayer_authored.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(load_arguments);
+        ASSERT_TRUE(result.error.empty()) << result.error;
+    }
+
+    [[nodiscard]] auto find_mesh(const std::string& name) const -> std::shared_ptr<erhe::scene::Mesh>
+    {
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : result.data.meshes) {
+            if (mesh && (mesh->get_name() == name)) {
+                return mesh;
+            }
+        }
+        return {};
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Sublayer_authored_import, a_sublayers_class_prim_is_a_class_prim)
+{
+    const erhe::usd::Usd_class_prim* metal = find_class(result.data.classes, "/World/Styles/Metal");
+    ASSERT_NE(metal, nullptr);
+    EXPECT_EQ(metal->name, "Metal");
+    EXPECT_EQ(find_value(*metal, "Mesh.shadow_cast"), "0"); // the USDA literal of a bool
+}
+
+TEST_F(Sublayer_authored_import, a_sublayers_inherits_arc_is_recorded)
+{
+    const erhe::usd::Usd_prim_inherits* entry = find_inherits(result.data, "/World/quad");
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(entry->inherits.size(), 1u);
+    EXPECT_EQ(entry->inherits.front(), "/World/Styles/Metal");
+}
+
+TEST_F(Sublayer_authored_import, a_sublayers_over_below_a_carrier_is_an_override)
+{
+    const erhe::usd::Usd_prim_references* carrier = find_references(result.data, "/World/Instance");
+    ASSERT_NE(carrier, nullptr);
+    ASSERT_EQ(carrier->references.size(), 1u);
+    ASSERT_EQ(carrier->overrides.size(), 1u);
+    EXPECT_EQ(carrier->overrides.front().relative_path, "plate");
+    ASSERT_EQ(carrier->overrides.front().values.size(), 1u);
+    EXPECT_EQ(carrier->overrides.front().values.front().name, "Mesh.shadow_cast");
+}
+
+TEST_F(Sublayer_authored_import, a_sublayers_xform_op_stack_is_read_as_a_stack)
+{
+    const std::shared_ptr<erhe::scene::Node> node = find_node(result.data, "Stacked");
+    ASSERT_TRUE(node.operator bool());
+    const erhe::scene::Xform_op_stack* stack = node->get_xform_op_stack();
+    ASSERT_NE(stack, nullptr);
+    ASSERT_EQ(stack->ops.size(), 2u);
+    EXPECT_EQ(stack->ops[0].type, erhe::scene::Xform_op_type::translate);
+    EXPECT_EQ(stack->ops[1].type, erhe::scene::Xform_op_type::rotate_xyz);
+}
+
+TEST_F(Sublayer_authored_import, a_sublayers_erhe_attribute_is_an_authored_local_value)
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = find_mesh("quad");
+    ASSERT_TRUE(mesh.operator bool());
+    EXPECT_TRUE(mesh->has_local_value(erhe::scene::Mesh::lightmapped_property.get()));
+    EXPECT_TRUE(mesh->get_value(erhe::scene::Mesh::lightmapped_property));
+}
+
+TEST_F(Sublayer_authored_import, a_sublayers_variant_set_is_in_the_table)
+{
+    const erhe::usd::Usd_variant_set* set = find_variant_set(result.data, "/World/Swap", "shape");
+    ASSERT_NE(set, nullptr);
+    EXPECT_EQ(set->selected, "first");
+    ASSERT_EQ(set->variants.size(), 2u);
+    for (const erhe::usd::Usd_variant& variant : set->variants) {
+        EXPECT_EQ(variant.prims.size(), 1u) << variant.name;
+    }
+    // The hoisted prims are in the tree, one per variant, sibling-unique.
+    EXPECT_TRUE(find_node(result.data, "tri").operator bool());
+    EXPECT_TRUE(find_node(result.data, "tri_1").operator bool());
+}
+
+TEST_F(Sublayer_authored_import, a_root_layer_over_on_a_sublayer_def_is_one_prim)
+{
+    std::size_t shared_count = 0;
+    for (const std::shared_ptr<erhe::scene::Node>& node : result.data.nodes) {
+        if (node && (node->get_name() == "Shared")) {
+            ++shared_count;
+        }
+    }
+    EXPECT_EQ(shared_count, 1u);
+    const std::shared_ptr<erhe::scene::Node> node = find_node(result.data, "Shared");
+    ASSERT_TRUE(node.operator bool());
+    EXPECT_FLOAT_EQ(local_translation(node).x, 9.0f);
 }
 
 } // anonymous namespace
