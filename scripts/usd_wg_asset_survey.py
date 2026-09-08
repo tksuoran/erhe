@@ -47,7 +47,16 @@ Verdicts
 --------
 `works`, `works, gap: <name>`, `fails: <cause>`, `crash`. The script assigns
 a provisional verdict from the counts, the log and the screenshot; the doc
-says which rows a human then corrected by eye.
+says which rows a human then corrected by eye. Those by-eye verdicts live in
+doc/usd-wg-assets-eye.json, which every run and every --from-summary reads and
+only --eye-note writes:
+
+    py -3 scripts/usd_wg_asset_survey.py --eye-note <entry path> "<what the
+        capture shows>" [--eye-gap "<the cause it names>"]
+
+A run restricted with --only or --limit surveys those entries and keeps every
+other entry's record, so summary.json and the document always state the whole
+survey; each record carries the date it was surveyed on.
 """
 
 import argparse
@@ -801,6 +810,80 @@ def gather_gaps(records: list) -> list:
 
 
 # --------------------------------------------------------------------------
+# By-eye verdicts and summary merging
+# --------------------------------------------------------------------------
+
+DEFAULT_EYE = pathlib.Path("doc/usd-wg-assets-eye.json")
+
+
+def load_eye_notes(path: pathlib.Path) -> dict:
+    """The committed by-eye verdicts, keyed by the entry's repo-relative path.
+
+    A run rebuilds every other per-entry fact from the editor, so the one fact
+    only a human can supply lives beside the document instead of in the run's
+    summary.json.
+    """
+    if not path.is_file():
+        return {}
+    notes = {}
+    for item in json.loads(path.read_text(encoding="utf-8")):
+        notes[item["path"]] = {"note": item.get("note", ""), "gap": item.get("gap", "")}
+    return notes
+
+
+def save_eye_notes(path: pathlib.Path, notes: dict) -> None:
+    rows = [{"path": key, "note": value["note"], "gap": value["gap"]}
+            for key, value in sorted(notes.items())]
+    path.write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
+
+
+def apply_eye_notes(summary: dict, notes: dict) -> int:
+    """Put each recorded by-eye verdict on its entry; entries with none carry
+    the verdict the counts, the log and the screenshot decided."""
+    applied = 0
+    for record in summary["entries"]:
+        note = notes.get(record["path"])
+        if note is None:
+            record["eye_checked"] = False
+            record["eye_note"] = ""
+            record["eye_gap"] = ""
+            continue
+        record["eye_checked"] = True
+        record["eye_note"] = note["note"]
+        record["eye_gap"] = note["gap"]
+        # The capture outranks the counts and the log: a gap only the eye sees
+        # is a gap, even where nothing was logged and the frame is not empty.
+        if note["gap"] and (record.get("verdict") == "works"):
+            record["verdict"] = "works, gap: " + gap_name(note["gap"])
+        applied += 1
+    return applied
+
+
+def merge_entries(summary: dict, fresh: list) -> dict:
+    """Fold a run's records into the summary: a surveyed entry replaces its
+    older record, every other record is kept as it was, and the counters state
+    what the merged whole holds."""
+    entries = {record["path"]: record for record in summary.get("entries", [])}
+    for record in fresh:
+        entries[record["path"]] = record
+    records = sorted(entries.values(), key=lambda r: r["path"])
+    dates = sorted(str(r.get("surveyed_at", ""))[:10] for r in records if r.get("surveyed_at"))
+    summary["entries"] = records
+    summary["entry_count"] = len(records)
+    summary["wall_time_s"] = sum(float(r.get("survey_seconds") or 0.0) for r in records)
+    summary["run_date"] = dates[-1] if dates else summary.get("run_date", "")
+    return summary
+
+
+def entries_of_newest_run(records: list) -> int:
+    dates = [str(r.get("surveyed_at", ""))[:10] for r in records if r.get("surveyed_at")]
+    if not dates:
+        return len(records)
+    newest = max(dates)
+    return sum(1 for date in dates if date == newest)
+
+
+# --------------------------------------------------------------------------
 # Document
 # --------------------------------------------------------------------------
 
@@ -998,6 +1081,12 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("per-entry data to `logs/usd_wg_survey/summary.json` and regenerates this")
     out.append("document from it (`--from-summary` regenerates without a run). Its")
     out.append("docstring states which files of a folder count as entry assets.")
+    out.append("A run restricted to some entries (`--only`, `--limit`) surveys those and")
+    out.append("keeps every other entry's record, so the document always states the whole")
+    out.append("survey; each record carries the date it was surveyed on. The by-eye")
+    out.append("verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which")
+    out.append("a run reads and never writes; `--eye-note <entry> \"<what the capture")
+    out.append("shows>\" [--eye-gap \"<cause>\"]` is how one is recorded.")
     out.append("Screenshot paths are under `logs/`, which is gitignored: the column is a")
     out.append("pointer into the last run's output, not a committed file.")
     out.append("")
@@ -1031,8 +1120,10 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
                    "files author them. No gap row: the survey's capture uses its own camera, "
                    "not the authored one.")
         out.append("")
-    out.append(f"Run: {summary['run_date']}, {summary['entry_count']} entries, "
-               f"{summary['wall_time_s']:.0f} s wall time, {summary['editor_launches']} editor launch(es).")
+    newest = entries_of_newest_run(records)
+    on_date = "" if (newest == len(records)) else f" ({newest} of them on that date)"
+    out.append(f"Run: {summary['run_date']}{on_date}, {summary['entry_count']} entries, "
+               f"{summary['wall_time_s']:.0f} s of survey time.")
     out.append(f"Verdicts: {counts['works']} works, {counts['works, gap']} works with a gap, "
                f"{counts['fails']} fails, {counts['crash']} crash.")
     out.append("")
@@ -1136,14 +1227,64 @@ def refresh_camera_fields(args, summary: dict) -> int:
     return refreshed
 
 
+def check_bookkeeping() -> bool:
+    """Prove the two document-level rules that no editor run exercises: a
+    by-eye verdict reaches its entry from the sidecar, and a restricted run
+    keeps the entries it did not survey."""
+    ok = True
+
+    notes = {"a/one.usda": {"note": "the cube is blue", "gap": "blue is wrong"}}
+    summary = {"entries": [{"path": "a/one.usda", "eye_note": "stale", "verdict": "works"},
+                           {"path": "b/two.usda", "verdict": "works"}]}
+    applied = apply_eye_notes(summary, notes)
+    first, second = summary["entries"]
+    if (applied != 1) or (not first["eye_checked"]) or (first["eye_note"] != "the cube is blue") \
+            or (first["eye_gap"] != "blue is wrong") or second["eye_checked"] or (second["eye_note"] != "") \
+            or (first["verdict"] != "works, gap: blue is wrong") or (second["verdict"] != "works"):
+        print("self-test: FAIL - the sidecar's by-eye verdict did not reach its entry")
+        ok = False
+
+    gaps = gather_gaps([
+        {"path": "a/one.usda", "crash": False, "loaded": True, "prims": 1, "meshes": 1,
+         "diagnostics": [], "screenshot_stats": {}, "layers": [], "authored_types": [],
+         "eye_gap": "blue is wrong", "eye_note": "the cube is blue"},
+    ])
+    if not any((g["cause"] == "blue is wrong") and (g["level"] == "appearance") for g in gaps):
+        print("self-test: FAIL - a by-eye gap did not reach the gaps table")
+        ok = False
+
+    summary = {"entries": [
+        {"path": "a/one.usda", "surveyed_at": "2026-09-01T10:00:00", "survey_seconds": 4.0, "verdict": "works"},
+        {"path": "b/two.usda", "surveyed_at": "2026-09-01T10:00:10", "survey_seconds": 6.0, "verdict": "works"},
+    ]}
+    merge_entries(summary, [{"path": "b/two.usda", "surveyed_at": "2026-09-08T09:00:00",
+                             "survey_seconds": 10.0, "verdict": "crash"}])
+    paths = [record["path"] for record in summary["entries"]]
+    if (paths != ["a/one.usda", "b/two.usda"]) or (summary["entry_count"] != 2) \
+            or (summary["entries"][1]["verdict"] != "crash") \
+            or (summary["entries"][0]["verdict"] != "works") \
+            or (abs(summary["wall_time_s"] - 14.0) > 1.0e-6) or (summary["run_date"] != "2026-09-08"):
+        print("self-test: FAIL - a restricted run did not merge into the whole survey")
+        ok = False
+    if entries_of_newest_run(summary["entries"]) != 1:
+        print("self-test: FAIL - the mixed-date entry count is wrong")
+        ok = False
+
+    print("self-test: bookkeeping " + ("PASS - sidecar and merge behave" if ok else "FAIL"))
+    return ok
+
+
 def run_self_test(args) -> int:
     """Prove the capture path before trusting a survey run.
 
     Opens a scene known to hold one lit, materialled mesh, frames it and
     captures, then checks the viewport region of the PNG: an unbound or
     unframed viewport is one flat color, so a varied crop means the pipeline
-    from open_scene through frame_scene to capture_screenshot works.
+    from open_scene through frame_scene to capture_screenshot works. The
+    document's own bookkeeping - the by-eye sidecar and the subset merge - is
+    checked first, without an editor.
     """
+    bookkeeping_ok = check_bookkeeping()
     source = pathlib.Path(args.self_test_file)
     if not source.is_file():
         print(f"self-test file not found: {source}", file=sys.stderr)
@@ -1185,7 +1326,7 @@ def run_self_test(args) -> int:
     )
     print("self-test: PASS - geometry is visible in the viewport" if ok
           else "self-test: FAIL - the viewport shows no framed geometry")
-    return 0 if ok else 1
+    return 0 if (ok and bookkeeping_ok) else 1
 
 
 def main() -> int:
@@ -1208,6 +1349,12 @@ def main() -> int:
                         help="survey only entries whose repo-relative path contains this substring (repeatable)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
+    parser.add_argument("--eye", type=pathlib.Path, default=DEFAULT_EYE,
+                        help="the by-eye verdict sidecar a run reads and --eye-note writes")
+    parser.add_argument("--eye-note", nargs=2, metavar=("ENTRY", "NOTE"), default=None,
+                        help="record what the capture of ENTRY shows in the sidecar and exit")
+    parser.add_argument("--eye-gap", default="",
+                        help="with --eye-note: the appearance gap that verdict names (empty = none)")
     parser.add_argument("--refresh-cameras", action="store_true",
                         help="reopen the entries whose file authors a UsdGeomCamera and record what the imported Camera reads; needs --root")
     parser.add_argument("--compose-comparisons", action="store_true",
@@ -1216,6 +1363,19 @@ def main() -> int:
 
     args.shots.mkdir(parents=True, exist_ok=True)
     summary_path = args.shots / "summary.json"
+
+    if args.eye_note:
+        entry, note = args.eye_note
+        notes = load_eye_notes(args.eye)
+        notes[entry] = {"note": note, "gap": args.eye_gap}
+        save_eye_notes(args.eye, notes)
+        print(f"recorded the by-eye verdict of {entry} in {args.eye} ({len(notes)} entries)")
+        if summary_path.is_file():
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            apply_eye_notes(summary, notes)
+            write_document(args.doc, summary)
+            print(f"wrote {args.doc} from {summary_path}")
+        return 0
 
     if args.refresh_cameras:
         if not args.root:
@@ -1253,8 +1413,10 @@ def main() -> int:
             print(f"no summary at {summary_path}; run the survey first", file=sys.stderr)
             return 2
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        applied = apply_eye_notes(summary, load_eye_notes(args.eye))
         write_document(args.doc, summary)
-        print(f"wrote {args.doc} from {summary_path} ({summary['entry_count']} entries)")
+        print(f"wrote {args.doc} from {summary_path} ({summary['entry_count']} entries, "
+              f"{applied} by-eye verdict(s) from {args.eye})")
         return 0
 
     if not args.root:
@@ -1293,6 +1455,7 @@ def main() -> int:
             if not editor.alive():
                 editor.start(args.ready_timeout)
             print(f"[{index}/{len(entries)}] {entry['path']}", flush=True)
+            entry_started = time.monotonic()
             try:
                 record = survey_entry(editor, root, entry, args.shots, args.load_timeout,
                                       args.close_wait, args.settle_frames)
@@ -1306,6 +1469,8 @@ def main() -> int:
                     "log_tail": [], "scene_close": "", "screenshot_stats": {},
                     "load_error": "", "describe_error": "", "scene_name": "",
                 })
+            record["surveyed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+            record["survey_seconds"] = time.monotonic() - entry_started
             records.append(record)
             print(f"      {record['verdict']}", flush=True)
             if (not record["crash"]) and editor.alive():
@@ -1322,19 +1487,30 @@ def main() -> int:
     finally:
         editor.stop()
 
-    summary = {
-        "run_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-        "entry_count": len(records),
-        "wall_time_s": time.monotonic() - started,
-        "editor_launches": editor.launches,
-        "max_per_folder": args.max_per_folder,
-        "entries": records,
-    }
+    # A run restricted to some entries keeps every entry it did not survey, so
+    # the summary and the document always state the whole survey.
+    subset = bool(args.only) or (args.limit > 0)
+    if subset and summary_path.is_file():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    else:
+        summary = {"entries": []}
+    summary["editor_launches"] = editor.launches
+    summary["max_per_folder"] = args.max_per_folder
+    merge_entries(summary, records)
+    for record in summary["entries"]:
+        # The by-eye verdicts live in the sidecar; the summary states what the
+        # run itself observed.
+        for key in ("eye_checked", "eye_note", "eye_gap"):
+            record.pop(key, None)
     summary_path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    apply_eye_notes(summary, load_eye_notes(args.eye))
     write_document(args.doc, summary)
+    surveyed_now = len(records)
+    records = summary["entries"]
 
     counts = collections.Counter(verdict_class(r["verdict"]) for r in records)
-    print(f"\n{len(records)} entries in {summary['wall_time_s']:.0f} s, {editor.launches} launch(es)")
+    print(f"\n{len(records)} entries ({surveyed_now} surveyed now) in "
+          f"{time.monotonic() - started:.0f} s, {editor.launches} launch(es)")
     print(f"works {counts['works']}, works-gap {counts['works, gap']}, fails {counts['fails']}, crash {counts['crash']}")
     for gap in gather_gaps(records)[:5]:
         print(f"  {gap['count']:3d}  {gap['cause'][:90]}")

@@ -435,7 +435,7 @@ packed in a `.usdz` read out of the archive. A `UsdTransform2d` places
 its texture where usdview does, measured face on against the
 reference render and pinned by the placement case of
 `src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
-entries, 46 work as they are, none crash) leaves, in the order the
+entries, 51 work as they are, none crash) leaves, in the order the
 fixes are taken: a `PointInstancer` not instanced; a
 time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's

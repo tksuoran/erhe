@@ -1,0 +1,82 @@
+[
+ {
+  "path": "full_assets/McUsd/McUsd.usda",
+  "note": "matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing",
+  "gap": "a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd.usdz",
+  "note": "matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing",
+  "gap": "a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd_10cm.usda",
+  "note": "matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing",
+  "gap": "a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd_10cm.usdz",
+  "note": "matches the reference block for block and every label now reads the right way round, except that the stained-glass cube renders opaque and pale blue where the reference shows a see-through purple, and the sunflower and fern cards are missing",
+  "gap": "a translucent material renders opaque: the stained-glass cube hides the grass behind it and loses its purple tint"
+ },
+ {
+  "path": "full_assets/OpenChessSet/chess_set.usda",
+  "note": "the whole set loads and its pieces stand where the reference puts them",
+  "gap": ""
+ },
+ {
+  "path": "full_assets/UsdCookie/UsdCookie.usdz",
+  "note": "the cookie carries its baked texture from inside the .usdz and matches the reference, at a brighter tone",
+  "gap": ""
+ },
+ {
+  "path": "full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/tractor/asset/tractorFullAsset.usda",
+  "note": "the tractor renders in the reference's red and grey; the material bound from the kit's own material layer now reaches the meshes",
+  "gap": ""
+ },
+ {
+  "path": "full_assets/Vehicles/USD_Mini_Car_Kit/assets/wheels/wheelNormal/asset/wheelNormalAsset.usda",
+  "note": "the wheel carries a material and its shape matches the reference",
+  "gap": ""
+ },
+ {
+  "path": "test_assets/AlphaBlendModeTest/AlphaBlendModeTest.usd",
+  "note": "not judged against the reference: the file authors no camera, so the capture is a whole-model view too small to compare panel by panel",
+  "gap": ""
+ },
+ {
+  "path": "test_assets/ColorSpaceTests/UsdPreviewSurface/usduvtexture_color_test.usda",
+  "note": "one row of the 5x5 chart samples a salmon tone, the other four render white where the reference shows every swatch orange",
+  "gap": "a UsdUVTexture's colour reaches only one row of the colour-space chart; the other four render white"
+ },
+ {
+  "path": "test_assets/NormalsTextureBiasAndScale/NormalsTextureBiasAndScale.usda",
+  "note": "the three cubes are light grey and their R glyphs read the right way round, matching the reference",
+  "gap": ""
+ },
+ {
+  "path": "test_assets/NormalsTextureBiasAndScale/NormalsTextureBiasAndScale.usdz",
+  "note": "same as the .usda: light grey cubes with correctly oriented glyphs",
+  "gap": ""
+ },
+ {
+  "path": "test_assets/RoughnessTest/RoughnessTest.usdz",
+  "note": "the bands carry their Texture / Constant labels the right way round but show no specular highlight, where the reference's highlight varies with roughness 0.00 / 0.33 / 0.66",
+  "gap": "roughness does not reach the shaded surface: no band shows the reference's roughness-varying highlight"
+ },
+ {
+  "path": "test_assets/TextureCoordinateTest/TextureCoordinateTest.usda",
+  "note": "the four quadrants carry the reference's yellow, red, blue and green and every label reads the right way round",
+  "gap": ""
+ },
+ {
+  "path": "test_assets/TextureFileFormatTests/all_files.usda",
+  "note": "both panels load through the file's own camera with their labels the right way round; the eight 8-bit tiles carry their gradient and the 16-bit, 32-bit and CMYK tiles render blank",
+  "gap": "16-bit, 32-bit and CMYK images do not load: their tiles render blank where the reference shows the same gradient the 8-bit tiles carry"
+ },
+ {
+  "path": "test_assets/TextureTransformTest/TextureTransformTest.usd",
+  "note": "the upper row's U, V and UV tiles match the reference's green, blue and teal checks, and, framed face on, the lower row's rotated, scaled and rotated-plus-scaled quads land where usdview puts them: cropped per quad against the reference they correlate at 0.98, 0.94 and 0.94, against 0.97 to 0.98 for the untransformed upper row. The small Correct / Not Supported / Error cards sit near the model's origin rather than inside their quads because the asset itself un-nested those prims in 2023, after the reference screenshot was taken; against the 2022 revision of the file they land where the reference shows them.",
+  "gap": ""
+ }
+]
