@@ -125,3 +125,9 @@
 ✓commit-2{editor:append_usd_content_library_operations-attaches-skins;register/build-already-format-neutral;CarbonFrameBike-cables-match-pxr-skinned-AABB-4mm;survey-gap-row-gone}
 ✓commit-3{export:Skeleton-from-Mesh::skin-pivot;joints=arrays-not-prims;first-skin-identity-geomBind+bind=inverse(ibm),further-skins-geomBind=bind_0*ibm_0;SkelBindingAPI-vertex-primvars-narrowest-elementSize;SkelAnimation-from-Usd_save_arguments::animations;bone-materials-no-longer-in-content-library;usd224→232;roundtrip-skinning-leg+usdchecker-pass}
   K1-DONE-2026-09-08{3-commits:ff4c67107+a3ec776fd+5a2b01bb5;plan-section-2}|?user-interactive{selected/hovered-bone-proxy-color-after-bone-material-unlisting;Hierarchy-shows-Skeleton+joint-prims+Skins-scope}
+
+[TASK::E4c-texture-graphs]{2026-09-08,via-harness}
+✓survey-tooling{d43fcbb8e:--usd-root=OpenUSD-leg{pxr-composed-counts+AABB;usdrecord-Storm-render-through-erhe-camera{get_viewports-rect+camera-frame;session-layer-camera-in-stage-space};storm_match-NCC+silhouette-IoU+bounds_deviation>10%=gap};validated:RoughnessTest-0.92/TextureCoordinateTest-0.90;0%-bounds-dev-on-Z-up+0.01-unit;4wdFullAsset-55%=REAL-GAP{25-meshes-vs-5-composed;not-diagnosed}}
+✓phase-1{501584e87:erhe::usd-Usd_node_graph{pins/params-(usd_type,literal-text)/nodes/interface-outputs}+material_graph_bindings;reader=collect_layer_composition-stops-at-marked-NodeGraph;writer=generic-Shader-prims+connections;load_stage-strips-graph-wiring-from-layer-copy-for-Tydra{fork-future-work};fixture-texture_graph.usda;usd232→245}
+?phase-2{editor:collect/resolve_usd_node_graphs;JSON-params→(type,text)-mapping;links-index/slot→names;material-slot-bind;MCP-get_scene_node_graphs;roundtrip-leg;docs}→E4b→E4d→E2
+

@@ -489,7 +489,7 @@ merged in; the next full run regenerates it whole.
 Verification (holds): the script runs over every entry asset without
 leaving the editor down, and the document lists every entry file once.
 
-#### E4c Texture node graphs (M)
+#### E4c Texture node graphs (M; phase 1 landed, phase 2 next)
 
 A `Graph_texture` is the `UsdShade` network it is: a `NodeGraph` prim
 where the asset sits, one `Shader` child per node with an `erhe:texture:`
@@ -498,7 +498,9 @@ links as attribute connections, and a material slot that samples the
 graph connected to the graph's interface output in place of a
 `UsdUVTexture`. `doc/usd-texture-graphs-plan.md` owns the design, the
 record between `erhe::usd` and the editor, the two phases and the
-verification.
+verification. Phase 1 holds: `erhe::usd` reads and writes the prims as
+the neutral record (`src/erhe/usd/notes.md`, "Texture node graphs";
+`erhe_usd_tests` 245). Phase 2, the editor side, is next.
 
 #### E4b Geometry node graphs (M)
 

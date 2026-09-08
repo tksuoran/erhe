@@ -154,6 +154,16 @@ material slots, and leave the graph dirty for the next frame's
 
 ## 3. Phases
 
+Phase 1 holds (`src/erhe/usd/notes.md`, "Texture node graphs"); phase 2
+is next. Two facts phase 1 settled that section 2 did not foresee: the
+parameter travels as a (USD type, USD literal text) pair chosen by the
+editor, since the editor's nodes serialize parameters as JSON rather than
+through the property system, and `load_stage` hands Tydra a stage built
+from a copy of the composed layer with the graph wiring stripped, because
+Tydra fails a whole material over a `UsdPreviewSurface` input whose
+connection is no `UsdUVTexture` (the kept layer keeps the wiring, and the
+strip goes once the LightUSD fork's Tydra tolerates such an input).
+
 1. `erhe::usd`: the record types, the reader (marked `NodeGraph` prims,
    material slot connections to them), the writer (generic `Shader`
    prims with connections, interface outputs, material slot connection),
