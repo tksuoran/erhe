@@ -610,6 +610,17 @@ section 3 except where named.
   prefab reload. Taking it up means walking the attachments in the same
   lockstep the counterpart link uses and giving each an `over` path
   (USD authors an applied schema's attributes on the prim itself).
+- Skinning on load: a `Mesh` with the `SkelBindingAPI` is imported as a
+  plain mesh at its bind position (`SkelRoot` is a `Typed` prim, the
+  `Skeleton` and the primvars are not read), so wherever the skeleton's
+  rest pose differs from its bind pose the mesh sits where USD does not
+  put it. The survey's CarbonFrameBike shows it: its node transform chain
+  matches pxr to every digit, and its four skinned cable meshes are 16 cm
+  off. The mapping's `Skin` row names the schemas; the glTF skin path
+  (`Skin`, joint primvars, `SkelAnimation` as the animation) is the shape.
+- Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
+  the `texCoord2f` typing of `UsdUVTexture` `inputs:st`, and a texture
+  packed in a `.usdz` written as a path that names no file.
 - Physics on load: `UsdPhysics` API schemas become
   `Node_physics`, `Node_joint`, `Physics_material` and `Collision_filter`
   per the mapping's physics table, through a USD-filled sibling of

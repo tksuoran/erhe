@@ -69,6 +69,7 @@ log and the empty-viewport test decided.
 
 | Entry file | What the capture shows |
 | --- | --- |
+| full_assets/CarbonFrameBike/CarbonFrameBike.usdz | the frame, wheels and parts sit where the usdrecord render puts them, but the four Schlauch cable meshes (skinned, SkelBindingAPI to a Skeleton whose rest pose differs from its bind pose) sit 16 cm off, at their unskinned bind position; the node transform chain root-to-leaf matches pxr to every digit |
 | full_assets/McUsd/McUsd.usda | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
 | full_assets/McUsd/McUsd.usdz | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
 | full_assets/McUsd/McUsd_10cm.usda | the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces |
@@ -374,6 +375,7 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | warning | USD prim '*': the referencing layer defines prims over the reference (source) - a reference protects its structure, so they are dropped | diagnose the message and add the support it asks for |
 | 1 | warning | USD prim '*': visibility and purpose are not readable from a '*' prim | diagnose the message and add the support it asks for |
 | 1 | warning | USD stage up axis '*' has no erhe counterpart - imported as Y-up | carry a Z-up stage's up axis into the scene instead of importing it as Y-up |
+| 1 | appearance | UsdSkel skinning is not applied: a skinned mesh renders at its bind position | diagnose the message and add the support it asks for |
 | 1 | warning | [InternalError] Attribute is invalid.); using default (false). | diagnose the message and add the support it asks for |
 | 1 | error | ^ | diagnose the message and add the support it asks for |
 | 1 | warning | `*` is authored, but hole face removal is only applied when triangulation is enabled. Hole faces are kept in the polygonal output. | diagnose the message and add the support it asks for |

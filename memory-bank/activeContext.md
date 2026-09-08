@@ -85,5 +85,9 @@ prompt_queue.txt::item-0=FULL-SURVEY-RUN-ONCE{~30min;then---refresh-cameras}→E
 ?U1-follow-ups::Create-menu-Scope-entry+collect_reference_candidates-tree-walk{U4};Layout-through-Scope;transform_selection-Scope-message
 ✓user-verified-2026-09-06::viewport-picking{b05553917:rt-mask-from-Mesh-own-flags};hierarchy-Create-menu-merged{7e24e4f95:child-of-clicked-prim;no-add-buttons-in-Properties}
 
+?usd-skinning-gap::CarbonFrameBike-4-Schlauch-meshes-16cm-off{SkelBindingAPI;rest!=bind;node-chain==pxr;plan-section-6-"Skinning on load";eye-note-recorded}
+?usdchecker-writer-findings::inputs:st-texCoord2f{LightUSD-struct}+usdz-texture-path-unresolvable{notes.md-future-work};MaterialBindingAPI-applied-everywhere-FIXED-2026-09-08{usd-tests-217}
+@openusd-tools::<usd_root>-prebuilt{usdrecord=headless-Storm-reference-render;usdchecker;pxr-python-XformCache/UsdSkel;per-machine-path=memory-bank/local}
+
 [BLOCKERS]
 none

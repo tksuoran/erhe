@@ -1,5 +1,10 @@
 [
  {
+  "path": "full_assets/CarbonFrameBike/CarbonFrameBike.usdz",
+  "note": "the frame, wheels and parts sit where the usdrecord render puts them, but the four Schlauch cable meshes (skinned, SkelBindingAPI to a Skeleton whose rest pose differs from its bind pose) sit 16 cm off, at their unskinned bind position; the node transform chain root-to-leaf matches pxr to every digit",
+  "gap": "UsdSkel skinning is not applied: a skinned mesh renders at its bind position"
+ },
+ {
   "path": "full_assets/McUsd/McUsd.usda",
   "note": "the opaque blocks match the reference; the purple stained glass cube is see-through and both cross-shaped cards - sunflower and fern - show both of their faces",
   "gap": ""

@@ -394,6 +394,8 @@ is then saved a second time and the two `.usda` files are compared line by
 line - the writer is a function of the scene, so a save of a reloaded scene
 reproduces its own input file, and any line that differs is reported as a
 failing check. `usdchecker` runs on the first saved file when it is on PATH
-or `--usdchecker` / `ERHE_USDCHECKER` names it, and prints SKIP otherwise;
+or `--usdchecker` / `ERHE_USDCHECKER` names it (the `usdchecker.bat`
+wrapper of the OpenUSD binary distribution's `scripts/` folder is what to
+name on Windows), and prints SKIP otherwise;
 the whole section skips when the editor was built with
 `ERHE_USD_LIBRARY=none`.
