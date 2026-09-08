@@ -1967,6 +1967,12 @@ def section_usd_round_trip(usdchecker_arg):
     # their counts, density, normal style and material, and their geometry
     # must not appear as a mesh of the scene.
     usd_round_trip_leg(S, "brushes.usda", "brushes", edits=[], extra_keys=["brushes"])
+    # skinning.usda holds a SkelRoot with a Skeleton and one skinned Mesh
+    # (doc/usd-compatibility-plan.md K1). The skeleton comes back as the
+    # Skeleton prim it was, its joints as the same prims below it - a joint is
+    # written as an entry of `joints`, so the reload must not find a second
+    # set of them - and the mesh keeps its binding.
+    skinning_saved = usd_round_trip_leg(S, "skinning.usda", "skinning", edits=[], extra_keys=[])
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 
@@ -1974,8 +1980,10 @@ def section_usd_round_trip(usdchecker_arg):
     if usdchecker is None:
         skip(S, "usdchecker", "not found (pass --usdchecker or set ERHE_USDCHECKER; "
              "it ships with an OpenUSD build)")
-    elif authored_saved is not None and authored_saved.is_file():
-        run_usdchecker(S, usdchecker, authored_saved)
+    else:
+        for saved in [authored_saved, skinning_saved]:
+            if saved is not None and saved.is_file():
+                run_usdchecker(S, usdchecker, saved)
 
 
 # --------------------------------------------------------------------------

@@ -787,6 +787,13 @@ public:
     std::vector<Usd_save_variant_set>                       variant_sets;
     // The brushes the scene's tree holds, one entry per brush prim.
     std::vector<Usd_save_brush>                             brushes;
+    // The scene's animations (doc/usd-compatibility-plan.md K1). The writer
+    // takes the channels of them that drive a joint prim of a skeleton it
+    // writes and authors those as that skeleton's `SkelAnimation` prim; every
+    // other channel is carried by the sampled `xformOp`s of the prim it
+    // drives, so an animation the list does not name loses only its joint
+    // channels.
+    std::vector<std::shared_ptr<erhe::scene::Animation>>    animations;
     // The point instancers the scene's tree holds, one entry per instancer
     // prim. An instancer prim of the tree the list does not name is written
     // with its children as plain prims and no instance arrays, and named in a

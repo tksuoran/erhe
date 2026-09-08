@@ -25,6 +25,8 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,6 +37,20 @@ namespace {
 [[nodiscard]] auto test_data_path(const char* file_name) -> std::filesystem::path
 {
     return std::filesystem::path{ERHE_USD_TEST_DATA_DIR} / file_name;
+}
+
+[[nodiscard]] auto temporary_path(const char* file_name) -> std::filesystem::path
+{
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() / "erhe_usd_skinning_tests";
+    std::error_code             error_code{};
+    std::filesystem::create_directories(directory, error_code);
+    return directory / file_name;
+}
+
+[[nodiscard]] auto read_file(const std::filesystem::path& path) -> std::string
+{
+    std::ifstream stream{path, std::ios::binary};
+    return std::string{std::istreambuf_iterator<char>{stream}, std::istreambuf_iterator<char>{}};
 }
 
 [[nodiscard]] auto find_prim(const std::shared_ptr<erhe::Hierarchy>& root, const std::string& name) -> std::shared_ptr<erhe::Hierarchy>
@@ -329,6 +345,257 @@ TEST_F(Usd_skel_animation, an_unauthored_geom_bind_transform_is_the_identity)
     expected_tip[3] = glm::vec4{0.0f, -4.0f, 0.0f, 1.0f};
     expect_matrix_near(skin->skin_data.inverse_bind_matrices[0], glm::mat4{1.0f}, "inverse bind matrix 0");
     expect_matrix_near(skin->skin_data.inverse_bind_matrices[1], expected_tip,    "inverse bind matrix 1");
+}
+
+// The export half (doc/usd-compatibility-plan.md K1): the `Skeleton` prim is
+// written back from the joint prims and the skin, the skinned mesh carries
+// the `SkelBindingAPI`, and reading either file back gives the same skin.
+
+class Skinning_round_trip : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        source_root = std::make_shared<erhe::scene::Xform>("import_root");
+        source      = load(test_data_path("skinning.usda"), source_root);
+        ASSERT_TRUE(source.error.empty()) << source.error;
+
+        written_path = temporary_path("skinning.usda");
+        erhe::usd::Usd_save_arguments save_arguments{
+            .path      = written_path,
+            .root_node = source_root
+        };
+        save_arguments.time_codes_per_second = source.data.time_codes.time_codes_per_second;
+        const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+        ASSERT_TRUE(save.error.empty()) << save.error;
+
+        reloaded_root = std::make_shared<erhe::scene::Xform>("reload_root");
+        reloaded      = load(written_path, reloaded_root);
+        ASSERT_TRUE(reloaded.error.empty()) << reloaded.error;
+    }
+
+    std::shared_ptr<erhe::scene::Node> source_root;
+    std::shared_ptr<erhe::scene::Node> reloaded_root;
+    std::filesystem::path              written_path;
+    erhe::usd::Usd_load_result         source;
+    erhe::usd::Usd_load_result         reloaded;
+};
+
+// The skeleton is written as the `Skeleton` prim it was read as, with the
+// joint paths and the two poses; the joints themselves are those arrays
+// rather than prims of the stage.
+TEST_F(Skinning_round_trip, the_skeleton_prim_carries_the_joint_arrays)
+{
+    const std::string written = read_file(written_path);
+    EXPECT_NE(written.find("def SkelRoot \"rig\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Skeleton \"skel\""), std::string::npos) << written;
+    EXPECT_NE(written.find("uniform token[] joints = [\"Root\", \"Root/Tip\"]"), std::string::npos) << written;
+    EXPECT_NE(written.find("bindTransforms"), std::string::npos) << written;
+    EXPECT_NE(written.find("restTransforms"), std::string::npos) << written;
+    EXPECT_EQ(written.find("def Xform \"Root\""), std::string::npos) << written;
+    EXPECT_EQ(written.find("def Xform \"Tip\""), std::string::npos) << written;
+}
+
+// The skinned mesh binds its skeleton and applies the schema next to the
+// relationship - usdchecker fails a prim that has one without the other -
+// and carries the influences as `vertex` primvars of the width erhe uses.
+TEST_F(Skinning_round_trip, the_skinned_mesh_carries_the_binding)
+{
+    const std::string written = read_file(written_path);
+    EXPECT_NE(written.find("apiSchemas = [\"SkelBindingAPI\"]"), std::string::npos) << written;
+    EXPECT_NE(written.find("rel skel:skeleton = </root/rig/skel>"), std::string::npos) << written;
+    EXPECT_NE(written.find("int[] primvars:skel:jointIndices"), std::string::npos) << written;
+    EXPECT_NE(written.find("float[] primvars:skel:jointWeights"), std::string::npos) << written;
+    EXPECT_NE(written.find("elementSize = 2"), std::string::npos) << written;
+    // erhe keeps only `inverse(bind_j) * geomBindTransform`, so the first
+    // skin of a skeleton is written through the identity geometry bind
+    // transform with the product folded into `bindTransforms`.
+    EXPECT_EQ(written.find("geomBindTransform"), std::string::npos) << written;
+}
+
+// The skin the reload gives is the one the source file gave: the same joint
+// prims in the same order and the same inverse bind matrices, which is what
+// makes the two files pose the mesh alike.
+TEST_F(Skinning_round_trip, the_skin_survives_the_round_trip)
+{
+    ASSERT_EQ(source.data.skins.size(), 1u);
+    ASSERT_EQ(reloaded.data.skins.size(), 1u);
+    const erhe::scene::Skin& before = *source.data.skins.front().get();
+    const erhe::scene::Skin& after  = *reloaded.data.skins.front().get();
+
+    ASSERT_EQ(after.skin_data.joints.size(), before.skin_data.joints.size());
+    for (std::size_t joint_index = 0, end = before.skin_data.joints.size(); joint_index < end; ++joint_index) {
+        EXPECT_EQ(after.skin_data.joints[joint_index]->get_name(), before.skin_data.joints[joint_index]->get_name());
+        expect_matrix_near(
+            after.skin_data.inverse_bind_matrices[joint_index],
+            before.skin_data.inverse_bind_matrices[joint_index],
+            "inverse bind matrix"
+        );
+    }
+
+    const std::shared_ptr<erhe::Hierarchy> skeleton = find_prim(reloaded_root, "skel");
+    ASSERT_NE(skeleton, nullptr);
+    EXPECT_EQ(prim_type_name(skeleton), "Skeleton");
+    EXPECT_EQ(after.skin_data.skeleton.get(), static_cast<erhe::scene::Node*>(skeleton.get()));
+
+    const std::shared_ptr<erhe::Hierarchy> body = find_prim(reloaded_root, "body");
+    ASSERT_NE(body, nullptr);
+    ASSERT_TRUE(erhe::is<erhe::scene::Mesh>(body.get()));
+    EXPECT_EQ(static_cast<const erhe::scene::Mesh*>(body.get())->skin, reloaded.data.skins.front());
+}
+
+// The influences the vertices carry are the ones the source file gave.
+TEST_F(Skinning_round_trip, the_joint_influences_survive_the_round_trip)
+{
+    const std::shared_ptr<erhe::Hierarchy> before = find_prim(source_root,   "body");
+    const std::shared_ptr<erhe::Hierarchy> after  = find_prim(reloaded_root, "body");
+    ASSERT_NE(before, nullptr);
+    ASSERT_NE(after,  nullptr);
+    const std::shared_ptr<erhe::geometry::Geometry> before_geometry = geometry_of(*static_cast<const erhe::scene::Mesh*>(before.get()));
+    const std::shared_ptr<erhe::geometry::Geometry> after_geometry  = geometry_of(*static_cast<const erhe::scene::Mesh*>(after.get()));
+    ASSERT_NE(before_geometry, nullptr);
+    ASSERT_NE(after_geometry,  nullptr);
+    ASSERT_EQ(after_geometry->get_mesh().vertices.nb(), before_geometry->get_mesh().vertices.nb());
+
+    erhe::geometry::Mesh_attributes& before_attributes = before_geometry->get_attributes();
+    erhe::geometry::Mesh_attributes& after_attributes  = after_geometry->get_attributes();
+    for (GEO::index_t vertex = 0; vertex < before_geometry->get_mesh().vertices.nb(); ++vertex) {
+        const std::optional<GEO::vec4u> before_indices = before_attributes.vertex_joint_indices(0).try_get(vertex);
+        const std::optional<GEO::vec4u> after_indices  = after_attributes.vertex_joint_indices(0).try_get(vertex);
+        const std::optional<GEO::vec4f> before_weights = before_attributes.vertex_joint_weights(0).try_get(vertex);
+        const std::optional<GEO::vec4f> after_weights  = after_attributes.vertex_joint_weights(0).try_get(vertex);
+        ASSERT_TRUE(before_indices.has_value() && after_indices.has_value()) << "vertex " << vertex;
+        ASSERT_TRUE(before_weights.has_value() && after_weights.has_value()) << "vertex " << vertex;
+        for (GEO::index_t slot = 0; slot < 4; ++slot) {
+            EXPECT_NEAR(after_weights.value()[slot], before_weights.value()[slot], 1e-5f) << "vertex " << vertex << " slot " << slot;
+            if (before_weights.value()[slot] > 0.0f) {
+                EXPECT_EQ(after_indices.value()[slot], before_indices.value()[slot]) << "vertex " << vertex << " slot " << slot;
+            }
+        }
+    }
+}
+
+// Writing what was just read back reaches a fixed point: the second file is
+// the first one, byte for byte.
+TEST_F(Skinning_round_trip, second_save_is_byte_identical)
+{
+    const std::filesystem::path second_path = temporary_path("skinning_second.usda");
+    erhe::usd::Usd_save_arguments save_arguments{
+        .path      = second_path,
+        .root_node = reloaded_root
+    };
+    save_arguments.time_codes_per_second = reloaded.data.time_codes.time_codes_per_second;
+    const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+    ASSERT_TRUE(save.error.empty()) << save.error;
+    EXPECT_EQ(read_file(second_path), read_file(written_path));
+}
+
+class Skel_animation_round_trip : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        source_root = std::make_shared<erhe::scene::Xform>("import_root");
+        source      = load(test_data_path("skel_animation.usda"), source_root);
+        ASSERT_TRUE(source.error.empty()) << source.error;
+
+        written_path = temporary_path("skel_animation.usda");
+        erhe::usd::Usd_save_arguments save_arguments{
+            .path      = written_path,
+            .root_node = source_root
+        };
+        save_arguments.animations            = source.data.animations;
+        save_arguments.time_codes_per_second = source.data.time_codes.time_codes_per_second;
+        const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+        ASSERT_TRUE(save.error.empty()) << save.error;
+
+        reloaded_root = std::make_shared<erhe::scene::Xform>("reload_root");
+        reloaded      = load(written_path, reloaded_root);
+        ASSERT_TRUE(reloaded.error.empty()) << reloaded.error;
+    }
+
+    [[nodiscard]] auto find_channel(
+        const erhe::scene::Animation&     animation,
+        const std::string&                joint_name,
+        const erhe::scene::Animation_path path
+    ) const -> const erhe::scene::Animation_channel*
+    {
+        for (const erhe::scene::Animation_channel& channel : animation.channels) {
+            if (channel.target && (channel.target->get_name() == joint_name) && (channel.path == path)) {
+                return &channel;
+            }
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<erhe::scene::Node> source_root;
+    std::shared_ptr<erhe::scene::Node> reloaded_root;
+    std::filesystem::path              written_path;
+    erhe::usd::Usd_load_result         source;
+    erhe::usd::Usd_load_result         reloaded;
+};
+
+// The joint channels are written as the skeleton's own `SkelAnimation` prim,
+// which the skeleton names in `skel:animationSource`.
+TEST_F(Skel_animation_round_trip, the_skeleton_names_its_animation)
+{
+    const std::string written = read_file(written_path);
+    EXPECT_NE(written.find("def SkelAnimation \"anim\""), std::string::npos) << written;
+    EXPECT_NE(written.find("rel skel:animationSource = </root/rig/skel/anim>"), std::string::npos) << written;
+    EXPECT_NE(written.find("translations.timeSamples"), std::string::npos) << written;
+    EXPECT_NE(written.find("rotations.timeSamples"), std::string::npos) << written;
+    EXPECT_NE(written.find("scales.timeSamples"), std::string::npos) << written;
+    // The layer's time coordinates are authored because samples were written.
+    EXPECT_NE(written.find("timeCodesPerSecond = 24"), std::string::npos) << written;
+    EXPECT_NE(written.find("endTimeCode = 24"), std::string::npos) << written;
+}
+
+// The reload gives the same joint channels, keyed at the same seconds with
+// the same values.
+TEST_F(Skel_animation_round_trip, the_joint_channels_survive_the_round_trip)
+{
+    ASSERT_EQ(source.data.animations.size(), 1u);
+    ASSERT_EQ(reloaded.data.animations.size(), 1u);
+    const erhe::scene::Animation& before = *source.data.animations.front().get();
+    const erhe::scene::Animation& after  = *reloaded.data.animations.front().get();
+    EXPECT_EQ(after.channels.size(), before.channels.size());
+
+    for (const char* const joint_name : {"Root", "Tip"}) {
+        for (const erhe::scene::Animation_path path : {
+            erhe::scene::Animation_path::TRANSLATION,
+            erhe::scene::Animation_path::ROTATION,
+            erhe::scene::Animation_path::SCALE
+        }) {
+            const erhe::scene::Animation_channel* before_channel = find_channel(before, joint_name, path);
+            const erhe::scene::Animation_channel* after_channel  = find_channel(after,  joint_name, path);
+            ASSERT_NE(before_channel, nullptr) << joint_name;
+            ASSERT_NE(after_channel,  nullptr) << joint_name;
+            const erhe::scene::Animation_sampler& before_sampler = before.samplers[before_channel->sampler_index];
+            const erhe::scene::Animation_sampler& after_sampler  = after.samplers[after_channel->sampler_index];
+            ASSERT_EQ(after_sampler.timestamps.size(), before_sampler.timestamps.size()) << joint_name;
+            ASSERT_EQ(after_sampler.data.size(),       before_sampler.data.size())       << joint_name;
+            for (std::size_t key = 0; key < before_sampler.timestamps.size(); ++key) {
+                EXPECT_NEAR(after_sampler.timestamps[key], before_sampler.timestamps[key], 1e-5f) << joint_name;
+            }
+            for (std::size_t value = 0; value < before_sampler.data.size(); ++value) {
+                EXPECT_NEAR(after_sampler.data[value], before_sampler.data[value], 1e-3f) << joint_name << " value " << value;
+            }
+        }
+    }
+}
+
+TEST_F(Skel_animation_round_trip, second_save_is_byte_identical)
+{
+    const std::filesystem::path second_path = temporary_path("skel_animation_second.usda");
+    erhe::usd::Usd_save_arguments save_arguments{
+        .path      = second_path,
+        .root_node = reloaded_root
+    };
+    save_arguments.animations            = reloaded.data.animations;
+    save_arguments.time_codes_per_second = reloaded.data.time_codes.time_codes_per_second;
+    const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+    ASSERT_TRUE(save.error.empty()) << save.error;
+    EXPECT_EQ(read_file(second_path), read_file(written_path));
 }
 
 } // anonymous namespace

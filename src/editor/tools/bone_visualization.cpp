@@ -4,7 +4,6 @@
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "assets/asset_manager.hpp"
-#include "content_library/content_library.hpp"
 #include "app_settings.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/scene_root.hpp"
@@ -367,10 +366,18 @@ void Bone_visualization::ensure_primitive()
 
     // Builtin-scope assets ({builtin, material, <name>}): the three materials
     // are editor-owned and outlive every scene on purpose (they are shared by
-    // the proxies of all scenes). Without this, closing a scene whose content
-    // library lists them makes the scene-close leak watchdog report them as
-    // leaked; as builtins they are "intentionally pinned by the asset
-    // manager" instead.
+    // the proxies of all scenes), and as builtins they are "intentionally
+    // pinned by the asset manager" for the scene-close leak watchdog.
+    //
+    // No scene's content library lists them: the index lists what a scene
+    // OWNS (content_library.hpp), and a material a mesh of the scene binds
+    // reaches the render through the material set's own per-object
+    // membership, which the mesh hooks feed
+    // (Scene_root::enqueue_mesh_materials) - the same way the material
+    // preview's inspected material does. Listing them made every save of a
+    // skinned scene write three `bone` Material prims into the file, which a
+    // reload then owned alongside these, duplicating them once per round
+    // trip.
     if (m_context.asset_manager != nullptr) {
         m_context.asset_manager->register_builtin(Asset_type::material, m_material);
         m_context.asset_manager->register_builtin(Asset_type::material, m_selected_material);
@@ -509,10 +516,9 @@ void Bone_visualization::update_proxy_material(Proxy& proxy)
     proxy.hovered  = hovered;
 }
 
-void Bone_visualization::add_skin_proxies(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Skin>& skin)
+void Bone_visualization::add_skin_proxies(const std::shared_ptr<erhe::scene::Skin>& skin)
 {
     ensure_primitive();
-    register_materials(scene_root);
 
     const std::vector<std::shared_ptr<erhe::scene::Node>>& joints = skin->skin_data.joints;
     for (std::size_t i = 0, end = joints.size(); i < end; ++i) {
@@ -563,7 +569,7 @@ void Bone_visualization::on_skin_registered(Skin_registered_message& message)
     }
     if (message.registered) {
         if (message.scene_root) {
-            add_skin_proxies(*message.scene_root, message.skin);
+            add_skin_proxies(message.skin);
         }
     } else {
         remove_skin_proxies(message.skin.get());
@@ -576,7 +582,6 @@ void Bone_visualization::on_close_scene(Close_scene_message& message)
     // (or a joint freed with the scene) must not leave proxies keeping items of
     // the closed scene alive - the scene-close leak watchdog would flag them.
     Scene_root* const scene_root = message.scene_root.get();
-    m_material_scene_roots.erase(scene_root);
     for (auto i = m_proxies.begin(); i != m_proxies.end(); ) {
         const std::shared_ptr<erhe::scene::Node> joint = i->second.joint.lock();
         const bool drop = !joint || (joint->get_item_host() == scene_root) || (joint->get_item_host() == nullptr);
@@ -687,24 +692,6 @@ void Bone_visualization::update_hover(const erhe::scene::Node* old_joint, const 
             update_proxy_material(i->second);
         }
     }
-}
-
-void Bone_visualization::register_materials(Scene_root& scene_root)
-{
-    if (m_material_scene_roots.find(&scene_root) != m_material_scene_roots.end()) {
-        return;
-    }
-    const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
-    if (!content_library) {
-        return;
-    }
-    {
-        std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{content_library->mutex};
-        content_library->add(m_material);
-        content_library->add(m_selected_material);
-        content_library->add(m_hover_material);
-    }
-    m_material_scene_roots.insert(&scene_root);
 }
 
 auto Bone_visualization::get_joint_for_proxy(const erhe::scene::Mesh* mesh) const -> std::shared_ptr<erhe::scene::Node>

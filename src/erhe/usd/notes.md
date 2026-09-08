@@ -722,6 +722,53 @@ the conversion builds exactly that.
   skeleton with no animation source contributes no channel and its joints stay
   at the rest pose, which is what pxr renders too.
 
+A save writes that model back. `Mesh::skin` is all the writer reads: a skin
+names its joints in `joints` order and its pivot, and that pivot is the prim
+the `Skeleton` is written on, so `Usd_save_arguments` carries no skin list.
+The one exception is the joint channels, which are channels of an
+`erhe::scene::Animation` rather than of the tree, so the caller hands the
+scene's animations over in `Usd_save_arguments::animations`.
+
+- The prim that is a skin's pivot is written as a `Skeleton` prim - as is a
+  prim still carrying the authored `Skeleton` token that skins nothing, then
+  with no joint arrays and one warning. Its `joints` are the joint prims'
+  paths below it, sanitized segment by segment, its `restTransforms` are the
+  joint prims' own local transforms, and its `bindTransforms` are recomputed
+  from the skin. A joint is not a prim of the written stage - USD carries it
+  as those array entries - so the planning pass leaves the joint prims out;
+  a prim the user parented under a joint is written where the joint sits,
+  with the joint's local transform composed into it, the way an `import_root`
+  container's children are.
+- erhe keeps only the product `inverse_bind_j = inverse(bind_j) *
+  geomBindTransform`, never the two factors, so the writer picks the split:
+  the first skin registered for a skeleton is written through the identity
+  geometry bind transform, with `bindTransforms[j] = inverse(inverse_bind_j)`,
+  and every further skin of that skeleton keeps those bind transforms and
+  carries the difference as its own `primvars:skel:geomBindTransform`,
+  `bind_0 * inverse_bind_0`. Reading either back gives exactly the inverse
+  bind matrices the skins hold, which is what makes a save a fixed point
+  although the file's original bind pose is not kept; UsdSkel poses the mesh
+  the same way either split is written.
+- A skinned `Mesh` prim applies the `SkelBindingAPI` next to its
+  `skel:skeleton` relationship - usdchecker fails a prim that has one without
+  the other - and writes `primvars:skel:jointIndices` / `jointWeights` as
+  `vertex` primvars indexed by the point index, which is the domain erhe
+  carries them in. `elementSize` is the narrowest width that holds every
+  influence of the mesh: erhe pads a vertex out to the width of the sets it
+  fills and reading a narrower `elementSize` back pads it again, so the
+  narrowest width is what makes a second save byte-identical. The weights are
+  the normalized ones erhe holds, not the file's own.
+- The joint channels of `Usd_save_arguments::animations` are written as one
+  `SkelAnimation` prim below the skeleton, which names it in
+  `skel:animationSource`. USD keys the translation, rotation and scale of
+  every joint of a skeleton on one shared timeline, so the time codes written
+  are the union of the times those channels key and a joint no channel
+  reaches contributes its rest pose at each of them. The prim is rebuilt from
+  the channels rather than written from the tree - Tydra hands the import the
+  channels, not the prim, so the tree's `SkelAnimation` prim carries nothing -
+  and it keeps the name the file authored. A skeleton no channel drives
+  writes neither the prim nor the relationship.
+
 ### Time samples
 
 A stage is evaluated at one time code: the root layer stack's
@@ -1240,7 +1287,13 @@ rig with a `SkelAnimation` and no `geomBindTransform`.
 `test_usd_skinning.cpp` asserts the `SkelRoot` / `Skeleton` prim classes and
 tokens, the joint prim paths and rest transforms, the skin's joints, pivot and
 inverse bind matrices, the normalized per-vertex influences, and the joint
-channels with their samples in seconds.
+channels with their samples in seconds. It round-trips both files as well:
+that the `Skeleton` prim comes back with its joint arrays and that no joint
+is written as a prim of its own, that the mesh applies the `SkelBindingAPI`
+next to its `skel:skeleton` relationship and carries the influences at the
+`elementSize` erhe uses, that the reload gives the same skin and the same
+per-vertex influences, that the joint channels come back keyed at the same
+seconds with the same values, and that a second save is byte-identical.
 
 `test_usd_export.cpp` round-trips both data files through `save_usda` and
 `load_usd` and asserts that the node names, the mesh topology, the subset

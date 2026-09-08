@@ -18,6 +18,7 @@
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_property/property_string.hpp"
 #include "erhe_property/property_value.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_scene/camera.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/light.hpp"
@@ -25,6 +26,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_scene/trs_transform.hpp"
 #include "erhe_scene/xform_op.hpp"
 
@@ -42,11 +44,13 @@
 #include "usdGeom.hh"
 #include "usdShade.hh"
 #include "usdLux.hh"
+#include "usdSkel.hh"
 #include "pprint-enum.hh"
 
 #include <fmt/format.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/trigonometric.hpp>
 
 #include <algorithm>
@@ -74,6 +78,29 @@ constexpr const char* c_world_prim_name = "World";
 // is recognized by its token; a style prim is written as a USD `class` prim
 // (doc/usd-compatibility-plan.md X3).
 constexpr std::string_view c_style_class_type_name{"Style"};
+
+// The `SkelAnimation` prim name a skeleton's joint channels are written
+// under (doc/usd-compatibility-plan.md K1). USD carries no name of its own
+// for it - Tydra hands the importer the channels, not the prim - so the
+// writer fixes one, which is what keeps a second save byte-identical.
+constexpr std::string_view c_skel_animation_prim_name{"anim"};
+
+// The prim type a skeleton's joint channels are authored under.
+constexpr std::string_view c_skel_animation_prim_type_name{"SkelAnimation"};
+
+// How many joint influences erhe carries per vertex: two attribute sets of
+// four (joint index, weight) pairs, the shape the importer fills them in.
+constexpr std::size_t c_joints_per_set{4};
+constexpr std::size_t c_joint_sets    {2};
+constexpr std::size_t c_joint_slots   {c_joints_per_set * c_joint_sets};
+
+// Whether a mesh accumulator collects the joint influences of the points it
+// appends: only a skinned mesh writes them, and a brush's geometry child
+// never does.
+enum class Skin_influences {
+    skip,
+    collect
+};
 
 // The focal length every exported perspective camera gets. USD is
 // physical-camera-first and erhe stores the two field-of-view angles, so one
@@ -435,6 +462,22 @@ public:
     std::vector<Plan_prim>           children;
 };
 
+// One skeleton the writer authors (doc/usd-compatibility-plan.md K1): the
+// prim that is the pivot of at least one skin, that skin's joints in
+// `joints` order, and the bind transform each joint is written with. The
+// first skin registered for a skeleton is the one the bind pose comes from.
+class Skeleton_record final
+{
+public:
+    const erhe::scene::Node*              node{nullptr};
+    std::vector<const erhe::scene::Node*> joints;
+    std::vector<glm::mat4>                bind_transforms;
+    // The name of the `SkelAnimation` prim the joint channels are written
+    // under: the one the file authored when it had one, so a save keeps the
+    // file's own spelling.
+    std::string                           animation_prim_name;
+};
+
 // One texture shader of one material's shading network: the material and
 // the slot the shader reads. A material is identified by the object rather
 // than by its place in the caller's list, because the scene tree - not that
@@ -721,6 +764,13 @@ public:
                 }
             }
         }
+
+        // The skeletons the tree's skinned meshes name, before anything is
+        // planned: a joint is an entry of its skeleton's `joints` rather than
+        // a prim, so the plan has to know which prims are joints
+        // (doc/usd-compatibility-plan.md K1).
+        collect_skeletons(*m_arguments.root_node.get());
+        collect_skeleton_tokens(*m_arguments.root_node.get());
 
         // Pass one: where every prim lands on the stage. A prim's path is
         // only known once its ancestors have their sanitized, sibling-unique
@@ -1480,6 +1530,24 @@ private:
                 );
                 continue;
             }
+            if (m_skel_animation_items.count(child_prim) != 0) {
+                continue; // rebuilt by the Skeleton prim from the joint channels
+            }
+            if ((child_node != nullptr) && (m_joint_items.count(child_prim) != 0)) {
+                // A joint is an entry of its skeleton's `joints` and
+                // `restTransforms`, not a prim: the Skeleton prim writes it
+                // (doc/usd-compatibility-plan.md K1). A prim parented under a
+                // joint is written where the joint sits, with the joint's own
+                // local transform composed into it, the way an import_root
+                // container's children are.
+                plan_children(
+                    *child_node,
+                    pre_transform * child_node->parent_from_node_transform().get_matrix(),
+                    names,
+                    out_prims
+                );
+                continue;
+            }
             if ((flags & erhe::Item_flags::render_proxy) != 0) {
                 continue;
             }
@@ -1780,6 +1848,9 @@ private:
             if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
                 m_style_paths[prim.item] = prim.path;
             }
+            if ((prim.item != nullptr) && (m_skeletons.count(prim.item) != 0)) {
+                m_skeleton_paths[prim.item] = prim.path;
+            }
             if ((prim.references != nullptr) && (prim.item != nullptr)) {
                 record_instance_content_material_paths(*prim.item, prim.path);
             }
@@ -1797,6 +1868,9 @@ private:
         }
         if ((prim.item != nullptr) && is_style_prim(*prim.item)) {
             m_style_paths[prim.item] = prim.path;
+        }
+        if ((prim.item != nullptr) && (m_skeletons.count(prim.item) != 0)) {
+            m_skeleton_paths[prim.item] = prim.path;
         }
         record_resource_paths(prim.children);
         for (const Plan_variant_prim& variant_prim : prim.variant_prims) {
@@ -2630,6 +2704,15 @@ private:
         );
 
         const Instance_root_override& override_root = plan_prim.override_root;
+
+        // A prim that is the pivot of a skin is the file's `Skeleton`
+        // (doc/usd-compatibility-plan.md K1), which is a transformable prim
+        // of its own kind rather than the plain `Xform` it would otherwise be.
+        const std::map<const erhe::Item_base*, Skeleton_record>::const_iterator skeleton = m_skeletons.find(&node);
+        if (skeleton != m_skeletons.end()) {
+            return write_skeleton_prim(node, skeleton->second, plan_prim, prim_name, matrix, override_root);
+        }
+
         lightusd::Prim prim =
             mesh            ? write_mesh_prim           (node, *mesh.get(),   prim_name, matrix, override_root) :
             camera          ? write_camera_prim         (node, *camera.get(), prim_name, matrix, override_root) :
@@ -2875,6 +2958,433 @@ private:
     }
 
     // -------------------------------------------------------------------
+    // Skinning
+    // -------------------------------------------------------------------
+
+    // The skeletons the tree's skinned meshes name (K1). `Mesh::skin` is all
+    // the writer needs: a skin names its joints in `joints` order and its
+    // pivot, and that pivot is the prim the `Skeleton` is written on.
+    //
+    // USD authors the bind pose on the skeleton and the geometry bind
+    // transform on the mesh, while erhe keeps only their product
+    // `inverse_bind_j = inverse(bind_j) * geomBindTransform`. The first skin
+    // of a skeleton is therefore written through the identity geometry bind
+    // transform, with `bindTransforms[j] = inverse(inverse_bind_j)`; every
+    // further skin of the same skeleton keeps those bind transforms and
+    // carries the difference as its own `primvars:skel:geomBindTransform`,
+    // `bind_0 * inverse_bind_0`. Reading either back gives exactly the
+    // inverse bind matrices the skins hold, which is what makes a save a
+    // fixed point although the file's original bind pose is not kept.
+    void collect_skeletons(const erhe::Hierarchy& parent)
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+            if (!child) {
+                continue;
+            }
+            const erhe::scene::Mesh* mesh = dynamic_cast<const erhe::scene::Mesh*>(child.get());
+            if ((mesh != nullptr) && mesh->skin) {
+                register_skin(*mesh, *mesh->skin.get());
+            }
+            collect_skeletons(*child.get());
+        }
+    }
+
+    // A prim carrying the authored `Skeleton` token that no skin of the tree
+    // names: it is still written as the `Skeleton` prim it was read as, with
+    // the joint arrays a skin would have supplied left out.
+    void collect_skeleton_tokens(const erhe::Hierarchy& parent)
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
+            if (!child) {
+                continue;
+            }
+            const erhe::scene::Node* node = dynamic_cast<const erhe::scene::Node*>(child.get());
+            const erhe::Typed*       item = dynamic_cast<const erhe::Typed*>(child.get());
+            if (
+                (node != nullptr) &&
+                (item != nullptr) &&
+                (item->get_prim_type_name() == c_skeleton_prim_type_name) &&
+                (m_skeletons.count(item) == 0)
+            ) {
+                add_warning(
+                    fmt::format("skeleton '{}' skins no mesh of the scene - it is written without its joints", child->get_name())
+                );
+                Skeleton_record record{};
+                record.node                = node;
+                record.animation_prim_name = take_skel_animation_prim_name(*node);
+                m_skeletons.emplace(item, std::move(record));
+            }
+            collect_skeleton_tokens(*child.get());
+        }
+    }
+
+    void register_skin(const erhe::scene::Mesh& mesh, const erhe::scene::Skin& skin)
+    {
+        if (m_skin_geom_bind_transforms.count(&skin) != 0) {
+            return;
+        }
+        const erhe::scene::Node* skeleton = skin.skin_data.skeleton.get();
+        if (skeleton == nullptr) {
+            add_warning(
+                fmt::format("mesh '{}' names a skin with no skeleton prim - the mesh is written unskinned", mesh.get_name())
+            );
+            return;
+        }
+        const std::map<const erhe::Item_base*, Skeleton_record>::const_iterator i = m_skeletons.find(skeleton);
+        if (i != m_skeletons.end()) {
+            const Skeleton_record& record = i->second;
+            if (skin.skin_data.joints.size() != record.joints.size()) {
+                add_warning(
+                    fmt::format(
+                        "mesh '{}' binds skeleton '{}' through {} joint(s) where the skeleton was written with {} - the skeleton's joints are kept",
+                        mesh.get_name(), skeleton->get_name(), skin.skin_data.joints.size(), record.joints.size()
+                    )
+                );
+            }
+            glm::mat4 geometry_from_bind{1.0f};
+            if (!record.bind_transforms.empty() && !skin.skin_data.inverse_bind_matrices.empty()) {
+                geometry_from_bind = record.bind_transforms.front() * skin.skin_data.inverse_bind_matrices.front();
+            }
+            m_skin_geom_bind_transforms.emplace(&skin, geometry_from_bind);
+            return;
+        }
+
+        Skeleton_record record{};
+        record.node                = skeleton;
+        record.animation_prim_name = take_skel_animation_prim_name(*skeleton);
+        record.joints.reserve(skin.skin_data.joints.size());
+        record.bind_transforms.reserve(skin.skin_data.joints.size());
+        for (std::size_t joint_index = 0, end = skin.skin_data.joints.size(); joint_index < end; ++joint_index) {
+            const erhe::scene::Node* joint = skin.skin_data.joints[joint_index].get();
+            record.joints.push_back(joint);
+            if (joint != nullptr) {
+                m_joint_items.insert(joint);
+            }
+            const glm::mat4 inverse_bind = (joint_index < skin.skin_data.inverse_bind_matrices.size())
+                ? skin.skin_data.inverse_bind_matrices[joint_index]
+                : glm::mat4{1.0f};
+            record.bind_transforms.push_back(glm::inverse(inverse_bind));
+        }
+        m_skeletons.emplace(skeleton, std::move(record));
+        m_skin_geom_bind_transforms.emplace(&skin, glm::mat4{1.0f});
+    }
+
+    // The name the skeleton's `SkelAnimation` prim is written under, and the
+    // decision not to write the tree prim it came from: Tydra hands the
+    // importer the joint channels rather than the prim, so the prim of the
+    // tree carries nothing, and the writer rebuilds it from the channels
+    // (doc/usd-compatibility-plan.md K1). Keeping the authored name is what
+    // makes a save a fixed point.
+    [[nodiscard]] auto take_skel_animation_prim_name(const erhe::scene::Node& skeleton) -> std::string
+    {
+        for (const std::shared_ptr<erhe::Hierarchy>& child : skeleton.get_children()) {
+            const erhe::Typed* item = dynamic_cast<const erhe::Typed*>(child.get());
+            if ((item != nullptr) && (item->get_prim_type_name() == c_skel_animation_prim_type_name)) {
+                m_skel_animation_items.insert(item);
+                return sanitize_usd_identifier(child->get_name());
+            }
+        }
+        return std::string{c_skel_animation_prim_name};
+    }
+
+    // The `joints` token of one joint prim: its path below the skeleton prim,
+    // sanitized segment by segment, so the prim `Bone_001_1` under `Bone_1`
+    // under the skeleton is `Bone_1/Bone_001_1`. Empty when the joint is not
+    // below the skeleton, which is what makes the skeleton write no joint
+    // arrays at all.
+    [[nodiscard]] static auto joint_token_of(const erhe::scene::Node& skeleton, const erhe::scene::Node& joint) -> std::string
+    {
+        std::string                      token  = sanitize_usd_identifier(joint.get_name());
+        std::shared_ptr<erhe::Hierarchy> parent = joint.get_parent().lock();
+        while (parent) {
+            if (parent.get() == static_cast<const erhe::Hierarchy*>(&skeleton)) {
+                return token;
+            }
+            token  = sanitize_usd_identifier(parent->get_name()) + "/" + token;
+            parent = parent->get_parent().lock();
+        }
+        return std::string{};
+    }
+
+    // The joint paths of one skeleton, empty when a joint is missing or sits
+    // outside the skeleton prim - a skeleton whose joints erhe cannot name is
+    // written without joint arrays rather than with wrong ones.
+    [[nodiscard]] auto joint_tokens_of(const Skeleton_record& record) -> std::vector<std::string>
+    {
+        std::vector<std::string> tokens;
+        tokens.reserve(record.joints.size());
+        for (const erhe::scene::Node* joint : record.joints) {
+            const std::string token = (joint != nullptr) ? joint_token_of(*record.node, *joint) : std::string{};
+            if (token.empty()) {
+                add_warning(
+                    fmt::format(
+                        "skeleton '{}' has a joint that is not a prim below it - the skeleton is written without its joints",
+                        record.node->get_name()
+                    )
+                );
+                return std::vector<std::string>{};
+            }
+            tokens.push_back(token);
+        }
+        return tokens;
+    }
+
+    // One skeleton as the `Skeleton` prim it is (K1): the joint paths, the
+    // rest pose the joint prims hold, the bind pose recomputed from the skin,
+    // and - when the caller's animations drive its joints - the
+    // `SkelAnimation` prim it names in `skel:animationSource`. The joints
+    // themselves are not prims of the stage: plan_children leaves them out,
+    // because USD carries them as these arrays.
+    [[nodiscard]] auto write_skeleton_prim(
+        const erhe::scene::Node&      node,
+        const Skeleton_record&        record,
+        const Plan_prim&              plan_prim,
+        const std::string&            prim_name,
+        const glm::mat4&              matrix,
+        const Instance_root_override& override_root
+    ) -> lightusd::Prim
+    {
+        lightusd::Skeleton skeleton;
+        skeleton.name = prim_name;
+        set_transform(skeleton.xformOps, node, matrix);
+        write_visibility_and_purpose(node, skeleton);
+        write_erhe_properties(node, skeleton);
+        write_instance_root_override(node, override_root, skeleton);
+
+        const std::vector<std::string> joint_tokens = joint_tokens_of(record);
+        std::optional<lightusd::Prim>  animation_prim;
+        std::string                    animation_name;
+        if (!joint_tokens.empty()) {
+            std::vector<lightusd::value::token>    joints;
+            std::vector<lightusd::value::matrix4d> bind_transforms;
+            std::vector<lightusd::value::matrix4d> rest_transforms;
+            joints.reserve(joint_tokens.size());
+            bind_transforms.reserve(joint_tokens.size());
+            rest_transforms.reserve(joint_tokens.size());
+            for (std::size_t joint_index = 0, end = joint_tokens.size(); joint_index < end; ++joint_index) {
+                joints.emplace_back(joint_tokens[joint_index]);
+                bind_transforms.push_back(to_usd(record.bind_transforms[joint_index]));
+                rest_transforms.push_back(to_usd(record.joints[joint_index]->parent_from_node()));
+            }
+            skeleton.joints.set_value(std::move(joints));
+            skeleton.bindTransforms.set_value(std::move(bind_transforms));
+            skeleton.restTransforms.set_value(std::move(rest_transforms));
+
+            Name_scope animation_names;
+            for (const Plan_prim& child : plan_prim.children) {
+                static_cast<void>(animation_names.make_unique(child.name));
+            }
+            animation_name = animation_names.make_unique(record.animation_prim_name);
+            animation_prim = write_skel_animation_prim(record, joint_tokens, animation_name);
+        }
+        if (animation_prim.has_value()) {
+            lightusd::Relationship relationship;
+            relationship.set(lightusd::Path{fmt::format("{}/{}", plan_prim.path, animation_name), ""});
+            skeleton.animationSource = relationship;
+        }
+
+        lightusd::Prim prim{skeleton};
+        if (animation_prim.has_value()) {
+            // usdchecker fails a prim that carries a SkelBindingAPI
+            // relationship without the applied schema, exactly as it does for
+            // a material binding.
+            apply_api_schema(prim.metas(), lightusd::APISchemas::APIName::SkelBindingAPI, std::string{});
+            std::string error;
+            if (!prim.add_child(std::move(animation_prim.value()), false, &error)) {
+                add_warning(fmt::format("the animation of skeleton '{}' could not be added: {}", prim_name, error));
+            }
+        }
+        return prim;
+    }
+
+    // The channels of the caller's animations that drive one joint of one
+    // skeleton.
+    class Joint_channels final
+    {
+    public:
+        const erhe::scene::Animation_sampler* translation{nullptr};
+        const erhe::scene::Animation_sampler* rotation   {nullptr};
+        const erhe::scene::Animation_sampler* scale      {nullptr};
+    };
+
+    // One channel's value at a time in seconds: linear between the two keys
+    // around it and clamped to the first and the last key outside the keyed
+    // range, which is how an erhe animation sampler reads.
+    [[nodiscard]] static auto sample_channel(
+        const erhe::scene::Animation_sampler& sampler,
+        const std::size_t                     component_count,
+        const float                           time,
+        glm::vec4&                            out_value
+    ) -> bool
+    {
+        const std::size_t key_count = std::min(
+            sampler.timestamps.size(),
+            (component_count > 0) ? (sampler.data.size() / component_count) : std::size_t{0}
+        );
+        if (key_count == 0) {
+            return false;
+        }
+        const auto value_at = [&sampler, component_count](const std::size_t key) -> glm::vec4 {
+            glm::vec4 value{0.0f, 0.0f, 0.0f, 0.0f};
+            for (std::size_t component = 0; component < component_count; ++component) {
+                value[static_cast<glm::length_t>(component)] = sampler.data[(key * component_count) + component];
+            }
+            return value;
+        };
+        if (time <= sampler.timestamps.front()) {
+            out_value = value_at(0);
+            return true;
+        }
+        if (time >= sampler.timestamps[key_count - 1]) {
+            out_value = value_at(key_count - 1);
+            return true;
+        }
+        for (std::size_t key = 1; key < key_count; ++key) {
+            if (time > sampler.timestamps[key]) {
+                continue;
+            }
+            const float span = sampler.timestamps[key] - sampler.timestamps[key - 1];
+            const float t    = (span > 0.0f) ? ((time - sampler.timestamps[key - 1]) / span) : 0.0f;
+            out_value = glm::mix(value_at(key - 1), value_at(key), t);
+            return true;
+        }
+        out_value = value_at(key_count - 1);
+        return true;
+    }
+
+    // The translation, rotation and scale of a matrix with no shear, which is
+    // what a joint's rest transform is: the joint's pose at every time code a
+    // channel of another joint keys but this one does not.
+    static void decompose_trs(const glm::mat4& matrix, glm::vec3& translation, glm::quat& rotation, glm::vec3& scale)
+    {
+        translation = glm::vec3{matrix[3]};
+        scale = glm::vec3{
+            glm::length(glm::vec3{matrix[0]}),
+            glm::length(glm::vec3{matrix[1]}),
+            glm::length(glm::vec3{matrix[2]})
+        };
+        glm::mat3 basis{glm::vec3{matrix[0]}, glm::vec3{matrix[1]}, glm::vec3{matrix[2]}};
+        for (int column = 0; column < 3; ++column) {
+            if (scale[column] > 0.0f) {
+                basis[column] /= scale[column];
+            }
+        }
+        rotation = glm::normalize(glm::quat_cast(basis));
+    }
+
+    // The joint channels driving one skeleton, as the `SkelAnimation` prim
+    // USD carries them in (K1). USD keys every joint's translation, rotation
+    // and scale of one skeleton on one shared timeline, so the time codes
+    // written are the union of the times the channels key, and a joint no
+    // channel reaches contributes its rest pose at each of them.
+    [[nodiscard]] auto write_skel_animation_prim(
+        const Skeleton_record&          record,
+        const std::vector<std::string>& joint_tokens,
+        const std::string&              prim_name
+    ) -> std::optional<lightusd::Prim>
+    {
+        const double time_codes_per_second = (m_arguments.time_codes_per_second > 0.0) ? m_arguments.time_codes_per_second : 24.0;
+
+        std::vector<Joint_channels> joint_channels;
+        joint_channels.resize(record.joints.size());
+        std::set<double> time_codes;
+        bool             any_channel{false};
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : m_arguments.animations) {
+            if (!animation) {
+                continue;
+            }
+            for (const erhe::scene::Animation_channel& channel : animation->channels) {
+                if (!channel.target || (channel.sampler_index >= animation->samplers.size())) {
+                    continue;
+                }
+                const std::vector<const erhe::scene::Node*>::const_iterator i = std::find(
+                    record.joints.begin(), record.joints.end(), channel.target.get()
+                );
+                if (i == record.joints.end()) {
+                    continue;
+                }
+                const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
+                Joint_channels&                        joint   = joint_channels[static_cast<std::size_t>(i - record.joints.begin())];
+                const erhe::scene::Animation_sampler** target  = nullptr;
+                switch (channel.path) {
+                    case erhe::scene::Animation_path::TRANSLATION: target = &joint.translation; break;
+                    case erhe::scene::Animation_path::ROTATION:    target = &joint.rotation;    break;
+                    case erhe::scene::Animation_path::SCALE:       target = &joint.scale;       break;
+                    default: break;
+                }
+                if ((target == nullptr) || (*target != nullptr)) {
+                    continue;
+                }
+                *target     = &sampler;
+                any_channel = true;
+                for (const float timestamp : sampler.timestamps) {
+                    time_codes.insert(static_cast<double>(timestamp) * time_codes_per_second);
+                }
+            }
+        }
+        if (!any_channel || time_codes.empty()) {
+            return std::nullopt;
+        }
+
+        lightusd::SkelAnimation animation_prim;
+        animation_prim.name = prim_name;
+        std::vector<lightusd::value::token> joints;
+        joints.reserve(joint_tokens.size());
+        for (const std::string& token : joint_tokens) {
+            joints.emplace_back(token);
+        }
+        animation_prim.joints.set_value(std::move(joints));
+
+        lightusd::Animatable<std::vector<lightusd::value::float3>> translations;
+        lightusd::Animatable<std::vector<lightusd::value::quatf>>  rotations;
+        lightusd::Animatable<std::vector<lightusd::value::half3>>  scales;
+        for (const double time_code : time_codes) {
+            const float                          time = static_cast<float>(time_code / time_codes_per_second);
+            std::vector<lightusd::value::float3> translation_values;
+            std::vector<lightusd::value::quatf>  rotation_values;
+            std::vector<lightusd::value::half3>  scale_values;
+            translation_values.reserve(record.joints.size());
+            rotation_values.reserve(record.joints.size());
+            scale_values.reserve(record.joints.size());
+            for (std::size_t joint_index = 0, end = record.joints.size(); joint_index < end; ++joint_index) {
+                glm::vec3 translation{0.0f, 0.0f, 0.0f};
+                glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+                glm::vec3 scale{1.0f, 1.0f, 1.0f};
+                decompose_trs(record.joints[joint_index]->parent_from_node(), translation, rotation, scale);
+
+                const Joint_channels& channels = joint_channels[joint_index];
+                glm::vec4             value{0.0f, 0.0f, 0.0f, 0.0f};
+                if ((channels.translation != nullptr) && sample_channel(*channels.translation, 3, time, value)) {
+                    translation = glm::vec3{value};
+                }
+                if ((channels.rotation != nullptr) && sample_channel(*channels.rotation, 4, time, value)) {
+                    // An erhe rotation channel keys (x, y, z, w).
+                    rotation = glm::normalize(glm::quat{value.w, value.x, value.y, value.z});
+                }
+                if ((channels.scale != nullptr) && sample_channel(*channels.scale, 3, time, value)) {
+                    scale = glm::vec3{value};
+                }
+                translation_values.push_back(lightusd::value::float3{translation.x, translation.y, translation.z});
+                rotation_values.push_back(lightusd::value::quatf{{rotation.x, rotation.y, rotation.z}, rotation.w});
+                scale_values.push_back(
+                    lightusd::value::half3{to_usd_half(scale.x), to_usd_half(scale.y), to_usd_half(scale.z)}
+                );
+            }
+            translations.add_sample(time_code, translation_values);
+            rotations.add_sample(time_code, rotation_values);
+            scales.add_sample(time_code, scale_values);
+
+            m_first_time_code    = m_wrote_time_samples ? std::min(m_first_time_code, time_code) : time_code;
+            m_last_time_code     = m_wrote_time_samples ? std::max(m_last_time_code,  time_code) : time_code;
+            m_wrote_time_samples = true;
+        }
+        animation_prim.translations.set_value(std::move(translations));
+        animation_prim.rotations.set_value(std::move(rotations));
+        animation_prim.scales.set_value(std::move(scales));
+        return lightusd::Prim{animation_prim};
+    }
+
+    // -------------------------------------------------------------------
     // Meshes
     // -------------------------------------------------------------------
 
@@ -2892,9 +3402,25 @@ private:
         std::vector<lightusd::value::texcoord2f> texcoords;
         std::vector<lightusd::value::color3f>    colors;
         std::vector<float>                       opacities;
+        // The joint influences of every point, `c_joint_slots` per point, and
+        // whether they are being collected at all: a skinned mesh writes them
+        // as `vertex` primvars indexed by the point index, which is the domain
+        // erhe carries them in (doc/usd-compatibility-plan.md K1).
+        std::vector<int32_t>                     joint_indices;
+        std::vector<float>                       joint_weights;
+        Skin_influences                          skin_influences{Skin_influences::skip};
         bool                                     has_normals  {false};
         bool                                     has_texcoords{false};
         bool                                     has_colors   {false};
+
+        // One influence slot of the point being appended. A skinned point
+        // gets exactly `c_joint_slots` of them, zero-weighted where erhe
+        // carries no influence, so the arrays stay indexed by the point.
+        void add_joint_influence(const int32_t index, const float weight)
+        {
+            joint_indices.push_back(index);
+            joint_weights.push_back(weight);
+        }
     };
 
     static void append_geometry(Mesh_accumulator& out, const erhe::geometry::Geometry& geometry)
@@ -2906,6 +3432,23 @@ private:
         for (GEO::index_t vertex = 0; vertex < mesh.vertices.nb(); ++vertex) {
             const GEO::vec3f point = erhe::geometry::get_pointf(mesh.vertices, vertex);
             out.points.push_back(lightusd::value::point3f{point.x, point.y, point.z});
+            if (out.skin_influences == Skin_influences::collect) {
+                for (std::size_t set = 0; set < c_joint_sets; ++set) {
+                    const erhe::geometry::Attribute_present<GEO::vec4u>& index_attribute =
+                        (set == 0) ? attributes.vertex_joint_indices_0 : attributes.vertex_joint_indices_1;
+                    const erhe::geometry::Attribute_present<GEO::vec4f>& weight_attribute =
+                        (set == 0) ? attributes.vertex_joint_weights_0 : attributes.vertex_joint_weights_1;
+                    const std::optional<GEO::vec4u> indices = index_attribute.try_get(vertex);
+                    const std::optional<GEO::vec4f> weights = weight_attribute.try_get(vertex);
+                    for (std::size_t component = 0; component < c_joints_per_set; ++component) {
+                        const GEO::index_t slot = static_cast<GEO::index_t>(component);
+                        out.add_joint_influence(
+                            (indices.has_value() && weights.has_value()) ? static_cast<int32_t>(indices.value()[slot]) : 0,
+                            (indices.has_value() && weights.has_value()) ? weights.value()[slot] : 0.0f
+                        );
+                    }
+                }
+            }
         }
         for (GEO::index_t facet = 0; facet < mesh.facets.nb(); ++facet) {
             const GEO::index_t corner_count = mesh.facets.nb_vertices(facet);
@@ -3004,6 +3547,23 @@ private:
                     ? lightusd::value::point3f{value.x, value.y, value.z}
                     : lightusd::value::point3f{0.0f, 0.0f, 0.0f}
             );
+            if (out.skin_influences == Skin_influences::collect) {
+                for (std::size_t set = 0; set < c_joint_sets; ++set) {
+                    const Vertex_attribute* joint_indices = stream.find_attribute(Vertex_attribute_usage::joint_indices, set);
+                    const Vertex_attribute* joint_weights = stream.find_attribute(Vertex_attribute_usage::joint_weights, set);
+                    glm::vec4               indices{0.0f, 0.0f, 0.0f, 0.0f};
+                    glm::vec4               weights{0.0f, 0.0f, 0.0f, 0.0f};
+                    const bool              has_indices = read_soup_attribute(soup, joint_indices, stride, vertex_index, indices);
+                    const bool              has_weights = read_soup_attribute(soup, joint_weights, stride, vertex_index, weights);
+                    for (std::size_t component = 0; component < c_joints_per_set; ++component) {
+                        const glm::length_t slot = static_cast<glm::length_t>(component);
+                        out.add_joint_influence(
+                            (has_indices && has_weights) ? static_cast<int32_t>(indices[slot]) : 0,
+                            (has_indices && has_weights) ? weights[slot] : 0.0f
+                        );
+                    }
+                }
+            }
         }
         for (std::size_t triangle = 0; ((triangle * 3) + 2) < soup.index_data.size(); ++triangle) {
             out.face_vertex_counts.push_back(3);
@@ -3123,6 +3683,7 @@ private:
         geom_mesh.subdivisionScheme.set_value(lightusd::GeomMesh::SubdivisionScheme::SubdivisionSchemeNone);
 
         Mesh_accumulator         accumulator;
+        accumulator.skin_influences = mesh.skin ? Skin_influences::collect : Skin_influences::skip;
         std::vector<Facet_group> groups;
         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
             const erhe::primitive::Primitive_render_shape* render_shape =
@@ -3165,9 +3726,13 @@ private:
         // the whole mesh and reproduces it. Several primitives become one
         // materialBind GeomSubset each.
         const bool mesh_bound = (groups.size() == 1) && bind_material(geom_mesh, groups.front().material);
+        const bool skin_bound = write_skin_binding(mesh, accumulator, geom_mesh);
         lightusd::Prim prim{geom_mesh};
         if (mesh_bound) {
             apply_material_binding_api(prim);
+        }
+        if (skin_bound) {
+            apply_api_schema(prim.metas(), lightusd::APISchemas::APIName::SkelBindingAPI, std::string{});
         }
         if (groups.size() > 1) {
             Name_scope subset_names;
@@ -3194,6 +3759,91 @@ private:
             }
         }
         return prim;
+    }
+
+    // The `SkelBindingAPI` of one skinned mesh (doc/usd-compatibility-plan.md
+    // K1): the skeleton it binds, the influences its vertices carry and the
+    // geometry bind transform the skin was written with. The influences are
+    // `vertex` primvars indexed by the point index, which is the domain the
+    // accumulator filled them in. Reports whether the schema was applied.
+    [[nodiscard]] auto write_skin_binding(
+        const erhe::scene::Mesh& mesh,
+        const Mesh_accumulator&  accumulator,
+        lightusd::GeomMesh&      geom_mesh
+    ) -> bool
+    {
+        const erhe::scene::Skin* skin = mesh.skin.get();
+        if (skin == nullptr) {
+            return false;
+        }
+        const erhe::scene::Node* skeleton = skin->skin_data.skeleton.get();
+        if (skeleton == nullptr) {
+            return false;
+        }
+        const std::map<const erhe::Item_base*, std::string>::const_iterator i = m_skeleton_paths.find(skeleton);
+        if (i == m_skeleton_paths.end()) {
+            add_warning(
+                fmt::format(
+                    "mesh '{}' binds skeleton '{}', which is not a prim of the file - the mesh is written unskinned",
+                    mesh.get_name(), skeleton->get_name()
+                )
+            );
+            return false;
+        }
+        lightusd::Relationship relationship;
+        relationship.set(lightusd::Path{i->second, ""});
+        geom_mesh.props.emplace("skel:skeleton", lightusd::Property{std::move(relationship), false});
+
+        const std::map<const erhe::scene::Skin*, glm::mat4>::const_iterator geometry_from_bind =
+            m_skin_geom_bind_transforms.find(skin);
+        if ((geometry_from_bind != m_skin_geom_bind_transforms.end()) && !is_identity(geometry_from_bind->second)) {
+            lightusd::Attribute attribute;
+            attribute.set_value(to_usd(geometry_from_bind->second));
+            geom_mesh.props.emplace("primvars:skel:geomBindTransform", lightusd::Property{std::move(attribute), false});
+        }
+
+        // The influences erhe carries per vertex, with the trailing slots no
+        // vertex weights dropped: erhe pads a vertex out to the width of the
+        // sets it fills and reading a narrower `elementSize` back pads it
+        // again, so the narrowest width that holds every influence is what
+        // makes a second save byte-identical.
+        const std::size_t point_count = std::min(accumulator.points.size(), accumulator.joint_weights.size() / c_joint_slots);
+        std::size_t       element_size{1};
+        for (std::size_t point = 0; point < point_count; ++point) {
+            for (std::size_t slot = 0; slot < c_joint_slots; ++slot) {
+                if (accumulator.joint_weights[(point * c_joint_slots) + slot] > 0.0f) {
+                    element_size = std::max(element_size, slot + 1);
+                }
+            }
+        }
+        std::vector<int32_t> indices;
+        std::vector<float>   weights;
+        indices.reserve(point_count * element_size);
+        weights.reserve(point_count * element_size);
+        for (std::size_t point = 0; point < point_count; ++point) {
+            for (std::size_t slot = 0; slot < element_size; ++slot) {
+                indices.push_back(accumulator.joint_indices[(point * c_joint_slots) + slot]);
+                weights.push_back(accumulator.joint_weights[(point * c_joint_slots) + slot]);
+            }
+        }
+        add_vertex_primvar(geom_mesh, "primvars:skel:jointIndices", indices, element_size);
+        add_vertex_primvar(geom_mesh, "primvars:skel:jointWeights", weights, element_size);
+        return true;
+    }
+
+    template <typename T, typename V>
+    static void add_vertex_primvar(
+        T&                    typed_prim,
+        const std::string&    name,
+        const std::vector<V>& values,
+        const std::size_t     element_size
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(values);
+        attribute.metas().set_interpolation_enum(lightusd::Interpolation::Vertex);
+        attribute.metas().set_elementSize(static_cast<uint32_t>(element_size));
+        typed_prim.props.emplace(name, lightusd::Property{std::move(attribute), false});
     }
 
     template <typename T, typename V>
@@ -3457,6 +4107,19 @@ private:
     // item: what tells plan_children to write it inside the block instead of
     // among the carrying prim's children.
     std::map<const erhe::Item_base*, Variant_prim_membership>                  m_variant_prims;
+    // The skeletons of the skins the tree's meshes bind, by the prim that is
+    // a skin's pivot, and where each of those prims landed on the stage so a
+    // skinned mesh names it by path (doc/usd-compatibility-plan.md K1).
+    std::map<const erhe::Item_base*, Skeleton_record>                          m_skeletons;
+    std::map<const erhe::Item_base*, std::string>                              m_skeleton_paths;
+    // The geometry bind transform each skin is written with.
+    std::map<const erhe::scene::Skin*, glm::mat4>                              m_skin_geom_bind_transforms;
+    // Every joint of every skeleton: a joint is an entry of the skeleton's
+    // `joints` rather than a prim of its own, so it is not planned.
+    std::set<const erhe::Item_base*>                                           m_joint_items;
+    // The `SkelAnimation` prims of the tree: the writer rebuilds each of them
+    // from the joint channels, so the prim the import made is not planned.
+    std::set<const erhe::Item_base*>                                           m_skel_animation_items;
     std::size_t                                              m_node_count{0};
     std::size_t                                              m_mesh_count{0};
 };

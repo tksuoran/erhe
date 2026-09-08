@@ -1855,6 +1855,10 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     const std::shared_ptr<Content_library> content_library = scene_root.get_content_library();
     if (content_library) {
         save_arguments.materials = content_library->get_all<erhe::primitive::Material>();
+        // The joint channels of these are written as the `SkelAnimation` of
+        // the skeleton they drive (doc/usd-compatibility-plan.md K1); every
+        // other channel travels as the sampled xformOps of its prim.
+        save_arguments.animations = content_library->get_all<erhe::scene::Animation>();
         collect_usd_brushes(*content_library.get(), path, save_arguments.brushes);
     }
     for (std::size_t material_index = 0, end = save_arguments.materials.size(); material_index < end; ++material_index) {

@@ -8,7 +8,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -134,13 +133,6 @@ private:
     };
 
     void ensure_primitive();
-    // R5.2b explicit registration: the bone materials are created here, so they
-    // must be listed in the content library of every scene whose proxies use
-    // them. Without it a proxy carries a material with no buffer slot and the
-    // shader falls back to a default - which is only visible on the selected
-    // bones, since the unselected ones are drawn through the vdotn override
-    // that replaces the fragment color anyway. Idempotent per scene root.
-    void register_materials(Scene_root& scene_root);
     auto make_proxy(const std::shared_ptr<erhe::scene::Node>& joint) -> Proxy;
     void set_proxy_transform(Proxy& proxy, glm::vec3 tail_local);
 
@@ -153,7 +145,7 @@ private:
     void on_animation_update ();
     void on_mode_changed     ();
 
-    void add_skin_proxies    (Scene_root& scene_root, const std::shared_ptr<erhe::scene::Skin>& skin);
+    void add_skin_proxies    (const std::shared_ptr<erhe::scene::Skin>& skin);
     void remove_skin_proxies (const erhe::scene::Skin* skin);
     void refresh_proxy_shape (Proxy& proxy);
     void apply_proxy_flags   (Proxy& proxy);
@@ -181,8 +173,6 @@ private:
     std::unordered_map<const erhe::scene::Node*, Proxy> m_proxies;
     // Reverse lookup for picking: proxy mesh -> joint node.
     std::unordered_map<const erhe::scene::Mesh*, std::weak_ptr<erhe::scene::Node>> m_joint_by_proxy_mesh;
-    // Scene roots the bone materials have been registered with.
-    std::set<const Scene_root*> m_material_scene_roots;
 };
 
 }
