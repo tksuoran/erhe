@@ -223,13 +223,24 @@ auto Xform_op::to_matrix() const -> glm::dmat4
     return inverted ? glm::inverse(matrix) : matrix;
 }
 
+auto Xform_op_sample::operator==(const Xform_op_sample& other) const -> bool
+{
+    return (time_code == other.time_code) && (value == other.value);
+}
+
+auto Xform_op_sample::operator!=(const Xform_op_sample& other) const -> bool
+{
+    return !(*this == other);
+}
+
 auto Xform_op::operator==(const Xform_op& other) const -> bool
 {
     return (type      == other.type    ) &&
            (precision == other.precision) &&
            (suffix    == other.suffix  ) &&
            (inverted  == other.inverted) &&
-           (value     == other.value   );
+           (value     == other.value   ) &&
+           (samples   == other.samples );
 }
 
 auto Xform_op::operator!=(const Xform_op& other) const -> bool
@@ -244,6 +255,16 @@ auto Xform_op_stack::compose() const -> glm::dmat4
         matrix = matrix * op.to_matrix();
     }
     return matrix;
+}
+
+auto Xform_op_stack::has_time_samples() const -> bool
+{
+    for (const Xform_op& op : ops) {
+        if (!op.samples.empty()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 auto Xform_op_stack::operator==(const Xform_op_stack& other) const -> bool

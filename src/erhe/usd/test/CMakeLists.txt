@@ -25,6 +25,7 @@ add_executable(${_target}
     test_usd_sublayers.cpp
     test_usd_texture_channels.cpp
     test_usd_texture_inputs.cpp
+    test_usd_time_samples.cpp
     test_usd_variants.cpp
     test_usd_xform_ops.cpp
 )

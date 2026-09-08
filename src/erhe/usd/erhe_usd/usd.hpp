@@ -24,6 +24,7 @@ namespace erhe::primitive {
     class Material;
 }
 namespace erhe::scene {
+    class Animation;
     class Camera;
     class Light;
     class Mesh;
@@ -426,6 +427,23 @@ public:
     std::string texture_file;
 };
 
+// The stage's time coordinates (doc/usd-compatibility-plan.md section 5).
+// A time code becomes seconds by dividing by `time_codes_per_second`, whose
+// USD fallback is 24 when no layer of the stack authors one;
+// `start_time_code` / `end_time_code` are the clip range the layer authors.
+// The `*_authored` flags say which of the three the file actually spelled, so
+// a save writes back what the file had rather than erhe's fallbacks.
+class Usd_time_codes final
+{
+public:
+    double time_codes_per_second{24.0};
+    double start_time_code      {0.0};
+    double end_time_code        {0.0};
+    bool   time_codes_per_second_authored{false};
+    bool   start_time_code_authored      {false};
+    bool   end_time_code_authored        {false};
+};
+
 // Everything one USD file contributes to a scene, in erhe types - the USD
 // counterpart of erhe::gltf::Gltf_data, and deliberately the same shape
 // where the two formats overlap. `nodes` holds every imported node (the
@@ -510,6 +528,16 @@ public:
     // visited them. A dome is never a light of `lights`: erhe has no
     // environment map and the dome becomes ambient light.
     std::vector<Usd_dome_light> dome_lights;
+
+    // The stage's time coordinates, as authored.
+    Usd_time_codes time_codes;
+    // The animation the file's time-sampled `xformOp:*` attributes become:
+    // one Animation named after the file, holding one channel per sampled op
+    // of every prim whose stack the channels can express
+    // (src/erhe/usd/notes.md, "Time samples"). Empty when the file samples no
+    // transform. It is a library item like the animations of a glTF file, and
+    // the caller attaches it to the content library the same way.
+    std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
     // The ambient light the first dome of `dome_lights` composes to
     // (`color * intensity * 2^exposure`), black when the file authors none.
     glm::vec3 ambient_light{0.0f, 0.0f, 0.0f};
@@ -762,6 +790,12 @@ public:
     // carried by the `customLayerData` scene block, not by a dome, so a scene
     // that never read one writes none.
     std::vector<Usd_dome_light>                             dome_lights;
+    // The rate the layer's time codes are in. The writer authors
+    // `timeCodesPerSecond`, `startTimeCode` and `endTimeCode` only when it
+    // wrote at least one time-sampled xformOp, and takes the range from the
+    // samples it wrote; the rate is the caller's, carried from the load
+    // (Usd_data::time_codes), so a file's own rate survives a round trip.
+    double                                                  time_codes_per_second{24.0};
     std::string                                             up_axis        {"Y"};
     double                                                  meters_per_unit{1.0};
 };

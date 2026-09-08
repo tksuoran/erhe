@@ -1,0 +1,58 @@
+#usda 1.0
+(
+    endTimeCode = 48
+    metersPerUnit = 1
+    startTimeCode = 0
+    timeCodesPerSecond = 24
+    upAxis = "Y"
+    defaultPrim = "World"
+)
+
+def Xform "World"
+{
+    def Xform "animated"
+    {
+        double3 xformOp:translate = (0, 0, 0)
+        double3 xformOp:translate.timeSamples = {
+            0: (0, 0, 0),
+            24: (10, 0, 0),
+            48: (20, 0, 0),
+        }
+        float3 xformOp:rotateXYZ.timeSamples = {
+            0: (0, 0, 0),
+            24: (0, 90, 0),
+            48: (0, 180, 0),
+        }
+        float3 xformOp:scale.timeSamples = {
+            0: (1, 1, 1),
+            24: (2, 2, 2),
+            48: (1, 1, 1),
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "sampled_matrix"
+    {
+        matrix4d xformOp:transform.timeSamples = {
+            0: ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ),
+            24: ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (5, 0, 0, 1) ),
+        }
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+
+    def Xform "pivot_sampled"
+    {
+        double3 xformOp:translate:pivot = (0, 1, 0)
+        float3 xformOp:rotateXYZ.timeSamples = {
+            0: (0, 0, 0),
+            24: (0, 90, 0),
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate:pivot", "xformOp:rotateXYZ", "!invert!xformOp:translate:pivot"]
+    }
+
+    def Xform "not_sampled"
+    {
+        double3 xformOp:translate = (7, 8, 9)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

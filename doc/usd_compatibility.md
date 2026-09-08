@@ -201,7 +201,7 @@ sides.
 
 | erhe | USD | notes |
 |---|---|---|
-| animation samplers / channels targeting node TRS (glTF model) | time samples on `xformOp:*` attributes | glTF is keyframe-sampler-first, USD time-sample-first; cubic tangents re-encode as `Ts` splines |
+| animation samplers / channels targeting node TRS (glTF model) | time samples on `xformOp:*` attributes | carried: the samples travel on `erhe::scene::Xform_op` and play as one Animation per file, keyed in seconds; a stack outside `[translate, rotate, scale]` keeps its samples and drives nothing; cubic tangents re-encode as `Ts` splines |
 | `Animation_player` playback writing the transform | time-sampled value resolution (stronger than `default`) | erhe overwrites the local value today; the animated layer (property-system section 6) restores the USD distinction |
 | channels on arbitrary properties (future) | time samples on any attribute | |
 | skins | `UsdSkel` `SkelAnimation` | |

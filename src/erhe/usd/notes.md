@@ -102,15 +102,16 @@ translation units.
   the file used. `!resetXformStack!` is the stack's flag rather than an op.
   A prim that authored no ops gets an empty stack, which composes to identity
   and exports as no `xformOp`s at all, so a saved layer says exactly what the
-  loaded one did. An op whose value is time-sampled contributes its default
-  when it has one and its first sample otherwise; animated transforms are
-  future work (`doc/usd-compatibility-plan.md` section 6).
+  loaded one did. An op whose value is time-sampled carries its samples too
+  ("Time samples" below).
   Three cases keep the composed matrix and no stack, each reported in the
   log: a prim the stage lookup does not answer for or whose class carries no
   `xformOps`, an op of a value type erhe has no counterpart for (one
   warning), and a stack whose composition disagrees with the transform the
   stage evaluates by more than 1e-5 (one warning - the two agreeing is what
-  `erhe_usd_tests` asserts for every prim of the fixtures). The stage's
+  `erhe_usd_tests` asserts for every prim of the fixtures). A stack that
+  carries time samples skips that last comparison, for the reason "Time
+  samples" gives. The stage's
   `upAxis` / `metersPerUnit` correction reaches the top-level prims of a
   non-Y-up or non-metre stage; those prims write a transform that is not what
   their ops say, so they keep the composed matrix too (logged at debug
@@ -656,6 +657,59 @@ volumes, MaterialX / OpenPBR shading networks, texture filter state, and the
 per-channel output selection of a `UsdUVTexture` (erhe reads roughness from
 green and metallic from blue, whichever channels the file's `outputs:*`
 connections name).
+
+### Time samples
+
+A stage is evaluated at one time code: the root layer stack's
+`startTimeCode` when it authors one, else the earliest time any prim of the
+stage samples an `xformOp` at, else USD's default time code. That is the time
+a viewer opens a stage at, so the pose the import gives the scene is the
+reference frame of its clips. Tydra's render-scene conversion, the
+`xformOp` stacks and every value the conversion reads use that one time code.
+
+A time-sampled `xformOp` attribute carries its samples on the erhe op
+(`erhe::scene::Xform_op::samples`), in the file's own time codes and with the
+op's own value type, and `Xform_op::value` is its value at the evaluation time
+code. The samples are what the file authored, so:
+
+- The samples win over the attribute's `default`, which is what USD says at
+  every time code they reach. LightUSD evaluates an op that carries both at
+  its `default` whatever time code it is asked for, so a prim whose stack
+  carries samples keeps its stack without the composition comparison above:
+  the stack is the authority and the composed matrix is not.
+- A save writes the samples back as `timeSamples` beside the value, and
+  authors `timeCodesPerSecond`, `startTimeCode` and `endTimeCode` exactly when
+  it wrote at least one sampled op, with the range the samples span.
+  `Usd_save_arguments::time_codes_per_second` supplies the rate, which the
+  caller carries from the load, so a file keeps its own. A sampled stack is
+  written whatever transform the prim holds at the time of the save: that
+  transform is the pose the animation player put it in, and the stack is what
+  the file authored.
+
+The playable projection of the samples is an `erhe::scene::Animation` - one
+per file, named after the file, listed in `Usd_data::animations` and attached
+to the content library the way a glTF file's animations are. It holds one
+channel per sampled op, keyed in seconds (`time code / timeCodesPerSecond`)
+and interpolated linearly, which is what USD does with the time samples of a
+floating-point attribute; USD authors no per-attribute interpolation for a
+reader to pick another one from. A `rotate*` op's Euler samples and an
+`orient` op's quaternions both become a quaternion rotation channel, with the
+sampled quaternions kept on one hemisphere so the interpolation never takes
+the long way round.
+
+erhe applies a channel by writing the component into the target's TRS, so a
+stack the channels can drive is one whose composition is that TRS: at most one
+`translate`, one rotate and one `scale` op, in that order, none inverted and
+none suffixed. A stack outside that - a sampled `transform` matrix op, a pivot
+pair, an op order like `[orient, translate]`, two ops of one kind - is named in
+one warning per prim and contributes no channel; it keeps the pose the
+evaluation time code gives it, and its samples still travel through a save.
+Editing an animation's keys does not write back into the ops, and neither does
+moving an animated prim: the stack is the authored record, and reconciling the
+two is future work (`doc/usd-compatibility-plan.md` section 6).
+
+Not carried: `UsdSkel` `SkelAnimation`, time samples on any attribute other
+than an `xformOp`, and `Ts` splines.
 
 ## Export
 

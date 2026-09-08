@@ -64,6 +64,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -291,6 +292,27 @@ void append_usd_content_library_operations(
         }
         operations.push_back(
             make_library_attach_operation(context, content_library, material, gltf_source)
+        );
+    }
+    // The animation the file's time-sampled xformOps became, attached the way
+    // a glTF file's animations are.
+    for (std::size_t i = 0, end = usd_data.animations.size(); i < end; ++i) {
+        const std::shared_ptr<erhe::scene::Animation>& animation = usd_data.animations[i];
+        if (!animation) {
+            continue;
+        }
+        operations.push_back(
+            make_library_attach_operation(
+                context,
+                content_library,
+                animation,
+                Gltf_source_reference{
+                    .gltf_path  = path_string,
+                    .item_name  = animation->get_name(),
+                    .item_index = static_cast<int>(i),
+                    .item_type  = "animation",
+                }
+            )
         );
     }
 }
@@ -1290,6 +1312,19 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // composed content into one layer (src/erhe/usd/notes.md), so the list is
     // kept for the line the save logs.
     scene_root->set_usd_sublayers(std::move(usd_data.sublayers));
+    // The stage's time coordinates: what the animation channels were built
+    // from and what the save writes back. An import into an existing scene
+    // leaves them alone - they belong to the file the scene itself is.
+    scene_root->set_usd_time_codes(
+        Usd_time_code_record{
+            .time_codes_per_second          = usd_data.time_codes.time_codes_per_second,
+            .start_time_code                = usd_data.time_codes.start_time_code,
+            .end_time_code                  = usd_data.time_codes.end_time_code,
+            .time_codes_per_second_authored = usd_data.time_codes.time_codes_per_second_authored,
+            .start_time_code_authored       = usd_data.time_codes.start_time_code_authored,
+            .end_time_code_authored         = usd_data.time_codes.end_time_code_authored
+        }
+    );
     if (!scene_state.settings_json.empty()) {
         simdjson::ondemand::parser   settings_parser;
         simdjson::padded_string      settings_padded{scene_state.settings_json};
@@ -1750,6 +1785,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         .path      = path,
         .root_node = root_node
     };
+    save_arguments.time_codes_per_second = scene_root.get_usd_time_codes().time_codes_per_second;
 
     for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
         collect_usd_references(child, save_arguments.references, save_arguments.point_instancers);

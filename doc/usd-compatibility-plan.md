@@ -200,8 +200,19 @@ record has the history.
   (`src/erhe/usd/notes.md`, `doc/usd_compatibility.md`). `erhe_usd_tests`
   round-trips a three-op stack, a pivot pair and a matrix op byte for
   byte and lands a move in the translate op alone. glTF keeps writing the
-  composed TRS (C1). Time-sampled ops take their default or first sample
-  (section 6).
+  composed TRS (C1).
+- Transform time samples: a time-sampled `xformOp:*` attribute carries its
+  samples on the op, in the file's own time codes; the stage is evaluated
+  at one time code - `startTimeCode` when authored, else the earliest
+  sample - so the pose a load gives the scene is the reference frame of
+  its clips, and a save writes the samples back beside the value with the
+  layer's `timeCodesPerSecond`, `startTimeCode` and `endTimeCode`. The
+  playable projection is one `erhe::scene::Animation` per file, keyed in
+  seconds, holding one channel per sampled op of every prim whose stack is
+  a `[translate, rotate, scale]` the channels can drive; a stack outside
+  that keeps its samples, keeps its start-time pose, and is named in one
+  warning. `erhe_usd_tests` round-trips a sampled stack to a fixed point
+  (`src/erhe/usd/notes.md`, "Time samples").
 - X1 References as prefab instances: LightUSD composes nothing at load
   (its composition option is declared and not implemented), so a
   referencing prim arrives as authored with its `references` and
@@ -440,9 +451,8 @@ its texture where usdview does, measured face on against the
 reference render and pinned by the placement case of
 `src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
 entries, 51 work as they are, none crash) leaves, in the order the
-fixes are taken: a
-time-sampled transform not evaluated at the reference's sample; 16-bit,
-32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
+fixes are taken: 16-bit, 32-bit and CMYK images and Radiance `.hdr`
+not decoded; McUsd's
 stained glass opaque and its cards missing; RoughnessTest's missing
 specular response; a scene whose load blocks the main loop long enough to
 trip the stall watchdog, which the intent-vfx teapot scenes do for minutes
@@ -520,11 +530,11 @@ the fixes S1 lists are taken up in the order of the assets they block.
 
 ## 6. Future work
 
-Animation and physics are outside G1, G2 and G3: a USD scene loads,
-edits and saves without them until the items below are taken up, and E1
-writes neither time samples nor `UsdPhysics` schemas. Each item is
-independent of the others and of every step in section 3 except where
-named.
+Physics, and the animation the transform time samples do not cover, are
+outside G1, G2 and G3: a USD scene loads, edits and saves without them
+until the items below are taken up, and E1 writes no `UsdPhysics`
+schemas. Each item is independent of the others and of every step in
+section 3 except where named.
 
 - Animated value layer: the property-system section 6 item, an animated
   value between coerced and local in R3, set by `Animation_sampler::apply`
@@ -535,11 +545,19 @@ named.
   `default`. It is also the prerequisite of the keyframing plan
   (`doc/animation-keyframing-plan.md`) and of animation channels on
   arbitrary properties, so it pays for itself without USD.
-- Time samples on load (after the animated value layer):
-  time-sampled `xformOp:*` attributes become erhe animation channels
-  (linear samples; `Ts` splines re-encoded to cubic samplers);
-  `UsdSkel` `SkelAnimation` goes through the existing skin path. The
-  matching save writes the channels back as time samples.
+- Time samples beyond the transform: a time-sampled `xformOp:*` attribute
+  is carried as authored and played as an `erhe::scene::Animation`
+  (`src/erhe/usd/notes.md`, "Time samples"), which leaves `UsdSkel`
+  `SkelAnimation` - it would go through the existing skin path - time
+  samples on any other attribute, and `Ts` splines re-encoded as cubic
+  samplers. A stack the TRS channels cannot drive keeps its samples and
+  its start-time pose and is named in one warning; driving it needs a
+  transform channel that composes ops rather than a TRS.
+- Reconciling an edit with the authored ops: the samples an op carries are
+  what the file authored, so keying an animation or moving an animated
+  prim changes the playable channels and the composed pose but not the
+  ops a save writes. Writing an edit back into the samples is what the
+  animated value layer above makes well defined.
 - Variant opinions a variant set does not carry: the `def` children of a
   variant block that the hoist does not reach - one authored below an
   `over` child of the variant, and any of them in a `.usdz` archive, whose

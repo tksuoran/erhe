@@ -30,6 +30,7 @@
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
 #include "erhe_scene/xform.hpp"
+#include "erhe_scene/animation.hpp"
 #include "erhe_scene/xform_op.hpp"
 
 // LightUSD headers. Together with usd.cpp this is the only place in erhe
@@ -233,29 +234,22 @@ using Tydra_subset    = lightusd::tydra::MaterialSubset;
     }
 }
 
-// The authored value of one op. An op that carries time samples rather than a
-// default uses its first sample: erhe has no animated transform to put the
-// rest in yet (doc/usd-compatibility-plan.md section 6, future work).
+// The USD value of one op at `time_code`. `samples` is the op's time samples
+// when it has any, in which case they are the op's value and its `default` is
+// not consulted: a USD attribute that carries both is the samples everywhere
+// the samples reach.
 template <typename T>
-[[nodiscard]] auto get_xform_op_value(const lightusd::XformOp& op, T& out_value) -> bool
+[[nodiscard]] auto get_usd_op_value_at(
+    const lightusd::XformOp&            op,
+    const lightusd::value::TimeSamples* samples,
+    const double                        time_code,
+    T&                                  out_value
+) -> bool
 {
-    if (op.has_default()) {
-        const nonstd::optional<T> value = op.get_value<T>();
-        if (!value) {
-            return false;
-        }
-        out_value = value.value();
-        return true;
+    if (samples != nullptr) {
+        return samples->get(&out_value, time_code, lightusd::value::TimeSampleInterpolationType::Linear);
     }
-    const nonstd::optional<lightusd::value::TimeSamples> samples = op.get_timesamples();
-    if (!samples) {
-        return false;
-    }
-    const nonstd::optional<double> time = samples.value().get_time(0);
-    if (!time) {
-        return false;
-    }
-    const nonstd::optional<T> value = op.get_value<T>(time.value());
+    const nonstd::optional<T> value = op.get_value<T>();
     if (!value) {
         return false;
     }
@@ -263,92 +257,141 @@ template <typename T>
     return true;
 }
 
-template <typename T>
-[[nodiscard]] auto get_xform_op_vector(const lightusd::XformOp& op, glm::dvec3& out_value) -> bool
+// The erhe form of one USD op value. The overload set is the op value types
+// USD spells; each answers the variant member erhe::scene::Xform_op::value
+// takes for the op types that use that spelling.
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::matrix4d& value) -> erhe::scene::Xform_op_value
 {
-    std::array<T, 3> value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = glm::dvec3{
+    return to_glm_double(value);
+}
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::double3& value) -> erhe::scene::Xform_op_value
+{
+    return glm::dvec3{value[0], value[1], value[2]};
+}
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::float3& value) -> erhe::scene::Xform_op_value
+{
+    return glm::dvec3{
         static_cast<double>(value[0]),
         static_cast<double>(value[1]),
         static_cast<double>(value[2])
     };
-    return true;
 }
-
-[[nodiscard]] auto get_xform_op_half_vector(const lightusd::XformOp& op, glm::dvec3& out_value) -> bool
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::half3& value) -> erhe::scene::Xform_op_value
 {
-    lightusd::value::half3 value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = glm::dvec3{
+    return glm::dvec3{
         static_cast<double>(lightusd::value::half_to_float(value[0])),
         static_cast<double>(lightusd::value::half_to_float(value[1])),
         static_cast<double>(lightusd::value::half_to_float(value[2]))
     };
-    return true;
 }
-
-template <typename T>
-[[nodiscard]] auto get_xform_op_scalar(const lightusd::XformOp& op, double& out_value) -> bool
+[[nodiscard]] auto to_xform_op_value(const double value) -> erhe::scene::Xform_op_value
 {
-    T value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = static_cast<double>(value);
-    return true;
+    return value;
 }
-
-[[nodiscard]] auto get_xform_op_half_scalar(const lightusd::XformOp& op, double& out_value) -> bool
+[[nodiscard]] auto to_xform_op_value(const float value) -> erhe::scene::Xform_op_value
 {
-    lightusd::value::half value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = static_cast<double>(lightusd::value::half_to_float(value));
-    return true;
+    return static_cast<double>(value);
 }
-
-template <typename T>
-[[nodiscard]] auto get_xform_op_quaternion(const lightusd::XformOp& op, glm::dquat& out_value) -> bool
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::half value) -> erhe::scene::Xform_op_value
 {
-    T value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = glm::dquat{
+    return static_cast<double>(lightusd::value::half_to_float(value));
+}
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::quatd& value) -> erhe::scene::Xform_op_value
+{
+    return glm::dquat{value.real, value.imag[0], value.imag[1], value.imag[2]};
+}
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::quatf& value) -> erhe::scene::Xform_op_value
+{
+    return glm::dquat{
         static_cast<double>(value.real),
         static_cast<double>(value.imag[0]),
         static_cast<double>(value.imag[1]),
         static_cast<double>(value.imag[2])
     };
-    return true;
 }
-
-[[nodiscard]] auto get_xform_op_half_quaternion(const lightusd::XformOp& op, glm::dquat& out_value) -> bool
+[[nodiscard]] auto to_xform_op_value(const lightusd::value::quath& value) -> erhe::scene::Xform_op_value
 {
-    lightusd::value::quath value{};
-    if (!get_xform_op_value(op, value)) {
-        return false;
-    }
-    out_value = glm::dquat{
+    return glm::dquat{
         static_cast<double>(lightusd::value::half_to_float(value.real)),
         static_cast<double>(lightusd::value::half_to_float(value.imag[0])),
         static_cast<double>(lightusd::value::half_to_float(value.imag[1])),
         static_cast<double>(lightusd::value::half_to_float(value.imag[2]))
     };
+}
+
+// One op of USD value type T: its value at `time_code`, and its time samples
+// as authored when it carries any.
+template <typename T>
+[[nodiscard]] auto read_typed_xform_op(
+    const lightusd::XformOp&            usd_op,
+    const lightusd::value::TimeSamples* samples,
+    const double                        time_code,
+    erhe::scene::Xform_op&              out_op
+) -> bool
+{
+    T value{};
+    if (!get_usd_op_value_at<T>(usd_op, samples, time_code, value)) {
+        return false;
+    }
+    out_op.value = to_xform_op_value(value);
+    if (samples == nullptr) {
+        return true;
+    }
+    const std::size_t count = samples->size();
+    out_op.samples.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        const nonstd::optional<double> sample_time = samples->get_time(i);
+        if (!sample_time) {
+            return false;
+        }
+        T sample_value{};
+        if (!samples->get(&sample_value, sample_time.value(), lightusd::value::TimeSampleInterpolationType::Linear)) {
+            return false;
+        }
+        out_op.samples.push_back(
+            erhe::scene::Xform_op_sample{
+                .time_code = sample_time.value(),
+                .value     = to_xform_op_value(sample_value)
+            }
+        );
+    }
     return true;
 }
 
+// The earliest time any op of `xformable` samples, and whether one does.
+[[nodiscard]] auto get_first_xform_op_sample_time(const lightusd::Xformable& xformable, double& out_time_code) -> bool
+{
+    bool found{false};
+    for (const lightusd::XformOp& usd_op : xformable.xformOps) {
+        if (!usd_op.has_timesamples()) {
+            continue;
+        }
+        const nonstd::optional<lightusd::value::TimeSamples> samples = usd_op.get_timesamples();
+        if (!samples || samples.value().empty()) {
+            continue;
+        }
+        const nonstd::optional<double> time = samples.value().get_time(0);
+        if (!time) {
+            continue;
+        }
+        if (!found || (time.value() < out_time_code)) {
+            out_time_code = time.value();
+            found         = true;
+        }
+    }
+    return found;
+}
+
 // One authored `xformOp:<type>[:<suffix>]` as an erhe Xform_op: the type, the
-// suffix and the invert flag as authored, and the value in double precision
-// with the authored value type kept as the op's precision, so the op is
-// written back as the type it was authored with.
-[[nodiscard]] auto read_xform_op(const lightusd::XformOp& usd_op, erhe::scene::Xform_op& out_op) -> bool
+// suffix and the invert flag as authored, the value at `time_code` in double
+// precision, the authored time samples when the op has any, and the authored
+// value type kept as the op's precision, so the op is written back as the type
+// it was authored with.
+[[nodiscard]] auto read_xform_op(
+    const lightusd::XformOp& usd_op,
+    const double             time_code,
+    erhe::scene::Xform_op&   out_op
+) -> bool
 {
     using Precision = erhe::scene::Xform_op_precision;
     if (!to_erhe_xform_op_type(usd_op.op_type, out_op.type)) {
@@ -357,63 +400,55 @@ template <typename T>
     out_op.suffix   = usd_op.suffix;
     out_op.inverted = usd_op.inverted;
 
+    nonstd::optional<lightusd::value::TimeSamples> samples;
+    if (usd_op.has_timesamples()) {
+        samples = usd_op.get_timesamples();
+        if (samples && samples.value().empty()) {
+            samples = nonstd::nullopt;
+        }
+    }
+    const lightusd::value::TimeSamples* sample_pointer = samples ? &samples.value() : nullptr;
+
     const std::string type_name = usd_op.get_value_type_name();
     if (type_name == lightusd::value::kMatrix4d) {
-        lightusd::value::matrix4d matrix{};
-        if (!get_xform_op_value(usd_op, matrix)) {
-            return false;
-        }
         out_op.precision = Precision::double_;
-        out_op.value     = to_glm_double(matrix);
-        return true;
+        return read_typed_xform_op<lightusd::value::matrix4d>(usd_op, sample_pointer, time_code, out_op);
     }
-    if ((type_name == lightusd::value::kDouble3) || (type_name == lightusd::value::kFloat3) || (type_name == lightusd::value::kHalf3)) {
-        glm::dvec3 value{0.0};
-        const bool read =
-            (type_name == lightusd::value::kDouble3) ? get_xform_op_vector<double>(usd_op, value) :
-            (type_name == lightusd::value::kFloat3)  ? get_xform_op_vector<float >(usd_op, value) :
-                                                       get_xform_op_half_vector   (usd_op, value);
-        if (!read) {
-            return false;
-        }
-        out_op.precision =
-            (type_name == lightusd::value::kDouble3) ? Precision::double_ :
-            (type_name == lightusd::value::kFloat3)  ? Precision::float_  :
-                                                       Precision::half_;
-        out_op.value = value;
-        return true;
+    if (type_name == lightusd::value::kDouble3) {
+        out_op.precision = Precision::double_;
+        return read_typed_xform_op<lightusd::value::double3>(usd_op, sample_pointer, time_code, out_op);
     }
-    if ((type_name == lightusd::value::kDouble) || (type_name == lightusd::value::kFloat) || (type_name == lightusd::value::kHalf)) {
-        double     value = 0.0;
-        const bool read =
-            (type_name == lightusd::value::kDouble) ? get_xform_op_scalar<double>(usd_op, value) :
-            (type_name == lightusd::value::kFloat)  ? get_xform_op_scalar<float >(usd_op, value) :
-                                                      get_xform_op_half_scalar   (usd_op, value);
-        if (!read) {
-            return false;
-        }
-        out_op.precision =
-            (type_name == lightusd::value::kDouble) ? Precision::double_ :
-            (type_name == lightusd::value::kFloat)  ? Precision::float_  :
-                                                      Precision::half_;
-        out_op.value = value;
-        return true;
+    if (type_name == lightusd::value::kFloat3) {
+        out_op.precision = Precision::float_;
+        return read_typed_xform_op<lightusd::value::float3>(usd_op, sample_pointer, time_code, out_op);
     }
-    if ((type_name == lightusd::value::kQuatd) || (type_name == lightusd::value::kQuatf) || (type_name == lightusd::value::kQuath)) {
-        glm::dquat value{1.0, 0.0, 0.0, 0.0};
-        const bool read =
-            (type_name == lightusd::value::kQuatd) ? get_xform_op_quaternion<lightusd::value::quatd>(usd_op, value) :
-            (type_name == lightusd::value::kQuatf) ? get_xform_op_quaternion<lightusd::value::quatf>(usd_op, value) :
-                                                     get_xform_op_half_quaternion                   (usd_op, value);
-        if (!read) {
-            return false;
-        }
-        out_op.precision =
-            (type_name == lightusd::value::kQuatd) ? Precision::double_ :
-            (type_name == lightusd::value::kQuatf) ? Precision::float_  :
-                                                     Precision::half_;
-        out_op.value = value;
-        return true;
+    if (type_name == lightusd::value::kHalf3) {
+        out_op.precision = Precision::half_;
+        return read_typed_xform_op<lightusd::value::half3>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kDouble) {
+        out_op.precision = Precision::double_;
+        return read_typed_xform_op<double>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kFloat) {
+        out_op.precision = Precision::float_;
+        return read_typed_xform_op<float>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kHalf) {
+        out_op.precision = Precision::half_;
+        return read_typed_xform_op<lightusd::value::half>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kQuatd) {
+        out_op.precision = Precision::double_;
+        return read_typed_xform_op<lightusd::value::quatd>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kQuatf) {
+        out_op.precision = Precision::float_;
+        return read_typed_xform_op<lightusd::value::quatf>(usd_op, sample_pointer, time_code, out_op);
+    }
+    if (type_name == lightusd::value::kQuath) {
+        out_op.precision = Precision::half_;
+        return read_typed_xform_op<lightusd::value::quath>(usd_op, sample_pointer, time_code, out_op);
     }
     return false;
 }
@@ -530,6 +565,7 @@ public:
         const lightusd::Stage& stage = impl.stage;
 
         report_skipped_physics(stage);
+        read_time_codes(stage);
 
         lightusd::tydra::RenderSceneConverterEnv env{stage};
         env.usd_filename = m_arguments.path.generic_string();
@@ -541,10 +577,15 @@ public:
         env.mesh_config.triangulate           = false;
         env.mesh_config.build_vertex_indices  = false;
         env.mesh_config.extract_all_texcoords = true;
-        // Time samples are read at the stage's default time code
-        // (doc/usd-compatibility-plan.md I1); an animated attribute
-        // contributes its default-time value and nothing else.
-        env.timecode = lightusd::value::TimeCode::Default();
+        // Everything the stage evaluates is evaluated at one time code, so
+        // that the transform Tydra composes for a prim and the authored
+        // xformOp stack the M8 reader reads say the same thing
+        // (src/erhe/usd/notes.md, "Time samples"). A stage that samples
+        // nothing keeps USD's default time code, which is the only value an
+        // attribute without samples has.
+        env.timecode = m_has_time_samples
+            ? m_import_time_code
+            : lightusd::value::TimeCode::Default();
         // The search path for texture assets is the file's own directory.
         const std::string directory = m_arguments.path.parent_path().generic_string();
         if (!directory.empty()) {
@@ -590,6 +631,7 @@ public:
         apply_variant_bindings();
         elide_default_local_values();
         apply_authored_opinions();
+        build_animation();
 
         log_usd->info(
             "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights, {} classes",
@@ -645,6 +687,229 @@ private:
         for (const std::shared_ptr<erhe::scene::Light>&        light    : m_result.data.lights)    { elide(light);    }
         for (const std::shared_ptr<erhe::scene::Camera>&       camera   : m_result.data.cameras)   { elide(camera);   }
         for (const std::shared_ptr<erhe::primitive::Material>& material : m_result.data.materials) { elide(material); }
+    }
+
+    // The stage's time coordinates, as the layer stack authored them. The
+    // fallbacks LightUSD hands back for the ones no layer authored are erhe's
+    // too (24 time codes per second, a range of nothing), so only what the
+    // file spelled is marked authored and only that is written back.
+    void read_time_codes(const lightusd::Stage& stage)
+    {
+        const lightusd::StageMetas& metas = stage.metas();
+        Usd_time_codes&             out   = m_result.data.time_codes;
+        out.time_codes_per_second          = metas.timeCodesPerSecond.get_value();
+        out.time_codes_per_second_authored = metas.timeCodesPerSecond.authored();
+        out.start_time_code                = metas.startTimeCode.get_value();
+        out.start_time_code_authored       = metas.startTimeCode.authored();
+        out.end_time_code                  = metas.endTimeCode.get_value();
+        out.end_time_code_authored         = metas.endTimeCode.authored();
+
+        // The time the whole stage is evaluated at: `startTimeCode` when the
+        // layer stack authors one, else the earliest time any prim of the
+        // stage samples a transform at. It is the time a viewer opens the
+        // stage at, so the pose the import gives the scene is the reference
+        // frame of its clips.
+        double earliest_sample_time{0.0};
+        m_has_time_samples = false;
+        for (const lightusd::Prim& prim : stage.root_prims()) {
+            find_earliest_sample_time(prim, earliest_sample_time, m_has_time_samples);
+        }
+        m_import_time_code = out.start_time_code_authored ? out.start_time_code : earliest_sample_time;
+    }
+
+    // The earliest time any xformOp of `prim` or its descendants samples.
+    static void find_earliest_sample_time(const lightusd::Prim& prim, double& out_time_code, bool& out_found)
+    {
+        const lightusd::Xformable* xformable = get_xformable(prim);
+        if (xformable != nullptr) {
+            double prim_time{0.0};
+            if (get_first_xform_op_sample_time(*xformable, prim_time)) {
+                if (!out_found || (prim_time < out_time_code)) {
+                    out_time_code = prim_time;
+                    out_found     = true;
+                }
+            }
+        }
+        for (const lightusd::Prim& child : prim.children()) {
+            find_earliest_sample_time(child, out_time_code, out_found);
+        }
+    }
+
+    // Which erhe animation path an op drives, and in which order the three
+    // may appear: erhe applies a channel by writing the component into the
+    // node's TRS, so a stack the animation can drive is one whose composition
+    // IS that TRS - at most one translate, one rotate and one scale op, in
+    // that order, none inverted and none suffixed.
+    [[nodiscard]] static auto get_xform_op_animation_path(
+        const erhe::scene::Xform_op_type   type,
+        erhe::scene::Animation_path&       out_path
+    ) -> bool
+    {
+        using Op   = erhe::scene::Xform_op_type;
+        using Path = erhe::scene::Animation_path;
+        switch (type) {
+            case Op::translate:  out_path = Path::TRANSLATION; return true;
+            case Op::scale:      out_path = Path::SCALE;       return true;
+            case Op::rotate_x:
+            case Op::rotate_y:
+            case Op::rotate_z:
+            case Op::rotate_xyz:
+            case Op::rotate_xzy:
+            case Op::rotate_yxz:
+            case Op::rotate_yzx:
+            case Op::rotate_zxy:
+            case Op::rotate_zyx:
+            case Op::orient:     out_path = Path::ROTATION;    return true;
+            default:                                           return false;
+        }
+    }
+
+    // Why the stack's time samples cannot become animation channels, or an
+    // empty string when they can.
+    [[nodiscard]] static auto get_animation_refusal(const erhe::scene::Xform_op_stack& stack) -> std::string
+    {
+        using Path = erhe::scene::Animation_path;
+        int  previous_order{-1};
+        bool has_translation{false};
+        bool has_rotation   {false};
+        bool has_scale      {false};
+        for (const erhe::scene::Xform_op& op : stack.ops) {
+            if (op.inverted) {
+                return "the stack inverts an op";
+            }
+            if (!op.suffix.empty()) {
+                return "the stack has a suffixed op (a pivot pair)";
+            }
+            erhe::scene::Animation_path path{Path::INVALID};
+            if (!get_xform_op_animation_path(op.type, path)) {
+                return "the stack has a matrix op";
+            }
+            const int order = (path == Path::TRANSLATION) ? 0 : (path == Path::ROTATION) ? 1 : 2;
+            if (order < previous_order) {
+                return "the ops are not in translate, rotate, scale order";
+            }
+            previous_order = order;
+            bool& seen = (path == Path::TRANSLATION) ? has_translation : (path == Path::ROTATION) ? has_rotation : has_scale;
+            if (seen) {
+                return "the stack has more than one op of the same kind";
+            }
+            seen = true;
+        }
+        return std::string{};
+    }
+
+    // The rotation one sample of a rotate / orient op holds, as a quaternion.
+    [[nodiscard]] static auto get_sample_rotation(
+        const erhe::scene::Xform_op&        op,
+        const erhe::scene::Xform_op_sample& sample
+    ) -> glm::dquat
+    {
+        if (op.type == erhe::scene::Xform_op_type::orient) {
+            return std::get<glm::dquat>(sample.value);
+        }
+        erhe::scene::Xform_op sample_op{};
+        sample_op.type  = op.type;
+        sample_op.value = sample.value;
+        return glm::quat_cast(glm::dmat3{sample_op.to_matrix()});
+    }
+
+    // The file's time-sampled xformOps as one Animation
+    // (src/erhe/usd/notes.md, "Time samples"). One channel per sampled op of
+    // every prim whose stack the channels can express; a stack they cannot is
+    // named in one warning and keeps the transform the import gave it, which
+    // is its pose at the evaluation time code.
+    void build_animation()
+    {
+        const double time_codes_per_second = (m_result.data.time_codes.time_codes_per_second > 0.0)
+            ? m_result.data.time_codes.time_codes_per_second
+            : 24.0;
+        std::shared_ptr<erhe::scene::Animation> animation;
+        for (const std::shared_ptr<erhe::scene::Node>& node : m_result.data.nodes) {
+            if (!node) {
+                continue;
+            }
+            const erhe::scene::Xform_op_stack* stack = node->get_xform_op_stack();
+            if ((stack == nullptr) || !stack->has_time_samples()) {
+                continue;
+            }
+            const std::string refusal = get_animation_refusal(*stack);
+            if (!refusal.empty()) {
+                log_usd->warn(
+                    "USD prim '{}': its time-sampled transform is not animated - {}",
+                    node->get_name(), refusal
+                );
+                continue;
+            }
+            for (const erhe::scene::Xform_op& op : stack->ops) {
+                if (op.samples.empty()) {
+                    continue;
+                }
+                erhe::scene::Animation_path path{erhe::scene::Animation_path::INVALID};
+                if (!get_xform_op_animation_path(op.type, path)) {
+                    continue;
+                }
+                if (!animation) {
+                    const std::string name = m_arguments.path.stem().generic_string();
+                    animation = std::make_shared<erhe::scene::Animation>(name.empty() ? std::string{"animation"} : name);
+                    animation->set_source_path(m_arguments.path);
+                    animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+                }
+                const std::size_t  component_count = erhe::scene::get_component_count(path);
+                std::vector<float> timestamps;
+                std::vector<float> values;
+                timestamps.reserve(op.samples.size());
+                values.reserve(op.samples.size() * component_count);
+                glm::dquat previous_rotation{1.0, 0.0, 0.0, 0.0};
+                bool       has_previous_rotation{false};
+                for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+                    timestamps.push_back(static_cast<float>(sample.time_code / time_codes_per_second));
+                    if (path == erhe::scene::Animation_path::ROTATION) {
+                        glm::dquat rotation = get_sample_rotation(op, sample);
+                        // Keep the sampled quaternions on one hemisphere: a
+                        // sign flip between two Euler samples would otherwise
+                        // make the interpolation take the long way round.
+                        if (has_previous_rotation && (glm::dot(previous_rotation, rotation) < 0.0)) {
+                            rotation = -rotation;
+                        }
+                        previous_rotation     = rotation;
+                        has_previous_rotation = true;
+                        values.push_back(static_cast<float>(rotation.x));
+                        values.push_back(static_cast<float>(rotation.y));
+                        values.push_back(static_cast<float>(rotation.z));
+                        values.push_back(static_cast<float>(rotation.w));
+                    } else {
+                        const glm::dvec3 vector = std::get<glm::dvec3>(sample.value);
+                        values.push_back(static_cast<float>(vector.x));
+                        values.push_back(static_cast<float>(vector.y));
+                        values.push_back(static_cast<float>(vector.z));
+                    }
+                }
+                // USD interpolates time samples of a floating-point attribute
+                // linearly, and authors no per-attribute interpolation for a
+                // reader to pick another one from.
+                erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+                sampler.set(std::move(timestamps), std::move(values));
+                animation->samplers.push_back(std::move(sampler));
+                animation->channels.push_back(
+                    erhe::scene::Animation_channel{
+                        .path           = path,
+                        .sampler_index  = animation->samplers.size() - 1,
+                        .target         = node,
+                        .start_position = 0,
+                        .value_offset   = 0
+                    }
+                );
+            }
+        }
+        if (!animation) {
+            return;
+        }
+        animation->notify_keyframes_changed();
+        log_usd->info(
+            "USD '{}': {} time-sampled transform channel(s) as animation '{}'",
+            m_arguments.path.generic_string(), animation->channels.size(), animation->get_name()
+        );
+        m_result.data.animations.push_back(std::move(animation));
     }
 
     // The root layer's `customLayerData`, string entries only: an erhe save
@@ -787,13 +1052,14 @@ private:
         if (xformable == nullptr) {
             return false;
         }
+        const double time_code = m_import_time_code;
         for (const lightusd::XformOp& usd_op : xformable->xformOps) {
             if (usd_op.op_type == lightusd::XformOp::OpType::ResetXformStack) {
                 out_stack.reset_xform_stack = true;
                 continue;
             }
             erhe::scene::Xform_op op{};
-            if (!read_xform_op(usd_op, op)) {
+            if (!read_xform_op(usd_op, time_code, op)) {
                 log_usd->warn(
                     "USD prim '{}': xformOp of value type '{}' has no erhe counterpart - the prim keeps the composed transform",
                     absolute_path,
@@ -836,7 +1102,16 @@ private:
             erhe::scene::Xform_op_stack stack{};
             if (read_xform_op_stack(usd_node.abs_path, stack)) {
                 const glm::mat4 stack_matrix{stack.compose()};
-                if ((composed_transform == Composed_transform::unevaluated) || is_near_matrix(stack_matrix, composed)) {
+                // A time-sampled stack is the prim's transform whatever the
+                // render scene composed: LightUSD evaluates an op that carries
+                // both a `default` and time samples at its default, while USD
+                // says the samples win at any time code the samples reach
+                // (src/erhe/usd/notes.md, "Time samples").
+                if (
+                    (composed_transform == Composed_transform::unevaluated) ||
+                    stack.has_time_samples() ||
+                    is_near_matrix(stack_matrix, composed)
+                ) {
                     node.set_xform_op_stack(std::move(stack));
                     return;
                 }
@@ -3539,7 +3814,7 @@ private:
                 continue;
             }
             erhe::scene::Xform_op op{};
-            if (!read_xform_op(usd_op, op)) {
+            if (!read_xform_op(usd_op, m_import_time_code, op)) {
                 log_usd->warn(
                     "USD prim '{}': the override at '{}' has an xformOp of value type '{}' with no erhe counterpart - the transform is dropped",
                     absolute_path,
@@ -4488,6 +4763,10 @@ private:
 
     const Usd_load_arguments&      m_arguments;
     Usd_load_result&               m_result;
+    // The time code the whole stage is evaluated at, and whether any prim
+    // samples a transform at all (read_time_codes).
+    double                         m_import_time_code{0.0};
+    bool                           m_has_time_samples{false};
     std::vector<Authored_opinions> m_authored_opinions;
     const lightusd::Stage*       m_stage{nullptr};
     const Tydra_scene*           m_scene{nullptr};

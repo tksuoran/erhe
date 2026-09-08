@@ -97,6 +97,14 @@ else: erhe's transform propagation always composes with the parent, so
 `M(op0) * M(op1) * ... * M(opN)`, so a point is transformed by the last op
 first and a `[translate, rotate, scale]` stack composes to `T * R * S`.
 
+An op may also carry the time samples the file authored for it
+(`Xform_op::samples`), in the authoring file's own time codes and in the op's
+own value form; `Xform_op::value` stays the op's single value, so `compose()`
+and the write-back need no notion of time. The samples are the authored record
+a save writes back, and their playable projection is an `Animation` built by
+the reader that produced them (`src/erhe/usd/notes.md`, "Time samples"); a
+write-back changes `value` alone and leaves the samples as authored.
+
 A prim without a stack - the common case - carries a null pointer and nothing
 else. While a stack is present it is the authoritative form of the local
 transform: `Xformable::handle_local_transform_written`, the shared tail of

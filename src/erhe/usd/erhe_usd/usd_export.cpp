@@ -168,47 +168,47 @@ constexpr float c_export_focal_length = 50.0f;
     }
 }
 
-// The op's value in the value type its authored precision names, which is
-// what the writer prints the type name of: a `float3` op comes back a
-// `float3` op. erhe keeps every value in double precision, so a `half` op
-// round-trips through the nearest half - the same value it was read from.
-void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& op)
+// Hand `value` - one value of `op`, its own or one of its time samples - to
+// `sink` in the USD value type the op is authored as, so that the op's value
+// and every one of its samples travel through one type dispatch.
+template <typename Sink>
+void visit_xform_op_value(const erhe::scene::Xform_op& op, const erhe::scene::Xform_op_value& value, Sink&& sink)
 {
     using Precision = erhe::scene::Xform_op_precision;
     if (op.type == erhe::scene::Xform_op_type::transform) {
         // matrix4d is the only matrix type erhe keeps a value in, and the op
         // holds it in double precision, so it is written without narrowing.
-        const glm::dmat4          value = std::get<glm::dmat4>(op.value);
+        const glm::dmat4          matrix_value = std::get<glm::dmat4>(value);
         lightusd::value::matrix4d matrix{};
         for (int j = 0; j < 4; ++j) {
             for (int i = 0; i < 4; ++i) {
-                matrix.m[j][i] = value[j][i];
+                matrix.m[j][i] = matrix_value[j][i];
             }
         }
-        usd_op.set_value(matrix);
+        sink(matrix);
         return;
     }
     if (op.type == erhe::scene::Xform_op_type::orient) {
-        const glm::dquat value = std::get<glm::dquat>(op.value);
+        const glm::dquat quaternion = std::get<glm::dquat>(value);
         switch (op.precision) {
             case Precision::double_: {
-                usd_op.set_value(lightusd::value::quatd{{value.x, value.y, value.z}, value.w});
+                sink(lightusd::value::quatd{{quaternion.x, quaternion.y, quaternion.z}, quaternion.w});
                 return;
             }
             case Precision::float_: {
-                usd_op.set_value(
+                sink(
                     lightusd::value::quatf{
-                        {static_cast<float>(value.x), static_cast<float>(value.y), static_cast<float>(value.z)},
-                        static_cast<float>(value.w)
+                        {static_cast<float>(quaternion.x), static_cast<float>(quaternion.y), static_cast<float>(quaternion.z)},
+                        static_cast<float>(quaternion.w)
                     }
                 );
                 return;
             }
             default: {
-                usd_op.set_value(
+                sink(
                     lightusd::value::quath{
-                        {to_usd_half(value.x), to_usd_half(value.y), to_usd_half(value.z)},
-                        to_usd_half(value.w)
+                        {to_usd_half(quaternion.x), to_usd_half(quaternion.y), to_usd_half(quaternion.z)},
+                        to_usd_half(quaternion.w)
                     }
                 );
                 return;
@@ -216,35 +216,63 @@ void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& 
         }
     }
     if (is_three_component_op(op.type)) {
-        const glm::dvec3 value = std::get<glm::dvec3>(op.value);
+        const glm::dvec3 vector = std::get<glm::dvec3>(value);
         switch (op.precision) {
             case Precision::double_: {
-                usd_op.set_value(lightusd::value::double3{value.x, value.y, value.z});
+                sink(lightusd::value::double3{vector.x, vector.y, vector.z});
                 return;
             }
             case Precision::float_: {
-                usd_op.set_value(
+                sink(
                     lightusd::value::float3{
-                        static_cast<float>(value.x),
-                        static_cast<float>(value.y),
-                        static_cast<float>(value.z)
+                        static_cast<float>(vector.x),
+                        static_cast<float>(vector.y),
+                        static_cast<float>(vector.z)
                     }
                 );
                 return;
             }
             default: {
-                usd_op.set_value(lightusd::value::half3{to_usd_half(value.x), to_usd_half(value.y), to_usd_half(value.z)});
+                sink(lightusd::value::half3{to_usd_half(vector.x), to_usd_half(vector.y), to_usd_half(vector.z)});
                 return;
             }
         }
     }
     // A single-axis rotate: one angle in degrees.
-    const double value = std::get<double>(op.value);
+    const double angle = std::get<double>(value);
     switch (op.precision) {
-        case Precision::double_: usd_op.set_value(value);                       return;
-        case Precision::float_:  usd_op.set_value(static_cast<float>(value));   return;
-        default:                 usd_op.set_value(to_usd_half(value));          return;
+        case Precision::double_: sink(angle);                        return;
+        case Precision::float_:  sink(static_cast<float>(angle));    return;
+        default:                 sink(to_usd_half(angle));           return;
     }
+}
+
+// The op's value in the value type its authored precision names, which is
+// what the writer prints the type name of: a `float3` op comes back a
+// `float3` op. erhe keeps every value in double precision, so a `half` op
+// round-trips through the nearest half - the same value it was read from.
+// The op's value and, when it carries any, its time samples
+// (src/erhe/usd/notes.md, "Time samples"). A sampled op is written with both:
+// the samples are what a viewer plays, and the value is the pose at the
+// stage's start time, which is what a reader that evaluates nothing sees.
+void set_xform_op_value(lightusd::XformOp& usd_op, const erhe::scene::Xform_op& op)
+{
+    visit_xform_op_value(op, op.value, [&usd_op](const auto& usd_value) { usd_op.set_value(usd_value); });
+    if (op.samples.empty()) {
+        return;
+    }
+    lightusd::value::TimeSamples samples;
+    samples.reserve(op.samples.size());
+    for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+        visit_xform_op_value(
+            op, sample.value,
+            [&samples, &sample](const auto& usd_value) {
+                std::string error;
+                static_cast<void>(samples.add_sample(sample.time_code, usd_value, &error));
+            }
+        );
+    }
+    usd_op.set_timesamples(std::move(samples));
 }
 
 [[nodiscard]] auto is_identity(const glm::mat4& matrix) -> bool
@@ -741,6 +769,16 @@ public:
             (m_arguments.up_axis == "X") ? lightusd::Axis::X : lightusd::Axis::Y
         );
         stage.metas().metersPerUnit.set_value(m_arguments.meters_per_unit);
+        // The time coordinates only mean something once the layer holds time
+        // samples, so they are authored exactly when one was written, and the
+        // range is the one the samples span.
+        if (m_wrote_time_samples) {
+            stage.metas().timeCodesPerSecond.set_value(
+                (m_arguments.time_codes_per_second > 0.0) ? m_arguments.time_codes_per_second : 24.0
+            );
+            stage.metas().startTimeCode.set_value(m_first_time_code);
+            stage.metas().endTimeCode.set_value(m_last_time_code);
+        }
         for (const std::pair<const std::string, std::string>& entry : m_arguments.custom_layer_data) {
             stage.metas().customLayerData[entry.first] = lightusd::MetaVariable{entry.second};
         }
@@ -767,6 +805,12 @@ public:
     }
 
 private:
+    // The time-code range of the xformOp time samples written so far, and
+    // whether any were: what the layer's startTimeCode / endTimeCode say.
+    double m_first_time_code   {0.0};
+    double m_last_time_code    {0.0};
+    bool   m_wrote_time_samples{false};
+
     void add_warning(const std::string& text)
     {
         if (!m_result.warning.empty()) {
@@ -2560,18 +2604,22 @@ private:
     // and a stage the importer applied its upAxis / metersPerUnit correction
     // to. A prim erhe created carries no stack and writes the single matrix
     // op, so nothing about an editor-authored file changes.
-    static void set_transform(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Node& node, const glm::mat4& matrix)
+    void set_transform(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Node& node, const glm::mat4& matrix)
     {
         set_transform(xform_ops, node.get_xform_op_stack(), matrix);
     }
 
-    static void set_transform(
+    void set_transform(
         std::vector<lightusd::XformOp>&    xform_ops,
         const erhe::scene::Xform_op_stack* stack,
         const glm::mat4&                   matrix
     )
     {
-        if ((stack != nullptr) && is_near(glm::mat4{stack->compose()}, matrix)) {
+        // A time-sampled stack is written whatever the transform the prim
+        // holds right now says: that transform is the pose the animation
+        // player put the prim in, and the stack is what the file authored
+        // (src/erhe/usd/notes.md, "Time samples").
+        if ((stack != nullptr) && (stack->has_time_samples() || is_near(glm::mat4{stack->compose()}, matrix))) {
             write_xform_op_stack(xform_ops, *stack);
             return;
         }
@@ -2584,7 +2632,7 @@ private:
         xform_ops.push_back(op);
     }
 
-    static void write_xform_op_stack(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Xform_op_stack& stack)
+    void write_xform_op_stack(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Xform_op_stack& stack)
     {
         if (stack.reset_xform_stack) {
             // `!resetXformStack!` is the first token of xformOpOrder and has
@@ -2599,6 +2647,11 @@ private:
             usd_op.inverted = op.inverted;
             usd_op.suffix   = op.suffix;
             set_xform_op_value(usd_op, op);
+            for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+                m_first_time_code = m_wrote_time_samples ? std::min(m_first_time_code, sample.time_code) : sample.time_code;
+                m_last_time_code  = m_wrote_time_samples ? std::max(m_last_time_code,  sample.time_code) : sample.time_code;
+                m_wrote_time_samples = true;
+            }
             xform_ops.push_back(usd_op);
         }
     }

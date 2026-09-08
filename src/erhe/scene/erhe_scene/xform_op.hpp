@@ -46,6 +46,20 @@ enum class Xform_op_precision {
 //                   authors the row-vector transpose of it)
 using Xform_op_value = std::variant<double, glm::dvec3, glm::dquat, glm::dmat4>;
 
+// One time sample of an op. `time_code` is the time in the units the authoring
+// file uses - USD time codes, which become seconds by dividing by the stage's
+// `timeCodesPerSecond` - and `value` is the op's value there, in the same form
+// Xform_op::value takes.
+class Xform_op_sample
+{
+public:
+    double         time_code{0.0};
+    Xform_op_value value    {glm::dmat4{1.0}};
+
+    [[nodiscard]] auto operator==(const Xform_op_sample& other) const -> bool;
+    [[nodiscard]] auto operator!=(const Xform_op_sample& other) const -> bool;
+};
+
 // One authored `xformOp:<type>[:<suffix>]` of a prim's xformOpOrder.
 class Xform_op
 {
@@ -57,6 +71,14 @@ public:
     // `!invert!` in xformOpOrder: the op contributes the inverse of its value.
     bool               inverted {false};
     Xform_op_value     value    {glm::dmat4{1.0}};
+    // The op's authored time samples, in the file's own time codes and in
+    // increasing time order; empty when the op is not time-sampled. `value`
+    // stays the op's single value - what it composes to - so compose() and
+    // the write-back need no notion of time; the samples are the authored
+    // record a save writes back, and the playable projection of them is an
+    // erhe::scene::Animation channel the importer builds
+    // (src/erhe/usd/notes.md, "Time samples").
+    std::vector<Xform_op_sample> samples{};
 
     // The op's contribution as a glm column-vector matrix, inversion applied.
     [[nodiscard]] auto to_matrix() const -> glm::dmat4;
@@ -81,6 +103,9 @@ public:
     // M(op0) * M(op1) * ... * M(opN), so a point is transformed by opN first.
     // A [translate, rotate, scale] stack composes to T * R * S.
     [[nodiscard]] auto compose() const -> glm::dmat4;
+
+    // Whether any op of the stack carries time samples.
+    [[nodiscard]] auto has_time_samples() const -> bool;
 
     [[nodiscard]] auto operator==(const Xform_op_stack& other) const -> bool;
     [[nodiscard]] auto operator!=(const Xform_op_stack& other) const -> bool;

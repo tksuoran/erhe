@@ -108,6 +108,23 @@ public:
     float       exposure {0.0f};
     std::string texture_file;
 };
+// The time coordinates a USD-backed scene was opened from authored
+// (src/erhe/usd/notes.md, "Time samples"). A time code becomes seconds by
+// dividing by `time_codes_per_second`; the `*_authored` flags say which of
+// the three the file spelled, so a save writes back what the file had. The
+// record is USD-only state, held the way the dome lights are: an
+// erhe-authored scene keeps USD's own defaults.
+class Usd_time_code_record
+{
+public:
+    double time_codes_per_second{24.0};
+    double start_time_code      {0.0};
+    double end_time_code        {0.0};
+    bool   time_codes_per_second_authored{false};
+    bool   start_time_code_authored      {false};
+    bool   end_time_code_authored        {false};
+};
+
 class Scene_view;
 class Viewport_scene_view;
 
@@ -330,6 +347,12 @@ public:
     [[nodiscard]] auto get_usd_sublayers() const -> const std::vector<std::string>&;
     void set_usd_sublayers(std::vector<std::string>&& sublayers);
 
+    // The time coordinates the opened USD file authored (see
+    // Usd_time_code_record): what turns an xformOp time sample into seconds,
+    // and what a save spells back so the file keeps its own rate.
+    [[nodiscard]] auto get_usd_time_codes() const -> const Usd_time_code_record&;
+    void set_usd_time_codes(const Usd_time_code_record& time_codes);
+
     // Definition-vs-reference classification for an asset-typed item
     // entering this scene's content library (asset-manager plan, R5
     // sub-plan resolution 2): true = definition (owning entry), false =
@@ -420,6 +443,7 @@ private:
     Scene_source_format                             m_source_format{Scene_source_format::none};
     std::vector<Usd_dome_light_record>              m_usd_dome_lights;
     std::vector<std::string>                        m_usd_sublayers;
+    Usd_time_code_record                            m_usd_time_codes;
     bool                                            m_is_registered{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per

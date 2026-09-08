@@ -2071,6 +2071,16 @@ void Scene_root::set_usd_sublayers(std::vector<std::string>&& sublayers)
     m_usd_sublayers = std::move(sublayers);
 }
 
+auto Scene_root::get_usd_time_codes() const -> const Usd_time_code_record&
+{
+    return m_usd_time_codes;
+}
+
+void Scene_root::set_usd_time_codes(const Usd_time_code_record& time_codes)
+{
+    m_usd_time_codes = time_codes;
+}
+
 void Scene_root::set_source_path(const std::filesystem::path& path, const Scene_source_format format)
 {
     m_source_path   = path;
