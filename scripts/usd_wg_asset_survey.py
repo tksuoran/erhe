@@ -57,6 +57,25 @@ only --eye-note writes:
 A run restricted with --only or --limit surveys those entries and keeps every
 other entry's record, so summary.json and the document always state the whole
 survey; each record carries the date it was surveyed on.
+
+OpenUSD reference (--usd-root / ERHE_USD_ROOT)
+----------------------------------------------
+With a prebuilt OpenUSD at `<usd_root>` (its `scripts/set_usd_env.bat` and
+`scripts/usdrecord.bat`), every entry also gets:
+
+* the composed stage's own counts (scripts/usd_wg_pxr_stage.py under the
+  bundled Python: prims, UsdGeomMesh, materials, lights, cameras) - what the
+  editor should have reached, read by OpenUSD itself, in place of the
+  authored-prim-type heuristic;
+* a Storm render through the very camera the editor's capture looks through
+  (`usdrecord`; the editor's computed camera is authored into a session layer
+  in stage space, an authored camera is named by path), at the capture's
+  aspect - a reference that exists for every entry and shows the current
+  revision of the asset, where the repository's own renders are missing for
+  most entries and predate some;
+* the normalized cross-correlation of the two grey images (`storm_match`,
+  1.0 = identical), which ranks the entries for a by-eye read and, under
+  --storm-threshold, names a gap the log does not.
 """
 
 import argparse
@@ -71,6 +90,318 @@ import sys
 import time
 import urllib.error
 import urllib.request
+
+# --------------------------------------------------------------------------
+# OpenUSD tools (optional): composed-stage facts and Storm reference renders
+# --------------------------------------------------------------------------
+
+DEFAULT_USD_ROOT = os.environ.get("ERHE_USD_ROOT", "")
+PXR_STAGE_SCRIPT = pathlib.Path(__file__).resolve().parent / "usd_wg_pxr_stage.py"
+
+
+class Usd_tools:
+    """The prebuilt OpenUSD at `<usd_root>`: its Python (`pxr`) for stage
+    facts and its `usdrecord` for Storm renders. Both run through the
+    wrapper scripts the distribution ships, which set up its environment."""
+
+    def __init__(self, usd_root: pathlib.Path) -> None:
+        self.root = usd_root
+        self.env_script = usd_root / "scripts" / "set_usd_env.bat"
+        self.usdrecord = usd_root / "scripts" / "usdrecord.bat"
+        if not self.env_script.is_file():
+            raise FileNotFoundError(f"{self.env_script} not found: --usd-root must name a prebuilt OpenUSD")
+        if not self.usdrecord.is_file():
+            raise FileNotFoundError(f"{self.usdrecord} not found: --usd-root must name a prebuilt OpenUSD")
+
+    def _run(self, command: str, timeout: float) -> subprocess.CompletedProcess:
+        # cmd.exe runs the env batch and the tool in one shell; the batch
+        # echoes its own comment lines, which the callers skip. The command
+        # line is passed as one string: cmd /c strips the outermost pair of
+        # quotes and keeps every quoted path inside intact.
+        return subprocess.run(f'cmd /c ""{self.env_script}" && {command}"',
+                              capture_output=True, text=True, timeout=timeout, errors="replace")
+
+    def stage_stats(self, path: pathlib.Path, timeout: float = 300.0) -> dict:
+        try:
+            done = self._run(f'python "{PXR_STAGE_SCRIPT}" "{path}"', timeout)
+        except subprocess.TimeoutExpired:
+            return {"error": f"pxr stage read timed out after {timeout:.0f} s"}
+        for line in done.stdout.splitlines():
+            if line.startswith("{"):
+                try:
+                    return json.loads(line)
+                except json.JSONDecodeError as error:
+                    return {"error": f"pxr stage read: unreadable output ({error})"}
+        tail = (done.stderr or done.stdout).strip().splitlines()[-3:]
+        return {"error": "pxr stage read produced no result: " + " | ".join(tail)[:300]}
+
+    def record(self, path: pathlib.Path, out_png: pathlib.Path, width: int,
+               camera: str = "", session_layer: pathlib.Path = None, timeout: float = 600.0) -> str:
+        """Render `path` with Storm into `out_png`; "" on success, else the reason."""
+        parts = [f'"{self.usdrecord}"', "--imageWidth", str(max(int(width), 16)), "--complexity", "medium"]
+        if session_layer is not None:
+            parts += ["--sessionLayer", f'"{session_layer}"']
+        if camera:
+            parts += ["--camera", f'"{camera}"']
+        parts += [f'"{path}"', f'"{out_png}"']
+        try:
+            done = self._run(" ".join(parts), timeout)
+        except subprocess.TimeoutExpired:
+            return f"usdrecord timed out after {timeout:.0f} s"
+        if out_png.is_file() and (out_png.stat().st_size > 0):
+            return ""
+        lines = [l for l in (done.stderr + done.stdout).splitlines()
+                 if l.strip() and (not l.lstrip().startswith("REM")) and ("Warning" not in l)]
+        return "usdrecord produced no image: " + " | ".join(lines[-3:])[:300]
+
+
+def composed_facts(stats: dict) -> dict:
+    """The per-entry fields kept from a pxr stage read."""
+    if not stats or stats.get("error"):
+        return {"composed_error": (stats or {}).get("error", "no pxr read")}
+    return {
+        "composed_prims": stats.get("prims"),
+        "composed_meshes": stats.get("meshes"),
+        "composed_gprims": stats.get("gprims"),
+        "composed_point_instancers": stats.get("point_instancers"),
+        "composed_materials": stats.get("materials"),
+        "composed_lights": stats.get("lights"),
+        "composed_cameras": stats.get("cameras", []),
+        "composed_up_axis": stats.get("up_axis", ""),
+        "composed_meters_per_unit": stats.get("meters_per_unit"),
+        "composed_bounds_min": stats.get("bounds_min"),
+        "composed_bounds_max": stats.get("bounds_max"),
+        "composed_errors": stats.get("errors", [])[:5],
+    }
+
+
+def bounds_deviation(record: dict):
+    """How far the editor's world AABB of the scene's meshes is from the
+    composed stage's, as a fraction of the composed diagonal: the editor's
+    bounds (Y-up metres) go back to stage space through the inverse of the
+    importer's stage transform first. None when either side is missing."""
+    framing = record.get("framing") or {}
+    erhe_min = framing.get("bounds_min")
+    erhe_max = framing.get("bounds_max")
+    stage_min = record.get("composed_bounds_min")
+    stage_max = record.get("composed_bounds_max")
+    if not (erhe_min and erhe_max and stage_min and stage_max) or (framing.get("meshes", 0) == 0):
+        return None
+    scale = float(record.get("composed_meters_per_unit") or 1.0) or 1.0
+    corners = []
+    for x in (erhe_min[0], erhe_max[0]):
+        for y in (erhe_min[1], erhe_max[1]):
+            for z in (erhe_min[2], erhe_max[2]):
+                if (record.get("composed_up_axis") or "Y") == "Z":
+                    x, y, z = x, -z, y    # inverse of R_x(-90 deg): (x, y, z) -> (x, -z, y)
+                corners.append((x / scale, y / scale, z / scale))
+    back_min = [min(c[i] for c in corners) for i in range(3)]
+    back_max = [max(c[i] for c in corners) for i in range(3)]
+    diagonal = sum((stage_max[i] - stage_min[i]) ** 2 for i in range(3)) ** 0.5
+    if diagonal <= 1.0e-9:
+        return None
+    deviation = max(
+        sum((back_min[i] - stage_min[i]) ** 2 for i in range(3)) ** 0.5,
+        sum((back_max[i] - stage_max[i]) ** 2 for i in range(3)) ** 0.5,
+    )
+    return round(deviation / diagonal, 4)
+
+
+def stage_camera_session_layer(view: dict, up_axis: str, meters_per_unit: float,
+                               out_path: pathlib.Path) -> None:
+    """Author the editor's viewport camera as a Camera prim in a session layer,
+    in the stage's own space: the importer applies R_x(-90 deg) for a Z-up
+    stage and scales by metersPerUnit (usd_import.cpp make_stage_transform),
+    so the camera goes back through the inverse before it is written."""
+    import numpy
+
+    world_from_camera = numpy.array(view["camera_world_from_camera"], dtype=float).reshape(4, 4).T  # column-major in
+    stage_from_world = numpy.identity(4)
+    if up_axis == "Z":
+        # inverse of glm::rotate(-pi/2, X): rotate +pi/2 about X
+        stage_from_world[1, 1] = 0.0
+        stage_from_world[1, 2] = -1.0
+        stage_from_world[2, 1] = 1.0
+        stage_from_world[2, 2] = 0.0
+    scale = float(meters_per_unit or 1.0)
+    if scale <= 0.0:
+        scale = 1.0
+    camera = stage_from_world @ world_from_camera
+    camera[:3, 3] /= scale
+    for column in range(3):   # the erhe camera carries no scale; keep the basis unit
+        length = numpy.linalg.norm(camera[:3, column])
+        if length > 0.0:
+            camera[:3, column] /= length
+    fov_y = float(view.get("camera_fov_y") or 0.7853981634)
+    aspect = float(view["width"]) / float(max(view["height"], 1))
+    vertical_aperture = 24.0
+    horizontal_aperture = vertical_aperture * aspect
+    focal_length = (0.5 * vertical_aperture) / max(numpy.tan(0.5 * fov_y), 1.0e-6)
+    z_near = float(view.get("camera_z_near") or 0.01) / scale
+    z_far = float(view.get("camera_z_far") or 1000.0) / scale
+    rows = []
+    for row in range(4):   # usda writes the matrix as rows of the row-vector convention: our columns
+        rows.append("(" + ", ".join(f"{camera[component, row]:.9g}" for component in range(4)) + ")")
+    out_path.write_text(
+        "#usda 1.0\n"
+        "def Camera \"ErheSurveyCamera\" {\n"
+        f"    float focalLength = {focal_length:.9g}\n"
+        f"    float horizontalAperture = {horizontal_aperture:.9g}\n"
+        f"    float verticalAperture = {vertical_aperture:.9g}\n"
+        f"    float2 clippingRange = ({z_near:.9g}, {z_far:.9g})\n"
+        f"    matrix4d xformOp:transform = ( {', '.join(rows)} )\n"
+        "    uniform token[] xformOpOrder = [\"xformOp:transform\"]\n"
+        "}\n",
+        encoding="utf-8")
+
+
+def capture_view_crop(record: dict):
+    """The editor's capture cropped to its 3D viewport (the rect get_viewports
+    reported, else the fixed region), as an RGB PIL image, or None."""
+    from PIL import Image
+    capture_path = pathlib.Path(record.get("screenshot", ""))
+    if not capture_path.is_file():
+        return None
+    with Image.open(capture_path) as capture_image:
+        capture = capture_image.convert("RGB")
+    width, height = capture.size
+    view = record.get("view") or {}
+    if view.get("width", 0) > 0 and view.get("height", 0) > 0:
+        box = (int(view["x"]), int(view["y"]), int(view["x"] + view["width"]), int(view["y"] + view["height"]))
+        box = (max(box[0], 0), max(box[1], 0), min(box[2], width), min(box[3], height))
+        if (box[2] > box[0]) and (box[3] > box[1]):
+            return capture.crop(box)
+    left, top, right, bottom = VIEWPORT_REGION
+    return capture.crop((int(left * width), int(top * height), int(right * width), int(bottom * height)))
+
+
+def match_against_storm(record: dict) -> dict:
+    """Normalized cross-correlation between the capture's viewport and the
+    Storm render, both grey, at the render's size. Storm leaves the
+    background transparent; it is composited over the capture's own
+    background colour (the median of the crop's border) so that only the
+    content decides the score. `object_match` scores the pixels Storm
+    covered, `match` the whole frame (a missing object lowers it)."""
+    try:
+        import numpy
+        from PIL import Image
+    except ImportError:
+        return {"error": "PIL / numpy missing under py -3"}
+    storm_path = pathlib.Path(record.get("storm_render", ""))
+    capture = capture_view_crop(record)
+    if (capture is None) or (not storm_path.is_file()):
+        return {"error": "no capture or no Storm render"}
+    with Image.open(storm_path) as storm_image:
+        storm = storm_image.convert("RGBA")
+    # Same vertical field of view on both sides (perspective_vertical): the
+    # wider image loses its margins so the two frames cover the same view.
+    def crop_to_aspect(image, aspect):
+        w, h = image.size
+        if (w / float(h)) > (aspect + 1.0e-3):
+            new_w = int(round(h * aspect))
+            left = (w - new_w) // 2
+            return image.crop((left, 0, left + new_w, h))
+        if (w / float(h)) < (aspect - 1.0e-3):
+            new_h = int(round(w / aspect))
+            top = (h - new_h) // 2
+            return image.crop((0, top, w, top + new_h))
+        return image
+    horizontal = (record.get("view") or {}).get("camera_projection_type", "") == "perspective_horizontal"
+    aspect = min(capture.width / float(capture.height), storm.width / float(storm.height))
+    if horizontal:
+        aspect = max(capture.width / float(capture.height), storm.width / float(storm.height))
+    capture = crop_to_aspect(capture, aspect)
+    storm = crop_to_aspect(storm, aspect)
+    size = (min(storm.width, 512), max(int(round(min(storm.width, 512) / aspect)), 1))
+    capture = numpy.asarray(capture.resize(size, Image.LANCZOS), dtype=float)
+    storm = numpy.asarray(storm.resize(size, Image.LANCZOS), dtype=float)
+    border = numpy.concatenate([capture[0], capture[-1], capture[:, 0], capture[:, -1]])
+    background = numpy.median(border, axis=0)
+    alpha = storm[:, :, 3:4] / 255.0
+    storm_rgb = (storm[:, :, :3] * alpha) + (background * (1.0 - alpha))
+    weights = numpy.array([0.299, 0.587, 0.114])
+    a = capture @ weights
+    b = storm_rgb @ weights
+
+    def ncc(x, y):
+        if x.size < 4:
+            return None
+        x = x - x.mean()
+        y = y - y.mean()
+        denominator = numpy.sqrt((x * x).sum() * (y * y).sum())
+        if denominator <= 1.0e-9:
+            return 1.0 if (numpy.abs(x).max() < 1.0e-9 and numpy.abs(y).max() < 1.0e-9) else 0.0
+        return float((x * y).sum() / denominator)
+
+    covered = alpha[:, :, 0] > 0.5
+    coverage = float(covered.mean())
+    # The silhouettes, independent of lighting and colour: where the capture
+    # departs from its background against where Storm drew anything.
+    drawn = numpy.abs(capture - background).max(axis=2) > 12.0
+    union = float((drawn | covered).sum())
+    silhouette = (float((drawn & covered).sum()) / union) if union > 0.0 else 1.0
+    result = {
+        "match": ncc(a, b),
+        "object_match": ncc(a[covered], b[covered]) if covered.any() else None,
+        "silhouette": round(silhouette, 4),
+        "coverage": round(coverage, 4),
+        "size": list(size),
+    }
+    for key in ("match", "object_match"):
+        if result[key] is not None:
+            result[key] = round(result[key], 4)
+    return result
+
+
+def storm_reference(record: dict, absolute: pathlib.Path, usd_tools: Usd_tools, shots_dir: pathlib.Path,
+                    timeout: float) -> None:
+    """The Storm render of the entry through the editor's own view, and the
+    match score; fills the storm_* fields of the record."""
+    record["storm_render"] = ""
+    record["storm_error"] = ""
+    record["storm_match"] = None
+    record["storm_object_match"] = None
+    record["storm_silhouette"] = None
+    record["storm_coverage"] = None
+    view = record.get("view") or {}
+    if not view.get("camera_world_from_camera"):
+        record["storm_error"] = "no viewport camera reported"
+        return
+    storm_dir = shots_dir / "storm"
+    storm_dir.mkdir(parents=True, exist_ok=True)
+    out_png = storm_dir / (record["slug"] + ".png")
+    if out_png.is_file():
+        out_png.unlink()
+    width = min(int(view.get("width") or 960), 1024)
+    camera = ""
+    session_layer = None
+    if (record.get("framing") or {}).get("camera_source") == "authored":
+        # The camera the editor looks through is the file's first camera in
+        # traversal order; pxr's list is in the same order.
+        cameras = record.get("composed_cameras") or []
+        camera = cameras[0] if cameras else ("/" + str(view.get("camera_path", "")).lstrip("/"))
+    else:
+        session_layer = storm_dir / (record["slug"] + ".camera.usda")
+        stage_camera_session_layer(
+            view,
+            record.get("composed_up_axis") or record.get("up_axis") or "Y",
+            record.get("composed_meters_per_unit") or record.get("meters_per_unit") or 1.0,
+            session_layer)
+        camera = "/ErheSurveyCamera"
+    error = usd_tools.record(absolute, out_png, width, camera=camera, session_layer=session_layer, timeout=timeout)
+    if error:
+        record["storm_error"] = error
+        return
+    record["storm_render"] = out_png.as_posix()
+    scored = match_against_storm(record)
+    if scored.get("error"):
+        record["storm_error"] = scored["error"]
+        return
+    record["storm_match"] = scored["match"]
+    record["storm_object_match"] = scored["object_match"]
+    record["storm_silhouette"] = scored["silhouette"]
+    record["storm_coverage"] = scored["coverage"]
+
 
 # --------------------------------------------------------------------------
 # Entry enumeration
@@ -563,7 +894,8 @@ def wait_until_idle(editor: Editor, timeout: float) -> tuple:
 
 
 def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pathlib.Path,
-                 load_timeout: float, close_wait: float, settle_frames: int) -> dict:
+                 load_timeout: float, close_wait: float, settle_frames: int,
+                 usd_tools: Usd_tools = None, storm_threshold: float = 0.0) -> dict:
     absolute = (root / entry["path"]).resolve()
     slug = entry_slug(entry["path"])
     shot = shots_dir / (slug + ".png")
@@ -593,6 +925,8 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
         "scene_close": "",
         "screenshot_stats": {},
         "framing": {},
+        "view": {},
+        "storm_threshold": storm_threshold,
         "crash": False,
         "crash_detail": "",
         "log_tail": [],
@@ -600,6 +934,9 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
     })
 
     position = editor.log_size()
+
+    if usd_tools is not None:
+        record.update(composed_facts(usd_tools.stage_stats(absolute)))
 
     try:
         description = editor.mcp.call("describe_usd_file", {"path": str(absolute)}, timeout=load_timeout)
@@ -650,6 +987,13 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
                 record["settle_error"] = record["settle_error"] or framing_error
                 wait_frames(editor, settle_frames, load_timeout)
                 editor.mcp.call("capture_screenshot", {"path": shot.as_posix()}, timeout=load_timeout)
+                # The rect the 3D view occupies in the capture and the camera
+                # it was rendered through, read after the frames above so the
+                # window has its final size.
+                for viewport in editor.mcp.call("get_viewports", {}, timeout=load_timeout).get("viewports", []):
+                    if viewport.get("title") == record["framing"].get("viewport"):
+                        record["view"] = viewport
+                        break
                 record["screenshot_stats"] = screenshot_stats(shot)
         except EditorDown as error:
             record["crash"] = True
@@ -667,6 +1011,12 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
             record["crash_detail"] = f"close_scene: {error}"
         except RuntimeError as error:
             record["load_error"] = record["load_error"] or str(error)[:300]
+
+    record["bounds_deviation"] = bounds_deviation(record)
+    if (usd_tools is not None) and record["loaded"] and (not record["crash"]):
+        # After the close: usdrecord holds the GPU for a while, and the editor
+        # need not be idle for it.
+        storm_reference(record, absolute, usd_tools, shots_dir, load_timeout)
 
     lines = editor.log_since(position)
     record["diagnostics"] = diagnostics(lines)
@@ -690,35 +1040,46 @@ def compose_comparison(record: dict, root: pathlib.Path, out_dir: pathlib.Path) 
     except ImportError:
         return ""
     references = record.get("references") or []
-    capture_path = pathlib.Path(record.get("screenshot", ""))
-    if (not references) or (not capture_path.is_file()):
-        return ""
-    reference_path = root / references[0]
-    if not reference_path.is_file():
-        return ""
+    storm_path = pathlib.Path(record.get("storm_render", ""))
     try:
-        with Image.open(capture_path) as capture_image:
-            capture = capture_image.convert("RGB")
-            width, height = capture.size
-            left, top, right, bottom = VIEWPORT_REGION
-            capture = capture.crop((int(left * width), int(top * height),
-                                    int(right * width), int(bottom * height)))
-        with Image.open(reference_path) as reference_image:
-            reference = reference_image.convert("RGB")
+        capture = capture_view_crop(record)
     except Exception:
+        capture = None
+    if capture is None:
         return ""
-    # Both halves are shown at the reference render's own height, so a file
-    # whose authored camera the capture looks through puts the same view on
-    # both sides and a difference between them is a real one.
-    target_height = min(max(reference.height, 320), 900)
+    images = [capture]
+    # The Storm render of the same view comes first when there is one; the
+    # repository's own render (its own view, often an older revision) last.
+    if storm_path.is_file():
+        try:
+            with Image.open(storm_path) as storm_image:
+                storm = storm_image.convert("RGBA")
+            backdrop = Image.new("RGBA", storm.size, (48, 48, 48, 255))
+            images.append(Image.alpha_composite(backdrop, storm).convert("RGB"))
+        except Exception:
+            pass
+    if references and (root / references[0]).is_file():
+        try:
+            with Image.open(root / references[0]) as reference_image:
+                images.append(reference_image.convert("RGB"))
+        except Exception:
+            pass
+    if len(images) < 2:
+        return ""
+    # Every panel is shown at the last reference's own height, so a file whose
+    # authored camera the capture looks through puts the same view on every
+    # panel and a difference between them is a real one.
+    target_height = min(max(images[-1].height, 320), 900)
     panels = []
-    for image in (capture, reference):
+    for image in images:
         scale = target_height / float(image.height)
         panels.append(image.resize((max(int(image.width * scale), 1), target_height)))
     gap = 8
-    sheet = Image.new("RGB", (panels[0].width + gap + panels[1].width, target_height), (90, 90, 90))
-    sheet.paste(panels[0], (0, 0))
-    sheet.paste(panels[1], (panels[0].width + gap, 0))
+    sheet = Image.new("RGB", (sum(p.width for p in panels) + gap * (len(panels) - 1), target_height), (90, 90, 90))
+    x = 0
+    for panel in panels:
+        sheet.paste(panel, (x, 0))
+        x += panel.width + gap
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / (record["slug"] + ".png")
     sheet.save(out_path)
@@ -761,8 +1122,45 @@ NO_MESH_CAUSES = [
 
 
 def authors_geometry(record: dict) -> bool:
+    """Whether the file holds geometry the editor should have turned into a
+    mesh: the composed stage's own Gprim / instancer count when OpenUSD read
+    it, else the authored prim types LightUSD reported."""
+    if record.get("composed_gprims") is not None:
+        return ((record.get("composed_gprims") or 0) > 0) or ((record.get("composed_point_instancers") or 0) > 0)
     return any((t.get("type_name") in GEOMETRY_PRIM_TYPES) and (t.get("count", 0) > 0)
                for t in (record.get("authored_types") or []))
+
+
+def storm_gap(record: dict) -> str:
+    """The gap the Storm comparison names, or "": a match under the run's
+    threshold on an entry whose render Storm produced."""
+    threshold = float(record.get("storm_threshold") or 0.0)
+    match = record.get("storm_match")
+    if (threshold <= 0.0) or (match is None):
+        return ""
+    if match < threshold:
+        return f"the frame differs from the Storm render of the same view (match {match:.2f})"
+    return ""
+
+
+def bounds_gap(record: dict) -> str:
+    """The scene's extent disagrees with the composed stage's by more than a
+    tenth of its diagonal: content placed, scaled or instanced differently
+    from what OpenUSD composes (the transform / skinning class of gap)."""
+    deviation = record.get("bounds_deviation")
+    if (deviation is None) or (deviation <= 0.10):
+        return ""
+    return f"the scene's bounds are off the composed stage's by {deviation:.0%} of its diagonal"
+
+
+def missing_mesh_gap(record: dict) -> str:
+    """A PointInstancer or an instanced prototype makes the editor's mesh count
+    legitimately exceed the composed one, so the counts name a gap only in the
+    other direction; a count of zero is the no-mesh gap, named elsewhere."""
+    composed = record.get("composed_meshes")
+    if (composed is None) or (record.get("meshes", 0) >= composed) or (record.get("meshes", 0) == 0):
+        return ""
+    return f"{record['meshes']} of the {composed} composed meshes loaded"
 
 
 def no_mesh_cause(record: dict) -> str:
@@ -795,10 +1193,16 @@ def provisional_verdict(record: dict) -> str:
     # Only now can an empty frame mean the render path: the meshes are there.
     if stats.get("available") and stats.get("flat"):
         return "works, gap: renders nothing"
+    if missing_mesh_gap(record):
+        return f"works, gap: {missing_mesh_gap(record)}"
+    if bounds_gap(record):
+        return f"works, gap: {bounds_gap(record)}"
     if errors:
         return f"works, gap: {gap_name(errors[0]['message'])}"
     if warnings:
         return f"works, gap: {gap_name(warnings[0]['message'])}"
+    if storm_gap(record):
+        return f"works, gap: {storm_gap(record)}"
     return "works"
 
 
@@ -852,6 +1256,13 @@ def gather_gaps(records: list) -> list:
             add("no mesh loaded: " + no_mesh_cause(record), "failure", asset, "")
         if record["loaded"] and (record["meshes"] > 0) and stats.get("available") and stats.get("flat"):
             add("renders nothing: the framed viewport is empty although meshes loaded", "failure", asset, "")
+        if record["loaded"] and missing_mesh_gap(record):
+            add("some composed meshes are not loaded", "failure", asset, missing_mesh_gap(record))
+        if record["loaded"] and bounds_gap(record):
+            add("the scene's bounds disagree with the composed stage's", "failure", asset, bounds_gap(record))
+        if record["loaded"] and storm_gap(record):
+            add("the frame differs from the Storm render of the same view", "appearance", asset,
+                f"match {record['storm_match']:.2f}: {record.get('storm_render', '')}")
         # A file whose content lives in a subLayer loads as an empty stage and
         # says nothing about it, so the layer list is what names the cause.
         sublayered = any("sub" in str(layer.get("kind", "")).lower()
@@ -1182,9 +1593,25 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("")
     out.append("The `Reference` column names the renders the repository ships beside each")
     out.append("asset (`screenshots/` first, then `thumbnails/`), repo-relative to")
-    out.append("`<usd-wg-assets>`. `--compose-comparisons` puts the capture and the first")
-    out.append("of those side by side under `logs/usd_wg_survey/compare/`, which is how the")
-    out.append("appearance verdicts below were reached.")
+    out.append("`<usd-wg-assets>`. `--compose-comparisons` puts the capture, the Storm render")
+    out.append("and the first of those side by side under `logs/usd_wg_survey/compare/`,")
+    out.append("which is how the appearance verdicts below were reached.")
+    out.append("")
+    out.append("With a prebuilt OpenUSD named by `--usd-root` (or `ERHE_USD_ROOT`), each")
+    out.append("entry also carries what OpenUSD itself makes of the file: the `Composed`")
+    out.append("column is the composed stage's `UsdGeomMesh` count (`scripts/usd_wg_pxr_stage.py`,")
+    out.append("instance proxies included, so an instanced prototype counts once per")
+    out.append("instance and a `PointInstancer`'s instances not at all), and the `Storm`")
+    out.append("column is the normalized cross-correlation between the capture's 3D view and")
+    out.append("a `usdrecord` Storm render of the same file through the same camera - the")
+    out.append("editor's computed camera authored into a session layer in the stage's own")
+    out.append("space, or the file's first camera named by path - at the capture's aspect")
+    out.append("(1.00 = identical grey images; lighting differs by design, so a lit, matching")
+    out.append("scene scores well below 1). Under `--storm-threshold` a lower score is a gap")
+    out.append("of its own; the score is what orders the by-eye reads. The composed stage's")
+    out.append("world bounds are compared with the scene's too (`bounds_deviation` in the")
+    out.append("summary): a disagreement over a tenth of the diagonal is a gap, the way a")
+    out.append("dropped transform, an unapplied skin or a stray prototype shows up.")
     out.append("")
     # What the importer makes of an authored camera, recorded because the
     # survey's own capture camera hides it: --refresh-cameras reopens these
@@ -1228,17 +1655,22 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("`authored` is the prim count `describe_usd_file` reports for the file;")
     out.append("`prims` / `meshes` / `materials` / `lights` are what the loaded scene holds.")
     out.append("")
-    out.append("| Folder | Entry file | Load | Authored | Prims | Meshes | Mats | Lights | Warnings and errors | Screenshot | Verdict |")
-    out.append("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |")
+    out.append("| Folder | Entry file | Load | Authored | Prims | Meshes | Composed | Mats | Lights | Storm | Warnings and errors | Screenshot | Verdict |")
+    out.append("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |")
     for record in sorted(records, key=lambda r: r["path"]):
         load = "crash" if record["crash"] else ("ok" if record["loaded"] else "failed")
         authored = record["authored_prims"]
-        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+        composed = record.get("composed_meshes")
+        storm = record.get("storm_match")
+        out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
             cell(record["folder"]),
             cell(pathlib.PurePosixPath(record["path"]).name),
             load,
             "-" if authored is None else authored,
-            record["prims"], record["meshes"], record["materials"], record["lights"],
+            record["prims"], record["meshes"],
+            "-" if composed is None else composed,
+            record["materials"], record["lights"],
+            "-" if storm is None else f"{storm:.2f}",
             cell(summarize_diagnostics(record)),
             cell(record["screenshot"]),
             cell(record["verdict"]),
@@ -1354,7 +1786,7 @@ def check_bookkeeping() -> bool:
     return ok
 
 
-def run_self_test(args) -> int:
+def run_self_test(args, usd_tools: Usd_tools = None) -> int:
     """Prove the capture path before trusting a survey run.
 
     Opens a scene known to hold one lit, materialled mesh, frames it and
@@ -1388,8 +1820,29 @@ def run_self_test(args) -> int:
         wait_frames(editor, args.settle_frames, args.load_timeout)
         editor.mcp.call("capture_screenshot", {"path": shot.as_posix()}, timeout=args.load_timeout)
         stats = screenshot_stats(shot)
+        view = {}
+        for viewport in editor.mcp.call("get_viewports", {}, timeout=args.load_timeout).get("viewports", []):
+            if viewport.get("title") == framing.get("viewport"):
+                view = viewport
     finally:
         editor.stop()
+
+    storm_ok = True
+    if usd_tools is not None:
+        # The Storm leg on the same file: a render must come back and the two
+        # silhouettes must overlap, which proves the camera transfer; the grey
+        # match is printed, not asserted - the fixture's unrotated DistantLight
+        # lights nothing in Storm, so its cube renders black there.
+        record = {"slug": "selftest", "screenshot": shot.as_posix(), "framing": framing, "view": view}
+        record.update(composed_facts(usd_tools.stage_stats(source.resolve())))
+        storm_reference(record, source.resolve(), usd_tools, args.shots, args.load_timeout)
+        print(f"self-test: composed meshes={record.get('composed_meshes')} "
+              f"storm={record.get('storm_render') or record.get('storm_error')} "
+              f"match={record.get('storm_match')} object_match={record.get('storm_object_match')} "
+              f"silhouette={record.get('storm_silhouette')} coverage={record.get('storm_coverage')}")
+        storm_ok = (record.get("storm_silhouette") is not None) and (record["storm_silhouette"] >= 0.5)
+        print("self-test: PASS - the Storm render shows the same view" if storm_ok
+              else "self-test: FAIL - no Storm render, or its silhouette is not where the capture's is")
 
     print(f"self-test: {source.name} -> scene '{scene}', "
           f"camera '{framing.get('camera')}' (created={framing.get('camera_created')}), "
@@ -1408,7 +1861,7 @@ def run_self_test(args) -> int:
     )
     print("self-test: PASS - geometry is visible in the viewport" if ok
           else "self-test: FAIL - the viewport shows no framed geometry")
-    return 0 if (ok and bookkeeping_ok) else 1
+    return 0 if (ok and bookkeeping_ok and storm_ok) else 1
 
 
 def main() -> int:
@@ -1440,8 +1893,20 @@ def main() -> int:
     parser.add_argument("--refresh-cameras", action="store_true",
                         help="reopen the entries whose file authors a UsdGeomCamera and record what the imported Camera reads; needs --root")
     parser.add_argument("--compose-comparisons", action="store_true",
-                        help="write logs/usd_wg_survey/compare/<entry>.png (capture beside the first reference render) and exit; needs --root")
+                        help="write logs/usd_wg_survey/compare/<entry>.png (capture beside the Storm render and the first reference render) and exit; needs --root")
+    parser.add_argument("--usd-root", default=DEFAULT_USD_ROOT,
+                        help="a prebuilt OpenUSD (its scripts/set_usd_env.bat and usdrecord.bat): adds the composed-stage counts and a Storm render of the same view per entry; default from ERHE_USD_ROOT; empty = off")
+    parser.add_argument("--storm-threshold", type=float, default=0.0,
+                        help="a Storm match under this value is a gap of its own (0 = record the score only)")
     args = parser.parse_args()
+
+    usd_tools = None
+    if args.usd_root:
+        try:
+            usd_tools = Usd_tools(pathlib.Path(args.usd_root))
+        except FileNotFoundError as error:
+            print(str(error), file=sys.stderr)
+            return 2
 
     args.shots.mkdir(parents=True, exist_ok=True)
     summary_path = args.shots / "summary.json"
@@ -1488,7 +1953,7 @@ def main() -> int:
         return 0
 
     if args.self_test:
-        return run_self_test(args)
+        return run_self_test(args, usd_tools)
 
     if args.from_summary:
         if not summary_path.is_file():
@@ -1541,7 +2006,8 @@ def main() -> int:
             entry_log_position = editor.log_size()
             try:
                 record = survey_entry(editor, root, entry, args.shots, args.load_timeout,
-                                      args.close_wait, args.settle_frames)
+                                      args.close_wait, args.settle_frames,
+                                      usd_tools, args.storm_threshold)
             except (RuntimeError, EditorDown) as error:
                 # An editor that stops answering while a load holds the main
                 # thread has not crashed: the entry is recorded as a failure

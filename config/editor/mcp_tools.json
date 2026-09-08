@@ -189,7 +189,7 @@
     "name": "get_scene_brushes"
   },
   {
-    "description": "List viewport windows: window title, bound scene name, and camera name. Use to verify which scene/camera each viewport shows (e.g. that opening a scene did not rebind pre-existing viewports).",
+    "description": "List viewport windows: window title, bound scene name, camera name, the pixel rectangle (x, y, width, height; top-left origin, the space of a capture_screenshot PNG) the 3D view occupies in the editor window, and the camera frame (camera_path, camera_world_from_camera as 16 column-major floats, camera_projection_type, camera_fov_y / fov_x in radians, camera_z_near / z_far). Use to verify which scene/camera each viewport shows, to crop a capture to the 3D view, or to reproduce the view in another renderer.",
     "inputSchema": {
       "properties": {},
       "type": "object"

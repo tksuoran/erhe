@@ -801,11 +801,41 @@ auto Mcp_server::query_viewports(const json& args) -> std::string
         const std::shared_ptr<Viewport_scene_view> scene_view = viewport_window->viewport_scene_view();
         const std::shared_ptr<Scene_root> scene_root = scene_view ? scene_view->get_scene_root() : std::shared_ptr<Scene_root>{};
         const std::shared_ptr<erhe::scene::Camera> camera = scene_view ? scene_view->get_camera() : std::shared_ptr<erhe::scene::Camera>{};
-        viewports.push_back({
+        // The rectangle the viewport's image occupies in the editor window, in
+        // window pixels with the origin at the top left (the pixel space a
+        // capture_screenshot PNG is in), and the camera's frame: enough for a
+        // caller to crop the capture to the 3D view and to reproduce the same
+        // view in another renderer.
+        const erhe::math::Viewport& rect = scene_view ? scene_view->get_window_viewport() : erhe::math::Viewport{};
+        json entry = {
             {"title",  viewport_window->get_title()},
             {"scene",  scene_root ? scene_root->get_name() : ""},
-            {"camera", camera ? camera->get_name() : ""}
-        });
+            {"camera", camera ? camera->get_name() : ""},
+            {"x",      rect.x},
+            {"y",      rect.y},
+            {"width",  rect.width},
+            {"height", rect.height}
+        };
+        if (camera) {
+            const glm::mat4 world_from_camera = camera->world_from_node();
+            json matrix = json::array();
+            for (int column = 0; column < 4; ++column) {
+                for (int row = 0; row < 4; ++row) {
+                    matrix.push_back(world_from_camera[column][row]);
+                }
+            }
+            entry["camera_path"]              = camera->get_path();
+            entry["camera_world_from_camera"] = matrix;   // column-major, 16 floats
+            const erhe::scene::Projection* projection = camera->projection();
+            if (projection != nullptr) {
+                entry["camera_projection_type"] = erhe::scene::Projection::c_type_strings[static_cast<int>(projection->projection_type)];
+                entry["camera_fov_y"]           = projection->fov_y;
+                entry["camera_fov_x"]           = projection->fov_x;
+                entry["camera_z_near"]          = projection->z_near;
+                entry["camera_z_far"]           = projection->z_far;
+            }
+        }
+        viewports.push_back(entry);
     }
 
     return make_json_content({{"viewports", viewports}}).dump();
