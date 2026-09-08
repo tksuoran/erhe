@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -242,4 +243,69 @@ TEST(Uv_transform_conversion, a_transform2d_round_trips)
     EXPECT_NEAR(back.scale.y,          usd.scale.y,          1e-5f);
     EXPECT_NEAR(back.translation.x,    usd.translation.x,    1e-5f);
     EXPECT_NEAR(back.translation.y,    usd.translation.y,    1e-5f);
+}
+
+// The placement a UsdPreviewSurface texture ends up with, checked against the
+// reference renderer's own formula. usdview (Storm) computes the sampled
+// coordinate as `translation + R(rotation) * (scale * st)` with R the
+// counter-clockwise rotation (pxr/imaging/hdSt/codeGen.cpp, the
+// UsdTransform2d code generator). erhe reads `st` through the V flip and lets
+// Material_buffer build `M = R(rotation) * S(scale)`, which the fragment
+// shader applies as `M * texcoord + offset` (res/shaders/erhe_texture.glsl).
+// The two agree exactly when to_erhe_uv_transform() converts through the flip,
+// which is what these cases pin: every one of them is a material of the USD
+// working group's TextureTransformTest asset.
+namespace {
+
+[[nodiscard]] auto usdview_placement(const erhe::usd::Usd_uv_transform_2d& usd, const glm::vec2 st) -> glm::vec2
+{
+    const float     rotation = glm::radians(usd.rotation_degrees);
+    const float     c        = std::cos(rotation);
+    const float     s        = std::sin(rotation);
+    const glm::vec2 scaled{usd.scale.x * st.x, usd.scale.y * st.y};
+    return usd.translation + glm::vec2{(c * scaled.x) - (s * scaled.y), (s * scaled.x) + (c * scaled.y)};
+}
+
+// What Material_buffer packs and erhe_texture.glsl applies, on an erhe
+// texcoord.
+[[nodiscard]] auto erhe_placement(const erhe::usd::Erhe_uv_transform& erhe_transform, const glm::vec2 uv) -> glm::vec2
+{
+    const float     c = std::cos(erhe_transform.rotation);
+    const float     s = std::sin(erhe_transform.rotation);
+    const glm::mat2 rotation{c, s, -s, c};
+    const glm::mat2 scale{erhe_transform.scale.x, 0.0f, 0.0f, erhe_transform.scale.y};
+    return ((rotation * scale) * uv) + erhe_transform.offset;
+}
+
+class Transform_2d_case
+{
+public:
+    const char*                    name;
+    erhe::usd::Usd_uv_transform_2d usd;
+};
+
+} // anonymous namespace
+
+TEST(Uv_transform_placement, every_texture_transform_test_material_lands_where_usdview_puts_it)
+{
+    const Transform_2d_case cases[] = {
+        {"Offset_U",  {.rotation_degrees =  0.0f,       .scale = {1.0f, 1.0f}, .translation = { 0.5f,        0.0f       }}},
+        {"Offset_V",  {.rotation_degrees =  0.0f,       .scale = {1.0f, 1.0f}, .translation = { 0.0f,       -0.5f       }}},
+        {"Offset_UV", {.rotation_degrees =  0.0f,       .scale = {1.0f, 1.0f}, .translation = { 0.5f,       -0.5f       }}},
+        {"Rotation",  {.rotation_degrees = 22.5f,       .scale = {1.0f, 1.0f}, .translation = { 0.38268343f, 0.076120496f}}},
+        {"Scale",     {.rotation_degrees =  0.0f,       .scale = {1.5f, 1.5f}, .translation = { 0.0f,       -0.5f       }}},
+        {"All",       {.rotation_degrees = 17.188734f,  .scale = {1.5f, 1.5f}, .translation = { 0.24328034f, -0.33300462f}}}
+    };
+    const glm::vec2 st_points[] = {
+        {0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {0.5f, 0.5f}, {0.25f, 0.75f}
+    };
+    for (const Transform_2d_case& transform_case : cases) {
+        const erhe::usd::Erhe_uv_transform erhe_transform = erhe::usd::to_erhe_uv_transform(transform_case.usd);
+        for (const glm::vec2 st : st_points) {
+            const glm::vec2 expected = erhe::usd::flip_texcoord_v(usdview_placement(transform_case.usd, st));
+            const glm::vec2 actual   = erhe_placement(erhe_transform, erhe::usd::flip_texcoord_v(st));
+            EXPECT_NEAR(actual.x, expected.x, 1e-5f) << transform_case.name << " at st (" << st.x << ", " << st.y << ")";
+            EXPECT_NEAR(actual.y, expected.y, 1e-5f) << transform_case.name << " at st (" << st.x << ", " << st.y << ")";
+        }
+    }
 }

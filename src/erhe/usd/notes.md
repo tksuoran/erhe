@@ -233,6 +233,14 @@ nothing else. The USD identity maps onto the erhe identity, so a texture with
 no `UsdTransform2d` leaves the slot at its defaults, and the writer authors a
 `UsdTransform2d` prim only for a slot whose transform is not the identity.
 
+The reference renderer's own composition is the one above: usdview's Storm
+generates `translation + mat2(cos, sin, -sin, cos) * (scale * in)` for a
+`UsdTransform2d`. `test_usd_texture_channels.cpp` walks the six materials of
+the USD working group's `TextureTransformTest` asset over a set of `st`
+points and asserts that formula against `to_erhe_uv_transform` composed the
+way `Material_buffer` and `erhe_texture.glsl` apply it, which is where any
+future change to either end has to stay true.
+
 ### UsdPreviewSurface fallbacks and channel outputs
 
 An unauthored UsdPreviewSurface input is the schema fallback, not an erhe

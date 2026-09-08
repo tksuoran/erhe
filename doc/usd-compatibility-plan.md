@@ -429,15 +429,16 @@ the V flip with `UsdTransform2d` carried through it, a scalar input
 reads the texture channel the file connects, an unauthored
 `diffuseColor` is USD's 0.18, and a `UsdUVTexture`'s wrap, transform,
 scale and per-channel normal decode reach the material, with a texture
-packed in a `.usdz` read out of the archive. The current run (146
-entries, 45 work as they are, none crash) leaves, in the order the
+packed in a `.usdz` read out of the archive. A `UsdTransform2d` places
+its texture where usdview does, measured face on against the
+reference render and pinned by the placement case of
+`src/erhe/usd/test/test_usd_texture_channels.cpp`. The current run (146
+entries, 46 work as they are, none crash) leaves, in the order the
 fixes are taken: a `PointInstancer` not instanced; a
 time-sampled transform not evaluated at the reference's sample; 16-bit,
 32-bit and CMYK images and Radiance `.hdr` not decoded; McUsd's
-stained glass opaque and its cards missing; the transform test's lower
-row, where a `UsdTransform2d` rotate and translate compose to a
-different placement; RoughnessTest's missing specular response; a prim
-a sublayer authors contributing no authored opinion, class prim or
+stained glass opaque and its cards missing; RoughnessTest's missing
+specular response; a prim a sublayer authors contributing no authored opinion, class prim or
 xformOp stack; a 4000-prim scene tripping the main-loop stall watchdog
 on load; MaterialX documents as reference targets; the draw list's
 null-material fallback for an unbound mesh.

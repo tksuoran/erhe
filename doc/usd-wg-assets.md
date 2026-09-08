@@ -23,7 +23,9 @@ pointer into the last run's output, not a committed file.
 
 Each capture is taken through `frame_scene`, which binds the opened scene
 into a viewport, gives it a camera when the file authors none and places
-that camera on the union world AABB of the scene's meshes. A scene whose
+that camera on the union world AABB of the scene's meshes: three quarters
+round, or straight down the shared axis when every mesh is coplanar, so a
+test card is seen the way its own reference image shows it. A scene whose
 file authors no light is lit by the editor's own headlight - one white
 directional light along the viewport camera's axis, the way usdview lights
 a stage that authors none - so the capture shows the geometry. That light
@@ -38,7 +40,7 @@ appearance verdicts below were reached.
 Authored cameras: 30 entries author a `UsdGeomCamera`; 30 of 30 imported cameras carry a field of view in (0.6, 179) degrees, so `convert_cameras` maps `focalLength`, `horizontalAperture` and `verticalAperture` onto `fov_y` / `fov_x` as the files author them. No gap row: the survey's capture uses its own camera, not the authored one.
 
 Run: 2026-09-08, 146 entries, 1584 s wall time, 1 editor launch(es).
-Verdicts: 45 works, 100 works with a gap, 1 fails, 0 crash.
+Verdicts: 46 works, 99 works with a gap, 1 fails, 0 crash.
 
 ## Verdicts checked by eye
 
@@ -63,7 +65,7 @@ log and the empty-viewport test decided.
 | test_assets/RoughnessTest/RoughnessTest.usdz | the bands carry their Texture / Constant labels the right way round but show no specular highlight, where the reference's highlight varies with roughness 0.00 / 0.33 / 0.66 |
 | test_assets/TextureCoordinateTest/TextureCoordinateTest.usda | the four quadrants carry the reference's yellow, red, blue and green and every label reads the right way round |
 | test_assets/TextureFileFormatTests/all_files.usda | both panels load through the file's own camera with their labels the right way round; the eight 8-bit tiles carry their gradient and the 16-bit, 32-bit and CMYK tiles render blank |
-| test_assets/TextureTransformTest/TextureTransformTest.usd | the upper row's U, V and UV tiles now match the reference's green, blue and teal checks; the lower row's transformed quads sit at a different rotation and offset than the reference shows |
+| test_assets/TextureTransformTest/TextureTransformTest.usd | the upper row's U, V and UV tiles match the reference's green, blue and teal checks, and, framed face on, the lower row's rotated, scaled and rotated-plus-scaled quads land where usdview puts them: cropped per quad against the reference they correlate at 0.98, 0.94 and 0.94, against 0.97 to 0.98 for the untransformed upper row. The small Correct / Not Supported / Error cards sit near the model's origin rather than inside their quads because the asset itself un-nested those prims in 2023, after the reference screenshot was taken; against the 2022 revision of the file they land where the reference shows them. |
 
 ## Entries
 
@@ -135,7 +137,7 @@ log and the empty-viewport test decided.
 | test_assets/TextureFileFormatTests | jpeg_cmyk_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_cmyk_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | test_assets/TextureFileFormatTests | jpeg_grayscale_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_grayscale_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
 | test_assets/TextureFileFormatTests | jpeg_rgb_8-bit.usda | ok | 14 | 10 | 3 | 2 | 0 | 1 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureFileFormatTests_jpeg_rgb_8-bit.usda.png | works, gap: Nbit sRGB texture is converted to fp32 sRGB texture(without linearlization) |
-| test_assets/TextureTransformTest | TextureTransformTest.usd | ok | 56 | 29 | 12 | 9 | 0 | 53 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureTransformTest_TextureTransformTest.usd.png | works, gap: texture transform placement differs |
+| test_assets/TextureTransformTest | TextureTransformTest.usd | ok | 56 | 29 | 12 | 9 | 0 | 53 warning; Nbit sRGB texture is converted to fp32 sRGB texture(without | logs/usd_wg_survey/test_assets_TextureTransformTest_TextureTransformTest.usd.png | works |
 | test_assets/USDZ/AnimatedCube | AnimatedCube.usdz | ok | 9 | 8 | 1 | 1 | 0 | 3 warning; Failed to load texture image: `*`. Skip loading. reason = Fa | logs/usd_wg_survey/test_assets_USDZ_AnimatedCube_AnimatedCube.usdz.png | works, gap: Failed to load texture image: `*`. Skip loading. reason = Failed to resolve asse |
 | test_assets/USDZ/AnimatedTriangle | AnimatedTriangle.usdz | ok | 6 | 5 | 1 | 1 | 0 | 1 warning; Attribute `*` does not exist in Prim <prim> | logs/usd_wg_survey/test_assets_USDZ_AnimatedTriangle_AnimatedTriangle.usdz.png | works, gap: Attribute `*` does not exist in Prim <prim> |
 | test_assets/USDZ/BoxAnimated | BoxAnimated.usdz | ok | 11 | 9 | 2 | 2 | 0 | 2 warning; Attribute `*` does not exist in Prim <prim> | logs/usd_wg_survey/test_assets_USDZ_BoxAnimated_BoxAnimated.usdz.png | works, gap: Attribute `*` does not exist in Prim <prim> |
@@ -355,7 +357,6 @@ assets it affects and what the editor would have to support to clear it.
 | 1 | warning | USD stage up axis '*' has no erhe counterpart - imported as Y-up | carry a Z-up stage's up axis into the scene instead of importing it as Y-up |
 | 1 | warning | [InternalError] Attribute is invalid.); using default (false). | diagnose the message and add the support it asks for |
 | 1 | error | ^ | diagnose the message and add the support it asks for |
-| 1 | appearance | a UsdTransform2d rotate and translate do not compose to the reference's placement: the lower row's transformed quads sit differently | compose a UsdTransform2d's rotation and translation the way UsdPreviewSurface specifies: the colour variants match the reference, the transformed quads do not |
 | 1 | appearance | a UsdUVTexture's colour reaches only one row of the colour-space chart; the other four render white | sample a UsdUVTexture through every colour-space path the file exercises (raw / sRGB / auto / omit / lin_ap1_scene); only one row reaches the surface, the rest render white |
 | 1 | error | breadcrumb t=Ns thread=Nx4a314aa1ce84cb9d: primitive: allocate_and_bind_writers | not a USD gap: editor-internal noise this survey happens to capture |
 | 1 | error | breadcrumb t=Ns thread=Nx4a314aa1ce84cb9d: primitive: build_polygon_fill facets=N verts=N corners=N | not a USD gap: editor-internal noise this survey happens to capture |

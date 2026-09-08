@@ -3061,12 +3061,31 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
         const float     radius = glm::max(0.5f * glm::length(bounds.diagonal()), 1.0e-4f);
         const float     fov_y  = glm::radians(45.0f);   // the fov set on this tool's camera
         const float     distance = glm::max((radius / std::tan(0.5f * fov_y)) * margin, radius * 1.5f);
-        const glm::vec3 direction = glm::normalize(glm::vec3{0.55f, 0.40f, 1.0f});
+        // A three-quarter view of the bounds, except for a scene whose meshes
+        // are coplanar - a texture or material test card, most often - which
+        // gets a view straight down the axis they share, so the card is seen
+        // the way the file's own reference image shows it. The flat axis is
+        // the one whose extent is under a hundredth of the largest; the view goes
+        // down its positive direction, and the up axis is the largest of the
+        // two remaining ones' neighbours.
+        const glm::vec3 extent      = bounds.diagonal();
+        const float     largest     = glm::max(extent.x, glm::max(extent.y, extent.z));
+        const int       flat_axis   =
+            (extent.x <= (largest * 1.0e-2f)) ? 0 :
+            (extent.y <= (largest * 1.0e-2f)) ? 1 :
+            (extent.z <= (largest * 1.0e-2f)) ? 2 : -1;
+        glm::vec3 direction = glm::normalize(glm::vec3{0.55f, 0.40f, 1.0f});
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        if (flat_axis >= 0) {
+            direction = glm::vec3{0.0f, 0.0f, 0.0f};
+            direction[flat_axis] = 1.0f;
+            up = (flat_axis == 1) ? glm::vec3{0.0f, 0.0f, 1.0f} : glm::vec3{0.0f, 1.0f, 0.0f};
+        }
         eye = center + (direction * distance);
         camera->set_z_near(glm::max(distance * 0.001f, 1.0e-4f));
         camera->set_z_far (distance + (radius * 4.0f));
         camera->set_parent_from_node(
-            erhe::math::create_look_at(eye, center, glm::vec3{0.0f, 1.0f, 0.0f})
+            erhe::math::create_look_at(eye, center, up)
         );
         framed = true;
     }
