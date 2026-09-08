@@ -33,6 +33,12 @@ constexpr std::string_view c_brush_normal_style_value_name  {"Brush.normal_style
 // from here; the erhe class is erhe::scene::Point_instancer.
 constexpr std::string_view c_point_instancer_prim_type_name {"PointInstancer"};
 
+// The USD schema token of a skeleton (doc/usd-compatibility-plan.md K1). A
+// `Skeleton` prim is a transformable prim of the erhe tree carrying this
+// token, holding one `Xform` prim per joint; the reader dispatches on the
+// token and the writer spells it, so both name it from here.
+constexpr std::string_view c_skeleton_prim_type_name {"Skeleton"};
+
 // One prim a variant block authors as a `def` child and the loader hoisted
 // out of it, into the tree below the prim carrying the set
 // (doc/usd-compatibility-plan.md X4). USD builds such a prim when its variant

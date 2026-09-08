@@ -28,6 +28,7 @@ namespace erhe::scene {
     class Camera;
     class Light;
     class Mesh;
+    class Skin;
     class Xformable; using Node = Xformable;
     using Layer_id = uint64_t;
 }
@@ -538,6 +539,16 @@ public:
     // transform. It is a library item like the animations of a glTF file, and
     // the caller attaches it to the content library the same way.
     std::vector<std::shared_ptr<erhe::scene::Animation>> animations;
+    // The skins the file's skinned meshes bind
+    // (doc/usd-compatibility-plan.md K1). One skin per (`Skeleton`,
+    // `primvars:skel:geomBindTransform`) pair: the meshes one skeleton skins
+    // through the same geometry bind transform share a skin, and a mesh with
+    // a bind transform of its own gets a skin of its own. A skin's joints are
+    // the `Xform` prims the skeleton's `joints` became, in that order, and
+    // its pivot is the prim the `Skeleton` became. The meshes of `meshes`
+    // already name their skin; the list is here for the reason `nodes` is -
+    // so the caller can register what one file contributed.
+    std::vector<std::shared_ptr<erhe::scene::Skin>>      skins;
     // The ambient light the first dome of `dome_lights` composes to
     // (`color * intensity * 2^exposure`), black when the file authors none.
     glm::vec3 ambient_light{0.0f, 0.0f, 0.0f};

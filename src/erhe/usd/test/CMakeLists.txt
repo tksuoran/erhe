@@ -22,6 +22,7 @@ add_executable(${_target}
     test_usd_point_instancers.cpp
     test_usd_prims.cpp
     test_usd_references.cpp
+    test_usd_skinning.cpp
     test_usd_styles.cpp
     test_usd_sublayers.cpp
     test_usd_texture_channels.cpp

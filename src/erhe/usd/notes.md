@@ -671,8 +671,56 @@ where it does not exist, and reports it as a texture it could not load; that
 line is dropped from the converter's warning for every path the archive holds
 (`filter_converter_warning`), because the image does reach the material.
 
-Not yet imported: skeletons and skinning, blend shapes, animation clips,
-volumes, MaterialX / OpenPBR shading networks, and texture filter state.
+Not yet imported: blend shapes, animation clips, volumes, MaterialX / OpenPBR
+shading networks, and texture filter state.
+
+### Skinning
+
+UsdSkel poses a bound point as `skelLocalToWorld * sum_j w_j *
+jointSkelSpace_j * inverse(bind_j) * geomBindTransform * p`, and the mesh's
+own transform plays no part; erhe's `Joint_buffer` poses it as `sum_j w_j *
+world_from_joint_j * inverse_bind_j * p`, the glTF rule. The two agree when
+every joint is a prim whose world transform is `skelLocalToWorld *
+jointSkelSpace_j` and the mesh's inverse bind matrix for joint `j` is
+`inverse(bind_j) * geomBindTransform` (doc/usd-compatibility-plan.md K1), so
+the conversion builds exactly that.
+
+- A `Skeleton` prim is a transformable prim of the tree carrying the authored
+  `Skeleton` token, the way a generic `Model` prim carries its own. The
+  `SkelRoot` stays the `Typed` prim it is: it carries no transform of its own
+  and encapsulates nothing erhe needs.
+- Each entry of the skeleton's `joints` is an `erhe::scene::Xform` prim under
+  the skeleton along the joint path, so `Bone_1/Bone_001_1` is `Bone_001_1`
+  under `Bone_1`, and its local transform is the joint's `restTransforms`
+  entry. A joint is a prim of the erhe tree rather than a row of an array,
+  which is what lets a joint channel of an animation drive it the way it
+  drives any other prim.
+- A skinned `Mesh` prim names an `erhe::scene::Skin` whose joints are those
+  prims in `joints` order, whose pivot is the skeleton prim and whose
+  `inverse_bind_matrices[j]` is `inverse(bind_j) * geomBindTransform`. That
+  depends on the mesh's own `geomBindTransform` alone, so the meshes one
+  skeleton skins through the same bind transform share a skin and a mesh with
+  a bind transform of its own gets a skin of its own. `Usd_data::skins` lists
+  them.
+- `primvars:skel:jointIndices` / `jointWeights` are vertex-variability
+  primvars, so they land on the vertex the USD point became - on the geogram
+  vertex for a geometry-normative mesh and on every corner of that point for a
+  soup mesh. erhe carries two sets of four influences per vertex; the strongest
+  `4 * set_count` of the `elementSize` USD authors are kept, their weights
+  normalized to sum to one, and an `elementSize` above eight is one warning
+  per mesh.
+- Tydra reorders the skin primvars only when it builds vertex indices, which
+  this conversion leaves off, so an influence is addressed by the USD point
+  index the way `points` is. Tydra also remaps a mesh-local `skel:joints`
+  order onto the skeleton's own, so a joint index is a skeleton joint index.
+- A `SkelAnimation` becomes joint channels of the file's one
+  `erhe::scene::Animation` ("Time samples" below), targeting the joint prims,
+  with translation, rotation and scale per joint. Tydra keys a skeletal
+  sampler in the file's time codes, so the channels are divided by
+  `timeCodesPerSecond` into seconds exactly as the sampled `xformOp`s are, and
+  a `quatf` sample arrives as its four floats in `(x, y, z, w)` order. A
+  skeleton with no animation source contributes no channel and its joints stay
+  at the rest pose, which is what pxr renders too.
 
 ### Time samples
 
@@ -724,8 +772,9 @@ Editing an animation's keys does not write back into the ops, and neither does
 moving an animated prim: the stack is the authored record, and reconciling the
 two is future work (`doc/usd-compatibility-plan.md` section 6).
 
-Not carried: `UsdSkel` `SkelAnimation`, time samples on any attribute other
-than an `xformOp`, and `Ts` splines.
+A `UsdSkel` `SkelAnimation` contributes its joint channels to this same
+animation ("Skinning" above). Not carried: time samples on any attribute other
+than an `xformOp` or a `SkelAnimation` array, and `Ts` splines.
 
 ## Export
 
@@ -1181,6 +1230,17 @@ binding a material from a `Looks` scope, one not - and a third without a
 their geometry counts, density, token and material path, that the third is one
 warning and no brush, that no brush geometry is scene content, and that a
 brush item is written back as the same prim, twice byte for byte.
+
+`test/data/skinning.usda` is the skinning case: a `SkelRoot` holding a
+two-joint `Skeleton` whose `bindTransforms` put the tip twice as far out as
+its `restTransforms` do, and a `Mesh` with the `SkelBindingAPI`, `elementSize`
+2 skin primvars whose weights are unnormalized and out of order, and a
+non-identity `geomBindTransform`. `test/data/skel_animation.usda` is the same
+rig with a `SkelAnimation` and no `geomBindTransform`.
+`test_usd_skinning.cpp` asserts the `SkelRoot` / `Skeleton` prim classes and
+tokens, the joint prim paths and rest transforms, the skin's joints, pivot and
+inverse bind matrices, the normalized per-vertex influences, and the joint
+channels with their samples in seconds.
 
 `test_usd_export.cpp` round-trips both data files through `save_usda` and
 `load_usd` and asserts that the node names, the mesh topology, the subset

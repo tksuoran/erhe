@@ -29,6 +29,7 @@
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/projection.hpp"
+#include "erhe_scene/skin.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/xform_op.hpp"
@@ -548,6 +549,109 @@ public:
     std::vector<std::uint32_t> facets;
 };
 
+// How many joint influences one erhe vertex attribute set holds, and how
+// many sets erhe's vertex format has (`joint_indices_0` / `joint_indices_1`
+// and their weights).
+constexpr std::size_t c_joints_per_set{4};
+constexpr std::size_t c_max_joint_sets{2};
+
+// The joint influences of one skinned mesh, in the shape erhe's vertex
+// attributes hold them (doc/usd-compatibility-plan.md K1): `set_count` sets
+// of four (joint index, weight) pairs per vertex, indexed by the USD point
+// index. USD authors `elementSize` influences per vertex, unnormalized and
+// in no particular order, so the strongest `set_count * 4` are kept and
+// their weights normalized to sum to one - which is what the shader's
+// weighted sum of `world_from_joint * inverse_bind` needs.
+class Joint_influences final
+{
+public:
+    [[nodiscard]] auto empty() const -> bool { return set_count == 0; }
+
+    std::size_t                set_count   {0};
+    std::size_t                vertex_count{0};
+    std::vector<std::uint32_t> indices; // set_count * 4 per vertex
+    std::vector<float>         weights; // set_count * 4 per vertex
+};
+
+[[nodiscard]] auto make_joint_influences(const Tydra_mesh& usd_mesh) -> Joint_influences
+{
+    Joint_influences result{};
+    if (usd_mesh.skel_id < 0) {
+        return result;
+    }
+    const lightusd::tydra::JointAndWeight& skin = usd_mesh.joint_and_weights;
+    if ((skin.elementSize < 1) || skin.jointIndices.empty()) {
+        return result;
+    }
+    const std::size_t element_size = static_cast<std::size_t>(skin.elementSize);
+    const std::size_t vertex_count = usd_mesh.points.size();
+    const std::size_t needed       = vertex_count * element_size;
+    if ((skin.jointIndices.size() < needed) || (skin.jointWeights.size() < needed)) {
+        log_usd->warn(
+            "USD prim '{}': `primvars:skel:jointIndices` / `jointWeights` hold fewer than {} values - the mesh is not skinned",
+            usd_mesh.abs_path, needed
+        );
+        return result;
+    }
+
+    const std::size_t capacity  = c_max_joint_sets * c_joints_per_set;
+    const std::size_t set_count = std::min(
+        c_max_joint_sets,
+        (element_size + c_joints_per_set - 1) / c_joints_per_set
+    );
+    if (element_size > capacity) {
+        log_usd->warn(
+            "USD prim '{}': `elementSize` {} of the skin primvars exceeds the {} influences per vertex erhe carries - the strongest {} are kept",
+            usd_mesh.abs_path, element_size, capacity, capacity
+        );
+    }
+
+    const std::size_t slots = set_count * c_joints_per_set;
+    result.set_count    = set_count;
+    result.vertex_count = vertex_count;
+    result.indices.assign(vertex_count * slots, 0u);
+    result.weights.assign(vertex_count * slots, 0.0f);
+
+    // One influence of one vertex, sorted by weight so the strongest survive
+    // the cut. Held outside the loop so the sort scratch is allocated once.
+    class Influence final
+    {
+    public:
+        float         weight{0.0f};
+        std::uint32_t index {0};
+    };
+    std::vector<Influence> influences;
+    influences.reserve(element_size);
+    for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+        influences.clear();
+        for (std::size_t element = 0; element < element_size; ++element) {
+            const std::size_t source = (vertex * element_size) + element;
+            const float       weight = skin.jointWeights[source];
+            const int         index  = skin.jointIndices[source];
+            if ((weight <= 0.0f) || (index < 0)) {
+                continue;
+            }
+            influences.push_back(Influence{.weight = weight, .index = static_cast<std::uint32_t>(index)});
+        }
+        std::stable_sort(
+            influences.begin(),
+            influences.end(),
+            [](const Influence& lhs, const Influence& rhs) -> bool { return lhs.weight > rhs.weight; }
+        );
+        const std::size_t kept = std::min(slots, influences.size());
+        float             sum  = 0.0f;
+        for (std::size_t i = 0; i < kept; ++i) {
+            sum += influences[i].weight;
+        }
+        const float scale = (sum > 0.0f) ? (1.0f / sum) : 0.0f;
+        for (std::size_t i = 0; i < kept; ++i) {
+            result.indices[(vertex * slots) + i] = influences[i].index;
+            result.weights[(vertex * slots) + i] = influences[i].weight * scale;
+        }
+    }
+    return result;
+}
+
 class Importer final
 {
 public:
@@ -620,6 +724,7 @@ public:
         read_custom_layer_data(stage);
 
         read_layer_composition();
+        index_skeletons();
         append_unconverted_materials(env, converter, scene);
         convert_images();
         convert_materials();
@@ -628,6 +733,7 @@ public:
         convert_cameras();
         convert_lights();
         convert_nodes();
+        build_skins();
         apply_variant_bindings();
         elide_default_local_values();
         apply_authored_opinions();
@@ -819,6 +925,130 @@ private:
     // every prim whose stack the channels can express; a stack they cannot is
     // named in one warning and keeps the transform the import gave it, which
     // is its pose at the evaluation time code.
+    // The file's one animation, made when the first channel of it is
+    // (src/erhe/usd/notes.md, "Time samples"): a file's sampled `xformOp`s
+    // and its `SkelAnimation` joint channels are channels of the same
+    // animation, so playing it poses the whole file.
+    void ensure_animation(std::shared_ptr<erhe::scene::Animation>& animation)
+    {
+        if (animation) {
+            return;
+        }
+        const std::string name = m_arguments.path.stem().generic_string();
+        animation = std::make_shared<erhe::scene::Animation>(name.empty() ? std::string{"animation"} : name);
+        animation->set_source_path(m_arguments.path);
+        animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    }
+
+    // The erhe animation path of one Tydra channel path, INVALID for the
+    // paths erhe drives no joint with (blend-shape weights and the custom
+    // property channels, which are future work - plan section 5).
+    [[nodiscard]] static auto to_erhe_animation_path(const lightusd::tydra::AnimationPath path) -> erhe::scene::Animation_path
+    {
+        switch (path) {
+            case lightusd::tydra::AnimationPath::Translation: return erhe::scene::Animation_path::TRANSLATION;
+            case lightusd::tydra::AnimationPath::Rotation:    return erhe::scene::Animation_path::ROTATION;
+            case lightusd::tydra::AnimationPath::Scale:       return erhe::scene::Animation_path::SCALE;
+            default:                                          return erhe::scene::Animation_path::INVALID;
+        }
+    }
+
+    // The joint channels of the file's `SkelAnimation` prims, as channels of
+    // the file's animation targeting the joint prims
+    // (doc/usd-compatibility-plan.md K1). A joint's animation is node
+    // animation in erhe, exactly as it is for a glTF skin, so a skeleton with
+    // no animation source leaves its joints at the rest pose - which is the
+    // pose UsdSkel gives them too. Tydra keys a skeletal sampler in the
+    // file's time codes, so the seconds erhe keys in are the same division
+    // the sampled `xformOp`s take.
+    void add_skeletal_animation_channels(
+        std::shared_ptr<erhe::scene::Animation>& animation,
+        const double                             time_codes_per_second
+    )
+    {
+        for (std::size_t clip_index = 0, clip_end = m_scene->animations.size(); clip_index < clip_end; ++clip_index) {
+            const lightusd::tydra::AnimationClip& clip = m_scene->animations[clip_index];
+            for (const lightusd::tydra::AnimationChannel& channel : clip.channels) {
+                if ((channel.target_type != lightusd::tydra::ChannelTargetType::SkeletonJoint) || !channel.is_valid()) {
+                    continue;
+                }
+                const erhe::scene::Animation_path path = to_erhe_animation_path(channel.path);
+                if (path == erhe::scene::Animation_path::INVALID) {
+                    continue;
+                }
+                const std::size_t skeleton_index = static_cast<std::size_t>(channel.skeleton_id);
+                if (skeleton_index >= m_skeleton_joint_nodes.size()) {
+                    continue;
+                }
+                const std::vector<std::shared_ptr<erhe::scene::Node>>& joint_nodes = m_skeleton_joint_nodes[skeleton_index];
+                const std::size_t joint_index = static_cast<std::size_t>(channel.joint_id);
+                if ((joint_index >= joint_nodes.size()) || !joint_nodes[joint_index]) {
+                    continue;
+                }
+                const std::size_t sampler_index = static_cast<std::size_t>(channel.sampler);
+                if (sampler_index >= clip.samplers.size()) {
+                    continue;
+                }
+                const lightusd::tydra::KeyframeSampler& source          = clip.samplers[sampler_index];
+                const std::size_t                       component_count = erhe::scene::get_component_count(path);
+                if (source.times.empty() || (source.values.size() < (source.times.size() * component_count))) {
+                    continue;
+                }
+
+                std::vector<float> timestamps;
+                std::vector<float> values;
+                timestamps.reserve(source.times.size());
+                values.reserve(source.times.size() * component_count);
+                glm::vec4 previous_rotation{0.0f, 0.0f, 0.0f, 1.0f};
+                bool      has_previous_rotation{false};
+                for (std::size_t key = 0; key < source.times.size(); ++key) {
+                    timestamps.push_back(static_cast<float>(static_cast<double>(source.times[key]) / time_codes_per_second));
+                    if (path == erhe::scene::Animation_path::ROTATION) {
+                        // Tydra copies a `quatf` sample as its four floats,
+                        // which are the imaginary parts followed by the real
+                        // one - the (x, y, z, w) an erhe rotation channel
+                        // holds. Keep the sampled quaternions on one
+                        // hemisphere so the interpolation never takes the
+                        // long way round.
+                        glm::vec4 rotation{
+                            source.values[(key * 4) + 0],
+                            source.values[(key * 4) + 1],
+                            source.values[(key * 4) + 2],
+                            source.values[(key * 4) + 3]
+                        };
+                        if (has_previous_rotation && (glm::dot(previous_rotation, rotation) < 0.0f)) {
+                            rotation = -rotation;
+                        }
+                        previous_rotation     = rotation;
+                        has_previous_rotation = true;
+                        values.push_back(rotation.x);
+                        values.push_back(rotation.y);
+                        values.push_back(rotation.z);
+                        values.push_back(rotation.w);
+                    } else {
+                        for (std::size_t component = 0; component < component_count; ++component) {
+                            values.push_back(source.values[(key * component_count) + component]);
+                        }
+                    }
+                }
+
+                ensure_animation(animation);
+                erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+                sampler.set(std::move(timestamps), std::move(values));
+                animation->samplers.push_back(std::move(sampler));
+                animation->channels.push_back(
+                    erhe::scene::Animation_channel{
+                        .path           = path,
+                        .sampler_index  = animation->samplers.size() - 1,
+                        .target         = joint_nodes[joint_index],
+                        .start_position = 0,
+                        .value_offset   = 0
+                    }
+                );
+            }
+        }
+    }
+
     void build_animation()
     {
         const double time_codes_per_second = (m_result.data.time_codes.time_codes_per_second > 0.0)
@@ -849,12 +1079,7 @@ private:
                 if (!get_xform_op_animation_path(op.type, path)) {
                     continue;
                 }
-                if (!animation) {
-                    const std::string name = m_arguments.path.stem().generic_string();
-                    animation = std::make_shared<erhe::scene::Animation>(name.empty() ? std::string{"animation"} : name);
-                    animation->set_source_path(m_arguments.path);
-                    animation->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
-                }
+                ensure_animation(animation);
                 const std::size_t  component_count = erhe::scene::get_component_count(path);
                 std::vector<float> timestamps;
                 std::vector<float> values;
@@ -902,6 +1127,7 @@ private:
                 );
             }
         }
+        add_skeletal_animation_channels(animation, time_codes_per_second);
         if (!animation) {
             return;
         }
@@ -2247,7 +2473,8 @@ private:
         const Tydra_mesh&                 usd_mesh,
         const Facet_group&                group,
         const std::vector<std::uint32_t>& facet_corner_offsets,
-        const std::string&                name
+        const std::string&                name,
+        const Joint_influences&           joint_influences
     ) const -> std::shared_ptr<erhe::geometry::Geometry>
     {
         const std::vector<std::uint32_t>& counts  = usd_mesh.faceVertexCounts();
@@ -2310,6 +2537,42 @@ private:
             }
         }
 
+        // The skin influences of the vertices this group kept: they are
+        // vertex-variability primvars, so they land on the geogram vertex the
+        // USD point became (K1).
+        if (!joint_influences.empty()) {
+            erhe::geometry::Mesh_attributes& attributes = geometry->get_attributes();
+            const std::size_t                slots      = joint_influences.set_count * c_joints_per_set;
+            for (std::size_t i = 0; i < used_vertices.size(); ++i) {
+                const std::size_t usd_vertex = used_vertices[i];
+                if (usd_vertex >= joint_influences.vertex_count) {
+                    continue;
+                }
+                const GEO::index_t vertex = static_cast<GEO::index_t>(i);
+                for (std::size_t set = 0; set < joint_influences.set_count; ++set) {
+                    const std::size_t base = (usd_vertex * slots) + (set * c_joints_per_set);
+                    attributes.vertex_joint_indices(set).set(
+                        vertex,
+                        GEO::vec4u{
+                            joint_influences.indices[base + 0],
+                            joint_influences.indices[base + 1],
+                            joint_influences.indices[base + 2],
+                            joint_influences.indices[base + 3]
+                        }
+                    );
+                    attributes.vertex_joint_weights(set).set(
+                        vertex,
+                        GEO::vec4f{
+                            joint_influences.weights[base + 0],
+                            joint_influences.weights[base + 1],
+                            joint_influences.weights[base + 2],
+                            joint_influences.weights[base + 3]
+                        }
+                    );
+                }
+            }
+        }
+
         // Facet adjacency, edges and the smooth vertex normals the wide-line
         // renderer needs. The same processing the editor's glTF finalize
         // pass runs for imported geometry that arrives without edges.
@@ -2330,7 +2593,8 @@ private:
     [[nodiscard]] auto build_triangle_soup(
         const Tydra_mesh&                 usd_mesh,
         const Facet_group&                group,
-        const std::vector<std::uint32_t>& facet_corner_offsets
+        const std::vector<std::uint32_t>& facet_corner_offsets,
+        const Joint_influences&           joint_influences
     ) const -> std::shared_ptr<erhe::primitive::Triangle_soup>
     {
         using namespace erhe::dataformat;
@@ -2354,6 +2618,10 @@ private:
             soup->vertex_format.streams.front().emplace_back(Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0);
         }
         soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, 0);
+        for (std::size_t set = 0; set < joint_influences.set_count; ++set) {
+            soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_uint,  Vertex_attribute_usage::joint_indices, set);
+            soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, set);
+        }
         soup->vertex_format.streams.front().finalize_stride();
 
         std::size_t corner_total = 0;
@@ -2410,6 +2678,33 @@ private:
                 }
                 const float color_values[4] = {color.x, color.y, color.z, color.w};
                 std::memcpy(destination + offset, color_values, sizeof(color_values));
+                offset += sizeof(color_values);
+
+                // The skin influences of the USD point this corner came from
+                // (K1). They follow the color in the stream, in the order the
+                // attributes were added above.
+                if (!joint_influences.empty() && (usd_vertex < joint_influences.vertex_count)) {
+                    const std::size_t slots = joint_influences.set_count * c_joints_per_set;
+                    for (std::size_t set = 0; set < joint_influences.set_count; ++set) {
+                        const std::size_t   base = (usd_vertex * slots) + (set * c_joints_per_set);
+                        const std::uint32_t index_values[4] = {
+                            joint_influences.indices[base + 0],
+                            joint_influences.indices[base + 1],
+                            joint_influences.indices[base + 2],
+                            joint_influences.indices[base + 3]
+                        };
+                        std::memcpy(destination + offset, index_values, sizeof(index_values));
+                        offset += sizeof(index_values);
+                        const float weight_values[4] = {
+                            joint_influences.weights[base + 0],
+                            joint_influences.weights[base + 1],
+                            joint_influences.weights[base + 2],
+                            joint_influences.weights[base + 3]
+                        };
+                        std::memcpy(destination + offset, weight_values, sizeof(weight_values));
+                        offset += sizeof(weight_values);
+                    }
+                }
 
                 ++vertex_index;
             }
@@ -2451,6 +2746,11 @@ private:
             const bool                       geometry_normative   = is_geometry_normative(usd_mesh.abs_path);
             const std::vector<std::uint32_t> facet_corner_offsets = make_facet_corner_offsets(usd_mesh);
             const std::vector<Facet_group>   groups               = make_facet_groups(usd_mesh);
+            // A skinned mesh carries its influences whichever build it takes:
+            // the primvars are vertex-variability, which is the domain the
+            // geometry-normative build keeps and the soup build splits per
+            // corner (K1).
+            const Joint_influences           joint_influences     = make_joint_influences(usd_mesh);
             // The subset each primitive came from, in the order the
             // primitives are added: what a variant binding at a GeomSubset
             // path names (doc/usd-compatibility-plan.md X4).
@@ -2468,11 +2768,11 @@ private:
                 std::shared_ptr<erhe::primitive::Primitive> primitive;
                 if (geometry_normative) {
                     primitive = std::make_shared<erhe::primitive::Primitive>(
-                        build_geometry(usd_mesh, group, facet_corner_offsets, name)
+                        build_geometry(usd_mesh, group, facet_corner_offsets, name, joint_influences)
                     );
                 } else {
                     primitive = std::make_shared<erhe::primitive::Primitive>(
-                        build_triangle_soup(usd_mesh, group, facet_corner_offsets)
+                        build_triangle_soup(usd_mesh, group, facet_corner_offsets, joint_influences)
                     );
                 }
                 mesh->add_primitive(primitive, material_at(group.material_id));
@@ -3200,6 +3500,13 @@ private:
         }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
+        // A `Skeleton` prim carries a transform and holds one `Xform` prim
+        // per joint, which no other prim type does
+        // (doc/usd-compatibility-plan.md K1).
+        if ((type_name == c_skeleton_prim_type_name) && (m_skeleton_index_by_path.count(usd_node.abs_path) != 0)) {
+            convert_skeleton(usd_node, parent, extra_transform);
+            return;
+        }
         if (is_contentless_prim_type(type_name) && !subtree_has_scene_content(usd_node)) {
             if (type_name == "Material") {
                 place_material(usd_node, parent);
@@ -3587,6 +3894,199 @@ private:
         material->set_parent(parent);
         record_inherits(usd_node.abs_path, material);
         record_variant_sets(usd_node.abs_path, material);
+    }
+
+    // The `Skeleton` prims Tydra converted, by their stage path, and the
+    // per-skeleton slots the conversion fills as it walks the tree
+    // (doc/usd-compatibility-plan.md K1).
+    void index_skeletons()
+    {
+        const std::size_t skeleton_count = m_scene->skeletons.size();
+        m_skeleton_nodes.resize(skeleton_count);
+        m_skeleton_joint_nodes.resize(skeleton_count);
+        for (std::size_t skeleton_index = 0; skeleton_index < skeleton_count; ++skeleton_index) {
+            const lightusd::tydra::SkelHierarchy& skeleton = m_scene->skeletons[skeleton_index];
+            m_skeleton_joint_nodes[skeleton_index].resize(skeleton.num_joints());
+            m_skeleton_index_by_path.emplace(skeleton.abs_path, skeleton_index);
+        }
+    }
+
+    // One `Skeleton` prim as a transformable prim of the tree holding one
+    // `Xform` prim per joint (doc/usd-compatibility-plan.md K1). USD has no
+    // erhe class for a skeleton, so the prim carries the authored `Skeleton`
+    // token the way a generic `Model` prim carries its own (C5), and the
+    // joints - which are USD paths rather than prims - become the prims that
+    // give erhe's GPU skinning a `world_from_joint` per joint.
+    void convert_skeleton(
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
+    )
+    {
+        const std::size_t skeleton_index = m_skeleton_index_by_path.at(usd_node.abs_path);
+        const std::string node_name      = usd_node.prim_name.empty()
+            ? fmt::format("node_{}", m_result.data.nodes.size())
+            : usd_node.prim_name;
+
+        std::shared_ptr<erhe::scene::Xformable> node = std::make_shared<erhe::scene::Xformable>(node_name);
+        node->set_prim_type_name(c_skeleton_prim_type_name);
+        node->set_source_path(m_arguments.path);
+        apply_prim_flags(*node.get());
+        node->Hierarchy::set_parent(parent);
+        apply_local_transform(*node.get(), usd_node, extra_transform, Composed_transform::evaluated);
+        node->update_world_from_node();
+        node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+        m_result.data.nodes.push_back(node);
+        m_skeleton_nodes[skeleton_index] = node;
+
+        m_authored_opinions.push_back(
+            Authored_opinions{
+                .absolute_path     = usd_node.abs_path,
+                .visibility_target = node.get(),
+                .primary           = nullptr,
+                .secondary         = node.get()
+            }
+        );
+        record_inherits(usd_node.abs_path, node);
+        record_variant_sets(usd_node.abs_path, node);
+
+        add_skeleton_joint(m_scene->skeletons[skeleton_index].root_node, node, skeleton_index);
+
+        if (record_references(usd_node, node)) {
+            return; // the prims below came from the arcs; the targets supply them
+        }
+        const glm::mat4 child_transform{1.0f};
+        for (const Tydra_node& usd_child : usd_node.children) {
+            convert_node(usd_child, node, child_transform);
+        }
+    }
+
+    // One joint of a skeleton, and the joints below it. The joint's name is
+    // the last segment of its `joints` path, so `Bone_1/Bone_001_1` is
+    // `Bone_001_1` under `Bone_1`, and its local transform is the joint's
+    // `restTransforms` entry - which is what makes the joint prim's world
+    // transform the `skelLocalToWorld * jointSkelSpace` UsdSkel poses a bound
+    // point with (doc/usd-compatibility-plan.md K1).
+    void add_skeleton_joint(
+        const lightusd::tydra::SkelNode&          skel_node,
+        const std::shared_ptr<erhe::scene::Node>& parent,
+        const std::size_t                         skeleton_index
+    )
+    {
+        const std::string::size_type separator = skel_node.joint_path.rfind('/');
+        const std::string            joint_name = (separator == std::string::npos)
+            ? skel_node.joint_path
+            : skel_node.joint_path.substr(separator + 1);
+
+        std::shared_ptr<erhe::scene::Xform> joint = std::make_shared<erhe::scene::Xform>(
+            joint_name.empty() ? fmt::format("joint_{}", skel_node.joint_id) : joint_name
+        );
+        joint->set_source_path(m_arguments.path);
+        apply_prim_flags(*joint.get());
+        joint->Hierarchy::set_parent(parent);
+        joint->node_data.transforms.parent_from_node.set(to_glm(skel_node.rest_transform));
+        joint->update_world_from_node();
+        joint->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+        m_result.data.nodes.push_back(joint);
+
+        std::vector<std::shared_ptr<erhe::scene::Node>>& joint_nodes = m_skeleton_joint_nodes[skeleton_index];
+        if ((skel_node.joint_id >= 0) && (static_cast<std::size_t>(skel_node.joint_id) < joint_nodes.size())) {
+            joint_nodes[static_cast<std::size_t>(skel_node.joint_id)] = joint;
+        }
+        for (const lightusd::tydra::SkelNode& child : skel_node.children) {
+            add_skeleton_joint(child, joint, skeleton_index);
+        }
+    }
+
+    // The skins the file's skinned meshes bind
+    // (doc/usd-compatibility-plan.md K1). UsdSkel poses a bound point as
+    // `skelLocalToWorld * jointSkelSpace_j * inverse(bind_j) *
+    // geomBindTransform * p` and erhe's Joint_buffer poses it as
+    // `world_from_joint_j * inverse_bind_j * p`, so with the joint prims
+    // above supplying the first factor the inverse bind matrix erhe needs is
+    // `inverse(bind_j) * geomBindTransform`. That depends on the mesh's own
+    // `geomBindTransform` alone, so the meshes of one skeleton sharing a bind
+    // transform share a skin.
+    void build_skins()
+    {
+        if (m_scene->skeletons.empty()) {
+            return;
+        }
+        // The skin of every Tydra mesh, by mesh index: what the prims the
+        // mesh became - the original and every clone take_mesh made - name.
+        std::vector<std::shared_ptr<erhe::scene::Skin>> skin_by_mesh;
+        skin_by_mesh.resize(m_scene->meshes.size());
+        for (std::size_t mesh_index = 0, end = m_scene->meshes.size(); mesh_index < end; ++mesh_index) {
+            const Tydra_mesh& usd_mesh = m_scene->meshes[mesh_index];
+            if (usd_mesh.skel_id < 0) {
+                continue;
+            }
+            const std::size_t skeleton_index = static_cast<std::size_t>(usd_mesh.skel_id);
+            if (skeleton_index >= m_scene->skeletons.size()) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Node>& skeleton_node = m_skeleton_nodes[skeleton_index];
+            if (!skeleton_node) {
+                log_usd->warn(
+                    "USD prim '{}': the skeleton it binds is not a prim of the tree - the mesh is not skinned",
+                    usd_mesh.abs_path
+                );
+                continue;
+            }
+            const glm::mat4 geometry_from_bind = to_glm(usd_mesh.joint_and_weights.geomBindTransform);
+            skin_by_mesh[mesh_index] = get_or_make_skin(skeleton_index, geometry_from_bind);
+        }
+
+        for (std::size_t mesh_index = 0, end = m_result.data.meshes.size(); mesh_index < end; ++mesh_index) {
+            if ((mesh_index < skin_by_mesh.size()) && skin_by_mesh[mesh_index] && m_result.data.meshes[mesh_index]) {
+                m_result.data.meshes[mesh_index]->skin = skin_by_mesh[mesh_index];
+            }
+        }
+        for (const std::pair<const std::string, Mesh_prim>& entry : m_mesh_by_path) {
+            if ((entry.second.template_index < skin_by_mesh.size()) && skin_by_mesh[entry.second.template_index] && entry.second.mesh) {
+                entry.second.mesh->skin = skin_by_mesh[entry.second.template_index];
+            }
+        }
+    }
+
+    [[nodiscard]] auto get_or_make_skin(
+        const std::size_t skeleton_index,
+        const glm::mat4&  geometry_from_bind
+    ) -> std::shared_ptr<erhe::scene::Skin>
+    {
+        for (const Skin_key& key : m_skins) {
+            if ((key.skeleton_index == skeleton_index) && is_near_matrix(key.geometry_from_bind, geometry_from_bind)) {
+                return key.skin;
+            }
+        }
+        const lightusd::tydra::SkelHierarchy&           skeleton    = m_scene->skeletons[skeleton_index];
+        const std::vector<std::shared_ptr<erhe::scene::Node>>& joint_nodes = m_skeleton_joint_nodes[skeleton_index];
+
+        const std::string skin_name = skeleton.prim_name.empty()
+            ? fmt::format("skin_{}", m_result.data.skins.size())
+            : skeleton.prim_name;
+        std::shared_ptr<erhe::scene::Skin> skin = std::make_shared<erhe::scene::Skin>(skin_name);
+        skin->set_source_path(m_arguments.path);
+        skin->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+        skin->skin_data.skeleton = m_skeleton_nodes[skeleton_index];
+        skin->skin_data.joints.reserve(joint_nodes.size());
+        skin->skin_data.inverse_bind_matrices.reserve(joint_nodes.size());
+        for (std::size_t joint_index = 0; joint_index < joint_nodes.size(); ++joint_index) {
+            const glm::mat4 skeleton_from_bind = (joint_index < skeleton.bind_transforms.size())
+                ? to_glm(skeleton.bind_transforms[joint_index])
+                : glm::mat4{1.0f};
+            skin->skin_data.joints.push_back(joint_nodes[joint_index]);
+            skin->skin_data.inverse_bind_matrices.push_back(glm::inverse(skeleton_from_bind) * geometry_from_bind);
+        }
+        m_skins.push_back(
+            Skin_key{
+                .skeleton_index     = skeleton_index,
+                .geometry_from_bind = geometry_from_bind,
+                .skin               = skin
+            }
+        );
+        m_result.data.skins.push_back(skin);
+        return skin;
     }
 
     // A prim whose class carries no transform: a `Scope`, and the `Typed`
@@ -4856,6 +5356,16 @@ private:
         std::size_t                        template_index{0};
     };
 
+    // One skin the conversion made, and the (skeleton, geometry bind
+    // transform) pair it answers for (doc/usd-compatibility-plan.md K1).
+    class Skin_key final
+    {
+    public:
+        std::size_t                        skeleton_index{0};
+        glm::mat4                          geometry_from_bind{1.0f};
+        std::shared_ptr<erhe::scene::Skin> skin;
+    };
+
     const Usd_load_arguments&      m_arguments;
     Usd_load_result&               m_result;
     // The time code the whole stage is evaluated at, and whether any prim
@@ -4906,6 +5416,16 @@ private:
     // The mesh each `Mesh` prim of the stage became, by the prim's absolute
     // path: what a variant binding resolves against.
     std::map<std::string, Mesh_prim>               m_mesh_by_path;
+    // The `Skeleton` prims Tydra converted, by stage path, and the prims the
+    // conversion made for each of them: the prim the `Skeleton` became and
+    // one prim per joint, in the skeleton's `joints` order
+    // (doc/usd-compatibility-plan.md K1). Filled by index_skeletons and
+    // convert_skeleton, read by build_skins and build_animation.
+    std::map<std::string, std::size_t>             m_skeleton_index_by_path;
+    std::vector<std::shared_ptr<erhe::scene::Node>> m_skeleton_nodes;
+    std::vector<std::vector<std::shared_ptr<erhe::scene::Node>>> m_skeleton_joint_nodes;
+    // The skins build_skins made, by the pair they answer for.
+    std::vector<Skin_key>                          m_skins;
     // The stage being converted, with the composed layer load_stage kept and
     // the prims it hoisted out of the variant blocks.
     const Stage::Impl*                           m_impl{nullptr};
