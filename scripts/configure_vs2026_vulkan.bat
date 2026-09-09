@@ -13,6 +13,7 @@ cmake ^
  -S . ^
  -Wno-dev ^
  %* ^
+ -DERHE_BUILD_TESTS=ON ^
  -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
  -DERHE_GLTF_LIBRARY=fastgltf ^
  -DERHE_GRAPHICS_API=vulkan ^
