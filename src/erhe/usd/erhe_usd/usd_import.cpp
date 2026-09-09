@@ -2880,6 +2880,52 @@ private:
     static constexpr unsigned int c_schema_sphere_stack_count    = 16;
     static constexpr int          c_schema_capsule_stack_count   = 8;
 
+    // `primvars:displayColor` / `primvars:displayOpacity` of a primitive-schema
+    // prim, as the corner color the mesh path gives a `Mesh` prim's primvars
+    // (set_corner_attributes): the fragment shader multiplies it into the base
+    // color, bound material or not. A schema prim authors no topology, so the
+    // only element a value can address is the whole surface: the first
+    // element colors every corner, and a prim that authors more than one is
+    // named in a warning. A prim that authors neither primvar leaves the
+    // attribute absent, the way an uncolored `Mesh` does.
+    void apply_primitive_schema_display_color(
+        const lightusd::GPrim&    gprim,
+        const std::string&        absolute_path,
+        erhe::geometry::Geometry& geometry
+    )
+    {
+        const std::vector<lightusd::value::color3f> colors = gprim.get_displayColors();
+        std::vector<float>                           opacities;
+        if (gprim.has_primvar("displayOpacity")) {
+            lightusd::GeomPrimvar primvar;
+            std::string           error;
+            if (gprim.get_primvar("displayOpacity", &primvar, &error)) {
+                primvar.flatten_with_indices(lightusd::value::TimeCode::Default(), &opacities);
+            }
+        }
+        if (colors.empty() && opacities.empty()) {
+            return;
+        }
+        if ((colors.size() > 1) || (opacities.size() > 1)) {
+            add_warning(
+                fmt::format(
+                    "USD prim '{}': displayColor has {} and displayOpacity {} element(s) - a primitive schema prim has no topology to address them by, the first element colors the whole surface",
+                    absolute_path,
+                    colors.size(),
+                    opacities.size()
+                )
+            );
+        }
+        const lightusd::value::color3f color   = colors.empty()    ? lightusd::value::color3f{1.0f, 1.0f, 1.0f} : colors.front();
+        const float                    opacity = opacities.empty() ? 1.0f : opacities.front();
+        const GEO::vec4f               value{color.r, color.g, color.b, opacity};
+        erhe::geometry::Mesh_attributes& attributes = geometry.get_attributes();
+        const GEO::Mesh&                 geo_mesh   = geometry.get_mesh();
+        for (GEO::index_t corner = 0; corner < geo_mesh.facet_corners.nb(); ++corner) {
+            attributes.corner_color_0.set(corner, value);
+        }
+    }
+
     // The geometry one primitive-schema prim describes, in the prim's own
     // local space: USD centers each of these shapes on the origin, so the
     // generator output is centered too and only the axis rotation is baked
@@ -2894,11 +2940,13 @@ private:
         std::shared_ptr<erhe::geometry::Geometry> geometry = std::make_shared<erhe::geometry::Geometry>(name);
         GEO::Mesh&                                geo_mesh = geometry->get_mesh();
         glm::mat4                                 rotation{1.0f};
+        const lightusd::GPrim*                    gprim = nullptr;
         if (type_name == "Cube") {
             const lightusd::GeomCube* cube = prim.as<lightusd::GeomCube>();
             if (cube == nullptr) {
                 return {};
             }
+            gprim = cube;
             const float size = static_cast<float>(read_schema_double(cube->size, 2.0));
             erhe::geometry::shapes::make_box(geo_mesh, size, size, size);
         } else if (type_name == "Sphere") {
@@ -2906,6 +2954,7 @@ private:
             if (sphere == nullptr) {
                 return {};
             }
+            gprim = sphere;
             erhe::geometry::shapes::make_sphere(
                 geo_mesh,
                 static_cast<float>(read_schema_double(sphere->radius, 1.0)),
@@ -2917,6 +2966,7 @@ private:
             if (cone == nullptr) {
                 return {};
             }
+            gprim = cone;
             const float height = static_cast<float>(read_schema_double(cone->height, 2.0));
             const float radius = static_cast<float>(read_schema_double(cone->radius, 1.0));
             erhe::geometry::shapes::make_cone(
@@ -2934,6 +2984,7 @@ private:
             if (cylinder == nullptr) {
                 return {};
             }
+            gprim = cylinder;
             const float height = static_cast<float>(read_schema_double(cylinder->height, 2.0));
             const float radius = static_cast<float>(read_schema_double(cylinder->radius, 1.0));
             erhe::geometry::shapes::make_cylinder(
@@ -2952,6 +3003,7 @@ private:
             if (cylinder == nullptr) {
                 return {};
             }
+            gprim = cylinder;
             const float height        = static_cast<float>(read_schema_double(cylinder->height,       2.0));
             const float radius_top    = static_cast<float>(read_schema_double(cylinder->radiusTop,    1.0));
             const float radius_bottom = static_cast<float>(read_schema_double(cylinder->radiusBottom, 1.0));
@@ -2972,6 +3024,7 @@ private:
             if (capsule == nullptr) {
                 return {};
             }
+            gprim = capsule;
             // USD's `height` is the length of the cylindrical mid-section,
             // which is erhe's `length`; the total height is height + 2 *
             // radius in both.
@@ -2988,6 +3041,7 @@ private:
             if (capsule == nullptr) {
                 return {};
             }
+            gprim = capsule;
             const float height        = static_cast<float>(read_schema_double(capsule->height,       1.0));
             const float radius_top    = static_cast<float>(read_schema_double(capsule->radiusTop,    0.5));
             const float radius_bottom = static_cast<float>(read_schema_double(capsule->radiusBottom, 0.5));
@@ -3028,6 +3082,7 @@ private:
         if (rotation != glm::mat4{1.0f}) {
             erhe::geometry::transform(*geometry.get(), *geometry.get(), erhe::geometry::to_geo_mat4f(rotation));
         }
+        apply_primitive_schema_display_color(*gprim, absolute_path, *geometry.get());
         // The same processing a geometry-normative USD mesh gets: facet
         // adjacency, the edges and the smooth vertex normals the wide-line
         // renderer needs. The generators write the shading normals - a

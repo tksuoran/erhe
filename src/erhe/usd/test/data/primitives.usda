@@ -35,6 +35,8 @@ def Xform "World"
         double3 xformOp:translate = (-6, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate"]
         double size = 2
+        color3f[] primvars:displayColor = [(0, 0, 0.8)]
+        float[] primvars:displayOpacity = [0.5]
     }
 
     def Sphere "Ball"

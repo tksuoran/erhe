@@ -23,6 +23,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -235,6 +236,33 @@ TEST_F(Primitive_schema_import, authored_xform_ops_place_the_prim)
 }
 
 // A primitive-schema prim binds a material the way any Gprim does.
+// `primvars:displayColor` / `displayOpacity` on a schema prim color every
+// corner of the generated geometry, the way a `Mesh` prim's primvars do; a
+// schema prim without them carries no corner color.
+TEST_F(Primitive_schema_import, display_color_reaches_every_corner)
+{
+    const erhe::scene::Mesh* box = find_mesh(root, "Box");
+    ASSERT_NE(box, nullptr);
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = geometry_of(*box);
+    ASSERT_TRUE(geometry.operator bool());
+    const GEO::Mesh& geo_mesh = geometry->get_mesh();
+    ASSERT_GT(geo_mesh.facet_corners.nb(), 0u);
+    for (GEO::index_t corner = 0; corner < geo_mesh.facet_corners.nb(); ++corner) {
+        const std::optional<GEO::vec4f> color = geometry->get_attributes().corner_color_0.try_get(corner);
+        ASSERT_TRUE(color.has_value()) << "corner " << corner;
+        EXPECT_NEAR(color.value().x, 0.0f, 1e-6f);
+        EXPECT_NEAR(color.value().y, 0.0f, 1e-6f);
+        EXPECT_NEAR(color.value().z, 0.8f, 1e-6f);
+        EXPECT_NEAR(color.value().w, 0.5f, 1e-6f);
+    }
+
+    const erhe::scene::Mesh* ball = find_mesh(root, "Ball");
+    ASSERT_NE(ball, nullptr);
+    const std::shared_ptr<erhe::geometry::Geometry> ball_geometry = geometry_of(*ball);
+    ASSERT_TRUE(ball_geometry.operator bool());
+    EXPECT_FALSE(ball_geometry->get_attributes().corner_color_0.try_get(0).has_value());
+}
+
 TEST_F(Primitive_schema_import, material_binding_reaches_the_primitive)
 {
     const erhe::scene::Mesh* pipe = find_mesh(root, "Pipe");

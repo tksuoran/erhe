@@ -89,6 +89,11 @@ translation units.
   spheres, so radii further apart than the height cost one warning and
   become a capsule of the larger radius. The prim binds a material the way
   any Gprim does; it holds no `GeomSubset`, so the mesh has one primitive.
+  Its `primvars:displayColor` / `primvars:displayOpacity` become the corner
+  color of every corner of the generated geometry, the same attribute a
+  `Mesh` prim's primvars fill: a schema prim authors no topology, so the
+  first element colors the whole surface and a prim authoring more than one
+  element is named in a warning.
   The first save is a change of representation, so the round trip is a fixed
   point from the first reload on rather than from the first save.
 - Tydra's `GetPropertyNames` knows a fixed set of prim types and answers
@@ -1333,12 +1338,14 @@ kinds, that the carrier prims are imported with their own transforms, and that
 the prims the arcs name are not.
 
 `test/data/primitives.usda` holds one prim of each UsdGeom primitive schema -
-a `Cube`, a `Sphere`, a `Cone` and a `Capsule` on Z, a `Cylinder` on Y bound
-to a material, and a `Cylinder_1` with a radius per end.
+a `Cube` with a `displayColor` and `displayOpacity`, a `Sphere`, a `Cone` and
+a `Capsule` on Z, a `Cylinder` on Y bound to a material, and a `Cylinder_1`
+with a radius per end.
 `test_usd_primitives.cpp` asserts that each becomes a `Mesh` prim with one
 primitive, facets and edges, that the size / radius / height / `axis`
 attributes land where the generator puts them, that the binding reaches the
-primitive, that a save writes `def Mesh` with points and no `Cube` or
+primitive, that the cube's display color and opacity reach every corner while
+the uncolored sphere carries none, that a save writes `def Mesh` with points and no `Cube` or
 `Cylinder` spelling, and that the round trip settles after the first reload
 (save two and save three are byte-identical).
 
