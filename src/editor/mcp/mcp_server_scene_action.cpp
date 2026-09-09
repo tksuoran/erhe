@@ -3040,12 +3040,17 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
     // framing the bounds; otherwise this tool's own, created on the first call
     // for the scene and reused after. An authored camera is only looked
     // through - never moved, and its projection is never read - because it
-    // carries the view its file intended.
+    // carries the view its file intended. The editor's own default camera
+    // (flagged exclude_from_prefab: injected on open when the file authors
+    // none) is not authored content, so it is framed as this tool's own.
     std::shared_ptr<erhe::scene::Camera> camera{};
     std::shared_ptr<erhe::scene::Camera> own_camera{};
     for (const std::shared_ptr<erhe::scene::Camera>& candidate : get_selectable_cameras(scene_root->get_scene())) {
-        if (candidate->get_name() == "MCP frame camera") {
-            own_camera = candidate;
+        const bool editor_default = (candidate->get_flag_bits() & erhe::Item_flags::exclude_from_prefab) != 0;
+        if ((candidate->get_name() == "MCP frame camera") || editor_default) {
+            if (!own_camera) {
+                own_camera = candidate;
+            }
         } else if (!camera) {
             camera = candidate;   // the first authored camera, in file order
         }

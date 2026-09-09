@@ -13,12 +13,13 @@
 #include <vector>
 
 namespace erhe {
+    class Hierarchy;
     class Item_base;
 }
 namespace erhe::gltf      { class Gltf_data; class Gltf_image_source; class Image_transfer; }
 namespace erhe::graphics  { class Device; class Texture; }
 namespace erhe::primitive { class Build_info; }
-namespace erhe::scene     { class Animation; class Xformable; using Node = Xformable; }
+namespace erhe::scene     { class Animation; class Camera; class Xformable; using Node = Xformable; }
 namespace tf              { class Executor; }
 
 namespace editor {
@@ -232,6 +233,17 @@ public:
     App_context&                 context,
     const std::filesystem::path& path
 ) -> std::shared_ptr<Scene_root>;
+
+// The editor's own camera for a scene whose file authors none, so that the
+// scene's viewport has something to render through: the same fitted default
+// camera the foreign-glTF import injects (make_import_gltf_operation with
+// fit_view_to_content), placed to frame the world bounds of every Mesh prim
+// under content_root. Flagged exclude_from_prefab. Returned unparented; the
+// caller inserts it into the scene. Format-neutral: open_scene_usd uses it.
+[[nodiscard]] auto make_default_camera_for_content(
+    App_context&     context,
+    erhe::Hierarchy& content_root
+) -> std::shared_ptr<erhe::scene::Camera>;
 
 // The MAIN-THREAD TAIL of open_scene_gltf, split out so the asynchronous
 // path (Gltf_load_task) can share it: everything from reading the ERHE_scene

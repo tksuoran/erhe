@@ -73,6 +73,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/animation.hpp"
+#include "erhe_scene/camera.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -1973,6 +1974,17 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         child->set_parent(scene_root_node);
     }
     container_node->set_parent({});
+
+    // A file that authors no camera is looked at through the editor's own
+    // default camera, fitted to the content the way a foreign glTF scene is
+    // (make_import_gltf_operation): the scene's viewport renders nothing
+    // without a camera. A save writes it back as a Camera prim, like the
+    // foreign-glTF default camera is saved with its scene.
+    if (scene.get_cameras().empty()) {
+        std::shared_ptr<erhe::scene::Camera> default_camera = make_default_camera_for_content(context, *scene_root_node);
+        default_camera->set_parent(scene_root_node);
+        log_parsers->info("open_scene_usd: '{}' authors no camera - added the editor default camera", erhe::file::to_string(path));
+    }
 
     // A selection the scene state carries wins over the one the file's
     // `variants` metadata authored: the prims are under the scene root now,

@@ -407,6 +407,33 @@ void append_content_library_attach_operations(
 // exclude_unlit skips primitives with an unlit (KHR_materials_unlit)
 // material: sky domes and backdrops surround the scene, so framing the
 // camera on them frames nothing.
+void include_mesh_world_bounds(
+    erhe::math::Aabb&        bounds,
+    const erhe::scene::Mesh& mesh,
+    const bool               exclude_unlit
+)
+{
+    const glm::mat4 world_from_node = mesh.world_from_node();
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
+        if (!mesh_primitive.primitive) {
+            continue;
+        }
+        const erhe::primitive::Material* material = mesh_primitive.material.get();
+        if (
+            exclude_unlit &&
+            (material != nullptr) &&
+            (material->get_bxdf_model() == erhe::primitive::Bxdf_model::unlit)
+        ) {
+            continue;
+        }
+        const erhe::math::Aabb primitive_bounds = mesh_primitive.primitive->get_bounding_box();
+        if (!primitive_bounds.is_valid()) {
+            continue;
+        }
+        bounds.include(primitive_bounds.transformed_by(world_from_node));
+    }
+}
+
 [[nodiscard]] auto compute_content_world_bounds(
     const erhe::gltf::Gltf_data& gltf_data,
     const bool                   exclude_unlit
@@ -421,26 +448,25 @@ void append_content_library_attach_operations(
         if (!mesh) {
             continue;
         }
-        const glm::mat4 world_from_node = node->world_from_node();
-        for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
-            if (!mesh_primitive.primitive) {
-                continue;
-            }
-            const erhe::primitive::Material* material = mesh_primitive.material.get();
-            if (
-                exclude_unlit &&
-                (material != nullptr) &&
-                (material->get_bxdf_model() == erhe::primitive::Bxdf_model::unlit)
-            ) {
-                continue;
-            }
-            const erhe::math::Aabb primitive_bounds = mesh_primitive.primitive->get_bounding_box();
-            if (!primitive_bounds.is_valid()) {
-                continue;
-            }
-            bounds.include(primitive_bounds.transformed_by(world_from_node));
-        }
+        include_mesh_world_bounds(bounds, *mesh, exclude_unlit);
     }
+    return bounds;
+}
+
+// The same bounds for content that is already in a tree: every Mesh prim
+// below (and including) root.
+[[nodiscard]] auto compute_subtree_world_bounds(
+    erhe::Hierarchy& root,
+    const bool       exclude_unlit
+) -> erhe::math::Aabb
+{
+    erhe::math::Aabb bounds{};
+    root.for_each<erhe::scene::Mesh>(
+        [&bounds, exclude_unlit](erhe::scene::Mesh& mesh) -> bool {
+            include_mesh_world_bounds(bounds, mesh, exclude_unlit);
+            return true;
+        }
+    );
     return bounds;
 }
 
@@ -523,6 +549,41 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
     // Properties UI slider covers.
     fit.shadow_range = std::clamp(fit.view_distance + radius, 22.0f, 1000.0f);
     return fit;
+}
+
+// The editor's own camera for a scene whose file authors none. Framed 8
+// units back from the origin looking at it; when a content fit is given,
+// backed off far enough for the content's bounding sphere to fill the
+// vertical fov instead, with the fitted depth / shadow ranges - a 200 m
+// scene is not visible at all through a 80 m far plane. Flagged
+// exclude_from_prefab: an editor convenience, not authored content (the
+// MCP frame_scene tool recognizes the flag and frames the camera as its
+// own). Returned unparented; the caller inserts it into the scene.
+[[nodiscard]] auto make_default_camera(const std::optional<Content_fit>& content_fit) -> std::shared_ptr<erhe::scene::Camera>
+{
+    std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
+    default_camera->set_fov_y          (c_default_camera_fov_y);
+    default_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
+    default_camera->set_z_near         (0.03f);
+    default_camera->set_z_far          (80.0f);
+    default_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
+
+    glm::vec3 eye_position{0.0f, 0.0f, 8.0f};
+    glm::vec3 target_position{0.0f, 0.0f, 0.0f};
+    if (content_fit.has_value()) {
+        default_camera->set_z_near(content_fit->z_near);
+        default_camera->set_z_far (content_fit->z_far);
+        default_camera->set_shadow_range(content_fit->shadow_range);
+        target_position = content_fit->center;
+        eye_position    = content_fit->center + glm::vec3{0.0f, 0.0f, 1.0f} * content_fit->view_distance;
+    }
+    const glm::mat4 m = erhe::math::create_look_at(
+        eye_position,                 // eye
+        target_position,              // center
+        glm::vec3{0.0f, 1.00f, 0.0f}  // up
+    );
+    default_camera->set_parent_from_node(m);
+    return default_camera;
 }
 
 }
@@ -1113,34 +1174,7 @@ auto make_import_gltf_operation(
     if (add_default_camera) {
         // A Camera is a prim (doc/usd-compatibility-plan.md C5): it carries
         // its own transform, so the camera IS the node inserted below.
-        std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
-        default_camera_node = default_camera;
-        default_camera->set_fov_y          (c_default_camera_fov_y);
-        default_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
-        default_camera->set_z_near         (0.03f);
-        default_camera->set_z_far          (80.0f);
-        default_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
-
-        // Default framing: 8 units back from the origin, looking at it. When
-        // the view is fitted to the content (scene open), back off far enough
-        // for the content's bounding sphere to fill the vertical fov instead,
-        // and take the fitted depth / shadow ranges - a 200 m scene is not
-        // visible at all through a 80 m far plane.
-        glm::vec3 eye_position{0.0f, 0.0f, 8.0f};
-        glm::vec3 target_position{0.0f, 0.0f, 0.0f};
-        if (content_fit.has_value()) {
-            default_camera->set_z_near(content_fit->z_near);
-            default_camera->set_z_far (content_fit->z_far);
-            default_camera->set_shadow_range(content_fit->shadow_range);
-            target_position = content_fit->center;
-            eye_position    = content_fit->center + glm::vec3{0.0f, 0.0f, 1.0f} * content_fit->view_distance;
-        }
-        const glm::mat4 m = erhe::math::create_look_at(
-            eye_position,                 // eye
-            target_position,              // center
-            glm::vec3{0.0f, 1.00f, 0.0f}  // up
-        );
-        default_camera_node->set_parent_from_node(m);
+        default_camera_node = make_default_camera(content_fit);
     }
 
     // Cameras the file itself carries: their fov / near plane are authored
@@ -1665,6 +1699,25 @@ auto finish_open_scene_gltf(
 
     log_parsers->info("open_scene_gltf: opened scene '{}' from '{}'", scene_root->get_name(), erhe::file::to_string(path));
     return scene_root;
+}
+
+auto make_default_camera_for_content(App_context& context, erhe::Hierarchy& content_root) -> std::shared_ptr<erhe::scene::Camera>
+{
+    const bool exclude_unlit = (context.editor_settings != nullptr) && context.editor_settings->exclude_unlit_primitives;
+    const std::optional<Content_fit> content_fit = make_content_fit(
+        compute_subtree_world_bounds(content_root, false),
+        exclude_unlit ? compute_subtree_world_bounds(content_root, true) : erhe::math::Aabb{}
+    );
+    if (content_fit.has_value()) {
+        log_parsers->info(
+            "Scene content fit: center {} {} {} radius {:.3f} view_distance {:.1f} -> z_near {:.4f} z_far {:.1f} shadow_range {:.1f}",
+            content_fit->center.x, content_fit->center.y, content_fit->center.z, content_fit->radius,
+            content_fit->view_distance, content_fit->z_near, content_fit->z_far, content_fit->shadow_range
+        );
+    } else {
+        log_parsers->info("Scene content fit: no valid content bounds - keeping default camera / shadow ranges");
+    }
+    return make_default_camera(content_fit);
 }
 
 auto open_scene_gltf(

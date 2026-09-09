@@ -495,25 +495,11 @@ auto Scene_views::open_new_viewport_scene_view(
     const std::string name = fmt::format("Viewport_scene_view {}", m_viewport_scene_views.size());
 
     const int msaa_sample_count = m_app_context.app_settings->graphics.current_graphics_preset.msaa_sample_count;
+    // The scene is bound even when it has no camera to look through: the
+    // window then carries the scene's name and its "Scene and Camera" dialog
+    // offers the scene's cameras once one exists, instead of the window being
+    // an unbound viewport that shows nothing and says nothing.
     const std::shared_ptr<erhe::scene::Camera> camera = choose_camera_for_scene(scene_root);
-    if (scene_root && camera) {
-        return create_viewport_scene_view(
-            m_viewport_config_data,
-            *m_app_context.graphics_device,
-            *m_app_context.rendergraph,
-            *m_app_context.imgui_windows,
-            *m_app_context.app_rendering,
-            *m_app_context.app_settings,
-            *m_app_context.post_processing,
-            name,
-            scene_root,
-            camera,
-            msaa_sample_count,
-            out_rendergraph_output_node
-        );
-    }
-
-    // Case for when no cameras found in scene
     return create_viewport_scene_view(
         m_viewport_config_data,
         *m_app_context.graphics_device,
@@ -523,8 +509,8 @@ auto Scene_views::open_new_viewport_scene_view(
         *m_app_context.app_settings,
         *m_app_context.post_processing,
         name,
-        {},
-        nullptr,
+        scene_root,
+        camera,
         msaa_sample_count,
         out_rendergraph_output_node
     );
