@@ -104,9 +104,8 @@ namespace {
     return static_cast<bool>(s.texture_reference);
 }
 
-[[nodiscard]] auto any_sampler_uses_texgen(const erhe::primitive::Material& material, const erhe::primitive::Texgen_mode texgen_mode) -> bool
+[[nodiscard]] auto any_sampler_uses_texgen(const erhe::primitive::Material_texture_samplers& s, const erhe::primitive::Texgen_mode texgen_mode) -> bool
 {
-    const erhe::primitive::Material_texture_samplers& s = material.data.texture_samplers;
     auto uses = [texgen_mode](const erhe::primitive::Material_texture_sampler& sampler) {
         return sampler_is_bound(sampler) && (sampler.texgen_mode == texgen_mode);
     };
@@ -185,9 +184,18 @@ auto Shader_key::derive(
         key.set(Shader_bool::USE_VERTEX_VARYING_TEXCOORD2, true);
     }
 
-    if (material != nullptr) {
-        const erhe::primitive::Material_values            data     = material->get_values();
-        const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+    // A primitive without a material draws with the reserved default
+    // material record (Material_set::default_material_slot_index), which
+    // Material_buffer writes from the Material_values defaults - an opaque
+    // isotropic BRDF with no textures. The variant is derived from those same
+    // defaults so the shader that reads the record is the lit one the record
+    // describes; leaving the material components unset would pick
+    // BXDF_MODEL 0 (unlit) with no normal varying, a different material than
+    // the record says.
+    {
+        static const erhe::primitive::Material_texture_samplers s_no_samplers{};
+        const erhe::primitive::Material_values            data     = (material != nullptr) ? material->get_values()           : erhe::primitive::Material_values{};
+        const erhe::primitive::Material_texture_samplers& samplers = (material != nullptr) ? material->data.texture_samplers : s_no_samplers;
 
         key.blending_mode = data.blending_mode;
 
@@ -256,7 +264,7 @@ auto Shader_key::derive(
         // alpha, which is covered by the bound-sampler check.
         auto needs_texgen = [&](const erhe::primitive::Texgen_mode texgen_mode) -> bool {
             return
-                any_sampler_uses_texgen(*material, texgen_mode) ||
+                any_sampler_uses_texgen(samplers, texgen_mode) ||
                 (
                     data.use_circular_brushed_metal &&
                     (data.circular_brushed_metal_texgen_mode == texgen_mode)
