@@ -137,6 +137,6 @@
   STOPPED-2026-09-08{©User};left=11-bounds-rows+stale-first-framing-bounds{plan-section-6};queue=E4b→E4d→E2
 
 
-[TASK::undefined-usd-prims]{2026-09-09,via-harness:1-coder}
-✓fix-1{Item_base::defined+derived-active-bit+import/export+docs+src/erhe/usd/test/test_usd_defined.cpp+3-fixtures;unbuilt-untested-by-instruction}|?user-build+test{erhe_usd_tests-Defined_prims.*;open-over.usda->2-cubes}
-?fix-2::displayColor/displayOpacity-on-Cube/Sphere/Cone/Cylinder/Capsule{usd_import.cpp-build_primitive_schema_geometry}
+[TASK::undefined-usd-prims]{DONE-2026-09-09}
+✓fix-1{7d0002f3d:Item_base::defined+derived-active-bit+import/export;84f735c45:apply_defined-reads-composed-layer-PrimSpec-specifier{LightUSD-LayerToStage-leaves-Prim::specifier()=Invalid;typed-struct.spec-only};user-verified}
+✓fix-2{d01eead74:build_primitive_schema_geometry-reads-GPrim-displayColor/displayOpacity->corner_color_0-every-corner{first-element;>1-warned};primitives.usda-Box-colored;usd-tests-256}|?user-interactive{over.usda:blue-Cube}
