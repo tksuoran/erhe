@@ -1003,10 +1003,13 @@ because the same spelling rule decides what an item is called on a stage.
   opinion round-trip.
 - The prim's specifier is the item's `defined` property, and is its own
   carrier - it never travels as metadata or as an `erhe:` custom attribute.
-  The importer reads it from `Prim::specifier()` beside the `active`
-  metadatum and the writer lowers a `def` to `over` for an item whose
-  `defined` is false; `class` prims are Style items (X3) and keep their
-  specifier.
+  The importer reads it from the composed layer's `PrimSpec::specifier()`
+  (`find_layer_primspec`), never from the stage `Prim`: LightUSD's
+  `LayerToStage` copies the specifier into the typed prim struct only and
+  leaves `Prim::specifier()` at `Specifier::Invalid`, so every stage prim
+  answers `Invalid`. The writer lowers the typed struct's `spec` field from
+  `def` to `over` for an item whose `defined` is false, for the same reason;
+  `class` prims are Style items (X3) and keep their specifier.
 - The name a value is authored under. `native_usd_property_name` is the one
   list of the erhe properties a prim carries in an attribute of its schema and
   of the USD spelling each of them gets (`surface.inputs:diffuseColor`,

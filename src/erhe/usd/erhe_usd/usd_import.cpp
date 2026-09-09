@@ -1659,13 +1659,19 @@ private:
     // `defined = false`; the derived Item_flags::active bit then prunes the
     // item and its subtree the way the traversal does. A `class` prim is a
     // Style item (X3) and never reaches this.
+    //
+    // The specifier is read from the composed layer's prim spec: LightUSD's
+    // LayerToStage copies the specifier into the typed prim struct only and
+    // leaves Prim::specifier() at Specifier::Invalid, so the stage prim
+    // cannot answer this (the writer lowers the typed struct's field for the
+    // same reason, see apply_defined_specifier in usd_export.cpp).
     void apply_defined(const std::string& absolute_path, erhe::Item_base& item)
     {
-        const lightusd::Prim* prim = find_prim(absolute_path);
-        if (prim == nullptr) {
+        const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
+        if (spec == nullptr) {
             return;
         }
-        if (prim->specifier() != lightusd::Specifier::Over) {
+        if (spec->specifier() != lightusd::Specifier::Over) {
             return;
         }
         item.set_value(erhe::Item_base::defined_property, false);
