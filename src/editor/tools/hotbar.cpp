@@ -707,6 +707,14 @@ void Hotbar::on_render_scene_view_message(Render_scene_view_message& message)
 // the hotbar visibly trails the camera by one frame. Forward_renderer does not
 // show this because it rebuilds its primitive buffer from live node transforms
 // at draw time.
+//
+// The write lands on the quad's rendertarget Xform node; the Rendertarget_mesh
+// that the draw lists sample is a child prim of that node, and a child prim's
+// world transform is recomputed only by Scene::update_node_transforms(). That
+// pass has already run for this frame when this is called (it produced the
+// camera world transform read above), so the hovered scene is propagated once
+// more here: only the rendertarget node is dirty at this point, so the pass
+// walks just that subtree, and it returns immediately when nothing is dirty.
 void Hotbar::update_once_per_frame()
 {
     if (!m_enabled || !m_show || m_use_radial) {
@@ -716,6 +724,16 @@ void Hotbar::update_once_per_frame()
         return; // Updated from on_render_scene_view_message() instead
     }
     update_node_transform();
+
+    const Scene_view* const scene_view = get_hover_scene_view();
+    if (scene_view == nullptr) {
+        return;
+    }
+    const std::shared_ptr<Scene_root> scene_root = scene_view->get_scene_root();
+    if (!scene_root) {
+        return;
+    }
+    scene_root->get_scene().update_node_transforms();
 }
 
 auto Hotbar::get_camera() const -> std::shared_ptr<erhe::scene::Camera>

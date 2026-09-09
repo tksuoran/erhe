@@ -792,7 +792,9 @@ public:
         // this frame's camera world transform (above) and must land before
         // flush_draw_lists() below, or the draw list records would carry the
         // previous frame's transform and the hotbar would trail the camera by
-        // one frame (see Hotbar::update_once_per_frame).
+        // one frame. It re-propagates the hovered scene's transforms itself so
+        // the quad's child mesh prim picks the write up this frame (see
+        // Hotbar::update_once_per_frame).
         erhe::log::set_breadcrumb("tick: hotbar update");
         m_hotbar->update_once_per_frame();
 
