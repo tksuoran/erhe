@@ -60,7 +60,7 @@
         "bone_selected_color": [1,0.95,0.5,1],
         "bone_hover_color": [1,1,0.4,1],
         "bone_solid": true,
-        "bone_width_scale": 0.1,
+        "bone_aspect_ratio": 0.1,
         "skin_bone_xray": true,
         "mesh_primitive_box_color": [0,0.8,1,1],
         "mesh_primitive_box_width": 1,
@@ -597,7 +597,7 @@
     },
     "physics": {
         "static_enable": true,
-        "dynamic_enable": false,
+        "dynamic_enable": true,
         "debug_draw": false,
         "wind_enable": false,
         "wind_direction": [1,0,0],
