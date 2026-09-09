@@ -139,4 +139,7 @@
 
 [TASK::undefined-usd-prims]{DONE-2026-09-09}
 ✓fix-1{7d0002f3d:Item_base::defined+derived-active-bit+import/export;84f735c45:apply_defined-reads-composed-layer-PrimSpec-specifier{LightUSD-LayerToStage-leaves-Prim::specifier()=Invalid;typed-struct.spec-only};user-verified}
-✓fix-2{d01eead74:build_primitive_schema_geometry-reads-GPrim-displayColor/displayOpacity->corner_color_0-every-corner{first-element;>1-warned};primitives.usda-Box-colored;usd-tests-256}|?user-interactive{over.usda:blue-Cube}
+✓fix-2{d01eead74:build_primitive_schema_geometry-reads-GPrim-displayColor/displayOpacity->corner_color_0-every-corner{first-element;>1-warned};primitives.usda-Box-colored;usd-tests-256;user-verified}
+✓fix-3{12f0ce012:null-material-rendered-unlit{Shader_key::derive-skipped-material-block->BXDF_MODEL-0=unlit,no-USE_VERTEX_VARYING_NORMAL;default-record-slot-0-says-isotropic_brdf}->derive-uses-Material_values{}-defaults+empty-samplers-for-null;shadow-path-unaffected;headless+user-verified}
+✓tests-in-main-build{cf367a263-(c)User:configure_vs2026_vulkan.bat-ERHE_BUILD_TESTS=ON;run:build_vs2026_vulkan/src/erhe/usd/test/Debug/erhe_usd_tests.exe}
+  ALL-DONE-2026-09-09;NEXT=prompt_queue.txt-item-0{E4b}
