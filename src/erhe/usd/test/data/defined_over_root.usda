@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+over "Root"
+{
+    def Cube "X"
+    {
+        double size = 1
+    }
+}
+
+def Xform "World"
+{
+}

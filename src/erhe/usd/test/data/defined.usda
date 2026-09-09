@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./defined_base.usda@
+    ]
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+over "World"
+{
+    over "definedCube"
+    {
+        double size = 2
+    }
+
+    over Cube "undefinedCube"
+    {
+        double size = 1
+    }
+}

@@ -136,3 +136,7 @@
 ✓fix{976a56adf:Usd_load_arguments::stage_metrics{root|referenced};load_usd_prefab_template→referenced;usd245→250;4wdBody-bounds==pxr;bounds-rows-41→11;roundtrip-331/332}
   STOPPED-2026-09-08{©User};left=11-bounds-rows+stale-first-framing-bounds{plan-section-6};queue=E4b→E4d→E2
 
+
+[TASK::undefined-usd-prims]{2026-09-09,via-harness:1-coder}
+✓fix-1{Item_base::defined+derived-active-bit+import/export+docs+src/erhe/usd/test/test_usd_defined.cpp+3-fixtures;unbuilt-untested-by-instruction}|?user-build+test{erhe_usd_tests-Defined_prims.*;open-over.usda->2-cubes}
+?fix-2::displayColor/displayOpacity-on-Cube/Sphere/Cone/Cylinder/Capsule{usd_import.cpp-build_primitive_schema_geometry}

@@ -766,6 +766,7 @@ private:
             if (opinions.visibility_target != nullptr) {
                 apply_visibility_and_purpose(opinions.absolute_path, *opinions.visibility_target);
                 apply_active(opinions.absolute_path, *opinions.visibility_target);
+                apply_defined(opinions.absolute_path, *opinions.visibility_target);
                 apply_double_sided(opinions.absolute_path, *opinions.visibility_target);
             }
             apply_erhe_custom_attributes(opinions.absolute_path, opinions.primary, opinions.secondary);
@@ -1646,6 +1647,28 @@ private:
             return;
         }
         item.set_value(erhe::Item_base::active_property, prim->metas().get_active());
+    }
+
+    // The prim's composed specifier (doc/usd-compatibility-plan.md X2). A
+    // prim that no layer defines keeps `over`, and USD's default traversal
+    // predicate requires a defined prim - so Hydra renders neither it nor
+    // anything below it, `def` descendants included, while the prim still
+    // exists on the stage and is a valid reference target. erhe keeps the
+    // item for exactly that reason (references into it must resolve, and its
+    // opinions must survive the round trip) and records the specifier as
+    // `defined = false`; the derived Item_flags::active bit then prunes the
+    // item and its subtree the way the traversal does. A `class` prim is a
+    // Style item (X3) and never reaches this.
+    void apply_defined(const std::string& absolute_path, erhe::Item_base& item)
+    {
+        const lightusd::Prim* prim = find_prim(absolute_path);
+        if (prim == nullptr) {
+            return;
+        }
+        if (prim->specifier() != lightusd::Specifier::Over) {
+            return;
+        }
+        item.set_value(erhe::Item_base::defined_property, false);
     }
 
     // A namespaced custom attribute `erhe:<Owner>:<name>` is an erhe property

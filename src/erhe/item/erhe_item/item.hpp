@@ -130,12 +130,14 @@ public:
     // gltf_item_flags.cpp). See doc/fabrik-ik-requirements.md.
     static constexpr uint64_t ik_lock                   = (uint64_t{1} << 37);
     // Effective USD `active` state (doc/usd-compatibility-plan.md X2): the
-    // item's own active property AND the bit of its parent. USD prunes the
-    // whole subtree of an inactive prim regardless of a descendant's own
-    // opinion, so the subtree effect is carried by this derived bit rather
-    // than by property inheritance. Clear means the item and everything
-    // below it is out of rendering, picking, simulation and every consumer
-    // that walks content; the item tree still shows the row, dimmed.
+    // item's own active property AND its own defined property AND the bit of
+    // its parent. USD prunes the whole subtree of an inactive prim, and its
+    // default traversal predicate reaches neither an undefined prim (composed
+    // specifier `over`) nor anything below one, regardless of a descendant's
+    // own opinion - so both subtree effects are carried by this derived bit
+    // rather than by property inheritance. Clear means the item and
+    // everything below it is out of rendering, picking, simulation and every
+    // consumer that walks content; the item tree still shows the row, dimmed.
     static constexpr uint64_t active                    = (uint64_t{1} << 38);
     static constexpr uint64_t count                     = 39;
 
@@ -580,6 +582,16 @@ public:
     // Item_flags::active bit, recomputed for the item and its subtree by
     // rederive_active_flag_bits() whenever the value or the parent moves.
     static const erhe::property::Property<bool> active_property;
+    // The prim's composed USD specifier: true for `def` (and for `class`,
+    // which erhe holds as a Style item), false for `over` - a prim with no
+    // defining opinion anywhere. USD's default traversal predicate requires
+    // a defined prim, so an undefined prim and its whole subtree are out of
+    // render, pick and simulation, while the prim still exists on the stage
+    // and is a valid reference target. Like `active` this is the item's own
+    // opinion, so it is NOT an inherits-flagged property; the subtree effect
+    // is the derived Item_flags::active bit, recomputed by
+    // rederive_active_flag_bits().
+    static const erhe::property::Property<bool> defined_property;
     // USD purpose vocabulary (doc/usd-compatibility-plan.md M3): an
     // inherited enumeration whose default layer is derived from the
     // editor-only flag bits (D31), so an item that authors nothing reports
@@ -659,11 +671,12 @@ protected:
     void        set_derived_flag_bit    (uint64_t bit, bool value);
 
 public:
-    // Recomputes Item_flags::active for this item from its own active value
-    // and its inheritance parent's bit, and, when the bit moved, for the
-    // whole subtree below it. Change-driven: called by the active property's
-    // changed callback and by the structural moves that can change what the
-    // parent is (Hierarchy::set_parent, Node_attachment::set_node,
+    // Recomputes Item_flags::active for this item from its own active and
+    // defined values and its inheritance parent's bit, and, when the bit
+    // moved, for the whole subtree below it. Change-driven: called by the
+    // changed callbacks of the active and defined properties, and by the
+    // structural moves that can change what the parent is
+    // (Hierarchy::set_parent, Node_attachment::set_node,
     // set_inheritance_container). An item whose bit did not move has a
     // subtree that did not move either, so the walk stops there.
     void rederive_active_flag_bits();

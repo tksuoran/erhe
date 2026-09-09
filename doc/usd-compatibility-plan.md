@@ -252,7 +252,12 @@ record has the history.
   bit takes an item and its whole subtree out of rendering, picking,
   simulation and every content walk and dims it in the hierarchy; USD
   carries it as the prim's `active` metadatum, glTF in
-  `ERHE_node.properties`. Persistence: `erhe::scene::instance_override`
+  `ERHE_node.properties`. `Item_base::defined` (own opinion, default
+  true) is the prim's composed specifier and feeds the same derived bit,
+  so an undefined prim (`over`, no defining opinion anywhere) and its
+  whole subtree are out the way USD's default traversal predicate leaves
+  them out, while the prim stays a valid reference target; USD carries it
+  as the specifier itself, glTF in `ERHE_node.properties`. Persistence: `erhe::scene::instance_override`
   states once what an override is (`src/erhe/scene/notes.md`); a USD
   save writes each overriding item as an `over` prim below the carrier
   holding its local values and `active` only, the clone of the target

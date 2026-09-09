@@ -397,11 +397,16 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   a `class` prim holds. A target that carries no transform composes what
   reached it through to its children, which is what the editor's template
   wrapper reproduces (`src/editor/parsers/notes.md`).
-- A root-level `over` with `def` descendants and no `def` of its own - the
-  shape a file uses when its own prims reference it - is a prim of the tree
-  like any other: LightUSD reconstructs it whatever its specifier, and it
-  imports as the typeless `Typed` prim it is, so a reference to it resolves.
-  The writer spells it `def`, the round trip's fixed point.
+- An undefined prim - one the composed stage gives the specifier `over`,
+  because no layer defines it - is a prim of the tree like any other:
+  LightUSD reconstructs it whatever its specifier, so a reference to it and to
+  its `def` descendants resolves. It imports with `defined = false`, which
+  takes it and its whole subtree out of render, pick and simulation through
+  the derived `Item_flags::active` bit, the way USD's default traversal
+  predicate reaches neither an undefined prim nor anything below one. The
+  writer spells the specifier from `defined`, the round trip's fixed point.
+  This is the shape a file uses when its own prims reference a root-level
+  `over` holding the assets they instance.
 - A payload is reported with kind `payload` and is otherwise a reference: erhe
   reads every arc when the file is read and has no deferred loading (plan
   section 5). `references` arcs come before `payload` arcs, the arc order of
@@ -996,6 +1001,12 @@ because the same spelling rule decides what an item is called on a stage.
   traversal, but the Tydra render-scene conversion the importer walks does
   not prune them - the item is created inactive, which is what lets the
   opinion round-trip.
+- The prim's specifier is the item's `defined` property, and is its own
+  carrier - it never travels as metadata or as an `erhe:` custom attribute.
+  The importer reads it from `Prim::specifier()` beside the `active`
+  metadatum and the writer lowers a `def` to `over` for an item whose
+  `defined` is false; `class` prims are Style items (X3) and keep their
+  specifier.
 - The name a value is authored under. `native_usd_property_name` is the one
   list of the erhe properties a prim carries in an attribute of its schema and
   of the USD spelling each of them gets (`surface.inputs:diffuseColor`,

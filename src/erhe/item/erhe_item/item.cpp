@@ -114,6 +114,17 @@ const erhe::property::Property<bool> Item_base::active_property = erhe::property
     erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .ui = erhe::property::Property_ui{.label = "Active"}}
 );
 
+// The prim's composed USD specifier (doc/usd-compatibility-plan.md X2): true
+// for `def`, false for the `over` a prim keeps when no layer defines it. USD's
+// default traversal predicate requires a defined prim, so an undefined prim
+// and its whole subtree are out of render, pick and simulation; like `active`
+// that subtree effect is the derived Item_flags::active bit, so this property
+// is the item's own opinion and is not inherits-flagged.
+const erhe::property::Property<bool> Item_base::defined_property = erhe::property::Property<bool>::register_property(
+    "defined", Item_base::property_owner_type(),
+    erhe::property::Property_metadata{.default_value = true, .property_changed = Item_base::on_flag_property_changed, .ui = erhe::property::Property_ui{.label = "Defined"}}
+);
+
 namespace {
 
 constexpr erhe::property::Enum_entry c_purpose_entries[] = {
@@ -363,7 +374,7 @@ void Item_base::on_flag_property_changed(erhe::property::Dependency_object& obje
     const bool value = erhe::property::get_as<bool>(args.new_value);
     if (&args.property == &visible_property.get()) {
         item.set_derived_flag_bit(Item_flags::visible, value);
-    } else if (&args.property == &active_property.get()) {
+    } else if ((&args.property == &active_property.get()) || (&args.property == &defined_property.get())) {
         item.rederive_active_flag_bits();
     }
 }
@@ -377,7 +388,7 @@ auto Item_base::is_parent_active() const -> bool
 
 void Item_base::rederive_active_flag_bits()
 {
-    const bool active     = is_parent_active() && get_value(active_property);
+    const bool active     = is_parent_active() && get_value(active_property) && get_value(defined_property);
     const bool was_active = erhe::utility::test_bit_set(m_flag_bits, Item_flags::active);
     if (active == was_active) {
         // Every descendant's bit is a function of this one, so an unchanged
@@ -414,7 +425,7 @@ void Item_base::rederive_flag_bits()
 {
     m_flag_bits = (m_flag_bits & ~Item_flags::derived)
         | (get_value(visible_property) ? Item_flags::visible : 0u)
-        | (get_value(active_property)  ? Item_flags::active  : 0u);
+        | ((get_value(active_property) && get_value(defined_property)) ? Item_flags::active : 0u);
     sync_seal_with_lock_edit();
 }
 
@@ -483,7 +494,7 @@ void Item_base::set_flag_bits(const uint64_t requested_mask, const bool value)
     uint64_t mask = requested_mask;
     if ((mask & Item_flags::derived) != 0u) {
         erhe::item::log->error(
-            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Item_base::active_property / Mesh::shadow_cast_property / Mesh::lightmapped_property); the derived bits are dropped from the mask",
+            "Item_base::set_flag_bits({}) on '{}': {} is a property (Item_base::visible_property / Item_base::active_property / Item_base::defined_property / Mesh::shadow_cast_property / Mesh::lightmapped_property); the derived bits are dropped from the mask",
             value, m_name, Item_flags::to_string(mask & Item_flags::derived)
         );
         mask &= ~Item_flags::derived;

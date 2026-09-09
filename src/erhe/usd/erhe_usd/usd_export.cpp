@@ -1048,6 +1048,63 @@ private:
         }
     }
 
+    // The prim's specifier from the item's `defined` value
+    // (doc/usd-compatibility-plan.md X2): an undefined prim - one the stage
+    // it was read from composed as `over` - is spelled `over` again, which is
+    // what makes the round trip a fixed point and keeps it and its subtree
+    // out of USD's default traversal. The specifier is the carrier, so no
+    // `erhe:` custom attribute is written for it. A `class` prim is a style
+    // (X3) and an `over` prim is already one, so only a `def` is lowered.
+    void apply_defined_specifier(const erhe::Item_base& item, lightusd::Prim& prim)
+    {
+        if (item.get_value(erhe::Item_base::defined_property)) {
+            return;
+        }
+        // The USDA writer prints the specifier the typed struct inside the
+        // prim carries, so that is the field to lower; Prim's own specifier
+        // is set to match so readers of either agree.
+        const bool lowered =
+            lower_specifier_of<lightusd::Xform              >(prim) ||
+            lower_specifier_of<lightusd::Scope              >(prim) ||
+            lower_specifier_of<lightusd::Model              >(prim) ||
+            lower_specifier_of<lightusd::GeomMesh           >(prim) ||
+            lower_specifier_of<lightusd::GeomSubset         >(prim) ||
+            lower_specifier_of<lightusd::GeomCamera         >(prim) ||
+            lower_specifier_of<lightusd::GeomPointInstancer >(prim) ||
+            lower_specifier_of<lightusd::SphereLight        >(prim) ||
+            lower_specifier_of<lightusd::DistantLight       >(prim) ||
+            lower_specifier_of<lightusd::DomeLight          >(prim) ||
+            lower_specifier_of<lightusd::Skeleton           >(prim) ||
+            lower_specifier_of<lightusd::SkelAnimation      >(prim) ||
+            lower_specifier_of<lightusd::NodeGraph          >(prim) ||
+            lower_specifier_of<lightusd::Material           >(prim) ||
+            lower_specifier_of<lightusd::Shader             >(prim);
+        if (!lowered) {
+            log_usd->error(
+                "USD prim '{}' is not defined, but its prim class is not one apply_defined_specifier knows - it is written as `def`",
+                item.get_name()
+            );
+        }
+    }
+
+    // Lowers one typed prim struct's specifier to `over`. Only a `def` is
+    // lowered: an `over` is already one and a `class` prim is a style (X3).
+    // Reports whether the prim holds a value of this class, so the caller can
+    // tell "not this class" from "already lowered".
+    template <typename T>
+    [[nodiscard]] static auto lower_specifier_of(lightusd::Prim& prim) -> bool
+    {
+        T* typed = prim.get_data().as<T>();
+        if (typed == nullptr) {
+            return false;
+        }
+        if (typed->spec == lightusd::Specifier::Def) {
+            typed->spec       = lightusd::Specifier::Over;
+            prim.specifier()  = lightusd::Specifier::Over;
+        }
+        return true;
+    }
+
     // -------------------------------------------------------------------
     // Materials
     // -------------------------------------------------------------------
@@ -2052,6 +2109,8 @@ private:
             (plan_prim.material != nullptr) ? write_material_prim(plan_prim) :
             (plan_prim.node     != nullptr) ? write_node         (plan_prim) :
                                               write_prim         (plan_prim);
+
+        apply_defined_specifier(*plan_prim.item, prim);
 
         if (plan_prim.references != nullptr) {
             write_references(prim, *plan_prim.references);

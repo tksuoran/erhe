@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Scope "World"
+{
+    def Cube "definedCube"
+    {
+        double size = 1
+    }
+}
