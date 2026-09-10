@@ -24,6 +24,7 @@ add_executable(${_target}
 target_link_libraries(${_target}
     PRIVATE
         erhe::texgen
+        fmt::fmt
         GTest::gtest
 )
 
