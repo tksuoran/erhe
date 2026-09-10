@@ -143,9 +143,17 @@ protected:
 
         m_readback = make_host_buffer(4 * sizeof(float), erhe::graphics::Buffer_usage::storage, "material set readback");
 
-        m_fallback_texture = device().create_dummy_texture(
-            device().get_command_buffer(0),
-            erhe::dataformat::Format::format_8_vec4_srgb
+        // create_dummy_texture records its pixel upload into the supplied
+        // command buffer and leaves ending + submitting to the caller, so it
+        // has to run inside a recording frame (submit_and_wait), never on a
+        // bare get_command_buffer() handle.
+        submit_and_wait(
+            [&](erhe::graphics::Command_buffer& command_buffer) {
+                m_fallback_texture = device().create_dummy_texture(
+                    command_buffer,
+                    erhe::dataformat::Format::format_8_vec4_srgb
+                );
+            }
         );
         m_fallback_sampler = std::make_unique<erhe::graphics::Sampler>(
             device(),
@@ -362,13 +370,13 @@ TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
 {
     const std::shared_ptr<Material> material = make_material("Material", glm::vec3{1.0f, 0.0f, 0.0f});
 
-    const std::shared_ptr<erhe::graphics::Texture> texture_a = device().create_dummy_texture(
-        device().get_command_buffer(0),
-        erhe::dataformat::Format::format_8_vec4_srgb
-    );
-    const std::shared_ptr<erhe::graphics::Texture> texture_b = device().create_dummy_texture(
-        device().get_command_buffer(0),
-        erhe::dataformat::Format::format_8_vec4_srgb
+    std::shared_ptr<erhe::graphics::Texture> texture_a;
+    std::shared_ptr<erhe::graphics::Texture> texture_b;
+    submit_and_wait(
+        [&](erhe::graphics::Command_buffer& command_buffer) {
+            texture_a = device().create_dummy_texture(command_buffer, erhe::dataformat::Format::format_8_vec4_srgb);
+            texture_b = device().create_dummy_texture(command_buffer, erhe::dataformat::Format::format_8_vec4_srgb);
+        }
     );
     // Texture is itself a Texture_reference that returns itself, which is the
     // plain case; a Graph_texture is the one that returns a different object
