@@ -188,6 +188,7 @@ private:
     auto action_clear_undo_history(const nlohmann::json& args) -> std::string;
     auto action_undo              (const nlohmann::json& args) -> std::string;
     auto action_redo              (const nlohmann::json& args) -> std::string;
+    auto action_request_exit      (const nlohmann::json& args) -> std::string;
     auto undo_or_redo             (const nlohmann::json& args, bool undo) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_transform_update_stats(const nlohmann::json& args) -> std::string;

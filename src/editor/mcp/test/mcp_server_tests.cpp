@@ -1,19 +1,33 @@
 // Integration tests for the editor's MCP server.
 //
-// These tests connect to a running editor over HTTP. Start the editor
-// before running, or use scripts/run_mcp_tests.ps1 to launch+test+cleanup
-// in one step.
+// These tests connect to an editor over HTTP. When an editor already answers
+// on the test port (started by the ctest fixture in CMakeLists.txt, or by
+// hand) it is used; otherwise this process launches one itself from the
+// compiled-in editor path (editor_launcher.hpp) and stops it at exit - that
+// is how Visual Studio's Test Explorer, which runs the binary without ctest,
+// gets an editor.
+//
+// Two editors: Mcp_test.* share one plain editor on ERHE_MCP_TEST_PORT;
+// Mcp_auth_test.* use a dedicated editor on ERHE_MCP_TEST_AUTH_PORT that
+// was started with the bearer token CMake wrote for the tests (its path is
+// compiled in, ERHE_MCP_TEST_TOKEN_FILE overrides it).
 //
 // Configuration (env vars):
-//   ERHE_MCP_TEST_HOST      default "127.0.0.1"
-//   ERHE_MCP_TEST_PORT      default 3743
-//   ERHE_MCP_TEST_TIMEOUT_S default 30  (initial /health wait)
+//   ERHE_MCP_TEST_HOST            default "127.0.0.1"
+//   ERHE_MCP_TEST_PORT            default 3743
+//   ERHE_MCP_TEST_AUTH_PORT       default 3744
+//   ERHE_MCP_TEST_TOKEN_FILE      default: the compiled-in test token file
+//   ERHE_MCP_TEST_TIMEOUT_S       default 30  (/health wait for an editor started elsewhere)
+//   ERHE_MCP_TEST_LAUNCH_TIMEOUT_S default 180 (/health wait for a self-launched editor)
+
+#include "editor_launcher.hpp"
 
 #include <gtest/gtest.h>
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -130,7 +144,17 @@ private:
     httplib::Client m_client;
 };
 
-// Single shared client + discovered scene/material across all tests.
+// Helpers defined after the test fixture (see below).
+void advance_frames(Mcp_client& client, int frames);
+[[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>;
+[[nodiscard]] auto wait_until_idle(Mcp_client& client, int timeout_ms) -> bool;
+
+// The scene every test runs in is created by Mcp_env::initialize(), from
+// this asset (textures for the texture tests) plus a material of its own.
+constexpr const char* c_textured_gltf      = "res/editor/assets/SM_Deccer_Cubes_Textured.glb";
+constexpr const char* c_test_material_name = "MCP test material";
+
+// Single shared client + the prepared scene/material across all tests.
 class Mcp_env
 {
 public:
@@ -150,6 +174,18 @@ public:
 
     [[nodiscard]] auto initialize_attempted() const -> bool { return m_initialize_attempted; }
 
+    // Closes the scene initialize() created. Called once, after the last test.
+    void teardown()
+    {
+        if (!m_client || m_scene_name.empty()) {
+            return;
+        }
+        m_client->call_tool("close_scene", json{{"scene_name", m_scene_name}});
+        advance_frames(*m_client, 6);
+        m_scene_name.clear();
+        m_ready = false;
+    }
+
     void initialize()
     {
         m_initialize_attempted = true;
@@ -159,57 +195,74 @@ public:
         const int         timeout_s  = env_or_int("ERHE_MCP_TEST_TIMEOUT_S", 30);
 
         m_client = std::make_unique<Mcp_client>(host, port);
+        // An editor started elsewhere (ctest fixture, by hand) may still be
+        // coming up: give it the configured wait. Only then launch one.
         if (!m_client->wait_for_ready(timeout_s)) {
-            GTEST_LOG_(ERROR) << "MCP server not reachable at " << host << ":" << port
-                              << " within " << timeout_s << "s. Start the editor first.";
-            return;
+            const int launch_timeout_s = env_or_int("ERHE_MCP_TEST_LAUNCH_TIMEOUT_S", 180);
+            if (!mcp_test::launch_editor(host, port, launch_timeout_s, {}, {})) {
+                GTEST_LOG_(ERROR) << "MCP server not reachable at " << host << ":" << port
+                                  << " and no editor could be launched.";
+                return;
+            }
         }
 
-        // Discover a scene and a material.
-        Mcp_client::Tool_result scenes_res = m_client->call_tool("list_scenes", json::object());
-        if (scenes_res.is_error || !scenes_res.payload.contains("scenes")) {
-            GTEST_LOG_(ERROR) << "list_scenes returned no scenes: " << scenes_res.text;
-            return;
+        // Prepare a fresh scene: nothing here depends on whatever the editor
+        // happens to have open. The scene gets the textured test asset (so
+        // the texture tests have textures) and a material of its own for
+        // the material tests; teardown() closes it again.
+        const std::vector<std::string> scenes_before = scene_names(*m_client);
+        m_client->call_tool("create_scene", json::object());
+        advance_frames(*m_client, 6);
+        for (const std::string& name : scene_names(*m_client)) {
+            if (std::find(scenes_before.begin(), scenes_before.end(), name) == scenes_before.end()) {
+                m_scene_name = name;
+            }
         }
-        const json& scenes = scenes_res.payload["scenes"];
-        if (!scenes.is_array() || scenes.empty()) {
-            GTEST_LOG_(ERROR) << "Editor has no scenes.";
-            return;
-        }
-        m_scene_name = scenes[0].value("name", "");
         if (m_scene_name.empty()) {
-            GTEST_LOG_(ERROR) << "First scene has empty name.";
+            GTEST_LOG_(ERROR) << "create_scene produced no new scene (list_scenes unchanged)";
             return;
         }
 
-        Mcp_client::Tool_result mats_res = m_client->call_tool(
-            "get_scene_materials", json{{"scene_name", m_scene_name}}
+        Mcp_client::Tool_result import_res = m_client->call_tool(
+            "import_gltf", json{{"scene_name", m_scene_name}, {"path", c_textured_gltf}}
         );
-        if (mats_res.is_error || !mats_res.payload.contains("materials") || mats_res.payload["materials"].empty()) {
-            GTEST_LOG_(ERROR) << "Scene '" << m_scene_name << "' has no materials.";
+        if (import_res.is_error) {
+            GTEST_LOG_(ERROR) << "import_gltf failed: " << import_res.text;
             return;
         }
-        m_material_name = mats_res.payload["materials"][0].value("name", "");
-        if (m_material_name.empty()) {
-            GTEST_LOG_(ERROR) << "First material has empty name.";
+        if (!wait_until_idle(*m_client, 60000)) {
+            GTEST_LOG_(ERROR) << "import of " << c_textured_gltf << " did not settle within 60 s";
             return;
         }
+
+        Mcp_client::Tool_result mat_res = m_client->call_tool(
+            "create_material", json{{"scene_name", m_scene_name}, {"name", c_test_material_name}}
+        );
+        if (mat_res.is_error) {
+            GTEST_LOG_(ERROR) << "create_material failed: " << mat_res.text;
+            return;
+        }
+        m_material_name = c_test_material_name;
 
         Mcp_client::Tool_result tex_res = m_client->call_tool(
             "get_scene_textures", json{{"scene_name", m_scene_name}}
         );
-        if (!tex_res.is_error && tex_res.payload.contains("textures")) {
-            const json& textures = tex_res.payload["textures"];
-            if (textures.is_array() && !textures.empty()) {
-                const json& first = textures[0];
-                if (first.contains("name") && first["name"].is_string()) {
-                    m_texture_name = first["name"].get<std::string>();
-                }
-                if (first.contains("id") && first["id"].is_number()) {
-                    m_texture_id = first["id"].get<std::size_t>();
-                }
-            }
+        if (tex_res.is_error || !tex_res.payload.contains("textures")) {
+            GTEST_LOG_(ERROR) << "get_scene_textures failed: " << tex_res.text;
+            return;
         }
+        const json& textures = tex_res.payload["textures"];
+        if (!textures.is_array() || textures.empty()) {
+            GTEST_LOG_(ERROR) << "imported " << c_textured_gltf << " but the scene has no textures";
+            return;
+        }
+        const json& first = textures[0];
+        if (!first.contains("name") || !first["name"].is_string() || !first.contains("id") || !first["id"].is_number()) {
+            GTEST_LOG_(ERROR) << "first texture entry lacks name/id: " << first.dump();
+            return;
+        }
+        m_texture_name = first["name"].get<std::string>();
+        m_texture_id   = first["id"].get<std::size_t>();
 
         m_ready = true;
     }
@@ -223,6 +276,21 @@ private:
     std::optional<std::string>  m_texture_name;
     std::optional<std::size_t>  m_texture_id;
 };
+
+// Registered at static-init time (before main), so its TearDown runs after
+// every test: close the prepared scene, then stop the editor this process
+// launched (no-op when the editor came from the ctest fixture or by hand).
+class Mcp_session_environment : public ::testing::Environment
+{
+public:
+    void TearDown() override
+    {
+        Mcp_env::get().teardown();
+        mcp_test::stop_launched_editors();
+    }
+};
+
+::testing::Environment* const s_session_environment = ::testing::AddGlobalTestEnvironment(new Mcp_session_environment{});
 
 class Mcp_test : public ::testing::Test
 {
@@ -900,14 +968,11 @@ TEST_F(Mcp_test, edit_material_texture_transform_round_trip)
     );
 }
 
-// ---- edit_material: texture assignment (skipped if no textures) -----------
+// ---- edit_material: texture assignment (the prepared scene has textures) ---
 
 TEST_F(Mcp_test, edit_material_texture_assign_by_name)
 {
     Mcp_env& env = Mcp_env::get();
-    if (!env.first_texture_name().has_value()) {
-        GTEST_SKIP() << "No textures in content library; skipping assign-by-name test";
-    }
     const std::string tex_name = env.first_texture_name().value();
 
     json before = material_details();
@@ -924,9 +989,10 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_name)
     );
 
     // Restore previous texture (which may be null = clear)
-    json restore_tex = before_slot["texture_id"].is_null()
-        ? json{nullptr}
-        : json{before_slot["texture_id"]};
+    // The slot's previous texture id, or null to clear. (Brace-initializing
+    // a json from one value would make a one-element ARRAY, which
+    // edit_material rejects.)
+    const json restore_tex = before_slot["texture_id"];
     edit_and_wait(
         json{{"texture_samplers", {
             {"base_color", {{"texture", restore_tex}}}
@@ -945,9 +1011,6 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_name)
 TEST_F(Mcp_test, edit_material_texture_assign_by_id)
 {
     Mcp_env& env = Mcp_env::get();
-    if (!env.first_texture_id().has_value()) {
-        GTEST_SKIP() << "No textures in content library; skipping assign-by-id test";
-    }
     const std::size_t tex_id = env.first_texture_id().value();
 
     json before = material_details();
@@ -963,9 +1026,10 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_id)
         }
     );
 
-    json restore_tex = before_slot["texture_id"].is_null()
-        ? json{nullptr}
-        : json{before_slot["texture_id"]};
+    // The slot's previous texture id, or null to clear. (Brace-initializing
+    // a json from one value would make a one-element ARRAY, which
+    // edit_material rejects.)
+    const json restore_tex = before_slot["texture_id"];
     edit_and_wait(
         json{{"texture_samplers", {
             {"base_color", {{"texture", restore_tex}}}
@@ -984,9 +1048,6 @@ TEST_F(Mcp_test, edit_material_texture_assign_by_id)
 TEST_F(Mcp_test, edit_material_texture_clear)
 {
     Mcp_env& env = Mcp_env::get();
-    if (!env.first_texture_id().has_value()) {
-        GTEST_SKIP() << "No textures in content library; skipping clear test";
-    }
     const std::size_t tex_id = env.first_texture_id().value();
 
     // First make sure something is assigned.
@@ -1211,68 +1272,67 @@ TEST_F(Mcp_test, queue_overflow_returns_busy_error)
     EXPECT_GT(ok_count.load(),   0); // at least some should have succeeded too
 }
 
-// (d) Ambiguous-name material lookup. The stock scene rarely has two
-// materials sharing a name, so the test is skipped if it cannot find
-// such a pair; when it does it confirms isError + candidate_ids.
-TEST_F(Mcp_test, edit_material_ambiguous_name_returns_candidates)
-{
-    Mcp_env& env = Mcp_env::get();
-    Mcp_client::Tool_result mats = env.client().call_tool(
-        "get_scene_materials", json{{"scene_name", env.scene_name()}}
-    );
-    ASSERT_FALSE(mats.is_error);
-    ASSERT_TRUE(mats.payload.contains("materials"));
+// Ambiguous material names are not constructible: create_material refuses a
+// name already in the library (tested above) and sibling names are unique,
+// so edit_material's ambiguous-name refusal has no reachable test state.
 
-    std::map<std::string, int> name_counts;
-    std::string duplicate_name;
-    for (const json& m : mats.payload["materials"]) {
-        const std::string name = m.value("name", std::string{});
-        if (name.empty()) continue;
-        if (++name_counts[name] >= 2) {
-            duplicate_name = name;
-            break;
+// Bearer-token auth needs an editor started WITH a token, which cannot be
+// turned on in a running one: Mcp_auth_test uses a dedicated editor on
+// ERHE_MCP_TEST_AUTH_PORT (ctest: the mcp_editor_auth fixture; otherwise
+// launched here with the test token file), separate from the shared editor
+// every Mcp_test case uses.
+class Mcp_auth_test : public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        m_host       = env_or    ("ERHE_MCP_TEST_HOST",       "127.0.0.1");
+        m_port       = env_or_int("ERHE_MCP_TEST_AUTH_PORT",  3744);
+        m_token_file = env_or    ("ERHE_MCP_TEST_TOKEN_FILE", mcp_test::compiled_in_token_file().c_str());
+        m_token      = mcp_test::read_token_file(m_token_file);
+        ASSERT_FALSE(m_token.empty()) << "cannot read the test token file '" << m_token_file << "'";
+
+        static bool s_launch_attempted = false;
+        if (!mcp_test::is_editor_reachable(m_host, m_port) && !s_launch_attempted) {
+            s_launch_attempted = true;
+            const int launch_timeout_s = env_or_int("ERHE_MCP_TEST_LAUNCH_TIMEOUT_S", 180);
+            ASSERT_TRUE(mcp_test::launch_editor(m_host, m_port, launch_timeout_s, m_token_file, m_token))
+                << "no auth-enabled editor at " << m_host << ":" << m_port << " and none could be launched";
         }
-    }
-    if (duplicate_name.empty()) {
-        GTEST_SKIP() << "Scene has no duplicate-named materials; cannot exercise ambiguous-name path";
+        ASSERT_TRUE(mcp_test::is_editor_reachable(m_host, m_port))
+            << "no auth-enabled editor at " << m_host << ":" << m_port;
     }
 
-    Material_scalar_state_guard guard;  // restores opacity/etc. on the FIRST matching material if we accidentally mutate
-    Mcp_client::Tool_result r = env.client().call_tool(
-        "edit_material",
-        json{{"scene_name", env.scene_name()}, {"material_name", duplicate_name}, {"opacity", 0.5}}
-    );
-    EXPECT_TRUE(r.is_error) << "Server should have refused ambiguous material name: " << r.text;
-    ASSERT_TRUE(r.payload.contains("candidate_ids")) << "Server should have listed candidate ids: " << r.text;
-    EXPECT_GE(r.payload["candidate_ids"].size(), 2u);
-}
+    auto post_tools_list(const std::optional<std::string>& bearer) -> httplib::Result
+    {
+        httplib::Client client{m_host, m_port};
+        client.set_read_timeout(5, 0);
+        if (bearer.has_value()) {
+            client.set_default_headers({{"Authorization", "Bearer " + bearer.value()}});
+        }
+        const json body = {{"jsonrpc", "2.0"}, {"id", "auth-probe"}, {"method", "tools/list"}};
+        return client.Post("/mcp", body.dump(), "application/json");
+    }
 
-// (a) Tampered token: send a wrong bearer token and expect 401 if auth
-// is enabled. The test is a no-op when the server has no token loaded
-// (auth disabled, e.g. token file missing).
-TEST_F(Mcp_test, auth_tampered_token_rejected)
+    std::string m_host;
+    int         m_port{0};
+    std::string m_token_file;
+    std::string m_token;
+};
+
+// The editor loaded the test token: the right token is accepted, no token
+// and a tampered token are refused with 401.
+TEST_F(Mcp_auth_test, tampered_token_rejected)
 {
-    const std::string host = env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1");
-    const int         port = env_or_int("ERHE_MCP_TEST_PORT", 3743);
+    httplib::Result with_token = post_tools_list(m_token);
+    ASSERT_TRUE(with_token);
+    ASSERT_EQ(with_token->status, 200) << "the test token was not accepted - did the editor load '" << m_token_file << "'?";
 
-    httplib::Client c_noauth{host, port};
-    c_noauth.set_read_timeout(5, 0);
-    json probe_body = {{"jsonrpc", "2.0"}, {"id", "auth-probe"}, {"method", "tools/list"}};
-    httplib::Result probe = c_noauth.Post("/mcp", probe_body.dump(), "application/json");
-    ASSERT_TRUE(probe);
-    if (probe->status == 200) {
-        // Auth disabled: nothing to test. (Mcp_env's existing tools/list
-        // call would have failed during initialize() if auth was
-        // required and the token mechanism was broken, so we know the
-        // happy path works.)
-        GTEST_SKIP() << "Server has no bearer token loaded; tampered-token test is a no-op";
-    }
-    ASSERT_EQ(probe->status, 401) << "Unauthenticated request should be 401 when auth is enabled";
+    httplib::Result no_token = post_tools_list(std::nullopt);
+    ASSERT_TRUE(no_token);
+    EXPECT_EQ(no_token->status, 401) << "Unauthenticated request should be 401 when auth is enabled";
 
-    httplib::Client c_bad{host, port};
-    c_bad.set_read_timeout(5, 0);
-    c_bad.set_default_headers({{"Authorization", "Bearer not-the-right-token"}});
-    httplib::Result tampered = c_bad.Post("/mcp", probe_body.dump(), "application/json");
+    httplib::Result tampered = post_tools_list(std::string{"not-the-right-token"});
     ASSERT_TRUE(tampered);
     EXPECT_EQ(tampered->status, 401) << "Wrong bearer token should be 401";
 }
@@ -1298,6 +1358,31 @@ void advance_frames(Mcp_client& client, int frames)
     for (int i = 0; i < frames; ++i) {
         client.call_tool("advance_time", json{{"seconds", 0.016}});
     }
+}
+
+// True once get_async_status reports nothing in flight on two consecutive
+// reads (workers, queued operations, scene commits and asset loads).
+[[nodiscard]] auto wait_until_idle(Mcp_client& client, const int timeout_ms) -> bool
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeout_ms};
+    int idle_reads = 0;
+    while (std::chrono::steady_clock::now() < deadline) {
+        advance_frames(client, 2);
+        Mcp_client::Tool_result status = client.call_tool("get_async_status", json::object());
+        const bool idle =
+            !status.is_error &&
+            (status.payload.value("pending",               1) == 0) &&
+            (status.payload.value("running",               1) == 0) &&
+            (status.payload.value("queued_operations",     1) == 0) &&
+            (status.payload.value("pending_scene_commits", 1) == 0) &&
+            (status.payload.value("asset_loads",           1) == 0);
+        idle_reads = idle ? (idle_reads + 1) : 0;
+        if (idle_reads >= 2) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+    return false;
 }
 
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>

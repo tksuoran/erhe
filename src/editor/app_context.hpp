@@ -199,6 +199,11 @@ public:
     // Hotbar / Hud rendertarget construction) read this to record GPU work into
     // the same cb. Null outside of tick().
     erhe::graphics::Command_buffer*         current_command_buffer{nullptr};
+    // Set on the main thread to end the run loop after the current frame -
+    // the programmatic counterpart of the window close event. The MCP
+    // request_exit tool sets it (ctest stops the editor it started as the
+    // mcp_server_tests fixture this way); Editor::run() reads it.
+    bool                                    close_requested       {false};
     erhe::graphics::Device*                 graphics_device       {nullptr};
     erhe::imgui::Imgui_renderer*            imgui_renderer        {nullptr};
     erhe::imgui::Imgui_windows*             imgui_windows         {nullptr};

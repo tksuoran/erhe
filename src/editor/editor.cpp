@@ -3852,7 +3852,7 @@ public:
         //  - Measure time since first swapbuffers
         //  - Count number of swapbuffers
         //  - Wait to avoid presenting frames faster than display refreshrate
-        while (!m_close_requested) {
+        while (!m_close_requested && !m_app_context.close_requested) {
             // Classify window activity for power saving and derive the
             // poll_events wait timeout. While unfocused or not visible we block
             // on events with a timeout instead of busy-spinning, which caps the

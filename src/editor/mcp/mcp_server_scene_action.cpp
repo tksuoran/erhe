@@ -3178,4 +3178,16 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
     }).dump();
 }
 
+auto Mcp_server::action_request_exit(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    // Runs on the main thread (dispatched from process_queued_requests), so
+    // the flag is read by Editor::run() at the top of the next loop
+    // iteration: this response still goes out, then the editor shuts down
+    // normally. Nothing is saved.
+    m_context.close_requested = true;
+    log_mcp->info("MCP server: request_exit - editor will exit after the current frame");
+    return make_text_content("exit requested").dump();
+}
+
 } // namespace editor

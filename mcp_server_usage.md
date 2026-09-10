@@ -1,6 +1,6 @@
 # erhe Editor MCP Server
 
-The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:3743` ("erhe" on a phone keypad). The `ERHE_MCP_PORT` environment variable overrides the preferred port. If the preferred port is already in use the server falls back to the next free port, scanning 20 successors (`[3743, 3763)` by default); the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`. The client scripts (`scripts/mcp_call.py`, `scripts/erhe_mcp.py`) also honor `ERHE_MCP_PORT` for their default port.
+The editor embeds an MCP (Model Context Protocol) server that exposes editor commands and scene/content-library queries over HTTP using JSON-RPC 2.0. The server starts automatically with the editor on `127.0.0.1:3743` ("erhe" on a phone keypad). The `ERHE_MCP_PORT` environment variable overrides the preferred port, and `ERHE_MCP_TOKEN_FILE` names the bearer-token file explicitly (default `~/.agents/erhe_mcp_token`; the mode 0600 requirement applies to both). If the preferred port is already in use the server falls back to the next free port, scanning 20 successors (`[3743, 3763)` by default); the port it actually bound is logged as `MCP server: listening on 127.0.0.1:<port>`. The client scripts (`scripts/mcp_call.py`, `scripts/erhe_mcp.py`) also honor `ERHE_MCP_PORT` for their default port.
 
 ## Endpoints
 

@@ -467,6 +467,13 @@ auto schema_scene_and_item(const char* item_key, const char* item_desc) -> json
 
 auto auth_token_path() -> std::filesystem::path
 {
+    // ERHE_MCP_TOKEN_FILE names the token file explicitly (the mode and
+    // ownership checks in load_auth_token still apply). Lets a second editor
+    // instance run with its own token - mcp_server_tests' auth fixture.
+    const char* const override_path = std::getenv("ERHE_MCP_TOKEN_FILE");
+    if ((override_path != nullptr) && (override_path[0] != '\0')) {
+        return std::filesystem::path{override_path};
+    }
 #if defined(_WIN32)
     const char* base = std::getenv("USERPROFILE");
 #else

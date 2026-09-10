@@ -395,6 +395,14 @@
     "name": "redo"
   },
   {
+    "description": "Ask the editor to exit after the current frame, exactly like closing the window: unsaved changes are discarded. The response is sent before the shutdown starts; poll /health until it stops answering to know the process is gone. Used by ctest to stop the editor it launched for mcp_server_tests.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "request_exit"
+  },
+  {
     "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread), pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush) and asset_loads (asset load tasks in flight, which change the scene when they publish). The scene is settled only when all five are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
     "inputSchema": {
       "properties": {},

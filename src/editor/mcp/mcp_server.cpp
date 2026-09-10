@@ -80,7 +80,7 @@ Mcp_server::Mcp_server(
     if (m_auth_token.empty()) {
         log_mcp->warn(
             "MCP server: no bearer token loaded (write a secret to ~/.agents/erhe_mcp_token "
-            "with mode 0600 to require Authorization: Bearer)"
+            "with mode 0600, or name a token file in ERHE_MCP_TOKEN_FILE, to require Authorization: Bearer)"
         );
     } else {
         log_mcp->info("MCP server: bearer-token auth enabled");
@@ -508,6 +508,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "clear_undo_history",             &Mcp_server::action_clear_undo_history            },
         { "undo",                           &Mcp_server::action_undo                          },
         { "redo",                           &Mcp_server::action_redo                          },
+        { "request_exit",                   &Mcp_server::action_request_exit                  },
         { "get_async_status",               &Mcp_server::query_async_status                   },
         { "get_transform_update_stats",     &Mcp_server::query_transform_update_stats         },
         { "merge_static_subtree",           &Mcp_server::action_merge_static_subtree          },

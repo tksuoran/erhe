@@ -162,10 +162,29 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   `erhe::file::log_file` by hand, then the library's `initialize_logging()`. The
   `log_*` globals are null `shared_ptr`s until then, so the first log call from
   a library under test is an access violation, not a silent no-op.
-- The 25 `Mcp_test` cases each wait `ERHE_MCP_TEST_TIMEOUT_S` seconds (default
-  30) for a live editor before skipping, one process each -- about 13 minutes of
-  the suite when no editor is running. Set `ERHE_MCP_TEST_TIMEOUT_S=1` for a
-  headless run.
+- `mcp_server_tests` is a pure HTTP client of the editor's MCP server, so under
+  `ctest` editors are CTest fixtures: `mcp_editor` (MCP port 3773) is one
+  editor shared by every `Mcp_test.*` case, and `mcp_editor_auth` (port 3774)
+  is a dedicated editor started with a configure-time test token
+  (`ERHE_MCP_TOKEN_FILE`) for `Mcp_auth_test.*`. Each fixture's start test
+  detaches `editor` from the repo root (PowerShell `Start-Process` on
+  Windows, `sh -c '... &'` elsewhere: a fixture setup test must exit before
+  its dependents run, CMake itself cannot start a process without waiting
+  for it, and a child that inherits ctest's output pipe makes ctest wait for
+  it, so the editor's console output is not captured - read `logs/log.txt`);
+  the cases wait for `GET /health` and run one at a time; the stop test runs
+  `mcp_server_tests --request-editor-exit`, which calls that editor's
+  `request_exit` MCP tool and waits for it to go away. Every case prepares
+  its own scene over MCP (create_scene + textured glTF import + a material)
+  and closes it afterwards. Run `ctest -C Debug -R "Mcp_"` from the build
+  directory; the windowed editor needs a live display (see "Windowed editor
+  needs a live display" below). Visual Studio's Test Explorer runs the gtest
+  binary directly (no ctest, no fixtures): there the binary launches the
+  editors from their compiled-in path when nothing answers on the port and
+  stops them at exit (`src/editor/mcp/test/editor_launcher.hpp`). Running
+  the binary by hand against an editor you started yourself: point it at
+  that editor with `ERHE_MCP_TEST_PORT` (default 3743); each case waits
+  `ERHE_MCP_TEST_TIMEOUT_S` seconds (default 30) before launching one.
 
 - The macOS `configure_xcode_*.sh` scripts enable tests by default. On Windows,
   `scripts\configure_tests_asan.bat` produces a dedicated test configuration

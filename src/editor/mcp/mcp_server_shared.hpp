@@ -263,8 +263,9 @@ auto schema_scene_name() -> json;
 
 auto schema_scene_and_item(const char* item_key, const char* item_desc) -> json;
 
-// Returns $HOME/.agents/erhe_mcp_token (or %USERPROFILE%\.agents\... on
-// Windows). The directory is not created here; the file is optional.
+// Returns the path named by ERHE_MCP_TOKEN_FILE when set, else
+// $HOME/.agents/erhe_mcp_token (or %USERPROFILE%\.agents\... on Windows).
+// The directory is not created here; the file is optional.
 auto auth_token_path() -> std::filesystem::path;
 
 // Returns the trimmed file contents, or an empty string if the file
