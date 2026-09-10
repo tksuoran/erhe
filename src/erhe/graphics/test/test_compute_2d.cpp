@@ -76,7 +76,13 @@ TEST_F(Gpu_test, compute_2d_global_invocation_pattern)
     const erhe::graphics::Bind_group_layout compute_layout{
         device(),
         erhe::graphics::Bind_group_layout_create_info{
-            .bindings          = { { 0u, erhe::graphics::Binding_type::storage_buffer } },
+            .bindings          = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0,
+                    .type = erhe::graphics::Binding_type::storage_buffer,
+                    .stage_flags = erhe::graphics::Shader_stage_flags::compute
+                }
+            },
             .debug_label       = erhe::utility::Debug_label{"compute 2d layout"},
             .uses_texture_heap = false
         }

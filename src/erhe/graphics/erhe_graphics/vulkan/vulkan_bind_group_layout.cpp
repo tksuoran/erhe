@@ -43,7 +43,7 @@ auto to_vulkan_shader_stage_flags(const uint32_t stage_flags) -> VkShaderStageFl
 } // anonymous namespace
 
 Bind_group_layout_impl::Bind_group_layout_impl(
-    Device&                             device,
+    Device&                              device,
     const Bind_group_layout_create_info& create_info
 )
     : m_device_impl          {device.get_impl()}
@@ -121,12 +121,15 @@ Bind_group_layout_impl::Bind_group_layout_impl(
         // opposite) would reintroduce the stage-mismatch hazard, so it is caught
         // here.
         if (binding.stage_flags == Shader_stage_flags::none) {
-            ERHE_FATAL(
-                "Bind_group_layout binding %u ('%.*s') declares no shader stages (Shader_stage_flags::none); set Bind_group_layout_binding::stage_flags to the stages it is accessed in",
-                binding.binding_point,
-                static_cast<int>(binding.name.size()),
-                binding.name.data()
+            device.device_message(
+                Message_severity::error,
+                fmt::format(
+                   "Bind_group_layout binding {} ({}) declares no shader stages (Shader_stage_flags::none); set Bind_group_layout_binding::stage_flags to the stages it is accessed in",
+                    binding.binding_point,
+                    binding.name
+                )
             );
+            throw std::runtime_error("Bind_group_layout binding declares no shader stages");
         }
         const VkShaderStageFlags stage_flags = to_vulkan_shader_stage_flags(binding.stage_flags);
         if (binding.type == Binding_type::combined_image_sampler) {

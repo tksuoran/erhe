@@ -646,7 +646,13 @@ TEST_F(Texgen_render_test, ubo_parameter)
     const erhe::graphics::Bind_group_layout layout{
         device(),
         erhe::graphics::Bind_group_layout_create_info{
-            .bindings          = { { 0u, erhe::graphics::Binding_type::uniform_buffer } },
+            .bindings          = {
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = erhe::graphics::Binding_type::uniform_buffer,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::fragment
+                }
+            },
             .debug_label       = erhe::utility::Debug_label{"texgen ubo layout"},
             .uses_texture_heap = false
         }

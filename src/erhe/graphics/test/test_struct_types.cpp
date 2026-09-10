@@ -139,8 +139,16 @@ TEST_F(Gpu_test, struct_types_in_interface_block)
         device(),
         erhe::graphics::Bind_group_layout_create_info{
             .bindings = {
-                { 0u, erhe::graphics::Binding_type::uniform_buffer },
-                { 1u, erhe::graphics::Binding_type::storage_buffer }
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 0u,
+                    .type          = erhe::graphics::Binding_type::uniform_buffer,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::compute
+                },
+                erhe::graphics::Bind_group_layout_binding{
+                    .binding_point = 1u,
+                    .type          = erhe::graphics::Binding_type::storage_buffer,
+                    .stage_flags   = erhe::graphics::Shader_stage_flags::compute
+                }
             },
             .debug_label       = erhe::utility::Debug_label{"struct_types layout"},
             .uses_texture_heap = false

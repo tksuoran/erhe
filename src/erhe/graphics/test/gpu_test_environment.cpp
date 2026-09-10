@@ -7,6 +7,7 @@
 #include "erhe_graphics/surface.hpp"
 #include "erhe_dataformat/dataformat_log.hpp"
 #include "erhe_log/log.hpp"
+#include "erhe_verify/verify.hpp"
 #include "erhe_window/window.hpp"
 #include "erhe_window/window_configuration.hpp"
 #include "erhe_window/window_log.hpp"
@@ -119,6 +120,9 @@ void Gpu_test_environment::add_message(const bool is_error, const std::string& m
 {
     std::lock_guard<std::mutex> lock{m_messages_mutex};
     m_messages.emplace_back(is_error, message);
+    if (is_error) {
+        m_messages.emplace_back(true, erhe_get_callstack());
+    }
 }
 
 void Gpu_test_environment::clear_messages()
