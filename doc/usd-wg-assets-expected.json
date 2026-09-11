@@ -194,5 +194,34 @@
    "hole face removal is only applied when triangulation is enabled"
   ],
   "reason": "each pyramid's material connects `inputs:diffuseColor` to a `UsdPrimvarReader_float3` reading `displayColor` (Pyramid/mtl.usda), and Tydra accepts only a `UsdUVTexture` output on a shader input, so it fails the material and erhe imports 0 of 3 - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result, and the reason the two variant bindings that name those materials are dropped as well. The `mtl` prims the referencing layer defines over the reference are a structural edit inside a reference, which section 5 puts out of scope. The uncarried variant opinions are the section 6 variants item. The hole-face line is Tydra reporting that it removes hole faces only when it triangulates, which the conversion does not ask it to; erhe drops the four hole facets itself, so the pyramids show the openings Storm shows (24 facets per shape, from 28 before the fix) and bounds_deviation measures 0.0"
+ },
+ {
+  "path": "full_assets/Teapot/Teapot.usd",
+  "diagnostics": [
+   "authors .* opinion\\(s\\) that erhe has no place for",
+   "must be `.*` for UsdUVTexture",
+   "Failed to convert UsdPreviewSurface",
+   "TODO: Prim type NodeGraph",
+   "the referencing layer defines typed prims over the reference"
+  ],
+  "gaps": [
+   "no mesh loaded"
+  ],
+  "reason": "the model's geometry is composed entirely inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe's hoist carries a variant's def children and property opinions but not the arcs they author, and the section 5 reference-structure rule drops a def authored over a reference, so nothing composes - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result. The material lines behind it are the same file's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of section 6); erhe imports 0 of the 1 composed mesh and 0 of the 2 materials"
+ },
+ {
+  "path": "full_assets/Teapot/DrawModes.usd",
+  "diagnostics": [
+   "authors .* opinion\\(s\\) that erhe has no place for",
+   "must be `.*` for UsdUVTexture",
+   "Failed to convert UsdPreviewSurface",
+   "TODO: Prim type NodeGraph",
+   "the referencing layer defines typed prims over the reference",
+   "the typeless prim has unreadable xformOps"
+  ],
+  "gaps": [
+   "no mesh loaded"
+  ],
+  "reason": "the model's geometry is composed entirely inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe's hoist carries a variant's def children and property opinions but not the arcs they author, and the section 5 reference-structure rule drops a def authored over a reference, so nothing composes - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result. The material lines behind it are the same file's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of section 6); this file references that model once per draw mode, so it imports 0 of 35 meshes and 0 of 70 materials. Its own extra line is the duplicates' xformOp stack: `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops `[\"xformOp:transform\", \"xformOp:transform:duplicate1\"]` while authoring only the second, because the first arrives through their internal reference to `/World/FancyTeapot_0`; the stack is reconstructed from a prim's own properties, so it reads as unreadable and the prim keeps the composed transform - the second of the two section 6 items, also a known limitation"
  }
 ]

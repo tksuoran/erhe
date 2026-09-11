@@ -611,6 +611,32 @@ section 3 except where named.
   on the tick thread. A shape-to-meshes index maintained at the change
   sites, a hover that does not trace while a load is in flight, and the
   proxy build on the deferred path are the fixes, in that order.
+- Composition authored inside a variant block: a reference or payload arc
+  authored on a variant (usd-wg `full_assets/Teapot/Teapot_Geometry.usd`
+  prepends the reference to `UtahTeapot.usd` on its `Utah` variant), and a
+  prim defined inside a variant block over a referencing prim (the
+  `Materials` scope of `Teapot_Materials.usd`). The hoist carries a
+  variant's `def` children and its property opinions, not the arcs they
+  author, and the section 5 reference-structure rule drops a def a variant
+  authors over a reference, so the whole model stays empty:
+  `full_assets/Teapot/Teapot.usd` imports 0 of its 1 composed mesh and 0 of
+  its 2 materials, and `full_assets/Teapot/DrawModes.usd`, which references
+  it once per draw mode, 0 of 35 and 0 of 70. Closing it is two changes: the
+  variant hoisting carrying a hoisted prim's reference and payload list-ops
+  into the arc loop that already runs for a prim's own arcs, and the
+  reference-structure rule admitting the defs a variant authors, which are
+  the variant's own content rather than an edit made over someone else's
+  structure.
+- An `xformOp` named in a prim's `xformOpOrder` that one of its arcs
+  supplies: `full_assets/Teapot/DrawModes.usd` gives each duplicate
+  (`/World/FancyTeapot_1` and its siblings) the order
+  `["xformOp:transform", "xformOp:transform:duplicate1"]` while authoring
+  only the second, because the first arrives through its internal reference
+  to `/World/FancyTeapot_0`. The stack is reconstructed from the prim's own
+  properties, so the missing op makes the whole stack unreadable and the
+  prim keeps the composed transform instead, with one warning per prim.
+  Closing it means resolving an op the order names against the prim's arc
+  targets, in the same place the stack is reconstructed.
 - A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`: Tydra accepts
   only a `UsdUVTexture` output on a shader input, so a network that reads a
   primvar into one - usd-wg
