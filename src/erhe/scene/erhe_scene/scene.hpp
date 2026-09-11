@@ -27,6 +27,13 @@ class Skin;
 
 using Layer_id = uint64_t;
 
+// Whether a Scene::register_skin() / Scene::unregister_skin() call changed
+// the scene's skin list, or only its use count of an already registered skin.
+enum class Skin_registry_change {
+    changed,
+    unchanged
+};
+
 class Mesh_layer
 {
 public:
@@ -219,8 +226,14 @@ public:
     void unregister_camera(const std::shared_ptr<Camera>& camera);
     void register_mesh    (const std::shared_ptr<Mesh>& mesh);
     void unregister_mesh  (const std::shared_ptr<Mesh>& mesh);
-    void register_skin    (const std::shared_ptr<Skin>& skin);
-    void unregister_skin  (const std::shared_ptr<Skin>& skin);
+    // A Skin is shared by every Mesh it skins - a glTF or USD skeleton
+    // commonly skins dozens of meshes - and each of those meshes registers
+    // and unregisters it, so the scene counts the uses: the skin list gains
+    // the skin on its first use and loses it on its last. The return value
+    // says whether the list changed, so a caller that announces the change
+    // (Scene_root publishes Skin_registered_message) announces it once.
+    auto register_skin    (const std::shared_ptr<Skin>& skin) -> Skin_registry_change;
+    auto unregister_skin  (const std::shared_ptr<Skin>& skin) -> Skin_registry_change;
     void register_light   (const std::shared_ptr<Light>& light);
     void unregister_light (const std::shared_ptr<Light>& light);
     void register_layout  (const std::shared_ptr<Layout>& layout);
@@ -249,6 +262,10 @@ private:
     std::vector<std::shared_ptr<Node>>        m_no_transform_update_nodes;
     std::vector<std::shared_ptr<Mesh_layer>>  m_mesh_layers;
     std::vector<std::shared_ptr<Skin>>        m_skins;
+    // Use count of m_skins[i]: the number of registrations (one per Mesh
+    // skinned by it) the scene has seen and not yet seen unregistered. Kept
+    // in lockstep with m_skins by register_skin() / unregister_skin().
+    std::vector<std::size_t>                  m_skin_use_counts;
     std::vector<std::shared_ptr<Light_layer>> m_light_layers;
     std::vector<std::shared_ptr<Camera>>      m_cameras;
     // Registered Layout attachments (register_layout / unregister_layout,

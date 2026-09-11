@@ -586,28 +586,39 @@ void Scene::unregister_mesh(const std::shared_ptr<Mesh>& mesh)
     }
 }
 
-void Scene::register_skin(const std::shared_ptr<Skin>& skin)
-{
-#ifndef NDEBUG
-    const auto i = std::find(m_skins.begin(), m_skins.end(), skin);
-    if (i != m_skins.end()) {
-        log->error("skin {} already in scene cameras", skin->get_name());
-    } else
-#endif
-    {
-        m_skins.push_back(skin);
-    }
-}
-
-void Scene::unregister_skin(const std::shared_ptr<Skin>& skin)
+auto Scene::register_skin(const std::shared_ptr<Skin>& skin) -> Skin_registry_change
 {
     ERHE_VERIFY(skin);
-    const auto i = std::remove(m_skins.begin(), m_skins.end(), skin);
-    if (i == m_skins.end()) {
-        log->error("skin {} not in scene cameras", skin->get_name());
-    } else {
-        m_skins.erase(i, m_skins.end());
+    const std::vector<std::shared_ptr<Skin>>::iterator i = std::find(m_skins.begin(), m_skins.end(), skin);
+    if (i != m_skins.end()) {
+        // Another Mesh skinned by this skin registered it already: count the
+        // use, keep one entry in the list.
+        ++m_skin_use_counts[static_cast<std::size_t>(i - m_skins.begin())];
+        return Skin_registry_change::unchanged;
     }
+    m_skins.push_back(skin);
+    m_skin_use_counts.push_back(1);
+    return Skin_registry_change::changed;
+}
+
+auto Scene::unregister_skin(const std::shared_ptr<Skin>& skin) -> Skin_registry_change
+{
+    ERHE_VERIFY(skin);
+    const std::vector<std::shared_ptr<Skin>>::iterator i = std::find(m_skins.begin(), m_skins.end(), skin);
+    if (i == m_skins.end()) {
+        log->error("skin {} not in scene skins", skin->get_name());
+        return Skin_registry_change::unchanged;
+    }
+    const std::size_t index = static_cast<std::size_t>(i - m_skins.begin());
+    ERHE_VERIFY(m_skin_use_counts[index] > 0);
+    --m_skin_use_counts[index];
+    if (m_skin_use_counts[index] > 0) {
+        // Meshes skinned by this skin remain in the scene.
+        return Skin_registry_change::unchanged;
+    }
+    m_skins.erase(i);
+    m_skin_use_counts.erase(m_skin_use_counts.begin() + static_cast<std::ptrdiff_t>(index));
+    return Skin_registry_change::changed;
 }
 
 void Scene::register_layout(const std::shared_ptr<Layout>& layout)

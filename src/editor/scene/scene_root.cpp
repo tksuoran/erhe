@@ -1479,8 +1479,12 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 
 void Scene_root::register_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
 {
-    if (m_scene) {
-        m_scene->register_skin(skin);
+    // One Skin is shared by every Mesh it skins, and each of those meshes
+    // registers it: the scene counts the uses and reports whether this call
+    // is the first one, so the joint marking and the message below run once
+    // per skin rather than once per skinned mesh.
+    if (m_scene && (m_scene->register_skin(skin) == erhe::scene::Skin_registry_change::unchanged)) {
+        return;
     }
     // Flag the joint nodes so a bone is identifiable without walking every skin
     // (item tree icon, bone selection mode, bone proxies).
@@ -1507,8 +1511,10 @@ void Scene_root::register_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
 
 void Scene_root::unregister_skin(const std::shared_ptr<erhe::scene::Skin>& skin)
 {
-    if (m_scene) {
-        m_scene->unregister_skin(skin);
+    // The skin leaves the scene with the last Mesh it skins (see
+    // register_skin): until then its registration and its bone proxies stand.
+    if (m_scene && (m_scene->unregister_skin(skin) == erhe::scene::Skin_registry_change::unchanged)) {
+        return;
     }
     // weak_from_this(), not shared_from_this(): see register_skin. The
     // unregister handler only needs the skin.
