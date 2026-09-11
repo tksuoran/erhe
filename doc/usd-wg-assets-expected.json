@@ -111,5 +111,12 @@
    "Primvar `tangents` has no authored value"
   ],
   "reason": "every one of the twelve meshes authors `float4[] primvars:tangents = []` - an empty array left behind by the glTF conversion (the glTF source carries no TANGENT attribute); an empty primvar has no data to convert, so LightUSD's Tydra skips it with this warning (a deliberate OpenUSD-compat path in render-data-mesh.cc whose comment names this very asset), and OpenUSD skips it just as silently - Storm renders the same frame (storm_match 0.99, bounds_deviation 0.0)"
+ },
+ {
+  "path": "full_assets/CarbonFrameBike/CarbonFrameBike.usdz",
+  "diagnostics": [
+   "Failed to get texture coordinate for `st`"
+  ],
+  "reason": "of the asset's 331 Mesh prims exactly one, </CarbonFrameBike/Geom/CarbonFrameBike/Bike_v2/Rahmen/Rahmen_3/Federachse/ZB_RobertS_2016/inafag_na4902_2rsr/inafag_na4902_2rsr_4891_4/Shape_4380>, authors no `primvars:st` (measured with pxr); its bound material </CarbonFrameBike/Materials/Material__37> is a constant-color UsdPreviewSurface with no connected input, which erhe imports with every texture slot empty, so the missing UV set changes nothing it draws - Tydra asks for `st` all the same and repeats the resulting line, which carries no prim path and an empty reason, in one accumulated warning batch; erhe imports 331 of 331 meshes and 31 of 31 materials and matches the Storm render on the objects it draws (0.92)"
  }
 ]
