@@ -953,6 +953,12 @@ elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
             # /W4 /WX on an unused variable under MSVC).
             "TRACY_ENABLE ON"
             "TRACY_ON_DEMAND ON"
+            # Bind the client's listen socket (TCP 8086+) to loopback only.
+            # The default binds the wildcard address, which makes Windows
+            # Defender Firewall prompt for every binary that links
+            # TracyClient - including each erhe_<name>_tests executable.
+            # The Tracy GUI must then run on the same machine.
+            "TRACY_ONLY_LOCALHOST ON"
     )
     message(STATUS "Erhe configured to use Tracy for profiling.")
     add_definitions(-DERHE_PROFILE_LIBRARY_TRACY)
