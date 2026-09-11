@@ -64,6 +64,26 @@ are repeatable, so `--only test_assets --exclude full_assets` or
 
     py -3 scripts/usd_wg_asset_survey.py --only test_assets --exclude McUsd
 
+Expected results (--expected)
+-----------------------------
+doc/usd-wg-assets-expected.json is hand-edited and committed. Each item
+names an entry path, the `diagnostics` it reports by design (regular
+expressions matched against the normalized message and the example line),
+optionally `appearance` (a reason: the entry's by-eye gap is expected too)
+and a `reason`. A matched diagnostic keeps its observed level in
+`level_observed` and no longer counts against the verdict or the Gaps
+section, so an entry whose only issues are expected is `works`. Every run,
+--from-summary and --eye-note re-apply the file to the whole summary, so an
+added or removed expectation takes effect without a re-run:
+
+    [
+     {
+      "path": "test_assets/.../usduvtexture_color_test.usda",
+      "diagnostics": ["`inputs:sourceColorSpace`: `lin_ap1_scene` is not an allowed token"],
+      "reason": "column 5 authors that illegal token on purpose (asset README)"
+     }
+    ]
+
 Test database (--test-db, --record-test-db, --failing-first, --clear-test-db)
 -----------------------------------------------------------------------------
 logs/usd_wg_survey/test_database.json (or --test-db) records, per entry
@@ -1293,6 +1313,8 @@ def gather_gaps(records: list) -> list:
             cause = record["load_error"] or record["describe_error"] or "load did not produce a scene"
             add("load failure: " + gap_name(cause), "failure", asset, cause)
         for diagnostic in record["diagnostics"]:
+            if diagnostic["level"] == "expected":
+                continue
             add(diagnostic["message"], diagnostic["level"], asset, diagnostic.get("example", ""))
         stats = record.get("screenshot_stats") or {}
         # The two conditions the counts and the frame carry that no log line
@@ -1317,7 +1339,7 @@ def gather_gaps(records: list) -> list:
             add(SUBLAYER_GAP, "failure", asset, "")
         # What the capture, compared against the repository's own reference
         # render, shows the editor getting wrong: a cause no log line states.
-        if record.get("eye_gap") and eye_gap_holds(record):
+        if record.get("eye_gap") and eye_gap_holds(record) and (not record.get("expected_appearance")):
             add(record["eye_gap"], "appearance", asset, record.get("eye_note", ""))
 
     gaps = []
@@ -1331,6 +1353,76 @@ def gather_gaps(records: list) -> list:
         })
     gaps.sort(key=lambda g: (-g["count"], g["cause"]))
     return gaps
+
+
+# --------------------------------------------------------------------------
+# Expected results: issues an entry is known to report by design
+# --------------------------------------------------------------------------
+
+DEFAULT_EXPECTED = pathlib.Path("doc/usd-wg-assets-expected.json")
+
+
+def load_expected_results(path: pathlib.Path) -> dict:
+    """The committed expected results, keyed by the entry's repo-relative path.
+
+    Each item names the diagnostics (regular expressions matched against the
+    normalized message and the example line) the entry reports by design, and
+    may declare its by-eye appearance gap expected too. A matched diagnostic
+    and an expected appearance gap no longer count against the verdict, so an
+    entry whose only issues are expected is `works`.
+    """
+    if not path.is_file():
+        return {}
+    expected = {}
+    for item in json.loads(path.read_text(encoding="utf-8")):
+        expected[item["path"]] = {
+            "diagnostics": [re.compile(pattern) for pattern in item.get("diagnostics", [])],
+            "appearance": item.get("appearance", ""),
+            "reason": item.get("reason", ""),
+        }
+    return expected
+
+
+def apply_expected_results(record: dict, expected: dict) -> bool:
+    """Relabel the record's expected diagnostics and recompute its verdict.
+
+    Idempotent: a diagnostic keeps its observed level in `level_observed`, so
+    an expectation removed from the sidecar takes effect on the next apply
+    without a re-run. Returns True when the record has any expectation.
+    """
+    restored = False
+    for diagnostic in record.get("diagnostics", []):
+        if "level_observed" in diagnostic:
+            diagnostic["level"] = diagnostic.pop("level_observed")
+            restored = True
+    record.pop("expected_appearance", None)
+    record.pop("expected_reason", None)
+    item = expected.get(record["path"])
+    if item is None:
+        record["expected_diagnostics"] = 0
+        if restored and (not record.get("crash")) and record.get("loaded"):
+            record["verdict"] = provisional_verdict(record)
+        return False
+    matched = 0
+    for diagnostic in record.get("diagnostics", []):
+        if diagnostic["level"] not in ("warning", "error"):
+            continue
+        texts = (diagnostic["message"], diagnostic.get("example", ""))
+        if any(pattern.search(text) for pattern in item["diagnostics"] for text in texts):
+            diagnostic["level_observed"] = diagnostic["level"]
+            diagnostic["level"] = "expected"
+            matched += diagnostic["count"]
+    record["expected_diagnostics"] = matched
+    record["expected_reason"] = item["reason"]
+    if item["appearance"]:
+        record["expected_appearance"] = item["appearance"]
+    if (not record.get("crash")) and record.get("loaded"):
+        record["verdict"] = provisional_verdict(record)
+    return True
+
+
+def apply_expected_results_to_summary(summary: dict, expected: dict) -> int:
+    return sum(1 for record in summary["entries"] if apply_expected_results(record, expected))
 
 
 # --------------------------------------------------------------------------
@@ -1377,7 +1469,7 @@ def apply_eye_notes(summary: dict, notes: dict) -> int:
         record["eye_gap"] = note["gap"]
         # The capture outranks the counts and the log: a gap only the eye sees
         # is a gap, even where nothing was logged and the frame is not empty.
-        if note["gap"] and (record.get("verdict") == "works"):
+        if note["gap"] and (record.get("verdict") == "works") and (not record.get("expected_appearance")):
             record["verdict"] = "works, gap: " + gap_name(note["gap"])
         applied += 1
     return applied
@@ -1421,15 +1513,18 @@ def summarize_diagnostics(record: dict) -> str:
         return "editor crash"
     errors = sum(d["count"] for d in record["diagnostics"] if d["level"] == "error")
     warnings = sum(d["count"] for d in record["diagnostics"] if d["level"] == "warning")
-    if (errors == 0) and (warnings == 0):
+    if (errors == 0) and (warnings == 0) and (not record.get("expected_diagnostics")):
         return "none"
-    named = [d["message"] for d in record["diagnostics"] if d["level"] != "note"]
+    named = [d["message"] for d in record["diagnostics"] if d["level"] in ("warning", "error")]
     first = named[0] if named else ""
     parts = []
     if errors:
         parts.append(f"{errors} error")
     if warnings:
         parts.append(f"{warnings} warning")
+    expected = record.get("expected_diagnostics", 0)
+    if expected:
+        parts.append(f"{expected} expected")
     return ", ".join(parts) + (f"; {gap_name(first)[:60]}" if first else "")
 
 
@@ -1613,7 +1708,10 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("survey; each record carries the date it was surveyed on. The by-eye")
     out.append("verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which")
     out.append("a run reads and never writes; `--eye-note <entry> \"<what the capture")
-    out.append("shows>\" [--eye-gap \"<cause>\"]` is how one is recorded.")
+    out.append("shows>\" [--eye-gap \"<cause>\"]` is how one is recorded. The expected")
+    out.append("results of the section after it come from `doc/usd-wg-assets-expected.json`,")
+    out.append("hand-edited: the diagnostics an entry reports by design (and, where stated,")
+    out.append("its by-eye appearance gap) do not count against its verdict.")
     out.append("Screenshot paths are under `logs/`, which is gitignored: the column is a")
     out.append("pointer into the last run's output, not a committed file.")
     out.append("")
@@ -1699,6 +1797,22 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
         out.append("No verdict has been checked by eye yet; every row is what the counts,")
         out.append("the log and the flat-screenshot test decided.")
     out.append("")
+    expected_rows = sorted((r for r in records if r.get("expected_reason")), key=lambda r: r["path"])
+    if expected_rows:
+        out.append("## Expected results")
+        out.append("")
+        out.append("These entries report issues by design; the issues named in")
+        out.append("`doc/usd-wg-assets-expected.json` are excluded from their verdict and from")
+        out.append("the Gaps section. The count is how many logged lines the expectation took.")
+        out.append("")
+        out.append("| Entry file | Expected | Why |")
+        out.append("| --- | --- | --- |")
+        for record in expected_rows:
+            what = f"{record.get('expected_diagnostics', 0)} diagnostic line(s)"
+            if record.get("expected_appearance"):
+                what += "; the by-eye appearance gap"
+            out.append("| {} | {} | {} |".format(cell(record["path"]), cell(what), cell(record["expected_reason"])))
+        out.append("")
     out.append("## Entries")
     out.append("")
     out.append("`authored` is the prim count `describe_usd_file` reports for the file;")
@@ -1862,9 +1976,9 @@ def refresh_camera_fields(args, summary: dict) -> int:
 
 
 def check_bookkeeping() -> bool:
-    """Prove the two document-level rules that no editor run exercises: a
-    by-eye verdict reaches its entry from the sidecar, and a restricted run
-    keeps the entries it did not survey."""
+    """Prove the document-level rules that no editor run exercises: a by-eye
+    verdict reaches its entry from the sidecar, a restricted run keeps the
+    entries it did not survey, and an expected result clears the verdict."""
     ok = True
 
     notes = {"a/one.usda": {"note": "the cube is blue", "gap": "blue is wrong"}}
@@ -1902,6 +2016,29 @@ def check_bookkeeping() -> bool:
         ok = False
     if entries_of_newest_run(summary["entries"]) != 1:
         print("self-test: FAIL - the mixed-date entry count is wrong")
+        ok = False
+
+    # An expected diagnostic and an expected appearance gap leave the verdict
+    # at works; removing the expectation restores the observed level.
+    expected = {"a/one.usda": {"diagnostics": [re.compile("not an allowed token")],
+                               "appearance": "by design", "reason": "the file authors it on purpose"}}
+    record = {"path": "a/one.usda", "crash": False, "loaded": True, "prims": 1, "meshes": 1,
+              "materials": 1, "lights": 0, "cameras": 0, "authored_prims": 1, "authored_types": [],
+              "screenshot_stats": {"available": True, "flat": False}, "layers": [],
+              "diagnostics": [{"level": "warning", "count": 5,
+                               "message": "Attribute `*`: `*` is not an allowed token. Ignore it",
+                               "example": "Attribute `inputs:x`: `y` is not an allowed token. Ignore it"}],
+              "verdict": "works, gap: stale"}
+    apply_expected_results(record, expected)
+    summary = {"entries": [record]}
+    apply_eye_notes(summary, notes)
+    gaps = gather_gaps(summary["entries"])
+    if (record["verdict"] != "works") or (record["expected_diagnostics"] != 5)             or (record["diagnostics"][0]["level"] != "expected") or gaps:
+        print("self-test: FAIL - an expected result did not clear the verdict")
+        ok = False
+    apply_expected_results(record, {})
+    if (record["diagnostics"][0]["level"] != "warning") or ("level_observed" in record["diagnostics"][0])             or (record["verdict"] != "works, gap: Attribute `*`: `*` is not an allowed token. Ignore it"):
+        print("self-test: FAIL - removing an expectation did not restore the observed level")
         ok = False
 
     print("self-test: bookkeeping " + ("PASS - sidecar and merge behave" if ok else "FAIL"))
@@ -2014,6 +2151,8 @@ def main() -> int:
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
     parser.add_argument("--eye", type=pathlib.Path, default=DEFAULT_EYE,
                         help="the by-eye verdict sidecar a run reads and --eye-note writes")
+    parser.add_argument("--expected", type=pathlib.Path, default=DEFAULT_EXPECTED,
+                        help="the expected-results sidecar: per entry, the diagnostics (regular expressions) it reports by design")
     parser.add_argument("--eye-note", nargs=2, metavar=("ENTRY", "NOTE"), default=None,
                         help="record what the capture of ENTRY shows in the sidecar and exit")
     parser.add_argument("--eye-gap", default="",
@@ -2053,6 +2192,7 @@ def main() -> int:
         if not args.root:
             return 0
     test_db = load_test_db(args.test_db)
+    expected = load_expected_results(args.expected)
 
     if args.eye_note:
         entry, note = args.eye_note
@@ -2062,6 +2202,7 @@ def main() -> int:
         print(f"recorded the by-eye verdict of {entry} in {args.eye} ({len(notes)} entries)")
         if summary_path.is_file():
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            apply_expected_results_to_summary(summary, expected)
             apply_eye_notes(summary, notes)
             write_document(args.doc, summary)
             print(f"wrote {args.doc} from {summary_path}")
@@ -2103,10 +2244,11 @@ def main() -> int:
             print(f"no summary at {summary_path}; run the survey first", file=sys.stderr)
             return 2
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        expected_count = apply_expected_results_to_summary(summary, expected)
         applied = apply_eye_notes(summary, load_eye_notes(args.eye))
         write_document(args.doc, summary)
         print(f"wrote {args.doc} from {summary_path} ({summary['entry_count']} entries, "
-              f"{applied} by-eye verdict(s) from {args.eye})")
+              f"{applied} by-eye verdict(s) from {args.eye}, {expected_count} expected result(s) from {args.expected})")
         return 0
 
     if not args.root:
@@ -2186,6 +2328,7 @@ def main() -> int:
                 })
             record["surveyed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             record["survey_seconds"] = time.monotonic() - entry_started
+            apply_expected_results(record, expected)
             records.append(record)
             print(f"      {record['verdict']}", flush=True)
             if args.record_test_db:
@@ -2215,6 +2358,7 @@ def main() -> int:
     summary["editor_launches"] = editor.launches
     summary["max_per_folder"] = args.max_per_folder
     merge_entries(summary, records)
+    apply_expected_results_to_summary(summary, expected)
     for record in summary["entries"]:
         # The by-eye verdicts live in the sidecar; the summary states what the
         # run itself observed.
