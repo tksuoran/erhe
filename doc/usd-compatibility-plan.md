@@ -544,20 +544,38 @@ not written wherever it sits. `erhe_usd_tests` 291 covers an empty
 the round-trip script's library-folder leg drives the editor's own
 folders through a save and a reload (23 checks).
 
-### E2 Material fidelity (M)
+### E2 Material fidelity (M; import half landed)
 
-What: erhe-only material fields that `UsdPreviewSurface` cannot carry
-(anisotropic roughness, transmission, brushed metal) export additionally
-as an `OpenPBRSurface` / MaterialX network when
-`LIGHTUSD_WITH_USDMTLX` is on; import prefers the OpenPBR network when
-both are present.
+What: the erhe material fields `UsdPreviewSurface` has no input for -
+anisotropic roughness and transmission - travel in an `OpenPBRSurface` /
+MaterialX network beside the `UsdPreviewSurface` one. Such a network is an
+inline `UsdShade` network that Tydra converts in every build, so neither half
+is conditional: `LIGHTUSD_WITH_USDMTLX` (off in erhe's build) only concerns
+reading a separate `.mtlx` document as an asset, which stays future work
+(section 6).
+
+What holds: the import half. The importer reads the OpenPBR network wherever a
+`Material` prim offers one and names a material that offers both in one line
+saying which was read, taking the two directional roughnesses, the
+transmission, the emission, the base layer, the opacity and the slot textures
+from it under the mapping's OpenPBR table. The fields no OpenPBR input carries
+(`reflectance`, the brushed-metal block, `use_aniso_control`) keep their
+`erhe:Material:<name>` custom-attribute path, which the authored-opinion pass
+applies after the network either way (`src/erhe/usd/notes.md`, "OpenPBR
+networks"; `erhe_usd_tests` 296).
+
+What remains: the export half. A material whose anisotropic roughness or
+transmission is not the erhe default writes an OpenPBR network beside its
+`UsdPreviewSurface` one, connected through `outputs:mtlx:surface`, so an
+erhe-to-erhe round trip carries those two fields as USD's own means rather
+than only as `erhe:` custom attributes.
 
 ## 4. Order
 
 Each step independently landable, in this order:
 
 1. E4 editor state in a USD file: E4d (E4a, E4c and E4b landed; completes G2)
-2. E2 material fidelity
+2. E2 material fidelity: the export half (the import half landed)
 
 Dependencies: E4d and E2 need nothing that has not landed.
 
@@ -708,13 +726,11 @@ section 3 except where named.
   Animation channels and the pose but not the `Xform_op` samples a USD save
   writes, so an edited clip saves as the file's original samples.
 - MaterialX: a `.mtlx` document as a reference target (the editor refuses
-  the arc), a `Material` whose surface is a `ND_standard_surface_surfaceshader`
-  or `ND_open_pbr_surface_surfaceshader` network (Tydra converts it into
-  `RenderMaterial::openPBRShader`, which the importer does not read; import
-  prefers that network when both are present, per E2), and the LightUSD usda
-  reader's rejection of `colorSpace` metadata on a shader attribute (the
-  survey's one failing entry). The `.mtlx` reader is behind
-  `LIGHTUSD_WITH_USDMTLX`, off in erhe's build.
+  the arc), and the LightUSD usda reader's rejection of `colorSpace` metadata
+  on a shader attribute (the survey's one failing entry). The `.mtlx` reader
+  is behind `LIGHTUSD_WITH_USDMTLX`, off in erhe's build. An inline
+  `ND_standard_surface_surfaceshader` or `ND_open_pbr_surface_surfaceshader`
+  network needs none of that and is read (E2).
 - Animated value layer: the property-system section 6 item, an animated
   value between coerced and local in R3, set by `Animation_sampler::apply`
   and cleared when playback stops, so playback never overwrites the

@@ -1,0 +1,145 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "root"
+{
+    def Mesh "anisotropic_panel"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </root/materials/Anisotropic>
+    }
+
+    def Mesh "both_panel"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 1, -1), (1, 1, -1), (1, 1, 1), (-1, 1, 1)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </root/materials/Both>
+    }
+
+    def Mesh "textured_panel"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-1, 2, -1), (1, 2, -1), (1, 2, 1), (-1, 2, 1)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+            interpolation = "faceVarying"
+        )
+        rel material:binding = </root/materials/Textured>
+    }
+
+    def Scope "Graph_Textures"
+    {
+        def NodeGraph "Rust"
+        {
+            custom token erhe:graph:format = "erhe_texture_graph"
+            color4f outputs:rgba.connect = </root/Graph_Textures/Rust/Colorize.outputs:rgba>
+
+            def Shader "Noise"
+            {
+                uniform token info:id = "erhe:texture:noise"
+                float inputs:density = 0.35
+                int inputs:size = 5
+                float outputs:f
+            }
+
+            def Shader "Colorize"
+            {
+                uniform token info:id = "erhe:texture:colorize"
+                float inputs:input.connect = </root/Graph_Textures/Rust/Noise.outputs:f>
+                color4f outputs:rgba
+            }
+        }
+    }
+
+    def Scope "materials"
+    {
+        def Material "Anisotropic"
+        {
+            token outputs:mtlx:surface.connect = </root/materials/Anisotropic/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "ND_open_pbr_surface_surfaceshader"
+                color3f inputs:base_color = (0.2, 0.4, 0.8)
+                float inputs:base_metalness = 1
+                float inputs:specular_roughness = 0.4
+                float inputs:specular_roughness_anisotropy = 0.75
+                float inputs:specular_ior = 1.4
+                float inputs:transmission_weight = 0.6
+                color3f inputs:emission_color = (1, 0.5, 0.25)
+                float inputs:emission_luminance = 2
+                float inputs:geometry_opacity = 0.5
+                token outputs:surface
+            }
+        }
+
+        def Material "Both"
+        {
+            token outputs:surface.connect = </root/materials/Both/preview.outputs:surface>
+            token outputs:mtlx:surface.connect = </root/materials/Both/open_pbr.outputs:surface>
+
+            def Shader "preview"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </root/Graph_Textures/Rust.outputs:rgba>
+                float inputs:roughness = 0.2
+                token outputs:surface
+            }
+
+            def Shader "open_pbr"
+            {
+                uniform token info:id = "ND_open_pbr_surface_surfaceshader"
+                color3f inputs:base_color = (0.1, 0.2, 0.3)
+                float inputs:specular_roughness = 0.7
+                token outputs:surface
+            }
+        }
+
+        def Material "Textured"
+        {
+            token outputs:mtlx:surface.connect = </root/materials/Textured/surface.outputs:surface>
+
+            def Shader "uv_reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "base_color_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgba.png@
+                float2 inputs:st.connect = </root/materials/Textured/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "sRGB"
+                token inputs:wrapS = "repeat"
+                token inputs:wrapT = "mirror"
+                float4 inputs:scale = (0.5, 0.25, 0.75, 1)
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "ND_open_pbr_surface_surfaceshader"
+                color3f inputs:base_color.connect = </root/materials/Textured/base_color_texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+    }
+}

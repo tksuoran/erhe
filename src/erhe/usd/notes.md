@@ -317,6 +317,51 @@ it, a roughness map would modulate a constant metallic through whatever the
 image holds in the channel the glTF default names - which is what
 `test_assets/RoughnessTest` authors.
 
+### OpenPBR networks
+
+A `Material` prim can offer more than one surface terminal, and Tydra reports
+each it converted: a `UsdPreviewSurface` in `RenderMaterial::surfaceShader`,
+and an `OpenPBRSurface` / `ND_open_pbr_surface_surfaceshader` /
+`ND_standard_surface_surfaceshader` network in
+`RenderMaterial::openPBRShader`. Both are inline `UsdShade` networks that
+Tydra converts in every build; `LIGHTUSD_WITH_USDMTLX` (off in erhe's build)
+only concerns reading a separate `.mtlx` document as an asset.
+
+The importer reads the OpenPBR network wherever there is one, and names a
+material that offers both in one line saying which was read. It is the richer
+terminal: `specular_roughness` with `specular_roughness_anisotropy` (or the
+Standard Surface `specular_anisotropy`, the same knob) is the pair erhe holds
+in its anisotropic `roughness`, and `transmission_weight` is the one erhe-only
+material field a surface schema carries an input for. An anisotropy that is
+not zero also names `Bxdf_model::anisotropic_brdf`, the model whose shading
+reads both roughness components.
+
+The two directional roughnesses come out of MaterialX's own
+`roughness_anisotropy` node - the node a MaterialX surface reaches this value
+through, and the one LightUSD's renderer implements: with `alpha = roughness *
+roughness` and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))` the alphas are
+`min(alpha / aspect, 1)` and `alpha * aspect`. erhe stores roughness rather
+than alpha, so it carries the square roots of those. OpenPBR's emission is a
+`emission_luminance` times an `emission_color`, and erhe's `emissive` is the
+linear color the shader adds, so the luminance scales the color. OpenPBR has
+no opacity threshold, so an opacity below one is blended and a cutout is not
+expressible.
+
+The authored-opinion rule is the UsdPreviewSurface one (I2), and two OpenPBR
+fallbacks are not erhe defaults: `base_color` composes to 0.8 grey and
+`specular_roughness` to 0.3, so both are written as local values whatever the
+file authors. Tydra's `GetPropertyNames` reaches the typed inputs of a
+`UsdPreviewSurface` only - an OpenPBR network's inputs live in the struct
+LightUSD parsed them into - so `read_open_pbr_property_names` asks those
+structs for the inputs erhe reads, the way a GPrim's attributes are asked for
+by name. An `erhe:Material:<name>` custom attribute is a local value the file
+authored and is applied after the network either way, so the erhe-only fields
+no OpenPBR input carries (`reflectance`, the brushed-metal block,
+`use_aniso_control`) keep travelling that way.
+
+An erhe texture graph binds a material slot through a `UsdPreviewSurface`
+input, so the graph bindings are read on the path that reads that shader.
+
 ### Sublayers
 
 A root layer's `subLayers` are the weakest layers of its layer stack (the `L`
@@ -805,8 +850,8 @@ packed under `0/` is the entry `0/texture.png` (a leading `./` is not part of
 the key). The converter reads no texel, so it never tries to open that path;
 its identifier is what reaches `convert_images`, which looks the entry up.
 
-Not yet imported: blend shapes, animation clips, volumes, MaterialX / OpenPBR
-shading networks, and texture filter state.
+Not yet imported: blend shapes, animation clips, volumes, a `.mtlx` document
+as an asset, and texture filter state.
 
 ### Skinning
 
@@ -1453,6 +1498,17 @@ instances are content, that a save writes the arrays back with the prototypes
 as plain children and the instance prims left out, that a moved instance
 persists through the save, and that the round trip settles after the first
 reload the way the primitive-schema one does.
+
+`test/data/open_pbr.usda` holds three materials whose surface is an
+`ND_open_pbr_surface_surfaceshader` network: one with an anisotropic
+roughness, a transmission and an emission, one that also offers a
+`UsdPreviewSurface` with a different roughness, and one whose base color is a
+`UsdUVTexture`. `test_usd_open_pbr.cpp` asserts the two directional
+roughnesses and the BXDF model the anisotropy names, the transmission and the
+luminance-scaled emission, the base layer and the blended opacity, that the
+material offering both networks reads the OpenPBR one, and that a texture on
+`base_color` binds the erhe slot with its wrap modes and its `inputs:scale`
+factor.
 
 `test/data/brushes.usda` holds a `Brushes` scope with two `Brush` prims - one
 binding a material from a `Looks` scope, one not - and a third without a

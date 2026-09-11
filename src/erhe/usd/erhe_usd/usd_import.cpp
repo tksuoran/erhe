@@ -48,6 +48,7 @@
 #include "stage.hh"
 #include "usdGeom.hh"
 #include "usdShade.hh"
+#include "usdMtlx.hh"
 #include "usdLux.hh"
 #include "tydra/render-data.hh"
 #include "tydra/render-data-converter.hh"
@@ -78,6 +79,13 @@
 namespace erhe::usd {
 
 namespace {
+
+// The OpenPBR `base_color` fallback. erhe's own `base_color` default is
+// white, so an OpenPBR network that leaves the input unauthored composes to a
+// value erhe has to write as a local one for the composed result to be the
+// one the file specifies (doc/usd-compatibility-plan.md I2), the way
+// `c_usd_diffuse_color_fallback` is the UsdPreviewSurface one.
+constexpr glm::vec3 c_open_pbr_base_color_fallback{0.8f, 0.8f, 0.8f};
 
 using Tydra_scene     = lightusd::tydra::RenderScene;
 using Tydra_node      = lightusd::tydra::Node;
@@ -1581,6 +1589,7 @@ private:
                 for (std::string& name : name_list) {
                     names.insert(std::move(name));
                 }
+                read_open_pbr_property_names(*prim, names);
             } else if (!read_gprim_property_names(*prim, names) && !error.empty()) {
                 log_usd->warn("USD prim '{}': {}", absolute_path, error);
             }
@@ -1656,6 +1665,69 @@ private:
             read_typed_gprim_property_names<lightusd::GeomCapsule   >(prim, names) ||
             read_typed_gprim_property_names<lightusd::GeomCapsule_1 >(prim, names) ||
             read_typed_gprim_property_names<lightusd::GeomPointInstancer>(prim, names);
+    }
+
+    // The authored input names of an OpenPBR surface Shader prim. Tydra's
+    // GetPropertyNames answers a Shader's `info:id` and its custom properties,
+    // and reaches the typed inputs of a UsdPreviewSurface only: an OpenPBR
+    // network's inputs live in the struct LightUSD parsed them into, so the
+    // ones erhe reads are asked for by name the way
+    // read_typed_gprim_property_names asks a GPrim's. Each is added under the
+    // OpenPBR spelling `apply_open_pbr_surface` asks about, so an Autodesk
+    // Standard Surface - the same knobs under other names, which Tydra
+    // converts into the same shader - answers the same questions.
+    static void read_open_pbr_property_names(const lightusd::Prim& prim, std::set<std::string>& names)
+    {
+        const lightusd::Shader* shader = prim.as<lightusd::Shader>();
+        if (shader == nullptr) {
+            return;
+        }
+        const auto add = [&names](const bool authored, const char* name)
+        {
+            if (authored) {
+                names.insert(std::string{"inputs:"} + name);
+            }
+        };
+        const lightusd::MtlxOpenPBRSurface* mtlx_open_pbr = shader->value.as<lightusd::MtlxOpenPBRSurface>();
+        if (mtlx_open_pbr != nullptr) {
+            add(mtlx_open_pbr->base_color                   .authored(), "base_color");
+            add(mtlx_open_pbr->base_metalness               .authored(), "base_metalness");
+            add(mtlx_open_pbr->specular_roughness           .authored(), "specular_roughness");
+            add(mtlx_open_pbr->specular_roughness_anisotropy.authored(), "specular_roughness_anisotropy");
+            add(mtlx_open_pbr->specular_anisotropy          .authored(), "specular_anisotropy");
+            add(mtlx_open_pbr->specular_ior                 .authored(), "specular_ior");
+            add(mtlx_open_pbr->transmission_weight          .authored(), "transmission_weight");
+            add(mtlx_open_pbr->emission_luminance           .authored(), "emission_luminance");
+            add(mtlx_open_pbr->emission_color               .authored(), "emission_color");
+            add(mtlx_open_pbr->geometry_opacity             .authored(), "geometry_opacity");
+            return;
+        }
+        const lightusd::OpenPBRSurface* open_pbr = shader->value.as<lightusd::OpenPBRSurface>();
+        if (open_pbr != nullptr) {
+            add(open_pbr->base_color                   .authored(), "base_color");
+            add(open_pbr->base_metalness               .authored(), "base_metalness");
+            add(open_pbr->specular_roughness           .authored(), "specular_roughness");
+            add(open_pbr->specular_roughness_anisotropy.authored(), "specular_roughness_anisotropy");
+            add(open_pbr->specular_anisotropy          .authored(), "specular_anisotropy");
+            add(open_pbr->specular_ior                 .authored(), "specular_ior");
+            add(open_pbr->transmission_weight          .authored(), "transmission_weight");
+            add(open_pbr->emission_luminance           .authored(), "emission_luminance");
+            add(open_pbr->emission_color               .authored(), "emission_color");
+            add(open_pbr->opacity                      .authored(), "opacity");
+            return;
+        }
+        const lightusd::MtlxAutodeskStandardSurface* standard = shader->value.as<lightusd::MtlxAutodeskStandardSurface>();
+        if (standard != nullptr) {
+            add(standard->base_color         .authored(), "base_color");
+            add(standard->metalness          .authored(), "base_metalness");
+            add(standard->specular_roughness .authored(), "specular_roughness");
+            add(standard->specular_anisotropy.authored(), "specular_anisotropy");
+            add(standard->specular_IOR       .authored(), "specular_ior");
+            add(standard->transmission       .authored(), "transmission_weight");
+            add(standard->emission           .authored(), "emission_luminance");
+            add(standard->emission_color     .authored(), "emission_color");
+            add(standard->opacity            .authored(), "opacity");
+        }
     }
 
     [[nodiscard]] auto is_authored(const std::string& absolute_path, const std::string& name) -> bool
@@ -2335,6 +2407,152 @@ private:
         return std::string{prim_part.data(), prim_part.size()};
     }
 
+    // Whether erhe carries the `inputs:scale` of the UsdUVTexture a shading
+    // input reads: a color or scalar factor folds it in, a slot with no
+    // factor of its own does not.
+    enum class Texel_scale
+    {
+        carried,
+        not_carried
+    };
+
+    // The texture half of one shading input, shared by the UsdPreviewSurface
+    // and the OpenPBR paths: bind the image to the erhe slot, carry the
+    // UsdUVTexture's wrap modes and its UsdTransform2d onto that slot, and
+    // warn about the texel transform erhe does not carry. An input carrying a
+    // plain value does nothing. The order the slots are applied in is the
+    // order the bindings are recorded in.
+    void apply_slot_texture(
+        const std::size_t                          material_index,
+        erhe::primitive::Material&                 material,
+        erhe::primitive::Material_texture_sampler& slot,
+        const Usd_material_texture_slot            slot_kind,
+        const std::int32_t                         texture_id,
+        const char*                                input_name,
+        const Texel_scale                          texel_scale
+    )
+    {
+        const lightusd::tydra::UVTexture* uv_texture = uv_texture_of(texture_id);
+        if (uv_texture == nullptr) {
+            return;
+        }
+        bind_texture(material_index, slot_kind, texture_id);
+        apply_texture_sampling(material, slot, *uv_texture);
+        warn_about_texel_transform(material.get_name(), input_name, *uv_texture, texel_scale == Texel_scale::carried);
+    }
+
+    // The normal slot: the texture, its sampling, and the texel decode
+    // `texel * scale + bias` that erhe carries for this slot only (the shader
+    // decodes the sampled normal with it).
+    void apply_normal_slot(
+        const std::size_t          material_index,
+        erhe::primitive::Material& material,
+        const std::int32_t         texture_id
+    )
+    {
+        using erhe::primitive::Material;
+        const lightusd::tydra::UVTexture* uv_texture = uv_texture_of(texture_id);
+        if (uv_texture == nullptr) {
+            return;
+        }
+        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        bind_texture(material_index, Usd_material_texture_slot::normal, texture_id);
+        apply_texture_sampling(material, slots.normal, *uv_texture);
+        set_or_clear_value(
+            material,
+            Material::normal_texture_decode_scale_property,
+            glm::vec4{uv_texture->scale[0], uv_texture->scale[1], uv_texture->scale[2], uv_texture->scale[3]}
+        );
+        set_or_clear_value(
+            material,
+            Material::normal_texture_decode_bias_property,
+            glm::vec4{uv_texture->bias[0], uv_texture->bias[1], uv_texture->bias[2], uv_texture->bias[3]}
+        );
+    }
+
+    // erhe has one metallic-roughness slot; a USD surface shader reads the
+    // two channels through separate texture inputs that a glTF-derived file
+    // points at one image. The roughness input names the image when both are
+    // textured, and each input's connection names which channel of it that
+    // input reads.
+    // The two inputs share one erhe slot, so an input that names no texture
+    // of its own while the other one does reads no channel of the bound image:
+    // its plain value stands alone (Texture_channel::none). Without that, a
+    // file that textures roughness and gives metallic a constant would have
+    // metallic modulated by whatever the roughness image holds in the channel
+    // the erhe default names.
+    void apply_metallic_roughness_slot(
+        const std::size_t          material_index,
+        erhe::primitive::Material& material,
+        const std::int32_t         metallic_texture_id,
+        const std::int32_t         roughness_texture_id,
+        const char*                metallic_input_name,
+        const char*                roughness_input_name
+    )
+    {
+        using erhe::primitive::Material;
+        const std::int32_t                slot_texture_id   = (roughness_texture_id >= 0) ? roughness_texture_id : metallic_texture_id;
+        const lightusd::tydra::UVTexture* metallic_texture  = uv_texture_of(metallic_texture_id);
+        const lightusd::tydra::UVTexture* roughness_texture = uv_texture_of(roughness_texture_id);
+        const lightusd::tydra::UVTexture* slot_texture      = uv_texture_of(slot_texture_id);
+        if (slot_texture == nullptr) {
+            return;
+        }
+        const std::string&                          material_name = material.get_name();
+        erhe::primitive::Material_texture_samplers& slots         = material.data.texture_samplers;
+        bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, slot_texture_id);
+        apply_texture_sampling(material, slots.metallic_roughness, *slot_texture);
+        if (metallic_texture != nullptr) {
+            warn_about_texel_transform(material_name, metallic_input_name, *metallic_texture, true);
+            set_or_clear_value(
+                material, Material::metallic_channel_property,
+                connected_channel(*metallic_texture, erhe::primitive::Texture_channel::b, material_name, metallic_input_name)
+            );
+        } else {
+            material.set_value(Material::metallic_channel_property, erhe::primitive::Texture_channel::none);
+        }
+        if (roughness_texture != nullptr) {
+            warn_about_texel_transform(material_name, roughness_input_name, *roughness_texture, true);
+            set_or_clear_value(
+                material, Material::roughness_channel_property,
+                connected_channel(*roughness_texture, erhe::primitive::Texture_channel::g, material_name, roughness_input_name)
+            );
+        } else {
+            material.set_value(Material::roughness_channel_property, erhe::primitive::Texture_channel::none);
+        }
+    }
+
+    // erhe's fragment alpha comes from the base color texture, so an opacity
+    // input is carried only when it reads that same image - the same
+    // UsdUVTexture prim, or another one on the same file, which Tydra gives an
+    // image entry of its own (RoughnessTest.usdz reads `roughness-spec.png`
+    // through two shaders, rgb and a); an opacity map of its own has no erhe
+    // slot to live in.
+    void apply_opacity_channel(
+        erhe::primitive::Material& material,
+        const std::int32_t         opacity_texture_id,
+        const std::int32_t         base_color_texture_id
+    )
+    {
+        using erhe::primitive::Material;
+        const lightusd::tydra::UVTexture* opacity_texture = uv_texture_of(opacity_texture_id);
+        if (opacity_texture == nullptr) {
+            return;
+        }
+        const std::string& material_name = material.get_name();
+        if (!same_texture_image(opacity_texture_id, base_color_texture_id)) {
+            log_usd->warn(
+                "USD material '{}': inputs:opacity reads an image of its own - erhe takes the alpha of the base color texture",
+                material_name
+            );
+            return;
+        }
+        set_or_clear_value(
+            material, Material::opacity_channel_property,
+            connected_channel(*opacity_texture, erhe::primitive::Texture_channel::a, material_name, "opacity")
+        );
+    }
+
     // Only an authored UsdPreviewSurface input becomes a local value
     // (doc/usd-compatibility-plan.md I2). An input the shader leaves at its
     // fallback writes nothing, so the erhe property keeps the ERHE default -
@@ -2362,7 +2580,6 @@ private:
         if (diffuse_texture != nullptr) {
             const glm::vec3 factor{diffuse_texture->scale[0], diffuse_texture->scale[1], diffuse_texture->scale[2]};
             set_or_clear_value(material, Material::base_color_property, factor);
-            warn_about_texel_transform(material_name, "diffuseColor", *diffuse_texture, true);
         } else if (is_authored(shader_path, "inputs:diffuseColor")) {
             material.set_value(
                 Material::base_color_property,
@@ -2381,7 +2598,6 @@ private:
         if (emissive_texture != nullptr) {
             const glm::vec3 factor{emissive_texture->scale[0], emissive_texture->scale[1], emissive_texture->scale[2]};
             set_or_clear_value(material, Material::emissive_property, factor);
-            warn_about_texel_transform(material_name, "emissiveColor", *emissive_texture, true);
         } else if (is_authored(shader_path, "inputs:emissiveColor")) {
             material.set_value(
                 Material::emissive_property,
@@ -2390,14 +2606,12 @@ private:
         }
         if (metallic_texture != nullptr) {
             set_or_clear_value(material, Material::metallic_property, connected_scale(*metallic_texture));
-            warn_about_texel_transform(material_name, "metallic", *metallic_texture, true);
         } else if (is_authored(shader_path, "inputs:metallic")) {
             material.set_value(Material::metallic_property, shader.metallic.value);
         }
         if (roughness_texture != nullptr) {
             const float factor = connected_scale(*roughness_texture);
             set_or_clear_value(material, Material::roughness_property, glm::vec2{factor, factor});
-            warn_about_texel_transform(material_name, "roughness", *roughness_texture, true);
         } else if (is_authored(shader_path, "inputs:roughness")) {
             // erhe's roughness is anisotropic; UsdPreviewSurface has one value.
             material.set_value(Material::roughness_property, glm::vec2{shader.roughness.value, shader.roughness.value});
@@ -2422,106 +2636,234 @@ private:
             material.set_value(Material::blending_mode_property, erhe::primitive::Material_blending_mode::alpha_blend);
         }
 
-        bind_texture(material_index, Usd_material_texture_slot::base_color, shader.diffuseColor.texture_id);
-        bind_texture(material_index, Usd_material_texture_slot::emissive,   shader.emissiveColor.texture_id);
-        bind_texture(material_index, Usd_material_texture_slot::normal,     shader.normal.texture_id);
-        bind_texture(material_index, Usd_material_texture_slot::occlusion,  shader.occlusion.texture_id);
-        // erhe has one metallic-roughness slot; UsdPreviewSurface reads the
-        // two channels through separate texture inputs that a glTF-derived
-        // file points at one image. The roughness input names it when both
-        // are textured.
-        const std::int32_t metallic_roughness_texture_id = (shader.roughness.texture_id >= 0)
-            ? shader.roughness.texture_id
-            : shader.metallic.texture_id;
-        bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, metallic_roughness_texture_id);
-
-        // How each bound texture is sampled: the wrap modes and the
-        // UsdTransform2d of its UsdUVTexture, on the erhe slot the texture
-        // was bound to.
+        // The textures the shader's inputs read, on the erhe slots they belong
+        // to: the image, the wrap modes and the UsdTransform2d of each
+        // UsdUVTexture, and the texel decode of the normal slot.
         erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
-        if (diffuse_texture != nullptr) {
-            apply_texture_sampling(material, slots.base_color, *diffuse_texture);
-        }
-        if (emissive_texture != nullptr) {
-            apply_texture_sampling(material, slots.emissive, *emissive_texture);
-        }
+        apply_slot_texture(
+            material_index, material, slots.base_color, Usd_material_texture_slot::base_color,
+            shader.diffuseColor.texture_id, "diffuseColor", Texel_scale::carried
+        );
+        apply_slot_texture(
+            material_index, material, slots.emissive, Usd_material_texture_slot::emissive,
+            shader.emissiveColor.texture_id, "emissiveColor", Texel_scale::carried
+        );
+        apply_normal_slot(material_index, material, shader.normal.texture_id);
+        apply_slot_texture(
+            material_index, material, slots.occlusion, Usd_material_texture_slot::occlusion,
+            shader.occlusion.texture_id, "occlusion", Texel_scale::not_carried
+        );
+        apply_metallic_roughness_slot(
+            material_index, material,
+            shader.metallic.texture_id, shader.roughness.texture_id,
+            "metallic", "roughness"
+        );
+        // Which channel of the occlusion texture the scalar input reads. USD
+        // names it in the connection; erhe's defaults are glTF's packing, so a
+        // file that follows glTF writes no local value here.
         const lightusd::tydra::UVTexture* occlusion_texture = uv_texture_of(shader.occlusion.texture_id);
-        if (occlusion_texture != nullptr) {
-            apply_texture_sampling(material, slots.occlusion, *occlusion_texture);
-            warn_about_texel_transform(material_name, "occlusion", *occlusion_texture, false);
-        }
-        const lightusd::tydra::UVTexture* metallic_roughness_texture = uv_texture_of(metallic_roughness_texture_id);
-        if (metallic_roughness_texture != nullptr) {
-            apply_texture_sampling(material, slots.metallic_roughness, *metallic_roughness_texture);
-        }
-        // Which channel of the bound texture each scalar input reads. USD
-        // names it in the connection; erhe's defaults are glTF's packing, so
-        // a file that follows glTF writes no local value here.
-        // The two inputs share one erhe slot, so an input that names no
-        // texture of its own while the other one does reads no channel of
-        // the bound image: its plain value stands alone (Texture_channel::
-        // none). Without that, a file that textures roughness and gives
-        // metallic a constant would have metallic modulated by whatever the
-        // roughness image holds in the channel the erhe default names.
-        if (metallic_texture != nullptr) {
-            set_or_clear_value(
-                material, Material::metallic_channel_property,
-                connected_channel(*metallic_texture, erhe::primitive::Texture_channel::b, material_name, "metallic")
-            );
-        } else if (metallic_roughness_texture != nullptr) {
-            material.set_value(Material::metallic_channel_property, erhe::primitive::Texture_channel::none);
-        }
-        if (roughness_texture != nullptr) {
-            set_or_clear_value(
-                material, Material::roughness_channel_property,
-                connected_channel(*roughness_texture, erhe::primitive::Texture_channel::g, material_name, "roughness")
-            );
-        } else if (metallic_roughness_texture != nullptr) {
-            material.set_value(Material::roughness_channel_property, erhe::primitive::Texture_channel::none);
-        }
         if (occlusion_texture != nullptr) {
             set_or_clear_value(
                 material, Material::occlusion_channel_property,
                 connected_channel(*occlusion_texture, erhe::primitive::Texture_channel::r, material_name, "occlusion")
             );
         }
-        // erhe's fragment alpha comes from the base color texture, so an
-        // opacity input is carried only when it reads that same image - the
-        // same UsdUVTexture prim, or another one on the same file, which
-        // Tydra gives an image entry of its own (RoughnessTest.usdz reads
-        // `roughness-spec.png` through two shaders, rgb and a); an opacity
-        // map of its own has no erhe slot to live in.
-        const lightusd::tydra::UVTexture* opacity_texture = uv_texture_of(shader.opacity.texture_id);
-        if (opacity_texture != nullptr) {
-            if (same_texture_image(shader.opacity.texture_id, shader.diffuseColor.texture_id)) {
-                set_or_clear_value(
-                    material, Material::opacity_channel_property,
-                    connected_channel(*opacity_texture, erhe::primitive::Texture_channel::a, material_name, "opacity")
-                );
-            } else {
-                log_usd->warn(
-                    "USD material '{}': inputs:opacity reads an image of its own - erhe takes the alpha of the base color texture",
-                    material_name
-                );
+        apply_opacity_channel(material, shader.opacity.texture_id, shader.diffuseColor.texture_id);
+    }
+
+    // The `info:id` of a Shader prim that is an OpenPBR surface terminal.
+    // Tydra converts each of these into `RenderMaterial::openPBRShader`.
+    [[nodiscard]] static auto is_open_pbr_shader(const lightusd::Prim& prim) -> bool
+    {
+        const lightusd::Shader* shader = prim.as<lightusd::Shader>();
+        if (shader == nullptr) {
+            return false;
+        }
+        return
+            (shader->info_id == "ND_open_pbr_surface_surfaceshader") ||
+            (shader->info_id == "ND_standard_surface_surfaceshader") ||
+            (shader->info_id == "OpenPBRSurface");
+    }
+
+    // The Shader prim carrying the OpenPBR network of a material, the way
+    // `find_surface_shader_path` names the UsdPreviewSurface one: the prim
+    // `outputs:mtlx:surface` connects to when the file authors that terminal,
+    // and the `outputs:surface` prim otherwise - a material whose only
+    // terminal is an OpenPBR shader connects the plain output. A terminal
+    // naming a NodeGraph is resolved to the one Shader child that is an
+    // OpenPBR surface, which is the shape a MaterialX export writes.
+    [[nodiscard]] auto find_open_pbr_shader_path(const std::string& material_absolute_path) -> std::string
+    {
+        const lightusd::Prim* prim = find_prim(material_absolute_path);
+        if (prim == nullptr) {
+            return {};
+        }
+        const lightusd::Material* usd_material = prim->as<lightusd::Material>();
+        if (usd_material == nullptr) {
+            return {};
+        }
+        const std::vector<lightusd::Path>& mtlx_connections    = usd_material->mtlxSurface.get_connections();
+        const std::vector<lightusd::Path>& surface_connections = usd_material->surface.get_connections();
+        const std::vector<lightusd::Path>& connections = mtlx_connections.empty() ? surface_connections : mtlx_connections;
+        if (connections.empty()) {
+            return {};
+        }
+        const lightusd::tstring_view prim_part = connections[0].prim_part();
+        const std::string            shader_path{prim_part.data(), prim_part.size()};
+        const lightusd::Prim*        shader_prim = find_prim(shader_path);
+        if (shader_prim == nullptr) {
+            return {};
+        }
+        if (is_open_pbr_shader(*shader_prim)) {
+            return shader_path;
+        }
+        for (const lightusd::Prim& child : shader_prim->children()) {
+            if (is_open_pbr_shader(child)) {
+                const lightusd::tstring_view element_name = child.element_name();
+                return shader_path + "/" + std::string{element_name.data(), element_name.size()};
+            }
+        }
+        return {};
+    }
+
+    // OpenPBR's two directional roughnesses from `specular_roughness` and the
+    // anisotropy, which is what erhe's `roughness` vec2 holds (the shader
+    // squares each component into the GGX alpha of that tangent direction).
+    // The parameterization is MaterialX's own `roughness_anisotropy` node,
+    // the node a MaterialX surface reaches this value through and the one
+    // LightUSD's renderer implements: with `alpha = roughness * roughness`
+    // and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))`, the two alphas are
+    // `min(alpha / aspect, 1)` and `alpha * aspect`. erhe stores roughness
+    // rather than alpha, so it carries the square roots of those.
+    [[nodiscard]] static auto to_anisotropic_roughness(const float roughness, const float anisotropy) -> glm::vec2
+    {
+        if (anisotropy == 0.0f) {
+            return glm::vec2{roughness, roughness};
+        }
+        const float alpha   = roughness * roughness;
+        const float aspect  = std::sqrt(1.0f - std::clamp(anisotropy, 0.0f, 0.98f));
+        const float alpha_x = std::min(alpha / aspect, 1.0f);
+        const float alpha_y = alpha * aspect;
+        return glm::vec2{std::sqrt(alpha_x), std::sqrt(alpha_y)};
+    }
+
+    // The OpenPBR network Tydra converts into `RenderMaterial::openPBRShader`
+    // onto the erhe material. The authored-opinion rule is the
+    // UsdPreviewSurface one (I2): an input the file leaves at its fallback
+    // writes nothing, except where the OpenPBR fallback is not the erhe
+    // default - `base_color` (0.8 grey against erhe's white) and
+    // `specular_roughness` (0.3 against erhe's 0.5) - which compose as the
+    // fallback and so are written as local values. The erhe-only fields no
+    // OpenPBR input carries (reflectance, the brushed-metal block) keep their
+    // `erhe:Material:<name>` custom-attribute path, which the authored-opinion
+    // pass applies after this one.
+    void apply_open_pbr_surface(
+        const lightusd::tydra::OpenPBRSurfaceShader& shader,
+        const std::string&                           shader_path,
+        const std::size_t                            material_index,
+        erhe::primitive::Material&                   material
+    )
+    {
+        using erhe::primitive::Material;
+        // A connected input takes its value from the texture, so the erhe
+        // factor - which the shader multiplies the sampled texel with - is
+        // the UsdUVTexture's inputs:scale, never the plain value the input
+        // still carries (the UsdPreviewSurface path spells the same rule).
+        const lightusd::tydra::UVTexture* base_color_texture = uv_texture_of(shader.base_color.texture_id);
+        const lightusd::tydra::UVTexture* emission_texture   = uv_texture_of(shader.emission_color.texture_id);
+        const lightusd::tydra::UVTexture* metalness_texture  = uv_texture_of(shader.base_metalness.texture_id);
+        const lightusd::tydra::UVTexture* roughness_texture  = uv_texture_of(shader.specular_roughness.texture_id);
+
+        if (base_color_texture != nullptr) {
+            const glm::vec3 factor{base_color_texture->scale[0], base_color_texture->scale[1], base_color_texture->scale[2]};
+            set_or_clear_value(material, Material::base_color_property, factor);
+        } else if (is_authored(shader_path, "inputs:base_color")) {
+            material.set_value(
+                Material::base_color_property,
+                glm::vec3{shader.base_color.value[0], shader.base_color.value[1], shader.base_color.value[2]}
+            );
+        } else {
+            material.set_value(Material::base_color_property, c_open_pbr_base_color_fallback);
+        }
+
+        if (metalness_texture != nullptr) {
+            set_or_clear_value(material, Material::metallic_property, connected_scale(*metalness_texture));
+        } else if (is_authored(shader_path, "inputs:base_metalness")) {
+            material.set_value(Material::metallic_property, shader.base_metalness.value);
+        }
+
+        // OpenPBR spells an anisotropic surface as one roughness plus an
+        // anisotropy; `specular_roughness_anisotropy` is the OpenPBR input
+        // and `specular_anisotropy` the Autodesk Standard Surface spelling of
+        // the same knob, which Tydra fills from the network it converted.
+        // The composed roughness is a local value in every case, the OpenPBR
+        // fallback (0.3) not being the erhe default.
+        const float roughness = (roughness_texture != nullptr)
+            ? connected_scale(*roughness_texture)
+            : shader.specular_roughness.value;
+        const float anisotropy = is_authored(shader_path, "inputs:specular_roughness_anisotropy")
+            ? shader.specular_roughness_anisotropy.value
+            : shader.specular_anisotropy.value;
+        material.set_value(Material::roughness_property, to_anisotropic_roughness(roughness, anisotropy));
+        // The two roughness components only reach the shading through a BXDF
+        // model that reads both, so an anisotropic network names one.
+        if (anisotropy != 0.0f) {
+            material.set_value(Material::bxdf_model_property, erhe::primitive::Bxdf_model::anisotropic_brdf);
+        }
+
+        if (is_authored(shader_path, "inputs:specular_ior")) {
+            material.set_value(Material::ior_property, shader.specular_ior.value);
+        }
+        // The erhe-only field OpenPBR does carry an input for.
+        if (is_authored(shader_path, "inputs:transmission_weight")) {
+            material.set_value(Material::transmission_property, shader.transmission_weight.value);
+        }
+
+        // OpenPBR's emission is a photometric luminance times a color; erhe's
+        // emissive is the linear color the shader adds, so the luminance
+        // scales the color.
+        const bool emission_authored =
+            (emission_texture != nullptr) ||
+            is_authored(shader_path, "inputs:emission_luminance") ||
+            is_authored(shader_path, "inputs:emission_color");
+        if (emission_authored) {
+            const glm::vec3 emission_color = (emission_texture != nullptr)
+                ? glm::vec3{emission_texture->scale[0], emission_texture->scale[1], emission_texture->scale[2]}
+                : glm::vec3{shader.emission_color.value[0], shader.emission_color.value[1], shader.emission_color.value[2]};
+            set_or_clear_value(material, Material::emissive_property, emission_color * shader.emission_luminance.value);
+        }
+
+        // OpenPBR spells opacity as `geometry_opacity`; a file following the
+        // UsdPreviewSurface habit spells it `opacity`, which LightUSD parses
+        // into the same field.
+        const bool opacity_authored =
+            is_authored(shader_path, "inputs:geometry_opacity") ||
+            is_authored(shader_path, "inputs:opacity");
+        if (opacity_authored) {
+            material.set_value(Material::opacity_property, shader.opacity.value);
+            // OpenPBR has no opacity threshold, so a cutout is not
+            // expressible: an opacity below one is blended.
+            if ((shader.opacity.value < 1.0f) || shader.opacity.is_texture()) {
+                material.set_value(Material::blending_mode_property, erhe::primitive::Material_blending_mode::alpha_blend);
             }
         }
 
-        const lightusd::tydra::UVTexture* normal_texture = uv_texture_of(shader.normal.texture_id);
-        if (normal_texture != nullptr) {
-            apply_texture_sampling(material, slots.normal, *normal_texture);
-            // The normal slot is the one erhe carries the texel transform
-            // for: the shader decodes `texel * scale + bias`.
-            set_or_clear_value(
-                material,
-                Material::normal_texture_decode_scale_property,
-                glm::vec4{normal_texture->scale[0], normal_texture->scale[1], normal_texture->scale[2], normal_texture->scale[3]}
-            );
-            set_or_clear_value(
-                material,
-                Material::normal_texture_decode_bias_property,
-                glm::vec4{normal_texture->bias[0], normal_texture->bias[1], normal_texture->bias[2], normal_texture->bias[3]}
-            );
-        }
+        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        apply_slot_texture(
+            material_index, material, slots.base_color, Usd_material_texture_slot::base_color,
+            shader.base_color.texture_id, "base_color", Texel_scale::carried
+        );
+        apply_slot_texture(
+            material_index, material, slots.emissive, Usd_material_texture_slot::emissive,
+            shader.emission_color.texture_id, "emission_color", Texel_scale::carried
+        );
+        apply_normal_slot(material_index, material, shader.normal.texture_id);
+        apply_metallic_roughness_slot(
+            material_index, material,
+            shader.base_metalness.texture_id, shader.specular_roughness.texture_id,
+            "base_metalness", "specular_roughness"
+        );
+        apply_opacity_channel(material, shader.opacity.texture_id, shader.base_color.texture_id);
     }
 
     void convert_materials()
@@ -2546,7 +2888,41 @@ private:
             material->enable_flag_bits(erhe::Item_flags::show_in_ui);
             m_material_by_path[usd_material.abs_path] = material_index;
 
-            if (usd_material.surfaceShader.has_value()) {
+            // Which surface terminals a Material prim offers is Tydra's
+            // reading of the file; erhe chooses between them. The OpenPBR
+            // network is the richer one - it is the only one that carries
+            // erhe's anisotropic roughness and its transmission - so it is
+            // read wherever it is there, and a material offering both is
+            // named in one line saying so.
+            if (usd_material.openPBRShader.has_value()) {
+                if (usd_material.surfaceShader.has_value()) {
+                    log_usd->info(
+                        "USD material '{}' carries both a UsdPreviewSurface and an OpenPBR network - the OpenPBR network is read",
+                        create_info.name
+                    );
+                    // An erhe texture graph binds a material slot through a
+                    // UsdPreviewSurface input (doc/usd-texture-graphs-plan.md),
+                    // whichever terminal supplies the values, so the bindings
+                    // are read off that shader here too.
+                    read_material_graph_bindings(material_index, find_surface_shader_path(usd_material.abs_path));
+                }
+                // Which of the shader's inputs the file authors is read off
+                // the Shader prim, so a terminal that resolves to none of them
+                // would silently read every input as its fallback.
+                const std::string shader_path = find_open_pbr_shader_path(usd_material.abs_path);
+                if (shader_path.empty()) {
+                    log_usd->warn(
+                        "USD material '{}': the OpenPBR terminal names no Shader prim - every input reads as its fallback",
+                        create_info.name
+                    );
+                }
+                apply_open_pbr_surface(
+                    usd_material.openPBRShader.value(),
+                    shader_path,
+                    material_index,
+                    *material.get()
+                );
+            } else if (usd_material.surfaceShader.has_value()) {
                 const std::string shader_path = find_surface_shader_path(usd_material.abs_path);
                 apply_preview_surface(
                     usd_material.surfaceShader.value(),
@@ -2557,7 +2933,7 @@ private:
                 read_material_graph_bindings(material_index, shader_path);
             } else {
                 log_usd->warn(
-                    "USD material '{}' has no UsdPreviewSurface shader - erhe material defaults are used",
+                    "USD material '{}' has no UsdPreviewSurface and no OpenPBR shader - erhe material defaults are used",
                     create_info.name
                 );
             }

@@ -149,17 +149,35 @@ The names are erhe / geogram's own:
 |---|---|---|
 | `base_color`, `base_color_texture` | `diffuseColor` | a connected input takes its value from the texture, so the erhe factor - which the shader multiplies the texel with - is the texture's `inputs:scale` on the channels that input reads, in both directions. That is what makes a textured `emissiveColor` visible: erhe's emissive factor is zero by default. `diffuseColor` is the one input whose schema fallback (0.18 grey) is not the erhe default, so an unauthored one imports as a local 0.18 and a save authors the effective value whenever it differs from 0.18 - an erhe default white included |
 | `opacity`, `alpha_cutoff`, `blending_mode` | `opacity`, `opacityThreshold` | blend vs mask is a threshold in USD |
-| `roughness` (x), `metallic`, `emissive`, `ior` | `roughness`, `metallic`, `emissiveColor`, `ior` | erhe's anisotropic `roughness.y` has no PreviewSurface input |
+| `roughness` (x), `metallic`, `emissive`, `ior` | `roughness`, `metallic`, `emissiveColor`, `ior` | erhe's anisotropic `roughness.y` has no PreviewSurface input; the OpenPBR row below is where both components come from |
 | `normal_texture`, `normal_texture_scale` | `normal` via `UsdUVTexture` | `normal_texture_scale` is the bumpiness multiplier glTF's `normalTexture.scale` is, and has no USD carrier of its own |
 | `normal_texture_decode_scale`, `normal_texture_decode_bias` | the normal `UsdUVTexture`'s `inputs:scale` / `inputs:bias` | the texel decode, `texel * scale + bias`; the erhe defaults are USD's fallbacks for a normal map, and both are written for every bound normal texture because USD's own attribute fallbacks are not erhe's |
 | `occlusion_texture`, `occlusion_texture_strength` | `occlusion` | |
 | `metallic_roughness_texture` | separate `metallic` / `roughness` reads of one texture (channel outputs) | erhe has one slot for the pair, so the importer takes the image the `roughness` input names and falls back to the `metallic` one |
 | `metallic_channel`, `roughness_channel`, `occlusion_channel`, `opacity_channel` | the `outputs:r` / `g` / `b` / `a` a scalar input connects to | which channel of the slot's texture each scalar input reads. The erhe defaults are glTF's fixed packing (metallic B, roughness G, occlusion R, opacity A), which is what a glTF-derived file authors; the shader indexes the sampled texel with the value, and a save spells the output name from it. An input the file gives a plain value while the other input of the shared metallic-roughness slot is textured reads `Texture_channel::none`: no channel of that image, its own factor alone, and no connection on save. `opacity` reads the base color texture, erhe having no opacity slot of its own, and is connected only where the material names a channel other than alpha; an `inputs:opacity` reading an image of its own is one warning |
-| `reflectance`, `transmission`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface; `OpenPBRSurface` / MaterialX carry anisotropy and transmission | erhe-only fields ride as `erhe:` custom attributes, in the form the qualified-name row of "Property system" gives |
+| `reflectance`, `bxdf_model`, brushed-metal fields, `use_aniso_control` | none in PreviewSurface and none in OpenPBR | erhe-only fields ride as `erhe:` custom attributes, in the form the qualified-name row of "Property system" gives |
 | `<slot>_texture_uv_*` | `UsdTransform2d` | USD composes `in * scale`, then the rotation, then the translation, which is the order the erhe slot transform applies. The erhe transform acts on the flipped texcoord, so the two are converted through `v' = 1 - v` in both directions (`src/erhe/usd/notes.md`, "Texture coordinates"). A save authors a `UsdTransform2d` prim between the material's primvar reader and the slot's `UsdUVTexture` for exactly the slots whose transform is not the identity |
 | `<slot>_texture_wrap_*`, filters | `UsdUVTexture` `wrapS` / `wrapT`; no filter inputs | `repeat` and `mirror` map onto the erhe address mode of the same name; `clamp`, `black` and the `useMetadata` default all become clamp-to-edge, because erhe has no border color. Both are written for every bound texture; a wrap value on a slot with no texture has no `UsdUVTexture` to ride on. The filters ride as `erhe:` custom attributes |
 | a texture image | `UsdUVTexture` `inputs:file` | a file beside the layer, or an entry of the `.usdz` the stage was loaded from: the reader hands the archive entry's bytes over (`Usd_image::bytes`) and the caller decodes those. Radiance `.hdr` is not decoded by either erhe or LightUSD |
 | `double_sided` | `erhe:Material:double_sided` on the `Material` prim | the erhe material's own flag (glTF `material.doubleSided`), which USD has no material input for: `doubleSided` in USD is a property of the geometry prim, and one material can be bound by several prims. The prim's own opinion travels in the geometry `doubleSided` attribute instead (the `Gprim.double_sided` row of "Geometry attributes"), and the renderers take either one as asking for both faces |
+
+
+A `Material` prim can offer a second surface terminal, an `OpenPBRSurface` /
+`ND_open_pbr_surface_surfaceshader` / `ND_standard_surface_surfaceshader`
+network, which is an inline `UsdShade` network in every build
+(`LIGHTUSD_WITH_USDMTLX` only concerns a `.mtlx` document as an asset). It is
+the richer terminal - it carries the two erhe fields `UsdPreviewSurface` has
+no input for - so the importer reads it wherever there is one and names a
+material that offers both. The inputs it carries beyond the rows above:
+
+| erhe `Material` property | USD OpenPBR input | notes |
+|---|---|---|
+| `roughness` (x and y) | `specular_roughness` with `specular_roughness_anisotropy`, or the Standard Surface `specular_anisotropy` | the two directional roughnesses come out of MaterialX's own `roughness_anisotropy` node, which LightUSD's renderer implements: with `alpha = roughness * roughness` and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))` the alphas are `min(alpha / aspect, 1)` and `alpha * aspect`, and erhe carries the square roots of those, storing roughness rather than alpha. An anisotropy that is not zero also names `Bxdf_model::anisotropic_brdf`, the model whose shading reads both components |
+| `transmission` | `transmission_weight` | the one erhe-only material field a surface schema has an input for |
+| `base_color`, `metallic`, `ior` | `base_color`, `base_metalness`, `specular_ior` | `base_color` is the OpenPBR input whose fallback (0.8 grey) is not the erhe default, so an unauthored one imports as a local 0.8 the way `diffuseColor` imports as a local 0.18. `specular_roughness`'s fallback (0.3) is the other one, so a roughness is always local |
+| `emissive` | `emission_color` times `emission_luminance` | OpenPBR's emission is photometric and erhe's `emissive` is the linear color the shader adds, so the luminance scales the color |
+| `opacity`, `blending_mode` | `geometry_opacity` (or `opacity`) | OpenPBR has no opacity threshold, so an opacity below one is blended and a cutout is not expressible |
+| a texture on `base_color`, `emission_color`, `base_metalness`, `specular_roughness`, `geometry_normal` | `UsdUVTexture` | bound to the erhe slot, sampled and channel-read exactly as the `UsdPreviewSurface` rows above say, the two metallic-roughness inputs sharing one slot included |
 
 
 ## Texture node graphs
