@@ -74,10 +74,13 @@ every entry (so an interrupted run keeps what it did), --clear-test-db
 empties it (and exits when no --root is given), and --failing-first orders
 the run by it: `fail` entries first, shortest run first, then `gap` entries
 the same way, then entries the database has not seen in survey order, and
-`pass` entries last. --limit applies after that order, so this runs the
-five quickest known failures:
+`pass` entries last. --last <substring> (repeatable) then moves the entries
+whose path contains it to the very end, keeping their order, so a slow or
+stuck entry stops holding up the coverage the rest of the run gives. --limit
+applies after both, so this runs the five quickest known failures with
+the MaterialX color-space entries deferred:
 
-    py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets>         --record-test-db --failing-first --limit 5
+    py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets>         --record-test-db --failing-first --last ColorSpaceTests/MaterialX --limit 5
 
 OpenUSD reference (--usd-root / ERHE_USD_ROOT)
 ----------------------------------------------
@@ -1794,6 +1797,13 @@ def sort_failing_first(entries: list, db: dict) -> list:
     return [entry for _, entry in sorted(enumerate(entries), key=key)]
 
 
+def sort_last(entries: list, fragments: list) -> list:
+    """Entries whose path contains any fragment move to the end, in the order
+    they had; the rest keep their order."""
+    deferred = [e for e in entries if any(fragment in e["path"] for fragment in fragments)]
+    return [e for e in entries if e not in deferred] + deferred
+
+
 DEFAULT_SHOTS = pathlib.Path("logs/usd_wg_survey")
 DEFAULT_DOC = pathlib.Path("doc/usd-wg-assets.md")
 DEFAULT_TEST_DB = DEFAULT_SHOTS / "test_database.json"
@@ -1984,6 +1994,8 @@ def main() -> int:
                         help="survey only entries whose repo-relative path contains this substring (repeatable)")
     parser.add_argument("--exclude", action="append", default=[],
                         help="skip entries whose repo-relative path contains this substring (repeatable, applied after --only)")
+    parser.add_argument("--last", action="append", default=[],
+                        help="run entries whose repo-relative path contains this substring after every other entry (repeatable; applied after --failing-first, before --limit)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
     parser.add_argument("--eye", type=pathlib.Path, default=DEFAULT_EYE,
@@ -2098,6 +2110,8 @@ def main() -> int:
         entries = [e for e in entries if not any(fragment in e["path"] for fragment in args.exclude)]
     if args.failing_first:
         entries = sort_failing_first(entries, test_db)
+    if args.last:
+        entries = sort_last(entries, args.last)
     if args.limit > 0:
         entries = entries[:args.limit]
     if args.list_entries:
