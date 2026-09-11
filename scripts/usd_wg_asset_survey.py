@@ -69,8 +69,10 @@ Expected results (--expected)
 doc/usd-wg-assets-expected.json is hand-edited and committed. Each item
 names an entry path, the `diagnostics` it reports by design (regular
 expressions matched against the normalized message and the example line),
-optionally `appearance` (a reason: the entry's by-eye gap is expected too)
-and a `reason`. A matched diagnostic keeps its observed level in
+the `gaps` the counts and the frame raise by design (regular expressions
+matched against the verdict's gap text, e.g. an empty mesh's "no mesh
+loaded"), optionally `appearance` (a reason: the entry's by-eye gap is
+expected too) and a `reason`. A matched diagnostic keeps its observed level in
 `level_observed` and no longer counts against the verdict or the Gaps
 section, so an entry whose only issues are expected is `works`. Every run,
 --from-summary and --eye-note re-apply the file to the whole summary, so an
@@ -1303,7 +1305,13 @@ def gather_gaps(records: list) -> list:
     """Each distinct cause once, with the number of assets it affects."""
     causes = {}
 
+    expected_gap_patterns = []
+
     def add(key: str, level: str, asset: str, example: str) -> None:
+        # A cause the entry's expected results name (the `gaps` patterns of
+        # doc/usd-wg-assets-expected.json) is by design, not a gap.
+        if any(pattern.search(key) for pattern in expected_gap_patterns):
+            return
         slot = causes.setdefault(key, {"cause": key, "level": level, "assets": set(), "example": example})
         slot["assets"].add(asset)
         if (level == "error") and (slot["level"] == "warning"):
@@ -1311,6 +1319,7 @@ def gather_gaps(records: list) -> list:
 
     for record in records:
         asset = record["path"]
+        expected_gap_patterns = [re.compile(text) for text in record.get("expected_gap_patterns", [])]
         if record["crash"]:
             add("editor crash while loading the file", "failure", asset, record.get("crash_detail", ""))
         if (not record["loaded"]) and (not record["crash"]):
@@ -1370,10 +1379,11 @@ def load_expected_results(path: pathlib.Path) -> dict:
     """The committed expected results, keyed by the entry's repo-relative path.
 
     Each item names the diagnostics (regular expressions matched against the
-    normalized message and the example line) the entry reports by design, and
-    may declare its by-eye appearance gap expected too. A matched diagnostic
-    and an expected appearance gap no longer count against the verdict, so an
-    entry whose only issues are expected is `works`.
+    normalized message and the example line) the entry reports by design, the
+    `gaps` (regular expressions matched against the verdict's gap text and the
+    Gaps section's cause text) the counts and the frame raise by design, and
+    may declare its by-eye appearance gap expected too. None of those count
+    against the verdict, so an entry whose only issues are expected is `works`.
     """
     if not path.is_file():
         return {}
@@ -1381,6 +1391,7 @@ def load_expected_results(path: pathlib.Path) -> dict:
     for item in json.loads(path.read_text(encoding="utf-8")):
         expected[item["path"]] = {
             "diagnostics": [re.compile(pattern) for pattern in item.get("diagnostics", [])],
+            "gaps": [pattern for pattern in item.get("gaps", [])],
             "appearance": item.get("appearance", ""),
             "reason": item.get("reason", ""),
         }
@@ -1401,6 +1412,8 @@ def apply_expected_results(record: dict, expected: dict) -> bool:
             restored = True
     record.pop("expected_appearance", None)
     record.pop("expected_reason", None)
+    record.pop("expected_gap", None)
+    record.pop("expected_gap_patterns", None)
     item = expected.get(record["path"])
     if item is None:
         record["expected_diagnostics"] = 0
@@ -1420,8 +1433,16 @@ def apply_expected_results(record: dict, expected: dict) -> bool:
     record["expected_reason"] = item["reason"]
     if item["appearance"]:
         record["expected_appearance"] = item["appearance"]
+    gaps = item.get("gaps", [])
+    if gaps:
+        record["expected_gap_patterns"] = list(gaps)
     if (not record.get("crash")) and record.get("loaded"):
         record["verdict"] = provisional_verdict(record)
+        if verdict_class(record["verdict"]) == "works, gap":
+            gap_text = record["verdict"][len("works, gap:"):].strip()
+            if any(re.search(pattern, gap_text) for pattern in gaps):
+                record["expected_gap"] = gap_text
+                record["verdict"]      = "works"
     return True
 
 
@@ -1813,6 +1834,8 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
         out.append("| --- | --- | --- |")
         for record in expected_rows:
             what = f"{record.get('expected_diagnostics', 0)} diagnostic line(s)"
+            if record.get("expected_gap"):
+                what += f"; the gap `{record['expected_gap']}`"
             if record.get("expected_appearance"):
                 what += "; the by-eye appearance gap"
             out.append("| {} | {} | {} |".format(cell(record["path"]), cell(what), cell(record["expected_reason"])))

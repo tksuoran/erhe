@@ -6,5 +6,12 @@
   ],
   "appearance": "the test's own README states that Hydra cannot honor colorSpace metadata on the file input, colorSpace:name on the input, or colorSpace:name on an enclosing scope; erhe follows sourceColorSpace only, as Storm does",
   "reason": "column 5 authors the illegal sourceColorSpace token `lin_ap1_scene` on purpose; LightUSD warns and keeps the fallback `auto`, which is what OpenUSD does with it (asset README)"
+ },
+ {
+  "path": "test_assets/schemaTests/usdGeom/meshes/empty_mesh/empty.usda",
+  "gaps": [
+   "no mesh loaded"
+  ],
+  "reason": "the file is one Mesh prim with no attributes at all; its README states the render is empty as expected"
  }
 ]
