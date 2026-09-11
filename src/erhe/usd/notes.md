@@ -710,7 +710,9 @@ left out are converted one by one with
 before the materials are converted. The converter moves its own texture
 and image lists into the render scene, so an extra conversion fills them again
 from index zero: the new entries are appended and the ids shifted by what was
-already there, for the six UsdPreviewSurface texture slots erhe reads.
+already there, for every UsdPreviewSurface input erhe reads (the six
+texture slots and `opacity`; `shift_texture_ids` lists them, and an input
+left out keeps an id into the textures of the material appended before it).
 
 How a bound texture is sampled and how its texels are read comes across with
 it:

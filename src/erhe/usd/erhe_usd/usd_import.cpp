@@ -5137,21 +5137,24 @@ private:
         }
     }
 
-    // The texture ids of the six UsdPreviewSurface inputs erhe reads
+    // The texture ids of the seven UsdPreviewSurface inputs erhe reads
     // (apply_preview_surface), moved by what the render scene already held.
+    // Every input apply_preview_surface reads is listed: an input left out
+    // keeps an id into the textures of the material appended before it.
     static void shift_texture_ids(Tydra_material& material, const std::size_t texture_offset)
     {
         if (!material.surfaceShader.has_value() || (texture_offset == 0)) {
             return;
         }
         lightusd::tydra::PreviewSurfaceShader& shader = material.surfaceShader.value();
-        const std::array<std::int32_t*, 6> texture_ids{
+        const std::array<std::int32_t*, 7> texture_ids{
             &shader.diffuseColor.texture_id,
             &shader.emissiveColor.texture_id,
             &shader.normal.texture_id,
             &shader.occlusion.texture_id,
             &shader.roughness.texture_id,
-            &shader.metallic.texture_id
+            &shader.metallic.texture_id,
+            &shader.opacity.texture_id
         };
         for (std::int32_t* texture_id : texture_ids) {
             if (*texture_id >= 0) {

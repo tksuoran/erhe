@@ -115,6 +115,25 @@ TEST_F(Texture_channels_import, a_gltf_packed_material_keeps_the_defaults)
     EXPECT_EQ(fallbacks->get_opacity_channel(),   erhe::primitive::Texture_channel::a);
 }
 
+// A material bound by no mesh of the file itself (here: by carriers whose
+// meshes come from a reference) is converted after Tydra's pass and appended
+// to the render scene, its texture ids moved past what the scene already
+// held. The second such material reads its opacity through the same texture
+// as its base color, so its channel is the one the connection names and not
+// the erhe default.
+TEST(Texture_channels_appended, every_input_of_an_appended_material_reads_its_own_texture)
+{
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_result         result = load(test_data_path("appended_materials.usda"), root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    erhe::primitive::Material* first  = material_at(root, "World/materials/first");
+    erhe::primitive::Material* second = material_at(root, "World/materials/second");
+    ASSERT_NE(first,  nullptr);
+    ASSERT_NE(second, nullptr);
+    EXPECT_EQ(first->get_opacity_channel(),  erhe::primitive::Texture_channel::a);
+    EXPECT_EQ(second->get_opacity_channel(), erhe::primitive::Texture_channel::r);
+}
+
 TEST_F(Texture_channels_import, an_input_that_names_no_texture_reads_no_channel)
 {
     // UsdPreviewSurface reads metallic and roughness through separate inputs

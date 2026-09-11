@@ -1,0 +1,70 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "materials"
+    {
+        def Material "first"
+        {
+            token outputs:surface.connect = </World/materials/first/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float3 outputs:rgb
+                float outputs:a
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/first/texture.outputs:rgb>
+                float inputs:opacity.connect = </World/materials/first/texture.outputs:a>
+                token outputs:surface
+            }
+        }
+
+        def Material "second"
+        {
+            token outputs:surface.connect = </World/materials/second/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float3 outputs:rgb
+                float outputs:r
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/second/texture.outputs:rgb>
+                float inputs:opacity.connect = </World/materials/second/texture.outputs:r>
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "FirstCarrier" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+        references = @override_target.usda@
+    )
+    {
+        rel material:binding = </World/materials/first>
+    }
+
+    def Xform "SecondCarrier" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+        references = @override_target.usda@
+    )
+    {
+        rel material:binding = </World/materials/second>
+    }
+}
