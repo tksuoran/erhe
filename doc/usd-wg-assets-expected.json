@@ -104,5 +104,12 @@
    "bounds are off the composed stage's"
   ],
   "reason": "a parser robustness test: twelve of its sixteen meshes declare `points` with a type no renderer can read as points, on purpose (README); Storm renders the four Vec3f-typed ones and so does erhe (Storm match 0.84), while the composed count and bounds take in the other twelve Mesh prims and their authored extents"
+ },
+ {
+  "path": "test_assets/TextureTransformTest/TextureTransformTest.usd",
+  "diagnostics": [
+   "Primvar `tangents` has no authored value"
+  ],
+  "reason": "every one of the twelve meshes authors `float4[] primvars:tangents = []` - an empty array left behind by the glTF conversion (the glTF source carries no TANGENT attribute); an empty primvar has no data to convert, so LightUSD's Tydra skips it with this warning (a deliberate OpenUSD-compat path in render-data-mesh.cc whose comment names this very asset), and OpenUSD skips it just as silently - Storm renders the same frame (storm_match 0.99, bounds_deviation 0.0)"
  }
 ]
