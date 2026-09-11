@@ -18,7 +18,7 @@ The script launches and relaunches the editor itself, writes the raw
 per-entry data to `logs/usd_wg_survey/summary.json` and regenerates this
 document from it (`--from-summary` regenerates without a run). Its
 docstring states which files of a folder count as entry assets.
-A run restricted to some entries (`--only`, `--limit`) surveys those and
+A run restricted to some entries (`--only`, `--exclude`, `--limit`) surveys those and
 keeps every other entry's record, so the document always states the whole
 survey; each record carries the date it was surveyed on. The by-eye
 verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which

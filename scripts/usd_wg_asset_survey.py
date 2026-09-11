@@ -54,9 +54,15 @@ only --eye-note writes:
     py -3 scripts/usd_wg_asset_survey.py --eye-note <entry path> "<what the
         capture shows>" [--eye-gap "<the cause it names>"]
 
-A run restricted with --only or --limit surveys those entries and keeps every
-other entry's record, so summary.json and the document always state the whole
-survey; each record carries the date it was surveyed on.
+A run restricted with --only, --exclude or --limit surveys those entries and
+keeps every other entry's record, so summary.json and the document always
+state the whole survey; each record carries the date it was surveyed on.
+--only keeps entries whose repo-relative path contains any given substring,
+--exclude then drops entries whose path contains any given substring; both
+are repeatable, so `--only test_assets --exclude full_assets` or
+`--exclude intent-vfx` select by group folder:
+
+    py -3 scripts/usd_wg_asset_survey.py --only test_assets --exclude McUsd
 
 OpenUSD reference (--usd-root / ERHE_USD_ROOT)
 ----------------------------------------------
@@ -1587,7 +1593,7 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
     out.append("per-entry data to `logs/usd_wg_survey/summary.json` and regenerates this")
     out.append("document from it (`--from-summary` regenerates without a run). Its")
     out.append("docstring states which files of a folder count as entry assets.")
-    out.append("A run restricted to some entries (`--only`, `--limit`) surveys those and")
+    out.append("A run restricted to some entries (`--only`, `--exclude`, `--limit`) surveys those and")
     out.append("keeps every other entry's record, so the document always states the whole")
     out.append("survey; each record carries the date it was surveyed on. The by-eye")
     out.append("verdicts of the next section come from `doc/usd-wg-assets-eye.json`, which")
@@ -1910,6 +1916,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="survey only the first N entries")
     parser.add_argument("--only", action="append", default=[],
                         help="survey only entries whose repo-relative path contains this substring (repeatable)")
+    parser.add_argument("--exclude", action="append", default=[],
+                        help="skip entries whose repo-relative path contains this substring (repeatable, applied after --only)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
     parser.add_argument("--eye", type=pathlib.Path, default=DEFAULT_EYE,
@@ -2005,6 +2013,8 @@ def main() -> int:
     entries = collect_entries(root, args.max_per_folder)
     if args.only:
         entries = [e for e in entries if any(fragment in e["path"] for fragment in args.only)]
+    if args.exclude:
+        entries = [e for e in entries if not any(fragment in e["path"] for fragment in args.exclude)]
     if args.limit > 0:
         entries = entries[:args.limit]
     if args.list_entries:
