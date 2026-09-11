@@ -94,7 +94,9 @@ every entry (so an interrupted run keeps what it did), --clear-test-db
 empties it (and exits when no --root is given), and --failing-first orders
 the run by it: `fail` entries first, shortest run first, then `gap` entries
 the same way, then entries the database has not seen in survey order, and
-`pass` entries last. --unrecorded-first then moves the entries the database
+`pass` entries last. --stop-on-gap ends the run after the first entry
+whose verdict is not `works`, after recording it, so one gap at a time can
+be fixed and the run resumed. --unrecorded-first then moves the entries the database
 has no result for to the front, keeping their order (with --failing-first
 that puts them ahead of the recorded failures), so a new or cleared
 database fills in before known results are re-run. --last <substring>
@@ -827,10 +829,12 @@ def diagnostics(lines: list) -> list:
 
 
 # The fraction of the captured frame that is inside the 3D viewport, clear of
-# the docked ImGui windows around it. The whole frame is never flat - the
-# editor's own UI fills the left half - so "renders nothing" is decided on
-# this region alone.
-VIEWPORT_REGION = (0.52, 0.10, 0.98, 0.95)
+# the docked ImGui windows around it, of the view-axis widget in the
+# viewport's top-right corner and of the tool buttons down its right edge.
+# The whole frame is never flat - the editor's own UI fills the left half and
+# the axis widget is always drawn - so "renders nothing" is decided on this
+# region alone.
+VIEWPORT_REGION = (0.52, 0.20, 0.92, 0.95)
 
 
 def screenshot_stats(path: pathlib.Path) -> dict:
@@ -2147,6 +2151,8 @@ def main() -> int:
                         help="run the entries the test database has no result for before the recorded ones (applied after --failing-first, before --last)")
     parser.add_argument("--last", action="append", default=[],
                         help="run entries whose repo-relative path contains this substring after every other entry (repeatable; applied after --failing-first, before --limit)")
+    parser.add_argument("--stop-on-gap", action="store_true",
+                        help="stop after the first entry whose verdict is not `works` (the summary, document and test database still record what ran)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
     parser.add_argument("--from-summary", action="store_true", help="regenerate the document from summary.json, no editor")
     parser.add_argument("--eye", type=pathlib.Path, default=DEFAULT_EYE,
@@ -2341,6 +2347,9 @@ def main() -> int:
                     record["crash"] = True
                     record["crash_detail"] = "editor died while closing leftover scenes"
                     record["verdict"] = "crash"
+            if args.stop_on_gap and (verdict_class(record["verdict"]) != "works"):
+                print(f"      stopping at the first gap/failure (--stop-on-gap): {entry['path']}", flush=True)
+                break
             if record["crash"] or record.get("unanswered", False) or (not editor.alive()):
                 print("      editor down; restarting", flush=True)
                 editor.stop()
@@ -2350,7 +2359,7 @@ def main() -> int:
 
     # A run restricted to some entries keeps every entry it did not survey, so
     # the summary and the document always state the whole survey.
-    subset = bool(args.only) or bool(args.exclude) or (args.limit > 0)
+    subset = bool(args.only) or bool(args.exclude) or (args.limit > 0) or (len(records) < len(entries))
     if subset and summary_path.is_file():
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     else:
