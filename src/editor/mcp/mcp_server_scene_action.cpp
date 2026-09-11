@@ -3017,13 +3017,20 @@ auto Mcp_server::action_frame_scene(const json& args) -> std::string
     }
     const std::shared_ptr<Scene_root> scene_root = scene_root_raw->shared_from_this();
 
-    // The union world AABB of every mesh of the scene.
+    // The union world AABB of every mesh the scene renders: an inactive mesh
+    // (its own `active` or `defined` opinion, or an ancestor's) is out of
+    // render, pick and simulation and out of this frame, the way usdview's
+    // frame-all and UsdGeomBBoxCache skip a prim the default traversal
+    // predicate does not reach.
     erhe::math::Aabb bounds{};
     std::size_t mesh_count = 0;
     erhe::scene::Xformable* root_node = scene_root->get_scene().get_root_node().get();
     if (root_node != nullptr) {
         root_node->for_each<erhe::scene::Mesh>(
             [&bounds, &mesh_count](erhe::scene::Mesh& mesh) -> bool {
+                if (!mesh.is_active()) {
+                    return true;
+                }
                 const erhe::math::Aabb mesh_bounds = mesh.get_aabb_world();
                 if (mesh_bounds.is_valid()) {
                     bounds.include(mesh_bounds.min);
