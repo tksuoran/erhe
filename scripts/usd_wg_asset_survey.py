@@ -750,8 +750,17 @@ LOG_LINE = re.compile(r"^\[\d\d:\d\d:\d\d\.\d+\]\s+\[([A-Z])\]\s+\[([^\]]+)\]\s*
 # outer frames added, so the cause itself starts after it.
 SOURCE_LOCATION = re.compile(r"[A-Za-z]:[\\/][^\s]*?\.(?:cc|cpp|hh|hpp|h|inc):(?:[A-Za-z_][A-Za-z0-9_:<> ]*)?\(\):\d+\s+")
 
-# Messages that report how this build is configured, not what the file needs.
-BENIGN = [re.compile(r"Threading is disabled for this build", re.IGNORECASE)]
+# Messages that report how this build is configured or how this script talks
+# to the editor, not what the file needs.
+BENIGN = [
+    re.compile(r"Threading is disabled for this build", re.IGNORECASE),
+    # The editor drops an MCP request whose HTTP client has already given up
+    # (mcp_server.cpp). That happens when a large asset keeps the main thread
+    # busy past the client's timeout; the script reissues the call and reads
+    # the answer, so the line reports this script's request timing, not the
+    # file.
+    re.compile(r"MCP server: dropped expired .* before processing"),
+]
 
 # Volatile parts of a message, so two messages about different prims
 # deduplicate into one gap.
