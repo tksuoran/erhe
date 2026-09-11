@@ -38,5 +38,9 @@ def Xform "World"
         def Xform "extra"
         {
         }
+        def "arm"
+        {
+            token visibility = "invisible"
+        }
     }
 }

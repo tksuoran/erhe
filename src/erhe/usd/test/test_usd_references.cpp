@@ -665,12 +665,20 @@ TEST_F(Override_import, an_over_on_a_material_is_read_as_an_override)
 }
 
 // referencing prim adds a prim to the reference, which is not an override.
-TEST_F(Override_import, a_def_below_a_carrier_is_not_an_override)
+// A typed `def` below a carrier adds structure and is dropped; a typeless
+// `def` names an existing child of the target and is its override, the way
+// an `over` is.
+TEST_F(Override_import, a_typed_def_below_a_carrier_is_dropped_and_a_typeless_def_is_an_override)
 {
     ASSERT_TRUE(result.error.empty()) << result.error;
     ASSERT_EQ(result.data.references.size(), 2u);
     EXPECT_EQ(result.data.references[1].stage_path, "/World/DefCarrier");
-    EXPECT_TRUE(result.data.references[1].overrides.empty());
+    const std::vector<erhe::scene::Instance_override>& overrides = result.data.references[1].overrides;
+    ASSERT_EQ(overrides.size(), 1u);
+    EXPECT_EQ(overrides[0].relative_path, "arm");
+    const std::string* visible = find_override_value(overrides[0], "visible");
+    ASSERT_NE(visible, nullptr);
+    EXPECT_EQ(*visible, "false");
 }
 
 // One carrier holding one instance, whose interior items name their template

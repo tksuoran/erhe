@@ -4432,9 +4432,13 @@ private:
     // the referencing prim is the sparse override of one instance item, at
     // the path it has below the carrier. LightUSD does not report which layer
     // an opinion on a composed prim came from, so the composed layer's own prim
-    // specs are what is asked; a `def` below a referencing prim adds structure
-    // to a reference, which is out of scope (plan section 5), so it is named
-    // in a warning and dropped.
+    // specs are what is asked. A typeless `def` below a referencing prim names
+    // no type and so adds nothing the target does not already have: it is
+    // the override of the child of that name, exactly as an `over` is (the
+    // usd-wg inherit_and_specialize.usda authors `def "source"` over a
+    // referenced Cube to recolor it). A typed `def` adds structure to a
+    // reference, which is out of scope (plan section 5), so it is named in a
+    // warning and dropped.
     [[nodiscard]] auto read_instance_overrides(const std::string& absolute_path) -> std::vector<erhe::scene::Instance_override>
     {
         std::vector<erhe::scene::Instance_override> overrides;
@@ -4455,7 +4459,10 @@ private:
     {
         std::string defined_names;
         for (const lightusd::PrimSpec& child : spec.children()) {
-            if (child.specifier() != lightusd::Specifier::Over) {
+            const bool is_override =
+                (child.specifier() == lightusd::Specifier::Over) ||
+                ((child.specifier() == lightusd::Specifier::Def) && child.typeName().empty());
+            if (!is_override) {
                 if (!defined_names.empty()) {
                     defined_names += ", ";
                 }
@@ -4475,7 +4482,7 @@ private:
         }
         if (!defined_names.empty()) {
             log_usd->warn(
-                "USD prim '{}': the referencing layer defines prims over the reference ({}) - a reference protects its structure, so they are dropped",
+                "USD prim '{}': the referencing layer defines typed prims over the reference ({}) - a reference protects its structure, so they are dropped",
                 absolute_path,
                 defined_names
             );

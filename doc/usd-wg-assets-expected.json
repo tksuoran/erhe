@@ -8,16 +8,25 @@
   "reason": "column 5 authors the illegal sourceColorSpace token `lin_ap1_scene` on purpose; LightUSD warns and keeps the fallback `auto`, which is what OpenUSD does with it (asset README)"
  },
  {
+  "path": "test_assets/foundation/stage_composition/inherit_and_specialize.usda",
+  "diagnostics": [
+   "inherits from '.*', which is not a class prim - it becomes no style"
+  ],
+  "reason": "the inherits and specializes arcs target a def Cube, and both inheriting prims author every inherited opinion locally (displayColor, translate), so the arcs change nothing visible; composing them is future work (doc/usd-compatibility-plan.md section 6); Storm match 0.95"
+ },
+ {
   "path": "test_assets/foundation/stage_composition/payload/payload_invalid.usda",
   "diagnostics": [
-   "Prefab source file not found"
+   "Prefab source file not found",
+   "failed to load reference target"
   ],
   "reason": "the file payloads a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved arc and composes nothing for it, and so does erhe"
  },
  {
   "path": "test_assets/foundation/stage_composition/references/reference_invalid.usda",
   "diagnostics": [
-   "Prefab source file not found"
+   "Prefab source file not found",
+   "failed to load reference target"
   ],
   "reason": "the file references a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved arc and composes nothing for it, and so does erhe"
  },
@@ -25,21 +34,26 @@
   "path": "test_assets/foundation/stage_composition/references_prim/reference_prim_in_other_file.usda",
   "diagnostics": [
    "Prefab '.*': prim '.*' is not in",
-   "Prefab source file not found"
+   "Prefab source file not found",
+   "failed to load reference target",
+   "produced no nodes - not caching"
   ],
   "reason": "two of the three prim references name a prim or a file that does not exist, on purpose (README); the existing one composes and the other two are reported unresolved, as OpenUSD does"
  },
  {
   "path": "test_assets/foundation/stage_composition/references_prim/reference_prim_in_same_file.usda",
   "diagnostics": [
-   "Prefab '.*': prim '.*' is not in"
+   "Prefab '.*': prim '.*' is not in",
+   "failed to load reference target",
+   "produced no nodes - not caching"
   ],
-  "reason": "one of the two internal prim references names a prim that does not exist, on purpose (README); the existing one composes and the other is reported unresolved, as OpenUSD does"
+  "reason": "both internal prim references name prims that do not exist: `Cube_with_invalid_reference` on purpose (README), and `Cube_with_reference` by an asset defect - it references </World/cube> while the file defines `Cube` (paths are case-sensitive); OpenUSD resolves neither and renders one cube, as erhe does (Storm match 0.98)"
  },
  {
   "path": "test_assets/foundation/stage_composition/subLayer/sublayer_invalid.usda",
   "diagnostics": [
-   "not found in path"
+   "not found in path",
+   "Composite subLayers failed"
   ],
   "reason": "the file sublayers a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved layer and composes nothing for it, and so does erhe"
  },

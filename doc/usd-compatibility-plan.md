@@ -582,6 +582,11 @@ section 3 except where named.
   (inactive or overridden prims still framed), the four internal-reference
   tests (0.19), scaled_extent, vehicleVariants (0.11). Each is measured
   against pxr's composed bounds and not yet diagnosed.
+- `inherits` and `specializes` arcs whose target is not a `class` prim
+  (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
+  a style only of a class prim, so such an arc composes nothing and is
+  warned about; the surveyed file overrides every inherited opinion locally,
+  so nothing visible depends on it there.
 - Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
   "Texture node graphs"): Tydra fails a material whose input connects to a
   `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
