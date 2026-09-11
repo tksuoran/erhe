@@ -249,5 +249,34 @@
    "Main loop STALLED"
   ],
   "reason": "the scene rings 2000 copies of simpleAsset around the origin, natively instanced and through 28 PointInstancers, and arrives as 9862 prims and 2000 meshes that take 92 s to settle, long enough for the main-loop watchdog to report the tick stuck in `raytrace: BVH commit` and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which now names these scenes; a known limitation, not a by-design result. The geometry is right: the bounds match the composed stage exactly (deviation 0.0) and the Storm render of the same view matches at 0.95. The material lines are the asset's own structure meeting the first item of section 5, which puts structural edits inside a reference out of scope: `assets/simpleAsset/mtl.usd` authors `prepend references = @./geo.usd@` on `/simpleAsset` and defines the `mtl` scope holding both materials as a child of that same referencing prim, so erhe drops the scope and then the bindings that name it, and the proxy cubes render with the default material. pxr reads the composed binding as `/__Prototype_1/mtl/proxy_material`, whose UsdPreviewSurface carries `inputs:diffuseColor = (0.1077, 0.9012, 0.0382)`; the reference render shows the same grey erhe does (every pixel of logs/usd_wg_survey/storm/intent-vfx_scenes_simpleAssetScene.usd.png is neutral), so nothing but that green is lost here"
+ },
+ {
+  "path": "intent-vfx/scenes/teapotScene.usd",
+  "diagnostics": [
+   "has protoIndex .* out of range",
+   "the referencing layer defines typed prims over the reference",
+   "does not exist in Prim .*\\(GeomSubset\\)",
+   "names no item of the instance",
+   "Main loop STALLED",
+   "breadcrumb t="
+  ],
+  "gaps": [
+   "Main loop STALLED"
+  ],
+  "reason": "the scene rings 945 teapots around the origin through 23 PointInstancers and arrives as 8535 prims, which take 16 s to settle and the whole load long enough for the main-loop watchdog to report the tick stuck and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which names these scenes. The protoIndex lines are the sublayer relationship item of the same section: `teapotScene_layoutOverrides.usd` prepends the three coloured prototypes to each instancer's `prototypes` and `teapotScene_layout.usd` prepends the single plain one, and LightUSD's sublayer merge admits a weaker opinion only when it is stored as a path vector, so pxr reads four targets on `/Scene/ring008/instancer_teapot008` (`red_teapot, green_teapot, blue_teapot, teapot`, measured with UsdGeom.PointInstancer) where erhe reads three and skips every instance whose `protoIndices` entry is 3, 2816 of them. The material lines are the first item of section 5, which puts structural edits inside a reference out of scope: `assets/teapot/mtl.usd` authors `prepend references = @./geo.usd@` on `/teapot` and defines the `mtl` scope holding the material as a child of that same referencing prim, so erhe drops the scope, and the teapots that do arrive render with the default material where Storm renders them red, green, blue and grey. The override line is that same binding, whose path crosses a second reference inside the instance (the nested-override item of section 6). The GeomSubset lines are Tydra's animation scan (`render-data-anim.cc` `ExtractPrimPropertyAnimation`) failing to read `indices`, which carries nothing animatable, the way the vehicle kit's subsets fail on `elementType`; the mesh converts whole, measured over MCP on the asset alone: 2472 facets and 1286 vertices in one primitive. The placement is right - the bounds match the composed stage exactly"
+ },
+ {
+  "path": "intent-vfx/scenes/teapotScene_layout.usd",
+  "diagnostics": [
+   "the referencing layer defines typed prims over the reference",
+   "does not exist in Prim .*\\(GeomSubset\\)",
+   "names no item of the instance",
+   "Main loop STALLED",
+   "breadcrumb t="
+  ],
+  "gaps": [
+   "Main loop STALLED"
+  ],
+  "reason": "the layout layer alone rings 1000 teapots around the origin through 23 PointInstancers and arrives as 8808 prims that take 101 s to settle, long enough for the main-loop watchdog to report the tick stuck and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which names these scenes. The bounds match the composed stage exactly and the Storm render of the same view matches at 0.91. The material lines are the first item of section 5, which puts structural edits inside a reference out of scope: `assets/teapot/mtl.usd` authors `prepend references = @./geo.usd@` on `/teapot` and defines the `mtl` scope holding the material as a child of that same referencing prim, so erhe drops the scope and the teapots render with the default material. The override line is that same layer's `over \"geo\" { over \"default\" { over \"Body\" } }`, which binds the dropped material and whose path crosses a second reference inside the instance - the nested-override item of section 6. The GeomSubset lines are Tydra's animation scan (`render-data-anim.cc` `ExtractPrimPropertyAnimation`) failing to read `indices`, which carries nothing animatable, the way the vehicle kit's subsets fail on `elementType`; the mesh converts whole, measured over MCP on the asset alone: 2472 facets and 1286 vertices in one primitive"
  }
 ]

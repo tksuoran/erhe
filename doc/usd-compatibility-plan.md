@@ -610,6 +610,33 @@ section 3 except where named.
   on the tick thread. A shape-to-meshes index maintained at the change
   sites, a hover that does not trace while a load is in flight, and the
   proxy build on the deferred path are the fixes, in that order.
+- Relationship targets a weaker sublayer contributes as a single path:
+  LightUSD's `CombinePrimSpecRec` (`src/composition.cc`) merges two layers'
+  `prepend` / `append` relationship opinions only when both are stored as a
+  path vector, and a single-target `prepend rel foo = </path>` is stored as a
+  path, so the weaker layer's target is dropped and the stronger layer's list
+  stands alone. The intent-vfx `scenes/teapotScene.usd` composes each
+  instancer's `prototypes` from two of its sublayers -
+  `teapotScene_layoutOverrides.usd` prepends the three coloured prototypes and
+  `teapotScene_layout.usd` prepends the single plain one - so pxr reads four
+  targets where erhe reads three, and every instance whose `protoIndices`
+  entry names the fourth is skipped, 2816 of them over the file's 23
+  instancers. The same merge puts the weaker layer's prepended targets before
+  the stronger's where USD puts the stronger's first, which would misname a
+  prototype even once the single-path opinion is admitted. Both go with a fork
+  fix, next to the two LightUSD limits above.
+- An override path that crosses a reference inside an instance: a carrier's
+  overrides are recorded as the paths USD composes them at, and X1 gives the
+  clone of an arc's target one level more than USD, which
+  `erhe::scene::find_instance_item` skips for the carrier's own clone and not
+  for a nested carrier deeper down. The intent-vfx teapot asset is the shape:
+  `assets/teapot/mtl.usd` authors `over "geo" { over "default" { over "Body" }
+  }` on the prim that references `geo.usd`, whose `default` scope references
+  `geo/UtahTeapot.usd` in turn, so the item the override names sits at
+  `teapot/geo/default/UtahTeapot/Body` and the lookup of `geo/default/Body`
+  misses it with a warning per carrier. Closing it means resolving an override
+  path segment by segment and looking through a `Prefab_instance` carrier's
+  clone at each step rather than only at the first.
 - Composition authored inside a variant block: a reference or payload arc
   authored on a variant (usd-wg `full_assets/Teapot/Teapot_Geometry.usd`
   prepends the reference to `UtahTeapot.usd` on its `Utah` variant), and a
