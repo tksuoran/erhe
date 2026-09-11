@@ -73,10 +73,35 @@
   "reason": "the file authors an upAxis value USD does not allow, on purpose (README: 'one invalid value'); Hydra applies no up-axis transform to the geometry and usdview reads the token as Y, which is what erhe renders too (Storm match 0.94)"
  },
  {
+  "path": "test_assets/schemaTests/usdGeom/extent/scaled_extent.usda",
+  "gaps": [
+   "bounds are off the composed stage's"
+  ],
+  "reason": "both cubes author a wrong `extent` on purpose (0.1 and 1.0 for 0.5 cubes, README 'Scaled Extent'); UsdGeomBBoxCache trusts the authored extent, so the composed bounds are the wrong ones while erhe bounds the actual points; Storm match 0.83"
+ },
+ {
   "path": "test_assets/schemaTests/usdGeom/meshes/empty_mesh/empty.usda",
   "gaps": [
    "no mesh loaded"
   ],
   "reason": "the file is one Mesh prim with no attributes at all; its README states the render is empty as expected"
+ },
+ {
+  "path": "test_assets/schemaTests/usdGeom/meshes/normals_types/normalsTypes.usda",
+  "diagnostics": [
+   "Attribute `normals` declared with a non-conformant type"
+  ],
+  "reason": "a parser robustness test: sixteen of its seventeen meshes declare `normals` with a type the schema does not give it, on purpose (README); LightUSD reports each and keeps the value as a custom property, and all 17 meshes load and render"
+ },
+ {
+  "path": "test_assets/schemaTests/usdGeom/meshes/points_types/pointsTypes.usda",
+  "diagnostics": [
+   "Attribute `points` declared with a non-conformant type"
+  ],
+  "gaps": [
+   "of the .* composed meshes loaded",
+   "bounds are off the composed stage's"
+  ],
+  "reason": "a parser robustness test: twelve of its sixteen meshes declare `points` with a type no renderer can read as points, on purpose (README); Storm renders the four Vec3f-typed ones and so does erhe (Storm match 0.84), while the composed count and bounds take in the other twelve Mesh prims and their authored extents"
  }
 ]

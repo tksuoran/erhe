@@ -249,13 +249,16 @@ def bounds_deviation(record: dict):
         # the editor's skinned bounds are not: no comparison to make.
         return None
     scale = float(record.get("composed_meters_per_unit") or 1.0) or 1.0
+    z_up = (record.get("composed_up_axis") or "Y") == "Z"
     corners = []
     for x in (erhe_min[0], erhe_max[0]):
         for y in (erhe_min[1], erhe_max[1]):
             for z in (erhe_min[2], erhe_max[2]):
-                if (record.get("composed_up_axis") or "Y") == "Z":
-                    x, y, z = x, -z, y    # inverse of R_x(-90 deg): (x, y, z) -> (x, -z, y)
-                corners.append((x / scale, y / scale, z / scale))
+                # Inverse of R_x(-90 deg): erhe (x, y, z) -> stage (x, -z, y).
+                # New names: rebinding the loop variables here would corrupt
+                # the outer loops' values for the corners that follow.
+                stage_x, stage_y, stage_z = (x, -z, y) if z_up else (x, y, z)
+                corners.append((stage_x / scale, stage_y / scale, stage_z / scale))
     back_min = [min(c[i] for c in corners) for i in range(3)]
     back_max = [max(c[i] for c in corners) for i in range(3)]
     diagonal = sum((stage_max[i] - stage_min[i]) ** 2 for i in range(3)) ** 0.5
