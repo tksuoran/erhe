@@ -1020,4 +1020,17 @@ public:
 // values, not exceptions.
 [[nodiscard]] auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result;
 
+// Where each prim of `arguments` lands on the stage, by the item it is: the
+// paths pass one of save_usda() assigns, without writing anything. The writer
+// decides a prim's path from the tree, the identifier spelling of its name,
+// the sibling-unique suffix it may need and the `World` prim that gathers a
+// scene's top-level prims when there is more than one of them, so a caller
+// that has to name a prim in what it writes INTO the file - the editor's
+// scene block naming the prim a graph drives - plans first, fills its own
+// state with these paths, and hands the same arguments to save_usda(), which
+// plans identically and so lands every prim where this said it would. The
+// paths are stage paths (a leading `/`); a prim the write leaves out is
+// absent from the map.
+[[nodiscard]] auto plan_usd_prim_paths(const Usd_save_arguments& arguments) -> std::map<const erhe::Item_base*, std::string>;
+
 } // namespace erhe::usd

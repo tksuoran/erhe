@@ -410,6 +410,48 @@ TEST(Usd_identifier, colliding_names_are_suffixed)
     EXPECT_TRUE(find_node(loaded.data, "World").operator bool());
 }
 
+// A caller that names a prim in what it writes into the file plans the paths
+// first; the plan is what the write then lands, the `World` wrapper, the
+// identifier spelling and the sibling-unique suffix included.
+TEST(Usd_prim_plan, planned_paths_are_the_paths_the_write_lands)
+{
+    const std::shared_ptr<erhe::scene::Node> root  = std::make_shared<erhe::scene::Xform>("root");
+    const std::shared_ptr<erhe::scene::Node> a     = std::make_shared<erhe::scene::Xform>("a.b");
+    const std::shared_ptr<erhe::scene::Node> b     = std::make_shared<erhe::scene::Xform>("a b");
+    const std::shared_ptr<erhe::scene::Node> child = std::make_shared<erhe::scene::Xform>("deep child");
+    for (const std::shared_ptr<erhe::scene::Node>& node : {a, b, child}) {
+        node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
+    }
+    a->Hierarchy::set_parent(root);
+    b->Hierarchy::set_parent(root);
+    child->Hierarchy::set_parent(a);
+
+    const std::filesystem::path         path = temporary_path("planned_paths.usda");
+    const erhe::usd::Usd_save_arguments save_arguments{.path = path, .root_node = root};
+
+    const std::map<const erhe::Item_base*, std::string> planned = erhe::usd::plan_usd_prim_paths(save_arguments);
+    ASSERT_EQ(planned.count(a.get()),     1u);
+    ASSERT_EQ(planned.count(b.get()),     1u);
+    ASSERT_EQ(planned.count(child.get()), 1u);
+    EXPECT_EQ(planned.at(a.get()),     "/World/a_b");
+    EXPECT_EQ(planned.at(b.get()),     "/World/a_b_1");
+    EXPECT_EQ(planned.at(child.get()), "/World/a_b/deep_child");
+
+    const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
+    ASSERT_TRUE(save.error.empty()) << save.error;
+
+    const std::shared_ptr<erhe::scene::Node> reload_root = std::make_shared<erhe::scene::Xform>("reload_root");
+    const erhe::usd::Usd_load_arguments      load_arguments{.path = path, .root_node = reload_root, .mesh_layer_id = 0};
+    const erhe::usd::Usd_load_result         loaded = erhe::usd::load_usd(load_arguments);
+    ASSERT_TRUE(loaded.error.empty()) << loaded.error;
+
+    // The reloaded tree carries the planned names, so a path the plan gave is
+    // the path the reloaded item has.
+    EXPECT_TRUE(find_node(loaded.data, "a_b").operator bool());
+    EXPECT_TRUE(find_node(loaded.data, "a_b_1").operator bool());
+    EXPECT_TRUE(find_node(loaded.data, "deep_child").operator bool());
+}
+
 } // anonymous namespace
 
 TEST_F(Authored_round_trip, double_and_matrix_survive_as_custom_attributes)

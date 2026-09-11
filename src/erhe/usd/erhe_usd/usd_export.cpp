@@ -463,6 +463,20 @@ public:
     std::vector<Plan_prim>           children;
 };
 
+// What pass one of the write decides: the prims with their paths, the name
+// the stage's `defaultPrim` takes, and whether the top-level prims were
+// gathered under the `World` prim that plays the erhe root's part.
+class Prim_plan final
+{
+public:
+    std::vector<Plan_prim> prims;
+    std::string            default_prim_name;
+    bool                   wrapped{false};
+    // False when there was nothing to plan (no root node); the error is on
+    // the result the exporter was given.
+    bool                   planned{false};
+};
+
 // One skeleton the writer authors (doc/usd-compatibility-plan.md K1): the
 // prim that is the pivot of at least one skin, that skin's joints in
 // `joints` order, and the bind transform each joint is written with. The
@@ -747,7 +761,12 @@ public:
     {
     }
 
-    void write()
+    // Pass one alone: where every prim of the tree lands on the stage. A
+    // caller that has to know a prim's path before the file exists - a scene
+    // block entry naming a prim - plans first, fills what it fills, and hands
+    // the same arguments to the write, which plans the same way again and so
+    // lands the same paths.
+    void plan(Prim_plan& out_plan)
     {
         ERHE_PROFILE_FUNCTION();
 
@@ -820,16 +839,61 @@ public:
         // names and the wrapper decision below is made, and a mesh binds its
         // material by that path, so the whole tree is planned before
         // anything is written.
-        std::vector<Plan_prim> plan;
-        Name_scope             top_level_names;
+        std::vector<Plan_prim>& plan = out_plan.prims;
+        Name_scope              top_level_names;
         plan_children(*m_arguments.root_node.get(), glm::mat4{1.0f}, top_level_names, plan);
 
         // Several top-level prims are gathered under one Xform that plays the
         // erhe root's part, so the stage still names one defaultPrim.
-        const bool        wrap              = (plan.size() != 1);
-        const std::string default_prim_name = wrap ? std::string{c_world_prim_name} : plan.front().name;
-        assign_paths(plan, wrap ? fmt::format("/{}", c_world_prim_name) : std::string{});
+        out_plan.wrapped           = (plan.size() != 1);
+        out_plan.default_prim_name = out_plan.wrapped ? std::string{c_world_prim_name} : plan.front().name;
+        assign_paths(plan, out_plan.wrapped ? fmt::format("/{}", c_world_prim_name) : std::string{});
         record_resource_paths(plan);
+        out_plan.planned = true;
+    }
+
+    // The planned path of every prim the tree holds, by the item it is: what
+    // `plan_usd_prim_paths` hands the caller.
+    void collect_planned_paths(std::map<const erhe::Item_base*, std::string>& out_paths)
+    {
+        Prim_plan prim_plan;
+        plan(prim_plan);
+        collect_planned_paths_of(prim_plan.prims, out_paths);
+    }
+
+    static void collect_planned_paths_of(
+        const std::vector<Plan_prim>&                 prims,
+        std::map<const erhe::Item_base*, std::string>& out_paths
+    )
+    {
+        for (const Plan_prim& prim : prims) {
+            if (prim.item != nullptr) {
+                out_paths[static_cast<const erhe::Item_base*>(prim.item)] = prim.path;
+            }
+            collect_planned_paths_of(prim.children, out_paths);
+            for (const Plan_variant_prim& variant_prim : prim.variant_prims) {
+                if (variant_prim.prim) {
+                    if (variant_prim.prim->item != nullptr) {
+                        out_paths[static_cast<const erhe::Item_base*>(variant_prim.prim->item)] = variant_prim.prim->path;
+                    }
+                    collect_planned_paths_of(variant_prim.prim->children, out_paths);
+                }
+            }
+        }
+    }
+
+    void write()
+    {
+        ERHE_PROFILE_FUNCTION();
+
+        Prim_plan prim_plan;
+        plan(prim_plan);
+        if (!prim_plan.planned) {
+            return;
+        }
+        std::vector<Plan_prim>& plan              = prim_plan.prims;
+        const bool              wrap              = prim_plan.wrapped;
+        const std::string&      default_prim_name = prim_plan.default_prim_name;
 
         // Pass two: the prims themselves.
         lightusd::Stage             stage;
@@ -2887,6 +2951,16 @@ private:
         } else if (usd_type == "color4f") {
             const std::vector<float> v = parse_usd_float_tuple(text, 4);
             attribute.set_value(lightusd::value::color4f{v[0], v[1], v[2], v[3]});
+        } else if (usd_type == "float3") {
+            // A geometry graph's vector parameters - a translation, a scale, a
+            // centre - are quantities, not colors, so the caller names them
+            // `float3` / `float4` where a texture graph names a color
+            // (doc/usd_compatibility.md, "Geometry node graphs").
+            const std::vector<float> v = parse_usd_float_tuple(text, 3);
+            attribute.set_value(lightusd::value::float3{v[0], v[1], v[2]});
+        } else if (usd_type == "float4") {
+            const std::vector<float> v = parse_usd_float_tuple(text, 4);
+            attribute.set_value(lightusd::value::float4{v[0], v[1], v[2], v[3]});
         } else {
             if (usd_type != "string") {
                 add_warning(
@@ -4538,6 +4612,17 @@ auto save_usda(const Usd_save_arguments& arguments) -> Usd_save_result
     Exporter        exporter{arguments, result};
     exporter.write();
     return result;
+}
+
+auto plan_usd_prim_paths(const Usd_save_arguments& arguments) -> std::map<const erhe::Item_base*, std::string>
+{
+    ERHE_PROFILE_FUNCTION();
+
+    std::map<const erhe::Item_base*, std::string> paths;
+    Usd_save_result                               result{};
+    Exporter                                      exporter{arguments, result};
+    exporter.collect_planned_paths(paths);
+    return paths;
 }
 
 auto get_usd_authored_as(const std::string_view owner, const std::string_view name, const Native_property_form form) -> std::string

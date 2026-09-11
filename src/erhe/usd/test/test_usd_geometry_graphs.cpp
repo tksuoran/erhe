@@ -262,6 +262,27 @@ TEST_F(Geometry_graphs_import, the_pin_and_parameter_types_are_read_as_authored)
     EXPECT_EQ(graph->outputs[0].source_node, "Transform");
 }
 
+// A vector parameter of a geometry node is a quantity, so it takes the
+// `float3` / `float4` spelling a texture graph's color parameter does not
+// (doc/usd_compatibility.md, "Geometry node graphs").
+TEST_F(Geometry_graphs_import, a_vector_parameter_is_read_as_float3_or_float4)
+{
+    const erhe::usd::Usd_node_graph* graph = find_graph(loaded.data, "/World/Graph_Meshes/Terrain");
+    ASSERT_NE(graph, nullptr);
+    const erhe::usd::Usd_node_graph_node* transform = find_node(*graph, "Transform");
+    ASSERT_NE(transform, nullptr);
+
+    const erhe::usd::Usd_node_graph_parameter* pivot = find_parameter(*transform, "pivot");
+    ASSERT_NE(pivot, nullptr);
+    EXPECT_EQ(pivot->usd_type, "float3");
+    EXPECT_EQ(pivot->value,    "(1, 2, 3)");
+
+    const erhe::usd::Usd_node_graph_parameter* weights = find_parameter(*transform, "weights");
+    ASSERT_NE(weights, nullptr);
+    EXPECT_EQ(weights->usd_type, "float4");
+    EXPECT_EQ(weights->value,    "(0.25, 0.5, 0.75, 1)");
+}
+
 TEST_F(Geometry_graphs_import, the_result_child_is_the_graphs_evaluated_geometry)
 {
     const erhe::usd::Usd_node_graph* graph = find_graph(loaded.data, "/World/Graph_Meshes/Terrain");
@@ -352,6 +373,8 @@ TEST_F(Geometry_graphs_export, the_pin_types_are_written_as_they_were_read)
     EXPECT_TRUE(has_line_with(lines, "float4 inputs:tint"));
     EXPECT_TRUE(has_line_with(lines, "matrix4d inputs:matrix"));
     EXPECT_TRUE(has_line_with(lines, "float inputs:size = 2.5"));
+    EXPECT_TRUE(has_line_with(lines, "float3 inputs:pivot = (1, 2, 3)"));
+    EXPECT_TRUE(has_line_with(lines, "float4 inputs:weights = (0.25, 0.5, 0.75, 1)"));
 }
 
 // The written prims read back as the records they were - the result geometry

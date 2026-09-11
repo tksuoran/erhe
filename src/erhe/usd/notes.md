@@ -642,7 +642,8 @@ The format is read before the children for that reason. The tokens are
   the file, as the typed attribute alone.
 - A parameter travels as its USD type and the USD literal spelling of its
   value (`float` `1.5`, `int` `3`, `bool` `true`, `token` / `string`
-  `"name"`, `float2` `(1, 2)`, `color3f` / `color4f`). `erhe::usd` knows no
+  `"name"`, `float2` `(1, 2)`, `color3f` / `color4f`, `float3` / `float4`
+  for a tuple that is a quantity rather than a color). `erhe::usd` knows no
   node vocabulary: the caller decides which USD type a parameter takes, and
   the writer authors exactly the (type, text) pair it is handed. A value with
   no USD form - a gradient, a curve - travels as its text in a `string`, one
@@ -966,7 +967,16 @@ than an `xformOp` or a `SkelAnimation` array, and `Ts` splines.
 `save_usda(const Usd_save_arguments&) -> Usd_save_result` takes erhe content
 rather than a `Usd_data` - the caller hands the writer the scene it holds -
 and reports failures as values. `sanitize_usd_identifier(name)` is public
-because the same spelling rule decides what an item is called on a stage.
+because the same spelling rule decides what an item is called on a stage, and
+`plan_usd_prim_paths(const Usd_save_arguments&)` runs the write's pass one
+alone and hands back each item's planned stage path. A caller that has to name
+a prim in what it writes INTO the file (the editor's scene block naming the
+prim a geometry graph drives, or the prim a variant selection is on) plans
+first, fills its own state with those paths, then hands the same arguments to
+`save_usda`, which plans identically and lands every prim where the plan said
+it would - the `World` wrapper, the identifier spelling and the sibling-unique
+suffix included. The two calls plan the same tree twice; the plan is a walk
+over the tree with no file work in it.
 
 - Prim layout. The root node is not a prim: an erhe item path excludes the
   root's own name (M1), so the root's children are the stage's top-level

@@ -31,6 +31,8 @@ def Xform "World"
                 float3 inputs:translation
                 float4 inputs:tint
                 matrix4d inputs:matrix
+                float3 inputs:pivot = (1, 2, 3)
+                float4 inputs:weights = (0.25, 0.5, 0.75, 1)
                 token outputs:geometry
             }
 
