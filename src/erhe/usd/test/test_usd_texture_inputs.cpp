@@ -112,6 +112,14 @@ TEST_F(Texture_inputs_import, a_color_texture_scale_becomes_the_slot_factor)
     EXPECT_NEAR(emissive.z, 1.0f, 1e-5f);
 }
 
+// An opacity input read through a second UsdUVTexture on the base color's
+// file is the same image: the channel it names reaches the material, where
+// an image of its own would have no erhe slot.
+TEST_F(Texture_inputs_import, an_opacity_texture_on_the_base_color_file_names_its_channel)
+{
+    EXPECT_EQ(material->get_value(erhe::primitive::Material::opacity_channel_property), erhe::primitive::Texture_channel::r);
+}
+
 TEST_F(Texture_inputs_import, the_normal_slot_carries_the_texel_decode)
 {
     const glm::vec4 scale = material->get_value(erhe::primitive::Material::normal_texture_decode_scale_property);

@@ -76,10 +76,19 @@ def Xform "root"
                 float3 outputs:rgb
             }
 
+            def Shader "opacity_texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </root/materials/Sampled/uv_transform.outputs:result>
+                float outputs:r
+            }
+
             def Shader "surface"
             {
                 uniform token info:id = "UsdPreviewSurface"
                 color3f inputs:diffuseColor.connect = </root/materials/Sampled/base_color_texture.outputs:rgb>
+                float inputs:opacity.connect = </root/materials/Sampled/opacity_texture.outputs:r>
                 color3f inputs:emissiveColor.connect = </root/materials/Sampled/emissive_texture.outputs:rgb>
                 normal3f inputs:normal.connect = </root/materials/Sampled/normal_texture.outputs:rgb>
                 float inputs:metallic = 0

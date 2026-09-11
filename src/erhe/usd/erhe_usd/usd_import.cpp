@@ -2122,6 +2122,37 @@ private:
         return image_index;
     }
 
+    // Whether two render-scene textures read the same image: the same image
+    // entry, or two entries on one asset (Tydra gives each UsdUVTexture prim
+    // an image entry of its own). Asked of the render scene, not of the erhe
+    // image list: a material appended after Tydra's pass has textures the
+    // erhe list does not hold yet.
+    [[nodiscard]] auto same_texture_image(const std::int32_t texture_id_a, const std::int32_t texture_id_b) const -> bool
+    {
+        if ((texture_id_a < 0) || (texture_id_b < 0)) {
+            return false;
+        }
+        const std::size_t index_a = static_cast<std::size_t>(texture_id_a);
+        const std::size_t index_b = static_cast<std::size_t>(texture_id_b);
+        if ((index_a >= m_scene->textures.size()) || (index_b >= m_scene->textures.size())) {
+            return false;
+        }
+        const std::int64_t image_a = m_scene->textures[index_a].texture_image_id;
+        const std::int64_t image_b = m_scene->textures[index_b].texture_image_id;
+        if ((image_a < 0) || (image_b < 0)) {
+            return false;
+        }
+        if (image_a == image_b) {
+            return true;
+        }
+        const std::size_t image_index_a = static_cast<std::size_t>(image_a);
+        const std::size_t image_index_b = static_cast<std::size_t>(image_b);
+        if ((image_index_a >= m_scene->images.size()) || (image_index_b >= m_scene->images.size())) {
+            return false;
+        }
+        return m_scene->images[image_index_a].asset_identifier == m_scene->images[image_index_b].asset_identifier;
+    }
+
     // A value that equals the property's default is not written: a local
     // value is an authored value (doc/property-system.md D32).
     template <typename T>
@@ -2447,11 +2478,14 @@ private:
             );
         }
         // erhe's fragment alpha comes from the base color texture, so an
-        // opacity input is carried only when it reads that same image; an
-        // opacity map of its own has no erhe slot to live in.
+        // opacity input is carried only when it reads that same image - the
+        // same UsdUVTexture prim, or another one on the same file, which
+        // Tydra gives an image entry of its own (RoughnessTest.usdz reads
+        // `roughness-spec.png` through two shaders, rgb and a); an opacity
+        // map of its own has no erhe slot to live in.
         const lightusd::tydra::UVTexture* opacity_texture = uv_texture_of(shader.opacity.texture_id);
         if (opacity_texture != nullptr) {
-            if (image_of(shader.opacity.texture_id) == image_of(shader.diffuseColor.texture_id)) {
+            if (same_texture_image(shader.opacity.texture_id, shader.diffuseColor.texture_id)) {
                 set_or_clear_value(
                     material, Material::opacity_channel_property,
                     connected_channel(*opacity_texture, erhe::primitive::Texture_channel::a, material_name, "opacity")
