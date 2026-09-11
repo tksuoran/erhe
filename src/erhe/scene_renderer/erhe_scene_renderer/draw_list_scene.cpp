@@ -469,18 +469,23 @@ void write_transform_fields(std::byte* record, const Primitive_struct& offsets, 
 // is in the object's own list and the id it holds IS the slot. A miss means R3
 // was violated for a registered object - a plan bug - and rendering the wrong
 // material silently is exactly the class of failure this design removes, so it
-// aborts rather than falling back.
+// aborts rather than falling back. A primitive with no material names one of
+// the set's reserved default slots: the vertex-colored one when its mesh
+// authored vertex colors (they are then its albedo), the plain one otherwise.
 void write_slot_fields(
-    std::byte*                         record,
-    const Primitive_struct&            offsets,
-    const Draw_list_object&            object,
-    const Material_set&                material_set,
-    const erhe::scene::Mesh&           mesh,
-    const erhe::scene::Mesh_primitive& mesh_primitive
+    std::byte*                          record,
+    const Primitive_struct&             offsets,
+    const Draw_list_object&             object,
+    const Material_set&                 material_set,
+    const erhe::scene::Mesh&            mesh,
+    const erhe::scene::Mesh_primitive&  mesh_primitive,
+    const erhe::primitive::Buffer_mesh* buffer_mesh
 )
 {
     const erhe::primitive::Material* material       = mesh_primitive.material.get();
-    uint32_t                         material_index = 0u;
+    uint32_t                         material_index = ((buffer_mesh != nullptr) && buffer_mesh->has_vertex_colors)
+        ? Material_set::vertex_colored_default_material_slot_index
+        : Material_set::default_material_slot_index;
     if (material != nullptr) {
         bool found = false;
         for (const Material_slot_id& id : object.material_slots) {
@@ -544,12 +549,12 @@ void Draw_list_scene::write_entry_record(const Draw_list_object& object, const D
     // color / size: pass-dependent, patched by Primitive_buffer::update() per
     // draw; zero here.
     std::memcpy(record + offsets.lightmap_scale_offset, &mesh_primitive.lightmap_uv_scale_offset, sizeof(glm::vec4));
-    write_slot_fields(record, offsets, object, m_material_set, *mesh, mesh_primitive);
-    std::memcpy(record + offsets.base_vertex, &entry.base_vertex, sizeof(uint32_t));
     const erhe::primitive::Primitive*   primitive   = mesh_primitive.primitive.get();
     // The variant the entry's draw parameters were baked from, not a fresh
     // choice: the quantization AABB has to match the vertices being drawn.
     const erhe::primitive::Buffer_mesh* buffer_mesh = (primitive != nullptr) ? primitive->get_renderable_mesh(entry.variant) : nullptr;
+    write_slot_fields(record, offsets, object, m_material_set, *mesh, mesh_primitive, buffer_mesh);
+    std::memcpy(record + offsets.base_vertex, &entry.base_vertex, sizeof(uint32_t));
     write_position_quantization_fields(record, offsets, buffer_mesh);
 }
 
@@ -576,7 +581,10 @@ void Draw_list_scene::write_object_gpu_slots(const uint32_t object_index)
     for (const Draw_list_entry_location& location : object.locations) {
         const Draw_list_entry& entry = m_draw_lists[location.draw_list_index].entries[location.entry_index];
         ERHE_VERIFY(entry.mesh_primitive_index < mesh_primitives.size());
-        write_slot_fields(get_record(location), offsets, object, m_material_set, *mesh, mesh_primitives[entry.mesh_primitive_index]);
+        const erhe::scene::Mesh_primitive&  mesh_primitive = mesh_primitives[entry.mesh_primitive_index];
+        const erhe::primitive::Primitive*   primitive      = mesh_primitive.primitive.get();
+        const erhe::primitive::Buffer_mesh* buffer_mesh    = (primitive != nullptr) ? primitive->get_renderable_mesh(entry.variant) : nullptr;
+        write_slot_fields(get_record(location), offsets, object, m_material_set, *mesh, mesh_primitive, buffer_mesh);
     }
     object.joint_slot = mesh->skin ? mesh->skin->skin_data.joint_buffer_index : 0u;
 }

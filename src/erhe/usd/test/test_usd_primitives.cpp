@@ -7,6 +7,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
@@ -261,6 +262,72 @@ TEST_F(Primitive_schema_import, display_color_reaches_every_corner)
     const std::shared_ptr<erhe::geometry::Geometry> ball_geometry = geometry_of(*ball);
     ASSERT_TRUE(ball_geometry.operator bool());
     EXPECT_FALSE(ball_geometry->get_attributes().corner_color_0.try_get(0).has_value());
+}
+
+// A `Mesh` prim's constant `primvars:displayColor` (one value for the whole
+// mesh) reaches Tydra as the render mesh's `displayColor`, not as a vertex
+// color array; it colors every corner all the same, and a mesh without one
+// carries no corner color - which is what tells an unbound mesh whose colors
+// are its albedo from one that renders the default look.
+TEST(Mesh_display_color, a_constant_display_color_reaches_every_corner)
+{
+    std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("root");
+    const erhe::usd::Usd_load_result result = load(std::filesystem::path{ERHE_USD_TEST_DATA_DIR} / "display_color_mesh.usda", root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    const erhe::scene::Mesh* frame = find_mesh(root, "Frame");
+    ASSERT_NE(frame, nullptr);
+    const std::shared_ptr<erhe::geometry::Geometry> geometry = geometry_of(*frame);
+    ASSERT_TRUE(geometry.operator bool());
+    const GEO::Mesh& geo_mesh = geometry->get_mesh();
+    ASSERT_GT(geo_mesh.facet_corners.nb(), 0u);
+    for (GEO::index_t corner = 0; corner < geo_mesh.facet_corners.nb(); ++corner) {
+        const std::optional<GEO::vec4f> color = geometry->get_attributes().corner_color_0.try_get(corner);
+        ASSERT_TRUE(color.has_value()) << "corner " << corner;
+        EXPECT_NEAR(color.value().x, 0.7f, 1e-6f);
+        EXPECT_NEAR(color.value().y, 0.0f, 1e-6f);
+        EXPECT_NEAR(color.value().z, 0.7f, 1e-6f);
+        EXPECT_NEAR(color.value().w, 1.0f, 1e-6f);
+    }
+
+    const erhe::scene::Mesh* plain = find_mesh(root, "Plain");
+    ASSERT_NE(plain, nullptr);
+    const std::shared_ptr<erhe::geometry::Geometry> plain_geometry = geometry_of(*plain);
+    ASSERT_TRUE(plain_geometry.operator bool());
+    EXPECT_FALSE(plain_geometry->get_attributes().corner_color_0.try_get(0).has_value());
+}
+
+// The soup build (a subdividing mesh) says the same through its vertex format:
+// a color attribute when the mesh authored a color, none otherwise
+// (Buffer_mesh::has_vertex_colors reads the format).
+TEST(Mesh_display_color, the_soup_format_carries_color_only_when_authored)
+{
+    std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("root");
+    const erhe::usd::Usd_load_result result = load(std::filesystem::path{ERHE_USD_TEST_DATA_DIR} / "display_color_mesh.usda", root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+
+    const auto soup_of = [](const erhe::scene::Mesh* mesh) -> std::shared_ptr<erhe::primitive::Triangle_soup> {
+        const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh->get_primitives();
+        if ((primitives.size() != 1) || !primitives.front().primitive) {
+            return {};
+        }
+        return primitives.front().primitive->render_shape ? primitives.front().primitive->render_shape->get_triangle_soup() : std::shared_ptr<erhe::primitive::Triangle_soup>{};
+    };
+    const auto has_color = [](const erhe::primitive::Triangle_soup& soup) -> bool {
+        return soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
+    };
+
+    const erhe::scene::Mesh* frame = find_mesh(root, "FrameSoup");
+    ASSERT_NE(frame, nullptr);
+    const std::shared_ptr<erhe::primitive::Triangle_soup> frame_soup = soup_of(frame);
+    ASSERT_TRUE(frame_soup.operator bool());
+    EXPECT_TRUE(has_color(*frame_soup));
+
+    const erhe::scene::Mesh* plain = find_mesh(root, "PlainSoup");
+    ASSERT_NE(plain, nullptr);
+    const std::shared_ptr<erhe::primitive::Triangle_soup> plain_soup = soup_of(plain);
+    ASSERT_TRUE(plain_soup.operator bool());
+    EXPECT_FALSE(has_color(*plain_soup));
 }
 
 TEST_F(Primitive_schema_import, material_binding_reaches_the_primitive)

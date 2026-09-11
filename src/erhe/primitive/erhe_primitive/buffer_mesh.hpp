@@ -139,6 +139,15 @@ public:
 
     size_t                    vertex_input_key{0};
 
+    // Whether the source authored vertex colors (a Geometry with a
+    // corner/vertex color attribute, a soup whose format carries color 0).
+    // The mesh memory vertex format always carries a color attribute, filled
+    // with white when the source has none, so the format cannot answer this;
+    // the material slot writer needs it to tell an unbound primitive whose
+    // colors are its albedo from one that renders the default look
+    // (Material_set::vertex_colored_default_material_slot_index).
+    bool                      has_vertex_colors{false};
+
     // RAII allocation handles - freed back to allocator on destruction
     std::vector<erhe::buffer::Buffer_allocation> vertex_allocations{};
     erhe::buffer::Buffer_allocation              index_allocation  {};

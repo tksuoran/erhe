@@ -58,26 +58,29 @@ public:
     std::size_t                                       written_byte_count{0};
 };
 
-// Reserves default_material_slot_index. The slot is alive - so it is covered
-// by every GPU write and by get_slot_count() - carries no Material, and is
-// reachable by no lookup: it is in neither m_index_by_material nor
-// m_free_slots, which is what keeps allocate_slot() from ever handing it out
-// and release_slot_if_unreferenced() from ever freeing it.
-void Material_set::reserve_default_slot()
+// Reserves default_material_slot_index and
+// vertex_colored_default_material_slot_index. The slots are alive - so they
+// are covered by every GPU write and by get_slot_count() - carry no Material,
+// and are reachable by no lookup: they are in neither m_index_by_material nor
+// m_free_slots, which is what keeps allocate_slot() from ever handing them out
+// and release_slot_if_unreferenced() from ever freeing them.
+void Material_set::reserve_default_slots()
 {
     ERHE_VERIFY(m_materials.empty());
-    Material_slot& slot = m_materials.emplace_back();
-    slot.alive = true;
+    for (uint32_t index = 0; index < first_material_slot_index; ++index) {
+        Material_slot& slot = m_materials.emplace_back();
+        slot.alive = true;
+    }
 }
 
 Material_set::Material_set()
 {
-    reserve_default_slot();
+    reserve_default_slots();
 }
 
 Material_set::Material_set(const Material_set_create_info& create_info)
 {
-    reserve_default_slot();
+    reserve_default_slots();
     ERHE_VERIFY(create_info.graphics_device    != nullptr);
     ERHE_VERIFY(create_info.material_interface != nullptr);
     ERHE_VERIFY(create_info.fallback_texture   != nullptr);
@@ -137,7 +140,7 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     m_gpu->force_dirty = false;
 
     const std::size_t slot_count = get_slot_count();
-    ERHE_VERIFY(slot_count > 0); // the reserved default slot is always live
+    ERHE_VERIFY(slot_count >= first_material_slot_index); // the reserved default slots are always live
     m_gpu->slot_materials.clear();
     m_gpu->slot_materials.resize(slot_count, nullptr);
     for (std::size_t i = 0; i < slot_count; ++i) {

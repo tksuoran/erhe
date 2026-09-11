@@ -166,6 +166,12 @@ private:
 // whichever material happened to hold slot 0.
 [[nodiscard]] auto get_default_material_record_inputs() -> Material_record_inputs;
 
+// The same record with a white base color, for an unbound primitive whose
+// source authored vertex colors: the shader multiplies the base color by the
+// vertex color, so white makes the vertex color the albedo. This is what slot
+// Material_set::vertex_colored_default_material_slot_index carries.
+[[nodiscard]] auto get_vertex_colored_default_material_record_inputs() -> Material_record_inputs;
+
 class Material_interface
 {
 public:

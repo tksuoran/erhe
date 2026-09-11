@@ -700,6 +700,7 @@ auto make_optimized_render_shape_from_staged_build(
     // the per-primitive record writer derives the decode affine from THIS
     // Buffer_mesh, and it has to be bit-identical to the one the encode used.
     buffer_mesh.texcoord_ranges     = source_buffer_mesh.texcoord_ranges;
+    buffer_mesh.has_vertex_colors   = source_buffer_mesh.has_vertex_colors;
 
     return std::make_shared<Primitive_render_shape>(std::move(buffer_mesh), std::move(composed));
 }

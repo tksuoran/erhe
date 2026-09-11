@@ -115,14 +115,21 @@ public:
 class Material_set final
 {
 public:
-    // The slot every primitive with no material of its own names. It is
-    // reserved at construction, holds no Material and is never handed out by
-    // allocate_slot(), and update() writes
-    // get_default_material_record_inputs() into it - so an unbound primitive
-    // renders erhe's default look instead of a zeroed record or whichever
-    // material would otherwise have landed at slot 0. Slots for materials
-    // therefore start at 1.
-    static constexpr uint32_t default_material_slot_index = 0;
+    // The slots a primitive with no material of its own names. Both are
+    // reserved at construction, hold no Material and are never handed out by
+    // allocate_slot(); update() writes get_default_material_record_inputs()
+    // into the first and get_vertex_colored_default_material_record_inputs()
+    // into the second. An unbound primitive without authored vertex colors
+    // names the first and renders erhe's default look (0.18 grey); one whose
+    // source authored vertex colors (Buffer_mesh::has_vertex_colors) names
+    // the second, whose white base color leaves the vertex color as the
+    // albedo - the way Storm shades a mesh with no material binding by its
+    // primvars:displayColor, where a bound material's base color multiplies
+    // the vertex color (glTF COLOR_0). Slots for materials therefore start at
+    // first_material_slot_index.
+    static constexpr uint32_t default_material_slot_index                = 0;
+    static constexpr uint32_t vertex_colored_default_material_slot_index = 1;
+    static constexpr uint32_t first_material_slot_index                  = 2;
 
     // Membership-only. No device, no buffer, no heap: the slot table is pure
     // bookkeeping and is tested that way (R16).
@@ -217,7 +224,7 @@ public:
     void               clear_membership_dirty();
 
 private:
-    void reserve_default_slot();
+    void reserve_default_slots();
 
     class Gpu;
 

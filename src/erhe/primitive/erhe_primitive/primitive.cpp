@@ -1088,6 +1088,8 @@ auto build_buffer_mesh_from_triangle_soup(const Triangle_soup& triangle_soup, co
         buffer_mesh.index_buffer_range                   = index_sink_allocation.range;
         buffer_mesh.index_allocation                     = std::move(index_sink_allocation.allocation);
         buffer_mesh.vertex_input_key                     = buffer_info.vertex_input_key;
+        buffer_mesh.has_vertex_colors                    =
+            triangle_soup.vertex_format.find_attribute(erhe::dataformat::Vertex_attribute_usage::color, 0).attribute != nullptr;
 
         for (std::size_t i = 0, end = buffer_info.vertex_format.streams.size(); i < end; ++i) {
             const erhe::dataformat::Vertex_stream& stream = buffer_info.vertex_format.streams.at(i);

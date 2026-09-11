@@ -67,6 +67,8 @@ Buffer_mesh& Buffer_mesh::operator=(Buffer_mesh&& other)
         release_allocations(*this);
         bounding_box                   = other.bounding_box;
         bounding_sphere                = other.bounding_sphere;
+        texcoord_ranges                = other.texcoord_ranges;
+        has_vertex_colors              = other.has_vertex_colors;
         joint_bounding_boxes           = std::move(other.joint_bounding_boxes);
         triangle_fill_indices          = other.triangle_fill_indices;
         edge_line_indices              = other.edge_line_indices;

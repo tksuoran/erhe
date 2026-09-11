@@ -1145,6 +1145,7 @@ auto Build_context::take_optimizable_snapshot(
             }
         }
         root.buffer_mesh.texcoord_ranges = texcoord_ranges;
+        root.buffer_mesh.has_vertex_colors = root.vertex_attributes.color[0].is_valid();
     }
     const Texcoord_quantization texcoord_quantization = get_texcoord_quantization(root.buffer_mesh);
 

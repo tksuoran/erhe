@@ -196,6 +196,13 @@ auto get_default_material_record_inputs() -> Material_record_inputs
     return inputs;
 }
 
+auto get_vertex_colored_default_material_record_inputs() -> Material_record_inputs
+{
+    Material_record_inputs inputs = get_default_material_record_inputs();
+    inputs.base_color = glm::vec3{1.0f, 1.0f, 1.0f};
+    return inputs;
+}
+
 Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Material_interface& material_interface)
     : m_graphics_device {graphics_device}
     , m_material_interface{material_interface}
@@ -301,12 +308,14 @@ void Material_buffer::write_records(
     // previous payload written into this copy left behind.
     std::memset(gpu_data.data(), 0, gpu_data.size());
 
-    // The reserved default slot, written once per update from the shared
+    // The reserved default slots, written once per update from the shared
     // default inputs; every other null entry is a hole and stays zeroed.
     if (!slot_materials.empty()) {
+        ERHE_VERIFY(slot_materials.size() >= Material_set::first_material_slot_index);
         ERHE_VERIFY(slot_materials[Material_set::default_material_slot_index] == nullptr);
-        const Material_record_inputs default_inputs = get_default_material_record_inputs();
-        write_record(gpu_data, Material_set::default_material_slot_index * entry_size, default_inputs, texture_heap);
+        ERHE_VERIFY(slot_materials[Material_set::vertex_colored_default_material_slot_index] == nullptr);
+        write_record(gpu_data, Material_set::default_material_slot_index * entry_size, get_default_material_record_inputs(), texture_heap);
+        write_record(gpu_data, Material_set::vertex_colored_default_material_slot_index * entry_size, get_vertex_colored_default_material_record_inputs(), texture_heap);
     }
 
     std::size_t write_offset = 0;

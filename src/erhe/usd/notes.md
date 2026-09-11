@@ -279,8 +279,9 @@ A mesh with no material binding at all is not given a `Material` - that would
 author a binding the file never had - and renders through the scene renderer's
 reserved default material slot, whose base color is the same 0.18 grey (see
 `src/erhe/scene_renderer/notes.md`). A mesh's `primvars:displayColor` arrives
-through Tydra as vertex colors and multiplies into the base color in the
-fragment shader, bound material or not.
+through Tydra as vertex colors; on an unbound mesh the fragment shader takes
+them as the albedo (Storm's shading of a mesh with no binding), under a bound
+material they multiply into its base color.
 
 A scalar input is connected through a named output of its `UsdUVTexture`
 (`outputs:r` / `g` / `b` / `a`), and that names the channel to read.

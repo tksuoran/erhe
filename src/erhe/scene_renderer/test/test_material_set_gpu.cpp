@@ -272,7 +272,7 @@ TEST_F(Material_set_gpu_test, record_survives_foreign_update)
     update(set_a);
     update(set_b);
 
-    EXPECT_EQ(read_base_color(set_a, 1u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set_a, 2u).r, 1.0f);
 }
 
 // V2.3. R2: an addition never renumbers, and the first material's record stays
@@ -286,15 +286,15 @@ TEST_F(Material_set_gpu_test, stable_slot_after_material_added)
     const Material_list list_1{first};
     set.sync_library(std::span<const std::shared_ptr<Material>>{list_1});
     update(set);
-    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
 
     const Material_list list_2{first, second};
     set.sync_library(std::span<const std::shared_ptr<Material>>{list_2});
     update(set);
 
     EXPECT_EQ(set.get_slot(first.get()).value(), 1u);
-    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
-    EXPECT_EQ(read_base_color(set, 2u).g, 1.0f);
+    EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 3u).g, 1.0f);
 }
 
 // V2.4. R3: membership is by reference, not by library listing. A material
@@ -335,7 +335,7 @@ TEST_F(Material_set_gpu_test, clean_update_writes_nothing)
     EXPECT_EQ(set.get_write_count(), after_first);
 
     // And what is still bound is the record from the first write.
-    EXPECT_EQ(read_base_color(set, 1u).r, 1.0f);
+    EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
 }
 
 // V2.8. R5, and the reason invalidation is a content hash rather than a
@@ -357,7 +357,7 @@ TEST_F(Material_set_gpu_test, material_data_edit_dirties_the_set)
 
     update(set);
     EXPECT_GT(set.get_write_count(), after_first);
-    const glm::vec3 base_color = read_base_color(set, 1u);
+    const glm::vec3 base_color = read_base_color(set, 2u);
     EXPECT_EQ(base_color.r, 0.0f);
     EXPECT_EQ(base_color.b, 1.0f);
 }
@@ -433,7 +433,7 @@ TEST_F(Material_set_gpu_test, material_set_alone_updates_and_binds)
     set.sync_library(std::span<const std::shared_ptr<Material>>{library});
     update(set);
 
-    const glm::vec3 base_color = read_base_color(set, 1u);
+    const glm::vec3 base_color = read_base_color(set, 2u);
     EXPECT_FLOAT_EQ(base_color.r, 0.25f);
     EXPECT_FLOAT_EQ(base_color.g, 0.5f);
     EXPECT_FLOAT_EQ(base_color.b, 0.75f);
@@ -486,6 +486,19 @@ TEST_F(Material_set_gpu_test, default_slot_is_written_for_an_empty_set)
 
     const glm::vec3 base_color = read_base_color(set, Material_set::default_material_slot_index);
     EXPECT_FLOAT_EQ(base_color.r, 0.18f);
+}
+
+// The second reserved slot: an unbound primitive whose mesh authored vertex
+// colors reads a white base color, so its vertex colors are its albedo.
+TEST_F(Material_set_gpu_test, vertex_colored_default_slot_carries_a_white_base_color)
+{
+    Material_set set{make_create_info("vertex_colored")};
+    update(set);
+
+    const glm::vec3 base_color = read_base_color(set, Material_set::vertex_colored_default_material_slot_index);
+    EXPECT_FLOAT_EQ(base_color.r, 1.0f);
+    EXPECT_FLOAT_EQ(base_color.g, 1.0f);
+    EXPECT_FLOAT_EQ(base_color.b, 1.0f);
 }
 
 } // namespace erhe::scene_renderer::test

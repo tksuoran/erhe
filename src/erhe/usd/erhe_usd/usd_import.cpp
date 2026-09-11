@@ -124,6 +124,41 @@ using Tydra_subset    = lightusd::tydra::MaterialSubset;
     }
 }
 
+// Whether the render mesh carries a color for its vertices. Tydra delivers
+// `primvars:displayColor` as `vertex_colors` when it varies, and a single
+// constant value (the whole mesh one color) in `displayColor` with
+// `has_authored_displayColor` set; both are authored colors.
+[[nodiscard]] auto usd_mesh_has_color(const lightusd::tydra::RenderMesh& usd_mesh) -> bool
+{
+    if (usd_mesh.has_authored_displayColor) {
+        return true;
+    }
+    return !usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3);
+}
+
+[[nodiscard]] auto read_attribute(const Tydra_attribute& attribute, const std::size_t element) -> glm::vec4;
+
+// The color of one corner: the varying vertex color when there is one, else
+// the mesh's constant displayColor. Opacity 1 unless a varying
+// `primvars:displayOpacity` names it.
+[[nodiscard]] auto usd_mesh_corner_color(
+    const lightusd::tydra::RenderMesh& usd_mesh,
+    const std::size_t                  vertex,
+    const std::size_t                  facet,
+    const std::size_t                  corner
+) -> glm::vec4
+{
+    glm::vec4 color{usd_mesh.displayColor.r, usd_mesh.displayColor.g, usd_mesh.displayColor.b, 1.0f};
+    if (!usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3)) {
+        color = read_attribute(usd_mesh.vertex_colors, attribute_element_index(usd_mesh.vertex_colors, vertex, facet, corner));
+    }
+    color.w = 1.0f;
+    if (!usd_mesh.vertex_opacities.empty() && (attribute_component_count(usd_mesh.vertex_opacities.format) >= 1)) {
+        color.w = read_attribute(usd_mesh.vertex_opacities, attribute_element_index(usd_mesh.vertex_opacities, vertex, facet, corner)).x;
+    }
+    return color;
+}
+
 [[nodiscard]] auto read_attribute(const Tydra_attribute& attribute, const std::size_t element) -> glm::vec4
 {
     glm::vec4         result{0.0f, 0.0f, 0.0f, 1.0f};
@@ -2516,20 +2551,9 @@ private:
             const glm::vec2 flipped = flip_texcoord_v(glm::vec2{uv.x, uv.y});
             attributes.corner_texcoord(slot).set(corner, GEO::vec2f{flipped.x, flipped.y});
         }
-        if (!usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3)) {
-            const glm::vec4 color = read_attribute(
-                usd_mesh.vertex_colors,
-                attribute_element_index(usd_mesh.vertex_colors, usd_vertex, usd_facet, usd_corner)
-            );
-            float alpha = 1.0f;
-            if (!usd_mesh.vertex_opacities.empty() && (attribute_component_count(usd_mesh.vertex_opacities.format) >= 1)) {
-                const glm::vec4 opacity = read_attribute(
-                    usd_mesh.vertex_opacities,
-                    attribute_element_index(usd_mesh.vertex_opacities, usd_vertex, usd_facet, usd_corner)
-                );
-                alpha = opacity.x;
-            }
-            attributes.corner_color_0.set(corner, GEO::vec4f{color.x, color.y, color.z, alpha});
+        if (usd_mesh_has_color(usd_mesh)) {
+            const glm::vec4 color = usd_mesh_corner_color(usd_mesh, usd_vertex, usd_facet, usd_corner);
+            attributes.corner_color_0.set(corner, GEO::vec4f{color.x, color.y, color.z, color.w});
         }
     }
 
@@ -2674,6 +2698,7 @@ private:
         soup->vertex_format.streams.emplace_back(0);
         soup->vertex_format.streams.front().emplace_back(Format::format_32_vec3_float, Vertex_attribute_usage::position, 0);
         const bool has_normal   = !usd_mesh.normals.empty() && (attribute_component_count(usd_mesh.normals.format) >= 3);
+        const bool has_color    = usd_mesh_has_color(usd_mesh);
         const auto texcoord_i   = usd_mesh.texcoords.find(0u);
         const bool has_texcoord = (texcoord_i != usd_mesh.texcoords.end()) &&
                                   !texcoord_i->second.empty() &&
@@ -2684,7 +2709,12 @@ private:
         if (has_texcoord) {
             soup->vertex_format.streams.front().emplace_back(Format::format_32_vec2_float, Vertex_attribute_usage::tex_coord, 0);
         }
-        soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, 0);
+        // Authored colors only: a color attribute in the soup format is what
+        // marks the mesh as vertex colored (Buffer_mesh::has_vertex_colors),
+        // and an unbound mesh's displayColor is its albedo on that account.
+        if (has_color) {
+            soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, 0);
+        }
         for (std::size_t set = 0; set < joint_influences.set_count; ++set) {
             soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_uint,  Vertex_attribute_usage::joint_indices, set);
             soup->vertex_format.streams.front().emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::joint_weights, set);
@@ -2697,8 +2727,6 @@ private:
         }
         const std::size_t stride = soup->vertex_format.streams.front().stride;
         soup->vertex_data.resize(corner_total * stride);
-
-        const bool has_color = !usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3);
 
         std::size_t vertex_index = 0;
         for (const std::uint32_t facet : group.facets) {
@@ -2735,17 +2763,12 @@ private:
                     std::memcpy(destination + offset, uv_values, sizeof(uv_values));
                     offset += sizeof(uv_values);
                 }
-                glm::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
                 if (has_color) {
-                    color = read_attribute(
-                        usd_mesh.vertex_colors,
-                        attribute_element_index(usd_mesh.vertex_colors, usd_vertex, facet, usd_corner)
-                    );
-                    color.w = 1.0f;
+                    const glm::vec4 color = usd_mesh_corner_color(usd_mesh, usd_vertex, facet, usd_corner);
+                    const float color_values[4] = {color.x, color.y, color.z, color.w};
+                    std::memcpy(destination + offset, color_values, sizeof(color_values));
+                    offset += sizeof(color_values);
                 }
-                const float color_values[4] = {color.x, color.y, color.z, color.w};
-                std::memcpy(destination + offset, color_values, sizeof(color_values));
-                offset += sizeof(color_values);
 
                 // The skin influences of the USD point this corner came from
                 // (K1). They follow the color in the stream, in the order the

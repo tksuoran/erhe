@@ -43,17 +43,23 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 Slot `Material_set::default_material_slot_index` (0) is reserved: it is alive
 from construction, holds no `Material`, is never handed out by
 `allocate_slot()`, and every `Material_set::update()` writes
-`get_default_material_record_inputs()` into it. Slots for materials therefore
-start at 1.
+`get_default_material_record_inputs()` into it, and slot 1 beside it (see
+below). Slots for materials therefore start at 2.
 
 That is the slot a primitive with no material of its own names: the primitive
 record writer stores index 0 for a null `Mesh_primitive::material`, so an
 unbound mesh renders erhe's default look - `Material_values` at its defaults
 (roughness 0.5, metallic 0, opaque, no textures) with base color 0.18 grey,
 which is UsdPreviewSurface's unbound `diffuseColor` and the same constant the
-USD importer uses for an unauthored one. Vertex colors still multiply into it
-(`standard.frag` computes `base_color *= v_color.rgb`), so a USD mesh whose
-`primvars:displayColor` arrives as vertex colors comes out in those colors.
+USD importer uses for an unauthored one. Slot 1
+(`vertex_colored_default_material_slot_index`) is the same record with a
+white base color, and the writer names it for an unbound primitive whose
+mesh authored vertex colors (`Buffer_mesh::has_vertex_colors`): the shader
+multiplies base color by vertex color, so white makes the vertex colors the
+albedo, the way Storm shades a mesh with no material binding by its
+`primvars:displayColor` (a bound material's base color multiplies the vertex
+color, glTF `COLOR_0` semantics). Material slots start at
+`first_material_slot_index` (2).
 
 The reserved record is written once per buffer update, not per primitive; the
 set holds no `Material` object for it, so it costs one record and no
