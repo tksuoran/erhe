@@ -42,7 +42,12 @@ target is any prim (doc/usd-compatibility-plan.md S1): an `Xformable`, a
 becomes, or a prototype a `class` prim holds (X3). The wrapper keeps the
 target's authored local transform when the target is an `Xformable` and simply
 holds it otherwise - a prim without a transform composes what reaches it
-through to its children. A prototype target is content-less where it sits, so
+through to its children. At instantiation (`attach_prefab_instance`) a
+carrier that authors an xformOp stack of its own supersedes that transform:
+the target's clone takes the identity, because `xformOpOrder` is one
+attribute and the referencing layer's wins wholesale (usd-wg
+InternalReferenceTest authors scale 100 on both the prototype and every
+instance, and composes to one). A prototype target is content-less where it sits, so
 the template it becomes gets `Item_flags::content` back on every prim of the
 file it holds.
 

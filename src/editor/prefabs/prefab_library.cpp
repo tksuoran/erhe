@@ -14,6 +14,7 @@
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/usd.hpp"
+#include "erhe_scene/xform_op.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "prefabs/prefab_instance.hpp"
 #include "scene/generated/gltf_source_reference.hpp"
@@ -862,6 +863,10 @@ void attach_prefab_instance(
     // A template child is any prim (doc/usd-compatibility-plan.md U4, S1): a
     // USD arc names a `Scope` or a typeless `def` as readily as an `Xform`.
     std::vector<std::shared_ptr<erhe::Hierarchy>> clone_prims;
+    const erhe::scene::Xform_op_stack* carrier_stack = node->get_xform_op_stack();
+    const bool carrier_supersedes_target_transform =
+        is_usd_file_extension(prefab_instance->get_prefab_source_path()) &&
+        (carrier_stack != nullptr) && !carrier_stack->ops.empty();
     for (const std::shared_ptr<erhe::Hierarchy>& child : prefab->template_root->get_children()) {
         if (!child) {
             continue;
@@ -888,7 +893,19 @@ void attach_prefab_instance(
             // local transform; a prefab clone must instead keep its local
             // (template) transform under its new parent, so restore it after
             // parenting.
-            const erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
+            //
+            // A USD referencing prim that authors an xformOp stack composes
+            // that stack in place of the target prim's own: `xformOpOrder`
+            // is one attribute, the referencing layer's opinion is the
+            // stronger one, and an op the order does not list applies
+            // nothing (doc/usd-compatibility-plan.md X1). The carrier holds
+            // the authored stack, so the target's clone - the wrapper's one
+            // child, the prim the arc named - takes the identity; a carrier
+            // without a stack of its own lets the target's transform stand.
+            erhe::scene::Trs_transform parent_from_node = clone_node->parent_from_node_transform();
+            if (carrier_supersedes_target_transform) {
+                parent_from_node = erhe::scene::Trs_transform{};
+            }
             clone_node->set_parent(node);
             clone_node->set_parent_from_node(parent_from_node);
         } else {
