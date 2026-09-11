@@ -1957,6 +1957,144 @@ def usd_resource_placement_leg(S):
     usd_close_scene(S, reloaded_name)
 
 
+def usd_graph_mesh_state(scene_name, graph_name):
+    """The geometry graph of that name as get_scene_node_graphs reports it:
+    the nodes by name with their parameters, the links, and the prims bound to
+    it. Names rather than ids, which a reload reshuffles."""
+    for graph in call("get_scene_node_graphs", {"scene_name": scene_name}).get("node_graphs", []):
+        if (graph.get("name") != graph_name) or (graph.get("format") != "erhe_geometry_graph"):
+            continue
+        return {
+            "nodes": sorted(
+                (
+                    {
+                        "name":       n.get("name"),
+                        "type":       n.get("type"),
+                        "parameters": json.dumps(n.get("parameters", {}), sort_keys=True),
+                    }
+                    for n in graph.get("nodes", [])
+                ),
+                key=lambda n: n["name"],
+            ),
+            "links": sorted(
+                (
+                    {
+                        "source_node": l.get("source_node"),
+                        "source_pin":  l.get("source_pin"),
+                        "sink_node":   l.get("sink_node"),
+                        "sink_pin":    l.get("sink_pin"),
+                    }
+                    for l in graph.get("links", [])
+                ),
+                key=lambda l: json.dumps(l, sort_keys=True),
+            ),
+            "node_bindings": sorted(b.get("prim") for b in graph.get("node_bindings", [])),
+        }
+    return None
+
+
+def usd_geometry_graph_leg(S):
+    """A geometry graph in a USD file (doc/usd-texture-graphs-plan.md section
+    4): a `Graph_mesh` is the marked `NodeGraph` prim a texture graph is, with
+    its nodes' `info:id` under `erhe:geometry:` and its evaluated geometry as
+    the child `Mesh "result"`, and the prim it is bound to gets its binding
+    back from the scene block. The graph is built through MCP on top of a USD
+    scene, since the binding is editor state no fixture file carries and only
+    a USD-backed scene saves as USDA.
+
+    The scene gains a level on the first save - the graph asset's kind scope
+    is a second top-level prim, so the writer gathers both under one `World`
+    prim (E1) - which every other USD leg shows as well. The scene block is
+    unaffected: it names a prim by the path the write PLANS for it, which is
+    the path the reloaded item has, so the first save is already the textual
+    fixed point."""
+    scene_name = "cube"
+    graph_name = "USD_GM"
+    carrier    = "GM_Carrier"
+
+    if not usd_open_scene(S, USD_DATA_DIR / "cube.usda", scene_name):
+        return
+    graph = mutate("create_graph_mesh", {"scene_name": scene_name, "name": graph_name})
+    check(S, "geometry graph leg: create_graph_mesh", bool(graph) and graph.get("created"), str(graph))
+    box    = mutate("geometry_graph_add_node", {"type": "box"})
+    output = mutate("geometry_graph_add_node", {"type": "output"})
+    connected = mutate("geometry_graph_connect", {
+        "source_node_id": box["id"], "source_slot": 0,
+        "sink_node_id": output["id"], "sink_slot": 0,
+    })
+    check(S, "geometry graph leg: box->output", bool(connected) and connected.get("connected"), str(connected))
+    call("get_geometry_graph")  # evaluation barrier
+    mutate("create_node", {"scene_name": scene_name, "name": carrier, "position": [0.0, 1.0, 0.0]})
+    check(S, "geometry graph leg: carrier node created", wait_for_scene_node(scene_name, carrier))
+    bound = mutate("set_node_graph_mesh", {
+        "scene_name": scene_name, "node_name": carrier, "graph_mesh": graph_name,
+    })
+    check(S, "geometry graph leg: set_node_graph_mesh", bool(bound) and bound.get("bound"), str(bound))
+    check(S, "geometry graph leg: the bake materialized on the carrier",
+          wait_for_mesh_child(scene_name, carrier))
+
+    original = usd_graph_mesh_state(scene_name, graph_name)
+    check(S, "geometry graph leg: the graph is reported before the save",
+          (original is not None) and (len(original["nodes"]) == 2), str(original))
+
+    first_save = USD_SAVE_DIR / "usd_roundtrip_graph_mesh.usda"
+    if not usd_save_scene(S, scene_name, first_save):
+        return
+    text = first_save.read_text(encoding="utf-8")
+    check(S, "geometry graph leg: the graph prim carries the geometry format token",
+          'custom token erhe:graph:format = "erhe_geometry_graph"' in text, "marker not written")
+    check(S, "geometry graph leg: the node ids are under erhe:geometry:",
+          ('uniform token info:id = "erhe:geometry:box"' in text) and
+          ('uniform token info:id = "erhe:geometry:output"' in text), "node info:id not written")
+    check(S, "geometry graph leg: the evaluated geometry is the result child",
+          'def Mesh "result"' in text, "no result child")
+    usd_close_scene(S, scene_name)
+
+    reloaded_name = first_save.stem
+    if not usd_open_scene(S, first_save, reloaded_name):
+        return
+    # The reloaded graph is born dirty: point the window at it, which is what
+    # get_geometry_graph waits for the evaluation of.
+    mutate("set_geometry_graph_target", {"scene_name": reloaded_name, "graph_mesh": graph_name})
+    call("get_geometry_graph")
+    wait_for_async_idle()
+
+    reloaded = usd_graph_mesh_state(reloaded_name, graph_name)
+    if not check(S, "geometry graph leg: the graph is reported after the reload", reloaded is not None):
+        return
+    # The bound prim's path gains the `World` level the first save adds, so
+    # the binding is checked by the prim it names rather than diffed.
+    for key in ["nodes", "links"]:
+        mismatches = []
+        diff_json(reloaded[key], original[key], key, mismatches)
+        check(S, f"geometry graph round-trip diff: {key} identical", not mismatches, f"{len(mismatches)} mismatches")
+        for mismatch in mismatches[:10]:
+            print(f"       {mismatch}")
+    check(S, "geometry graph leg: the carrier prim is bound to the graph again",
+          reloaded["node_bindings"] and reloaded["node_bindings"][0].endswith(carrier),
+          str(reloaded["node_bindings"]))
+    check(S, "geometry graph leg: the carrier still shows a mesh",
+          wait_for_mesh_child(reloaded_name, carrier))
+
+    second_save = USD_SAVE_DIR / "usd_roundtrip_graph_mesh_2.usda"
+    if usd_save_scene(S, reloaded_name, second_save):
+        first_lines  = first_save.read_text(encoding="utf-8").splitlines()
+        second_lines = second_save.read_text(encoding="utf-8").splitlines()
+        identical = first_lines == second_lines
+        detail = ""
+        if not identical:
+            differing = [i for i, (a, b) in enumerate(zip(first_lines, second_lines), start=1) if a != b]
+            detail = (f"{len(first_lines)} vs {len(second_lines)} lines, "
+                      f"{len(differing)} differing (first at line {differing[0] if differing else '-'})")
+        check(S, "geometry graph leg: second save is textually identical", identical, detail)
+        if not identical:
+            for index, (a, b) in enumerate(zip(first_lines, second_lines), start=1):
+                if a != b:
+                    print(f"       line {index}: {a!r} != {b!r}")
+                    break
+    usd_close_scene(S, reloaded_name)
+
+
 def run_usdchecker(section, usdchecker, usda_path):
     result = subprocess.run([usdchecker, str(usda_path)], capture_output=True, text=True, timeout=300)
     output = (result.stdout + result.stderr).strip()
@@ -2035,6 +2173,10 @@ def section_usd_round_trip(usdchecker_arg):
     # back node for node, parameter for parameter and link for link, at the
     # place it had, with the material slot still fed from it.
     usd_round_trip_leg(S, "texture_graph.usda", "texture_graph", edits=[], extra_keys=["node_graphs"])
+    # A geometry graph is the same prim form with the evaluated geometry as a
+    # child Mesh, and the prim it drives bound to it again after a reload
+    # (doc/usd-texture-graphs-plan.md section 4).
+    usd_geometry_graph_leg(S)
     usd_resource_placement_leg(S)
     usd_references_leg(S)
 

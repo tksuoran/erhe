@@ -1081,11 +1081,63 @@ auto Mcp_server::query_graph_textures(const json& args) -> std::string
     return make_json_content(result).dump();
 }
 
-// The texture node graphs a scene's content library holds, as the file
-// carries them (doc/usd-texture-graphs-plan.md): every graph asset with its
-// nodes, the links between them by name, and the material slots fed from it.
-// This is what the scene round-trip harness diffs a saved and reloaded file
-// with, so it names nodes and pins rather than ids, which a reload reshuffles.
+namespace {
+
+// The nodes and the links of one graph asset, by name: what a reload has to
+// reproduce. Shared by the two graph kinds, which differ in their node type
+// and in nothing this reports. The asset is non-const because
+// erhe::graph::Graph::get_links() is.
+template <typename AssetT, typename NodeT>
+void describe_graph_asset(AssetT& asset, json& out_nodes, json& out_links)
+{
+    std::map<const erhe::graph::Node*, std::string> names_by_node;
+    out_nodes = json::array();
+    for (const std::shared_ptr<NodeT>& node : asset.nodes()) {
+        names_by_node[node.get()] = std::string{node->get_name()};
+        json parameters = json::object();
+        node->write_parameters(parameters);
+        json node_json{
+            {"name",       std::string{node->get_name()}},
+            {"type",       node->get_factory_type_name()},
+            {"parameters", parameters}
+        };
+        if (node->has_canvas_position()) {
+            node_json["x"] = node->get_canvas_x();
+            node_json["y"] = node->get_canvas_y();
+        }
+        out_nodes.push_back(std::move(node_json));
+    }
+    out_links = json::array();
+    for (const std::unique_ptr<erhe::graph::Link>& link : asset.graph().get_links()) {
+        const erhe::graph::Pin* const source = link->get_source();
+        const erhe::graph::Pin* const sink   = link->get_sink();
+        if ((source == nullptr) || (sink == nullptr)) {
+            continue;
+        }
+        const std::map<const erhe::graph::Node*, std::string>::const_iterator source_node =
+            names_by_node.find(source->get_owner_node());
+        const std::map<const erhe::graph::Node*, std::string>::const_iterator sink_node =
+            names_by_node.find(sink->get_owner_node());
+        if ((source_node == names_by_node.end()) || (sink_node == names_by_node.end())) {
+            continue;
+        }
+        out_links.push_back({
+            {"source_node", source_node->second},
+            {"source_pin",  std::string{source->get_name()}},
+            {"sink_node",   sink_node->second},
+            {"sink_pin",    std::string{sink->get_name()}}
+        });
+    }
+}
+
+} // anonymous namespace
+
+// The node graphs a scene's content library holds, as the file carries them
+// (doc/usd-texture-graphs-plan.md): every graph asset with its nodes, the
+// links between them by name, the material slots fed from a texture graph and
+// the prims bound to a geometry graph. This is what the scene round-trip
+// harness diffs a saved and reloaded file with, so it names nodes, pins and
+// prims rather than ids, which a reload reshuffles.
 auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
 {
     const std::string scene_name = args.value("scene_name", "");
@@ -1100,44 +1152,9 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
             if (!graph_texture) {
                 continue;
             }
-            std::map<const erhe::graph::Node*, std::string> names_by_node;
-            json nodes = json::array();
-            for (const std::shared_ptr<Texture_graph_node>& node : graph_texture->nodes()) {
-                names_by_node[node.get()] = std::string{node->get_name()};
-                json parameters = json::object();
-                node->write_parameters(parameters);
-                json node_json{
-                    {"name",       std::string{node->get_name()}},
-                    {"type",       node->get_factory_type_name()},
-                    {"parameters", parameters}
-                };
-                if (node->has_canvas_position()) {
-                    node_json["x"] = node->get_canvas_x();
-                    node_json["y"] = node->get_canvas_y();
-                }
-                nodes.push_back(std::move(node_json));
-            }
-            json links = json::array();
-            for (const std::unique_ptr<erhe::graph::Link>& link : graph_texture->graph().get_links()) {
-                const erhe::graph::Pin* const source = link->get_source();
-                const erhe::graph::Pin* const sink   = link->get_sink();
-                if ((source == nullptr) || (sink == nullptr)) {
-                    continue;
-                }
-                const std::map<const erhe::graph::Node*, std::string>::const_iterator source_node =
-                    names_by_node.find(source->get_owner_node());
-                const std::map<const erhe::graph::Node*, std::string>::const_iterator sink_node =
-                    names_by_node.find(sink->get_owner_node());
-                if ((source_node == names_by_node.end()) || (sink_node == names_by_node.end())) {
-                    continue;
-                }
-                links.push_back({
-                    {"source_node", source_node->second},
-                    {"source_pin",  std::string{source->get_name()}},
-                    {"sink_node",   sink_node->second},
-                    {"sink_pin",    std::string{sink->get_name()}}
-                });
-            }
+            json nodes;
+            json links;
+            describe_graph_asset<Graph_texture, Texture_graph_node>(*graph_texture.get(), nodes, links);
             json material_bindings = json::array();
             for (const std::shared_ptr<erhe::primitive::Material>& material : library->get_all<erhe::primitive::Material>()) {
                 if (!material) {
@@ -1169,6 +1186,37 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
                 {"nodes",             nodes},
                 {"links",             links},
                 {"material_bindings", material_bindings}
+            });
+        }
+        // A geometry graph reports the same shape, with the prims bound to it
+        // in place of the material slots fed from it
+        // (doc/usd-texture-graphs-plan.md section 4).
+        for (const std::shared_ptr<Graph_mesh>& graph_mesh : library->get_all<Graph_mesh>()) {
+            if (!graph_mesh) {
+                continue;
+            }
+            json nodes;
+            json links;
+            describe_graph_asset<Graph_mesh, Geometry_graph_node>(*graph_mesh.get(), nodes, links);
+            json node_bindings = json::array();
+            scene_root.get_scene().for_each_node(
+                [&graph_mesh, &node_bindings](const std::shared_ptr<erhe::scene::Node>& node) -> bool {
+                    const std::shared_ptr<Geometry_graph_mesh> attachment =
+                        erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+                    if (attachment && (attachment->get_graph_mesh() == graph_mesh)) {
+                        node_bindings.push_back({{"prim", node->get_reference_path()}});
+                    }
+                    return true;
+                }
+            );
+            node_graphs.push_back({
+                {"name",          graph_mesh->get_name()},
+                {"path",          std::string{graph_mesh->get_reference_path()}},
+                {"scene",         scene_root.get_name()},
+                {"format",        std::string{"erhe_geometry_graph"}},
+                {"nodes",         nodes},
+                {"links",         links},
+                {"node_bindings", node_bindings}
             });
         }
     };

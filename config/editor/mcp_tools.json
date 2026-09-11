@@ -189,7 +189,7 @@
     "name": "get_scene_brushes"
   },
   {
-    "description": "List the texture node graphs (Graph_texture assets) a scene's content library holds: each graph's name, its content-library path, its format token, its nodes (name, factory type, canvas x / y, parameters), the links between them named by node and pin, and the material slots fed from the graph. Names rather than ids, so a saved and reloaded scene compares directly.",
+    "description": "List the node graphs a scene's content library holds - texture graphs (Graph_texture assets) and geometry graphs (Graph_mesh assets): each graph's name, its content-library path, its format token, its nodes (name, factory type, canvas x / y, parameters) and the links between them named by node and pin, plus the material slots fed from a texture graph (material_bindings) or the prims bound to a geometry graph (node_bindings). Names rather than ids, so a saved and reloaded scene compares directly.",
     "inputSchema": {
       "properties": {
         "scene_name": {

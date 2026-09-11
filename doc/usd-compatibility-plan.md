@@ -510,12 +510,19 @@ the neutral record (`src/erhe/usd/notes.md`, "Node graphs";
 script's `texture_graph.usda` leg is green with a byte-identical second
 save (MCP `get_scene_node_graphs`).
 
-#### E4b Geometry node graphs (M)
+#### E4b Geometry node graphs (M; landed)
 
 A `Graph_mesh` reuses E4c's prim form with `erhe:geometry:` node ids and
 the evaluated geometry as a child `Mesh "result"` prim written the way
 a brush writes its geometry (E4a); `doc/usd-texture-graphs-plan.md`
-section 4 states the rule. E4c lands first.
+section 4 states the rule, the scene-block carrier for the bindings and
+the designations (each naming a prim by the path the write plans for it,
+`erhe::usd::plan_usd_prim_paths`), and the identifier spelling a pin and
+a parameter name travel in. `erhe::usd` reads and writes the prims as the neutral record
+(`erhe_usd_tests` 284) and the editor collects and rebuilds a
+`Graph_mesh` from it, binds the prims that drive their mesh from it
+again, and the round-trip script's geometry-graph leg is green with the
+save a fixed point from the first reload.
 
 #### E4d Content-library folders (S)
 
@@ -535,10 +542,10 @@ both are present.
 
 Each step independently landable, in this order:
 
-1. E4 editor state in a USD file: E4c, E4b, E4d in that order (E4a landed; completes G2)
+1. E4 editor state in a USD file: E4d (E4a, E4c and E4b landed; completes G2)
 2. E2 material fidelity
 
-Dependencies: E4b to E4d and E2 need nothing that has not landed.
+Dependencies: E4d and E2 need nothing that has not landed.
 
 ## 5. Out of scope
 

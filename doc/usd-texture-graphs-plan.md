@@ -187,15 +187,41 @@ generated texture (a non-uniform surface), saves, reopens and matches
 `get_scene_node_graphs` and the material's slot binding, with a
 byte-identical second save and a clean scene close.
 
-## 4. Geometry graphs (E4b) reuse this form
+## 4. Geometry graphs reuse this form
 
 A `Graph_mesh` is the same prim form with `info:id` under
 `erhe:geometry:` and the evaluated geometry as a child `Mesh "result"`
 prim, written the way a brush writes its geometry (E4a), so a viewer
-without erhe sees the result; reload rebuilds the graph from the nodes
-and re-evaluates, reading the child mesh only when no nodes are present.
-Pin value types map to the geometry payload types the mapping gives
-them. E4c lands first and E4b adds the vocabulary and the result child.
+without erhe sees the result. A reload rebuilds the graph from the nodes
+and re-evaluates it, and reads the child mesh only when the record
+carries no node - the one case where the child is all there is to say
+what the graph makes. Pin value types are the geometry payload types the
+mapping gives them (`doc/usd_compatibility.md`, "Geometry node graphs"),
+and a tuple-valued node parameter takes the `float3` / `float4` spelling
+a texture graph's color parameter does not.
+
+A geometry node names its pins and its parameters for the reader ("x
+size"), and a USD property name is an identifier, so both travel in the
+identifier spelling `sanitize_usd_identifier` gives them and the reload
+matches a recorded name against the spelling the rebuilt node's pin or
+parameter key would take.
+
+Two things a `NodeGraph` prim has no form for ride the `erhe:scene`
+`customLayerData` block instead, one entry per graph under
+`graph_meshes`: the scene prims bound to the graph (a
+`Geometry_graph_mesh` attachment, an object reference no `erhe:` custom
+attribute can carry), and the graph's Houdini-style display / ghost node
+designations, which USD has no counterpart for. Each entry names a prim
+by the path `erhe::usd::plan_usd_prim_paths` plans for it, in the
+item-path spelling: the save plans the paths from the arguments it has
+filled, writes the block with them and hands the same arguments to the
+write, which plans identically. A planned path is where the prim lands -
+the `World` prim that gathers several top-level prims, the identifier
+spelling of every name and the sibling-unique suffix included - so it is
+the path the item has when the file is opened again and the entry
+matches it exactly. The save is therefore its own fixed point: what the
+block says about a prim does not change when the file is reloaded and
+saved again.
 
 ## 5. Out of scope
 
