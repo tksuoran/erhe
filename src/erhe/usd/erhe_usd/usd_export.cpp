@@ -1743,6 +1743,13 @@ private:
                 continue;
             }
             const uint64_t           flags      = child_prim->get_flag_bits();
+            if ((flags & erhe::Item_flags::session_only) != 0) {
+                // Editor session state (the default camera injected for a
+                // file that authors none), not stage content: the file
+                // carries the cameras it authored or the user created, and
+                // the next open injects the default again.
+                continue;
+            }
             const erhe::scene::Node* child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if ((child_node != nullptr) && ((flags & erhe::Item_flags::import_root) != 0)) {
                 plan_children(

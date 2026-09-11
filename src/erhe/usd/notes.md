@@ -989,7 +989,12 @@ over the tree with no file work in it.
   `Camera`, an `erhe::scene::Light` writes the UsdLux type its `light_type`
   names (`DistantLight` or `SphereLight`), and an `erhe::scene::Xform`
   writes `Xform`. That is what the importer inverts, so a file round-trips
-  without gaining a level. A prim of a class that carries no transform gets
+  without gaining a level. The layer carries the items the file authored plus
+  the ones the user created: an item flagged
+  `erhe::Item_flags::session_only` - the editor's default camera, injected so
+  that a camera-less file has something to render through, and re-injected on
+  every open - is left out, so such a file saves back with the top-level prims
+  it authored and keeps its own root. A prim of a class that carries no transform gets
   none, and the transform that reached it composes with its children. A mesh
   with one primitive binds its material directly; several primitives become
   one `materialBind` `GeomSubset` each, over the concatenated `points` /

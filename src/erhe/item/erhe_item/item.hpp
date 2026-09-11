@@ -139,7 +139,14 @@ public:
     // everything below it is out of rendering, picking, simulation and every
     // consumer that walks content; the item tree still shows the row, dimmed.
     static constexpr uint64_t active                    = (uint64_t{1} << 38);
-    static constexpr uint64_t count                     = 39;
+    // Content the editor injects into a scene for the duration of the
+    // session, so that a file which authors none of it is still usable: the
+    // default camera a camera-less file is looked at through. It is not part
+    // of what the file says, so every exporter leaves it out and it is never
+    // serialized - the next open injects it again. The user's own content
+    // never carries the bit, so a camera the user creates is saved.
+    static constexpr uint64_t session_only              = (uint64_t{1} << 39);
+    static constexpr uint64_t count                     = 40;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -208,6 +215,7 @@ public:
         "Ancestor Hovered in Graph",
         "IK Lock",
         "Active",
+        "Session Only",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

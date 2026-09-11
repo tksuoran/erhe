@@ -238,8 +238,9 @@ public:
 // scene's viewport has something to render through: the same fitted default
 // camera the foreign-glTF import injects (make_import_gltf_operation with
 // fit_view_to_content), placed to frame the world bounds of every Mesh prim
-// under content_root. Flagged exclude_from_prefab. Returned unparented; the
-// caller inserts it into the scene. Format-neutral: open_scene_usd uses it.
+// under content_root. Flagged session_only (no exporter writes it) and
+// exclude_from_prefab. Returned unparented; the caller inserts it into the
+// scene. Format-neutral: open_scene_usd uses it.
 [[nodiscard]] auto make_default_camera_for_content(
     App_context&     context,
     erhe::Hierarchy& content_root

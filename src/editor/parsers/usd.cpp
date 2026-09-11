@@ -2416,8 +2416,9 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // A file that authors no camera is looked at through the editor's own
     // default camera, fitted to the content the way a foreign glTF scene is
     // (make_import_gltf_operation): the scene's viewport renders nothing
-    // without a camera. A save writes it back as a Camera prim, like the
-    // foreign-glTF default camera is saved with its scene.
+    // without a camera. It is session state (Item_flags::session_only), so a
+    // save writes the file back as what it authored and the next open injects
+    // the default camera again.
     if (scene.get_cameras().empty()) {
         std::shared_ptr<erhe::scene::Camera> default_camera = make_default_camera_for_content(context, *scene_root_node);
         default_camera->set_parent(scene_root_node);

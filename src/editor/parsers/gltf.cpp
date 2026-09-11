@@ -556,9 +556,12 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
 // backed off far enough for the content's bounding sphere to fill the
 // vertical fov instead, with the fitted depth / shadow ranges - a 200 m
 // scene is not visible at all through a 80 m far plane. Flagged
-// exclude_from_prefab: an editor convenience, not authored content (the
-// MCP frame_scene tool recognizes the flag and frames the camera as its
-// own). Returned unparented; the caller inserts it into the scene.
+// session_only: it is the editor's convenience for this session, so the
+// glTF exporter and the USD writer both leave it out and the next open of
+// the file injects it again. Also flagged exclude_from_prefab, so it stays
+// out of prefab instances (the MCP frame_scene tool recognizes that flag
+// and frames the camera as its own). Returned unparented; the caller
+// inserts it into the scene.
 [[nodiscard]] auto make_default_camera(const std::optional<Content_fit>& content_fit) -> std::shared_ptr<erhe::scene::Camera>
 {
     std::shared_ptr<erhe::scene::Camera> default_camera = std::make_shared<erhe::scene::Camera>("Camera");
@@ -566,7 +569,12 @@ constexpr float c_default_camera_fov_y = glm::radians(35.0f);
     default_camera->set_projection_type(erhe::scene::Projection::Type::perspective_vertical);
     default_camera->set_z_near         (0.03f);
     default_camera->set_z_far          (80.0f);
-    default_camera->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui | erhe::Item_flags::exclude_from_prefab);
+    default_camera->enable_flag_bits(
+        erhe::Item_flags::content             |
+        erhe::Item_flags::show_in_ui          |
+        erhe::Item_flags::exclude_from_prefab |
+        erhe::Item_flags::session_only
+    );
 
     glm::vec3 eye_position{0.0f, 0.0f, 8.0f};
     glm::vec3 target_position{0.0f, 0.0f, 0.0f};

@@ -295,6 +295,14 @@ keep their state on import.
   support was removed in phase 4).
 - Undo/redo history, selection, and other transient session state are not
   saved.
+- **A file carries the cameras it authored plus the ones the user created.**
+  The default camera the editor injects so that a camera-less file has
+  something to render through - the foreign-glTF import's, and the one
+  `open_scene_usd` adds - is session state, flagged
+  `erhe::Item_flags::session_only`: the glTF exporter and the USD writer both
+  leave it out, and the next open of the file injects a fresh one fitted to
+  the content. A file therefore saves as the prim tree it authored; a
+  camera-less file stays camera-less and its top-level prim stays its root.
 - Corner normals of geometry-normative meshes live only in `ERHE_geometry`;
   foreign viewers render such meshes flat-shaded.
 - **Prefab templates ignore editor-domain payloads.** Since the Save Scene /
@@ -329,6 +337,11 @@ scope, and a texture always is, because a USD file names image files rather
 than texture prims. Importing the same
 file as an asset (the Asset Browser's "Import", MCP `import_usd`) keeps
 using the wrapper and the target scene's library, unchanged.
+
+A file that authors no camera is looked at through the editor's default
+camera, fitted to the content; it is session state and is not written back
+(see "What is not persisted"), so the layer saves with the top-level prims
+the file authored.
 
 What the written layer carries beyond the USD mapping
 ([`usd_compatibility.md`](usd_compatibility.md)) is the editor's scene state,

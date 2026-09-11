@@ -6305,6 +6305,13 @@ private:
             if (erhe_child_prim == nullptr) {
                 continue;
             }
+            if ((erhe_child_prim->get_flag_bits() & erhe::Item_flags::session_only) != 0) {
+                // Editor session state (the default camera injected for a
+                // file that authors none), not file content: the file
+                // carries the cameras it authored or the user created, and
+                // the next open injects the default again.
+                continue;
+            }
             const erhe::scene::Node* erhe_child_node = dynamic_cast<const erhe::scene::Node*>(child.get());
             if (erhe_child_node == nullptr) {
                 // A prim of a class that carries no transform: the transform
