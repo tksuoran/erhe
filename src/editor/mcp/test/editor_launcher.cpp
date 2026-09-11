@@ -16,6 +16,7 @@
 #   include <windows.h>
 #else
 #   include <csignal>
+#   include <fcntl.h>
 #   include <sys/types.h>
 #   include <sys/wait.h>
 #   include <unistd.h>
@@ -53,17 +54,34 @@ auto make_client(const std::string& host, const int port, const std::string& tok
     return client;
 }
 
-auto health_ok(httplib::Client& client) -> bool
+// What GET /health says about the editor on a port: nothing answers,
+// the HTTP thread is up but the main loop is not yet serving requests
+// (503), or requests are served (200).
+enum class Health : unsigned int {
+    unreachable = 0,
+    starting    = 1,
+    ready       = 2
+};
+
+auto probe_health(httplib::Client& client) -> Health
 {
     httplib::Result res = client.Get("/health");
-    return res && (res->status == 200);
+    if (!res) {
+        return Health::unreachable;
+    }
+    return (res->status == 200) ? Health::ready : Health::starting;
 }
 
-auto wait_for_health(httplib::Client& client, const int timeout_seconds, const bool expect_alive) -> bool
+auto health_ok(httplib::Client& client) -> bool
+{
+    return probe_health(client) == Health::ready;
+}
+
+auto wait_for_health(httplib::Client& client, const int timeout_seconds, const Health expected) -> bool
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{timeout_seconds};
     while (std::chrono::steady_clock::now() < deadline) {
-        if (health_ok(client) == expect_alive) {
+        if (probe_health(client) == expected) {
             return true;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds{250});
@@ -158,6 +176,19 @@ auto spawn_editor(
     }
     if (pid == 0) {
         setsid();
+        // The editor logs through its file sink; its standard streams go to
+        // the null device so a parent that is itself a ctest test (the
+        // fixture start step) does not hand ctest's output pipe on to the
+        // editor, which would make ctest wait for the editor to exit.
+        const int null_fd = open("/dev/null", O_RDWR);
+        if (null_fd >= 0) {
+            dup2(null_fd, STDIN_FILENO);
+            dup2(null_fd, STDOUT_FILENO);
+            dup2(null_fd, STDERR_FILENO);
+            if (null_fd > STDERR_FILENO) {
+                close(null_fd);
+            }
+        }
         if (chdir(working_directory.c_str()) != 0) {
             _exit(127);
         }
@@ -205,10 +236,10 @@ auto read_token_file(const std::string& path) -> std::string
     return token;
 }
 
-auto is_editor_reachable(const std::string& host, const int port) -> bool
+auto wait_for_editor(const std::string& host, const int port, const int timeout_seconds) -> bool
 {
     httplib::Client client = make_client(host, port, {});
-    return health_ok(client);
+    return wait_for_health(client, timeout_seconds, Health::ready);
 }
 
 auto launch_editor(
@@ -270,12 +301,46 @@ auto launch_editor(
 #endif
 }
 
+auto start_editor_and_wait(const std::string& host, const int port, const int timeout_seconds, const std::string& token_file) -> int
+{
+    {
+        httplib::Client client = make_client(host, port, {});
+        if (probe_health(client) != Health::unreachable) {
+            std::cerr << "mcp_server_tests: something already answers on " << host << ":" << port
+                      << " (a leftover editor?); stop it before starting the fixture editor\n";
+            return 1;
+        }
+    }
+    const std::string token = read_token_file(token_file);
+    if (!launch_editor(host, port, timeout_seconds, token_file, token)) {
+        return 1;
+    }
+    // Leave the editor running: forget it so nothing in this process can
+    // stop it on the way out.
+#if defined(_WIN32)
+    for (Launched_editor& editor : s_launched) {
+        if (editor.process != nullptr) {
+            CloseHandle(editor.process);
+        }
+    }
+#endif
+    s_launched.clear();
+    return 0;
+}
+
 auto request_exit_and_wait(const std::string& host, const int port, const std::string& token) -> int
 {
     httplib::Client client = make_client(host, port, token);
-    if (!health_ok(client)) {
+    if (probe_health(client) == Health::unreachable) {
         std::cout << "mcp_server_tests: no MCP server at " << host << ":" << port << "; nothing to stop\n";
         return 0;
+    }
+    // A fixture stop can run right after its start (no case in between
+    // matched the filter): the editor is up but not yet serving. Wait for
+    // it rather than mistake "starting" for "gone" and leave it running.
+    if (!wait_for_health(client, 60, Health::ready)) {
+        std::cerr << "mcp_server_tests: editor at " << host << ":" << port << " still starting after 60 s\n";
+        return 1;
     }
 
     const std::string body =
@@ -287,7 +352,7 @@ auto request_exit_and_wait(const std::string& host, const int port, const std::s
         return 1;
     }
 
-    if (wait_for_health(client, 60, false)) {
+    if (wait_for_health(client, 60, Health::unreachable)) {
         std::cout << "mcp_server_tests: editor at " << host << ":" << port << " has exited\n";
         return 0;
     }

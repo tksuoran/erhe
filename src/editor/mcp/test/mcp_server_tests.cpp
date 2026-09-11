@@ -1292,14 +1292,19 @@ protected:
         m_token      = mcp_test::read_token_file(m_token_file);
         ASSERT_FALSE(m_token.empty()) << "cannot read the test token file '" << m_token_file << "'";
 
+        // Same as Mcp_env::initialize(): an editor started elsewhere (the
+        // ctest fixture) may still be coming up - give it the configured
+        // wait before launching one. A single probe here once launched a
+        // second editor beside the fixture's; both bound the port.
         static bool s_launch_attempted = false;
-        if (!mcp_test::is_editor_reachable(m_host, m_port) && !s_launch_attempted) {
+        const int   timeout_s          = env_or_int("ERHE_MCP_TEST_TIMEOUT_S", 30);
+        if (!mcp_test::wait_for_editor(m_host, m_port, timeout_s) && !s_launch_attempted) {
             s_launch_attempted = true;
             const int launch_timeout_s = env_or_int("ERHE_MCP_TEST_LAUNCH_TIMEOUT_S", 180);
             ASSERT_TRUE(mcp_test::launch_editor(m_host, m_port, launch_timeout_s, m_token_file, m_token))
                 << "no auth-enabled editor at " << m_host << ":" << m_port << " and none could be launched";
         }
-        ASSERT_TRUE(mcp_test::is_editor_reachable(m_host, m_port))
+        ASSERT_TRUE(mcp_test::wait_for_editor(m_host, m_port, 1))
             << "no auth-enabled editor at " << m_host << ":" << m_port;
     }
 

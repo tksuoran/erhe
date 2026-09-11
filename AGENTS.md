@@ -167,14 +167,17 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   editor shared by every `Mcp_test.*` case, and `mcp_editor_auth` (port 3774)
   is a dedicated editor started with a configure-time test token
   (`ERHE_MCP_TOKEN_FILE`) for `Mcp_auth_test.*`. Each fixture's start test
-  detaches `editor` from the repo root (PowerShell `Start-Process` on
-  Windows, `sh -c '... &'` elsewhere: a fixture setup test must exit before
-  its dependents run, CMake itself cannot start a process without waiting
-  for it, and a child that inherits ctest's output pipe makes ctest wait for
-  it, so the editor's console output is not captured - read `logs/log.txt`);
-  the cases wait for `GET /health` and run one at a time; the stop test runs
-  `mcp_server_tests --request-editor-exit`, which calls that editor's
-  `request_exit` MCP tool and waits for it to go away. Every case prepares
+  runs `mcp_server_tests --start-editor`, which spawns `editor` detached from
+  the repo root with its standard streams on the null device (a fixture
+  setup test must exit before its dependents run, CMake itself cannot start
+  a process without waiting for it, and a child that inherits ctest's output
+  pipe makes ctest wait for it, so the editor's console output is not
+  captured - read `logs/log.txt`), refuses when something already answers on
+  the port, and exits once `GET /health` answers 200 (it answers 503 until
+  the main loop serves requests); the cases wait for that 200 too and run
+  one at a time; the stop test runs `mcp_server_tests --request-editor-exit`,
+  which waits for a still-starting editor, calls that editor's `request_exit`
+  MCP tool and waits for it to go away. Every case prepares
   its own scene over MCP (create_scene + textured glTF import + a material)
   and closes it afterwards. Run `ctest -C Debug -R "Mcp_"` from the build
   directory; the windowed editor needs a live display (see "Windowed editor

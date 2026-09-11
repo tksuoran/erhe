@@ -433,6 +433,13 @@ private:
     };
     std::mutex                                       m_queue_mutex;
     std::vector<std::unique_ptr<Queued_request>>     m_request_queue;
+    // True once process_queued_requests() has run: the main loop is
+    // draining the queue, so a tools/call can be answered inside
+    // k_request_timeout. GET /health reports 200 only then (503
+    // "starting" before), because the HTTP thread is up seconds before
+    // the first frame and a client that treats "listening" as "ready"
+    // has its first calls expire. Guarded by m_queue_mutex.
+    bool                                             m_serving{false};
 
     // One-frame request deferral (main thread only, no lock needed). A
     // handler that needs the editor to render a frame before it can produce

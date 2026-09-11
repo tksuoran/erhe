@@ -172,10 +172,9 @@ again:**
 - `erhe::graphics::Texture` **is itself a `Texture_reference`** that returns
   itself, so a plain texture needs no wrapper; `Texture_reference` is abstract
   and cannot be constructed directly.
-- The MCP test harness's readiness probe is **`/health`, which answers before
-  the default scene exists**. A test run started the moment health goes green
-  fails with `Scene not found: ` (empty name). Give the editor a few more
-  seconds, or re-run.
+- The MCP test harness's readiness probe is `/health`, which answers 200
+  only once the main loop serves requests (503 before). Every case prepares
+  its own scene over MCP, so no test depends on the default scene existing.
 - `nlohmann::json{value}` builds an **array**, not a scalar. Assign the value
   directly (`e["k"] = v;`) when writing a number into an MCP payload.
 

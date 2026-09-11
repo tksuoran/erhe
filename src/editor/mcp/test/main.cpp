@@ -25,8 +25,18 @@ auto env_or_int(const char* name, int fallback) -> int
 int main(int argc, char** argv)
 {
     for (int i = 1; i < argc; ++i) {
-        // The FIXTURES_CLEANUP step of the ctest fixtures (CMakeLists.txt).
-        // ERHE_MCP_TEST_TOKEN_FILE names the token of an auth-enabled editor.
+        // The FIXTURES_SETUP / FIXTURES_CLEANUP steps of the ctest fixtures
+        // (CMakeLists.txt). ERHE_MCP_TEST_TOKEN_FILE names the token file of
+        // an auth-enabled editor (the editor to start reads it; the token
+        // is presented to the editor being stopped).
+        if (std::strcmp(argv[i], "--start-editor") == 0) {
+            return mcp_test::start_editor_and_wait(
+                env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1"),
+                env_or_int("ERHE_MCP_TEST_PORT", 3743),
+                env_or_int("ERHE_MCP_TEST_LAUNCH_TIMEOUT_S", 180),
+                env_or    ("ERHE_MCP_TEST_TOKEN_FILE", "")
+            );
+        }
         if (std::strcmp(argv[i], "--request-editor-exit") == 0) {
             return mcp_test::request_exit_and_wait(
                 env_or    ("ERHE_MCP_TEST_HOST", "127.0.0.1"),

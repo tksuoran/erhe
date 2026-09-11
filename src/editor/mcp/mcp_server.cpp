@@ -134,20 +134,26 @@ void Mcp_server::start()
     for (int candidate = preferred_port; candidate < (preferred_port + k_port_retry_count); ++candidate) {
         m_http_server = std::make_unique<httplib::Server>();
         m_http_server->set_payload_max_length(k_max_payload_bytes);
-#if defined(_WIN32)
-        // httplib's default socket options set SO_REUSEADDR, which on
-        // Windows (unlike POSIX) lets bind() succeed on a port another
-        // process is actively LISTENing on. The new socket is silently
-        // shadowed (the first listener keeps receiving all connections),
-        // so the fallback scan below never fires and this server logs a
-        // port that a DIFFERENT editor instance is answering on.
-        // SO_EXCLUSIVEADDRUSE makes bind() fail like POSIX would.
+        // The port scan below relies on bind() FAILING on a port another
+        // editor is LISTENing on; httplib's default socket options break
+        // that on every platform. On Windows they set SO_REUSEADDR, which
+        // (unlike POSIX) lets bind() succeed on an actively listening port:
+        // the new socket is silently shadowed and this server logs a port a
+        // DIFFERENT editor is answering on; SO_EXCLUSIVEADDRUSE makes bind()
+        // fail. On POSIX they set SO_REUSEPORT, under which two listeners
+        // of the same user share the port and the kernel splits incoming
+        // connections between them (seen on macOS: two fixture editors both
+        // logged "listening on 3774" and served alternate requests);
+        // SO_REUSEADDR alone keeps TIME_WAIT reuse and fails on a listener.
         m_http_server->set_socket_options(
             [](socket_t sock) {
+#if defined(_WIN32)
                 httplib::set_socket_opt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, 1);
+#else
+                httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
+#endif
             }
         );
-#endif
         setup_routes();
         if (m_http_server->bind_to_port("127.0.0.1", candidate)) {
             bound_port = candidate;
@@ -288,9 +294,21 @@ void Mcp_server::setup_routes()
         }
     });
 
-    m_http_server->Get("/health", [](const httplib::Request&, httplib::Response& res) {
+    // Readiness, not liveness: 200 once the main loop drains the request
+    // queue (see m_serving), 503 while the editor is still starting up.
+    m_http_server->Get("/health", [this](const httplib::Request&, httplib::Response& res) {
+        bool serving = false;
+        {
+            std::lock_guard<std::mutex> lock{m_queue_mutex};
+            serving = m_serving;
+        }
         res.set_header("Content-Type", "application/json");
-        res.body = R"({"status":"ok"})";
+        if (serving) {
+            res.body = R"({"status":"ok"})";
+        } else {
+            res.status = 503;
+            res.body   = R"({"status":"starting"})";
+        }
     });
 }
 
@@ -410,6 +428,7 @@ auto Mcp_server::process_queued_requests() -> int
     std::vector<std::unique_ptr<Queued_request>> requests;
     {
         std::lock_guard<std::mutex> lock{m_queue_mutex};
+        m_serving = true;
         requests.swap(m_request_queue);
     }
 

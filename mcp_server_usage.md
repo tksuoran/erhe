@@ -7,7 +7,7 @@ The editor embeds an MCP (Model Context Protocol) server that exposes editor com
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/mcp` | JSON-RPC 2.0 endpoint for MCP protocol |
-| GET | `/health` | Health check, returns `{"status":"ok"}` |
+| GET | `/health` | Readiness check: `200 {"status":"ok"}` once the main loop serves requests, `503 {"status":"starting"}` while the editor is still starting (the HTTP thread is up seconds before the first frame; a `tools/call` sent then expires) |
 
 ## Registering as an HTTP MCP server
 
