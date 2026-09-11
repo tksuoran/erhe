@@ -576,13 +576,6 @@ section 3 except where named.
   payload reads the pre-instantiation bounds (the survey's
   `payload_child_folder.usda` row at 4950% is this; a second framing reads
   the right ones). The same load-settle family as the load-performance item.
-- The bounds row the survey still shows in `full_assets`
-  (`doc/usd-wg-assets.md`, "bounds disagree"): vehicleVariants (0.11),
-  measured before the survey's own bounds comparison was corrected (Z-up
-  conversion, lights in the pxr bound); re-measure with the gap loop
-  (`doc/usd-survey-gap-loop.md`) before diagnosing. Every `test_assets`
-  bounds row is closed, and so is Creases_SpinningPyramids, which the gap
-  loop re-measured at a deviation of 0.0.
 - `inherits` and `specializes` arcs whose target is not a `class` prim
   (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
   a style only of a class prim, so such an arc composes nothing and is
@@ -603,7 +596,11 @@ section 3 except where named.
   StandardShaderBall scene's six neutral `.exr` maps are the surveyed
   assets that ask for the second.
 - Load performance of a scene holding thousands of prims (the intent-vfx
-  teapot scenes, several minutes with the stall watchdog firing): each queued
+  teapot scenes, several minutes with the stall watchdog firing, and the
+  usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
+  hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
+  prims and 146 meshes and the watchdog reports the tick stuck in
+  `raytrace: BVH commit`): each queued
   raytrace commit scans every mesh of every layer
   (`collect_meshes_sharing_primitives`, O(N) per commit, N commits per
   load), hover traces the linear path every frame while the TLAS cannot

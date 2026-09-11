@@ -223,5 +223,18 @@
    "no mesh loaded"
   ],
   "reason": "the model's geometry is composed entirely inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe's hoist carries a variant's def children and property opinions but not the arcs they author, and the section 5 reference-structure rule drops a def authored over a reference, so nothing composes - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result. The material lines behind it are the same file's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of section 6); this file references that model once per draw mode, so it imports 0 of 35 meshes and 0 of 70 materials. Its own extra line is the duplicates' xformOp stack: `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops `[\"xformOp:transform\", \"xformOp:transform:duplicate1\"]` while authoring only the second, because the first arrives through their internal reference to `/World/FancyTeapot_0`; the stack is reconstructed from a prim's own properties, so it reads as unreadable and the prim keeps the composed transform - the second of the two section 6 items, also a known limitation"
+ },
+ {
+  "path": "full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/vehicleVariants.usda",
+  "diagnostics": [
+   "Main loop STALLED",
+   "breadcrumb t=",
+   "Failed to read property 'elementType'",
+   "does not exist in Prim .*\\(GeomSubset\\)"
+  ],
+  "gaps": [
+   "Main loop STALLED"
+  ],
+  "reason": "the kit's variant sets are hoisted whole, so a stage the composer reads as 91 prims and 6 meshes arrives as 2373 prims and 146 meshes, and the load takes long enough for the main-loop watchdog to report the tick stuck in `raytrace: BVH commit` and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which names that scan as the first of its three causes; a known limitation, not a by-design result. The elementType lines are Tydra's animation scan asking for a builtin that the binary 4wdGeo.usd leaves unauthored on its GeomSubsets (its .usda siblings author `uniform token elementType = \"face\"`, which is also USD's fallback), and nothing animatable rides that attribute: every subset converts, giving the entry its 432 materials. The geometry itself is right - the bounds deviate by 0.02 from the composed stage, and the Storm render matches at 0.86"
  }
 ]
