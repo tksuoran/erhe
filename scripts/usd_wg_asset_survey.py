@@ -74,11 +74,15 @@ every entry (so an interrupted run keeps what it did), --clear-test-db
 empties it (and exits when no --root is given), and --failing-first orders
 the run by it: `fail` entries first, shortest run first, then `gap` entries
 the same way, then entries the database has not seen in survey order, and
-`pass` entries last. --last <substring> (repeatable) then moves the entries
-whose path contains it to the very end, keeping their order, so a slow or
-stuck entry stops holding up the coverage the rest of the run gives. --limit
-applies after both, so this runs the five quickest known failures with
-the MaterialX color-space entries deferred:
+`pass` entries last. --unrecorded-first then moves the entries the database
+has no result for to the front, keeping their order (with --failing-first
+that puts them ahead of the recorded failures), so a new or cleared
+database fills in before known results are re-run. --last <substring>
+(repeatable) then moves the entries whose path contains it to the very
+end, keeping their order, so a slow or stuck entry stops holding up the
+coverage the rest of the run gives. --limit applies after all of these, so
+this runs the five quickest known failures with the MaterialX color-space
+entries deferred:
 
     py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets>         --record-test-db --failing-first --last ColorSpaceTests/MaterialX --limit 5
 
@@ -1797,6 +1801,14 @@ def sort_failing_first(entries: list, db: dict) -> list:
     return [entry for _, entry in sorted(enumerate(entries), key=key)]
 
 
+def sort_unrecorded_first(entries: list, db: dict) -> list:
+    """Entries the database has no result for move to the front, keeping
+    their order; the recorded entries follow in the order they had."""
+    known = db["entries"]
+    unrecorded = [e for e in entries if e["path"] not in known]
+    return unrecorded + [e for e in entries if e["path"] in known]
+
+
 def sort_last(entries: list, fragments: list) -> list:
     """Entries whose path contains any fragment move to the end, in the order
     they had; the rest keep their order."""
@@ -1994,6 +2006,8 @@ def main() -> int:
                         help="survey only entries whose repo-relative path contains this substring (repeatable)")
     parser.add_argument("--exclude", action="append", default=[],
                         help="skip entries whose repo-relative path contains this substring (repeatable, applied after --only)")
+    parser.add_argument("--unrecorded-first", action="store_true",
+                        help="run the entries the test database has no result for before the recorded ones (applied after --failing-first, before --last)")
     parser.add_argument("--last", action="append", default=[],
                         help="run entries whose repo-relative path contains this substring after every other entry (repeatable; applied after --failing-first, before --limit)")
     parser.add_argument("--list-entries", action="store_true", help="print the entry list and exit")
@@ -2110,6 +2124,8 @@ def main() -> int:
         entries = [e for e in entries if not any(fragment in e["path"] for fragment in args.exclude)]
     if args.failing_first:
         entries = sort_failing_first(entries, test_db)
+    if args.unrecorded_first:
+        entries = sort_unrecorded_first(entries, test_db)
     if args.last:
         entries = sort_last(entries, args.last)
     if args.limit > 0:
