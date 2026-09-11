@@ -609,6 +609,13 @@ section 3 except where named.
   on the tick thread. A shape-to-meshes index maintained at the change
   sites, a hover that does not trace while a load is in flight, and the
   proxy build on the deferred path are the fixes, in that order.
+- An environment map from a `DomeLight` texture: erhe has no environment
+  map, so a dome's `inputs:texture:file` is named in one warning and not
+  sampled, and the dome contributes the constant radiance of its `color`,
+  `intensity` and `exposure` only (`src/erhe/usd/notes.md`, DomeLight). The
+  usd-wg McUsd entries are the surveyed assets that author one. Taking it
+  up means an image-based ambient term in the renderer first; the reader
+  already keeps the dome prim and its texture path.
 - Grid depth: the grid's depth does not agree with the content's, so grid
   lines cross opaque objects below the horizon (`doc/editor_rendering.md`,
   Grid). Needs a RenderDoc session on the windowed build.

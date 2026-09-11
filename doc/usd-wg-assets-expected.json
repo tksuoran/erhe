@@ -127,5 +127,12 @@
    "TODO: Prim type SpatialAudio"
   ],
   "reason": "the SkelAnimation prim </SoC_ElephantWithMonochord/Object/Elefant/_anim> declares `blendShapes` and `blendShapeWeights` with no authored value and no time sample (measured with pxr), which OpenUSD reads as no blend shapes and reports nothing about; `extent` is a bound rather than something drawn, and the asset's own README ('Known Issue: Bounds calculations') states its extents may be wrong and that a viewer may compute new bounds from the skinned data instead, which is what erhe does with the 2540 samples Tydra skips; and the README states the file carries UsdAudio data on purpose, which erhe keeps as a Typed prim without its schema attributes (doc/usd-compatibility-plan.md section 5, the Typed prim of unsupported type). erhe imports 3 of 3 meshes and 2 of 2 materials and matches the Storm render on the objects it draws (0.99)"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd.usda",
+  "diagnostics": [
+   "DomeLight texture '.*' is not sampled"
+  ],
+  "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
  }
 ]
