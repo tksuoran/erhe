@@ -134,5 +134,26 @@
    "DomeLight texture '.*' is not sampled"
   ],
   "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd.usdz",
+  "diagnostics": [
+   "DomeLight texture '.*' is not sampled"
+  ],
+  "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd_10cm.usda",
+  "diagnostics": [
+   "DomeLight texture '.*' is not sampled"
+  ],
+  "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
+ },
+ {
+  "path": "full_assets/McUsd/McUsd_10cm.usdz",
+  "diagnostics": [
+   "DomeLight texture '.*' is not sampled"
+  ],
+  "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
  }
 ]
