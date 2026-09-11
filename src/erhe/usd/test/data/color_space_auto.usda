@@ -1,0 +1,165 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "materials"
+    {
+        def Material "rgba_png"
+        {
+            token outputs:surface.connect = </World/materials/rgba_png/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgba.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/rgba_png/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+
+        def Material "rgb_jpg"
+        {
+            token outputs:surface.connect = </World/materials/rgb_jpg/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgb.jpg@
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/rgb_jpg/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+
+        def Material "gray_png"
+        {
+            token outputs:surface.connect = </World/materials/gray_png/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_gray.png@
+                float outputs:r
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness.connect = </World/materials/gray_png/texture.outputs:r>
+                token outputs:surface
+            }
+        }
+
+        def Material "gray16_png"
+        {
+            token outputs:surface.connect = </World/materials/gray16_png/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_gray16.png@
+                float outputs:r
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness.connect = </World/materials/gray16_png/texture.outputs:r>
+                token outputs:surface
+            }
+        }
+
+        def Material "palette_png"
+        {
+            token outputs:surface.connect = </World/materials/palette_png/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_palette.png@
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/palette_png/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+
+        def Material "rgb_bmp"
+        {
+            token outputs:surface.connect = </World/materials/rgb_bmp/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgb.bmp@
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/rgb_bmp/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+
+        def Material "rgba_tga"
+        {
+            token outputs:surface.connect = </World/materials/rgba_tga/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgba.tga@
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/rgba_tga/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+
+        def Material "authored_raw"
+        {
+            token outputs:surface.connect = </World/materials/authored_raw/surface.outputs:surface>
+
+            def Shader "texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgba.png@
+                token inputs:sourceColorSpace = "raw"
+                float3 outputs:rgb
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                normal3f inputs:normal.connect = </World/materials/authored_raw/texture.outputs:rgb>
+                token outputs:surface
+            }
+        }
+    }
+}

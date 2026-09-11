@@ -17,6 +17,7 @@
 #include "erhe_primitive/primitive.hpp"
 #include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
+#include "erhe_usd/image_header.hpp"
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_string.hpp"
@@ -695,6 +696,13 @@ public:
         if (!directory.empty()) {
             env.set_search_paths({directory});
         }
+        // The converter runs metadata-only for textures: it resolves each
+        // image's path and color space and reads no texel. erhe decodes the
+        // image itself (convert_images / Usd_image), and Tydra's decode would
+        // be a second one, followed by an 8-bit-to-float conversion nothing
+        // reads. (The LIGHTUSD_WITH_BUILTIN_IMAGE_LOADER option does not
+        // compile Tydra's decoder out; this flag is what keeps it idle.)
+        env.scene_config.load_texture_assets = false;
 
         lightusd::tydra::RenderSceneConverter converter;
         Tydra_scene                           scene;
@@ -1432,10 +1440,7 @@ private:
     // for itself. A `PointInstancer` prototype "resolved to no RenderMesh"
     // says the render-scene conversion did not expand the instancer, which is
     // exactly what erhe does not want it to do: the expansion is
-    // convert_point_instancer's (S1), off the raw prim. A texture the stage's
-    // own `.usdz` archive holds is read straight out of the archive by
-    // convert_images, so Tydra's failure to resolve its packaged path names
-    // an image that does reach the material.
+    // convert_point_instancer's (S1), off the raw prim.
     [[nodiscard]] auto filter_converter_warning(const std::string& warning) -> std::string
     {
         std::string       filtered;
@@ -1451,18 +1456,6 @@ private:
                 (line.find("resolved to no RenderMesh") != std::string_view::npos)
             ) {
                 continue;
-            }
-            constexpr std::string_view texture_load_failure{"Failed to load texture image: `"};
-            const std::size_t          failure_position = line.find(texture_load_failure);
-            if (failure_position != std::string_view::npos) {
-                const std::size_t name_begin = failure_position + texture_load_failure.size();
-                const std::size_t name_end   = line.find('`', name_begin);
-                if (
-                    (name_end != std::string_view::npos) &&
-                    usdz_has_entry(std::string{line.substr(name_begin, name_end - name_begin)})
-                ) {
-                    continue;
-                }
             }
             if (line.empty() && filtered.empty()) {
                 continue;
@@ -1846,14 +1839,6 @@ private:
     // archive's own directory - directory components and all, so a texture
     // packed under `0/` is the key `0/texture.png`; a leading `./` is not
     // part of that key.
-    [[nodiscard]] auto usdz_has_entry(const std::string& asset_identifier) -> bool
-    {
-        if (asset_identifier.empty() || !ensure_usdz_asset()) {
-            return false;
-        }
-        return m_usdz_asset.asset_map.find(usdz_entry_key(asset_identifier)) != m_usdz_asset.asset_map.end();
-    }
-
     [[nodiscard]] static auto usdz_entry_key(const std::string& asset_identifier) -> std::string
     {
         return (asset_identifier.compare(0, 2, "./") == 0)
@@ -1901,9 +1886,31 @@ private:
             }
             usd_image.path = image_path;
             usd_image.name = usd_image.path.filename().generic_string();
-            usd_image.srgb = is_srgb_color_space(image.usdColorSpace);
+            usd_image.srgb = resolve_srgb(image, usd_image);
             m_result.data.images.push_back(usd_image);
         }
+    }
+
+    // Whether the image's texels are sRGB-encoded. An authored color space
+    // says so itself. `auto` - the schema fallback, which Tydra reports as
+    // Unknown when it reads no texel - is the UsdPreviewSurface rule applied
+    // to the image's own header: sRGB when it is 8-bit with 3 or 4
+    // components (is_srgb_by_auto_rule), data otherwise.
+    [[nodiscard]] auto resolve_srgb(const lightusd::tydra::TextureImage& image, const Usd_image& usd_image) -> bool
+    {
+        if (image.usdColorSpace != lightusd::tydra::ColorSpace::Unknown) {
+            return is_srgb_color_space(image.usdColorSpace);
+        }
+        const Image_header header = usd_image.bytes.empty()
+            ? probe_image_header(usd_image.path)
+            : probe_image_header(std::span<const std::uint8_t>{usd_image.bytes.data(), usd_image.bytes.size()});
+        if (!header.known) {
+            log_usd->info(
+                "USD image '{}': color space is 'auto' and the header is not one this reader knows - read as data",
+                usd_image.path.generic_string()
+            );
+        }
+        return is_srgb_by_auto_rule(header);
     }
 
     // The image behind one UsdPreviewSurface input, or no_image when the

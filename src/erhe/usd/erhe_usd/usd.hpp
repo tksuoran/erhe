@@ -350,8 +350,9 @@ class Usd_image final
 public:
     std::string           name;
     std::filesystem::path path;
-    // The USD color space of the source asset says whether the texels are
-    // sRGB-encoded; a normal / occlusion map is raw.
+    // Whether the texels are sRGB-encoded: the authored USD color space, or
+    // for `auto` the UsdPreviewSurface rule read off the image's own header
+    // (8-bit with 3 or 4 components; erhe_usd/image_header.hpp).
     bool                  srgb{true};
     // The image file's bytes when it is packed inside the `.usdz` the stage
     // was loaded from; empty when the image is a loose file, which `path`

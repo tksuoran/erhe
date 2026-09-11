@@ -777,6 +777,10 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
             # an erhe scene.
             "LIGHTUSD_WITH_TYDRA ON"
             "LIGHTUSD_WITH_PCP ON"
+            # Does not compile Tydra's stb_image decoder out (LightUSD's
+            # CMake leaves the NO_BUILTIN define commented out); the render
+            # scene converter is run with load_texture_assets off instead
+            # (src/erhe/usd/erhe_usd/usd_import.cpp), so no texel is read.
             "LIGHTUSD_WITH_BUILTIN_IMAGE_LOADER OFF"
             "LIGHTUSD_USE_WUFFS_IMAGE_LOADER OFF"
             "LIGHTUSD_WITH_NANOIMAGE OFF"

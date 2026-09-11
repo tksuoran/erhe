@@ -1430,9 +1430,6 @@ REMEDY = [
      "register a USD-imported material at its creation site so the scene owns it rather than "
      "listing it from the mesh binding (R5.2b, src/editor/scene/scene_root.cpp); the material "
      "still binds and renders"),
-    (re.compile(r"sRGB texture is converted to fp"),
-     "read 16-bit and 32-bit sRGB images directly instead of Tydra's un-linearized float "
-     "conversion, which loses the transfer function"),
     (re.compile(r"Failed to load texture image|image .* not found|Failed to resolve asset path"),
      "resolve a texture asset path against the layer that authored it, including inside a "
      ".usdz package"),

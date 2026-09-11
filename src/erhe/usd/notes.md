@@ -172,10 +172,17 @@ translation units.
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of
   its facets uses it.
-- LightUSD's image loaders are off, so an image arrives as a resolved file
-  path (`Usd_image`) and the caller decodes it with erhe's own image
-  loading. `erhe::usd` creates no GPU object at all, which is what lets the
-  conversion run off the main thread.
+- The render-scene converter runs with `load_texture_assets` off, so an
+  image arrives as a resolved file path (`Usd_image`) with no texel read,
+  and the caller decodes it with erhe's own image loading. (The
+  `LIGHTUSD_WITH_BUILTIN_IMAGE_LOADER` option does not compile Tydra's
+  decoder out; the flag is what keeps it idle.) `erhe::usd` creates no GPU
+  object at all, which is what lets the conversion run off the main thread.
+  `Usd_image::srgb` is the authored color space; for `auto`, the schema
+  fallback, it is the UsdPreviewSurface rule applied to the image's own
+  header (`image_header.hpp`: sRGB when 8-bit with 3 or 4 components, data
+  otherwise; PNG, JPEG, BMP and TGA headers are read, any other file is
+  data).
 - Values are read at the stage's default time code, and `UsdPhysics` prims
   and API schemas are counted and reported in one log line rather than
   imported (`doc/usd-compatibility-plan.md` section 5).
@@ -751,10 +758,8 @@ source; the caller decodes them with the memory overload of
 The archive key is the packaged asset path exactly as the file authors it,
 relative to the archive root and directory components included, so a texture
 packed under `0/` is the entry `0/texture.png` (a leading `./` is not part of
-the key). The Tydra converter resolves that path against the file system,
-where it does not exist, and reports it as a texture it could not load; that
-line is dropped from the converter's warning for every path the archive holds
-(`filter_converter_warning`), because the image does reach the material.
+the key). The converter reads no texel, so it never tries to open that path;
+its identifier is what reaches `convert_images`, which looks the entry up.
 
 Not yet imported: blend shapes, animation clips, volumes, MaterialX / OpenPBR
 shading networks, and texture filter state.

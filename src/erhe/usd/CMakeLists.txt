@@ -4,6 +4,8 @@ add_library(erhe::usd ALIAS ${_target})
 
 erhe_target_sources_grouped(
     ${_target} TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES
+    erhe_usd/image_header.cpp
+    erhe_usd/image_header.hpp
     erhe_usd/usd.cpp
     erhe_usd/usd.hpp
     erhe_usd/usd_impl.hpp

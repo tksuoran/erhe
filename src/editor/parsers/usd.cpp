@@ -104,11 +104,11 @@ namespace editor {
 namespace {
 
 // One image file the stage names, loaded into a GPU texture. USD material
-// inputs reference image files, and LightUSD's own image loaders are off
-// (erhe::usd/notes.md), so the decode goes through erhe's Image_loader - the
-// same one Texture_file_loader uses for standalone image files - and the
-// upload through a blocking-drain Image_transfer, which is what the inline
-// glTF import path does as well.
+// inputs reference image files, and erhe::usd reads no texel of them (its
+// converter runs metadata-only, src/erhe/usd/notes.md), so the decode goes
+// through erhe's Image_loader - the same one Texture_file_loader uses for
+// standalone image files - and the upload through a blocking-drain
+// Image_transfer, which is what the inline glTF import path does as well.
 [[nodiscard]] auto load_usd_image(
     erhe::graphics::Device&                      graphics_device,
     erhe::gltf::Image_transfer&                  image_transfer,
