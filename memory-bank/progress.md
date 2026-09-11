@@ -143,3 +143,9 @@
 ✓fix-3{12f0ce012:null-material-rendered-unlit{Shader_key::derive-skipped-material-block->BXDF_MODEL-0=unlit,no-USE_VERTEX_VARYING_NORMAL;default-record-slot-0-says-isotropic_brdf}->derive-uses-Material_values{}-defaults+empty-samplers-for-null;shadow-path-unaffected;headless+user-verified}
 ✓tests-in-main-build{cf367a263-(c)User:configure_vs2026_vulkan.bat-ERHE_BUILD_TESTS=ON;run:build_vs2026_vulkan/src/erhe/usd/test/Debug/erhe_usd_tests.exe}
   ALL-DONE-2026-09-09;NEXT=prompt_queue.txt-item-0{E4b}
+
+[TASK::usd-survey-gap-loop]{2026-09-11,IN-PROGRESS;harness=doc/usd-survey-gap-loop.md}
+✓survey-tooling{test-db+ordering-options+--stop-on-gap+expected-results-sidecar+eye-per-entry+bounds-fixes;19-commits-156911452..b2f1e143a}
+✓erhe-fixes{12e674e96+a5ffe14ad+ca9b2b651+f346d58f4+232213b0e+bcdc3a721+69700edb3+736ec447b}
+@state::test_assets-95/104-pass{MaterialX-6-excluded;all_files-row-stale}
+?next::TextureTransformTest.usd->BrainStem.usdz->test_assets-clean->full_assets->intent-vfx->full-run-regenerates-doc

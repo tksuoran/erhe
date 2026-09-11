@@ -576,12 +576,13 @@ section 3 except where named.
   payload reads the pre-instantiation bounds (the survey's
   `payload_child_folder.usda` row at 4950% is this; a second framing reads
   the right ones). The same load-settle family as the load-performance item.
-- The bounds rows the survey still shows after the root-layer-metrics fix
+- The bounds rows the survey still shows in `full_assets`
   (`doc/usd-wg-assets.md`, "bounds disagree"): Creases_SpinningPyramids
-  (8.3x, node-subtree variants), all_files, active.usda and over.usda
-  (inactive or overridden prims still framed), the four internal-reference
-  tests (0.19), scaled_extent, vehicleVariants (0.11). Each is measured
-  against pxr's composed bounds and not yet diagnosed.
+  (8.3x, node-subtree variants) and vehicleVariants (0.11), measured before
+  the survey's own bounds comparison was corrected (Z-up conversion, lights
+  in the pxr bound); re-measure with the gap loop
+  (`doc/usd-survey-gap-loop.md`) before diagnosing. Every `test_assets`
+  bounds row is closed.
 - `inherits` and `specializes` arcs whose target is not a `class` prim
   (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
   a style only of a class prim, so such an arc composes nothing and is
