@@ -1,0 +1,52 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Scope "Graph_Meshes"
+    {
+        def NodeGraph "Terrain"
+        {
+            custom token erhe:graph:format = "erhe_geometry_graph"
+            token outputs:geometry.connect = </World/Graph_Meshes/Terrain/Transform.outputs:geometry>
+
+            def Shader "Box"
+            {
+                uniform token info:id = "erhe:geometry:box"
+                custom float2 erhe:ui:position = (60, 20)
+                float inputs:size = 2.5
+                float inputs:seed.connect = </World/Graph_Meshes/Terrain/Alien.outputs:f>
+                token outputs:geometry
+            }
+
+            def Shader "Transform"
+            {
+                uniform token info:id = "erhe:geometry:transform"
+                custom float2 erhe:ui:position = (260, 20)
+                token inputs:geometry.connect = </World/Graph_Meshes/Terrain/Box.outputs:geometry>
+                float3 inputs:translation
+                float4 inputs:tint
+                matrix4d inputs:matrix
+                token outputs:geometry
+            }
+
+            def Shader "Alien"
+            {
+                uniform token info:id = "erhe:texture:noise"
+                float outputs:f
+            }
+
+            def Mesh "result"
+            {
+                uniform token subdivisionScheme = "none"
+                int[] faceVertexCounts = [4, 4]
+                int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+                point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1), (-1, 1, -1), (1, 1, -1), (1, 1, 1), (-1, 1, 1)]
+            }
+        }
+    }
+}

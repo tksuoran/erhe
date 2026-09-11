@@ -72,7 +72,8 @@ node attachments. The mapping an exporter applies and an importer inverts:
 | `Skin` | `UsdSkel` (`SkelRoot`, `Skeleton`, `SkelBindingAPI`) | the skin's pivot is the `Skeleton` prim and its joints are `Xform` prims below it, so a joint animates the way any prim does; `inverse_bind_j` is `inverse(bind_j) * geomBindTransform` and a save splits it back with an identity `geomBindTransform` for the skeleton's first skin (`src/erhe/usd/notes.md`, "Skinning") |
 | `editor::Brush` | `Brush` (custom `typeName`, no USD schema) | a brush is a prim where it sits: `erhe:Brush:density` and `erhe:Brush:normal_style` custom attributes, `material:binding` for the material a placed instance gets, and the geometry as a child `def Mesh "geometry"` with `subdivisionScheme = none` (`src/erhe/usd/notes.md`, "Brush prims"). `purpose` is derived from the brush flag (M3), so it is not authored |
 | `editor::Graph_texture` | `NodeGraph` marked with `erhe:graph:format` | a texture graph is a prim where it sits, holding one generic `Shader` child per node; see "Texture node graphs" |
-| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh`, graph meshes | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
+| `editor::Graph_mesh` | `NodeGraph` marked with `erhe:graph:format` | a geometry graph is the same prim form, with its nodes' `info:id` under `erhe:geometry:` and its evaluated geometry as a child `def Mesh "result"`; see "Geometry node graphs" |
+| `Layout` / `Layout_item`, `Brush_placement`, `Grid`, `Rendertarget_mesh` | custom (codeless) schemas or namespaced custom attributes (`erhe:...`) | editor domain, no USD counterpart; the attribute form is the qualified-name row of "Property system" |
 | prefab instance (`Prefab_instance`, glTF 2.1 externalAssets) | `references` (or `payload`) composition arc | one attachment per arc, in the authored order; the arc's target file, prim path and form are what the attachment records, and a save writes them back |
 | item tags (`ERHE_collections`) | `UsdCollectionAPI` (`collection:<name>:includes`) on the default prim, one collection per tag | |
 | per-scene settings (`ERHE_scene`) | root-layer `customLayerData` or a custom API schema on the root prim | |
@@ -177,6 +178,21 @@ document owns the rules, this table owns the mapping rows.
 | a node pin | `inputs:<pin>` / `outputs:<pin>` typed from the pin's `erhe::texgen::Value_type` (`float`, `color3f`, `color4f`) | an input pin with a link is the attribute with a `.connect` to the source node's output; an unlinked pin is the typed attribute alone, so the pin is still in the file |
 | the graph's result | the `NodeGraph`'s own `outputs:<pin>` connection | taken from the linked input of the graph's `output` sink node: the value a material slot can name |
 | a material slot sampling the graph | the slot's `UsdPreviewSurface` input connected to that interface output | in place of a `UsdUVTexture`, so no image is written for the slot. The baked image is not written at all: a graph loads born dirty and the first evaluation re-bakes it |
+
+## Geometry node graphs
+
+An erhe geometry graph (`editor::Graph_mesh`) rides a USD file as the prim
+form a texture graph takes
+([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md) section 4); the
+design document owns the rules, this table owns the mapping rows. Every row
+of "Texture node graphs" holds unchanged except the four below.
+
+| erhe | USD | notes |
+|---|---|---|
+| a `Graph_mesh` asset | `NodeGraph` prim carrying `custom token erhe:graph:format = "erhe_geometry_graph"` | the marker attribute is the same one a texture graph carries and the token is what tells the two kinds apart, so which `info:id` prefix the graph's nodes are under follows from the format |
+| one graph node | a `Shader` child, `uniform token info:id = "erhe:geometry:<factory type>"` | a `Shader` whose `info:id` is under another prefix - a texture node inside a geometry graph - is one warning and no node, and the links into it go with it |
+| a node pin | `inputs:<pin>` / `outputs:<pin>` typed from the pin's payload kind | `float` for a float, `int` for an int, `bool` for a bool, `float3` for a vec3, `float4` for a vec4 and `matrix4d` for a mat4; the opaque payload pins - geometry, points, instances, sdf, material - are `token`, since an erhe payload has no USD value and the connection is what matters |
+| the graph's evaluated geometry | a child `def Mesh "result"` with `subdivisionScheme = none` | written the way a brush writes its geometry, so a viewer without erhe sees what the graph makes. A reload rebuilds the graph from the nodes and re-evaluates it, and reads the child mesh only when the graph carries no node; a graph that has evaluated nothing writes no child |
 
 ## Lights
 

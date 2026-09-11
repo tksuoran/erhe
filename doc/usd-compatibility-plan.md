@@ -504,7 +504,7 @@ graph connected to the graph's interface output in place of a
 `UsdUVTexture`. `doc/usd-texture-graphs-plan.md` owns the design, the
 record between `erhe::usd` and the editor, the two phases and the
 verification. Both phases hold: `erhe::usd` reads and writes the prims as
-the neutral record (`src/erhe/usd/notes.md`, "Texture node graphs";
+the neutral record (`src/erhe/usd/notes.md`, "Node graphs";
 `erhe_usd_tests` 245) and the editor collects and rebuilds a
 `Graph_texture` from it, binds the material slots, and the round-trip
 script's `texture_graph.usda` leg is green with a byte-identical second
@@ -582,7 +582,7 @@ section 3 except where named.
   warned about; the surveyed file overrides every inherited opinion locally,
   so nothing visible depends on it there.
 - Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
-  "Texture node graphs"): Tydra fails a material whose input connects to a
+  "Node graphs"): Tydra fails a material whose input connects to a
   `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
   the USDA parser does not round-trip an escaped double quote, so nested
   parameter text travels with single quotes. Both go with a fork fix.

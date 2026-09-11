@@ -154,7 +154,7 @@ material slots, and leave the graph dirty for the next frame's
 
 ## 3. Phases
 
-Phase 1 holds (`src/erhe/usd/notes.md`, "Texture node graphs") and so does
+Phase 1 holds (`src/erhe/usd/notes.md`, "Node graphs") and so does
 phase 2. Two facts phase 1 settled that section 2 did not foresee: the
 parameter travels as a (USD type, USD literal text) pair chosen by the
 editor, since the editor's nodes serialize parameters as JSON rather than

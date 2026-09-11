@@ -642,6 +642,17 @@ void compose_node_graph_stage(
 
 } // anonymous namespace
 
+auto node_graph_node_id_prefix(std::string_view format) -> std::string_view
+{
+    if (format == c_texture_graph_format) {
+        return c_texture_graph_node_id_prefix;
+    }
+    if (format == c_geometry_graph_format) {
+        return c_geometry_graph_node_id_prefix;
+    }
+    return std::string_view{};
+}
+
 auto load_stage(const std::filesystem::path& path) -> Load_stage_result
 {
     ERHE_PROFILE_FUNCTION();

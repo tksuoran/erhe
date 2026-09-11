@@ -42,6 +42,26 @@ namespace erhe::usd {
 // I2), and the one the writer authors even for an erhe default.
 inline const glm::vec3 c_usd_diffuse_color_fallback{0.18f, 0.18f, 0.18f};
 
+// The `erhe:graph:format` marker token of each kind of erhe node graph
+// (doc/usd-texture-graphs-plan.md 2.1, section 4). The token is the graph
+// kind, spelled the way the glTF `ERHE_node_graphs` `format` field spells it,
+// and the caller names it: erhe::usd carries a graph's nodes without knowing
+// what any of them mean.
+constexpr std::string_view c_texture_graph_format          {"erhe_texture_graph"};
+constexpr std::string_view c_geometry_graph_format         {"erhe_geometry_graph"};
+
+// The `info:id` namespace prefix the nodes of a graph of each format are
+// written under. A node of a texture graph is `erhe:texture:<type name>` and
+// a node of a geometry graph `erhe:geometry:<type name>`, the type name being
+// the factory type name the caller makes the node with; a `Shader` child whose
+// `info:id` is under another prefix is no node of that graph.
+constexpr std::string_view c_texture_graph_node_id_prefix  {"erhe:texture:"};
+constexpr std::string_view c_geometry_graph_node_id_prefix {"erhe:geometry:"};
+
+// The prefix the nodes of a graph of `format` take, empty for a format
+// erhe::usd has no prefix for - a graph of such a format carries no node.
+[[nodiscard]] auto node_graph_node_id_prefix(std::string_view format) -> std::string_view;
+
 // USD's `st` primvar has its origin at the bottom-left of the image; erhe's
 // texture coordinates follow glTF, whose origin is the top-left. The two
 // spaces differ by `v' = 1 - v` alone, so one involution converts either way
@@ -410,8 +430,8 @@ public:
     std::vector<erhe::scene::Instance_override_value> values;
 };
 
-// One pin of a texture node graph (doc/usd-texture-graphs-plan.md 2.2). A pin
-// is an `inputs:<name>` / `outputs:<name>` attribute of a `Shader` prim, and
+// One pin of a node graph (doc/usd-texture-graphs-plan.md 2.2). A pin is an
+// `inputs:<name>` / `outputs:<name>` attribute of a `Shader` prim, and
 // the graph's interface outputs have the same shape. `source_node` and
 // `source_pin` name the link into an input pin - the source node's name below
 // the graph and the output pin of it the connection targets - and are empty
@@ -420,14 +440,18 @@ class Usd_node_graph_pin final
 {
 public:
     std::string name;
-    // The USD value type of the pin: `float`, `color3f` or `color4f`.
+    // The USD value type of the pin, which the mapping gives per pin kind
+    // (doc/usd_compatibility.md, "Texture node graphs" and "Geometry node
+    // graphs"): `float`, `color3f` or `color4f` for a texture pin, and
+    // `float` / `int` / `bool` / `float3` / `float4` / `matrix4d` or the
+    // opaque `token` for a geometry pin.
     std::string value_type;
     std::string source_node;
     std::string source_pin;
 };
 
-// One parameter of a texture graph node: an `inputs:<name>` attribute
-// carrying a value. `usd_type` is one of `float`, `int`, `bool`, `token`,
+// One parameter of a graph node: an `inputs:<name>` attribute carrying a
+// value. `usd_type` is one of `float`, `int`, `bool`, `token`,
 // `string`, `float2`, `color3f`, `color4f`, and `value` is the USD literal
 // spelling of the value in that type (`1.5`, `3`, `true`, `"name"`,
 // `(1, 2)`, `(0.1, 0.2, 0.3)`). A type with no USD form - a gradient, a
@@ -442,9 +466,9 @@ public:
     std::string value;
 };
 
-// One node of a texture node graph: a `Shader` child of the `NodeGraph` prim.
-// `type_name` is the `info:id` with the `erhe:texture:` prefix stripped, which
-// is the factory type name the caller makes the node with.
+// One node of a node graph: a `Shader` child of the `NodeGraph` prim.
+// `type_name` is the `info:id` with the prefix its graph's format names
+// stripped, which is the factory type name the caller makes the node with.
 class Usd_node_graph_node final
 {
 public:
@@ -460,11 +484,11 @@ public:
     std::vector<Usd_node_graph_pin>       outputs;
 };
 
-// One texture node graph a USD file carries as a `NodeGraph` prim marked with
-// `erhe:graph:format` (doc/usd-texture-graphs-plan.md R1). erhe::usd creates
-// no item - the caller rebuilds the graph asset from this record, as it makes
-// the Brush of a `Brush` prim - and a `NodeGraph` without the marker is left
-// to the material conversion (R5).
+// One node graph a USD file carries as a `NodeGraph` prim marked with
+// `erhe:graph:format` (doc/usd-texture-graphs-plan.md R1, section 4).
+// erhe::usd creates no item - the caller rebuilds the graph asset from this
+// record, as it makes the Brush of a `Brush` prim - and a `NodeGraph` without
+// the marker is left to the material conversion (R5).
 class Usd_node_graph final
 {
 public:
@@ -477,6 +501,12 @@ public:
     // of its nodes: the value a material slot can name (R2).
     std::vector<Usd_node_graph_pin>    outputs;
     std::vector<Usd_node_graph_node>   nodes;
+    // The evaluated geometry of a geometry graph: the prim's child
+    // `def Mesh "result"`, converted the way a brush's geometry child is, so
+    // a viewer without erhe sees what the graph makes. Null for a texture
+    // graph, which has no such child, and for a geometry graph the file wrote
+    // without one; a reload reads it only when the graph carries no node.
+    std::shared_ptr<erhe::geometry::Geometry> geometry;
 };
 
 // A material slot fed by a texture node graph instead of by an image
@@ -833,8 +863,8 @@ public:
     std::shared_ptr<const erhe::primitive::Material> material;
 };
 
-// One texture node graph of the scene the writer authors as a marked
-// `NodeGraph` prim (doc/usd-texture-graphs-plan.md 2.4). erhe::usd names no
+// One node graph of the scene the writer authors as a marked `NodeGraph`
+// prim (doc/usd-texture-graphs-plan.md 2.4, section 4). erhe::usd names no
 // editor type (R6), so the caller hands the graph over as a neutral record:
 // `item` is the graph asset prim itself, whose place in the tree decides where
 // the `NodeGraph` prim goes, and the rest is what the prim carries. Being
@@ -850,6 +880,11 @@ public:
     // The nodes in the order they are written, which is the order a reload
     // reads them back in (R4).
     std::vector<Usd_node_graph_node>       nodes;
+    // The evaluated geometry of a geometry graph, written as the child
+    // `def Mesh "result"` a brush's geometry is written as. A texture graph
+    // and a geometry graph that has evaluated nothing hand over none, and
+    // then no child is written.
+    std::shared_ptr<const erhe::geometry::Geometry> geometry;
 };
 
 // One material slot the writer feeds from a texture node graph instead of

@@ -774,6 +774,7 @@ public:
         convert_materials();
         convert_meshes();
         resolve_brush_geometry();
+        resolve_node_graph_geometry();
         convert_cameras();
         convert_lights();
         convert_nodes();
@@ -3511,6 +3512,38 @@ private:
         m_result.data.brushes = std::move(brushes);
     }
 
+    // The evaluated geometry of every geometry graph the layer walk recorded:
+    // the graph prim's `def Mesh "result"` child, converted the way every
+    // other mesh of the file is (doc/usd-texture-graphs-plan.md section 4).
+    // The mesh is not scene content - convert_node stops at the graph prim,
+    // as it does at a brush - so only its geometry is taken, and a graph
+    // written without one simply carries none: the nodes are what a reload
+    // re-evaluates.
+    void resolve_node_graph_geometry()
+    {
+        for (const std::pair<const std::string, std::size_t>& entry : m_geometry_graph_index_by_path) {
+            const std::string result_path = entry.first + "/" + std::string{c_node_graph_result_prim_name};
+            const std::map<std::string, std::size_t>::const_iterator i = m_mesh_index_by_path.find(result_path);
+            if (i == m_mesh_index_by_path.end()) {
+                continue;
+            }
+            const std::shared_ptr<erhe::scene::Mesh>& mesh = m_result.data.meshes[i->second];
+            if (!mesh) {
+                continue;
+            }
+            Usd_node_graph& record = m_result.data.node_graphs[entry.second];
+            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+                if (!mesh_primitive.primitive || !mesh_primitive.primitive->render_shape) {
+                    continue;
+                }
+                record.geometry = mesh_primitive.primitive->render_shape->get_geometry();
+                if (record.geometry) {
+                    break;
+                }
+            }
+        }
+    }
+
     void convert_cameras()
     {
         m_result.data.cameras.reserve(m_scene->cameras.size());
@@ -5032,9 +5065,11 @@ private:
     // (doc/usd-texture-graphs-plan.md 2.3). An `inputs:` attribute carrying a
     // value is a parameter, one carrying a connection or nothing at all is an
     // input pin, and every `outputs:` attribute is an output pin. A shader
-    // whose `info:id` is not an erhe texture node is one warning and no node.
+    // whose `info:id` is not under the prefix the graph's format names is one
+    // warning and no node.
     [[nodiscard]] auto read_node_graph_node(
         const std::string&        graph_path,
+        const std::string_view    node_id_prefix,
         const lightusd::PrimSpec& spec,
         Usd_node_graph_node&      node
     ) -> bool
@@ -5046,17 +5081,18 @@ private:
             ? unquote(attribute_literal(info_id->second.get_attribute()))
             : std::string{};
         if (
-            (type_id.size() <= c_node_graph_node_id_prefix.size()) ||
-            (type_id.compare(0, c_node_graph_node_id_prefix.size(), c_node_graph_node_id_prefix) != 0)
+            node_id_prefix.empty()                    ||
+            (type_id.size() <= node_id_prefix.size()) ||
+            (type_id.compare(0, node_id_prefix.size(), node_id_prefix) != 0)
         ) {
             log_usd->warn(
-                "USD node graph '{}': the Shader '{}' has info:id '{}', which is no erhe texture node - it becomes no node",
-                graph_path, spec.name(), type_id
+                "USD node graph '{}': the Shader '{}' has info:id '{}', which is no erhe '{}' node - it becomes no node",
+                graph_path, spec.name(), type_id, node_id_prefix
             );
             return false;
         }
         node.name      = spec.name();
-        node.type_name = type_id.substr(c_node_graph_node_id_prefix.size());
+        node.type_name = type_id.substr(node_id_prefix.size());
         for (const std::pair<const std::string, lightusd::Property>& property : props) {
             if (!property.second.is_attribute()) {
                 continue;
@@ -5130,21 +5166,34 @@ private:
     }
 
     // One marked `NodeGraph` prim as the record the caller rebuilds the graph
-    // asset from (doc/usd-texture-graphs-plan.md 2.3).
+    // asset from (doc/usd-texture-graphs-plan.md 2.3, section 4). The marker
+    // is read before the children: the format is what says which `info:id`
+    // prefix the graph's nodes are under.
     void read_node_graph_prim(const std::string& path, const lightusd::PrimSpec& spec)
     {
         m_node_graph_paths.insert(path);
         Usd_node_graph record{};
         record.stage_path = path;
         record.name       = spec.name();
+        const std::map<std::string, lightusd::Property>::const_iterator format_property =
+            spec.props().find(std::string{c_node_graph_format_attribute});
+        if ((format_property != spec.props().end()) && format_property->second.is_attribute()) {
+            record.format = unquote(attribute_literal(format_property->second.get_attribute()));
+        }
+        const std::string_view node_id_prefix = node_graph_node_id_prefix(record.format);
         for (const lightusd::PrimSpec& child : spec.children()) {
             if (child.typeName() != c_node_graph_shader_prim_type_name) {
                 continue;
             }
             Usd_node_graph_node node{};
-            if (read_node_graph_node(path, child, node)) {
+            if (read_node_graph_node(path, node_id_prefix, child, node)) {
                 record.nodes.push_back(std::move(node));
             }
+        }
+        // The evaluated geometry of a geometry graph follows once the meshes
+        // are converted (resolve_node_graph_geometry).
+        if (record.format == c_geometry_graph_format) {
+            m_geometry_graph_index_by_path.emplace(path, m_result.data.node_graphs.size());
         }
         for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
             if (!property.second.is_attribute()) {
@@ -5153,7 +5202,6 @@ private:
             const std::string&         name      = property.first;
             const lightusd::Attribute& attribute = property.second.get_attribute();
             if (name == c_node_graph_format_attribute) {
-                record.format = unquote(attribute_literal(attribute));
                 continue;
             }
             if (name.compare(0, c_node_graph_output_prefix.size(), c_node_graph_output_prefix) != 0) {
@@ -6061,6 +6109,7 @@ private:
     // by read_layer_composition: what the scene conversion stops at, and what
     // a material connection is recognized as a graph binding by.
     std::set<std::string>                          m_node_graph_paths;
+    std::map<std::string, std::size_t>             m_geometry_graph_index_by_path;
     // The converted mesh of every `Mesh` prim of the stage, by the prim's
     // absolute path, as an index into Usd_data::meshes: what a brush prim's
     // geometry child is looked up by. Filled by convert_meshes, which runs

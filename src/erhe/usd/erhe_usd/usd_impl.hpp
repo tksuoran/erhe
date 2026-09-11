@@ -28,17 +28,19 @@ constexpr std::string_view c_brush_normal_style_attribute   {"erhe:Brush:normal_
 constexpr std::string_view c_brush_density_value_name       {"Brush.density"};
 constexpr std::string_view c_brush_normal_style_value_name  {"Brush.normal_style"};
 
-// How a texture node graph travels in a USD file
-// (doc/usd-texture-graphs-plan.md 2.1). The graph is a `NodeGraph` prim
-// carrying the marker attribute that says it is erhe's - a `NodeGraph`
-// without it is a foreign shading network (R5) - each node is a `Shader`
-// child whose `info:id` is the node's factory type name under a namespace
-// prefix, and the node's editor position is one custom attribute. The reader
-// and the writer both spell them from here.
+// How a node graph travels in a USD file (doc/usd-texture-graphs-plan.md 2.1
+// and section 4). The graph is a `NodeGraph` prim carrying the marker
+// attribute that says it is erhe's - a `NodeGraph` without it is a foreign
+// shading network (R5) - each node is a `Shader` child whose `info:id` is the
+// node's factory type name under the namespace prefix its graph's format
+// names (`node_graph_node_id_prefix`), and the node's editor position is one
+// custom attribute. A geometry graph holds its evaluated geometry as a child
+// `Mesh` of a fixed name, the way a brush holds its own. The reader and the
+// writer both spell them from here.
 constexpr std::string_view c_node_graph_prim_type_name     {"NodeGraph"};
 constexpr std::string_view c_node_graph_format_attribute   {"erhe:graph:format"};
 constexpr std::string_view c_node_graph_position_attribute {"erhe:ui:position"};
-constexpr std::string_view c_node_graph_node_id_prefix     {"erhe:texture:"};
+constexpr std::string_view c_node_graph_result_prim_name   {"result"};
 constexpr std::string_view c_node_graph_input_prefix       {"inputs:"};
 constexpr std::string_view c_node_graph_output_prefix      {"outputs:"};
 constexpr std::string_view c_node_graph_shader_prim_type_name{"Shader"};

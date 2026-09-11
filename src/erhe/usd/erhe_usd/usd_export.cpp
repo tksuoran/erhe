@@ -1953,7 +1953,7 @@ private:
         return prim.get_class_type_name() == c_brush_prim_type_name;
     }
 
-    // A texture node graph item (doc/usd-texture-graphs-plan.md), which is a
+    // A node graph item (doc/usd-texture-graphs-plan.md), which is a
     // marked `NodeGraph` prim on the stage. erhe::usd names no editor type
     // (R6) and a graph carries no class token of its own the way a brush
     // does, so what makes an item a graph prim is being named in
@@ -1966,8 +1966,8 @@ private:
 
     // A resource prim a USD file carries, or a prim on the way down to one.
     // A resource is not content, so this is what widens the content filter;
-    // today the file carries materials, styles, brushes and texture node
-    // graphs, and plan steps E4b and E4d add the other kinds.
+    // today the file carries materials, styles, brushes and node graphs, and
+    // plan step E4d adds the folders.
     [[nodiscard]] auto holds_carried_resource(const erhe::Typed& prim) const -> bool
     {
         if (
@@ -2927,11 +2927,12 @@ private:
     }
 
     // One node of a graph as the generic `Shader` prim it is: `info:id` the
-    // node's type name under the `erhe:texture:` prefix, the editor position
-    // as one custom attribute, and the parameters and pins as its
+    // node's type name under the prefix the graph's format names, the editor
+    // position as one custom attribute, and the parameters and pins as its
     // `inputs:` / `outputs:` properties.
     [[nodiscard]] auto write_node_graph_node_prim(
         const Usd_node_graph_node&                node,
+        const std::string_view                    node_id_prefix,
         const std::string&                        prim_name,
         const std::string&                        graph_path,
         const std::map<std::string, std::string>& node_prim_names
@@ -2970,16 +2971,19 @@ private:
 
         lightusd::Shader shader;
         shader.name    = prim_name;
-        shader.info_id = std::string{c_node_graph_node_id_prefix} + node.type_name;
+        shader.info_id = std::string{node_id_prefix} + node.type_name;
         shader.value   = std::move(shader_node);
         return lightusd::Prim{shader};
     }
 
-    // A texture graph asset as the marked `NodeGraph` prim it is
-    // (doc/usd-texture-graphs-plan.md 2.4): the marker attribute, the
-    // interface outputs as connections into the nodes, and one generic
+    // A graph asset as the marked `NodeGraph` prim it is
+    // (doc/usd-texture-graphs-plan.md 2.4, section 4): the marker attribute,
+    // the interface outputs as connections into the nodes, one generic
     // `Shader` child per node, in the record's order so a second save spells
-    // the same file (R4).
+    // the same file (R4), and - for a geometry graph that has evaluated
+    // something - its geometry as the child `Mesh "result"` a brush's
+    // geometry is written as, so a viewer without erhe sees what the graph
+    // makes.
     [[nodiscard]] auto write_node_graph_prim(
         const erhe::Typed& item,
         const std::string& prim_name,
@@ -3013,17 +3017,35 @@ private:
             );
         }
 
+        const std::string_view node_id_prefix = node_graph_node_id_prefix(record.format);
+        if (node_id_prefix.empty() && !record.nodes.empty()) {
+            add_warning(
+                fmt::format("graph '{}' has format '{}', which names no node id prefix", prim_name, record.format)
+            );
+        }
         lightusd::Prim prim{graph};
         for (std::size_t index = 0, end = record.nodes.size(); index < end; ++index) {
             std::string error;
             if (
                 !prim.add_child(
-                    write_node_graph_node_prim(record.nodes[index], prim_names[index], prim_path, node_prim_names),
+                    write_node_graph_node_prim(record.nodes[index], node_id_prefix, prim_names[index], prim_path, node_prim_names),
                     false,
                     &error
                 )
             ) {
                 add_warning(fmt::format("node '{}' of graph '{}' could not be added: {}", prim_names[index], prim_name, error));
+            }
+        }
+        if (record.geometry) {
+            std::string error;
+            if (
+                !prim.add_child(
+                    write_geometry_mesh_prim(*record.geometry.get(), std::string{c_node_graph_result_prim_name}),
+                    false,
+                    &error
+                )
+            ) {
+                add_warning(fmt::format("the result geometry of graph '{}' could not be added: {}", prim_name, error));
             }
         }
         return prim;

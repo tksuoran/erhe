@@ -606,17 +606,34 @@ the prim becomes no `Typed` item; a `Brush` prim without a `geometry` child is
 one warning and no brush record. `erhe::usd` creates no item: the caller makes
 the editor Brush at the path the prim has.
 
-### Texture node graphs
+### Node graphs
 
-A texture graph is a `NodeGraph` prim carrying the custom attribute
+A node graph is a `NodeGraph` prim carrying the custom attribute
 `erhe:graph:format`, which is the marker that says the network is erhe's
 (doc/usd-texture-graphs-plan.md). A `NodeGraph` without it is a foreign
-shading network and is left to the material conversion. Each node of the graph
-is a generic `Shader` child whose `info:id` is `erhe:texture:<type name>` -
-the factory type name the caller makes the node with - carrying its editor
-position as `custom float2 erhe:ui:position`, and each link is an attribute
-connection. The spellings are `usd_impl.hpp` constants, which the reader and
-the writer share.
+shading network and is left to the material conversion. The marker's token
+says which kind of graph it is: `erhe_texture_graph` for a texture graph and
+`erhe_geometry_graph` for a geometry graph, spelled the way the glTF
+`ERHE_node_graphs` `format` field spells them. Each node of the graph is a
+generic `Shader` child whose `info:id` is the factory type name the caller
+makes the node with, under the namespace prefix the format names -
+`erhe:texture:` or `erhe:geometry:`, which `node_graph_node_id_prefix` is the
+one place that pairs the two - carrying its editor position as
+`custom float2 erhe:ui:position`, and each link is an attribute connection.
+The format is read before the children for that reason. The tokens are
+`usd.hpp` constants, the caller names them too; the rest of the spellings are
+`usd_impl.hpp` constants, which the reader and the writer share.
+
+- A geometry graph carries its evaluated geometry as a child
+  `def Mesh "result"` written with `subdivisionScheme = none`, the way a brush
+  writes its geometry, so a viewer without erhe sees what the graph makes. The
+  child is converted the way every other mesh of the file is and its geometry
+  is taken off the first primitive into `Usd_node_graph::geometry`; the scene
+  conversion stops at the graph prim, so the result is no mesh of the scene.
+  A reload rebuilds the graph from the nodes and re-evaluates it, and reads
+  the child mesh only when the graph carries no node. A texture graph has no
+  such child, and a geometry graph that has evaluated nothing hands the writer
+  none, which writes none.
 
 - The `inputs:` / `outputs:` properties of a node are read by one rule: an
   `inputs:` attribute carrying a value is a parameter, an `inputs:` attribute
@@ -646,14 +663,16 @@ the writer share.
 - The same composed-layer walk that takes the class prims records a marked
   `NodeGraph` into `Usd_data::node_graphs`, and the scene conversion stops at
   the prim the way it stops at a `Brush` prim, so no node becomes a scene prim.
-  A `Shader` child whose `info:id` is not under the `erhe:texture:` prefix is
-  one warning and no node, and the links into it are dropped with it, as is a
-  connection that leaves the graph.
+  A `Shader` child whose `info:id` is not under the prefix its graph's format
+  names is one warning and no node, and the links into it are dropped with it,
+  as is a connection that leaves the graph.
 - Tydra's render-scene conversion fails a whole material over a
   `UsdPreviewSurface` input whose connection resolves to no `UsdUVTexture`, so
   the stage it converts is built without that wiring: `load_stage` strips every
   connection into a marked graph from a copy of the composed layer and builds
-  the stage from that copy (`compose_node_graph_stage`), while the kept layer
+  the stage from that copy (`compose_node_graph_stage`) - the marker attribute
+  is what a graph is recognized by there, so a graph of any format is stripped
+  - while the kept layer
   - which is what the graphs and the slot bindings are read off - keeps it.
   The material then takes its schema fallback for the stripped input, and the
   caller binds the slot to the rebuilt graph asset. A graph inside a `.usdz`
