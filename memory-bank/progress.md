@@ -153,3 +153,20 @@
 ✓full-run{ff2a735d9:146-entries/3124s;works-138/gap-7/fails-1/crash-0;all-non-works=MaterialX}
 !caveat::per-entry-diagnostics-order-dependent{Tydra-warns-only-on-first-load-of-shared-file-per-launch;expectations-name-patterns-on-every-affected-entry-so-verdicts-hold,line-counts-vary}
 ?schedule::LightUSD-rel-list-op-fork-fix+nested-carrier-override-resolution{section-6;erhe/fork-defects-not-by-design}
+
+[TASK::E4b-geometry-graphs]{DONE-2026-09-11;via-harness;3-commits}
+✓commit-1{3199d4396:erhe::usd-format-token+prefix-pairing+result-child-Mesh;11-new-tests->283;fixture-geometry_graph.usda}
+✓commit-2{5c304f4d2+fc9d21605:plan_usd_prim_paths+editor-half;scene-block-graph_meshes-by-planned-path;variant-selections-same;geometry-leg-25/25;usd-tests-285}
+  E4b-DONE-2026-09-11|?user-interactive{Hierarchy-shows-geometry-graph-under-holding-prim;Geometry-Graph-window-opens-USD-loaded-graph}
+✓follow-up{3f57351ed:Item_flags::session_only;injected-default-camera-not-saved{USD+glTF};roundtrip-354/357}
+?open{textured.usda-texture-network-lost-at-import;references_override-DefCarrier-query-wrong-carrier;P6-flake}
+
+[TASK::E4d-folders]{DONE-2026-09-11;8060c4aa4;via-harness}
+✓every-Scope-written+kind-scope-adopted-by-name+skin/animation-items-not-prims+top-level-Scope-no-World-wrapper;usd-tests-291;roundtrip-375/378
+?user-interactive{empty-folder-survives-USD-save;Materials-scope-not-duplicated-after-reopen}
+
+[TASK::E2-material-fidelity]{DONE-2026-09-11;via-harness;2-commits}
+✓commit-1{36e828bf0:import-OpenPBR-network{prefers-over-UsdPreviewSurface;anisotropy-formula;authoredness-from-struct;graph-bindings-both-paths};usd-tests-297;roundtrip-377/380}
+✓commit-2{199d9a77c:export-OpenPBR-network-beside-preview{outputs:mtlx:surface;inverse-formula;exact-erhe:Material:roughness};usd-tests-302;roundtrip-398/401}
+  E2-DONE;USD-PLAN-SECTION-3-COMPLETE-2026-09-11;left=section-6-future-work+3-unrelated-roundtrip-failures
+

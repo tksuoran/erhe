@@ -699,6 +699,14 @@ section 3 except where named.
   prim keeps the composed transform instead, with one warning per prim.
   Closing it means resolving an op the order names against the prim's arc
   targets, in the same place the stack is reconstructed.
+- A material slot that a texture graph feeds AND that carries an authored
+  factor: the connection replaces the value in both terminals (a
+  `UsdPreviewSurface` or OpenPBR input is either connected or valued), so
+  the factor of such a slot is not written and reads back as the default.
+  Found while building `src/erhe/usd/test/data/open_pbr.usda` (E2). Closing
+  it means carrying the factor as the graph connection's `inputs:scale` the
+  way a `UsdUVTexture` carries erhe's factor, which needs the graph's
+  interface output to pass through a multiplying node.
 - A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`: Tydra accepts
   only a `UsdUVTexture` output on a shader input, so a network that reads a
   primvar into one - usd-wg
