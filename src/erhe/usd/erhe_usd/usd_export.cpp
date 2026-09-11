@@ -1525,6 +1525,229 @@ private:
         }
     }
 
+    // The exact anisotropic roughness on the material prim. Neither terminal
+    // carries the pair as erhe holds it - the preview surface has one value,
+    // and the OpenPBR parameterization spells only the pairs whose X
+    // component is the rougher one - so the material authors its own
+    // `erhe:Material:roughness`, which a reload applies after the network
+    // (I2). The network is what another reader shades with; this is what
+    // makes the erhe round trip bit-exact.
+    void write_exact_roughness(const erhe::primitive::Material& material, lightusd::Material& usd_material)
+    {
+        // Only a local roughness: a value a style or an inheritance supplies is
+        // that chain's to give, and authoring it here would make the reload
+        // hold a local value the material never had. Such a material carries
+        // its roughness in the network alone.
+        if (!is_local(material, erhe::primitive::Material::roughness_property.get())) {
+            return;
+        }
+        const glm::vec2 roughness = material.get_value(erhe::primitive::Material::roughness_property);
+        lightusd::Attribute        attribute;
+        lightusd::primvar::PrimVar var;
+        var.set_value(lightusd::value::float2{roughness.x, roughness.y});
+        attribute.set_var(std::move(var));
+        const std::string attribute_name{"erhe:Material:roughness"};
+        if (usd_material.props.find(attribute_name) != usd_material.props.end()) {
+            return;
+        }
+        usd_material.props.emplace(attribute_name, lightusd::Property{std::move(attribute), true});
+    }
+
+    // Whether the material has a value the `UsdPreviewSurface` has no input
+    // for: an anisotropic roughness (its two components differ, which is the
+    // pair only OpenPBR carries) or a transmission. Such a material is written
+    // with an OpenPBR network beside its preview surface; every other material
+    // writes none, so a file of ordinary materials is the file it was
+    // (doc/usd-compatibility-plan.md E2).
+    [[nodiscard]] static auto needs_open_pbr_network(const erhe::primitive::Material& material) -> bool
+    {
+        using erhe::primitive::Material;
+        const glm::vec2 roughness = material.get_value(Material::roughness_property);
+        return (roughness.x != roughness.y) || (material.get_value(Material::transmission_property) != 0.0f);
+    }
+
+    [[nodiscard]] static auto make_float_input(const float value) -> lightusd::Attribute
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(value);
+        return attribute;
+    }
+
+    [[nodiscard]] static auto make_color_input(const glm::vec3& value) -> lightusd::Attribute
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::color3f{value.x, value.y, value.z});
+        return attribute;
+    }
+
+    // The source one OpenPBR input reads: the very prim the preview surface's
+    // input of that slot reads - the material's own `UsdUVTexture` for the
+    // slot, or the interface output of the texture graph that feeds it - so a
+    // material with both terminals has one shading network, not two.
+    [[nodiscard]] auto connect_open_pbr_texture(
+        lightusd::Prim&                  material_prim,
+        const std::string&               material_path,
+        const erhe::primitive::Material& material,
+        const Usd_material_texture_slot  slot,
+        const char*                      output_name,
+        const char*                      type_name,
+        lightusd::Attribute&             attribute
+    ) -> bool
+    {
+        lightusd::Path graph_output;
+        if (find_graph_output(material, slot, graph_output)) {
+            attribute.set_type_name(type_name);
+            attribute.set_connection(graph_output);
+            return true;
+        }
+        const std::string shader_name = get_texture_shader(material_prim, material_path, material, slot);
+        if (shader_name.empty()) {
+            return false;
+        }
+        attribute.set_type_name(type_name);
+        attribute.set_connection(lightusd::Path{material_path + "/" + shader_name, output_name});
+        return true;
+    }
+
+    // The OpenPBR network of a material whose anisotropic roughness or
+    // transmission the `UsdPreviewSurface` cannot carry: one generic `Shader`
+    // prim the material offers through `outputs:mtlx:surface`, which is the
+    // terminal the importer prefers and the one another MaterialX reader
+    // finds. The values are the material's effective ones, and an input is
+    // authored where it differs from its OpenPBR fallback - except
+    // `base_color` and `specular_roughness`, whose fallbacks are not erhe
+    // defaults, so they are authored whatever the value is (the mirror of the
+    // import rule, `src/erhe/usd/notes.md`, "OpenPBR networks").
+    void write_open_pbr_shader(
+        lightusd::Prim&                  material_prim,
+        const std::string&               material_path,
+        const erhe::primitive::Material& material
+    )
+    {
+        using erhe::primitive::Material;
+        lightusd::ShaderNode shader_node;
+        const auto author = [&shader_node](const std::string_view name, lightusd::Attribute attribute)
+        {
+            shader_node.props.emplace(
+                std::string{c_node_graph_input_prefix} + std::string{name},
+                lightusd::Property{std::move(attribute), false}
+            );
+        };
+
+        const glm::vec2          erhe_roughness = material.get_value(Material::roughness_property);
+        const Open_pbr_roughness roughness      = from_anisotropic_roughness(erhe_roughness);
+        if (erhe_roughness.y > erhe_roughness.x) {
+            add_warning(
+                fmt::format(
+                    "material '{}' is rougher along Y than along X, which no OpenPBR anisotropy spells - "
+                    "the network carries the X roughness alone",
+                    material.get_name()
+                )
+            );
+        }
+
+        // base_color, the emission and the two scalars of the shared
+        // metallic-roughness slot read a texture where the material has one,
+        // exactly as the preview surface's inputs do; otherwise they carry the
+        // plain value.
+        lightusd::Attribute base_color_input;
+        if (!connect_open_pbr_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::base_color,
+                "outputs:rgb", "color3f", base_color_input
+            )
+        ) {
+            base_color_input = make_color_input(material.get_value(Material::base_color_property));
+        }
+        author("base_color", std::move(base_color_input));
+
+        lightusd::Attribute roughness_input;
+        if ((material.get_roughness_channel() == erhe::primitive::Texture_channel::none) ||
+            !connect_open_pbr_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+                channel_output_name(material.get_roughness_channel()), "float", roughness_input
+            )
+        ) {
+            roughness_input = make_float_input(roughness.roughness);
+        }
+        author("specular_roughness", std::move(roughness_input));
+        if (roughness.anisotropy != 0.0f) {
+            author("specular_roughness_anisotropy", make_float_input(roughness.anisotropy));
+        }
+
+        const float         metallic = material.get_value(Material::metallic_property);
+        lightusd::Attribute metallic_input;
+        if ((material.get_metallic_channel() != erhe::primitive::Texture_channel::none) &&
+            connect_open_pbr_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::metallic_roughness,
+                channel_output_name(material.get_metallic_channel()), "float", metallic_input
+            )
+        ) {
+            author("base_metalness", std::move(metallic_input));
+        } else if (metallic != 0.0f) {
+            author("base_metalness", make_float_input(metallic));
+        }
+
+        // 1.5 is the fallback of both OpenPBR's `specular_ior` and erhe's own
+        // `ior`, so a material at it authors nothing.
+        const float ior = material.get_value(Material::ior_property);
+        if (ior != 1.5f) {
+            author("specular_ior", make_float_input(ior));
+        }
+        const float transmission = material.get_value(Material::transmission_property);
+        if (transmission != 0.0f) {
+            author("transmission_weight", make_float_input(transmission));
+        }
+
+        // erhe's `emissive` is the whole linear value the shader adds, and
+        // OpenPBR's emission is a color times a luminance, so the color
+        // carries the value and the luminance is one - which is what the
+        // importer's `emission_color * emission_luminance` reads back.
+        const glm::vec3     emissive = material.get_value(Material::emissive_property);
+        lightusd::Attribute emission_input;
+        if (connect_open_pbr_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::emissive,
+                "outputs:rgb", "color3f", emission_input
+            )
+        ) {
+            author("emission_color",     std::move(emission_input));
+            author("emission_luminance", make_float_input(1.0f));
+        } else if (emissive != glm::vec3{0.0f, 0.0f, 0.0f}) {
+            author("emission_color",     make_color_input(emissive));
+            author("emission_luminance", make_float_input(1.0f));
+        }
+
+        const float opacity = material.get_value(Material::opacity_property);
+        if (opacity != 1.0f) {
+            author("geometry_opacity", make_float_input(opacity));
+        }
+
+        lightusd::Attribute normal_input;
+        if (connect_open_pbr_texture(
+                material_prim, material_path, material, Usd_material_texture_slot::normal,
+                "outputs:rgb", "normal3f", normal_input
+            )
+        ) {
+            author("geometry_normal", std::move(normal_input));
+        }
+
+        lightusd::Attribute surface_output;
+        surface_output.set_type_name("token");
+        shader_node.props.emplace(
+            std::string{c_node_graph_output_prefix} + "surface",
+            lightusd::Property{std::move(surface_output), false}
+        );
+
+        lightusd::Shader shader;
+        shader.name    = std::string{c_open_pbr_shader_prim_name};
+        shader.info_id = std::string{c_open_pbr_info_id};
+        shader.value   = std::move(shader_node);
+
+        std::string error;
+        if (!material_prim.add_child(lightusd::Prim{shader}, false, &error)) {
+            add_warning(fmt::format("OpenPBR shader of '{}' could not be added: {}", material_path, error));
+        }
+    }
+
     // One `Material` prim where the material sits in the scene tree
     // (doc/usd-compatibility-plan.md U4): the material's own name and place,
     // its `UsdPreviewSurface` shader and the texture shaders that feed it.
@@ -1537,11 +1760,29 @@ private:
         lightusd::Material usd_material;
         usd_material.name = plan_prim.name;
         usd_material.surface.set(lightusd::Path{plan_prim.path + "/surface", "outputs:surface"});
+        // A material the preview surface cannot carry offers a second
+        // terminal: the OpenPBR network, through the output the importer
+        // prefers (doc/usd-compatibility-plan.md E2).
+        const bool open_pbr = needs_open_pbr_network(material);
+        if (open_pbr) {
+            usd_material.mtlxSurface.set(
+                lightusd::Path{plan_prim.path + "/" + std::string{c_open_pbr_shader_prim_name}, "outputs:surface"}
+            );
+        }
         write_erhe_properties(material, usd_material);
+        if (open_pbr) {
+            write_exact_roughness(material, usd_material);
+        }
 
         lightusd::Prim material_prim{usd_material};
         warn_about_unresolved_textures(material);
+        // The preview surface is written first: it makes the UsdUVTexture
+        // prims of the material's slots, which the OpenPBR inputs then read
+        // rather than writing a second set.
         write_surface_shader(material_prim, plan_prim.path, material);
+        if (open_pbr) {
+            write_open_pbr_shader(material_prim, plan_prim.path, material);
+        }
         return material_prim;
     }
 

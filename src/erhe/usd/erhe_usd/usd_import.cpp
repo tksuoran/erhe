@@ -80,13 +80,6 @@ namespace erhe::usd {
 
 namespace {
 
-// The OpenPBR `base_color` fallback. erhe's own `base_color` default is
-// white, so an OpenPBR network that leaves the input unauthored composes to a
-// value erhe has to write as a local one for the composed result to be the
-// one the file specifies (doc/usd-compatibility-plan.md I2), the way
-// `c_usd_diffuse_color_fallback` is the UsdPreviewSurface one.
-constexpr glm::vec3 c_open_pbr_base_color_fallback{0.8f, 0.8f, 0.8f};
-
 using Tydra_scene     = lightusd::tydra::RenderScene;
 using Tydra_node      = lightusd::tydra::Node;
 using Tydra_mesh      = lightusd::tydra::RenderMesh;
@@ -2680,9 +2673,9 @@ private:
             return false;
         }
         return
-            (shader->info_id == "ND_open_pbr_surface_surfaceshader") ||
-            (shader->info_id == "ND_standard_surface_surfaceshader") ||
-            (shader->info_id == "OpenPBRSurface");
+            (shader->info_id == c_open_pbr_info_id)          ||
+            (shader->info_id == c_open_pbr_standard_info_id) ||
+            (shader->info_id == c_open_pbr_schema_info_id);
     }
 
     // The Shader prim carrying the OpenPBR network of a material, the way
@@ -2724,27 +2717,6 @@ private:
             }
         }
         return {};
-    }
-
-    // OpenPBR's two directional roughnesses from `specular_roughness` and the
-    // anisotropy, which is what erhe's `roughness` vec2 holds (the shader
-    // squares each component into the GGX alpha of that tangent direction).
-    // The parameterization is MaterialX's own `roughness_anisotropy` node,
-    // the node a MaterialX surface reaches this value through and the one
-    // LightUSD's renderer implements: with `alpha = roughness * roughness`
-    // and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))`, the two alphas are
-    // `min(alpha / aspect, 1)` and `alpha * aspect`. erhe stores roughness
-    // rather than alpha, so it carries the square roots of those.
-    [[nodiscard]] static auto to_anisotropic_roughness(const float roughness, const float anisotropy) -> glm::vec2
-    {
-        if (anisotropy == 0.0f) {
-            return glm::vec2{roughness, roughness};
-        }
-        const float alpha   = roughness * roughness;
-        const float aspect  = std::sqrt(1.0f - std::clamp(anisotropy, 0.0f, 0.98f));
-        const float alpha_x = std::min(alpha / aspect, 1.0f);
-        const float alpha_y = alpha * aspect;
-        return glm::vec2{std::sqrt(alpha_x), std::sqrt(alpha_y)};
     }
 
     // The OpenPBR network Tydra converts into `RenderMaterial::openPBRShader`

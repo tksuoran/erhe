@@ -362,6 +362,37 @@ no OpenPBR input carries (`reflectance`, the brushed-metal block,
 An erhe texture graph binds a material slot through a `UsdPreviewSurface`
 input, so the graph bindings are read on the path that reads that shader.
 
+A save authors the network for exactly the materials that need one: a
+roughness whose two components differ, or a transmission that is not zero
+(`needs_open_pbr_network`). Such a material offers the network through its
+`outputs:mtlx:surface` - the terminal `find_open_pbr_shader_path` prefers -
+as a `Shader` prim named `open_pbr` beside the `surface` prim, while
+`outputs:surface` keeps the `UsdPreviewSurface`; every other material writes
+the one terminal it always wrote, so a file of ordinary materials is the file
+it was. The preview surface is written first, so the OpenPBR inputs connect to
+the `UsdUVTexture` prims it made rather than to a second set, and a slot fed by
+a texture graph reads the same interface output. The inputs carry the
+material's effective values, authored where they differ from their OpenPBR
+fallback except `base_color` and `specular_roughness`, which are authored in
+every case (the mirror of the read rule above). An emission is written as the
+`emission_color` erhe's `emissive` is with `emission_luminance` one.
+
+Inverting the roughness parameterization is exact wherever the forward `min`
+did not clamp: `alpha_x * alpha_y` is `alpha * alpha`, so the roughness is
+`sqrt(rx * ry)`, and `alpha_y / alpha` is the aspect, so the anisotropy is
+`1 - (ry / rx)^2` (`from_anisotropic_roughness`). The parameterization runs
+one way only - the anisotropy is not negative, so it always says X is the
+rougher direction, and the node clamps it at 0.98 - so a pair whose Y
+component is the larger one, or whose ratio is below `sqrt(0.02)`, is not
+spelled exactly. The material therefore also authors its own
+`erhe:Material:roughness` with the exact pair, which a reload applies after the
+network (I2): the network is what another reader shades with, the attribute is
+what keeps the erhe round trip bit-exact. It is the one place the writer
+authors an `erhe:` attribute for a value that also has a native carrier, and it
+is written only where the roughness is a local value - a roughness a style or
+an inheritance supplies is that chain's to give, so such a material carries it
+in the network alone.
+
 ### Sublayers
 
 A root layer's `subLayers` are the weakest layers of its layer stack (the `L`
@@ -1509,6 +1540,13 @@ luminance-scaled emission, the base layer and the blended opacity, that the
 material offering both networks reads the OpenPBR one, and that a texture on
 `base_color` binds the erhe slot with its wrap modes and its `inputs:scale`
 factor.
+The same file is the export fixture: `Open_pbr_export` saves it and asserts
+that the anisotropic and transmissive material offers both terminals with the
+network's input values and the exact `erhe:Material:roughness`, that the
+material the preview surface carries writes no network, that an OpenPBR input
+reads the one `UsdUVTexture` prim of its slot, and that the file reads back
+and saves again identically. `Open_pbr_roughness_conversion` converts a few
+pairs both ways, including one the parameterization cannot spell.
 
 `test/data/brushes.usda` holds a `Brushes` scope with two `Brush` prims - one
 binding a material from a `Looks` scope, one not - and a third without a
@@ -1568,7 +1606,8 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   `Scope` prims it is (E4d), and the brushes, styles and node graphs travel
   as prims of their own. The physics materials, collision filters and joint
   settings have no USD form yet (C1). The writer also emits no `.usdc` or
-  `.usdz` and no MaterialX.
+  `.usdz`, and no `.mtlx` document (the inline OpenPBR network it writes for
+  an anisotropic or transmissive material is not one).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written
   as `erhe:Light:color` but the import resolves neither the qualified nor the
   bare name against a node, so such a value does not come back.

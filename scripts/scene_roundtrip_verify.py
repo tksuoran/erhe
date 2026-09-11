@@ -1774,6 +1774,23 @@ def usd_attachment_id(scene_name, node_name, attachment_type):
     return None
 
 
+def usd_open_pbr_terminals(S, saved):
+    """The written file offers both surface terminals for the material whose
+    values only the OpenPBR network carries (doc/usd-compatibility-plan.md
+    E2)."""
+    if saved is None or not saved.is_file():
+        check(S, "open_pbr: saved file present", False, "no file")
+        return
+    text = saved.read_text(encoding="utf-8")
+    check(S, "open_pbr: the saved material offers outputs:mtlx:surface",
+          "outputs:mtlx:surface" in text, "not written")
+    check(S, "open_pbr: the saved network is an OpenPBR surface",
+          "ND_open_pbr_surface_surfaceshader" in text, "not written")
+    check(S, "open_pbr: the edited values are in the network",
+          ("inputs:transmission_weight = 0.4" in text) and ("inputs:specular_roughness_anisotropy" in text),
+          "edited values not in the network")
+
+
 def usd_round_trip_leg(S, source_file, scene_name, edits, extra_keys):
     """One file through open -> edit -> save -> close -> reload -> diff, plus
     a second save whose text must match the first."""
@@ -2257,6 +2274,20 @@ def section_usd_round_trip(usdchecker_arg):
     # back node for node, parameter for parameter and link for link, at the
     # place it had, with the material slot still fed from it.
     usd_round_trip_leg(S, "texture_graph.usda", "texture_graph", edits=[], extra_keys=["node_graphs"])
+    # open_pbr.usda holds materials whose surface is an OpenPBR network
+    # (doc/usd-compatibility-plan.md E2). An anisotropic roughness and a
+    # transmission are what only that network carries, so both are edited
+    # before the save: they must come back, and the saved file must offer the
+    # network again beside its UsdPreviewSurface.
+    open_pbr_saved = usd_round_trip_leg(
+        S, "open_pbr.usda", "open_pbr",
+        edits=[
+            ("material", "Anisotropic", "roughness",    "0.5 0.25"),
+            ("material", "Anisotropic", "transmission", "0.4"),
+        ],
+        extra_keys=[],
+    )
+    usd_open_pbr_terminals(S, open_pbr_saved)
     # A geometry graph is the same prim form with the evaluated geometry as a
     # child Mesh, and the prim it drives bound to it again after a reload
     # (doc/usd-texture-graphs-plan.md section 4).

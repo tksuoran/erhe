@@ -14,6 +14,17 @@
 
 namespace erhe::usd {
 
+// How an OpenPBR network travels in a USD file
+// (doc/usd-compatibility-plan.md E2). A `Material` prim offers it beside its
+// `UsdPreviewSurface` through `outputs:mtlx:surface`, and it is a `Shader`
+// child whose `info:id` is one of the surface-node spellings Tydra converts
+// into `RenderMaterial::openPBRShader`. The reader and the writer both spell
+// them from here.
+constexpr std::string_view c_open_pbr_shader_prim_name  {"open_pbr"};
+constexpr std::string_view c_open_pbr_info_id           {"ND_open_pbr_surface_surfaceshader"};
+constexpr std::string_view c_open_pbr_standard_info_id  {"ND_standard_surface_surfaceshader"};
+constexpr std::string_view c_open_pbr_schema_info_id    {"OpenPBRSurface"};
+
 // How a brush travels in a USD file (doc/usd-compatibility-plan.md E4a). USD
 // has no schema for a brush, so the prim's `typeName` is the erhe class token
 // - the same token the writer gives every `Typed` prim - its geometry is a

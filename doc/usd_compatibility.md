@@ -168,11 +168,19 @@ network, which is an inline `UsdShade` network in every build
 (`LIGHTUSD_WITH_USDMTLX` only concerns a `.mtlx` document as an asset). It is
 the richer terminal - it carries the two erhe fields `UsdPreviewSurface` has
 no input for - so the importer reads it wherever there is one and names a
-material that offers both. The inputs it carries beyond the rows above:
+material that offers both. The writer authors one for exactly the materials
+that need it: a material whose roughness is anisotropic or whose transmission
+is not zero gets an `ND_open_pbr_surface_surfaceshader` `Shader` prim named
+`open_pbr` beside its `surface` prim, offered through the material's
+`outputs:mtlx:surface` while `outputs:surface` keeps the
+`UsdPreviewSurface`; every other material writes one terminal as before. The
+OpenPBR inputs read the very `UsdUVTexture` (or texture-graph output) prims
+the preview surface reads, so the material has one shading network. The
+inputs the network carries beyond the rows above:
 
 | erhe `Material` property | USD OpenPBR input | notes |
 |---|---|---|
-| `roughness` (x and y) | `specular_roughness` with `specular_roughness_anisotropy`, or the Standard Surface `specular_anisotropy` | the two directional roughnesses come out of MaterialX's own `roughness_anisotropy` node, which LightUSD's renderer implements: with `alpha = roughness * roughness` and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))` the alphas are `min(alpha / aspect, 1)` and `alpha * aspect`, and erhe carries the square roots of those, storing roughness rather than alpha. An anisotropy that is not zero also names `Bxdf_model::anisotropic_brdf`, the model whose shading reads both components |
+| `roughness` (x and y) | `specular_roughness` with `specular_roughness_anisotropy`, or the Standard Surface `specular_anisotropy` | the two directional roughnesses come out of MaterialX's own `roughness_anisotropy` node, which LightUSD's renderer implements: with `alpha = roughness * roughness` and `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))` the alphas are `min(alpha / aspect, 1)` and `alpha * aspect`, and erhe carries the square roots of those, storing roughness rather than alpha. An anisotropy that is not zero also names `Bxdf_model::anisotropic_brdf`, the model whose shading reads both components. A save inverts that exactly: `alpha_x * alpha_y` is `alpha * alpha`, so `specular_roughness = sqrt(rx * ry)`, and the aspect is `ry / rx`, so `specular_roughness_anisotropy = 1 - (ry / rx)^2`. The parameterization runs one way only - the anisotropy is not negative, so X is always the rougher direction, and it stops at the node's own 0.98 - so a pair erhe holds whose Y component is the larger one, or whose ratio is below `sqrt(0.02)`, is not spelled exactly: the material's own `erhe:Material:roughness` is the exact pair, applied after the network on reload, and the network is what another reader shades with |
 | `transmission` | `transmission_weight` | the one erhe-only material field a surface schema has an input for |
 | `base_color`, `metallic`, `ior` | `base_color`, `base_metalness`, `specular_ior` | `base_color` is the OpenPBR input whose fallback (0.8 grey) is not the erhe default, so an unauthored one imports as a local 0.8 the way `diffuseColor` imports as a local 0.18. `specular_roughness`'s fallback (0.3) is the other one, so a roughness is always local |
 | `emissive` | `emission_color` times `emission_luminance` | OpenPBR's emission is photometric and erhe's `emissive` is the linear color the shader adds, so the luminance scales the color |

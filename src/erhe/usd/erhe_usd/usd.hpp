@@ -4,6 +4,8 @@
 
 #include <glm/glm.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -41,6 +43,65 @@ namespace erhe::usd {
 // composed result to be the one USD specifies (doc/usd-compatibility-plan.md
 // I2), and the one the writer authors even for an erhe default.
 inline const glm::vec3 c_usd_diffuse_color_fallback{0.18f, 0.18f, 0.18f};
+
+// The OpenPBR `base_color` fallback, treated the way
+// `c_usd_diffuse_color_fallback` is treated for `UsdPreviewSurface`: it
+// composes to 0.8 grey for every other reader and erhe's own default is
+// white, so the importer writes it as a local value and the writer authors
+// the input whatever the erhe value is. `specular_roughness` is the other
+// OpenPBR input whose fallback (0.3) is not an erhe default, and it is
+// likewise read and written in every case. An input whose fallback does
+// agree is left unauthored in both directions.
+inline const glm::vec3 c_open_pbr_base_color_fallback{0.8f, 0.8f, 0.8f};
+
+// erhe's anisotropic `roughness` and OpenPBR's `specular_roughness` plus
+// `specular_roughness_anisotropy` are the same surface under two
+// parameterizations, and this pair converts between them. The forward
+// direction is MaterialX's own `roughness_anisotropy` node - the node a
+// MaterialX surface reaches this value through, and the one LightUSD's
+// renderer implements: with `alpha = roughness * roughness` and
+// `aspect = sqrt(1 - clamp(anisotropy, 0, 0.98))` the two alphas are
+// `min(alpha / aspect, 1)` and `alpha * aspect`. erhe stores roughness rather
+// than alpha, so it carries the square roots of those.
+class Open_pbr_roughness final
+{
+public:
+    float roughness {0.3f};
+    float anisotropy{0.0f};
+};
+
+[[nodiscard]] inline auto to_anisotropic_roughness(const float roughness, const float anisotropy) -> glm::vec2
+{
+    if (anisotropy == 0.0f) {
+        return glm::vec2{roughness, roughness};
+    }
+    const float alpha   = roughness * roughness;
+    const float aspect  = std::sqrt(1.0f - std::clamp(anisotropy, 0.0f, 0.98f));
+    const float alpha_x = std::min(alpha / aspect, 1.0f);
+    const float alpha_y = alpha * aspect;
+    return glm::vec2{std::sqrt(alpha_x), std::sqrt(alpha_y)};
+}
+
+// The inverse of the forward direction above, which the two alphas invert
+// exactly wherever the forward `min` did not clamp: `alpha_x * alpha_y` is
+// `alpha * alpha`, so `roughness = sqrt(rx * ry)`, and `alpha_y / alpha` is
+// the aspect, so `anisotropy = 1 - (ry / rx)^2`.
+// The parameterization runs one way only: `anisotropy` is not negative, so it
+// says the X direction is the rougher one. An erhe roughness whose Y component
+// is the larger one is not expressible, and the isotropic X roughness is what
+// the network then carries (the exact pair rides as the material's own
+// `erhe:Material:roughness`, which a reload applies after the network).
+[[nodiscard]] inline auto from_anisotropic_roughness(const glm::vec2 roughness) -> Open_pbr_roughness
+{
+    if ((roughness.y >= roughness.x) || (roughness.x <= 0.0f)) {
+        return Open_pbr_roughness{.roughness = roughness.x, .anisotropy = 0.0f};
+    }
+    const float ratio = roughness.y / roughness.x;
+    return Open_pbr_roughness{
+        .roughness  = std::sqrt(roughness.x * roughness.y),
+        .anisotropy = std::clamp(1.0f - (ratio * ratio), 0.0f, 0.98f)
+    };
+}
 
 // The `erhe:graph:format` marker token of each kind of erhe node graph
 // (doc/usd-texture-graphs-plan.md 2.1, section 4). The token is the graph

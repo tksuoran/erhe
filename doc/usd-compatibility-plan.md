@@ -544,40 +544,37 @@ not written wherever it sits. `erhe_usd_tests` 291 covers an empty
 the round-trip script's library-folder leg drives the editor's own
 folders through a save and a reload (23 checks).
 
-### E2 Material fidelity (M; import half landed)
+### E2 Material fidelity (M; landed)
 
-What: the erhe material fields `UsdPreviewSurface` has no input for -
-anisotropic roughness and transmission - travel in an `OpenPBRSurface` /
-MaterialX network beside the `UsdPreviewSurface` one. Such a network is an
-inline `UsdShade` network that Tydra converts in every build, so neither half
-is conditional: `LIGHTUSD_WITH_USDMTLX` (off in erhe's build) only concerns
-reading a separate `.mtlx` document as an asset, which stays future work
-(section 6).
+The erhe material fields `UsdPreviewSurface` has no input for - anisotropic
+roughness and transmission - travel in an `OpenPBRSurface` / MaterialX network
+beside the `UsdPreviewSurface` one. Such a network is an inline `UsdShade`
+network that Tydra converts in every build, so neither direction is
+conditional: `LIGHTUSD_WITH_USDMTLX` (off in erhe's build) only concerns a
+separate `.mtlx` document as an asset, which stays future work (section 6).
 
-What holds: the import half. The importer reads the OpenPBR network wherever a
-`Material` prim offers one and names a material that offers both in one line
-saying which was read, taking the two directional roughnesses, the
-transmission, the emission, the base layer, the opacity and the slot textures
-from it under the mapping's OpenPBR table. The fields no OpenPBR input carries
-(`reflectance`, the brushed-metal block, `use_aniso_control`) keep their
-`erhe:Material:<name>` custom-attribute path, which the authored-opinion pass
-applies after the network either way (`src/erhe/usd/notes.md`, "OpenPBR
-networks"; `erhe_usd_tests` 296).
-
-What remains: the export half. A material whose anisotropic roughness or
-transmission is not the erhe default writes an OpenPBR network beside its
-`UsdPreviewSurface` one, connected through `outputs:mtlx:surface`, so an
-erhe-to-erhe round trip carries those two fields as USD's own means rather
-than only as `erhe:` custom attributes.
+The importer reads the OpenPBR network wherever a `Material` prim offers one
+and names a material that offers both in one line saying which was read,
+taking the two directional roughnesses, the transmission, the emission, the
+base layer, the opacity and the slot textures from it under the mapping's
+OpenPBR table. The writer authors one for exactly the materials that need it -
+a roughness whose components differ, or a transmission that is not zero -
+through `outputs:mtlx:surface`, with the inputs reading the very texture prims
+the preview surface reads; every other material writes the one terminal it
+always wrote. The pair the OpenPBR parameterization cannot spell exactly rides
+as the material's own `erhe:Material:roughness`, applied after the network on
+reload, so the erhe round trip is bit-exact while another reader shades from
+the network. The fields no OpenPBR input carries (`reflectance`, the
+brushed-metal block, `use_aniso_control`) keep their `erhe:Material:<name>`
+custom-attribute path (`src/erhe/usd/notes.md`, "OpenPBR networks";
+`erhe_usd_tests` 302, and the round-trip script's `open_pbr.usda` leg).
 
 ## 4. Order
 
-Each step independently landable, in this order:
-
-1. E4 editor state in a USD file: E4d (E4a, E4c and E4b landed; completes G2)
-2. E2 material fidelity: the export half (the import half landed)
-
-Dependencies: E4d and E2 need nothing that has not landed.
+Every step of section 3 has landed (E4a, E4c, E4b, E4d and E2 as of
+2026-09-11), so G2 and G3 hold as section 2 states them. What remains is
+the future work of section 6, which has no fixed order; each item there
+is landable on its own.
 
 ## 5. Out of scope
 
@@ -730,7 +727,7 @@ section 3 except where named.
   on a shader attribute (the survey's one failing entry). The `.mtlx` reader
   is behind `LIGHTUSD_WITH_USDMTLX`, off in erhe's build. An inline
   `ND_standard_surface_surfaceshader` or `ND_open_pbr_surface_surfaceshader`
-  network needs none of that and is read (E2).
+  network needs none of that and is read and written (E2).
 - Animated value layer: the property-system section 6 item, an animated
   value between coerced and local in R3, set by `Animation_sampler::apply`
   and cleared when playback stops, so playback never overwrites the

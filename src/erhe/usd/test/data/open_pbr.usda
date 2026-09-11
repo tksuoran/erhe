@@ -64,6 +64,12 @@ def Xform "root"
                 float inputs:input.connect = </root/Graph_Textures/Rust/Noise.outputs:f>
                 color4f outputs:rgba
             }
+
+            def Shader "Output"
+            {
+                uniform token info:id = "erhe:texture:output"
+                color4f inputs:rgba.connect = </root/Graph_Textures/Rust/Colorize.outputs:rgba>
+            }
         }
     }
 
@@ -97,7 +103,8 @@ def Xform "root"
             def Shader "preview"
             {
                 uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor.connect = </root/Graph_Textures/Rust.outputs:rgba>
+                color3f inputs:diffuseColor = (0.9, 0.1, 0.1)
+                color3f inputs:emissiveColor.connect = </root/Graph_Textures/Rust.outputs:rgba>
                 float inputs:roughness = 0.2
                 token outputs:surface
             }
@@ -129,7 +136,7 @@ def Xform "root"
                 float2 inputs:st.connect = </root/materials/Textured/uv_reader.outputs:result>
                 token inputs:sourceColorSpace = "sRGB"
                 token inputs:wrapS = "repeat"
-                token inputs:wrapT = "mirror"
+                token inputs:wrapT = "repeat"
                 float4 inputs:scale = (0.5, 0.25, 0.75, 1)
                 float3 outputs:rgb
             }
@@ -138,6 +145,7 @@ def Xform "root"
             {
                 uniform token info:id = "ND_open_pbr_surface_surfaceshader"
                 color3f inputs:base_color.connect = </root/materials/Textured/base_color_texture.outputs:rgb>
+                float inputs:specular_roughness_anisotropy = 0.5
                 token outputs:surface
             }
         }
