@@ -596,7 +596,9 @@ section 3 except where named.
   StandardShaderBall scene's six neutral `.exr` maps are the surveyed
   assets that ask for the second.
 - Load performance of a scene holding thousands of prims (the intent-vfx
-  teapot scenes, several minutes with the stall watchdog firing, and the
+  scenes, several minutes with the stall watchdog firing - the teapot ones,
+  and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset
+  arrive as 9862 prims and take 92 s to settle - and the
   usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
   hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
   prims and 146 meshes and the watchdog reports the tick stuck in

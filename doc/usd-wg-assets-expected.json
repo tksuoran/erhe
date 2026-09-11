@@ -236,5 +236,18 @@
    "Main loop STALLED"
   ],
   "reason": "the kit's variant sets are hoisted whole, so a stage the composer reads as 91 prims and 6 meshes arrives as 2373 prims and 146 meshes, and the load takes long enough for the main-loop watchdog to report the tick stuck in `raytrace: BVH commit` and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which names that scan as the first of its three causes; a known limitation, not a by-design result. The elementType lines are Tydra's animation scan asking for a builtin that the binary 4wdGeo.usd leaves unauthored on its GeomSubsets (its .usda siblings author `uniform token elementType = \"face\"`, which is also USD's fallback), and nothing animatable rides that attribute: every subset converts, giving the entry its 432 materials. The geometry itself is right - the bounds deviate by 0.02 from the composed stage, and the Storm render matches at 0.86"
+ },
+ {
+  "path": "intent-vfx/scenes/simpleAssetScene.usd",
+  "diagnostics": [
+   "the referencing layer defines typed prims over the reference",
+   "which names no material - the binding is dropped",
+   "Main loop STALLED",
+   "breadcrumb t="
+  ],
+  "gaps": [
+   "Main loop STALLED"
+  ],
+  "reason": "the scene rings 2000 copies of simpleAsset around the origin, natively instanced and through 28 PointInstancers, and arrives as 9862 prims and 2000 meshes that take 92 s to settle, long enough for the main-loop watchdog to report the tick stuck in `raytrace: BVH commit` and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which now names these scenes; a known limitation, not a by-design result. The geometry is right: the bounds match the composed stage exactly (deviation 0.0) and the Storm render of the same view matches at 0.95. The material lines are the asset's own structure meeting the first item of section 5, which puts structural edits inside a reference out of scope: `assets/simpleAsset/mtl.usd` authors `prepend references = @./geo.usd@` on `/simpleAsset` and defines the `mtl` scope holding both materials as a child of that same referencing prim, so erhe drops the scope and then the bindings that name it, and the proxy cubes render with the default material. pxr reads the composed binding as `/__Prototype_1/mtl/proxy_material`, whose UsdPreviewSurface carries `inputs:diffuseColor = (0.1077, 0.9012, 0.0382)`; the reference render shows the same grey erhe does (every pixel of logs/usd_wg_survey/storm/intent-vfx_scenes_simpleAssetScene.usd.png is neutral), so nothing but that green is lost here"
  }
 ]
