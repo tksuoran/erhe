@@ -176,6 +176,11 @@ translation units.
   opened from (`Scene_root::get_usd_dome_lights`); a scene that read no dome
   writes none and carries its ambient light in the `customLayerData` scene
   block instead.
+- A face named by `holeIndices` is not drawn: the importer claims it before
+  any subset sees it, so it lands in no facet group and neither the
+  geometry-normative build nor the triangle-soup build emits it. Tydra
+  removes hole faces only when it triangulates, which the conversion does not
+  ask it to, and says so in a warning per mesh.
 - Each materialBind `GeomSubset` becomes one primitive of the erhe mesh,
   with the facets no subset claims forming one more - the same shape a glTF
   mesh's primitive list has. A vertex is emitted for a group only if one of

@@ -17,6 +17,7 @@ add_executable(${_target}
     test_usd_defined.cpp
     test_usd_double_sided.cpp
     test_usd_export.cpp
+    test_usd_hole_faces.cpp
     test_usd_image_header.cpp
     test_usd_import.cpp
     test_usd_materials.cpp

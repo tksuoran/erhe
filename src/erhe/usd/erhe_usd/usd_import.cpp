@@ -2606,11 +2606,50 @@ private:
         return names;
     }
 
+    // `holeIndices` names the faces USD does not draw. Tydra removes them
+    // only when it triangulates, and the conversion keeps the authored
+    // polygons instead, so the hole facets are dropped here: each is claimed
+    // before any subset sees it and so lands in no facet group, which both
+    // the geometry-normative build and the triangle-soup build walk.
+    [[nodiscard]] auto authored_hole_facets(const std::string& mesh_absolute_path) const -> std::vector<std::uint32_t>
+    {
+        std::vector<std::uint32_t> hole_facets;
+        const lightusd::Prim* prim = find_prim(mesh_absolute_path);
+        if (prim == nullptr) {
+            return hole_facets;
+        }
+        const lightusd::GeomMesh* geom_mesh = prim->as<lightusd::GeomMesh>();
+        if (geom_mesh == nullptr) {
+            return hole_facets;
+        }
+        lightusd::Animatable<std::vector<std::int32_t>> animatable{};
+        if (!geom_mesh->holeIndices.get_value(&animatable)) {
+            return hole_facets;
+        }
+        std::vector<std::int32_t> indices{};
+        if (!animatable.get_default(&indices)) {
+            return hole_facets;
+        }
+        hole_facets.reserve(indices.size());
+        for (const std::int32_t index : indices) {
+            if (index >= 0) {
+                hole_facets.push_back(static_cast<std::uint32_t>(index));
+            }
+        }
+        return hole_facets;
+    }
+
     [[nodiscard]] auto make_facet_groups(const Tydra_mesh& usd_mesh) const -> std::vector<Facet_group>
     {
         const std::size_t facet_count = usd_mesh.faceVertexCounts().size();
         std::vector<Facet_group> groups;
         std::vector<bool>        claimed(facet_count, false);
+
+        for (const std::uint32_t hole_facet : authored_hole_facets(usd_mesh.abs_path)) {
+            if (hole_facet < facet_count) {
+                claimed[hole_facet] = true;
+            }
+        }
 
         // Authored order first, then anything the map holds that no prim
         // named (a subset Tydra synthesized).
