@@ -244,8 +244,8 @@ TEST_F(Material_set_gpu_test, two_sets_same_material_distinct_slots)
 
     const uint32_t slot_a = set_a.get_slot(shared_material.get()).value();
     const uint32_t slot_b = set_b.get_slot(shared_material.get()).value();
-    EXPECT_EQ(slot_a, 1u);
-    EXPECT_EQ(slot_b, 2u);
+    EXPECT_EQ(slot_a, 2u);
+    EXPECT_EQ(slot_b, 3u);
 
     update(set_a);
     update(set_b);
@@ -292,7 +292,7 @@ TEST_F(Material_set_gpu_test, stable_slot_after_material_added)
     set.sync_library(std::span<const std::shared_ptr<Material>>{list_2});
     update(set);
 
-    EXPECT_EQ(set.get_slot(first.get()).value(), 1u);
+    EXPECT_EQ(set.get_slot(first.get()).value(), 2u);
     EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
     EXPECT_EQ(read_base_color(set, 3u).g, 1.0f);
 }
