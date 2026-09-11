@@ -278,5 +278,15 @@
    "Main loop STALLED"
   ],
   "reason": "the layout layer alone rings 1000 teapots around the origin through 23 PointInstancers and arrives as 8808 prims that take 101 s to settle, long enough for the main-loop watchdog to report the tick stuck and print its breadcrumbs - the load-performance item of doc/usd-compatibility-plan.md section 6, which names these scenes. The bounds match the composed stage exactly and the Storm render of the same view matches at 0.91. The material lines are the first item of section 5, which puts structural edits inside a reference out of scope: `assets/teapot/mtl.usd` authors `prepend references = @./geo.usd@` on `/teapot` and defines the `mtl` scope holding the material as a child of that same referencing prim, so erhe drops the scope and the teapots render with the default material. The override line is that same layer's `over \"geo\" { over \"default\" { over \"Body\" } }`, which binds the dropped material and whose path crosses a second reference inside the instance - the nested-override item of section 6. The GeomSubset lines are Tydra's animation scan (`render-data-anim.cc` `ExtractPrimPropertyAnimation`) failing to read `indices`, which carries nothing animatable, the way the vehicle kit's subsets fail on `elementType`; the mesh converts whole, measured over MCP on the asset alone: 2472 facets and 1286 vertices in one primitive"
+ },
+ {
+  "path": "intent-vfx/scenes/teapotScene_layoutOverrides.usd",
+  "diagnostics": [
+   "which names no prim of the file",
+   "the referencing layer defines typed prims over the reference",
+   "does not exist in Prim .*\\(GeomSubset\\)",
+   "names no item of the instance"
+  ],
+  "reason": "the file is a department override layer, not a stage of its own: `teapotScene.usd` names it in its `subLayers` list between the animation cycle and the layout, and it authors `over` opinions plus the coloured prototypes that `prepend inherits = </_class_/teapot>`. The class itself belongs to the sibling layer `teapotScene_layout.usd` (line 6260), so opened on its own the file inherits from a prim it does not hold and erhe says so once per prototype; OpenUSD composes the same file to 0 prims, 0 meshes and 0 materials, which is what the pxr leg of the survey reads. The material, GeomSubset and override lines are the teapot asset's own, named in this file's entry for `intent-vfx/scenes/teapotScene_layout.usd`"
  }
 ]
