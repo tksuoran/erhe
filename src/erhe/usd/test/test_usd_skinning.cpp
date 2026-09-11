@@ -10,6 +10,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_item/typed.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -596,6 +597,42 @@ TEST_F(Skel_animation_round_trip, second_save_is_byte_identical)
     const erhe::usd::Usd_save_result save = erhe::usd::save_usda(save_arguments);
     ASSERT_TRUE(save.error.empty()) << save.error;
     EXPECT_EQ(read_file(second_path), read_file(written_path));
+}
+
+// `visibility` and `purpose` are GPrim attributes that the UsdSkel types
+// carry copies of, so they are read from the concrete prim class: a
+// `Skeleton` authoring `purpose = "guide"` and a `SkelRoot` authoring
+// `visibility = "invisible"` land on the imported prims' own properties
+// (usd-wg full_assets/ElephantWithMonochord authors the first on both of
+// its skeletons).
+class Usd_skel_visibility_and_purpose : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root   = std::make_shared<erhe::scene::Xform>("import_root");
+        result = load(test_data_path("skel_purpose.usda"), root);
+        ASSERT_TRUE(result.error.empty()) << result.error;
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Usd_skel_visibility_and_purpose, skeleton_purpose_is_local)
+{
+    const std::shared_ptr<erhe::Hierarchy> skel = find_prim(root, "skel");
+    ASSERT_NE(skel, nullptr);
+    EXPECT_EQ(skel->get_value_source(erhe::Item_base::purpose_property.get()), erhe::property::Value_source::local);
+    EXPECT_EQ(skel->get_value(erhe::Item_base::purpose_property), erhe::Purpose::guide);
+}
+
+TEST_F(Usd_skel_visibility_and_purpose, skel_root_visibility_is_local)
+{
+    const std::shared_ptr<erhe::Hierarchy> rig = find_prim(root, "rig");
+    ASSERT_NE(rig, nullptr);
+    EXPECT_EQ(rig->get_value_source(erhe::Item_base::visible_property.get()), erhe::property::Value_source::local);
+    EXPECT_FALSE(rig->get_value(erhe::Item_base::visible_property));
 }
 
 } // anonymous namespace

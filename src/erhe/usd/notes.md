@@ -102,6 +102,14 @@ translation units.
   attributes every `GPrim` carries and the custom properties of its `props`
   map. That is what lets `visibility`, `purpose` and the `erhe:` custom
   attributes of a `Cube` prim be read at all.
+- `visibility` and `purpose` are read from the concrete LightUSD prim class,
+  because Tydra's `GetProperty` reaches a prim's own schema attributes but
+  not the ones it inherits from `GPrim` or from a light base. The lookup
+  therefore names every prim type the conversion makes a prim for - the
+  `GPrim`-derived geometry, point, curve and instancer types, the camera,
+  the UsdSkel `SkelRoot` and `Skeleton`, and the UsdLux types - and a type
+  missing from that list reports "visibility and purpose are not readable
+  from a '<type>' prim" and keeps the defaults.
 - Every prim the conversion gives a transform to keeps the xformOp stack it
   was authored with, next to the transform Tydra composed for it
   (`doc/usd-compatibility-plan.md` M8, `src/erhe/scene/notes.md` "Authored

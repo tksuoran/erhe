@@ -1667,9 +1667,10 @@ private:
     // reaches a prim's own schema attributes and its custom ones, but not
     // the ones a prim inherits from GPrim or from LightAPI, so these two
     // are read from the concrete prim class. Every prim type the conversion
-    // makes a node for is listed: the GPrim-derived geometry and camera
-    // types, and the UsdLux types, which carry their own copies of the two
-    // attributes rather than deriving from GPrim.
+    // makes a node for is listed: the GPrim-derived geometry, point and
+    // curve types, the camera, the UsdSkel types, and the UsdLux types -
+    // the last two carry their own copies of the two attributes rather than
+    // deriving from GPrim.
     template <typename T>
     [[nodiscard]] static auto read_visibility_and_purpose(
         const lightusd::Prim&  prim,
@@ -1712,7 +1713,13 @@ private:
             read_visibility_and_purpose<lightusd::GeomCylinder  >(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomCylinder_1>(prim, visibility, purpose) ||
             read_visibility_and_purpose<lightusd::GeomCapsule   >(prim, visibility, purpose) ||
-            read_visibility_and_purpose<lightusd::GeomCapsule_1 >(prim, visibility, purpose);
+            read_visibility_and_purpose<lightusd::GeomCapsule_1 >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomPoints        >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomBasisCurves   >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::GeomPointInstancer>(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::SkelRoot          >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::Skeleton          >(prim, visibility, purpose) ||
+            read_visibility_and_purpose<lightusd::DomeLight         >(prim, visibility, purpose);
     }
 
     // `doubleSided` of the composed prim. Like `visibility` and `purpose` it
