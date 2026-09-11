@@ -1415,10 +1415,6 @@ def summarize_diagnostics(record: dict) -> str:
 # written after reading the code that emits the message (the source is named),
 # so it states the missing support, not a instruction to go and look.
 REMEDY = [
-    (re.compile(r"Attribute .* does not exist in Prim"),
-     "nothing: LightUSD's Tydra probes every optional Gprim attribute (extent, doubleSided) "
-     "for time samples and reports the ones a prim does not author; the schema fallback is "
-     "used and the mesh loads (.cpm_cache lightusd src/tydra/render-data-anim.cc)"),
     (re.compile(r"TODO: Prim type|resolved to no RenderMesh"),
      "build geometry for the UsdGeom schemas Tydra does not convert (Cube, Sphere, Cone, "
      "Cylinder, Capsule, PointInstancer): the prim loads with no mesh "

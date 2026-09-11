@@ -763,7 +763,7 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
         # to the branch name, so the build does not move when the branch does;
         # GIT_SHALLOW is off because a shallow clone cannot fetch a raw commit
         # id. Drop the fork once an upstream release carries the same fixes.
-        GIT_TAG           4983cc9b08be7d914da52b4312e4aeb445320200
+        GIT_TAG           8ed5cf574e45ea26360f7bcd22028f4c79798a39
         GIT_SHALLOW       FALSE
         #GITHUB_REPOSITORY lighttransport/LightUSD
         GITHUB_REPOSITORY tksuoran/LightUSD
