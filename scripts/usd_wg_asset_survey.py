@@ -1039,11 +1039,15 @@ def survey_entry(editor: Editor, root: pathlib.Path, entry: dict, shots_dir: pat
                 record["settle_seconds"], record["settle_error"] = wait_until_idle(editor, load_timeout)
                 nodes = editor.mcp.call("get_scene_nodes", {"scene_name": scene}, timeout=load_timeout).get("nodes", [])
                 record["prims"] = len(nodes)
-                # Active meshes only: an inactive prim (`active = false`, or an
-                # undefined `over`) is a prim of erhe's tree but out of render,
-                # as USD's default traversal predicate leaves it out of the
+                # Active content meshes only: an inactive prim (`active = false`,
+                # an undefined `over`) and a prototype held by a `class` prim
+                # (no content flag) are prims of erhe's tree but out of render,
+                # as USD's default traversal predicate leaves them out of the
                 # composed count this is compared against.
-                record["meshes"] = sum(1 for n in nodes if (n.get("type") == "Mesh") and n.get("active", True))
+                record["meshes"] = sum(
+                    1 for n in nodes
+                    if (n.get("type") == "Mesh") and n.get("active", True) and n.get("content", True)
+                )
                 record["materials"] = len(editor.mcp.call("get_scene_materials", {"scene_name": scene}, timeout=load_timeout).get("materials", []))
                 record["lights"] = len(editor.mcp.call("get_scene_lights", {"scene_name": scene}, timeout=load_timeout).get("lights", []))
                 record["cameras"] = len(editor.mcp.call("get_scene_cameras", {"scene_name": scene}, timeout=load_timeout).get("cameras", []))

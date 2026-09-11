@@ -411,6 +411,7 @@ auto Mcp_server::query_scene_nodes(const json& args) -> std::string
                 {"parent_id",   parent_prim ? json(parent_prim->get_id()) : json()},
                 {"locked",      prim->is_lock_edit()},
                 {"active",      prim->is_active()},
+                {"content",     (prim->get_flag_bits() & erhe::Item_flags::content) != 0},
                 {"import_root", (prim->get_flag_bits() & erhe::Item_flags::import_root) != 0},
                 {"tags",        tags_arr}
             };
