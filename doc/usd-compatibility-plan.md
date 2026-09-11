@@ -576,13 +576,13 @@ section 3 except where named.
   payload reads the pre-instantiation bounds (the survey's
   `payload_child_folder.usda` row at 4950% is this; a second framing reads
   the right ones). The same load-settle family as the load-performance item.
-- The bounds rows the survey still shows in `full_assets`
-  (`doc/usd-wg-assets.md`, "bounds disagree"): Creases_SpinningPyramids
-  (8.3x, node-subtree variants) and vehicleVariants (0.11), measured before
-  the survey's own bounds comparison was corrected (Z-up conversion, lights
-  in the pxr bound); re-measure with the gap loop
+- The bounds row the survey still shows in `full_assets`
+  (`doc/usd-wg-assets.md`, "bounds disagree"): vehicleVariants (0.11),
+  measured before the survey's own bounds comparison was corrected (Z-up
+  conversion, lights in the pxr bound); re-measure with the gap loop
   (`doc/usd-survey-gap-loop.md`) before diagnosing. Every `test_assets`
-  bounds row is closed.
+  bounds row is closed, and so is Creases_SpinningPyramids, which the gap
+  loop re-measured at a deviation of 0.0.
 - `inherits` and `specializes` arcs whose target is not a `class` prim
   (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
   a style only of a class prim, so such an arc composes nothing and is
@@ -611,6 +611,16 @@ section 3 except where named.
   on the tick thread. A shape-to-meshes index maintained at the change
   sites, a hover that does not trace while a load is in flight, and the
   proxy build on the deferred path are the fixes, in that order.
+- A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`: Tydra accepts
+  only a `UsdUVTexture` output on a shader input, so a network that reads a
+  primvar into one - usd-wg
+  `full_assets/SubdivisionSurfaces/Creases_SpinningPyramids.usda` connects
+  `inputs:diffuseColor` to a `UsdPrimvarReader_float3` reading
+  `displayColor` - fails the whole material, and the file's meshes arrive
+  with no material at all (0 of 3 there). Closing it is either a fork change
+  in Tydra or erhe reading the network from the composed layer itself and
+  mapping the named primvar onto the value the input would take, which for
+  `displayColor` is the vertex colors erhe already carries.
 - An environment map from a `DomeLight` texture: erhe has no environment
   map, so a dome's `inputs:texture:file` is named in one warning and not
   sampled, and the dome contributes the constant radiance of its `color`,

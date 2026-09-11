@@ -181,5 +181,18 @@
    "renders in the unbound default"
   ],
   "appearance": "the by-eye note records every mesh in the unbound default grey where the reference shows dark and light stone with green and gold accents; that is what a file whose materials are all MaterialX documents looks like until the MaterialX item of doc/usd-compatibility-plan.md section 6 is taken up - the pieces themselves stand where the reference puts them"
+ },
+ {
+  "path": "full_assets/SubdivisionSurfaces/Creases_SpinningPyramids.usda",
+  "diagnostics": [
+   "authors .* opinion\\(s\\) that erhe has no place for",
+   "must be `.*` for UsdUVTexture",
+   "Failed to convert UsdPreviewSurface",
+   "has no converted material - it is not placed in the tree",
+   "the referencing layer defines typed prims over the reference",
+   "binds '.*' to material '.*', which the file has no prim for",
+   "hole face removal is only applied when triangulation is enabled"
+  ],
+  "reason": "each pyramid's material connects `inputs:diffuseColor` to a `UsdPrimvarReader_float3` reading `displayColor` (Pyramid/mtl.usda), and Tydra accepts only a `UsdUVTexture` output on a shader input, so it fails the material and erhe imports 0 of 3 - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result, and the reason the two variant bindings that name those materials are dropped as well. The `mtl` prims the referencing layer defines over the reference are a structural edit inside a reference, which section 5 puts out of scope. The uncarried variant opinions are the section 6 variants item. The hole-face line is Tydra reporting that it removes hole faces only when it triangulates, which the conversion does not ask it to; erhe drops the four hole facets itself, so the pyramids show the openings Storm shows (24 facets per shape, from 28 before the fix) and bounds_deviation measures 0.0"
  }
 ]
