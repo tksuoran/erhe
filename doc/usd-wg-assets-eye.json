@@ -76,8 +76,8 @@
  },
  {
   "path": "test_assets/TextureFileFormatTests/all_files.usda",
-  "note": "both panels load through the file's own camera with their labels the right way round; the eight 8-bit tiles carry their gradient and the 16-bit, 32-bit and CMYK tiles render blank",
-  "gap": "16-bit, 32-bit and CMYK images do not load: their tiles render blank where the reference shows the same gradient the 8-bit tiles carry"
+  "note": "all 24 labelled tiles show their texture and the magenta background frames render as in the Storm render (the 32-bit PNG is dark in Storm too)",
+  "gap": ""
  },
  {
   "path": "test_assets/TextureTransformTest/TextureTransformTest.usd",

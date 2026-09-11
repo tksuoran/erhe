@@ -2199,6 +2199,7 @@ def main() -> int:
             return 0
     test_db = load_test_db(args.test_db)
     expected = load_expected_results(args.expected)
+    eye_notes = load_eye_notes(args.eye)
 
     if args.eye_note:
         entry, note = args.eye_note
@@ -2335,6 +2336,9 @@ def main() -> int:
             record["surveyed_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             record["survey_seconds"] = time.monotonic() - entry_started
             apply_expected_results(record, expected)
+            # The by-eye verdict belongs to the entry's status and to the
+            # stop decision, so it is applied here as well as on the summary.
+            apply_eye_notes({"entries": [record]}, eye_notes)
             records.append(record)
             print(f"      {record['verdict']}", flush=True)
             if args.record_test_db:
