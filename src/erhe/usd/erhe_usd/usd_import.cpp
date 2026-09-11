@@ -3501,10 +3501,15 @@ private:
         if (m_arguments.stage_metrics == Stage_metrics::referenced) {
             return transform;
         }
+        // USD's upAxis takes only `Y` and `Z`. Hydra applies no up-axis
+        // transform to the geometry whatever the token says (the axis only
+        // orients usdview's default camera, where an unknown token reads as
+        // Y), so a file authoring `X` or a misspelling renders as Y-up there
+        // and here alike.
         if (m_result.data.up_axis == "Z") {
             transform = glm::rotate(transform, -glm::half_pi<float>(), glm::vec3{1.0f, 0.0f, 0.0f});
-        } else if (m_result.data.up_axis == "X") {
-            log_usd->warn("USD stage up axis 'X' has no erhe counterpart - imported as Y-up");
+        } else if (!m_result.data.up_axis.empty() && (m_result.data.up_axis != "Y")) {
+            log_usd->warn("USD stage up axis '{}' is not a valid upAxis (Y or Z) - imported as Y-up, as usdview renders it", m_result.data.up_axis);
         }
         const float scale = static_cast<float>(m_result.data.meters_per_unit);
         if (scale != 1.0f) {

@@ -8,6 +8,57 @@
   "reason": "column 5 authors the illegal sourceColorSpace token `lin_ap1_scene` on purpose; LightUSD warns and keeps the fallback `auto`, which is what OpenUSD does with it (asset README)"
  },
  {
+  "path": "test_assets/foundation/stage_composition/payload/payload_invalid.usda",
+  "diagnostics": [
+   "Prefab source file not found"
+  ],
+  "reason": "the file payloads a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved arc and composes nothing for it, and so does erhe"
+ },
+ {
+  "path": "test_assets/foundation/stage_composition/references/reference_invalid.usda",
+  "diagnostics": [
+   "Prefab source file not found"
+  ],
+  "reason": "the file references a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved arc and composes nothing for it, and so does erhe"
+ },
+ {
+  "path": "test_assets/foundation/stage_composition/references_prim/reference_prim_in_other_file.usda",
+  "diagnostics": [
+   "Prefab '.*': prim '.*' is not in",
+   "Prefab source file not found"
+  ],
+  "reason": "two of the three prim references name a prim or a file that does not exist, on purpose (README); the existing one composes and the other two are reported unresolved, as OpenUSD does"
+ },
+ {
+  "path": "test_assets/foundation/stage_composition/references_prim/reference_prim_in_same_file.usda",
+  "diagnostics": [
+   "Prefab '.*': prim '.*' is not in"
+  ],
+  "reason": "one of the two internal prim references names a prim that does not exist, on purpose (README); the existing one composes and the other is reported unresolved, as OpenUSD does"
+ },
+ {
+  "path": "test_assets/foundation/stage_composition/subLayer/sublayer_invalid.usda",
+  "diagnostics": [
+   "not found in path"
+  ],
+  "reason": "the file sublayers a file that does not exist, on purpose (README: 'invalid file'); OpenUSD reports the unresolved layer and composes nothing for it, and so does erhe"
+ },
+ {
+  "path": "test_assets/foundation/stage_configuration/upAxis/upAxis_X.usda",
+  "diagnostics": [
+   "is not a valid upAxis \\(Y or Z\\) - imported as Y-up"
+  ],
+  "reason": "the file authors an upAxis value USD does not allow, on purpose (README: 'one invalid value'); Hydra applies no up-axis transform to the geometry and usdview reads the token as Y, which is what erhe renders too (Storm match 0.94)"
+ },
+ {
+  "path": "test_assets/foundation/stage_configuration/upAxis/upAxis_invalid.usda",
+  "diagnostics": [
+   "is not a valid upAxis \\(Y or Z\\) - imported as Y-up",
+   "Ignore unknown .* value\\. Must be"
+  ],
+  "reason": "the file authors an upAxis value USD does not allow, on purpose (README: 'one invalid value'); Hydra applies no up-axis transform to the geometry and usdview reads the token as Y, which is what erhe renders too (Storm match 0.94)"
+ },
+ {
   "path": "test_assets/schemaTests/usdGeom/meshes/empty_mesh/empty.usda",
   "gaps": [
    "no mesh loaded"

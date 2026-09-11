@@ -1615,8 +1615,6 @@ REMEDY = [
      "(Prefab_library::get_or_load, X1)"),
     (re.compile(r"Failed to parse USDA|Failed to parse (Attribute|Prim|`)"),
      "read the USDA constructs LightUSD's parser rejects; the file then loads as an empty stage"),
-    (re.compile(r"up axis .* has no erhe counterpart"),
-     "carry a Z-up stage's up axis into the scene instead of importing it as Y-up"),
     (re.compile(r"renders flat white when its bound material comes from another layer"),
      "bind a material the file authors in a layer other than the mesh's own; the mesh loads and shades "
      "with the default white material instead of the one the file binds"),
