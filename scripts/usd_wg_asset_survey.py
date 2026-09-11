@@ -64,6 +64,21 @@ are repeatable, so `--only test_assets --exclude full_assets` or
 
     py -3 scripts/usd_wg_asset_survey.py --only test_assets --exclude McUsd
 
+Test database (--test-db, --record-test-db, --failing-first, --clear-test-db)
+-----------------------------------------------------------------------------
+logs/usd_wg_survey/test_database.json (or --test-db) records, per entry
+path, the status of its last recorded run - `pass` (works, no gap), `gap`
+(works with a gap) or `fail` (fails or crash) - together with the verdict,
+the run time in seconds and the date. --record-test-db updates it after
+every entry (so an interrupted run keeps what it did), --clear-test-db
+empties it (and exits when no --root is given), and --failing-first orders
+the run by it: `fail` entries first, shortest run first, then `gap` entries
+the same way, then entries the database has not seen in survey order, and
+`pass` entries last. --limit applies after that order, so this runs the
+five quickest known failures:
+
+    py -3 scripts/usd_wg_asset_survey.py --root <usd-wg-assets>         --record-test-db --failing-first --limit 5
+
 OpenUSD reference (--usd-root / ERHE_USD_ROOT)
 ----------------------------------------------
 With a prebuilt OpenUSD at `<usd_root>` (its `scripts/set_usd_env.bat` and
@@ -1722,8 +1737,66 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
 # --------------------------------------------------------------------------
 
 DEFAULT_EDITOR = pathlib.Path("build_vs2026_vulkan_headless/src/editor/Debug/editor.exe")
+# --------------------------------------------------------------------------
+# Test database: per-entry status and run time of the last recorded run
+# --------------------------------------------------------------------------
+
+TEST_DB_STATUSES = ("pass", "gap", "fail")
+
+
+def test_status(verdict: str) -> str:
+    """pass = works without a gap, gap = works with gap(s), fail = fails or crash."""
+    kind = verdict_class(verdict)
+    if kind == "works":
+        return "pass"
+    if kind == "works, gap":
+        return "gap"
+    return "fail"
+
+
+def load_test_db(path: pathlib.Path) -> dict:
+    if not path.is_file():
+        return {"entries": {}}
+    db = json.loads(path.read_text(encoding="utf-8"))
+    db.setdefault("entries", {})
+    return db
+
+
+def save_test_db(path: pathlib.Path, db: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(db, indent=1, sort_keys=True), encoding="utf-8")
+
+
+def record_test_result(db: dict, record: dict) -> None:
+    db["entries"][record["path"]] = {
+        "status": test_status(record["verdict"]),
+        "verdict": record["verdict"],
+        "seconds": round(float(record.get("survey_seconds") or 0.0), 3),
+        "recorded_at": record.get("surveyed_at", ""),
+    }
+
+
+def sort_failing_first(entries: list, db: dict) -> list:
+    """Recorded failures first, shortest run first; then recorded gaps the same
+    way; then entries the database has never seen, in survey order; passing
+    entries last, in survey order."""
+    rank = {"fail": 0, "gap": 1, None: 2, "pass": 3}
+    known = db["entries"]
+
+    def key(item):
+        index, entry = item
+        recorded = known.get(entry["path"])
+        status = recorded["status"] if recorded else None
+        if status in ("fail", "gap"):
+            return (rank[status], float(recorded.get("seconds") or 0.0), index)
+        return (rank.get(status, 2), 0.0, index)
+
+    return [entry for _, entry in sorted(enumerate(entries), key=key)]
+
+
 DEFAULT_SHOTS = pathlib.Path("logs/usd_wg_survey")
 DEFAULT_DOC = pathlib.Path("doc/usd-wg-assets.md")
+DEFAULT_TEST_DB = DEFAULT_SHOTS / "test_database.json"
 
 
 def refresh_camera_fields(args, summary: dict) -> int:
@@ -1927,6 +2000,14 @@ def main() -> int:
                         help="a prebuilt OpenUSD (its scripts/set_usd_env.bat and usdrecord.bat): adds the composed-stage counts and a Storm render of the same view per entry; default from ERHE_USD_ROOT; empty = off")
     parser.add_argument("--storm-threshold", type=float, default=0.0,
                         help="a Storm match under this value is a gap of its own (0 = record the score only)")
+    parser.add_argument("--test-db", type=pathlib.Path, default=DEFAULT_TEST_DB,
+                        help="the test database: per entry, pass / gap / fail and the run time of its last recorded run")
+    parser.add_argument("--clear-test-db", action="store_true",
+                        help="empty the test database first (exits when no survey is requested)")
+    parser.add_argument("--record-test-db", action="store_true",
+                        help="update the test database with each surveyed entry's status and run time")
+    parser.add_argument("--failing-first", action="store_true",
+                        help="run the entries the test database records as failing first, shortest run first, then gaps, unrecorded entries, passing entries")
     args = parser.parse_args()
 
     usd_tools = None
@@ -1939,6 +2020,13 @@ def main() -> int:
 
     args.shots.mkdir(parents=True, exist_ok=True)
     summary_path = args.shots / "summary.json"
+
+    if args.clear_test_db:
+        save_test_db(args.test_db, {"entries": {}})
+        print(f"cleared the test database {args.test_db}")
+        if not args.root:
+            return 0
+    test_db = load_test_db(args.test_db)
 
     if args.eye_note:
         entry, note = args.eye_note
@@ -2008,6 +2096,8 @@ def main() -> int:
         entries = [e for e in entries if any(fragment in e["path"] for fragment in args.only)]
     if args.exclude:
         entries = [e for e in entries if not any(fragment in e["path"] for fragment in args.exclude)]
+    if args.failing_first:
+        entries = sort_failing_first(entries, test_db)
     if args.limit > 0:
         entries = entries[:args.limit]
     if args.list_entries:
@@ -2068,6 +2158,9 @@ def main() -> int:
             record["survey_seconds"] = time.monotonic() - entry_started
             records.append(record)
             print(f"      {record['verdict']}", flush=True)
+            if args.record_test_db:
+                record_test_result(test_db, record)
+                save_test_db(args.test_db, test_db)
             if (not record["crash"]) and editor.alive():
                 try:
                     close_extra_scenes(editor, args.load_timeout)
@@ -2084,7 +2177,7 @@ def main() -> int:
 
     # A run restricted to some entries keeps every entry it did not survey, so
     # the summary and the document always state the whole survey.
-    subset = bool(args.only) or (args.limit > 0)
+    subset = bool(args.only) or bool(args.exclude) or (args.limit > 0)
     if subset and summary_path.is_file():
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     else:
@@ -2110,6 +2203,10 @@ def main() -> int:
     for gap in gather_gaps(records)[:5]:
         print(f"  {gap['count']:3d}  {gap['cause'][:90]}")
     print(f"wrote {args.doc} and {summary_path}")
+    if args.record_test_db:
+        db_counts = collections.Counter(e["status"] for e in test_db["entries"].values())
+        print(f"test database {args.test_db}: {len(test_db['entries'])} entries "
+              f"(pass {db_counts['pass']}, gap {db_counts['gap']}, fail {db_counts['fail']})")
     return 0
 
 
