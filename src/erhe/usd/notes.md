@@ -398,7 +398,12 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   prim erhe reads is typeless; a typeless or `Scope` prim that authors an arc
   therefore imports as an `erhe::scene::Xform`, which is what holds the
   instances the arcs become and which carries the prim's own authored
-  transform (the identity when it authors none). The item
+  transform (the identity when it authors none). LightUSD reconstructs a
+  typeless prim as a `Model` whose attributes stay raw properties - it
+  builds no xformOps for it and Tydra evaluates the identity for it - so
+  the importer reconstructs the carrier's `xformOp:*` properties itself
+  (`ReconstructXformOpsFromProperties`, the reader an `over`'s xformOps go
+  through) and takes that stack as the transform. The item
   remembers nothing of having been typeless: the writer spells it
   `def Xform`, a legal and more explicit spelling of the same composition, and
   that spelling is the round trip's fixed point from the first save on. A
@@ -410,7 +415,12 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   reached it through to its children, which is what the editor's template
   wrapper reproduces (`src/editor/parsers/notes.md`).
 - An undefined prim - one the composed stage gives the specifier `over`,
-  because no layer defines it - is a prim of the tree like any other:
+  because no layer defines it - is a prim of the tree like any other. A prim
+  that authors a `references` or `payload` arc is defined by the arc's
+  target, so `over "x" (references = @f.usda@)` is defined whatever the
+  layer's specifier says (LightUSD composes no arcs, so the layer spec is all
+  the importer can read; a target that fails to resolve is the arc
+  resolution's report, not an undefined prim). Otherwise:
   LightUSD reconstructs it whatever its specifier, so a reference to it and to
   its `def` descendants resolves. It imports with `defined = false`, which
   takes it and its whole subtree out of render, pick and simulation through

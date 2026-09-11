@@ -1285,11 +1285,30 @@ private:
             return false;
         }
         const lightusd::Xformable* xformable = get_xformable(*prim);
+        std::vector<lightusd::XformOp> model_ops;
         if (xformable == nullptr) {
-            return false;
+            // A typeless prim - the `Model` LightUSD reconstructs for
+            // `def "name"` and `over "name"` - keeps every attribute as a raw
+            // property: LightUSD builds no xformOps for it and Tydra evaluates
+            // no transform for it. USD gives such a prim its type through the
+            // arc it authors, and its own xformOps apply on top of the composed
+            // target, so the raw `xformOp:*` properties are reconstructed here
+            // the way an `over`'s are (read_override_xform_ops).
+            const lightusd::Model* model = prim->as<lightusd::Model>();
+            if ((model == nullptr) || (model->props.find("xformOpOrder") == model->props.end())) {
+                return false;
+            }
+            std::map<std::string, lightusd::Property> properties = model->props;
+            std::set<std::string>                     table;
+            std::string                               error;
+            if (!lightusd::prim::ReconstructXformOpsFromProperties(model->spec, table, properties, &model_ops, &error)) {
+                log_usd->warn("USD prim '{}': the typeless prim has unreadable xformOps: {}", absolute_path, error);
+                return false;
+            }
         }
+        const std::vector<lightusd::XformOp>& ops = (xformable != nullptr) ? xformable->xformOps : model_ops;
         const double time_code = m_import_time_code;
-        for (const lightusd::XformOp& usd_op : xformable->xformOps) {
+        for (const lightusd::XformOp& usd_op : ops) {
             if (usd_op.op_type == lightusd::XformOp::OpType::ResetXformStack) {
                 out_stack.reset_xform_stack = true;
                 continue;
@@ -1658,6 +1677,13 @@ private:
     // leaves Prim::specifier() at Specifier::Invalid, so the stage prim
     // cannot answer this (the writer lowers the typed struct's field for the
     // same reason, see apply_defined_specifier in usd_export.cpp).
+    //
+    // A prim that authors a `references` or `payload` arc is defined by the
+    // arc's target: `over "x" (references = @file.usda@)` composes to a
+    // defined prim whenever the target is a `def`, which is the case an arc
+    // exists for (a target that does not resolve is reported by the arc's
+    // resolution, not here). LightUSD composes no arcs, so the layer spec
+    // still says `over`; such a prim keeps `defined` at its default.
     void apply_defined(const std::string& absolute_path, erhe::Item_base& item)
     {
         const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
@@ -1665,6 +1691,9 @@ private:
             return;
         }
         if (spec->specifier() != lightusd::Specifier::Over) {
+            return;
+        }
+        if (!read_prim_references(absolute_path).empty()) {
             return;
         }
         item.set_value(erhe::Item_base::defined_property, false);
@@ -3641,6 +3670,12 @@ private:
         // a prim either, so the authored stack is what it has.
         if (!content && is_primitive_schema_prim_type(type_name)) {
             content            = make_primitive_schema_mesh(usd_node.abs_path, type_name, node_name);
+            composed_transform = Composed_transform::unevaluated;
+        }
+        // A typeless arc carrier is a LightUSD `Model`, for which Tydra
+        // evaluates no transform (the identity): its authored stack is its
+        // transform (read_xform_op_stack).
+        if (type_name.empty()) {
             composed_transform = Composed_transform::unevaluated;
         }
         std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(content);

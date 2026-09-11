@@ -11,6 +11,15 @@ def Xform "World"
         references = @reftarget.usda@</Library/Gadget>
     )
     {
+        double3 xformOp:translate = (0, 4.4, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    over "OverCarrier" (
+        references = @reftarget.usda@</Library/Gadget>
+    )
+    {
+        double3 xformOp:translate = (0, 2.2, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 
     def Scope "ScopeCarrier" (

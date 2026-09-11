@@ -1082,7 +1082,7 @@ protected:
 TEST_F(Typeless_carrier_import, a_typeless_carrier_and_a_scope_carrier_are_xform_carriers)
 {
     ASSERT_TRUE(result.error.empty()) << result.error;
-    ASSERT_EQ(result.data.references.size(), 2u);
+    ASSERT_EQ(result.data.references.size(), 3u);
 
     for (const char* name : {"Carrier", "ScopeCarrier"}) {
         const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, name);
@@ -1097,8 +1097,38 @@ TEST_F(Typeless_carrier_import, a_typeless_carrier_and_a_scope_carrier_are_xform
     EXPECT_EQ(result.data.references[0].references[0].asset_path, "reftarget.usda");
     EXPECT_EQ(result.data.references[0].references[0].prim_path, "/Library/Gadget");
 
-    EXPECT_EQ(result.data.references[1].stage_path, "/World/ScopeCarrier");
-    EXPECT_EQ(result.data.references[1].item, find_node(result.data, "ScopeCarrier"));
+    EXPECT_EQ(result.data.references[1].stage_path, "/World/OverCarrier");
+    EXPECT_EQ(result.data.references[1].item, find_node(result.data, "OverCarrier"));
+    EXPECT_EQ(result.data.references[2].stage_path, "/World/ScopeCarrier");
+    EXPECT_EQ(result.data.references[2].item, find_node(result.data, "ScopeCarrier"));
+}
+
+// LightUSD reconstructs a typeless prim as a `Model` whose xformOps stay raw
+// properties, and Tydra evaluates the identity for it; the carrier's own
+// authored translate is its transform all the same.
+TEST_F(Typeless_carrier_import, a_typeless_carrier_keeps_its_own_transform)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, "Carrier");
+    ASSERT_TRUE(carrier.operator bool());
+    const glm::vec3 translation = glm::vec3{carrier->parent_from_node_transform().get_matrix()[3]};
+    EXPECT_FLOAT_EQ(translation.y, 4.4f);
+    const erhe::scene::Xform_op_stack* stack = carrier->get_xform_op_stack();
+    ASSERT_NE(stack, nullptr);
+    EXPECT_EQ(stack->ops.size(), 1u);
+}
+
+// `over "x" (references = ...)` composes to a defined prim: the arc's target
+// defines it, so the layer's `over` does not make it undefined.
+TEST_F(Typeless_carrier_import, an_over_carrier_is_defined_and_keeps_its_transform)
+{
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    const std::shared_ptr<erhe::scene::Node> carrier = find_node(result.data, "OverCarrier");
+    ASSERT_TRUE(carrier.operator bool());
+    EXPECT_FALSE(carrier->read_local_value(erhe::Item_base::defined_property).has_value());
+    EXPECT_TRUE(carrier->is_active());
+    const glm::vec3 translation = glm::vec3{carrier->parent_from_node_transform().get_matrix()[3]};
+    EXPECT_FLOAT_EQ(translation.y, 2.2f);
 }
 
 TEST_F(Typeless_carrier_import, a_scope_without_arcs_stays_a_scope)
@@ -1136,7 +1166,7 @@ TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a
     };
     const erhe::usd::Usd_load_result loaded = erhe::usd::load_usd(load_arguments);
     ASSERT_TRUE(loaded.error.empty()) << loaded.error;
-    ASSERT_EQ(loaded.data.references.size(), 2u);
+    ASSERT_EQ(loaded.data.references.size(), 3u);
 
     std::vector<erhe::usd::Usd_save_prim_references> save_references;
     for (const erhe::usd::Usd_prim_references& entry : loaded.data.references) {
@@ -1165,7 +1195,10 @@ TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a
     const std::string written = read_text_file(stage_path);
     EXPECT_NE(written.find("def Xform \"Carrier\""), std::string::npos) << written;
     EXPECT_NE(written.find("def Xform \"ScopeCarrier\""), std::string::npos) << written;
+    EXPECT_NE(written.find("def Xform \"OverCarrier\""), std::string::npos) << written;
     EXPECT_EQ(written.find("def \"Carrier\""), std::string::npos) << written;
+    // The carrier's own authored translate is written back with it.
+    EXPECT_NE(written.find("xformOp:translate = (0, 4.4, 0)"), std::string::npos) << written;
     EXPECT_NE(written.find("def Scope \"PlainScope\""), std::string::npos) << written;
 
     // Reading the written file back and writing it again changes nothing.
@@ -1177,7 +1210,7 @@ TEST(Typeless_carrier_export, a_carrier_is_written_as_an_xform_and_the_save_is_a
     };
     const erhe::usd::Usd_load_result reloaded = erhe::usd::load_usd(reload_arguments);
     ASSERT_TRUE(reloaded.error.empty()) << reloaded.error;
-    ASSERT_EQ(reloaded.data.references.size(), 2u);
+    ASSERT_EQ(reloaded.data.references.size(), 3u);
 
     std::vector<erhe::usd::Usd_save_prim_references> resave_references;
     for (const erhe::usd::Usd_prim_references& entry : reloaded.data.references) {
