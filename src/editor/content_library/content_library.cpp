@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 
 namespace editor {
 
@@ -87,6 +88,39 @@ auto Content_library::get_kind_type_bit(const erhe::Item_base& item) -> uint64_t
     return get_kind_type_bit_of_type(item.get_type());
 }
 
+namespace {
+
+// One character of a name as a file that spells identifiers can carry it:
+// USD allows [A-Za-z0-9_] and writes every other character as '_'
+// (erhe::usd::sanitize_usd_identifier), so a kind scope named "Graph
+// Textures" comes back named "Graph_Textures".
+[[nodiscard]] auto identifier_character(const char c) -> char
+{
+    const bool carried =
+        ((c >= 'a') && (c <= 'z')) ||
+        ((c >= 'A') && (c <= 'Z')) ||
+        ((c >= '0') && (c <= '9')) ||
+        (c == '_');
+    return carried ? c : '_';
+}
+
+// Whether a prim name is a kind scope's name, in the file's spelling or in
+// the editor's: the name is what recognizes a kind's scope on reload.
+[[nodiscard]] auto is_kind_scope_name(const std::string_view kind_scope_name, const std::string& prim_name) -> bool
+{
+    if (kind_scope_name.size() != prim_name.size()) {
+        return false;
+    }
+    for (std::size_t i = 0, end = prim_name.size(); i < end; ++i) {
+        if (identifier_character(kind_scope_name[i]) != identifier_character(prim_name[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // anonymous namespace
+
 auto Content_library::get_kind_scope_name(const uint64_t kind_type_bit) -> std::string_view
 {
     for (const Kind_row& row : c_kinds) {
@@ -129,7 +163,11 @@ auto Content_library::get_host_name() const -> const char*
 
 void Content_library::register_prim(const std::shared_ptr<erhe::Typed>& prim)
 {
-    if (!prim || (get_kind_type_bit(*prim) == 0)) {
+    if (!prim) {
+        return;
+    }
+    adopt_kind_scope(prim);
+    if (get_kind_type_bit(*prim) == 0) {
         return; // a Scope, or a prim of a class no library indexes
     }
     index_insert(prim);
@@ -138,7 +176,11 @@ void Content_library::register_prim(const std::shared_ptr<erhe::Typed>& prim)
 
 void Content_library::unregister_prim(const std::shared_ptr<erhe::Typed>& prim)
 {
-    if (!prim || (get_kind_type_bit(*prim) == 0)) {
+    if (!prim) {
+        return;
+    }
+    forget_kind_scope(prim);
+    if (get_kind_type_bit(*prim) == 0) {
         return;
     }
     index_erase(prim);
@@ -207,7 +249,15 @@ void Content_library::set_owner(erhe::Item_host* const owner, const std::shared_
     m_owner     = owner;
     m_prim_root = prim_root;
     const std::shared_ptr<erhe::Hierarchy> new_parent = get_prim_root();
+    // A copy: moving a scope to the new root changes its item host, which
+    // takes it out of m_scopes through unregister_prim and puts it back
+    // through register_prim.
+    std::vector<std::shared_ptr<erhe::Scope>> scopes;
+    scopes.reserve(m_scopes.size());
     for (const auto& [type_bit, scope] : m_scopes) {
+        scopes.push_back(scope);
+    }
+    for (const std::shared_ptr<erhe::Scope>& scope : scopes) {
         scope->set_parent(new_parent);
     }
 }
@@ -251,6 +301,77 @@ auto Content_library::find_scope(const uint64_t kind_type_bit) const -> std::sha
     return (i != m_scopes.end()) ? i->second : std::shared_ptr<erhe::Scope>{};
 }
 
+auto Content_library::find_kind_scope_prim(const std::string_view scope_name) const -> std::shared_ptr<erhe::Scope>
+{
+    // Breadth first from the prim root, so the scope nearest the root is the
+    // one a kind gets when the tree holds the name more than once.
+    std::vector<std::shared_ptr<erhe::Hierarchy>> level;
+    const std::shared_ptr<erhe::Hierarchy> prim_root = get_prim_root();
+    if (!prim_root) {
+        return {};
+    }
+    level.push_back(prim_root);
+    while (!level.empty()) {
+        std::vector<std::shared_ptr<erhe::Hierarchy>> next_level;
+        for (const std::shared_ptr<erhe::Hierarchy>& prim : level) {
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(child);
+                if (scope && is_kind_scope_name(scope_name, scope->get_name())) {
+                    return scope;
+                }
+                next_level.push_back(child);
+            }
+        }
+        level = std::move(next_level);
+    }
+    return {};
+}
+
+void Content_library::adopt_kind_scope(const std::shared_ptr<erhe::Typed>& prim)
+{
+    const std::shared_ptr<erhe::Scope> scope = std::dynamic_pointer_cast<erhe::Scope>(prim);
+    if (!scope) {
+        return;
+    }
+    for (const uint64_t kind_type_bit : get_kind_type_bits()) {
+        if (!is_kind_scope_name(get_kind_scope_name(kind_type_bit), scope->get_name())) {
+            continue;
+        }
+        if (m_scopes.find(kind_type_bit) != m_scopes.end()) {
+            return; // the kind already has its scope; this one is a folder of its own
+        }
+        m_scopes.emplace(kind_type_bit, scope);
+        return;
+    }
+}
+
+void Content_library::forget_kind_scope(const std::shared_ptr<erhe::Typed>& prim)
+{
+    for (const uint64_t kind_type_bit : get_kind_type_bits()) {
+        const auto i = m_scopes.find(kind_type_bit);
+        if ((i != m_scopes.end()) && (i->second.get() == prim.get())) {
+            m_scopes.erase(i);
+            return;
+        }
+    }
+}
+
+void Content_library::adopt_kind_scopes(const erhe::Hierarchy& subtree)
+{
+    std::vector<const erhe::Hierarchy*> level;
+    level.push_back(&subtree);
+    while (!level.empty()) {
+        std::vector<const erhe::Hierarchy*> next_level;
+        for (const erhe::Hierarchy* prim : level) {
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                adopt_kind_scope(std::dynamic_pointer_cast<erhe::Typed>(child));
+                next_level.push_back(child.get());
+            }
+        }
+        level = std::move(next_level);
+    }
+}
+
 auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>
 {
     const std::shared_ptr<erhe::Scope> existing = find_scope(kind_type_bit);
@@ -262,10 +383,19 @@ auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr
         log_scene->warn("content library: item type bit {:#x} names no resource kind", kind_type_bit);
         return {};
     }
-    std::shared_ptr<erhe::Scope> scope = std::make_shared<erhe::Scope>(scope_name);
-    scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    // A saved scene brings its kind scopes back as the prims they are, and a
+    // file carries a scope's name and its place: the name is the recognition,
+    // so a reloaded "Materials" scope is adopted rather than joined by a
+    // second one of the same name (doc/usd-compatibility-plan.md E4d).
+    std::shared_ptr<erhe::Scope> scope = find_kind_scope_prim(scope_name);
+    if (!scope) {
+        scope = std::make_shared<erhe::Scope>(scope_name);
+        scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        m_scopes.emplace(kind_type_bit, scope);
+        scope->set_parent(get_prim_root());
+        return scope;
+    }
     m_scopes.emplace(kind_type_bit, scope);
-    scope->set_parent(get_prim_root());
     return scope;
 }
 

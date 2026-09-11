@@ -1874,6 +1874,90 @@ def usd_instance_item_state(scene_name, carrier_name):
     return state
 
 
+def usd_library_folder_leg(S):
+    """A content-library folder is a `Scope` of the scene tree
+    (doc/content-library-folders.md) and a USD file carries every `Scope` it is
+    given (doc/usd-compatibility-plan.md E4d): a folder holding a material and
+    an empty folder beside it both come back at their paths, the kind scope
+    they hang off is adopted by name on reload rather than doubled, and the
+    save is a fixed point from the first reload."""
+    # The scene takes its name from the file it was loaded from.
+    scene_name = "looks"
+    if not usd_open_scene(S, USD_DATA_DIR / "looks.usda", scene_name):
+        return
+    # The kind scope is created by the first resource of its kind; the file
+    # keeps its own materials in its own scopes, so it has none yet.
+    material = mutate("create_material", {"scene_name": scene_name, "name": "E4d Folder Material"})
+    check(S, "material created", bool(material) and material.get("queued"), str(material))
+    holding = mutate("create_library_folder", {"scene_name": scene_name, "folder_path": "Materials/E4d Metals"})
+    check(S, "folder created under the Materials kind scope", bool(holding) and holding.get("folder"), str(holding))
+    empty = mutate("create_library_folder", {"scene_name": scene_name, "folder_path": "Materials/E4d Empty"})
+    check(S, "empty folder created beside it", bool(empty) and empty.get("folder"), str(empty))
+    moved = mutate("move_library_item", {
+        "scene_name": scene_name, "item_name": "E4d Folder Material", "folder_path": "Materials/E4d Metals",
+    })
+    check(S, "material moved into the folder", bool(moved) and moved.get("folder"), str(moved))
+
+    saved = USD_SAVE_DIR / "usd_library_folders.usda"
+    if not usd_save_scene(S, scene_name, saved):
+        return
+    usd_close_scene(S, scene_name)
+
+    written = saved.read_text(encoding="utf-8")
+    check(S, "the empty folder is written as a Scope prim",
+          'def Scope "E4d_Empty"' in written, "no E4d_Empty scope in the file")
+    check(S, "the holding folder is written as a Scope prim",
+          'def Scope "E4d_Metals"' in written, "no E4d_Metals scope in the file")
+
+    reloaded_name = saved.stem
+    if not usd_open_scene(S, saved, reloaded_name):
+        return
+    scope_paths, material_paths = usd_folder_paths(reloaded_name)
+    for wanted in ["Materials/E4d_Metals", "Materials/E4d_Empty"]:
+        check(S, f"'{wanted}' reloads as a Scope in its place",
+              any(path.endswith(wanted) for path in scope_paths), str(scope_paths))
+    # The stage spells an identifier, so the reloaded names are the sanitized
+    # ones (src/erhe/usd/notes.md, sanitize_usd_identifier).
+    check(S, "the material reloads inside its folder",
+          any(path.endswith("E4d_Metals/E4d_Folder_Material") for path in material_paths), str(material_paths))
+
+    # The reload settles the file - the writer gathers several top-level prims
+    # under one `World` - so the save is a fixed point from here on.
+    second = USD_SAVE_DIR / "usd_library_folders_2.usda"
+    if usd_save_scene(S, reloaded_name, second):
+        check(S, "second save of the folder tree is textually identical",
+              second.read_text(encoding="utf-8") == written)
+
+    # The kind scope of the reloaded file is the one a new material goes into:
+    # its name is the recognition, so no second Materials scope appears.
+    probe = mutate("create_material", {"scene_name": reloaded_name, "name": "E4d Adopt Probe"})
+    check(S, "probe material created in the reloaded scene", bool(probe) and probe.get("queued"), str(probe))
+    scope_paths, material_paths = usd_folder_paths(reloaded_name)
+    check(S, "the reloaded Materials scope is adopted, not doubled",
+          sum(1 for path in scope_paths if path.split("/")[-1] == "Materials") == 1, str(scope_paths))
+    check(S, "the new material lands in the reloaded kind scope",
+          any(path.endswith("Materials/E4d Adopt Probe") for path in material_paths), str(material_paths))
+    usd_close_scene(S, reloaded_name)
+
+
+def usd_folder_paths(scene_name):
+    """The tree paths of the scene's Scope prims and of its material prims."""
+    nodes = call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+    by_id = {node["id"]: node for node in nodes}
+
+    def path_of(node):
+        names  = [node.get("name")]
+        parent = by_id.get(node.get("parent_id"))
+        while parent is not None:
+            names.append(parent.get("name"))
+            parent = by_id.get(parent.get("parent_id"))
+        return "/".join(reversed(names))
+
+    scope_paths    = sorted(path_of(n) for n in nodes if n.get("type") == "Scope")
+    material_paths = sorted(path_of(n) for n in nodes if n.get("type") == "Material")
+    return scope_paths, material_paths
+
+
 def usd_references_leg(S):
     """A reference with sparse overrides (doc/usd-compatibility-plan.md X2):
     each `over` below the referencing prim reloads as the local values of one
@@ -2178,6 +2262,7 @@ def section_usd_round_trip(usdchecker_arg):
     # (doc/usd-texture-graphs-plan.md section 4).
     usd_geometry_graph_leg(S)
     usd_resource_placement_leg(S)
+    usd_library_folder_leg(S)
     usd_references_leg(S)
 
     usdchecker = find_usdchecker(usdchecker_arg)

@@ -115,7 +115,10 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   Resources at the kind-scope level are not listed (that is where a load puts
   a resource no folder names). `ERHE_brushes` `folder_path` is read for older
   files and no longer written; `library_folders` is the one carrier for every
-  kind.
+  kind. In USD the tree is the file: a folder and a kind scope are written as
+  the `Scope` prims they are, where they sit and whatever they hold, and a
+  `Scope` on reload is a folder in its place - a kind scope recognized by its
+  name (doc/usd-compatibility-plan.md E4d).
 - D6 Load order. `append_library_folders_operation` appends one
   `Content_library_folders_operation` LAST - after every attach operation of
   the import and after the node inserts, because a saved path may name any

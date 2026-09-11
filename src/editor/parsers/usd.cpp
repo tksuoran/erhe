@@ -2085,6 +2085,12 @@ auto make_import_usd_operation(
     const std::string                      path_string     = path.generic_string();
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
     std::vector<std::shared_ptr<Operation>> operations;
+    // The file's own folder tree is the library's: a `Scope` named for a kind
+    // is that kind's scope (doc/usd-compatibility-plan.md E4d). The library is
+    // told before the attach operations below are built, because each of them
+    // resolves the scope its resource goes into as it is constructed, and the
+    // loaded tree enters the scene only with the insert at the end.
+    content_library->adopt_kind_scopes(*root_node.get());
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
     resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
     // An imported file's own scene block says which of its prims its geometry
@@ -2389,6 +2395,12 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         );
     }
 
+    // The file's own folder tree is the library's: a `Scope` named for a kind
+    // is that kind's scope (doc/usd-compatibility-plan.md E4d). The library is
+    // told before the attach operations below are built, because each of them
+    // resolves the scope its resource goes into as it is constructed.
+    content_library->adopt_kind_scopes(*container_node.get());
+
     // The content-library attaches are undoable operations on the import
     // path; opening a scene is not undoable, so they are executed inline and
     // dropped - the same shape finish_open_scene_gltf uses.
@@ -2446,23 +2458,6 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 }
 
 namespace {
-
-// The five erhe texture slots in the order erhe::usd names them, so the save
-// can walk a material's slots and the writer's slot enumeration together.
-// The editor state a USD file does not carry yet, reported once per save, so
-// a scene that holds any of it says what the written file leaves behind
-// (src/erhe/usd/notes.md future work).
-void log_uncarried_editor_state(const std::filesystem::path& path)
-{
-    // A folder is a Scope of the scene tree, so it is written when it holds a
-    // resource the file carries (a material, or a style since X3); a folder holding only
-    // kinds listed above, or nothing at all, is left out
-    // (src/erhe/usd/notes.md, Export).
-    log_parsers->info(
-        "save_scene_usd '{}': a content-library folder holding no material is not carried by a USD file yet",
-        erhe::file::to_string(path)
-    );
-}
 
 // One instance of a point instancer (doc/usd-compatibility-plan.md S1): a
 // content child prim of the instancer carrying a Prefab_instance attachment.
@@ -2912,8 +2907,6 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
         save_arguments.custom_layer_data[c_usd_scene_state_key] = scene_json.dump();
         save_arguments.custom_layer_data[c_usd_version_key]     = c_usd_version_value;
     }
-
-    log_uncarried_editor_state(path);
 
     const erhe::usd::Usd_save_result result = erhe::usd::save_usda(save_arguments);
     if (!result.warning.empty()) {

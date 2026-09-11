@@ -41,7 +41,15 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   scope survives emptying it. A kind scope and the resource prims below it
   carry `Item_flags::show_in_ui` but not `Item_flags::content`, which is what
   keeps the glTF node writer from writing them as nodes
-  (`doc/scene_serialization.md`).
+  (`doc/scene_serialization.md`). A scene loaded from a file brings its kind
+  scopes back as the prims they are: a `Scope` of the tree whose name is a
+  kind's scope name, in the editor's spelling or in the identifier spelling a
+  stage carries (`Graph_Textures` for `Graph Textures`), IS that kind's scope.
+  `adopt_kind_scopes(subtree)` records them, and the USD load calls it before
+  it builds the attach operations of the resources it read
+  (`doc/usd-compatibility-plan.md` E4d); `get_scope()` looks for one in the
+  tree, nearest the prim root first, before it creates one, and the record is
+  dropped again when the prim leaves the tree.
 
 ## The index
 

@@ -107,10 +107,18 @@ public:
     [[nodiscard]] auto get_prim_root() const -> std::shared_ptr<erhe::Hierarchy>;
 
     // The `Scope` a resource of this kind is placed under. `get_scope()`
-    // creates it on the first resource of that kind and then keeps it, so a
-    // kind no resource ever reached adds no prim and a folder the user made
-    // under a scope survives emptying it.
+    // adopts the child of the prim root that carries the kind's name - the
+    // scope a loaded scene brings back - and creates it on the first resource
+    // of that kind when the tree holds none, then keeps it, so a kind no
+    // resource ever reached adds no prim and a folder the user made under a
+    // scope survives emptying it.
     [[nodiscard]] auto get_scope (uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>;
+    // Hands the library the folder tree a file carries, before any resource of
+    // it is attached: every `Scope` of the subtree whose name is a kind scope
+    // name and whose kind has no scope yet becomes that kind's scope, so the
+    // resources of the load land in the scopes the file wrote rather than in
+    // a second set (doc/usd-compatibility-plan.md E4d).
+    void adopt_kind_scopes(const erhe::Hierarchy& subtree);
     [[nodiscard]] auto find_scope(uint64_t kind_type_bit) const -> std::shared_ptr<erhe::Scope>;
     // The kind whose scope this prim is, or sits below; 0 when it is neither.
     [[nodiscard]] auto find_scope_kind(const erhe::Hierarchy& prim) const -> uint64_t;
@@ -201,6 +209,17 @@ private:
     };
 
     [[nodiscard]] auto metadata_entry(const std::shared_ptr<erhe::Item_base>& item) -> Resource_metadata&;
+    // The prim nearest the prim root that is a `Scope` carrying a kind
+    // scope's name, null when the tree holds none.
+    [[nodiscard]] auto find_kind_scope_prim(std::string_view scope_name) const -> std::shared_ptr<erhe::Scope>;
+    // Records a `Scope` prim as its kind's scope when its name is a kind
+    // scope name and that kind has no scope yet: a scene that loads its
+    // folder tree from a file gets its kind scopes from the tree.
+    void adopt_kind_scope(const std::shared_ptr<erhe::Typed>& prim);
+    // Drops the record when the prim recorded as a kind's scope leaves the
+    // tree (an undone import, a deleted scope), so the next resource of that
+    // kind gets the scope the tree holds now.
+    void forget_kind_scope(const std::shared_ptr<erhe::Typed>& prim);
     void index_insert(const std::shared_ptr<erhe::Item_base>& item);
     void index_erase (const std::shared_ptr<erhe::Item_base>& item);
     void announce_attached(const std::shared_ptr<erhe::Item_base>& item);

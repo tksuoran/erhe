@@ -1011,8 +1011,19 @@ over the tree with no file work in it.
   `UsdPreviewSurface` `Shader`, one `UsdUVTexture` shader per bound slot and
   one `UsdPrimvarReader_float2` for their UVs; those shader prims occupy the
   material prim's namespace, so a prim the user parented to a material is not
-  written. The stage names one `defaultPrim`: the single top-level prim, or a
-  `World` `Xform` gathering them when the scene has several.
+  written. Every `Scope` of the tree is written where it sits whatever it
+  holds - a content-library folder, a kind scope and an authored `Scope` are
+  one kind of prim - so an empty folder is a prim of the layer and the folder
+  tree survives a save (doc/usd-compatibility-plan.md E4d,
+  doc/content-library-folders.md). A skin and an animation are library
+  resources carried by what they drive - the `Skeleton` prim's arrays and the
+  skinned mesh's primvars (K1), and the sampled `xformOp`s of the prims an
+  animation drives - so the item itself is not written wherever it sits. The
+  stage names one `defaultPrim`: the single top-level prim, the single
+  top-level prim that is not a `Scope` when the folder scopes sit beside it,
+  or a `World` `Xform` gathering the top-level prims when the scene has
+  several of its own. A top-level `Scope` never forces that wrapper, which is
+  what keeps a save from adding a level to the tree it read.
 - A prim's transform. A prim that carries the xformOp stack it was imported
   with writes that stack: one attribute per op in the authored value type its
   precision names, the `xformOpOrder` token list carrying the suffixes, the
@@ -1418,6 +1429,15 @@ the uncolored sphere carries none, that a save writes `def Mesh` with points and
 `Cylinder` spelling, and that the round trip settles after the first reload
 (save two and save three are byte-identical).
 
+`test/data/folders.usda` is the folder-tree case: an empty `Scope`, a nested
+`Scope` holding a material and an empty sibling `Scope` below the same parent.
+`test_usd_folders.cpp` asserts that every `Scope` becomes an `erhe::Scope`
+item in its place, that a save writes each of them back once, that the reload
+gives the same tree with the material still inside its folder and that the
+second save is byte-identical. It also builds the editor's own shape - folder
+scopes carrying `show_in_ui` and no content flag - and asserts that a folder
+holding nothing the file carries is written and read back all the same.
+
 `test/data/textured.usda` binds an image file through a `UsdUVTexture`
 network; it is the round-trip script's texture case rather than a unit-test
 input.
@@ -1487,13 +1507,12 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   imported as an asset; the prefab library parses glTF only.
 - Of the editor state `ERHE_scene` and the asset-root extensions hold in
   glTF, the scene-level block travels as the `erhe:scene` string of
-  `customLayerData` (doc/scene_serialization.md, USD-backed scenes) and the
-  materials travel as the prims they are, so the scopes that hold them
-  travel with them, and the brushes and styles travel as prims of their own.
-  The geometry and texture node graphs and the remaining resource kinds have
-  no USD form yet (C1); a save logs one line per kind the scene holds. The writer also emits no `.usdc` or `.usdz`, no
-  MaterialX, and none of the composition structure of the file it loaded -
-  the first version flattens what it read (plan steps X1 and X2).
+  `customLayerData` (doc/scene_serialization.md, USD-backed scenes), the
+  materials travel as the prims they are, the folder tree travels as the
+  `Scope` prims it is (E4d), and the brushes, styles and node graphs travel
+  as prims of their own. The physics materials, collision filters and joint
+  settings have no USD form yet (C1). The writer also emits no `.usdc` or
+  `.usdz` and no MaterialX.
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written
   as `erhe:Light:color` but the import resolves neither the qualified nor the
   bare name against a node, so such a value does not come back.

@@ -524,11 +524,25 @@ a parameter name travel in. `erhe::usd` reads and writes the prims as the neutra
 again, and the round-trip script's geometry-graph leg is green with the
 save a fixed point from the first reload.
 
-#### E4d Content-library folders (S)
+#### E4d Content-library folders (S; landed)
 
-A folder holding nothing the file carries is still written as the
-`Scope` it is, and an empty `Scope` on reload is a folder in its place,
-so the folder tree survives a save whatever it holds.
+Every `Scope` of the tree is written where it sits, whatever it holds: a
+content-library folder, a kind scope (`Materials`, `Brushes`, ...) and a
+`Scope` a file authored are one kind of prim, so the folder tree survives
+a save empty. A `Scope` on reload is a folder in its place, and a kind
+scope is recognized by its name - the editor adopts the one the file
+brought back rather than making a second one
+(`Content_library::adopt_kind_scopes`, `src/editor/parsers/notes.md`).
+A top-level `Scope` is a namespace a reference has no use for, so it does
+not force the `World` wrapper: a scene with one prim of its own beside
+its kind scopes names that prim as the stage's `defaultPrim` and writes
+the scopes beside it, which is what keeps a save from adding a level to
+the tree it read. A skin and an animation are library resources that the
+`Skeleton` prim and the sampled `xformOp`s carry, so the item itself is
+not written wherever it sits. `erhe_usd_tests` 291 covers an empty
+`Scope`, a nested folder tree and the byte-identical second write, and
+the round-trip script's library-folder leg drives the editor's own
+folders through a save and a reload (23 checks).
 
 ### E2 Material fidelity (M)
 

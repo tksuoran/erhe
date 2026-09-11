@@ -844,12 +844,39 @@ public:
         plan_children(*m_arguments.root_node.get(), glm::mat4{1.0f}, top_level_names, plan);
 
         // Several top-level prims are gathered under one Xform that plays the
-        // erhe root's part, so the stage still names one defaultPrim.
-        out_plan.wrapped           = (plan.size() != 1);
-        out_plan.default_prim_name = out_plan.wrapped ? std::string{c_world_prim_name} : plan.front().name;
+        // erhe root's part, so the stage still names one defaultPrim. A
+        // top-level `Scope` - a content-library kind scope or folder, which
+        // sits beside the scene's own prims (doc/usd-compatibility-plan.md
+        // E4d) - is a namespace a reference has no use for and does not force
+        // the wrapper: a scene with one prim of its own beside such scopes
+        // names that prim as the defaultPrim and writes the scopes beside it,
+        // so saving a scene that was read from a file adds no level to it.
+        const Plan_prim* const single_prim = find_single_non_scope_prim(plan);
+        out_plan.wrapped           = (plan.size() != 1) && (single_prim == nullptr);
+        out_plan.default_prim_name = out_plan.wrapped
+            ? std::string{c_world_prim_name}
+            : ((single_prim != nullptr) ? single_prim->name : plan.front().name);
         assign_paths(plan, out_plan.wrapped ? fmt::format("/{}", c_world_prim_name) : std::string{});
         record_resource_paths(plan);
         out_plan.planned = true;
+    }
+
+    // The one top-level prim that is not a `Scope`, null when the plan holds
+    // no such prim or more than one of them. It is what the stage names as its
+    // defaultPrim when no wrapper is written.
+    [[nodiscard]] static auto find_single_non_scope_prim(const std::vector<Plan_prim>& plan) -> const Plan_prim*
+    {
+        const Plan_prim* found = nullptr;
+        for (const Plan_prim& prim : plan) {
+            if (erhe::is<erhe::Scope>(prim.item)) {
+                continue;
+            }
+            if (found != nullptr) {
+                return nullptr;
+            }
+            found = &prim;
+        }
+        return found;
     }
 
     // The planned path of every prim the tree holds, by the item it is: what
@@ -901,9 +928,15 @@ public:
         write_plan_prims(plan, content_prims);
 
         if (!wrap) {
-            lightusd::Prim& prim = content_prims.front();
-            add_collections(prim);
-            add_root_prim(stage, std::move(prim));
+            // Every planned prim is a top-level prim of the stage - one prim
+            // per plan entry, in the plan's order - and the one the plan named
+            // as the defaultPrim carries the collections.
+            for (std::size_t i = 0, end = content_prims.size(); i < end; ++i) {
+                if (plan[i].name == default_prim_name) {
+                    add_collections(content_prims[i]);
+                }
+                add_root_prim(stage, std::move(content_prims[i]));
+            }
         } else {
             lightusd::Xform world;
             world.name = c_world_prim_name;
@@ -922,7 +955,16 @@ public:
         // the content root. A dome lights the whole stage and carries no
         // place in the content tree (erhe holds it as ambient light), so the
         // stage root is where it goes; `defaultPrim` still names the content.
-        write_dome_lights(stage, default_prim_name);
+        std::vector<std::string> root_prim_names;
+        if (wrap) {
+            root_prim_names.push_back(std::string{c_world_prim_name});
+        } else {
+            root_prim_names.reserve(plan.size());
+            for (const Plan_prim& prim : plan) {
+                root_prim_names.push_back(prim.name);
+            }
+        }
+        write_dome_lights(stage, root_prim_names);
 
         stage.metas().defaultPrim = lightusd::value::token{default_prim_name};
         stage.metas().upAxis.set_value(
@@ -984,13 +1026,17 @@ private:
     // One `DomeLight` root prim per recorded dome (Usd_save_arguments::
     // dome_lights). erhe holds a dome as the scene's ambient light, so the
     // values written are the ones the load read back out of the prim.
-    void write_dome_lights(lightusd::Stage& stage, const std::string& default_prim_name)
+    void write_dome_lights(lightusd::Stage& stage, const std::vector<std::string>& root_prim_names)
     {
         if (m_arguments.dome_lights.empty()) {
             return;
         }
+        // The names the stage's own top-level prims took, so a dome takes a
+        // name of its own beside them.
         Name_scope names;
-        static_cast<void>(names.make_unique(default_prim_name));
+        for (const std::string& name : root_prim_names) {
+            static_cast<void>(names.make_unique(name));
+        }
         for (const Usd_dome_light& dome : m_arguments.dome_lights) {
             lightusd::DomeLight dome_light;
             dome_light.name = names.make_unique(dome.name.empty() ? std::string{"DomeLight"} : dome.name);
@@ -1724,10 +1770,11 @@ private:
     // composed in, a render proxy is derived data rebuilt by its owner, and
     // anything without Item_flags::content is transient editor furniture
     // (tool visuals, controllers, rendertarget UI quads) recreated every
-    // session - widened by the resources a USD file carries: a resource prim
-    // carries show_in_ui rather than content, so a material and every prim on
-    // the way down to one are planned as well
-    // (doc/usd-compatibility-plan.md U4).
+    // session - widened by what a USD file carries without the content flag:
+    // a folder scope and a resource prim carry show_in_ui rather than
+    // content, so every `Scope`, every material and every prim on the way
+    // down to one are planned as well
+    // (doc/usd-compatibility-plan.md U4, E4d).
     void plan_children(
         const erhe::Hierarchy&          parent,
         const glm::mat4&                pre_transform,
@@ -1763,6 +1810,16 @@ private:
             if (m_skel_animation_items.count(child_prim) != 0) {
                 continue; // rebuilt by the Skeleton prim from the joint channels
             }
+            // A skin and an animation are library resources of the editor,
+            // not prims of a stage: a skin is the `Skeleton` prim's arrays
+            // and the skinned mesh's `SkelBindingAPI` primvars (K1), and an
+            // animation is the sampled `xformOp`s of the prims it drives, so
+            // both are written by what they drive and the item itself is left
+            // out wherever it sits - a folder scope written since E4d holds
+            // them the way any other scope holds its resources.
+            if (erhe::is<erhe::scene::Skin>(child_prim) || erhe::is<erhe::scene::Animation>(child_prim)) {
+                continue;
+            }
             if ((child_node != nullptr) && (m_joint_items.count(child_prim) != 0)) {
                 // A joint is an entry of its skeleton's `joints` and
                 // `restTransforms`, not a prim: the Skeleton prim writes it
@@ -1791,7 +1848,7 @@ private:
             if (
                 ((flags & erhe::Item_flags::content) == 0) &&
                 !plans_contentless_prims(holder)           &&
-                !holds_carried_resource(*child_prim)
+                !is_carried_without_content_flag(*child_prim)
             ) {
                 continue;
             }
@@ -2035,13 +2092,17 @@ private:
         return m_node_graphs.find(&prim) != m_node_graphs.end();
     }
 
-    // A resource prim a USD file carries, or a prim on the way down to one.
-    // A resource is not content, so this is what widens the content filter;
-    // today the file carries materials, styles, brushes and node graphs, and
-    // plan step E4d adds the folders.
-    [[nodiscard]] auto holds_carried_resource(const erhe::Typed& prim) const -> bool
+    // A prim the file carries although it carries no Item_flags::content,
+    // which is what widens the content filter. Three kinds answer true: every
+    // `Scope` - a content-library folder, a kind scope, an authored USD
+    // `Scope` - which is written where it sits whatever it holds, so a folder
+    // tree survives a save (doc/usd-compatibility-plan.md E4d); a resource
+    // prim the file carries, which today is a material, a style, a brush or a
+    // node graph; and a prim on the way down to one of those.
+    [[nodiscard]] auto is_carried_without_content_flag(const erhe::Typed& prim) const -> bool
     {
         if (
+            erhe::is<erhe::Scope>(&prim)               ||
             erhe::is<erhe::primitive::Material>(&prim) ||
             is_style_prim(prim)                        ||
             is_brush_prim(prim)                        ||
@@ -2057,7 +2118,7 @@ private:
             if ((child_prim->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
                 continue;
             }
-            if (holds_carried_resource(*child_prim)) {
+            if (is_carried_without_content_flag(*child_prim)) {
                 return true;
             }
         }
