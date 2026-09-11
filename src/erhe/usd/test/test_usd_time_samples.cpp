@@ -163,12 +163,17 @@ TEST_F(Time_samples, sampled_ops_become_one_animation_of_three_channels)
     const std::shared_ptr<erhe::scene::Animation>& animation = loaded.data.animations.front();
     ASSERT_TRUE(animation);
     EXPECT_EQ(animation->get_name(), "time_samples");
-    // Only `animated` is expressible: the matrix op and the pivot pair are not.
-    ASSERT_EQ(animation->channels.size(), 3u);
+    // `animated` is driven op by op; the matrix op, the pivot pair and the
+    // [orient, translate] stack are baked into three channels each.
+    ASSERT_EQ(animation->channels.size(), 12u);
+    std::size_t animated_channels = 0;
     for (const erhe::scene::Animation_channel& channel : animation->channels) {
         ASSERT_TRUE(channel.target);
-        EXPECT_EQ(channel.target->get_name(), "animated");
+        if (channel.target->get_name() == "animated") {
+            ++animated_channels;
+        }
     }
+    EXPECT_EQ(animated_channels, 3u);
     EXPECT_NE(find_channel(*animation, erhe::scene::Animation_path::TRANSLATION, "animated"), nullptr);
     EXPECT_NE(find_channel(*animation, erhe::scene::Animation_path::ROTATION,    "animated"), nullptr);
     EXPECT_NE(find_channel(*animation, erhe::scene::Animation_path::SCALE,       "animated"), nullptr);
@@ -225,21 +230,58 @@ TEST_F(Time_samples, euler_samples_become_a_quaternion_channel)
     EXPECT_NEAR(std::abs(sampler.data[7]), half_root_two, 1e-4f);
 }
 
-// A stack the channels cannot express keeps the transform the import gave it
-// and contributes no channel.
-TEST_F(Time_samples, a_pivot_pair_and_a_matrix_op_are_not_animated)
+// A stack the per-op channels cannot drive is baked: the whole stack is
+// composed at every sample time code and decomposed into translation,
+// rotation and scale channels, exact at the samples.
+TEST_F(Time_samples, a_pivot_pair_and_a_matrix_op_are_baked_into_channels)
 {
     ASSERT_EQ(loaded.data.animations.size(), 1u);
-    const erhe::scene::Animation& animation = *loaded.data.animations.front();
-    EXPECT_EQ(find_channel(animation, erhe::scene::Animation_path::ROTATION,    "pivot_sampled"),  nullptr);
-    EXPECT_EQ(find_channel(animation, erhe::scene::Animation_path::TRANSLATION, "sampled_matrix"), nullptr);
+    const std::shared_ptr<erhe::scene::Animation>& animation = loaded.data.animations.front();
+    EXPECT_NE(find_channel(*animation, erhe::scene::Animation_path::ROTATION,    "pivot_sampled"),  nullptr);
+    EXPECT_NE(find_channel(*animation, erhe::scene::Animation_path::TRANSLATION, "sampled_matrix"), nullptr);
 
-    // The samples are still on the ops, so a save writes them back.
+    // The sampled matrix op translates by 5 on x at time code 24 (1 s).
+    animation->apply(1.0f);
+    const std::shared_ptr<erhe::scene::Node> matrix_node = find_node(loaded.data, "sampled_matrix");
+    ASSERT_TRUE(matrix_node);
+    EXPECT_NEAR(matrix_node->parent_from_node_transform().get_matrix()[3][0], 5.0f, 1e-4f);
+
+    // The pivot pair rotates 90 degrees about y around (0, 1, 0): the origin
+    // stays put, so the baked translation is (0, 0, 0) and the rotation is the
+    // 90 degree turn.
     const std::shared_ptr<erhe::scene::Node> pivot_node = find_node(loaded.data, "pivot_sampled");
     ASSERT_TRUE(pivot_node);
+    const glm::mat4 pivot_matrix = pivot_node->parent_from_node_transform().get_matrix();
+    EXPECT_NEAR(pivot_matrix[3][0], 0.0f, 1e-4f);
+    EXPECT_NEAR(pivot_matrix[3][1], 0.0f, 1e-4f);
+    EXPECT_NEAR(pivot_matrix[3][2], 0.0f, 1e-4f);
+    EXPECT_NEAR(pivot_matrix[0][2], -1.0f, 1e-3f); // x axis maps to -z after 90 deg about y
+
+    // The samples are still on the ops, so a save writes them back.
     const erhe::scene::Xform_op_stack* pivot_stack = pivot_node->get_xform_op_stack();
     ASSERT_NE(pivot_stack, nullptr);
     EXPECT_TRUE(pivot_stack->has_time_samples());
+}
+
+// [orient, translate] composes rotation * translation: the translate is
+// rotated. The baked translation channel carries the rotated offset.
+TEST_F(Time_samples, an_orient_then_translate_stack_is_baked)
+{
+    ASSERT_EQ(loaded.data.animations.size(), 1u);
+    const std::shared_ptr<erhe::scene::Animation>& animation = loaded.data.animations.front();
+    ASSERT_NE(find_channel(*animation, erhe::scene::Animation_path::TRANSLATION, "orient_then_translate"), nullptr);
+    const std::shared_ptr<erhe::scene::Node> node = find_node(loaded.data, "orient_then_translate");
+    ASSERT_TRUE(node);
+
+    animation->apply(0.0f);
+    glm::mat4 matrix = node->parent_from_node_transform().get_matrix();
+    EXPECT_NEAR(matrix[3][0], 10.0f, 1e-4f);
+    EXPECT_NEAR(matrix[3][2],  0.0f, 1e-4f);
+
+    animation->apply(1.0f);
+    matrix = node->parent_from_node_transform().get_matrix();
+    EXPECT_NEAR(matrix[3][0],   0.0f, 1e-3f);
+    EXPECT_NEAR(matrix[3][2], -10.0f, 1e-3f);
 }
 
 TEST_F(Time_samples, a_prim_that_samples_nothing_has_no_samples)
@@ -270,7 +312,7 @@ TEST_F(Time_samples, samples_and_time_codes_are_written_back)
     const erhe::usd::Usd_load_result reloaded = erhe::usd::load_usd(load_arguments);
     ASSERT_TRUE(reloaded.error.empty()) << reloaded.error;
     ASSERT_EQ(reloaded.data.animations.size(), 1u);
-    EXPECT_EQ(reloaded.data.animations.front()->channels.size(), 3u);
+    EXPECT_EQ(reloaded.data.animations.front()->channels.size(), 12u);
 
     const std::filesystem::path   second_path = temporary_path("time_samples_again.usda");
     erhe::usd::Usd_save_arguments save_arguments{

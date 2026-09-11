@@ -50,6 +50,19 @@ def Xform "World"
         uniform token[] xformOpOrder = ["xformOp:translate:pivot", "xformOp:rotateXYZ", "!invert!xformOp:translate:pivot"]
     }
 
+    def Xform "orient_then_translate"
+    {
+        quatf xformOp:orient.timeSamples = {
+            0: (1, 0, 0, 0),
+            24: (0.70710678, 0, 0.70710678, 0),
+        }
+        double3 xformOp:translate.timeSamples = {
+            0: (10, 0, 0),
+            24: (10, 0, 0),
+        }
+        uniform token[] xformOpOrder = ["xformOp:orient", "xformOp:translate"]
+    }
+
     def Xform "not_sampled"
     {
         double3 xformOp:translate = (7, 8, 9)

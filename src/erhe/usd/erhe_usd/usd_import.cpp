@@ -58,6 +58,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include <fmt/format.h>
 
@@ -949,6 +950,45 @@ private:
         return std::string{};
     }
 
+    // The value an op has at one time code: its sample there, the linear
+    // interpolation of the two samples around it (a quaternion slerps), the
+    // first or last sample outside the sampled range - USD's time sample
+    // semantics for a floating-point attribute. A matrix op holds its earlier
+    // sample: two matrices do not interpolate componentwise into a transform.
+    [[nodiscard]] static auto get_op_value_at(const erhe::scene::Xform_op& op, const double time_code) -> erhe::scene::Xform_op_value
+    {
+        if (op.samples.empty()) {
+            return op.value;
+        }
+        const erhe::scene::Xform_op_sample* before = nullptr;
+        const erhe::scene::Xform_op_sample* after  = nullptr;
+        for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+            if ((sample.time_code <= time_code) && ((before == nullptr) || (sample.time_code > before->time_code))) {
+                before = &sample;
+            }
+            if ((sample.time_code >= time_code) && ((after == nullptr) || (sample.time_code < after->time_code))) {
+                after = &sample;
+            }
+        }
+        if (before == nullptr) {
+            return after->value;
+        }
+        if ((after == nullptr) || (after == before) || (after->time_code <= before->time_code)) {
+            return before->value;
+        }
+        const double t = (time_code - before->time_code) / (after->time_code - before->time_code);
+        if (std::holds_alternative<glm::dvec3>(before->value) && std::holds_alternative<glm::dvec3>(after->value)) {
+            return glm::mix(std::get<glm::dvec3>(before->value), std::get<glm::dvec3>(after->value), t);
+        }
+        if (std::holds_alternative<double>(before->value) && std::holds_alternative<double>(after->value)) {
+            return std::get<double>(before->value) + (std::get<double>(after->value) - std::get<double>(before->value)) * t;
+        }
+        if (std::holds_alternative<glm::dquat>(before->value) && std::holds_alternative<glm::dquat>(after->value)) {
+            return glm::slerp(std::get<glm::dquat>(before->value), std::get<glm::dquat>(after->value), t);
+        }
+        return before->value;
+    }
+
     // The rotation one sample of a rotate / orient op holds, as a quaternion.
     [[nodiscard]] static auto get_sample_rotation(
         const erhe::scene::Xform_op&        op,
@@ -1093,6 +1133,90 @@ private:
         }
     }
 
+    // A sampled stack whose ops are not one translate, one rotate and one
+    // scale in that order - `[orient, translate]`, a pivot pair, a sampled
+    // matrix op, two ops of a kind - cannot be driven op by op, because a
+    // channel writes one TRS component of the target. Its transform is baked
+    // instead: at the union of the ops' sample time codes the whole stack is
+    // posed and composed, the matrix is decomposed into translation, rotation
+    // and scale, and those become the three channels. Exact at every sample,
+    // linear between them, the way the per-op channels are; the samples stay
+    // on the ops, so a save writes the authored stack back unchanged.
+    void bake_stack_animation(
+        const std::shared_ptr<erhe::scene::Node>& node,
+        const erhe::scene::Xform_op_stack&        stack,
+        const double                              time_codes_per_second,
+        const std::string&                        reason,
+        std::shared_ptr<erhe::scene::Animation>&  animation
+    )
+    {
+        std::vector<double> time_codes;
+        for (const erhe::scene::Xform_op& op : stack.ops) {
+            for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+                time_codes.push_back(sample.time_code);
+            }
+        }
+        std::sort(time_codes.begin(), time_codes.end());
+        time_codes.erase(std::unique(time_codes.begin(), time_codes.end()), time_codes.end());
+        if (time_codes.empty()) {
+            return;
+        }
+        std::vector<float> timestamps;
+        std::vector<float> translations;
+        std::vector<float> rotations;
+        std::vector<float> scales;
+        timestamps  .reserve(time_codes.size());
+        translations.reserve(time_codes.size() * 3);
+        rotations   .reserve(time_codes.size() * 4);
+        scales      .reserve(time_codes.size() * 3);
+        glm::quat previous_rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        bool      has_previous_rotation{false};
+        erhe::scene::Xform_op_stack posed = stack;
+        for (const double time_code : time_codes) {
+            for (std::size_t i = 0; i < stack.ops.size(); ++i) {
+                posed.ops[i].value = get_op_value_at(stack.ops[i], time_code);
+            }
+            const glm::mat4 matrix = glm::mat4{posed.compose()};
+            glm::vec3 scale      {1.0f};
+            glm::quat rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec3 translation{0.0f};
+            glm::vec3 skew       {0.0f};
+            glm::vec4 perspective{0.0f};
+            glm::decompose(matrix, scale, rotation, translation, skew, perspective);
+            if (has_previous_rotation && (glm::dot(previous_rotation, rotation) < 0.0f)) {
+                rotation = -rotation;
+            }
+            previous_rotation     = rotation;
+            has_previous_rotation = true;
+            timestamps.push_back(static_cast<float>(time_code / time_codes_per_second));
+            translations.insert(translations.end(), {translation.x, translation.y, translation.z});
+            rotations   .insert(rotations   .end(), {rotation.x, rotation.y, rotation.z, rotation.w});
+            scales      .insert(scales      .end(), {scale.x, scale.y, scale.z});
+        }
+        ensure_animation(animation);
+        const auto add_channel = [&](const erhe::scene::Animation_path path, std::vector<float>&& values) {
+            erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+            sampler.set(std::vector<float>{timestamps}, std::move(values));
+            animation->samplers.push_back(std::move(sampler));
+            animation->channels.push_back(
+                erhe::scene::Animation_channel{
+                    .path           = path,
+                    .sampler_index  = animation->samplers.size() - 1,
+                    .target         = node,
+                    .start_position = 0,
+                    .value_offset   = 0
+                }
+            );
+        };
+        add_channel(erhe::scene::Animation_path::TRANSLATION, std::move(translations));
+        add_channel(erhe::scene::Animation_path::ROTATION,    std::move(rotations));
+        add_channel(erhe::scene::Animation_path::SCALE,       std::move(scales));
+        log_usd->info(
+            "USD prim '{}': {} - its time-sampled transform is baked into translate, rotate, scale channels at {} sample time code(s)",
+            node->get_name(), reason, time_codes.size()
+        );
+    }
+
     void build_animation()
     {
         const double time_codes_per_second = (m_result.data.time_codes.time_codes_per_second > 0.0)
@@ -1109,10 +1233,7 @@ private:
             }
             const std::string refusal = get_animation_refusal(*stack);
             if (!refusal.empty()) {
-                log_usd->warn(
-                    "USD prim '{}': its time-sampled transform is not animated - {}",
-                    node->get_name(), refusal
-                );
+                bake_stack_animation(node, *stack, time_codes_per_second, refusal, animation);
                 continue;
             }
             for (const erhe::scene::Xform_op& op : stack->ops) {

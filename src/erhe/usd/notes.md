@@ -910,12 +910,16 @@ sampled quaternions kept on one hemisphere so the interpolation never takes
 the long way round.
 
 erhe applies a channel by writing the component into the target's TRS, so a
-stack the channels can drive is one whose composition is that TRS: at most one
-`translate`, one rotate and one `scale` op, in that order, none inverted and
-none suffixed. A stack outside that - a sampled `transform` matrix op, a pivot
-pair, an op order like `[orient, translate]`, two ops of one kind - is named in
-one warning per prim and contributes no channel; it keeps the pose the
-evaluation time code gives it, and its samples still travel through a save.
+stack the channels can drive op by op is one whose composition is that TRS: at
+most one `translate`, one rotate and one `scale` op, in that order, none
+inverted and none suffixed. A stack outside that - a sampled `transform` matrix
+op, a pivot pair, an op order like `[orient, translate]`, two ops of one kind -
+is baked instead (`bake_stack_animation`): at the union of its ops' sample
+time codes the whole stack is posed (each op at its interpolated value, a
+matrix op at its earlier sample) and composed, and the matrix decomposed into
+translation, rotation and scale becomes three channels - exact at every
+sample, linear between them. One info line per prim names the reason. The
+samples still travel through a save either way.
 Editing an animation's keys does not write back into the ops, and neither does
 moving an animated prim: the stack is the authored record, and reconciling the
 two is future work (`doc/usd-compatibility-plan.md` section 6).
