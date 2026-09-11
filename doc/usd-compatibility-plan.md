@@ -597,9 +597,11 @@ section 3 except where named.
   tiles for them render blank. wuffs can decode both to 8-bit RGBA, so this
   is a failure in erhe's use of it that no log names per file yet
   (`src/erhe/graphics/erhe_graphics/image_loader_wuffs.cpp`); diagnose with a
-  per-file decode-failure log line first. Radiance `.hdr` needs a decoder
-  erhe does not build (`stb_image.h` sits in the CPM cache of fpng and
-  LightUSD); no surveyed asset in that folder needs it.
+  per-file decode-failure log line first. Radiance `.hdr` and OpenEXR
+  `.exr` need decoders erhe does not build (`stb_image.h` sits in the CPM
+  cache of fpng and LightUSD, and nothing in the tree reads `.exr`); the
+  StandardShaderBall scene's six neutral `.exr` maps are the surveyed
+  assets that ask for the second.
 - Load performance of a scene holding thousands of prims (the intent-vfx
   teapot scenes, several minutes with the stall watchdog firing): each queued
   raytrace commit scans every mesh of every layer

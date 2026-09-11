@@ -155,5 +155,19 @@
    "DomeLight texture '.*' is not sampled"
   ],
   "reason": "the file authors a textured DomeLight; erhe has no environment map, so the dome contributes the constant radiance of its color, intensity and exposure only and names the texture in this warning - a known limitation tracked in doc/usd-compatibility-plan.md section 6 (an environment map from a DomeLight texture), not a by-design result. Everything the entry draws is right: 23 of 23 meshes, 23 of 23 materials, bounds_deviation 0.0, and the by-eye note records the opaque blocks matching the reference with the stained-glass cube see-through and both cards two-sided"
+ },
+ {
+  "path": "full_assets/StandardShaderBall/standard_shader_ball_scene.usda",
+  "diagnostics": [
+   "TODO: Prim type NodeGraph",
+   "the referencing layer defines typed prims over the reference",
+   "authors .* opinion\\(s\\) that erhe has no place for",
+   "USD image '.*\\.exr' could not be decoded",
+   "binds material '.*', which the file has no prim for"
+  ],
+  "gaps": [
+   "of the 12 composed meshes loaded"
+  ],
+  "reason": "every line this entry reports names a decision the plan already states. The composed stage holds twelve meshes (measured with pxr); erhe loads ten because the three under </standard_shader_ball_scene/shader_ball/neutral_objects> are defined over a referencing prim - a structural edit inside a reference, which section 5 puts out of scope and which the warning names - while the hoisted second `surface_geometry` variant adds one inactive `material_surface`. The four materials erhe does not convert (13 of 17) are the MaterialX ones under </standard_shader_ball_scene/materials/examples/mtlx>, whose surface is an `ND_open_pbr_surface_surfaceshader` network the importer does not read (section 6, MaterialX), which is why the four variant bindings to them are dropped and why two `NodeGraph` prims stay Typed prims without their schema attributes (section 5). The variant opinions a variant set has no place for are the section 6 variants item, and the six undecoded neutral maps are `.exr`, which section 6's image-decoding item names. bounds_deviation 0.0 and the lights and cameras all compose"
  }
 ]
