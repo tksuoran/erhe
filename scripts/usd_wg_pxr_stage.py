@@ -16,8 +16,11 @@ Output fields:
   materials        UsdShadeMaterial prims
   lights           prims carrying the UsdLux LightAPI
   cameras          UsdGeomCamera prims, in traversal order (paths)
-  bounds_min/max   world-space AABB of the default and render purposes at the
-                   stage's start time code, in stage units and stage up axis
+  bounds_min/max   world-space AABB of the Gprims and PointInstancers of the
+                   default and render purposes at the stage's start time code,
+                   in stage units and stage up axis - the geometry erhe frames;
+                   a light's extent (UsdLux lights are Boundable and the whole-
+                   stage bound takes them in) is not part of it
   skinned          whether any prim is a SkelRoot or carries UsdSkel BindingAPI;
                    the bounds cache does not apply skinning, so such bounds are
                    the rest pose and no basis for a comparison
@@ -33,7 +36,7 @@ def main() -> int:
         print(__doc__, file=sys.stderr)
         return 2
     path = sys.argv[1]
-    from pxr import Tf, Usd, UsdGeom, UsdLux, UsdShade, UsdSkel
+    from pxr import Gf, Tf, Usd, UsdGeom, UsdLux, UsdShade, UsdSkel
 
     errors = []
     delegate = None
@@ -69,7 +72,10 @@ def main() -> int:
     try:
         cache = UsdGeom.BBoxCache(Usd.TimeCode(stage.GetStartTimeCode()),
                                   [UsdGeom.Tokens.default_, UsdGeom.Tokens.render], useExtentsHint=False)
-        box = cache.ComputeWorldBound(stage.GetPseudoRoot()).ComputeAlignedRange()
+        box = Gf.Range3d()
+        for prim in stage.Traverse(Usd.TraverseInstanceProxies(Usd.PrimDefaultPredicate)):
+            if prim.IsA(UsdGeom.Gprim) or prim.IsA(UsdGeom.PointInstancer):
+                box.UnionWith(cache.ComputeWorldBound(prim).ComputeAlignedRange())
         if not box.IsEmpty():
             result["bounds_min"] = [float(v) for v in box.GetMin()]
             result["bounds_max"] = [float(v) for v in box.GetMax()]
