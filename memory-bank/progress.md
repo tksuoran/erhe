@@ -144,8 +144,12 @@
 ✓tests-in-main-build{cf367a263-(c)User:configure_vs2026_vulkan.bat-ERHE_BUILD_TESTS=ON;run:build_vs2026_vulkan/src/erhe/usd/test/Debug/erhe_usd_tests.exe}
   ALL-DONE-2026-09-09;NEXT=prompt_queue.txt-item-0{E4b}
 
-[TASK::usd-survey-gap-loop]{2026-09-11,IN-PROGRESS;harness=doc/usd-survey-gap-loop.md}
+[TASK::usd-survey-gap-loop]{DONE-2026-09-11;harness=doc/usd-survey-gap-loop.md;3-workers}
 ✓survey-tooling{test-db+ordering-options+--stop-on-gap+expected-results-sidecar+eye-per-entry+bounds-fixes;19-commits-156911452..b2f1e143a}
-✓erhe-fixes{12e674e96+a5ffe14ad+ca9b2b651+f346d58f4+232213b0e+bcdc3a721+69700edb3+736ec447b}
-@state::test_assets-95/104-pass{MaterialX-6-excluded;all_files-row-stale}
-?next::TextureTransformTest.usd->BrainStem.usdz->test_assets-clean->full_assets->intent-vfx->full-run-regenerates-doc
+✓erhe-fixes{12e674e96+a5ffe14ad+ca9b2b651+f346d58f4+232213b0e+bcdc3a721+69700edb3+736ec447b|loop:3cc978116-shared-Skin-registered-once{Scene-use-counts;scene-tests-121}+0268de381-visibility/purpose-on-Skel/Points/Curves/PointInstancer/DomeLight+56f40c44c-holeIndices-facets-not-drawn;usd-tests-272}
+✓survey-fix{a3f314d09-expired-MCP-request-line-benign}
+✓deferrals-section-6{(c)User:PrimvarReader-fed-UsdPreviewSurface-input|Teapot-arcs-authored-inside-variant+xformOp-supplied-by-arc;worker:DomeLight-env-map+.exr+load-perf-vehicleVariants/intent-vfx+LightUSD-single-path-rel-list-op-merge{fork-fix,2816-instances}+nested-carrier-override-path{find_instance_item}};bounds-item-deleted{both-rows-0.0}
+✓scopes-clean{test_assets+full_assets+intent-vfx;18-commits-2da54eec8..ff2a735d9}
+✓full-run{ff2a735d9:146-entries/3124s;works-138/gap-7/fails-1/crash-0;all-non-works=MaterialX}
+!caveat::per-entry-diagnostics-order-dependent{Tydra-warns-only-on-first-load-of-shared-file-per-launch;expectations-name-patterns-on-every-affected-entry-so-verdicts-hold,line-counts-vary}
+?schedule::LightUSD-rel-list-op-fork-fix+nested-carrier-override-resolution{section-6;erhe/fork-defects-not-by-design}

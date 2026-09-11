@@ -437,7 +437,7 @@ the file is a fixed point from the first reload on (the first save of a
 brush built in memory differs in vertex order, since the mesh reader
 re-indexes), and the scene closes clean.
 
-#### S1 USD Assets Working Group survey (M; first run landed, `doc/usd-wg-assets.md`)
+#### S1 USD Assets Working Group survey (M; landed, `doc/usd-wg-assets.md`; the gap loop of `doc/usd-survey-gap-loop.md` runs clean on every scope, every remaining gap is the section 6 MaterialX item)
 
 What: every entry asset of the ASWF USD Assets Working Group repository
 (`<usd-wg-assets>`, a local clone of github.com/usd-wg/assets:
