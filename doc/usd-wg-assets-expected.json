@@ -2,10 +2,11 @@
  {
   "path": "test_assets/ColorSpaceTests/UsdPreviewSurface/usduvtexture_color_test.usda",
   "diagnostics": [
-   "Attribute `inputs:sourceColorSpace`: `lin_ap1_scene` is not an allowed token"
+   "Attribute `inputs:sourceColorSpace`: `lin_ap1_scene` is not an allowed token",
+   "USD image '.*\\.hdr' could not be decoded"
   ],
   "appearance": "the test's own README states that Hydra cannot honor colorSpace metadata on the file input, colorSpace:name on the input, or colorSpace:name on an enclosing scope; erhe follows sourceColorSpace only, as Storm does",
-  "reason": "column 5 authors the illegal sourceColorSpace token `lin_ap1_scene` on purpose; LightUSD warns and keeps the fallback `auto`, which is what OpenUSD does with it (asset README)"
+  "reason": "column 5 authors the illegal sourceColorSpace token `lin_ap1_scene` on purpose; LightUSD warns and keeps the fallback `auto`, which is what OpenUSD does with it (asset README); the Radiance .hdr textures of rows 1 and 3 are not decoded - a known limitation tracked in doc/usd-compatibility-plan.md section 6, not a by-design result"
  },
  {
   "path": "test_assets/foundation/stage_composition/inherit_and_specialize.usda",

@@ -748,7 +748,7 @@ LOG_LINE = re.compile(r"^\[\d\d:\d\d:\d\d\.\d+\]\s+\[([A-Z])\]\s+\[([^\]]+)\]\s*
 # A source location LightUSD prefixes each of its own diagnostics with.
 # Everything before the LAST one is context the erhe wrapper and LightUSD's
 # outer frames added, so the cause itself starts after it.
-SOURCE_LOCATION = re.compile(r"[A-Za-z]:[\\/][^\s]*?\.(?:cc|cpp|hh|hpp|h):(?:[A-Za-z_][A-Za-z0-9_:<> ]*)?\(\):\d+\s+")
+SOURCE_LOCATION = re.compile(r"[A-Za-z]:[\\/][^\s]*?\.(?:cc|cpp|hh|hpp|h|inc):(?:[A-Za-z_][A-Za-z0-9_:<> ]*)?\(\):\d+\s+")
 
 # Messages that report how this build is configured, not what the file needs.
 BENIGN = [re.compile(r"Threading is disabled for this build", re.IGNORECASE)]
