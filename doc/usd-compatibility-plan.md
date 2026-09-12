@@ -599,9 +599,8 @@ section 6 entry it names, and nothing here restates one.
 
 1. The animated value layer and the write-back of an edited transform clip
    hold; they are in section 2. What is left of the item is section 6
-   "Time samples beyond the transform", which waits on the generalized
-   animation channel of `doc/property-system.md` section 6 and ranks with
-   the shading work of item 6.
+   "Time samples beyond the transform", which ranks with the shading work
+   of item 6.
 2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
@@ -691,9 +690,9 @@ ranks them. A USD scene loads, edits and saves without any of them.
   samples") and `SkelAnimation` joint channels are K1, which leaves time
   samples on any other attribute - a material input, a light intensity, a
   visibility - and `Ts` splines re-encoded as cubic samplers. An
-  `erhe::scene::Animation` channel names an `Animation_path` rather than a
-  property, so this waits on the generalized channel of
-  `doc/property-system.md` section 6.
+  `erhe::scene::Animation_channel` already names the property it drives
+  (`src/erhe/scene/notes.md`, "Animation playback"), so the reader and the
+  writer are what is left.
 - Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
   "Node graphs"): Tydra fails a material whose input connects to a
   `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;

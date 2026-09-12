@@ -3641,26 +3641,24 @@ private:
                 continue;
             }
             for (const erhe::scene::Animation_channel& channel : animation->channels) {
+                const std::shared_ptr<erhe::scene::Node> target_node = erhe::scene::get_target_node(channel);
                 if (
-                    !channel.target ||
+                    !target_node ||
                     (channel.sampler_index >= animation->samplers.size()) ||
                     (channel.value_offset != 0)
                 ) {
                     continue;
                 }
-                if (
-                    (channel.path != erhe::scene::Animation_path::TRANSLATION) &&
-                    (channel.path != erhe::scene::Animation_path::ROTATION) &&
-                    (channel.path != erhe::scene::Animation_path::SCALE)
-                ) {
+                const erhe::scene::Animation_path path = erhe::scene::get_animation_path(channel);
+                if (path == erhe::scene::Animation_path::INVALID) {
                     continue;
                 }
-                Node_transform_channels&               entry   = m_transform_channels[channel.target.get()];
+                Node_transform_channels&               entry   = m_transform_channels[target_node.get()];
                 const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
                 const erhe::scene::Animation_sampler** target  =
-                    (channel.path == erhe::scene::Animation_path::TRANSLATION) ? &entry.translation :
-                    (channel.path == erhe::scene::Animation_path::ROTATION)    ? &entry.rotation    :
-                                                                                 &entry.scale;
+                    (path == erhe::scene::Animation_path::TRANSLATION) ? &entry.translation :
+                    (path == erhe::scene::Animation_path::ROTATION)    ? &entry.rotation    :
+                                                                         &entry.scale;
                 if (*target == nullptr) {
                     *target = &sampler;
                 }
@@ -4750,11 +4748,12 @@ private:
                 continue;
             }
             for (const erhe::scene::Animation_channel& channel : animation->channels) {
-                if (!channel.target || (channel.sampler_index >= animation->samplers.size())) {
+                const std::shared_ptr<erhe::scene::Node> target_node = erhe::scene::get_target_node(channel);
+                if (!target_node || (channel.sampler_index >= animation->samplers.size())) {
                     continue;
                 }
                 const std::vector<const erhe::scene::Node*>::const_iterator i = std::find(
-                    record.joints.begin(), record.joints.end(), channel.target.get()
+                    record.joints.begin(), record.joints.end(), target_node.get()
                 );
                 if (i == record.joints.end()) {
                     continue;
@@ -4762,7 +4761,7 @@ private:
                 const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
                 Joint_channels&                        joint   = joint_channels[static_cast<std::size_t>(i - record.joints.begin())];
                 const erhe::scene::Animation_sampler** target  = nullptr;
-                switch (channel.path) {
+                switch (erhe::scene::get_animation_path(channel)) {
                     case erhe::scene::Animation_path::TRANSLATION: target = &joint.translation; break;
                     case erhe::scene::Animation_path::ROTATION:    target = &joint.rotation;    break;
                     case erhe::scene::Animation_path::SCALE:       target = &joint.scale;       break;

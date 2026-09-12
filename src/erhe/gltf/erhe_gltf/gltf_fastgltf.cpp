@@ -394,7 +394,6 @@ auto to_erhe_attribute(const fastgltf::Accessor& accessor) -> erhe::dataformat::
         case fastgltf::AnimationPath::Translation: return erhe::scene::Animation_path::TRANSLATION;
         case fastgltf::AnimationPath::Rotation:    return erhe::scene::Animation_path::ROTATION;
         case fastgltf::AnimationPath::Scale:       return erhe::scene::Animation_path::SCALE;
-        case fastgltf::AnimationPath::Weights:     return erhe::scene::Animation_path::WEIGHTS;
         default:                                   return erhe::scene::Animation_path::INVALID;
     }
 }
@@ -1524,16 +1523,22 @@ private:
             //    log_gltf->trace(ss.str());
             //}
 
+            if (path == erhe::scene::Animation_path::INVALID) {
+                // Morph-target weights are the only other glTF path, and erhe
+                // has no morph-target support end to end.
+                log_gltf->warn(
+                    "Animation `{}` channel {} drives a path erhe does not animate - skipping channel",
+                    animation_name, channel_index
+                );
+                continue;
+            }
             const fastgltf::AnimationSampler& sampler = animation.samplers.at(channel.samplerIndex);
-            erhe_animation->channels[channel_index] = erhe::scene::Animation_channel{
-                .path           = path,
-                .sampler_index  = channel.samplerIndex,
-                .target         = target_node,
-                .start_position = 0,
-                .value_offset   = (sampler.interpolation == fastgltf::AnimationInterpolation::CubicSpline)
-                    ? get_component_count(path)
-                    : 0
-            };
+            erhe_animation->channels[channel_index] = erhe::scene::make_transform_channel(
+                target_node,
+                path,
+                channel.samplerIndex,
+                (sampler.interpolation == fastgltf::AnimationInterpolation::CubicSpline) ? get_component_count(path) : 0
+            );
         }
         m_data_out.animations[animation_index] = erhe_animation;
     }
@@ -5959,7 +5964,6 @@ private:
             case erhe::scene::Animation_path::TRANSLATION: return fastgltf::AnimationPath::Translation;
             case erhe::scene::Animation_path::ROTATION:    return fastgltf::AnimationPath::Rotation;
             case erhe::scene::Animation_path::SCALE:       return fastgltf::AnimationPath::Scale;
-            case erhe::scene::Animation_path::WEIGHTS:     return fastgltf::AnimationPath::Weights;
             default:                                       return fastgltf::AnimationPath::Translation;
         }
     }
@@ -5993,18 +5997,27 @@ private:
         // referenced only by skipped channels must not be emitted.
         std::vector<std::optional<std::size_t>> sampler_map(animation.samplers.size());
 
+        bool non_transform_channel_warned{false};
         for (const erhe::scene::Animation_channel& channel : animation.channels) {
-            if (channel.path == erhe::scene::Animation_path::WEIGHTS) {
-                // erhe has no morph-target support end-to-end; there is no
-                // data behind a weights channel to export.
-                log_gltf->warn("glTF export: animation '{}' weights channel skipped (morph targets not supported)", animation.get_name());
+            const erhe::scene::Animation_path path = erhe::scene::get_animation_path(channel);
+            if (path == erhe::scene::Animation_path::INVALID) {
+                // glTF animates the three transform components and morph
+                // target weights; a channel driving any other property has no
+                // carrier here (USD time samples carry it instead).
+                if (!non_transform_channel_warned) {
+                    non_transform_channel_warned = true;
+                    log_gltf->warn(
+                        "glTF export: animation '{}' has channels driving properties glTF cannot carry - skipping them",
+                        animation.get_name()
+                    );
+                }
                 continue;
             }
-            const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+            const std::size_t component_count = erhe::scene::get_component_count(path);
             if ((component_count == 0) || (channel.sampler_index >= animation.samplers.size())) {
                 continue;
             }
-            const std::optional<std::size_t> target_node_index = find_gltf_node_index(channel.target);
+            const std::optional<std::size_t> target_node_index = find_gltf_node_index(erhe::scene::get_target_node(channel));
             if (!target_node_index.has_value()) {
                 log_gltf->warn(
                     "glTF export: animation '{}' channel targets node '{}' outside the exported subtree - skipping channel",
@@ -6050,7 +6063,7 @@ private:
             fastgltf::AnimationChannel gltf_channel{};
             gltf_channel.samplerIndex = sampler_map[channel.sampler_index].value();
             gltf_channel.nodeIndex    = target_node_index.value();
-            gltf_channel.path         = from_erhe(channel.path);
+            gltf_channel.path         = from_erhe(path);
             gltf_animation.channels.emplace_back(std::move(gltf_channel));
         }
 

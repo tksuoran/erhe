@@ -265,7 +265,7 @@ protected:
     ) const -> const erhe::scene::Animation_channel*
     {
         for (const erhe::scene::Animation_channel& channel : animation.channels) {
-            if (channel.target && (channel.target->get_name() == joint_name) && (channel.path == path)) {
+            if (channel.target && (channel.target->get_name() == joint_name) && (erhe::scene::get_animation_path(channel) == path)) {
                 return &channel;
             }
         }
@@ -297,7 +297,9 @@ TEST_F(Usd_skel_animation, joint_channels_target_the_joint_prims)
     const erhe::scene::Animation_channel* tip = find_channel(animation, "Tip", erhe::scene::Animation_path::TRANSLATION);
     ASSERT_NE(tip, nullptr);
     // The channel drives the joint prim of the tree, not a copy of it.
-    EXPECT_EQ(tip->target->get_parent().lock()->get_name(), "Root");
+    const std::shared_ptr<erhe::scene::Node> tip_node = erhe::scene::get_target_node(*tip);
+    ASSERT_NE(tip_node, nullptr);
+    EXPECT_EQ(tip_node->get_parent().lock()->get_name(), "Root");
 }
 
 // The samples are the file's: keyed at time code 0 and 24 of a 24-per-second
@@ -522,7 +524,7 @@ protected:
     ) const -> const erhe::scene::Animation_channel*
     {
         for (const erhe::scene::Animation_channel& channel : animation.channels) {
-            if (channel.target && (channel.target->get_name() == joint_name) && (channel.path == path)) {
+            if (channel.target && (channel.target->get_name() == joint_name) && (erhe::scene::get_animation_path(channel) == path)) {
                 return &channel;
             }
         }

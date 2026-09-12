@@ -271,10 +271,11 @@ void Animation_player::apply()
     // node transforms of every distinct scene encountered to be safe.
     erhe::scene::Scene* last_scene = nullptr;
     for (const erhe::scene::Animation_channel& channel : m_animation->channels) {
-        if (!channel.target) {
+        const std::shared_ptr<erhe::scene::Node> target = erhe::scene::get_target_node(channel);
+        if (!target) {
             continue;
         }
-        erhe::scene::Scene* scene = channel.target->get_scene();
+        erhe::scene::Scene* scene = target->get_scene();
         if ((scene != nullptr) && (scene != last_scene)) {
             scene->update_node_transforms();
             last_scene = scene;

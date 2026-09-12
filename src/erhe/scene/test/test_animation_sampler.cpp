@@ -24,7 +24,7 @@ constexpr float tol = 1e-4f;
     -> erhe::scene::Animation_channel
 {
     erhe::scene::Animation_channel channel{};
-    channel.path           = path;
+    channel.property       = erhe::scene::get_transform_property(path);
     channel.sampler_index  = 0;
     channel.target         = {};
     channel.start_position = 0;

@@ -966,13 +966,7 @@ private:
                 sampler.set(std::move(timestamps), std::move(values));
                 animation->samplers.push_back(std::move(sampler));
                 animation->channels.push_back(
-                    erhe::scene::Animation_channel{
-                        .path           = path,
-                        .sampler_index  = animation->samplers.size() - 1,
-                        .target         = joint_nodes[joint_index],
-                        .start_position = 0,
-                        .value_offset   = 0
-                    }
+                    erhe::scene::make_transform_channel(joint_nodes[joint_index], path, animation->samplers.size() - 1)
                 );
             }
         }
@@ -1044,13 +1038,7 @@ private:
             sampler.set(std::vector<float>{timestamps}, std::move(values));
             animation->samplers.push_back(std::move(sampler));
             animation->channels.push_back(
-                erhe::scene::Animation_channel{
-                    .path           = path,
-                    .sampler_index  = animation->samplers.size() - 1,
-                    .target         = node,
-                    .start_position = 0,
-                    .value_offset   = 0
-                }
+                erhe::scene::make_transform_channel(node, path, animation->samplers.size() - 1)
             );
         };
         add_channel(erhe::scene::Animation_path::TRANSLATION, std::move(translations));
@@ -1127,13 +1115,7 @@ private:
                 sampler.set(std::move(timestamps), std::move(values));
                 animation->samplers.push_back(std::move(sampler));
                 animation->channels.push_back(
-                    erhe::scene::Animation_channel{
-                        .path           = path,
-                        .sampler_index  = animation->samplers.size() - 1,
-                        .target         = node,
-                        .start_position = 0,
-                        .value_offset   = 0
-                    }
+                    erhe::scene::make_transform_channel(node, path, animation->samplers.size() - 1)
                 );
             }
         }

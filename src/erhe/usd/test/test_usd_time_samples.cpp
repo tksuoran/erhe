@@ -70,7 +70,7 @@ namespace {
 ) -> const erhe::scene::Animation_channel*
 {
     for (const erhe::scene::Animation_channel& channel : animation.channels) {
-        if ((channel.path == path) && channel.target && (channel.target->get_name() == target_name)) {
+        if ((erhe::scene::get_animation_path(channel) == path) && channel.target && (channel.target->get_name() == target_name)) {
             return &channel;
         }
     }

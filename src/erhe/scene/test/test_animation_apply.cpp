@@ -11,6 +11,7 @@
 
 #include "erhe_scene/animation.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/light.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/xform.hpp"
@@ -74,13 +75,9 @@ void make_translation_animation(erhe::scene::Animation& animation, const std::sh
     );
     animation.samplers.push_back(std::move(sampler));
 
-    erhe::scene::Animation_channel channel{};
-    channel.path           = erhe::scene::Animation_path::TRANSLATION;
-    channel.sampler_index  = 0;
-    channel.target         = target;
-    channel.start_position = 0;
-    channel.value_offset   = 0;
-    animation.channels.push_back(channel);
+    animation.channels.push_back(
+        erhe::scene::make_transform_channel(target, erhe::scene::Animation_path::TRANSLATION, 0)
+    );
 }
 
 TEST(animation_apply, moves_the_animated_node)
@@ -316,6 +313,153 @@ TEST(animation_apply, an_edit_of_an_unanimated_component_keeps_the_pose_and_the_
     EXPECT_FLOAT_EQ(node->parent_from_node_transform().get_translation().x, 1.0f);
     EXPECT_FLOAT_EQ(node->parent_from_node_transform().get_translation().z, 3.0f);
     EXPECT_NEAR(node->parent_from_node_transform().get_rotation().y, new_rotation.y, 1e-5f);
+}
+
+// --- Channels driving properties other than the transform ---------------
+//
+// An Animation_channel names a Dependency_property of its target, so a clip
+// drives any registered property whose type a sampler can carry, and the
+// three transform components are just the common case.
+
+// One float channel on the light's intensity: key 1 at t=0, key 5 at t=1.
+void make_intensity_animation(erhe::scene::Animation& animation, const std::shared_ptr<erhe::scene::Light>& target)
+{
+    erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+    sampler.set(
+        std::vector<float>{0.0f, 1.0f},
+        std::vector<float>{1.0f, 5.0f}
+    );
+    animation.samplers.push_back(std::move(sampler));
+
+    erhe::scene::Animation_channel channel{};
+    channel.property      = erhe::scene::Light::intensity_property.get_ptr();
+    channel.sampler_index = animation.samplers.size() - 1;
+    channel.target        = target;
+    animation.channels.push_back(channel);
+}
+
+TEST(animation_property_channel, a_float_channel_interpolates_and_writes_the_animated_layer)
+{
+    using erhe::property::Value_source;
+
+    auto light = std::make_shared<erhe::scene::Light>("animated light");
+    light->set_intensity(2.0f);
+
+    erhe::scene::Animation animation{"test animation"};
+    make_intensity_animation(animation, light);
+
+    animation.apply(0.5f);
+
+    EXPECT_FLOAT_EQ(light->get_value(erhe::scene::Light::intensity_property), 3.0f);
+    EXPECT_EQ(light->get_value_source(erhe::scene::Light::intensity_property.get()), Value_source::animated);
+    EXPECT_TRUE(light->has_animated_value(erhe::scene::Light::intensity_property.get()));
+
+    // The authored intensity is the base under the pose, and it is what a
+    // save sees.
+    EXPECT_FLOAT_EQ(light->get_animation_base_value(erhe::scene::Light::intensity_property), 2.0f);
+
+    animation.apply(1.0f);
+    EXPECT_FLOAT_EQ(light->get_value(erhe::scene::Light::intensity_property), 5.0f);
+
+    animation.clear_applied();
+    EXPECT_FALSE(light->has_animated_value(erhe::scene::Light::intensity_property.get()));
+    EXPECT_FLOAT_EQ(light->get_value(erhe::scene::Light::intensity_property), 2.0f);
+}
+
+// A boolean has no value between two keys: it holds the previous key whatever
+// the sampler's interpolation mode says.
+TEST(animation_property_channel, a_bool_channel_holds_the_previous_key)
+{
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
+
+    erhe::scene::Animation animation{"test animation"};
+    erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+    sampler.set(
+        std::vector<float>{0.0f, 1.0f, 2.0f},
+        std::vector<float>{0.0f, 1.0f, 0.0f}
+    );
+    animation.samplers.push_back(std::move(sampler));
+
+    erhe::scene::Animation_channel channel{};
+    channel.property      = erhe::Item_base::visible_property.get_ptr();
+    channel.sampler_index = 0;
+    channel.target        = node;
+    animation.channels.push_back(channel);
+
+    animation.apply(0.0f);
+    EXPECT_FALSE(node->get_value(erhe::Item_base::visible_property));
+    animation.apply(0.5f);
+    EXPECT_FALSE(node->get_value(erhe::Item_base::visible_property));
+    animation.apply(1.0f);
+    EXPECT_TRUE(node->get_value(erhe::Item_base::visible_property));
+    animation.apply(1.5f);
+    EXPECT_TRUE(node->get_value(erhe::Item_base::visible_property));
+    animation.apply(2.0f);
+    EXPECT_FALSE(node->get_value(erhe::Item_base::visible_property));
+
+    animation.clear_applied();
+    EXPECT_FALSE(node->has_animated_value(erhe::Item_base::visible_property.get()));
+    EXPECT_TRUE(node->get_value(erhe::Item_base::visible_property));
+}
+
+// One clip, a transform channel and a non-transform channel: both play, and
+// clear_applied() puts both back on what they authored.
+TEST(animation_property_channel, a_mixed_clip_applies_and_clears_both_kinds)
+{
+    Test_scene_host host;
+
+    auto node  = std::make_shared<erhe::scene::Xform>("animated node");
+    auto light = std::make_shared<erhe::scene::Light>("animated light");
+    node->set_parent(host.scene.get_root_node());
+    node->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{1.0f, 0.0f, 0.0f}));
+    light->set_intensity(2.0f);
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node);
+    make_intensity_animation(animation, light);
+
+    animation.apply(1.0f);
+    host.scene.update_node_transforms();
+
+    EXPECT_FLOAT_EQ(node->world_from_node()[3][0], 10.0f);
+    EXPECT_FLOAT_EQ(light->get_value(erhe::scene::Light::intensity_property), 5.0f);
+    EXPECT_TRUE(node->is_local_transform_animated());
+    EXPECT_TRUE(light->has_animated_value(erhe::scene::Light::intensity_property.get()));
+
+    animation.clear_applied();
+    host.scene.update_node_transforms();
+
+    EXPECT_FALSE(node->is_local_transform_animated());
+    EXPECT_FALSE(light->has_animated_value(erhe::scene::Light::intensity_property.get()));
+    EXPECT_FLOAT_EQ(node->world_from_node()[3][0], 1.0f);
+    EXPECT_FLOAT_EQ(light->get_value(erhe::scene::Light::intensity_property), 2.0f);
+}
+
+// Animation_path is a classification of the driven property, not a field.
+TEST(animation_property_channel, get_animation_path_classifies_the_driven_property)
+{
+    auto node  = std::make_shared<erhe::scene::Xform>("n");
+    auto light = std::make_shared<erhe::scene::Light>("l");
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node);
+    make_intensity_animation(animation, light);
+
+    EXPECT_EQ(erhe::scene::get_animation_path(animation.channels[0]), erhe::scene::Animation_path::TRANSLATION);
+    EXPECT_EQ(erhe::scene::get_animation_path(animation.channels[1]), erhe::scene::Animation_path::INVALID);
+    EXPECT_EQ(erhe::scene::get_component_count(animation.channels[0]), 3);
+    EXPECT_EQ(erhe::scene::get_component_count(animation.channels[1]), 1);
+
+    EXPECT_EQ(
+        erhe::scene::make_transform_channel(node, erhe::scene::Animation_path::ROTATION, 0).property,
+        erhe::scene::Xformable::rotation_property.get_ptr()
+    );
+    EXPECT_EQ(
+        erhe::scene::get_animation_path(erhe::scene::make_transform_channel(node, erhe::scene::Animation_path::SCALE, 0)),
+        erhe::scene::Animation_path::SCALE
+    );
+    EXPECT_TRUE(erhe::scene::is_animatable(erhe::scene::Light::intensity_property.get()));
+    EXPECT_FALSE(erhe::scene::is_animatable(erhe::Item_base::name_property.get()));
 }
 
 } // anonymous namespace

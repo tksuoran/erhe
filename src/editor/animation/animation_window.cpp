@@ -55,6 +55,20 @@ constexpr int   c_cubic_segment_steps = 16;
 
 const char* const c_component_names[4] = { "X", "Y", "Z", "W" };
 
+// What a channel drives: the transform component for a TRS channel, and the
+// driven property's qualified name for any other channel.
+[[nodiscard]] auto get_channel_path_label(const erhe::scene::Animation_channel& channel) -> std::string
+{
+    const erhe::scene::Animation_path path = erhe::scene::get_animation_path(channel);
+    if (path != erhe::scene::Animation_path::INVALID) {
+        return std::string{erhe::scene::c_str(path)};
+    }
+    if (channel.property == nullptr) {
+        return std::string{"(no property)"};
+    }
+    return erhe::property::Property_registry::get().qualified_name(*channel.property);
+}
+
 // Rounds a raw step to a "nice" 1-2-5 progression value.
 [[nodiscard]] auto nice_step(const float raw_step) -> float
 {
@@ -186,7 +200,7 @@ void Animation_window::prune_stale_selection()
                 if (point.key_index >= sampler.timestamps.size()) {
                     return true;
                 }
-                return point.component >= erhe::scene::get_component_count(channel.path);
+                return point.component >= erhe::scene::get_component_count(channel);
             }
         ),
         m_selection.end()
@@ -268,7 +282,7 @@ void Animation_window::compute_frame_all_view(const float canvas_height_px)
     for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
         const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
         const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t component_count = erhe::scene::get_component_count(channel);
         if (sampler.timestamps.empty() || (component_count == 0)) {
             continue;
         }
@@ -542,7 +556,7 @@ void Animation_window::collect_key_marker_times()
 
     for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
         const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t component_count = erhe::scene::get_component_count(channel);
         bool include = false;
         switch (m_key_marker_source) {
             case Key_marker_source::selected_objects: {
@@ -829,7 +843,7 @@ auto Animation_window::channel_label(const std::size_t channel_index) const -> s
     return fmt::format(
         "{} {}",
         channel.target ? channel.target->get_name() : "(no target)",
-        erhe::scene::c_str(channel.path)
+        get_channel_path_label(channel)
     );
 }
 
@@ -837,7 +851,7 @@ void Animation_window::channel_row(const std::size_t channel_index)
 {
     erhe::scene::Animation& animation = *m_animation.get();
     const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
-    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+    const std::size_t component_count = erhe::scene::get_component_count(channel);
 
     ImGui::PushID(static_cast<int>(channel_index));
 
@@ -957,7 +971,7 @@ void Animation_window::channel_list_pane()
                 if (!channel_passes_filter(channel_index)) {
                     continue;
                 }
-                const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
+                const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index]);
                 uint32_t mask = 0u;
                 for (std::size_t component = 0; component < component_count; ++component) {
                     if (is_component_animated(animation, channel_index, component)) {
@@ -973,8 +987,8 @@ void Animation_window::channel_list_pane()
         }
 
         for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
-            if (erhe::scene::get_component_count(animation.channels[channel_index].path) == 0) {
-                continue; // WEIGHTS - not shown (no curve support yet)
+            if (erhe::scene::get_component_count(animation.channels[channel_index]) == 0) {
+                continue; // a channel with no property, or one of a type no curve carries
             }
             if (!channel_passes_filter(channel_index)) {
                 continue;
@@ -991,7 +1005,7 @@ void Animation_window::channel_list_pane()
     if (ImGui::TreeNodeEx("Shown Channels", ImGuiTreeNodeFlags_DefaultOpen)) {
         bool any_shown = false;
         for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
-            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index].path);
+            const std::size_t component_count = erhe::scene::get_component_count(animation.channels[channel_index]);
             if (component_count == 0) {
                 continue;
             }
@@ -1185,7 +1199,7 @@ auto Animation_window::find_curve_near(
     for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
         const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
         const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t component_count = erhe::scene::get_component_count(channel);
         if (sampler.timestamps.empty() || (component_count == 0)) {
             continue;
         }
@@ -1277,7 +1291,7 @@ void Animation_window::curve_canvas()
         for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
             const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
             const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-            const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+            const std::size_t component_count = erhe::scene::get_component_count(channel);
             for (std::size_t component = 0; component < component_count; ++component) {
                 if (!is_component_visible(channel_index, component)) {
                     continue;
@@ -1498,7 +1512,7 @@ void Animation_window::curve_canvas()
         for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
             const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
             const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-            const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+            const std::size_t component_count = erhe::scene::get_component_count(channel);
             if (sampler.timestamps.empty() || (component_count == 0)) {
                 continue;
             }
@@ -1644,7 +1658,7 @@ void Animation_window::curve_canvas()
         ImGui::SetTooltip(
             "%s %s.%s\nkey %d  t = %.4f  v = %.4f",
             channel.target ? channel.target->get_name().c_str() : "(no target)",
-            erhe::scene::c_str(channel.path),
+            get_channel_path_label(channel).c_str(),
             c_component_names[point.component],
             static_cast<int>(point.key_index),
             static_cast<double>(sampler.timestamps.at(point.key_index)),

@@ -65,7 +65,7 @@ auto get_key_value_index(
 {
     const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
     const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
-    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+    const std::size_t component_count = erhe::scene::get_component_count(channel);
     const std::size_t stride          = component_count * get_key_value_count(sampler.interpolation_mode);
     return (key_index * stride) + channel.value_offset + component;
 }
@@ -148,7 +148,7 @@ auto insert_keyframe(
         if (channel.sampler_index != sampler_index) {
             continue;
         }
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t component_count = erhe::scene::get_component_count(channel);
         channel.start_position = 0;
         const glm::vec4 value = sampler.evaluate(channel, time);
         for (std::size_t c = 0; c < component_count; ++c) {
@@ -247,7 +247,7 @@ auto is_component_animated(
     // CUBICSPLINE tangents (a single-key sampler always evaluates to the key
     // value, so tangents only matter with at least one segment).
     if ((key_count >= 2) && (sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE)) {
-        const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+        const std::size_t component_count = erhe::scene::get_component_count(channel);
         const std::size_t stride          = component_count * get_key_value_count(sampler.interpolation_mode);
         for (std::size_t key = 0; key < key_count; ++key) {
             const float in_tangent  = sampler.data.at((key * stride) + component);
@@ -267,7 +267,7 @@ auto is_channel_animated(
 ) -> bool
 {
     const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
-    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
+    const std::size_t component_count = erhe::scene::get_component_count(channel);
     for (std::size_t component = 0; component < component_count; ++component) {
         if (is_component_animated(animation, channel_index, component)) {
             return true;
@@ -320,7 +320,7 @@ auto find_channel(
 {
     for (std::size_t channel_index = 0; channel_index < animation.channels.size(); ++channel_index) {
         const erhe::scene::Animation_channel& channel = animation.channels[channel_index];
-        if ((channel.target.get() == target) && (channel.path == path)) {
+        if ((channel.target.get() == target) && (erhe::scene::get_animation_path(channel) == path)) {
             out_channel_index = channel_index;
             return true;
         }
@@ -352,13 +352,7 @@ auto ensure_channel(
     animation.samplers.push_back(std::move(sampler));
 
     animation.channels.push_back(
-        erhe::scene::Animation_channel{
-            .path           = path,
-            .sampler_index  = animation.samplers.size() - 1,
-            .target         = target,
-            .start_position = 0,
-            .value_offset   = 0
-        }
+        erhe::scene::make_transform_channel(target, path, animation.samplers.size() - 1)
     );
     animation.notify_keyframes_changed();
     return animation.channels.size() - 1;
@@ -370,10 +364,11 @@ auto set_key_from_node(
     const float             time
 ) -> std::size_t
 {
-    const erhe::scene::Animation_channel& channel = animation.channels.at(channel_index);
-    ERHE_VERIFY(channel.target);
-    const std::size_t component_count = erhe::scene::get_component_count(channel.path);
-    const glm::vec4   value           = get_node_path_value(*channel.target.get(), channel.path);
+    const erhe::scene::Animation_channel&      channel = animation.channels.at(channel_index);
+    const std::shared_ptr<erhe::scene::Node>   target  = erhe::scene::get_target_node(channel);
+    ERHE_VERIFY(target);
+    const std::size_t component_count = erhe::scene::get_component_count(channel);
+    const glm::vec4   value           = get_node_path_value(*target.get(), erhe::scene::get_animation_path(channel));
 
     // insert_keyframe() seeds the new key with the curve's evaluated value
     // (and estimated tangents for CUBICSPLINE); the value components are then

@@ -156,8 +156,9 @@ auto Mcp_server::query_scene_animations(const json& args) -> std::string
                 channels.push_back({
                     {"index",         channel_index},
                     {"target",        channel.target ? channel.target->get_name() : ""},
-                    {"path",          erhe::scene::c_str(channel.path)},
-                    {"components",    erhe::scene::get_component_count(channel.path)},
+                    {"path",          erhe::scene::c_str(erhe::scene::get_animation_path(channel))},
+                    {"property",      (channel.property != nullptr) ? erhe::property::Property_registry::get().qualified_name(*channel.property) : std::string{}},
+                    {"components",    erhe::scene::get_component_count(channel)},
                     {"interpolation", erhe::scene::c_str(sampler.interpolation_mode)},
                     {"sampler_index", channel.sampler_index},
                     {"keyframes",     sampler.timestamps.size()},
@@ -474,7 +475,7 @@ auto Mcp_server::action_animation_edit_keyframe(const json& args) -> std::string
                 return make_error_content("move with 'value' requires 'component'");
             }
             const std::size_t component = static_cast<std::size_t>(args["component"].get<int>());
-            if (component >= erhe::scene::get_component_count(channel.path)) {
+            if (component >= erhe::scene::get_component_count(channel)) {
                 return make_error_content("component out of range for channel path");
             }
             set_keyframe_value(*animation.get(), channel_index, key_index, component, args["value"].get<float>());

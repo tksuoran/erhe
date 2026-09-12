@@ -83,10 +83,11 @@ public:
         }
         const erhe::scene::Animation_sampler& sampler = animation.samplers.at(channel.sampler_index);
         const glm::vec4 value = sampler.evaluate(channel, time);
-        if (channel.path == erhe::scene::Animation_path::TRANSLATION) {
+        const erhe::scene::Animation_path path = erhe::scene::get_animation_path(channel);
+        if (path == erhe::scene::Animation_path::TRANSLATION) {
             result.translation = glm::vec3{value};
             result.ok = true;
-        } else if (channel.path == erhe::scene::Animation_path::ROTATION) {
+        } else if (path == erhe::scene::Animation_path::ROTATION) {
             result.rotation = glm::quat{value.w, value.x, value.y, value.z};
             result.ok = true;
         }
@@ -98,7 +99,7 @@ public:
 {
     for (const erhe::scene::Animation_channel& channel : animation.channels) {
         if (channel.target && (channel.target->get_name() == joint_name)) {
-            return channel.target;
+            return erhe::scene::get_target_node(channel);
         }
     }
     return {};

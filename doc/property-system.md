@@ -1371,10 +1371,14 @@ transform's skew component stays internal. `world_from_node` stays a
 derived cache; the world components are exposed as computed properties
 (D26), not stored ones.
 
-`Animation_sampler::apply` writes each sampled component through
+An `erhe::scene::Animation_channel` names the property it drives - a target
+`erhe::Item_base` and a `Dependency_property` of it - so a clip animates any
+registered property whose type a sampler can carry, and the three transform
+components are the common case rather than the only one.
+`Animation_sampler::apply` writes each sampled value through
 `set_animated_value` (D5), so playback holds the pose in the animated layer
-and the transform the prim authored stays readable as the base under it: a
-save writes the base, a transform edit made while playing edits the base, and
+and the value the item authored stays readable as the base under it: a save
+writes the base, an edit made while playing edits the base, and
 `Animation::clear_applied` - what the editor's player calls when playback
 stops - puts every target back on it.
 `Xformable::authored_parent_from_node_transform()` is what the USD and glTF
@@ -2096,11 +2100,6 @@ style layer is D25 and the reference layer is D33.
   item tree expansion, sheet-window formulas. The naming, lookup and
   listing side exists (D3, D12, section 4.14); each needs its own
   `visible_when` and a registering owner type on the editor side.
-- Animation channels targeting arbitrary properties (not only node TRS),
-  which becomes possible once `Animation_channel` stores a
-  `Dependency_property` index instead of `Animation_path`. Playback writes
-  the animated layer (D5), so a generalized channel leaves the authored
-  local value alone from the start.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

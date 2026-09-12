@@ -17,7 +17,7 @@ A glTF-like 3D scene graph providing hierarchical transforms, prim classes (see 
 - `Projection` -- Camera projection configuration supporting many types (perspective vertical/horizontal, orthogonal, XR asymmetric, generic frustum).
 - `Transform` -- Matrix + inverse matrix pair with factory methods for projection setups.
 - `Trs_transform` -- Extends `Transform` with decomposed translation, rotation, scale, and skew. Supports interpolation.
-- `Animation` / `Animation_sampler` / `Animation_channel` -- Keyframe animation system supporting step, linear, and cubic spline interpolation for translation, rotation, scale, and weights. `Animation` is a typed prim (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes") with the fixed `typeName` token `Animation`, as `Skin` is with `Skin`.
+- `Animation` / `Animation_sampler` / `Animation_channel` -- Keyframe animation system supporting step, linear, and cubic spline interpolation of any animatable property of any item (see "Animation playback"). `Animation` is a typed prim (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes") with the fixed `typeName` token `Animation`, as `Skin` is with `Skin`.
 - `Skin` -- Skeletal skinning data (joint nodes + inverse bind matrices, plus the optional glTF `skeleton` pivot node). `get_skin_transform_root()` returns the node an editor should transform to move a skinned mesh: skinning ignores the mesh node's own transform (glTF 2.0 requires it), so only a common ancestor of the joints moves the posed result. Uses `Skin_data::skeleton` when set, else the closest common ancestor of the joints. One `Skin` is shared by every `Mesh` it skins, and each of those meshes registers it with the scene, so `Scene::register_skin()` / `Scene::unregister_skin()` count the uses: `get_skins()` holds one entry per skin, the entry appears with the first skinned mesh and leaves with the last, and the returned `Skin_registry_change` tells a caller that announces the change (`Scene_root` publishes `Skin_registered_message`) to announce it once.
 - `Mesh_layer` / `Light_layer` -- Organize meshes and lights into layers with flags and IDs.
 - `Scene_host` -- Abstract interface for registering/unregistering scene objects.
@@ -156,14 +156,24 @@ stack next to the matrices.
 
 ## Animation playback
 
-An animation plays through the animated layer of the target's transform
-properties (`doc/property-system.md` D5), never over the transform the prim
-authored. `Animation_sampler::apply` writes each sampled component with
-`set_animated_value`, so the prim reads the pose while the transform it
-authored stays readable underneath it as the base
-(`Xformable::authored_parent_from_node_transform`,
-`is_local_transform_animated`). Three rules follow, and every serializer and
-every transform writer relies on them:
+An `Animation_channel` names the property it drives: a target
+`std::shared_ptr<erhe::Item_base>` and the `erhe::property::Dependency_property`
+of it that the sampler feeds. The three local transform components of an
+`Xformable` are the common case; any registered property whose type the sampler
+packing covers (`is_animatable`: the scalars, the 2 / 3 / 4 component vectors
+and a quaternion) is driven the same way, and a value that has nothing between
+two keys - a boolean, an integer, an enumeration - holds the previous key
+whatever the sampler's interpolation mode says. `get_animation_path` classifies
+a channel back into `Animation_path` for the writers that have a carrier for
+the transform components only, and `make_transform_channel` builds one.
+
+An animation plays through the animated layer of the driven property
+(`doc/property-system.md` D5), never over the value the item authored.
+`Animation_sampler::apply` writes each sampled value with `set_animated_value`,
+so the item reads the pose while what it authored stays readable underneath it
+as the base (`Xformable::authored_parent_from_node_transform`,
+`is_local_transform_animated` for the transform). Three rules follow, and every
+serializer and every transform writer relies on them:
 
 - A pose is not authored state: it is not a local value, a save never sees it,
   and it is not written back into the authored xformOp stack. The stack carries
@@ -177,12 +187,17 @@ every transform writer relies on them:
 
 A pose is written one component at a time, so the per-component write only
 stores: `Animation::apply` runs the world-transform update and
-`handle_transform_update` once per target node, after every channel of the node
-is in. `Animation::clear_applied` - what the editor's player calls when
+`handle_transform_update` once per `Xformable` target of a transform channel,
+after every transform channel of that target is in. A channel driving any other
+property needs nothing beyond the write - `set_animated_value` notifies its
+readers. `Animation::clear_applied` - what the editor's player calls when
 playback stops and when it lets go of an animation - drops the layer of every
-target through `Xformable::clear_animated_local_transform`, which restores the
-three components together and runs that same tail once, with the transform
-whole.
+transform target through `Xformable::clear_animated_local_transform`, which
+restores the three components together and runs that same tail once with the
+transform whole, and clears every other channel's property on its own.
+
+glTF carries transform channels only: a channel driving any other property is
+skipped on export, with one warning per animation.
 
 glTF does not carry the stack (`doc/usd-compatibility-plan.md` C1): a glTF
 save writes the composed TRS, and a glTF scene has no stack to start with.
