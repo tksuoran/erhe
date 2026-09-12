@@ -253,7 +253,11 @@ TEST_F(Physics_import, erhe_body_values_and_tapered_capsule)
     EXPECT_NEAR(shape.radius_top,    0.3f, c_tolerance);
 }
 
-TEST_F(Physics_import, a_scaled_box_collider_is_its_scaled_extents)
+// A scaled collider prim states its shape twice over otherwise: the shape
+// record carries the schema dimensions as authored and the prim keeps its
+// scale, which the physics import applies as the collider node's transform -
+// the rule a glTF collider on a scaled node follows too.
+TEST_F(Physics_import, a_scaled_box_collider_keeps_its_scale_on_the_prim)
 {
     const erhe::scene::Physics_node_description* collider_prim = body("/World/Slab/collider");
     ASSERT_NE(collider_prim, nullptr);
@@ -262,9 +266,15 @@ TEST_F(Physics_import, a_scaled_box_collider_is_its_scaled_extents)
     ASSERT_TRUE(geometry.shape_index.has_value());
     const erhe::scene::Physics_shape& shape = result.data.physics.shapes[geometry.shape_index.value()];
     EXPECT_EQ(shape.type, erhe::scene::Physics_shape_type::e_box);
-    EXPECT_NEAR(shape.size.x, 2.0f, c_tolerance);
-    EXPECT_NEAR(shape.size.y, 0.5f, c_tolerance);
-    EXPECT_NEAR(shape.size.z, 3.0f, c_tolerance);
+    EXPECT_NEAR(shape.size.x, 1.0f, c_tolerance);
+    EXPECT_NEAR(shape.size.y, 1.0f, c_tolerance);
+    EXPECT_NEAR(shape.size.z, 1.0f, c_tolerance);
+
+    ASSERT_TRUE(collider_prim->node.operator bool());
+    const glm::vec3 scale = collider_prim->node->parent_from_node_transform().get_scale();
+    EXPECT_NEAR(scale.x, 2.0f, c_tolerance);
+    EXPECT_NEAR(scale.y, 0.5f, c_tolerance);
+    EXPECT_NEAR(scale.z, 3.0f, c_tolerance);
 }
 
 TEST_F(Physics_import, guide_collider_prims_are_listed)

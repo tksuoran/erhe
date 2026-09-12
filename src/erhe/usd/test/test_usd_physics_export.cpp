@@ -96,6 +96,24 @@ public:
     return out;
 }
 
+// The collider prim's own scale, in the dimensions of the shape it carries:
+// what the editor's physics import applies as the collider node's transform
+// when it folds the shape into its body, and what a save has to see for the
+// prim it writes to state the same size again.
+[[nodiscard]] auto scaled_shape(
+    const erhe::scene::Physics_shape& shape,
+    const glm::vec3&                  scale
+) -> erhe::scene::Physics_shape
+{
+    erhe::scene::Physics_shape out = shape;
+    out.size          = shape.size * scale;
+    out.radius        = shape.radius        * scale.x;
+    out.radius_bottom = shape.radius_bottom * scale.x;
+    out.radius_top    = shape.radius_top    * scale.x;
+    out.height        = shape.height        * scale.y;
+    return out;
+}
+
 [[nodiscard]] auto build_save_input(
     const erhe::usd::Usd_data&                data,
     const std::shared_ptr<erhe::scene::Node>& root
@@ -136,13 +154,21 @@ public:
             if (body_entry.node.get() != parent) {
                 continue;
             }
+            erhe::scene::Physics_node_collider folded = entry.collider.value();
+            const glm::vec3 scale = entry.node->parent_from_node_transform().get_scale();
+            if (folded.geometry.shape_index.has_value() && (scale != glm::vec3{1.0f})) {
+                const erhe::scene::Physics_shape& shape =
+                    input->description.shapes[folded.geometry.shape_index.value()];
+                input->description.shapes.push_back(scaled_shape(shape, scale));
+                folded.geometry.shape_index = input->description.shapes.size() - 1;
+            }
             if (body_entry.trigger.has_value()) {
                 // A trigger body detects overlaps with the same shapes a
                 // collider body collides with.
-                body_entry.trigger.value().geometry     = entry.collider.value().geometry;
-                body_entry.trigger.value().filter_index = entry.collider.value().filter_index;
+                body_entry.trigger.value().geometry     = folded.geometry;
+                body_entry.trigger.value().filter_index = folded.filter_index;
             } else {
-                body_entry.collider = entry.collider;
+                body_entry.collider = folded;
             }
             break;
         }
@@ -377,14 +403,25 @@ TEST_F(Physics_export, the_bodies_and_their_shapes_survive)
 
 }
 
+// A box of unequal extents is a unit `Cube` scaled per axis, so the size the
+// fold saw comes back as the shape's dimensions times the prim's own scale -
+// which is what the physics import composes again.
 TEST_F(Physics_export, a_scaled_box_collider_survives)
 {
-    const erhe::scene::Physics_shape* const box = shape_of(trip->reloaded.data, body_at(trip->reloaded.data, "/World/Slab/collider"));
+    const erhe::scene::Physics_node_description* const collider_prim =
+        body_at(trip->reloaded.data, "/World/Slab/collider");
+    const erhe::scene::Physics_shape* const box = shape_of(trip->reloaded.data, collider_prim);
     ASSERT_NE(box, nullptr);
     EXPECT_EQ(box->type, erhe::scene::Physics_shape_type::e_box);
-    EXPECT_NEAR(box->size.x, 2.0f, c_tolerance);
-    EXPECT_NEAR(box->size.y, 0.5f, c_tolerance);
-    EXPECT_NEAR(box->size.z, 3.0f, c_tolerance);
+    EXPECT_NEAR(box->size.x, 1.0f, c_tolerance);
+    EXPECT_NEAR(box->size.y, 1.0f, c_tolerance);
+    EXPECT_NEAR(box->size.z, 1.0f, c_tolerance);
+
+    ASSERT_TRUE(collider_prim->node.operator bool());
+    const glm::vec3 scale = collider_prim->node->parent_from_node_transform().get_scale();
+    EXPECT_NEAR(scale.x, 2.0f, c_tolerance);
+    EXPECT_NEAR(scale.y, 0.5f, c_tolerance);
+    EXPECT_NEAR(scale.z, 3.0f, c_tolerance);
 }
 
 TEST_F(Physics_export, the_trigger_body_survives)

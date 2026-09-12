@@ -2398,6 +2398,18 @@ private:
     // tree survives a save (doc/usd-compatibility-plan.md E4d); a resource
     // prim the file carries, which today is a material, a style, a brush or a
     // node graph; and a prim on the way down to one of those.
+    // A physics material, a collision filter and a joint-settings item are
+    // library resources: they carry no content flag, and the prim each one is
+    // is what the physics record names, so the plan holds them the way it
+    // holds a material or a brush.
+    [[nodiscard]] auto is_physics_resource_prim(const erhe::Typed& prim) const -> bool
+    {
+        return
+            (m_physics_material_record.count(&prim) != 0) ||
+            (m_physics_filter_record.count(&prim) != 0)   ||
+            (m_physics_settings_record.count(&prim) != 0);
+    }
+
     [[nodiscard]] auto is_carried_without_content_flag(const erhe::Typed& prim) const -> bool
     {
         if (
@@ -2405,7 +2417,8 @@ private:
             erhe::is<erhe::primitive::Material>(&prim) ||
             is_style_prim(prim)                        ||
             is_brush_prim(prim)                        ||
-            is_node_graph_prim(prim)
+            is_node_graph_prim(prim)                   ||
+            is_physics_resource_prim(prim)
         ) {
             return true;
         }
@@ -3201,6 +3214,9 @@ private:
         }
         if (is_node_graph_prim(*plan_prim.item)) {
             return write_node_graph_prim(*plan_prim.item, plan_prim.name, plan_prim.path);
+        }
+        if (m_physics_material_record.count(plan_prim.item) != 0) {
+            return write_physics_material_prim(*plan_prim.item, plan_prim.name, plan_prim.path);
         }
         if (m_physics_filter_record.count(plan_prim.item) != 0) {
             return write_collision_group_prim(*plan_prim.item, plan_prim.name);
@@ -5723,6 +5739,26 @@ private:
     {
         const char* const axis_name = (axis == 1) ? "Y" : ((axis == 2) ? "Z" : "X");
         return ((kind == Limit_axis_kind::angular) ? std::string{"rot"} : std::string{"trans"}) + axis_name;
+    }
+
+    // A physics material item as the `Material` prim it is: a material prim
+    // with no surface output, carrying `PhysicsMaterialAPI` and nothing else.
+    // That is the prim a file authors a physics material on, and the prim an
+    // import gives the item the record names.
+    [[nodiscard]] auto write_physics_material_prim(
+        const erhe::Typed& item,
+        const std::string& prim_name,
+        const std::string& prim_path
+    ) -> lightusd::Prim
+    {
+        lightusd::Material usd_material;
+        usd_material.name = prim_name;
+        // Every value of the item travels through its record: the schema
+        // attributes of the description and the `erhe:Physics_material:`
+        // attributes of the record's own properties.
+        lightusd::Prim prim{usd_material};
+        write_physics_material_on_prim(item, prim, prim_path);
+        return prim;
     }
 
     // A physics material as the `Material` prim it is: the four schema

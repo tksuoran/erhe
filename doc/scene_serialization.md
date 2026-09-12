@@ -97,8 +97,8 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
 1. **Root node** - the scene's root; export walks the node tree. Nodes
    flagged `import_root` are transparent (their children are written in
    their place), so open/save cycles do not nest wrappers.
-2. **Physics data** - `build_gltf_physics_data()`
-   (`parsers/gltf_physics_export.cpp`) converts `Node_physics` /
+2. **Physics data** - `build_physics_description()`
+   (`parsers/physics_export.cpp`, the builder the USD save uses too) converts `Node_physics` /
    `Node_joint` attachments and the content library's physics materials,
    collision filters and joint settings into the plain-data
    `erhe::scene::Physics_description` carrier (`KHR_physics_rigid_bodies` +
@@ -234,7 +234,7 @@ JSON-only, no buffer decode) and branches on
      node.
   6. Execute inline (built as operations, executed and dropped - same
      ordering as the import compound): content-library attaches (textures /
-     materials / skins / animations), `import_gltf_physics()` (Khronos
+     materials / skins / animations), `import_gltf_physics()` -> `import_physics()` (Khronos
      payload -> `Node_physics` / `Node_joint`, compound folding, carrier
      node removal) and `import_gltf_editor_state()`
      (`parsers/gltf_extensions_import.cpp`: flags, layouts, tags, brushes,
@@ -265,7 +265,7 @@ keep their state on import.
 | `scan_gltf`, `is_erhe_scene` | `src/editor/parsers/gltf.cpp` | cheap scan; erhe-authored detection |
 | `add_gltf_editor_state` | `src/editor/parsers/gltf_extensions_export.cpp` | editor-domain `ERHE_*` payloads + exclusion hook |
 | `import_gltf_editor_state` | `src/editor/parsers/gltf_extensions_import.cpp` | editor-domain `ERHE_*` apply on open/import |
-| physics export / import | `src/editor/parsers/gltf_physics_export.cpp` / `gltf_physics_import.cpp` | Khronos physics payload <-> erhe::physics |
+| physics export / import | `src/editor/parsers/physics_export.cpp` / `physics_import.cpp` (`gltf_physics_import.cpp` = the glTF entry) | format-neutral physics description <-> erhe::physics |
 | `export_gltf`, `parse_gltf` + library `ERHE_*` writers/readers | `src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp` | core glTF I/O (fastgltf fork: physics extensions, glTF 2.1 externalAssets, generic extension passthrough) |
 | prefab externalAssets | `src/editor/prefabs/prefab_library.cpp` | collect on save, resolve + instantiate on open |
 | `Scene_settings` / `Gltf_source_reference` codegen | `src/editor/scene/definitions/*.py` | per-scene overrides payload; content-library item -> source-file back-references |
@@ -375,10 +375,13 @@ a `class` prim ([`usd-compatibility-plan.md`](usd-compatibility-plan.md)
 X3), a brush a `Brush` prim holding its geometry as a child `Mesh`, a node
 graph of either kind a marked `NodeGraph` prim holding one `Shader` per node
 ([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)), and a folder
-the `Scope` it is (E4). The editor state a USD file does not carry is the
-physics on nodes (`Node_physics`, `Node_joint`, physics materials and
-collision filters); a save logs one line for it, so nothing disappears
-silently, and carrying it is the plan's section 6. Textures are
+the `Scope` it is (E4). The physics of the scene is the `UsdPhysics` prims
+and API schemas of the mapping ([`usd_compatibility.md`](usd_compatibility.md),
+"Physics"): a body is its prim's `PhysicsRigidBodyAPI`, a physics material,
+a collision filter and a joint-settings item are prims where they sit, a
+joint is a `PhysicsJoint` child prim of the prim it joins, and the physics
+world's gravity is a `PhysicsScene` prim, so the `erhe:scene` block carries
+only `enable_physics` of it. Textures are
 named by their source image file: a generated texture has no bytes on disk, so
 its slot is left out of the material's shading network with a warning - except
 a slot fed by a texture graph, which is written as a connection to that

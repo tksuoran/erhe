@@ -50,6 +50,9 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "operations/operation_stack.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/gltf_extensions_names.hpp"
+#include "parsers/physics_export.hpp"
+#include "parsers/physics_import.hpp"
+#include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
 
@@ -74,6 +77,11 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/typed.hpp"
+#include "erhe_physics/collision_filter.hpp"
+#include "erhe_physics/iworld.hpp"
+#include "erhe_physics/physics_joint_settings.hpp"
+#include "erhe_physics/physics_material.hpp"
+#include "erhe_property/property_string.hpp"
 #include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
@@ -83,6 +91,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/physics_description.hpp"
 #include "erhe_scene/point_instancer.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene/skin.hpp"
@@ -1908,6 +1917,381 @@ void fill_variant_table(
     }
 }
 
+// --------------------------------------------------------------------------
+// Physics (doc/usd_compatibility.md, "Physics")
+// --------------------------------------------------------------------------
+
+// The erhe property names that travel as fields of the neutral physics
+// description, which the file states as schema attributes of its own. Every
+// other local value of the item is an `erhe:Owner:name` custom attribute the
+// record carries.
+constexpr std::string_view c_physics_material_description_fields[] = {
+    std::string_view{"static_friction"},
+    std::string_view{"dynamic_friction"},
+    std::string_view{"restitution"},
+    std::string_view{"friction_combine"},
+    std::string_view{"restitution_combine"}
+};
+constexpr std::string_view c_node_physics_description_fields[] = {
+    std::string_view{"motion_mode"},
+    std::string_view{"is_trigger"},
+    std::string_view{"mass"},
+    std::string_view{"gravity_factor"},
+    std::string_view{"initial_linear_velocity"},
+    std::string_view{"initial_angular_velocity"},
+    std::string_view{"center_of_mass_offset"}
+};
+
+// The USD type one erhe property value is spelled with. The pair (type, text)
+// is what a physics record carries and what the writer authors the attribute
+// from; a value USD has no scalar type for travels as the property text it is.
+[[nodiscard]] auto usd_physics_property_type(const erhe::property::Property_type type) -> const char*
+{
+    switch (type) {
+        case erhe::property::Property_type::boolean:  return "bool";
+        case erhe::property::Property_type::integer:  return "int";
+        case erhe::property::Property_type::floating: return "float";
+        case erhe::property::Property_type::vec2:     return "float2";
+        case erhe::property::Property_type::vec3:     return "float3";
+        case erhe::property::Property_type::vec4:     return "float4";
+        case erhe::property::Property_type::quat:     return "float4";
+        default:                                      return "string";
+    }
+}
+
+// The erhe-only local values of one physics item, as the properties of its
+// record: the qualified property name, the USD type and the property text.
+void collect_usd_physics_properties(
+    const erhe::Item_base&                        item,
+    const std::span<const std::string_view>       description_fields,
+    std::vector<erhe::usd::Usd_physics_property>& out_properties
+)
+{
+    const erhe::property::Owner_type owner_type = item.get_property_owner_type();
+    item.for_each_local_value(
+        [&item, &description_fields, &out_properties, owner_type](
+            const erhe::property::Dependency_property& property,
+            const erhe::property::Property_value&      value
+        ) {
+            const erhe::property::Property_metadata& metadata = property.get_metadata(owner_type);
+            if ((metadata.flags & erhe::property::Property_flags::serialize) == 0u) {
+                return;
+            }
+            if (metadata.bridge.is_bound()) {
+                return; // a value of the item's own schema attributes
+            }
+            if (item.get_expression(property).has_value()) {
+                return; // formulas are session state (D14)
+            }
+            const erhe::property::Property_type type = erhe::property::type_of(value);
+            if (type == erhe::property::Property_type::object) {
+                return; // an object reference travels as the schema's own relationship
+            }
+            for (const std::string_view field : description_fields) {
+                if (property.get_name() == field) {
+                    return;
+                }
+            }
+            // Always the qualified `Owner.name` form: it is what the
+            // `erhe:<Owner>:<name>` attribute name is spelled from, and the
+            // import resolves either spelling back to the property.
+            const erhe::property::Property_registry& registry = erhe::property::Property_registry::get();
+            out_properties.push_back(
+                erhe::usd::Usd_physics_property{
+                    .name     = fmt::format("{}.{}", registry.get_owner_name(property.get_owner_type()), property.get_name()),
+                    .usd_type = std::string{usd_physics_property_type(type)},
+                    .value    = erhe::property::to_string(property, value)
+                }
+            );
+        }
+    );
+}
+
+// The place one shared physics record's item takes: the prim the file
+// authored the record on leaves the tree and the item is parented where that
+// prim sat, so the item IS the prim the record names and a save writes it
+// back to the same path. Null when the file's tree holds no such prim, which
+// is what puts the item in its kind scope.
+[[nodiscard]] auto take_usd_physics_prim_place(
+    const std::shared_ptr<erhe::scene::Node>& container_node,
+    const std::string&                        stage_path
+) -> std::shared_ptr<erhe::Hierarchy>
+{
+    if (stage_path.empty()) {
+        return {};
+    }
+    const std::shared_ptr<erhe::Hierarchy> prim = find_prim_hierarchy(container_node, stage_path);
+    if (!prim) {
+        return {};
+    }
+    const std::shared_ptr<erhe::Hierarchy> parent = prim->get_parent().lock();
+    prim->set_parent({});
+    return parent ? parent : std::static_pointer_cast<erhe::Hierarchy>(container_node);
+}
+
+// The materials the file's meshes bind: a `Material` prim one of them names
+// is the scene's shading material and keeps its place.
+[[nodiscard]] auto collect_usd_bound_materials(const erhe::usd::Usd_data& usd_data) -> std::set<const erhe::primitive::Material*>
+{
+    std::set<const erhe::primitive::Material*> bound;
+    for (const std::shared_ptr<erhe::scene::Mesh>& mesh : usd_data.meshes) {
+        if (!mesh) {
+            continue;
+        }
+        for (const erhe::scene::Mesh_primitive& primitive : mesh->get_primitives()) {
+            if (primitive.material) {
+                bound.insert(primitive.material.get());
+            }
+        }
+    }
+    return bound;
+}
+
+// Where the physics material of one record is placed. A `Material` prim no
+// mesh binds is the record's own prim: the shading material the conversion
+// made of it leaves the tree and the physics material takes its place. A prim
+// that is the scene's shading material as well, or that is other content
+// carrying `PhysicsMaterialAPI`, keeps its place and the physics material is
+// placed in the `Physics Materials` scope.
+[[nodiscard]] auto take_usd_physics_material_place(
+    erhe::usd::Usd_data&                             usd_data,
+    const std::shared_ptr<erhe::scene::Node>&        container_node,
+    const std::string&                               stage_path,
+    const std::set<const erhe::primitive::Material*>& bound_materials
+) -> std::shared_ptr<erhe::Hierarchy>
+{
+    if (stage_path.empty()) {
+        return {};
+    }
+    const std::shared_ptr<erhe::Hierarchy> prim = find_prim_hierarchy(container_node, stage_path);
+    if (!prim) {
+        return {};
+    }
+    if (!erhe::is<erhe::primitive::Material>(prim.get())) {
+        log_parsers->warn(
+            "USD physics material '{}' sits on a prim that is scene content - the material is placed in the Physics Materials scope",
+            stage_path
+        );
+        return {};
+    }
+    const erhe::primitive::Material* const material = static_cast<const erhe::primitive::Material*>(prim.get());
+    if (bound_materials.count(material) != 0) {
+        log_parsers->warn(
+            "USD physics material '{}' is bound as a surface material too - the material is placed in the Physics Materials scope",
+            stage_path
+        );
+        return {};
+    }
+    // The shading material the conversion made of a physics-only Material
+    // prim is not scene content: the physics material is what the prim is.
+    for (std::shared_ptr<erhe::primitive::Material>& entry : usd_data.materials) {
+        if (entry.get() == material) {
+            entry.reset();
+        }
+    }
+    const std::shared_ptr<erhe::Hierarchy> parent = prim->get_parent().lock();
+    prim->set_parent({});
+    return parent ? parent : std::static_pointer_cast<erhe::Hierarchy>(container_node);
+}
+
+// The physics of one USD file as editor physics: the neutral description the
+// reader filled goes through the import both formats use, with each shared
+// item placed at the prim the file authored it on and each record's erhe-only
+// values set on the item it becomes. The guide prims whose shape has folded
+// into a body leave the tree once the bodies are built, the way the glTF
+// import drops the shape carriers it folded.
+void resolve_usd_physics(
+    App_context&                                   context,
+    erhe::usd::Usd_data&                           usd_data,
+    const std::shared_ptr<Scene_root>&             scene_root,
+    const std::shared_ptr<erhe::scene::Node>&      container_node,
+    const std::filesystem::path&                   path,
+    std::vector<std::shared_ptr<erhe::Item_base>>& mesh_node_items,
+    std::vector<std::shared_ptr<Operation>>&       operations
+)
+{
+    const erhe::scene::Physics_description& physics = usd_data.physics;
+    if (
+        physics.materials.empty()         &&
+        physics.collision_filters.empty() &&
+        physics.joints.empty()            &&
+        physics.node_physics.empty()
+    ) {
+        return;
+    }
+
+    Physics_import_arguments arguments{};
+    arguments.description = &usd_data.physics;
+    arguments.path        = path;
+
+    const std::set<const erhe::primitive::Material*> bound_materials = collect_usd_bound_materials(usd_data);
+    arguments.materials.reserve(physics.materials.size());
+    for (std::size_t i = 0, end = physics.materials.size(); i < end; ++i) {
+        const erhe::usd::Usd_physics_record* const record = (i < usd_data.physics_prims.materials.size())
+            ? &usd_data.physics_prims.materials[i]
+            : nullptr;
+        Physics_import_item item{};
+        if (record != nullptr) {
+            item.parent = take_usd_physics_material_place(usd_data, container_node, record->stage_path, bound_materials);
+            for (const erhe::usd::Usd_physics_property& property : record->properties) {
+                item.properties.emplace_back(property.name, property.value);
+            }
+        }
+        arguments.materials.push_back(std::move(item));
+    }
+
+    arguments.collision_filters.reserve(physics.collision_filters.size());
+    for (std::size_t i = 0, end = physics.collision_filters.size(); i < end; ++i) {
+        const erhe::usd::Usd_physics_record* const record = (i < usd_data.physics_prims.collision_filters.size())
+            ? &usd_data.physics_prims.collision_filters[i]
+            : nullptr;
+        Physics_import_item item{};
+        if (record != nullptr) {
+            item.parent = take_usd_physics_prim_place(container_node, record->stage_path);
+            for (const erhe::usd::Usd_physics_property& property : record->properties) {
+                item.properties.emplace_back(property.name, property.value);
+            }
+        }
+        arguments.collision_filters.push_back(std::move(item));
+    }
+
+    arguments.joint_settings.reserve(physics.joints.size());
+    for (std::size_t i = 0, end = physics.joints.size(); i < end; ++i) {
+        const erhe::usd::Usd_physics_record* const record = (i < usd_data.physics_prims.joint_settings.size())
+            ? &usd_data.physics_prims.joint_settings[i]
+            : nullptr;
+        Physics_import_item item{};
+        if (record != nullptr) {
+            // A joint prim that states its limits and drives inline is not a
+            // prim of the tree, so its settings item is placed in the
+            // `Physics Joints` scope under the joint's own name.
+            item.parent = take_usd_physics_prim_place(container_node, record->stage_path);
+            for (const erhe::usd::Usd_physics_property& property : record->properties) {
+                item.properties.emplace_back(property.name, property.value);
+            }
+        }
+        arguments.joint_settings.push_back(std::move(item));
+    }
+
+    for (std::size_t i = 0, end = physics.node_physics.size(); i < end; ++i) {
+        const erhe::scene::Physics_node_description& body = physics.node_physics[i];
+        if (!body.node || (i >= usd_data.physics_prims.bodies.size())) {
+            continue;
+        }
+        const erhe::usd::Usd_physics_record& record = usd_data.physics_prims.bodies[i];
+        if (record.properties.empty()) {
+            continue;
+        }
+        Physics_import_body import_body{};
+        for (const erhe::usd::Usd_physics_property& property : record.properties) {
+            import_body.properties.emplace_back(property.name, property.value);
+        }
+        arguments.bodies.emplace(body.node.get(), std::move(import_body));
+    }
+
+    import_physics(context, arguments, scene_root, operations);
+
+    // The prims whose whole content was the collision shape a body now
+    // carries: they have served their purpose, and left in the tree a save
+    // would write them beside the guide prims it synthesizes for the body.
+    for (const std::shared_ptr<erhe::scene::Node>& guide : usd_data.physics_prims.guide_collider_prims) {
+        if (!guide) {
+            continue;
+        }
+        guide->erhe::Hierarchy::set_parent(std::shared_ptr<erhe::Hierarchy>{});
+        // A guide prim that carried the tessellation of an implicit shape is
+        // a mesh; out of the tree it is no longer one of the meshes the
+        // raytrace kickoff builds acceleration structures for.
+        const erhe::Item_base* const item = guide.get();
+        mesh_node_items.erase(
+            std::remove_if(
+                mesh_node_items.begin(),
+                mesh_node_items.end(),
+                [item](const std::shared_ptr<erhe::Item_base>& entry) { return entry.get() == item; }
+            ),
+            mesh_node_items.end()
+        );
+    }
+}
+
+// The physics world's gravity as the file's `PhysicsScene` prim states it.
+// USD's own fallbacks stand for what the prim leaves unauthored: the negative
+// up axis, and earth gravity.
+void apply_usd_physics_scene(const erhe::usd::Usd_data& usd_data, Scene_root& scene_root)
+{
+    if (!usd_data.physics_prims.scene.present || !scene_root.has_physics_world()) {
+        return;
+    }
+    const glm::vec3 direction = usd_data.physics_prims.scene.gravity_direction.value_or(glm::vec3{0.0f, -1.0f, 0.0f});
+    const float     magnitude = usd_data.physics_prims.scene.gravity_magnitude.value_or(9.81f);
+    const float     length    = glm::length(direction);
+    const glm::vec3 gravity   = (length > 0.0f) ? ((direction / length) * magnitude) : glm::vec3{0.0f};
+    scene_root.get_physics_world().set_gravity(gravity);
+    log_parsers->info(
+        "open_scene_usd: the file's PhysicsScene sets gravity to ({}, {}, {})",
+        gravity.x, gravity.y, gravity.z
+    );
+}
+
+// The physics of a scene to write: the format-neutral description the glTF
+// save builds too, with the prim of the tree each record sits on and the
+// erhe-only values of it the description has no field for.
+void collect_usd_physics(
+    Scene_root&                                 scene_root,
+    const erhe::scene::Physics_description&     description,
+    const Physics_description_items&            items,
+    erhe::usd::Usd_save_physics&                physics
+)
+{
+    physics.description = &description;
+    physics.materials.reserve(description.materials.size());
+    for (std::size_t i = 0, end = description.materials.size(); i < end; ++i) {
+        erhe::usd::Usd_save_physics_record record{};
+        if ((i < items.materials.size()) && items.materials[i]) {
+            record.item = items.materials[i];
+            collect_usd_physics_properties(*items.materials[i].get(), c_physics_material_description_fields, record.properties);
+        }
+        physics.materials.push_back(std::move(record));
+    }
+    physics.collision_filters.reserve(description.collision_filters.size());
+    for (std::size_t i = 0, end = description.collision_filters.size(); i < end; ++i) {
+        erhe::usd::Usd_save_physics_record record{};
+        if ((i < items.collision_filters.size()) && items.collision_filters[i]) {
+            record.item = items.collision_filters[i];
+            collect_usd_physics_properties(*items.collision_filters[i].get(), {}, record.properties);
+        }
+        physics.collision_filters.push_back(std::move(record));
+    }
+    physics.joint_settings.reserve(description.joints.size());
+    for (std::size_t i = 0, end = description.joints.size(); i < end; ++i) {
+        erhe::usd::Usd_save_physics_record record{};
+        if ((i < items.joint_settings.size()) && items.joint_settings[i]) {
+            record.item = items.joint_settings[i];
+            collect_usd_physics_properties(*items.joint_settings[i].get(), {}, record.properties);
+        }
+        physics.joint_settings.push_back(std::move(record));
+    }
+    physics.bodies.reserve(description.node_physics.size());
+    for (const erhe::scene::Physics_node_description& body : description.node_physics) {
+        erhe::usd::Usd_save_physics_record record{};
+        record.item = body.node;
+        if (body.node) {
+            const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(body.node.get());
+            if (node_physics) {
+                collect_usd_physics_properties(*node_physics.get(), c_node_physics_description_fields, record.properties);
+            }
+        }
+        physics.bodies.push_back(std::move(record));
+    }
+    physics.has_physics_scene = scene_root.has_physics_world();
+    if (scene_root.has_physics_world()) {
+        const glm::vec3 gravity   = scene_root.get_physics_world().get_gravity();
+        const float     magnitude = glm::length(gravity);
+        physics.gravity_direction = (magnitude > 0.0f) ? (gravity / magnitude) : glm::vec3{0.0f, -1.0f, 0.0f};
+        physics.gravity_magnitude = magnitude;
+    }
+}
+
 // The `customLayerData` key the editor's scene state travels under, and the
 // key naming the writer's format revision. The value of `erhe:scene` is the
 // JSON object the glTF ERHE_scene block carries, verbatim as a string:
@@ -2091,6 +2475,9 @@ auto make_import_usd_operation(
     // resolves the scope its resource goes into as it is constructed, and the
     // loaded tree enters the scene only with the insert at the end.
     content_library->adopt_kind_scopes(*root_node.get());
+    // The file's physics, before the material attaches: a `Material` prim the
+    // file made a physics material of is not a shading material of the scene.
+    resolve_usd_physics(context, usd_data, scene_root, root_node, path, mesh_node_items, operations);
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
     resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
     // An imported file's own scene block says which of its prims its geometry
@@ -2405,6 +2792,10 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // path; opening a scene is not undoable, so they are executed inline and
     // dropped - the same shape finish_open_scene_gltf uses.
     std::vector<std::shared_ptr<Operation>> operations;
+    // The file's physics, before the material attaches: a `Material` prim the
+    // file made a physics material of is not a shading material of the scene.
+    resolve_usd_physics(context, usd_data, scene_root, container_node, path, mesh_node_items, operations);
+    apply_usd_physics_scene(usd_data, *scene_root.get());
     append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
     resolve_usd_brushes(context, content_library, usd_data, container_node, path.generic_string(), operations);
     resolve_usd_node_graphs(
@@ -2872,6 +3263,16 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
             );
         }
     }
+
+    // The scene's physics (doc/usd_compatibility.md, "Physics"): the
+    // format-neutral description the glTF save builds too, the prim of the
+    // tree each record sits on and the physics world's gravity. It is
+    // complete before the plan below, which reserves the names of the prims a
+    // body adds under itself.
+    Physics_description_items              physics_items;
+    const erhe::scene::Physics_description physics_description =
+        build_physics_description(scene, content_library.get(), &physics_items);
+    collect_usd_physics(scene_root, physics_description, physics_items, save_arguments.physics);
 
     // The editor's scene state, in the JSON shape the glTF ERHE_scene block
     // carries, as one `customLayerData` string. What it says about a prim it

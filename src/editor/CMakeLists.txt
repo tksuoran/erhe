@@ -413,10 +413,12 @@ erhe_target_sources_grouped(
     parsers/gltf_extensions_import.cpp
     parsers/gltf_extensions_import.hpp
     parsers/gltf_extensions_names.hpp
-    parsers/gltf_physics_export.cpp
-    parsers/gltf_physics_export.hpp
     parsers/gltf_physics_import.cpp
     parsers/gltf_physics_import.hpp
+    parsers/physics_export.cpp
+    parsers/physics_export.hpp
+    parsers/physics_import.cpp
+    parsers/physics_import.hpp
     parsers/json_polyhedron.cpp
     parsers/json_polyhedron.hpp
     parsers/usd.cpp

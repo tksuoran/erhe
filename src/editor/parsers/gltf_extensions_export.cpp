@@ -436,7 +436,7 @@ void add_gltf_editor_state(
                 arguments.excluded_meshes.insert(graph_mesh_attachment->get_controlled_ghost_mesh().get());
             }
             if (graph_mesh_attachment->get_controlled_node_physics() == node_physics) {
-                node_physics.reset(); // build_gltf_physics_data skips it too
+                node_physics.reset(); // build_physics_description skips it too
             }
             if (graph_mesh_attachment->get_graph_mesh()) {
                 data->node_bindings.push_back(

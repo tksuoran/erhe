@@ -1,4 +1,4 @@
-#include "parsers/gltf_physics_export.hpp"
+#include "parsers/physics_export.hpp"
 
 #include "content_library/content_library.hpp"
 #include "editor_log.hpp"
@@ -32,7 +32,7 @@ namespace {
 constexpr float k_scale_epsilon     = 1.0e-4f;
 constexpr float k_transform_epsilon = 1.0e-5f;
 
-[[nodiscard]] auto to_gltf_combine_mode(const erhe::physics::Combine_mode mode) -> erhe::scene::Physics_combine_mode
+[[nodiscard]] auto to_neutral_combine_mode(const erhe::physics::Combine_mode mode) -> erhe::scene::Physics_combine_mode
 {
     switch (mode) {
         case erhe::physics::Combine_mode::e_average:  return erhe::scene::Physics_combine_mode::e_average;
@@ -103,12 +103,12 @@ public:
     return shape;
 }
 
-class Gltf_physics_builder
+class Physics_builder
 {
 public:
     erhe::scene::Physics_description data;
 
-    std::vector<std::shared_ptr<erhe::physics::Physics_material>> material_items; // data.materials[i] describes material_items[i]
+    Physics_description_items items; // items.materials[i] is what data.materials[i] describes, and so on
     std::unordered_map<const erhe::physics::Physics_material*,       std::size_t> material_index_map;
     std::unordered_map<const erhe::physics::Collision_filter*,       std::size_t> filter_index_map;
     std::unordered_map<const erhe::physics::Physics_joint_settings*, std::size_t> joint_index_map;
@@ -130,10 +130,10 @@ public:
         description.static_friction     = material->get_static_friction();
         description.dynamic_friction    = material->get_dynamic_friction();
         description.restitution         = material->get_restitution();
-        description.friction_combine    = to_gltf_combine_mode(material->get_friction_combine());
-        description.restitution_combine = to_gltf_combine_mode(material->get_restitution_combine());
+        description.friction_combine    = to_neutral_combine_mode(material->get_friction_combine());
+        description.restitution_combine = to_neutral_combine_mode(material->get_restitution_combine());
         data.materials.push_back(std::move(description));
-        material_items.push_back(material);
+        items.materials.push_back(material);
         return index;
     }
 
@@ -154,6 +154,7 @@ public:
         description.collide_with_systems     = filter->collide_with_systems;
         description.not_collide_with_systems = filter->not_collide_with_systems;
         data.collision_filters.push_back(std::move(description));
+        items.collision_filters.push_back(filter);
         return index;
     }
 
@@ -167,6 +168,7 @@ public:
             if (!free_joint_index.has_value()) {
                 free_joint_index = data.joints.size();
                 data.joints.push_back(erhe::scene::Physics_joint_description{});
+                items.joint_settings.push_back(std::shared_ptr<erhe::physics::Physics_joint_settings>{});
             }
             return free_joint_index.value();
         }
@@ -213,6 +215,7 @@ public:
             description.drives.push_back(out_drive);
         }
         data.joints.push_back(std::move(description));
+        items.joint_settings.push_back(settings);
         return index;
     }
 
@@ -316,13 +319,13 @@ public:
 
 } // anonymous namespace
 
-auto build_gltf_physics_data(
-    const erhe::scene::Scene&                                      scene,
-    const Content_library*                                         content_library,
-    std::vector<std::shared_ptr<erhe::physics::Physics_material>>* material_items
+auto build_physics_description(
+    const erhe::scene::Scene&  scene,
+    const Content_library*     content_library,
+    Physics_description_items* items
 ) -> erhe::scene::Physics_description
 {
-    Gltf_physics_builder builder{};
+    Physics_builder builder{};
 
     scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
         std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
@@ -420,7 +423,7 @@ auto build_gltf_physics_data(
                         // source mesh reference and cannot be exported).
                         if (entries.size() > 1) {
                             log_parsers->warn(
-                                "gltf physics export: body '{}' compound child {} is a {} shape with no source mesh reference - skipping child",
+                                "physics export: body '{}' compound child {} is a {} shape with no source mesh reference - skipping child",
                                 node->get_name(),
                                 entry_index,
                                 (base_type == erhe::physics::Collision_shape_type::e_convex_hull) ? "convex hull" : "triangle mesh"
@@ -430,7 +433,7 @@ auto build_gltf_physics_data(
                         const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
                         if (!mesh) {
                             log_parsers->warn(
-                                "gltf physics export: body '{}' has a {} shape but no mesh attachment - skipping collider",
+                                "physics export: body '{}' has a {} shape but no mesh attachment - skipping collider",
                                 node->get_name(),
                                 (base_type == erhe::physics::Collision_shape_type::e_convex_hull) ? "convex hull" : "triangle mesh"
                             );
@@ -442,7 +445,7 @@ auto build_gltf_physics_data(
                         continue;
                     } else {
                         log_parsers->warn(
-                            "gltf physics export: body '{}' has unsupported collision shape type {} - skipping collider",
+                            "physics export: body '{}' has unsupported collision shape type {} - skipping collider",
                             node->get_name(),
                             static_cast<int>(base_type)
                         );
@@ -494,7 +497,7 @@ auto build_gltf_physics_data(
                         description.trigger = erhe::scene::Physics_node_trigger{};
                         has_content = true;
                     } else {
-                        log_parsers->warn("gltf physics export: trigger '{}' has no exportable geometry - skipping trigger", node->get_name());
+                        log_parsers->warn("physics export: trigger '{}' has no exportable geometry - skipping trigger", node->get_name());
                     }
                 } else if (direct_geometry.has_value()) {
                     erhe::scene::Physics_node_collider collider{};
@@ -515,14 +518,14 @@ auto build_gltf_physics_data(
                 // Motion-only body (empty or missing shape): exported without
                 // collider; import recreates it with an empty shape.
             } else {
-                log_parsers->warn("gltf physics export: static body '{}' has no collision shape - node not exported as physics", node->get_name());
+                log_parsers->warn("physics export: static body '{}' has no collision shape - node not exported as physics", node->get_name());
             }
         }
 
         if (node_joint) {
             if (joint_count > 1) {
                 log_parsers->warn(
-                    "gltf physics export: node '{}' has {} joints - glTF supports one joint per node, exporting the first",
+                    "physics export: node '{}' has {} joints - glTF supports one joint per node, exporting the first",
                     node->get_name(),
                     joint_count
                 );
@@ -530,7 +533,7 @@ auto build_gltf_physics_data(
             const std::shared_ptr<erhe::scene::Node> connected_node = node_joint->get_connected_node();
             if (!connected_node) {
                 log_parsers->warn(
-                    "gltf physics export: node '{}' joint has no connected node (world attachment is not representable) - skipping joint",
+                    "physics export: node '{}' joint has no connected node (world attachment is not representable) - skipping joint",
                     node->get_name()
                 );
             } else {
@@ -551,7 +554,7 @@ auto build_gltf_physics_data(
 
     if (!builder.data.node_physics.empty() || !builder.data.synthesized_colliders.empty()) {
         log_parsers->info(
-            "gltf physics export: {} shapes, {} materials, {} collision filters, {} joint settings, {} physics nodes, {} synthesized colliders",
+            "physics export: {} shapes, {} materials, {} collision filters, {} joint settings, {} physics nodes, {} synthesized colliders",
             builder.data.shapes.size(),
             builder.data.materials.size(),
             builder.data.collision_filters.size(),
@@ -582,8 +585,8 @@ auto build_gltf_physics_data(
         }
     }
 
-    if (material_items != nullptr) {
-        *material_items = std::move(builder.material_items);
+    if (items != nullptr) {
+        *items = std::move(builder.items);
     }
     return builder.data;
 }

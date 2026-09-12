@@ -23,7 +23,7 @@ class Scene_root;
 // Added on top of the caller-provided arguments:
 // - excluded_meshes: graph-mesh-controlled meshes (baked artifacts the
 //   graphs rebuild on load; ERHE_node_graphs re-binds them). The matching
-//   Node_physics exclusion lives in build_gltf_physics_data().
+//   Node_physics exclusion lives in build_physics_description().
 // - ERHE_physics node payloads: motion_mode (both kinematic modes),
 //   per-body friction / restitution, linear / angular damping -
 //   KHR_physics_rigid_bodies has no carrier for these.
@@ -46,7 +46,7 @@ class Scene_root;
 // scene_root must outlive the export_gltf() call; the builder callback
 // captures its own copies of the collected payload data.
 // physics_material_items pairs arguments.physics_data->materials by index
-// with the library items (build_gltf_physics_data's material_items) so the
+// with the library items (build_physics_description's items.materials) so the
 // ERHE_scene physics_materials entries carry each material's local values.
 void add_gltf_editor_state(
     erhe::gltf::Gltf_export_arguments&                                   arguments,

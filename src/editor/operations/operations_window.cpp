@@ -22,7 +22,7 @@
 #include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
 #include "parsers/usd.hpp"
-#include "parsers/gltf_physics_export.hpp"
+#include "parsers/physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "erhe_scene_renderer/mesh_memory.hpp"
 #include "scene/node_joint.hpp"
@@ -2522,7 +2522,7 @@ void Operations::export_callback(const char* const* filelist, int filter)
 
     if (path.has_value()) {
         const bool binary = true;
-        const erhe::scene::Physics_description physics_data = build_gltf_physics_data(scene, scene_root->get_content_library().get());
+        const erhe::scene::Physics_description physics_data = build_physics_description(scene, scene_root->get_content_library().get());
         // Prefab instances export as glTF 2.1 externalAsset references
         // instead of flattened content.
         std::string gltf = erhe::gltf::export_gltf(

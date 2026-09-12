@@ -1058,41 +1058,8 @@ private:
         float               radius = 0.0f;
         if (read_float(props, std::string{c_physics_shape_radius_bottom_attribute}, radius)) { shape.radius_bottom = radius; }
         if (read_float(props, std::string{c_physics_shape_radius_top_attribute   }, radius)) { shape.radius_top    = radius; }
-        apply_collider_scale(entry, shape);
         m_data.physics.shapes.push_back(shape);
         return m_data.physics.shapes.size() - 1;
-    }
-
-    // The scale of the collider prim itself, in the dimensions of the shape
-    // it describes: per axis for a box, and the radial and the axial
-    // component for a round shape, whose erhe form has one radius per end and
-    // no way to state a second radial size.
-    void apply_collider_scale(const Prim_entry& entry, erhe::scene::Physics_shape& shape)
-    {
-        const std::shared_ptr<erhe::scene::Node> node = find_node(entry.path);
-        if (!node) {
-            return;
-        }
-        const glm::vec3 scale = node->parent_from_node_transform().get_scale();
-        if (scale == glm::vec3{1.0f}) {
-            return;
-        }
-        if (shape.type == erhe::scene::Physics_shape_type::e_box) {
-            shape.size = shape.size * scale;
-            return;
-        }
-        if (scale.x != scale.z) {
-            add_warning(
-                fmt::format(
-                    "USD '{}': collider prim '{}' is scaled by {} across its axis and {} along the other - its shape takes the first",
-                    m_arguments.file_name, entry.path, scale.x, scale.z
-                )
-            );
-        }
-        shape.radius        *= scale.x;
-        shape.radius_bottom *= scale.x;
-        shape.radius_top    *= scale.x;
-        shape.height        *= scale.y;
     }
 
     // The physics material bound to one collider prim: its own

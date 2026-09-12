@@ -1975,6 +1975,95 @@ def usd_folder_paths(scene_name):
     return scope_paths, material_paths
 
 
+
+# The bodies of physics.usda whose state a save carries whole: a body whose
+# collider is a guide prim of its own or its own mesh. `Rock` is left out
+# because what erhe holds of it is less than the file said, which a round trip
+# cannot restore: its convex hull is built from the mesh of its child `shell`
+# prim and an erhe hull shape keeps no reference to that mesh, the same
+# limitation the glTF export has for a compound child hull.
+USD_PHYSICS_LEG_BODIES = ["Crate", "Ball", "Ground", "Slab", "Sensor"]
+
+
+def usd_physics_state(scene_name, node_names):
+    """The physics of a USD-backed scene: the shared items by category and the
+    physics attachments of the named prims, in the form the glTF leg diffs."""
+    items = call("get_physics_items", {"scene_name": scene_name})
+    state = {
+        "physics_materials":      sorted(m.get("name") for m in items.get("physics_materials", [])),
+        "collision_filters":      sorted(f.get("name") for f in items.get("collision_filters", [])),
+        "physics_joint_settings": sorted(s.get("name") for s in items.get("physics_joint_settings", [])),
+        "bodies":                 {},
+    }
+    for name in node_names:
+        details = call("get_node_details", {"scene_name": scene_name, "node_name": name})
+        state["bodies"][name] = norm_attachment_details(details)
+    return state
+
+
+def usd_physics_leg(S):
+    """The physics a file carries (doc/usd_compatibility.md, "Physics"):
+    physics.usda holds a dynamic body with a mass and a material, a kinematic
+    one, a static mesh collider, a trigger, two collision groups and three
+    joints. The leg adds the three things the glTF leg's physics block adds -
+    a physics material, a body using it and a joint - and a save, a reload and
+    a diff show every body, shared item and joint coming back as it went
+    out."""
+    scene_name = "physics"
+    if not usd_open_scene(S, USD_DATA_DIR / "physics.usda", scene_name):
+        return
+    # The leg verifies what a file carries, and a simulation step moves what
+    # it is about to compare: every body of the fixture but the ground is
+    # dynamic or kinematic.
+    mutate("toggle_physics", {"enabled": False})
+
+    # A resource is a prim, so its name is a USD identifier: a name a save can
+    # write as it stands is what a reload gives the item back
+    # (src/erhe/usd/notes.md, sanitize_usd_identifier).
+    material = mutate("create_physics_material", {
+        "scene_name": scene_name, "name": "Roundtrip_ice",
+        "static_friction": 0.05, "dynamic_friction": 0.04, "restitution": 0.1,
+        "linear_damping": 0.02, "angular_damping": 0.03, "wind_receptivity": 0.25, "density": 900.0,
+        "friction_combine": "minimum",
+    })
+    check(S, "physics: create_physics_material", bool(material) and material.get("created"), str(material))
+    edited = mutate("edit_physics_body", {
+        "scene_name": scene_name, "node_name": "Crate", "material_name": "Roundtrip_ice",
+    })
+    check(S, "physics: edit_physics_body (material_name)",
+          bool(edited) and "material_name" in edited.get("applied", []), str(edited))
+    joint = mutate("create_physics_joint", {
+        "scene_name": scene_name, "node_name": "Sensor", "connected_node_name": "Anchor",
+        "settings_name": "Hinge_settings", "enable_collision": True,
+    })
+    check(S, "physics: create_physics_joint", bool(joint) and joint.get("created"), str(joint))
+
+    original = usd_physics_state(scene_name, USD_PHYSICS_LEG_BODIES)
+    check(S, "physics: the file's shared items are in the library",
+          original["physics_materials"] == ["Roundtrip_ice", "Rubber"] and
+          original["collision_filters"] == ["Characters", "Props"] and
+          original["physics_joint_settings"] == ["Door", "Hinge_settings", "Weld"],
+          str({k: original[k] for k in ("physics_materials", "collision_filters", "physics_joint_settings")}))
+
+    saved = USD_SAVE_DIR / "usd_physics.usda"
+    if not usd_save_scene(S, scene_name, saved):
+        return
+    usd_close_scene(S, scene_name)
+
+    reloaded_name = saved.stem
+    if not usd_open_scene(S, saved, reloaded_name):
+        return
+    reloaded = usd_physics_state(reloaded_name, USD_PHYSICS_LEG_BODIES)
+    mismatches = []
+    diff_json(reloaded, original, "physics", mismatches)
+    check(S, "physics round-trip diff: bodies, joints and shared items identical",
+          not mismatches, f"{len(mismatches)} mismatches")
+    for mismatch in mismatches[:10]:
+        print(f"       {mismatch}")
+    usd_close_scene(S, reloaded_name)
+    mutate("toggle_physics", {"enabled": True})
+
+
 def usd_references_leg(S):
     """A reference with sparse overrides (doc/usd-compatibility-plan.md X2):
     each `over` below the referencing prim reloads as the local values of one
@@ -2295,6 +2384,7 @@ def section_usd_round_trip(usdchecker_arg):
     usd_resource_placement_leg(S)
     usd_library_folder_leg(S)
     usd_references_leg(S)
+    usd_physics_leg(S)
 
     usdchecker = find_usdchecker(usdchecker_arg)
     if usdchecker is None:

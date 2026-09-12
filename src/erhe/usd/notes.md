@@ -1066,12 +1066,14 @@ follows are:
   `Capsule_1`, `Cylinder`, `Cylinder_1`) is an implicit shape appended to
   `Physics_description::shapes`, with the schema's own dimensions and the
   `erhe:Physics_shape:radius_bottom` / `radius_top` of a tapered one. The
-  shapes are Y-aligned and origin-centered on both sides, so the dimensions
-  and the prim's own scale are what travel: a `Cube` takes its scale per axis
-  (the erhe box is `size * scale`, which is how a box of unequal extents is
-  stated), and a round shape takes the radial component of the scale on its
-  radii and the axial one on its height, with one warning when the two radial
-  components differ. A prim aligned along another axis is one warning. A
+  shapes are Y-aligned and origin-centered on both sides, so the shape record
+  carries the schema dimensions as authored - a `Cube size = 1` is a box of
+  `1 x 1 x 1` - and the prim's own scale stays on the prim: the shape belongs
+  to the prim it sits on, whose transform the physics import applies, which is
+  the rule a glTF collider on a scaled node follows as well. That is what
+  makes a box of unequal extents (a unit `Cube` scaled per axis, the form the
+  writer authors) a fixed point. A prim aligned along another axis is one
+  warning. A
   collider prim of any other type - a `Cone` among them - is one warning and
   no collider. A collider prim whose `purpose` is `guide` carries the shape
   and nothing else, so it is listed in
@@ -1441,7 +1443,13 @@ becomes. The rules the write follows:
   `physics:staticFriction`, `physics:dynamicFriction`, `physics:restitution`
   and `physics:density`; the combine modes and every other erhe-only value
   are `erhe:Physics_material:` custom attributes, in the USD type the record
-  carries.
+  carries. A record whose item is a physics material of its own - the item an
+  editor holds, rather than the shading material of a `Material` prim - is
+  written as a `Material` prim with no surface output carrying that schema.
+- A physics material, a collision filter and a joint-settings item are
+  library resources and carry no content flag, so the plan holds them the way
+  it holds a material or a brush: each is a prim where it sits, and the record
+  names it.
 - A collision filter is a `PhysicsCollisionGroup` prim: the three
   `erhe:Collision_filter:` string arrays state the lists exactly,
   `collection:colliders:includes` names the prims of the bodies using the
@@ -1622,8 +1630,9 @@ a second save is byte-identical.
 `test/data/physics.usda` covers the `UsdPhysics` read: a `PhysicsScene`, a
 dynamic body with a `guide` `Cube` collider bound to a physics `Material`, a
 kinematic body with a `Sphere` collider, a static `Mesh` collider, a dynamic
-body with a `convexHull` `Mesh` collider, a body carrying the erhe-only
-`gravity_factor` and `is_trigger` with a tapered `Capsule` collider, two
+body whose `convexHull` `Mesh` collider is a tetrahedron, a body carrying
+the erhe-only `gravity_factor` and `is_trigger` with a tapered `Capsule`
+collider, two
 `PhysicsCollisionGroup` prims (one stating its lists the USD way and one the
 erhe way), a joint-settings prim applying two limit instances of equal value
 and one drive instance, and three joints: one naming those settings, a

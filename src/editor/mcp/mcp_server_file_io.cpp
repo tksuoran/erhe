@@ -15,7 +15,7 @@
 #include "parsers/gltf.hpp"
 #include "parsers/usd.hpp"
 #include "parsers/gltf_extensions_export.hpp"
-#include "parsers/gltf_physics_export.hpp"
+#include "parsers/physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
@@ -363,8 +363,8 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         return r.dump();
     }
     const bool editor_state = args.value("editor_state", false);
-    std::vector<std::shared_ptr<erhe::physics::Physics_material>> physics_material_items;
-    const erhe::scene::Physics_description physics_data = build_gltf_physics_data(sr->get_scene(), sr->get_content_library().get(), &physics_material_items);
+    Physics_description_items physics_items;
+    const erhe::scene::Physics_description physics_data = build_physics_description(sr->get_scene(), sr->get_content_library().get(), &physics_items);
     // Prefab instances export as glTF 2.1 externalAsset references instead
     // of flattened content; URIs are relativized against the export
     // directory.
@@ -381,7 +381,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
         // Full scene persistence: editor-domain ERHE_* extensions + baked
         // graph-mesh exclusion (doc/gltf-scene-roundtrip-plan.md phase 3).
         // The default export stays plain interchange.
-        add_gltf_editor_state(export_arguments, *sr, export_path, physics_material_items);
+        add_gltf_editor_state(export_arguments, *sr, export_path, physics_items.materials);
     }
     const std::string gltf = erhe::gltf::export_gltf(export_arguments);
     if (!erhe::file::write_file(std::filesystem::path{path_str}, gltf)) {
