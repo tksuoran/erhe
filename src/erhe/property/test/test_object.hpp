@@ -16,6 +16,7 @@ inline auto type_a() -> Owner_type { static const Owner_type id = allocate_owner
 inline auto type_b() -> Owner_type { static const Owner_type id = allocate_owner_type(root_owner_type, "type_b"); return id; }
 inline auto type_c() -> Owner_type { static const Owner_type id = allocate_owner_type(root_owner_type, "type_c"); return id; }
 inline auto type_d() -> Owner_type { static const Owner_type id = allocate_owner_type(root_owner_type, "type_d"); return id; } // bridged-property tests only
+inline auto type_e() -> Owner_type { static const Owner_type id = allocate_owner_type(root_owner_type, "type_e"); return id; } // animated bridged-property tests only
 inline auto type_a_child() -> Owner_type { static const Owner_type id = allocate_owner_type(type_a(), "type_a_child"); return id; }
 inline auto type_b_child() -> Owner_type { static const Owner_type id = allocate_owner_type(type_b(), "type_b_child"); return id; } // secondary-owner tests only
 

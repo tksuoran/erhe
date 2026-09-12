@@ -21,7 +21,8 @@ enum class Value_source : uint8_t {
     expression    = 3, // a formula on this object (D22); the local layer
     style         = 4, // the object's Property_style (D25); between local and inherited
     computed      = 5, // the owner's value provider (D26); read-only, no layers
-    reference     = 6  // the object's reference counterpart (D33); between style and inherited
+    reference     = 6, // the object's reference counterpart (D33); between style and inherited
+    animated      = 7  // a playback pose (D5); above local, never authored
 };
 
 [[nodiscard]] constexpr auto c_str(const Value_source source) -> const char*
@@ -34,6 +35,7 @@ enum class Value_source : uint8_t {
         case Value_source::style:         return "style";
         case Value_source::computed:      return "computed";
         case Value_source::reference:     return "reference";
+        case Value_source::animated:      return "animated";
     }
     return "?";
 }

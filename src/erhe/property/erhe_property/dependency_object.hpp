@@ -61,7 +61,7 @@ public:
 };
 
 // WPF DependencyObject: a sparse store of per-property values with
-// precedence coerced > local > style > reference > inherited > default,
+// precedence coerced > animated > local > style > reference > inherited > default,
 // validate / coerce / changed callbacks from the property metadata, a
 // virtual changed hook, per-object observers, change batching, and
 // expressions driving properties from other properties (D22).
@@ -144,6 +144,31 @@ public:
     void clear_value(const Property_key<T>& key)
     {
         clear_value_internal(key.get(), true);
+    }
+
+    // Animated layer (D5): a playback pose, read above the local layer and
+    // below coerce. It is never authored - it is not a local value, it is
+    // not serialized, and a save never sees it - so an edit made while a
+    // property is animated writes the base the animation is playing over.
+    template <Property_storable T>
+    auto set_animated_value(const Property<T>& property, const T& value) -> bool
+    {
+        return set_animated_value(property.get(), make_value<T>(value));
+    }
+
+    template <Property_storable T>
+    auto clear_animated_value(const Property<T>& property) -> bool
+    {
+        return clear_animated_value(property.get());
+    }
+
+    // The effective value with the animated layer ignored (WPF
+    // GetAnimationBaseValue): what the object shows once playback stops,
+    // and what a keyed edit during playback changes.
+    template <Property_storable T>
+    [[nodiscard]] auto get_animation_base_value(const Property<T>& property) const -> T
+    {
+        return get_as<T>(get_animation_base_value(property.get()));
     }
 
     template <Property_storable T>
@@ -231,6 +256,22 @@ public:
     auto               clear_value     (const Dependency_property& property) -> bool;
     [[nodiscard]] auto read_local_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto has_local_value (const Dependency_property& property) const -> bool;
+
+    // Animated layer (D5), untyped form. set_animated_value validates and
+    // coerces the value the way a local write does and notifies and
+    // propagates the same way, but it writes no authored state: the base -
+    // the entry's local value, or the value behind the bridge of a bridged
+    // property, kept in the entry while the animation runs - is what
+    // set_value writes, what has_own_value, read_local_value,
+    // for_each_local_value and serialization see, and what
+    // clear_animated_value restores. The write is accepted on a sealed
+    // object (playback of a sealed prefab instance); a computed or
+    // read-only property refuses it. Clearing a property that is not
+    // animated is a no-op.
+    auto               set_animated_value      (const Dependency_property& property, const Property_value& value) -> bool;
+    auto               clear_animated_value    (const Dependency_property& property) -> bool;
+    [[nodiscard]] auto has_animated_value      (const Dependency_property& property) const -> bool;
+    [[nodiscard]] auto get_animation_base_value(const Dependency_property& property) const -> Property_value;
     // Local (entry or bridge), style or reference value: the object is the
     // origin of the value its descendants inherit.
     [[nodiscard]] auto has_own_value   (const Dependency_property& property) const -> bool;
@@ -317,9 +358,16 @@ protected:
     void refresh_computed_default(const Dependency_property& property, const Property_value& old_value, Value_source old_source);
 
 private:
+    // Whether a read applies the animated layer (D5) or resolves the base
+    // value below it.
+    enum class Animated_layer : uint8_t {
+        applied = 0,
+        ignored = 1
+    };
+
     struct Effective_value_entry
     {
-        Effective_value_entry() = default;
+        explicit Effective_value_entry(uint16_t index);
         Effective_value_entry(uint16_t index, Property_value local);
         Effective_value_entry(const Effective_value_entry& other);
         Effective_value_entry& operator=(const Effective_value_entry& other);
@@ -327,10 +375,20 @@ private:
         Effective_value_entry& operator=(Effective_value_entry&& other) noexcept = default;
         ~Effective_value_entry() noexcept = default;
 
+        // True when the entry carries an authored local layer: the stored
+        // value, or the last evaluated result of `expression`, or - on a
+        // bridged property with a running animation - the base kept out of
+        // the bridge while the animated value occupies it. An entry that
+        // carries only an animated value has none.
+        [[nodiscard]] auto has_local   () const -> bool { return local.has_value(); }
+        [[nodiscard]] auto has_animated() const -> bool { return animated.has_value(); }
+
         uint16_t                      index{0};
-        Property_value                local;      // the stored value, or the last evaluated result of `expression`
-        std::optional<Property_value> coerced;
-        std::unique_ptr<Expression>   expression; // D22; on a bridged property the entry carries only this
+        std::optional<Property_value> local;
+        std::optional<Property_value> coerced;         // the coerced form of `local`
+        std::optional<Property_value> animated;        // D5; on a bridged property the bridge carries it too
+        std::optional<Property_value> animated_coerced; // entry-store form only; a bridged value is coerced on read
+        std::unique_ptr<Expression>   expression;      // D22; on a bridged property the entry carries only this
     };
 
     // (target object, target property) reading `source_index` of this
@@ -357,8 +415,16 @@ private:
     void               remove_entry        (uint16_t index);
 
     [[nodiscard]] auto get_metadata       (const Dependency_property& property) const -> const Property_metadata&;
-    [[nodiscard]] auto get_base_value     (const Dependency_property& property, Value_source& out_source) const -> Property_value;
-    [[nodiscard]] auto get_effective_value(const Dependency_property& property, Value_source& out_source) const -> Property_value;
+    [[nodiscard]] auto get_base_value     (const Dependency_property& property, Value_source& out_source, Animated_layer layer = Animated_layer::applied) const -> Property_value;
+    [[nodiscard]] auto get_effective_value(const Dependency_property& property, Value_source& out_source, Animated_layer layer = Animated_layer::applied) const -> Property_value;
+    // The (source, uncoerced value) an existing entry resolves to for the
+    // given layer, or nothing when the entry carries no value of its own
+    // (an animated-only entry read with the animated layer ignored).
+    [[nodiscard]] auto get_entry_value    (const Effective_value_entry& entry, const Property_metadata& metadata, Value_source& out_source, Animated_layer layer) const -> std::optional<Property_value>;
+    // has_own_value, plus the animated layer: what an inheritance
+    // descendant reads through its ancestor walk, and what makes an object
+    // independent of the tree in an inheritance snapshot.
+    [[nodiscard]] auto supplies_value_to_descendants(const Dependency_property& property) const -> bool;
     [[nodiscard]] auto get_inherited_value(const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto get_style_value    (const Dependency_property& property) const -> std::optional<Property_value>;
     [[nodiscard]] auto has_style_value    (const Dependency_property& property) const -> bool;
@@ -393,7 +459,11 @@ private:
     void propagate_to_reference_users(const Property_changed_args& args);
     auto               set_value_internal  (const Dependency_property& property, const Property_value& value, bool allow_read_only, bool keep_expression) -> bool;
     auto               clear_value_internal(const Dependency_property& property, bool allow_read_only) -> bool;
-    void store_coerced       (const Dependency_property& property, Effective_value_entry& entry);
+    void store_coerced          (const Dependency_property& property, Effective_value_entry& entry);
+    void store_animated_coerced (const Dependency_property& property, Effective_value_entry& entry);
+    // Drops an entry that carries nothing any more (no local, no animated
+    // value, no expression).
+    void remove_entry_if_empty  (uint16_t index);
 
     // Expressions
     [[nodiscard]] auto entry_is_bridged_expression(const Effective_value_entry& entry, const Property_metadata& metadata) const -> bool;

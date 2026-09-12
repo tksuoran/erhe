@@ -169,6 +169,12 @@ auto describe_property_origin(
         origin.authored_as = "computed";
         return origin;
     }
+    if (source == Value_source::animated) {
+        // D5: a playback pose. Nothing authored it - the value under it is
+        // what the file carries - so the origin names the layer alone.
+        origin.authored_as = "animated";
+        return origin;
+    }
     if (source == Value_source::default_value) {
         origin.authored_as = "schema fallback";
         return origin;

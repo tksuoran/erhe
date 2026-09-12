@@ -68,11 +68,13 @@ table, see D2a), and references to other objects (D28).
   An untyped path (`Property_value` variant) exists for generic code: the
   Properties window, undo, serialization, MCP.
 - R3 Precedence. The effective value of a property on an object is, in
-  decreasing precedence: coerced, local, style (D25), reference (D33),
-  inherited, default. Each layer can be present or absent independently;
-  clearing a layer exposes the next one.
-  The layer order leaves room for an animated layer between coerced and
-  local (future work, section 6).
+  decreasing precedence: coerced, animated (D5), local, style (D25),
+  reference (D33), inherited, default. Each layer can be present or absent
+  independently; clearing a layer exposes the next one. Coerce applies to
+  whichever base layer wins, the animated one included. The animated layer
+  is the only layer that is not authored: it is a playback pose, so it is
+  not a local value, it is never serialized, and a write made while it is
+  present goes to the layer under it.
 - R4 Callbacks. A property has an optional validate callback (value only, no
   object), and its metadata has an optional coerce callback and an optional
   property-changed callback, both receiving the object. The object also gets a
@@ -247,16 +249,39 @@ table, see D2a), and references to other objects (D28).
 - D5 Effective value store. `Dependency_object` owns
   `std::vector<Effective_value_entry>` sorted by property index and searched
   by binary search (WPF `EffectiveValueEntry` array). An entry holds: index,
-  the local `Property_value`, and `std::optional<Property_value> coerced`
-  set only when the coerce callback changed the local value (the future
-  animated layer of section 6 is another optional in the entry). An entry
-  exists only for properties with a local value; reading a property with no
-  entry returns the inherited or default value without allocating.
+  `std::optional<Property_value> local`, `std::optional<Property_value>
+  coerced` set only when the coerce callback changed the local value, and
+  the animated layer as a second pair, `animated` and `animated_coerced`.
+  An entry exists for a property with a local value, an expression or an
+  animated value; reading a property with no entry returns the inherited or
+  default value without allocating. `local` carries the authored layer -
+  the stored value, the last evaluated expression result, or, on a bridged
+  property (D18) whose storage an animation occupies, the base kept out of
+  the bridge - and an entry that carries only an animated value has none,
+  which is what makes `has_local_value`, `has_own_value`,
+  `read_local_value`, `for_each_local_value`, `read_local_state`,
+  `is_coerced` and everything built on them (serialization, default
+  elision, instance overrides) ignore a playback pose. What a descendant
+  inherits and what an inheritance snapshot treats as independent of the
+  tree is the effective value, so both see the animated layer.
 - D6 Public object API (mirrors WPF names in erhe casing):
   - `get_value(property) -> T` / `get_value(const Dependency_property&) ->
     Property_value` (effective value, R3).
   - `set_value(property, value)` (local layer; validate, then coerce, then
     store, then notify), `clear_value(property)` (drops the local layer).
+  - `set_animated_value(property, value)` / `clear_animated_value(property)`
+    (the animated layer of R3; WPF `SetAnimatedValue`): validate, coerce,
+    store, notify and propagate the way a local write does, writing no
+    authored state. Clearing a property that is not animated is a no-op.
+    The write is accepted on a sealed object (D24) - playback of a sealed
+    prefab instance runs - and refused on a computed (D26) or read-only
+    (R6) property. `has_animated_value(property)` reports the layer, and
+    `get_animation_base_value(property)` (WPF `GetAnimationBaseValue`) is
+    the effective value with the layer ignored: what a keyed edit changes
+    and what the object shows once playback stops. On a bridged property
+    (D18) the bridge storage carries the animated value, so the owner's own
+    engineered representation animates, and the entry keeps the base until
+    `clear_animated_value` writes it back through the bridge.
   - `read_local_value(property) -> std::optional<T>` (R10, R13).
   - `coerce_value(property)` re-runs the coerce callback against the current
     local value and notifies if the effective value changed (WPF
@@ -1348,8 +1373,9 @@ derived cache; the world components are exposed as computed properties
 
 `Animation_sampler::apply` keeps writing the `Trs_transform` directly; the
 bridged properties read that storage, so playback and the property view
-agree. Playback still overwrites the authored transform; the animated layer
-that would preserve it is section 6 work.
+agree. Playback therefore still overwrites the authored transform: the
+animated layer that preserves it exists (D5), and moving playback onto it
+is section 6 work.
 
 R14 holds by construction: no per-frame path changed.
 
@@ -2025,13 +2051,12 @@ style layer is D25 and the reference layer is D33.
 
 ## 6. Future work
 
-- Animated value layer (WPF `SetAnimatedValue` / `GetAnimationBaseValue`):
-  a layer between coerced and local in R3, stored as a second optional in
-  the entry (D5), set and cleared by `Animation_sampler::apply` and
-  animation stop so playback never overwrites the authored local value and
-  keying (`doc/animation-keyframing-plan.md`) reads the local value as the
-  authored pose. No prerequisites; the keyframing plan and non-destructive
-  playback of generalized animation channels (below) both wait on it.
+- Playback through the animated layer: `Animation_sampler::apply` sets the
+  animated layer (D5) instead of writing the `Trs_transform` directly, and
+  stopping an animation clears it, so playback never overwrites the
+  authored pose and keying (`doc/animation-keyframing-plan.md`) reads the
+  authored pose back. The layer itself is implemented; only playback still
+  has to move onto it.
 - Property serialization to glTF: expression text of driven properties
   (D22), material local values (materials export field by field, and
   default elision plus `Material::set_values` keep a round trip from

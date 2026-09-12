@@ -136,9 +136,10 @@ inventory (and the owner's design section when the design changed).
   it). User: `erhe::Item_base::purpose_property`, whose default follows the
   item's editor-only flag bits.
 - **`Dependency_object`** - the per-object store: sparse vector of entries
-  sorted by property index, binary-searched; an entry exists only for a
-  property with a local value and holds that value plus its coerced value
-  when the coerce callback changed it. Two virtuals serve object
+  sorted by property index, binary-searched; an entry exists for a property
+  with a local value, an expression or an animated value, and holds each of
+  the two stored layers plus its coerced value when the coerce callback
+  changed it. Two virtuals serve object
   references: `get_reference_path()` (the text form of a reference to
   this object, empty by default; `Item_base` returns its name) and
   `get_shared_reference()` (the owning pointer a reference stores, null
@@ -170,19 +171,36 @@ inventory (and the owner's design section when the design changed).
 
 ## Value precedence and callbacks
 
-Effective value = coerced(base), base = local > style > reference >
-inherited > default (the default being `Property_metadata::compute_default`
-for the object when that is bound, D31); a computed property (D26) bypasses
-all of it and reads its provider.
-The
-coerced value of a local value is stored in the entry and refreshed by
-`set_value` and `coerce_value`; a property without a local value is coerced
-on every read. `set_value` runs validate (type check, enumeration table,
+Effective value = coerced(base), base = animated > local > style >
+reference > inherited > default (the default being
+`Property_metadata::compute_default` for the object when that is bound,
+D31); a computed property (D26) bypasses all of it and reads its provider.
+The coerced value of a stored layer is kept in the entry and refreshed by
+`set_value`, `set_animated_value` and `coerce_value`; a property without a
+stored layer is coerced on every read. `set_value` runs validate (type check, enumeration table,
 callback), stores, coerces, then notifies when the effective value or its
 source changed: metadata `property_changed`, the virtual
 `on_property_changed`, then observers. `Change_batch` queues notifications on
 an object and delivers one per property when the outermost batch ends, with
 the value before the batch and after it.
+
+## Animated layer
+
+`set_animated_value(property, value)` / `clear_animated_value(property)`
+(`doc/property-system.md` D5) hold a playback pose above the local layer
+(`Value_source::animated`). They validate, coerce, notify and propagate to
+descendants, style users and reference users the way a local write does,
+but they write no authored state: an entry carrying only an animated value
+reports no local value, is not serialized and is not listed by
+`for_each_local_value`, so a save never sees a pose. A write while the
+layer is present goes to the base under it - a keyed edit during playback
+edits the authored pose - and `get_animation_base_value(property)` (WPF
+`GetAnimationBaseValue`) reads the resolution without the layer. A sealed
+object (D24) accepts the write, so a sealed prefab instance plays; a
+computed or read-only property refuses it. On a bridged property (D18) the
+bridge storage carries the pose, the entry keeps the base, and clearing
+writes the base back through the bridge. What descendants inherit is the
+effective value, so an animated ancestor animates the subtree below it.
 
 ## Style
 
@@ -300,8 +318,8 @@ only, read by serializers, listed in `doc/property-inventory.md`.
 
 ## Copy semantics
 
-Copying a `Dependency_object` copies its entries (local and coerced values)
-and its style and reference pointers, registering the copy as a user of
+Copying a `Dependency_object` copies its entries (local, animated and
+coerced values) and its style and reference pointers, registering the copy as a user of
 both. Observers, pending batches and inherited state are not copied.
 
 ## Threading

@@ -61,6 +61,7 @@ namespace {
         case Value_source::inherited:     return IM_COL32(225, 195, 255, 255); // purple: from an ancestor
         case Value_source::computed:      return IM_COL32(165, 165, 165, 255); // dim gray: computed, read-only
         case Value_source::reference:     return IM_COL32(255, 190, 215, 255); // pink: from the reference counterpart (D33)
+        case Value_source::animated:      return IM_COL32(250, 250, 160, 255); // yellow: a playback pose (D5)
     }
     return IM_COL32(255, 255, 255, 255);
 }

@@ -77,6 +77,11 @@ void Observer_token::release()
 
 // Effective_value_entry
 
+Dependency_object::Effective_value_entry::Effective_value_entry(const uint16_t index)
+    : index{index}
+{
+}
+
 Dependency_object::Effective_value_entry::Effective_value_entry(const uint16_t index, Property_value local)
     : index{index}
     , local{std::move(local)}
@@ -84,20 +89,24 @@ Dependency_object::Effective_value_entry::Effective_value_entry(const uint16_t i
 }
 
 Dependency_object::Effective_value_entry::Effective_value_entry(const Effective_value_entry& other)
-    : index     {other.index}
-    , local     {other.local}
-    , coerced   {other.coerced}
-    , expression{other.expression ? other.expression->clone() : nullptr}
+    : index           {other.index}
+    , local           {other.local}
+    , coerced         {other.coerced}
+    , animated        {other.animated}
+    , animated_coerced{other.animated_coerced}
+    , expression      {other.expression ? other.expression->clone() : nullptr}
 {
 }
 
 Dependency_object::Effective_value_entry& Dependency_object::Effective_value_entry::operator=(const Effective_value_entry& other)
 {
     if (this != &other) {
-        index      = other.index;
-        local      = other.local;
-        coerced    = other.coerced;
-        expression = other.expression ? other.expression->clone() : nullptr;
+        index            = other.index;
+        local            = other.local;
+        coerced          = other.coerced;
+        animated         = other.animated;
+        animated_coerced = other.animated_coerced;
+        expression       = other.expression ? other.expression->clone() : nullptr;
     }
     return *this;
 }
@@ -194,7 +203,16 @@ auto Dependency_object::find_or_create_entry(const uint16_t index) -> Effective_
     if ((i != m_entries.end()) && (i->index == index)) {
         return *i;
     }
-    return *m_entries.insert(i, Effective_value_entry{index, Property_value{}});
+    return *m_entries.insert(i, Effective_value_entry{index});
+}
+
+void Dependency_object::remove_entry_if_empty(const uint16_t index)
+{
+    const Effective_value_entry* entry = find_entry(index);
+    if ((entry == nullptr) || entry->has_local() || entry->has_animated() || (entry->expression != nullptr)) {
+        return;
+    }
+    remove_entry(index);
 }
 
 void Dependency_object::remove_entry(const uint16_t index)
@@ -267,11 +285,11 @@ auto Dependency_object::get_supplied_value(const Dependency_property& property, 
         return metadata.compute(*this);
     }
     if (const Effective_value_entry* entry = find_entry(property.get_index()); entry != nullptr) {
-        out_source = (entry->expression != nullptr) ? Value_source::expression : Value_source::local;
-        if (entry_is_bridged_expression(*entry, metadata)) {
-            return metadata.bridge.get(*this);
+        // D5: an animated value is supplied the way a local value is, so an
+        // object referencing an animated counterpart plays the animation.
+        if (std::optional<Property_value> value = get_entry_value(*entry, metadata, out_source, Animated_layer::applied); value.has_value()) {
+            return value;
         }
-        return entry->local;
     }
     if (metadata.bridge.is_bound()) {
         out_source = Value_source::local;
@@ -365,7 +383,8 @@ void Dependency_object::propagate_to_reference_users(const Property_changed_args
             (source == Value_source::expression) ||
             (source == Value_source::computed) ||
             (source == Value_source::style) ||
-            (source == Value_source::reference);
+            (source == Value_source::reference) ||
+            (source == Value_source::animated);
     };
     const bool old_supplied = is_supplied(args.old_source);
     const bool new_supplied = is_supplied(args.new_source);
@@ -393,10 +412,20 @@ void Dependency_object::propagate_to_reference_users(const Property_changed_args
 }
 
 // D33: a value the object supplies itself - local, style or reference -
-// is the origin of what its inheritance descendants read.
+// is an opinion of its own, and the origin of what its inheritance
+// descendants read. An animated value (D5) is not one of these: it is a
+// playback pose, not an opinion the object holds.
 auto Dependency_object::has_own_value(const Dependency_property& property) const -> bool
 {
     return has_local_value(property) || has_style_value(property) || has_reference_value(property);
+}
+
+// D5: what a descendant reads through its ancestor walk is the ancestor's
+// EFFECTIVE value, so an animated ancestor animates the subtree below it,
+// and an animated object is itself independent of the tree.
+auto Dependency_object::supplies_value_to_descendants(const Dependency_property& property) const -> bool
+{
+    return has_animated_value(property) || has_own_value(property);
 }
 
 auto Dependency_object::get_effective_value_below_style(const Dependency_property& property, Value_source& out_source) const -> Property_value
@@ -490,7 +519,7 @@ void Dependency_object::propagate_to_style_users(const Property_changed_args& ar
 auto Dependency_object::get_inherited_value(const Dependency_property& property) const -> std::optional<Property_value>
 {
     for (const Dependency_object* ancestor = get_inheritance_parent(); ancestor != nullptr; ancestor = ancestor->get_inheritance_parent()) {
-        if (ancestor->has_own_value(property)) {
+        if (ancestor->supplies_value_to_descendants(property)) {
             Value_source source{};
             return ancestor->get_effective_value(property, source);
         }
@@ -498,7 +527,50 @@ auto Dependency_object::get_inherited_value(const Dependency_property& property)
     return std::nullopt;
 }
 
-auto Dependency_object::get_base_value(const Dependency_property& property, Value_source& out_source) const -> Property_value
+// The layers an entry itself carries, in precedence order: the animated
+// value (D5), then the expression result or the stored local value (D22,
+// R3). Nothing when the entry carries no value for this layer - an
+// animated-only entry read with the animated layer ignored, or an
+// expression that has not produced a value yet.
+auto Dependency_object::get_entry_value(
+    const Effective_value_entry& entry,
+    const Property_metadata&     metadata,
+    Value_source&                out_source,
+    const Animated_layer         layer
+) const -> std::optional<Property_value>
+{
+    if (entry.has_animated()) {
+        if (layer == Animated_layer::applied) {
+            out_source = Value_source::animated;
+            // On a bridged property the bridge storage carries the animated
+            // value, and it is the truth: the owner may have written it.
+            return metadata.bridge.is_bound() ? metadata.bridge.get(*this) : entry.animated.value();
+        }
+        if (metadata.bridge.is_bound()) {
+            // The base of a bridged property is kept in the entry while the
+            // animated value occupies the bridge storage.
+            if (entry.has_local()) {
+                out_source = Value_source::local;
+                return entry.local.value();
+            }
+            return std::nullopt;
+        }
+    }
+    if (entry.expression != nullptr) {
+        out_source = Value_source::expression;
+        if (entry_is_bridged_expression(entry, metadata)) {
+            return metadata.bridge.get(*this);
+        }
+        return entry.local;
+    }
+    if (entry.has_local()) {
+        out_source = Value_source::local;
+        return entry.local.value();
+    }
+    return std::nullopt;
+}
+
+auto Dependency_object::get_base_value(const Dependency_property& property, Value_source& out_source, const Animated_layer layer) const -> Property_value
 {
     const Property_metadata& metadata = get_metadata(property);
     if (metadata.is_computed()) {
@@ -509,11 +581,9 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
         return metadata.compute(*this);
     }
     if (const Effective_value_entry* entry = find_entry(property.get_index()); entry != nullptr) {
-        out_source = (entry->expression != nullptr) ? Value_source::expression : Value_source::local;
-        if (entry_is_bridged_expression(*entry, metadata)) {
-            return metadata.bridge.get(*this);
+        if (std::optional<Property_value> value = get_entry_value(*entry, metadata, out_source, layer); value.has_value()) {
+            return std::move(value.value());
         }
-        return entry->local;
     }
     if (metadata.bridge.is_bound()) {
         out_source = Value_source::local;
@@ -539,7 +609,7 @@ auto Dependency_object::get_base_value(const Dependency_property& property, Valu
     return metadata.compute_default ? metadata.compute_default(*this) : metadata.default_value.value();
 }
 
-auto Dependency_object::get_effective_value(const Dependency_property& property, Value_source& out_source) const -> Property_value
+auto Dependency_object::get_effective_value(const Dependency_property& property, Value_source& out_source, const Animated_layer layer) const -> Property_value
 {
     const Effective_value_entry* entry = find_entry(property.get_index());
     if ((entry != nullptr) && (entry->expression != nullptr) && entry->expression->has_unresolved_references()) {
@@ -549,21 +619,43 @@ auto Dependency_object::get_effective_value(const Dependency_property& property,
         self->evaluate_expression(*self->find_entry(property.get_index()), property);
         entry = find_entry(property.get_index());
     }
-    if (entry != nullptr) {
-        const Property_metadata& metadata = get_metadata(property);
-        out_source = (entry->expression != nullptr) ? Value_source::expression : Value_source::local;
-        if (entry_is_bridged_expression(*entry, metadata)) {
-            const Property_value base = metadata.bridge.get(*this);
-            return metadata.coerce ? metadata.coerce(*this, base) : base;
-        }
-        return entry->coerced.has_value() ? entry->coerced.value() : entry->local;
-    }
-    Property_value base = get_base_value(property, out_source);
     const Property_metadata& metadata = get_metadata(property);
+    if (entry != nullptr) {
+        Value_source                  entry_source{};
+        std::optional<Property_value> value = get_entry_value(*entry, metadata, entry_source, layer);
+        if (value.has_value()) {
+            out_source = entry_source;
+            if (entry_source == Value_source::animated) {
+                if (metadata.bridge.is_bound()) {
+                    // The value came from the bridge storage, which the owner
+                    // may have written since: coerce it on read.
+                    return metadata.coerce ? metadata.coerce(*this, value.value()) : std::move(value.value());
+                }
+                return entry->animated_coerced.has_value() ? entry->animated_coerced.value() : std::move(value.value());
+            }
+            if (entry_is_bridged_expression(*entry, metadata)) {
+                return metadata.coerce ? metadata.coerce(*this, value.value()) : std::move(value.value());
+            }
+            return entry->coerced.has_value() ? entry->coerced.value() : std::move(value.value());
+        }
+    }
+    Property_value base = get_base_value(property, out_source, layer);
     if (metadata.coerce && (out_source != Value_source::computed)) {
         return metadata.coerce(*this, base);
     }
     return base;
+}
+
+auto Dependency_object::get_animation_base_value(const Dependency_property& property) const -> Property_value
+{
+    Value_source source{};
+    return get_effective_value(property, source, Animated_layer::ignored);
+}
+
+auto Dependency_object::has_animated_value(const Dependency_property& property) const -> bool
+{
+    const Effective_value_entry* entry = find_entry(property.get_index());
+    return (entry != nullptr) && entry->has_animated();
 }
 
 auto Dependency_object::get_value(const Dependency_property& property) const -> Property_value
@@ -589,8 +681,14 @@ auto Dependency_object::read_local_value(const Dependency_property& property) co
 {
     const Property_metadata& metadata = get_metadata(property);
     const Effective_value_entry* entry = find_entry(property.get_index());
-    if ((entry != nullptr) && !entry_is_bridged_expression(*entry, metadata)) {
-        return entry->local;
+    if ((entry != nullptr) && entry->has_local()) {
+        // A bridged expression entry keeps no local value of its own - the
+        // bridge holds the result - unless an animation occupies the bridge
+        // and the entry keeps the base (D5).
+        const bool bridge_holds_the_local = entry_is_bridged_expression(*entry, metadata) && !entry->has_animated();
+        if (!bridge_holds_the_local) {
+            return entry->local;
+        }
     }
     if (metadata.bridge.is_bound()) {
         return metadata.bridge.get(*this);
@@ -600,18 +698,42 @@ auto Dependency_object::read_local_value(const Dependency_property& property) co
 
 auto Dependency_object::has_local_value(const Dependency_property& property) const -> bool
 {
-    return (find_entry(property.get_index()) != nullptr) || get_metadata(property).bridge.is_bound();
+    const Effective_value_entry* entry = find_entry(property.get_index());
+    // D5: an entry that carries only an animated value is not an authored
+    // local value.
+    if ((entry != nullptr) && (entry->has_local() || (entry->expression != nullptr))) {
+        return true;
+    }
+    return get_metadata(property).bridge.is_bound();
 }
 
 void Dependency_object::store_coerced(const Dependency_property& property, Effective_value_entry& entry)
 {
     const Property_metadata& metadata = get_metadata(property);
     entry.coerced.reset();
-    if (metadata.coerce) {
-        Property_value coerced = metadata.coerce(*this, entry.local);
-        if (!(coerced == entry.local)) {
+    if (metadata.coerce && entry.has_local()) {
+        Property_value coerced = metadata.coerce(*this, entry.local.value());
+        if (!(coerced == entry.local.value())) {
             ERHE_VERIFY(type_of(coerced) == property.get_type());
             entry.coerced = std::move(coerced);
+        }
+    }
+}
+
+// D5: the animated value is a base like any other, so the coerce callback
+// applies to it.
+void Dependency_object::store_animated_coerced(const Dependency_property& property, Effective_value_entry& entry)
+{
+    const Property_metadata& metadata = get_metadata(property);
+    entry.animated_coerced.reset();
+    if (metadata.bridge.is_bound()) {
+        return; // the bridge storage is the value; it is coerced on read
+    }
+    if (metadata.coerce && entry.has_animated()) {
+        Property_value coerced = metadata.coerce(*this, entry.animated.value());
+        if (!(coerced == entry.animated.value())) {
+            ERHE_VERIFY(type_of(coerced) == property.get_type());
+            entry.animated_coerced = std::move(coerced);
         }
     }
 }
@@ -678,16 +800,21 @@ auto Dependency_object::set_value_internal(const Dependency_property& property, 
     Property_value old_value = get_effective_value(property, old_source);
 
     Effective_value_entry* entry = find_entry(property.get_index());
+    // D5: while a property is animated the write goes to the base the
+    // animation plays over - a keyed edit during playback edits the
+    // authored pose, never the playback pose - so the bridge storage, which
+    // carries the animated value, is left alone.
+    const bool animated = (entry != nullptr) && entry->has_animated();
     if ((entry != nullptr) && (entry->expression != nullptr) && !keep_expression) {
         // A value write replaces the expression (WPF semantics).
         detach_expression(*entry);
         entry->expression.reset();
-        if (metadata.bridge.is_bound()) {
+        if (metadata.bridge.is_bound() && !animated) {
             remove_entry(property.get_index());
             entry = nullptr;
         }
     }
-    if (metadata.bridge.is_bound()) {
+    if (metadata.bridge.is_bound() && !animated) {
         metadata.bridge.set(*this, value);
     } else {
         Effective_value_entry& stored = (entry != nullptr) ? *entry : find_or_create_entry(property.get_index());
@@ -742,14 +869,95 @@ auto Dependency_object::clear_value_internal(const Dependency_property& property
         // default (and drops an expression, through set_value_internal).
         return set_value_internal(property, metadata.default_value.value(), allow_read_only, false);
     }
-    if (find_entry(property.get_index()) == nullptr) {
+    Effective_value_entry* entry = find_entry(property.get_index());
+    if (entry == nullptr) {
         return true;
     }
 
     Value_source   old_source{};
     Property_value old_value = get_effective_value(property, old_source);
 
-    remove_entry(property.get_index());
+    if (entry->has_animated()) {
+        // D5: only the local layer is cleared; the animated value stays and
+        // the entry with it.
+        detach_expression(*entry);
+        entry->expression.reset();
+        entry->local.reset();
+        entry->coerced.reset();
+    } else {
+        remove_entry(property.get_index());
+    }
+
+    Value_source   new_source{};
+    Property_value new_value = get_effective_value(property, new_source);
+    notify(property, old_value, old_source, new_value, new_source);
+    return true;
+}
+
+// Animated layer (D5)
+
+auto Dependency_object::set_animated_value(const Dependency_property& property, const Property_value& value) -> bool
+{
+    if (property.is_read_only()) {
+        log->error("property '{}' is read-only", property.get_name());
+        return false;
+    }
+    const Property_metadata& metadata = get_metadata(property);
+    if (metadata.is_computed()) {
+        log->error("property '{}' is computed: an animation cannot drive it", property.get_name());
+        return false;
+    }
+    if (!property.validate(value)) {
+        return false; // Dependency_property::validate logs the reason itself
+    }
+    // The seal (D24) guards the authored state; an animated value is not
+    // authored, so playback runs on a sealed prefab instance.
+
+    Value_source   old_source{};
+    Property_value old_value = get_effective_value(property, old_source);
+
+    Effective_value_entry& entry = find_or_create_entry(property.get_index());
+    if (metadata.bridge.is_bound() && !entry.has_animated()) {
+        // The bridge storage is about to carry the animated value: the base
+        // it holds now is kept in the entry until the animation is cleared.
+        entry.local = metadata.bridge.get(*this);
+        store_coerced(property, entry);
+    }
+    entry.animated = value;
+    store_animated_coerced(property, entry);
+    if (metadata.bridge.is_bound()) {
+        metadata.bridge.set(*this, value);
+    }
+
+    Value_source   new_source{};
+    Property_value new_value = get_effective_value(property, new_source);
+    notify(property, old_value, old_source, new_value, new_source);
+    return true;
+}
+
+auto Dependency_object::clear_animated_value(const Dependency_property& property) -> bool
+{
+    Effective_value_entry* entry = find_entry(property.get_index());
+    if ((entry == nullptr) || !entry->has_animated()) {
+        return true; // not animated: nothing changes and nothing is notified
+    }
+
+    Value_source   old_source{};
+    Property_value old_value = get_effective_value(property, old_source);
+
+    entry->animated.reset();
+    entry->animated_coerced.reset();
+    const Property_metadata& metadata = get_metadata(property);
+    if (metadata.bridge.is_bound()) {
+        // The base kept in the entry goes back into the bridge storage; the
+        // entry then carries an expression or nothing at all.
+        if (entry->has_local()) {
+            metadata.bridge.set(*this, entry->local.value());
+            entry->local.reset();
+            entry->coerced.reset();
+        }
+    }
+    remove_entry_if_empty(property.get_index());
 
     Value_source   new_source{};
     Property_value new_value = get_effective_value(property, new_source);
@@ -766,6 +974,7 @@ void Dependency_object::coerce_value(const Dependency_property& property)
     Value_source   old_source{};
     Property_value old_value = get_effective_value(property, old_source);
     store_coerced(property, *entry);
+    store_animated_coerced(property, *entry);
     Value_source   new_source{};
     Property_value new_value = get_effective_value(property, new_source);
     notify(property, old_value, old_source, new_value, new_source);
@@ -814,11 +1023,20 @@ void Dependency_object::for_each_local_value(const std::function<void(const Depe
             ++b;
         }
         if ((b < bridged.size()) && (bridged[b]->get_index() == entry.index)) {
-            callback(*bridged[b], bridged[b]->get_metadata(owner_type).bridge.get(*this));
+            const Dependency_property& bridged_property = *bridged[b];
             ++b;
+            // D5: while the bridge storage carries an animated value, the
+            // local value of the property is the base kept in the entry.
+            if (entry.has_local()) {
+                callback(bridged_property, entry.local.value());
+            } else {
+                callback(bridged_property, bridged_property.get_metadata(owner_type).bridge.get(*this));
+            }
             continue;
         }
-        callback(registry.get(entry.index), entry.local);
+        if (entry.has_local()) {
+            callback(registry.get(entry.index), entry.local.value());
+        }
     }
     for (; b < bridged.size(); ++b) {
         callback(*bridged[b], bridged[b]->get_metadata(owner_type).bridge.get(*this));
@@ -885,7 +1103,7 @@ auto Dependency_object::set_expression(const Dependency_property& property, cons
     std::unique_ptr<Expression> previous = std::move(entry.expression);
     entry.expression = std::move(expression);
     const Property_metadata& metadata = get_metadata(property);
-    if (!metadata.bridge.is_bound() && !had_entry) {
+    if (!metadata.bridge.is_bound() && !entry.has_local()) {
         entry.local = old_value;
         entry.coerced.reset();
     }
@@ -900,6 +1118,8 @@ auto Dependency_object::set_expression(const Dependency_property& property, cons
             entry.expression = std::move(previous); // unresolved; resolves again on the next read
             if (!had_entry) {
                 remove_entry(property.get_index());
+            } else {
+                remove_entry_if_empty(property.get_index());
             }
             return false;
         }
@@ -1023,7 +1243,7 @@ auto Dependency_object::evaluate_into(Effective_value_entry& entry, const Depend
         return false;
     }
     const Property_metadata& metadata = get_metadata(property);
-    if (metadata.bridge.is_bound()) {
+    if (metadata.bridge.is_bound() && !entry.has_animated()) {
         metadata.bridge.set(*this, result.value());
     } else {
         entry.local = std::move(result.value());
@@ -1248,8 +1468,8 @@ void Dependency_object::propagate_to_descendants(
 {
     for_each_inheritance_child(
         [&](Dependency_object& child) {
-            if (child.has_own_value(property)) {
-                return; // a local, style or reference value shadows the subtree
+            if (child.supplies_value_to_descendants(property)) {
+                return; // a local, style, reference or animated value shadows the subtree
             }
             const Property_metadata& child_metadata = child.get_metadata(property);
             Property_value child_old = old_value;
@@ -1453,8 +1673,8 @@ void Dependency_object::capture_inheritance_snapshot_recursive(Inheritance_snaps
         if (!property.get_metadata(owner_type).inherits) {
             continue;
         }
-        if (has_own_value(property)) {
-            continue; // local, style or reference value: unaffected by the tree
+        if (supplies_value_to_descendants(property)) {
+            continue; // local, style, reference or animated value: unaffected by the tree
         }
         Value_source source{};
         Property_value value = get_effective_value(property, source);
