@@ -107,6 +107,7 @@ constexpr std::string_view c_collision_filter_systems_attribute     {"erhe:Colli
 constexpr std::string_view c_collision_filter_collide_attribute     {"erhe:Collision_filter:collide_with_systems"};
 constexpr std::string_view c_collision_filter_not_collide_attribute {"erhe:Collision_filter:not_collide_with_systems"};
 constexpr std::string_view c_node_physics_gravity_factor_attribute  {"erhe:Node_physics:gravity_factor"};
+constexpr std::string_view c_node_physics_is_trigger_attribute      {"erhe:Node_physics:is_trigger"};
 constexpr std::string_view c_node_joint_settings_relationship       {"erhe:Node_joint:joint_settings"};
 
 // One prim a variant block authors as a `def` child and the loader hoisted

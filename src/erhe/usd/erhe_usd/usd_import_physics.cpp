@@ -12,6 +12,7 @@
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/trs_transform.hpp"
 
 // LightUSD headers, as in usd_import.cpp: erhe::usd is the only erhe library
 // that includes them.
@@ -635,8 +636,9 @@ private:
             }
             out_properties.push_back(
                 Usd_physics_property{
-                    .name  = qualified_name,
-                    .value = usd_literal_to_property_text(lightusd::value::pprint_value(attribute->get_var().value_raw()))
+                    .name     = qualified_name,
+                    .usd_type = attribute->type_name(),
+                    .value    = usd_literal_to_property_text(lightusd::value::pprint_value(attribute->get_var().value_raw()))
                 }
             );
         }
@@ -693,7 +695,11 @@ private:
             record.stage_path = entry.path;
             if (read_float(props, "physics:density", value)) {
                 record.properties.push_back(
-                    Usd_physics_property{.name = std::string{"Physics_material.density"}, .value = fmt::format("{}", value)}
+                    Usd_physics_property{
+                        .name     = std::string{"Physics_material.density"},
+                        .usd_type = std::string{"float"},
+                        .value    = fmt::format("{}", value)
+                    }
                 );
             }
             read_erhe_properties(entry, m_material_own_fields, record.properties);
@@ -808,6 +814,7 @@ private:
             if (is_collider) {
                 read_collider(entry, m_data.physics.node_physics[description_index]);
             }
+            apply_trigger(entry, m_data.physics.node_physics[description_index]);
         }
     }
 
@@ -882,6 +889,26 @@ private:
         description.motion = motion;
     }
 
+    // A body the file marks as a trigger detects overlaps rather than
+    // colliding, which the neutral description states as a trigger rather
+    // than as a collider: the shapes are the same and the body is not
+    // simulated against. The colliders below such a body fold onto it the way
+    // a plain body's do.
+    void apply_trigger(const Prim_entry& entry, erhe::scene::Physics_node_description& description)
+    {
+        bool is_trigger = false;
+        if (!read_bool(prim_props(*entry.prim), std::string{c_node_physics_is_trigger_attribute}, is_trigger) || !is_trigger) {
+            return;
+        }
+        erhe::scene::Physics_node_trigger trigger{};
+        if (description.collider.has_value()) {
+            trigger.geometry     = description.collider.value().geometry;
+            trigger.filter_index = description.collider.value().filter_index;
+            description.collider.reset();
+        }
+        description.trigger = std::move(trigger);
+    }
+
     void read_collider(const Prim_entry& entry, erhe::scene::Physics_node_description& description)
     {
         erhe::scene::Physics_node_collider collider{};
@@ -941,7 +968,10 @@ private:
 
     // The implicit shape one primitive-schema collider prim describes, as an
     // index into `Physics_description::shapes`. The shapes are Y-aligned and
-    // centered on the origin on both sides, so only the dimensions travel.
+    // centered on the origin on both sides, so the dimensions and the prim's
+    // own scale are what travel: USD states a box of unequal extents as a
+    // unit `Cube` scaled per axis, which is the form its own physics tooling
+    // authors, and the erhe shape is the scaled size.
     [[nodiscard]] auto read_shape(const Prim_entry& entry) -> std::optional<std::size_t>
     {
         const lightusd::Prim&      prim = *entry.prim;
@@ -1028,8 +1058,41 @@ private:
         float               radius = 0.0f;
         if (read_float(props, std::string{c_physics_shape_radius_bottom_attribute}, radius)) { shape.radius_bottom = radius; }
         if (read_float(props, std::string{c_physics_shape_radius_top_attribute   }, radius)) { shape.radius_top    = radius; }
+        apply_collider_scale(entry, shape);
         m_data.physics.shapes.push_back(shape);
         return m_data.physics.shapes.size() - 1;
+    }
+
+    // The scale of the collider prim itself, in the dimensions of the shape
+    // it describes: per axis for a box, and the radial and the axial
+    // component for a round shape, whose erhe form has one radius per end and
+    // no way to state a second radial size.
+    void apply_collider_scale(const Prim_entry& entry, erhe::scene::Physics_shape& shape)
+    {
+        const std::shared_ptr<erhe::scene::Node> node = find_node(entry.path);
+        if (!node) {
+            return;
+        }
+        const glm::vec3 scale = node->parent_from_node_transform().get_scale();
+        if (scale == glm::vec3{1.0f}) {
+            return;
+        }
+        if (shape.type == erhe::scene::Physics_shape_type::e_box) {
+            shape.size = shape.size * scale;
+            return;
+        }
+        if (scale.x != scale.z) {
+            add_warning(
+                fmt::format(
+                    "USD '{}': collider prim '{}' is scaled by {} across its axis and {} along the other - its shape takes the first",
+                    m_arguments.file_name, entry.path, scale.x, scale.z
+                )
+            );
+        }
+        shape.radius        *= scale.x;
+        shape.radius_bottom *= scale.x;
+        shape.radius_top    *= scale.x;
+        shape.height        *= scale.y;
     }
 
     // The physics material bound to one collider prim: its own
@@ -1428,7 +1491,10 @@ private:
     std::map<std::string, std::size_t> m_joint_settings_index_by_path;
     // The custom attributes each record reads into a field of its own, and
     // which are then not property assignments of the record.
-    const std::set<std::string> m_body_own_fields{std::string{c_node_physics_gravity_factor_attribute}};
+    const std::set<std::string> m_body_own_fields{
+        std::string{c_node_physics_gravity_factor_attribute},
+        std::string{c_node_physics_is_trigger_attribute}
+    };
     const std::set<std::string> m_material_own_fields{};
     const std::set<std::string> m_filter_own_fields{
         std::string{c_collision_filter_systems_attribute},

@@ -1047,6 +1047,12 @@ stage and carries the values the neutral record has no field for. The mapping
 is the "Physics" table of `doc/usd_compatibility.md`; the rules the read
 follows are:
 
+- A joint prim and the `PhysicsScene` prim are physics content rather than
+  prims of the scene tree: a joint is an attachment of the prim it joins and
+  the scene prim is the physics world's gravity, so the conversion leaves
+  both out of the tree and the physics record is where they travel. Every
+  other physics prim - a body, a collider, a physics material, a collision
+  group, a joint-settings prim - is a prim of the tree like any other.
 - A prim carrying `PhysicsRigidBodyAPI` is a body, and a prim carrying
   `PhysicsCollisionAPI` is a collider; each becomes one
   `Physics_node_description` naming the prim of the erhe tree it sits on, and
@@ -1060,8 +1066,12 @@ follows are:
   `Capsule_1`, `Cylinder`, `Cylinder_1`) is an implicit shape appended to
   `Physics_description::shapes`, with the schema's own dimensions and the
   `erhe:Physics_shape:radius_bottom` / `radius_top` of a tapered one. The
-  shapes are Y-aligned and origin-centered on both sides, so only the
-  dimensions travel and a prim aligned along another axis is one warning. A
+  shapes are Y-aligned and origin-centered on both sides, so the dimensions
+  and the prim's own scale are what travel: a `Cube` takes its scale per axis
+  (the erhe box is `size * scale`, which is how a box of unequal extents is
+  stated), and a round shape takes the radial component of the scale on its
+  radii and the axial one on its height, with one warning when the two radial
+  components differ. A prim aligned along another axis is one warning. A
   collider prim of any other type - a `Cone` among them - is one warning and
   no collider. A collider prim whose `purpose` is `guide` carries the shape
   and nothing else, so it is listed in
@@ -1071,6 +1081,11 @@ follows are:
   `PhysicsMeshCollisionAPI` `physics:approximation` says whether it is a
   convex hull: `none` is the triangle mesh, `convexHull` the hull, and every
   other approximation is one warning and the hull.
+- A body prim carrying `erhe:Node_physics:is_trigger` is a trigger rather
+  than a collider: the shapes are the same and the description states them as
+  `Physics_node_trigger`, which is the form the physics import builds a
+  sensor body from. The flag is the record's own, so it is not one of the
+  record's property values.
 - The physics material of a collider is the `Material` prim its own
   `material:binding:physics` names, else the one an ancestor up to and
   including its body prim binds. The collision filter of a collider is the
@@ -1384,6 +1399,76 @@ over the tree with no file work in it.
   read back. A wrap value on a slot with no texture has no `UsdUVTexture` to
   ride on and is not written.
 
+### Physics
+
+The writer takes the physics of a scene as `Usd_save_arguments::physics`: the
+same format-neutral `erhe::scene::Physics_description` the reader fills, one
+`Usd_save_physics_record` per material, collision filter, joint-settings item
+and body naming the prim of the tree that record sits on, and the physics
+world's gravity. Where a record's prim lands is the two-pass planner's answer
+like every other prim's, so a record's schema is authored on the prim its item
+becomes. The rules the write follows:
+
+- A body prim carries `PhysicsRigidBodyAPI`, and `PhysicsMassAPI` beside it
+  when the body states a mass, a center of mass or an inertia. A body with no
+  motion is a static body, which is the collision schema alone.
+  `physics:kinematicEnabled`, `physics:velocity`, `physics:angularVelocity`
+  (in degrees) and the erhe-only `erhe:Node_physics:gravity_factor` are
+  written only where they differ from the fallback, the authored-only rule
+  every native attribute follows.
+- A collider whose shape is implicit is a child prim named `collider`
+  (sibling-unique) of its body prim: a `Sphere`, `Cube`, `Capsule` or
+  `Cylinder` with `purpose = guide`, `PhysicsCollisionAPI` and the schema's
+  own dimensions. A box of unequal extents is a `Cube` of `size = 1` with the
+  extents as its `xformOp:scale`, the form USD's own physics tooling authors;
+  a cubical one is `size = s` and no scale. A tapered capsule or cylinder
+  writes the larger radius on the schema attribute and the exact pair as
+  `erhe:Physics_shape:radius_bottom` / `radius_top`, so a reader without erhe
+  simulates a shape of the right size. A synthesized collider - a shape of a
+  compound that no prim of the tree carries - is the same prim with its own
+  translation, rotation and scale as its `xformOp`s.
+- A body that states a trigger rather than a collider writes the trigger's
+  geometry as the same collider prim, each prim a compound trigger names as
+  one collider prim below the body, and `custom bool
+  erhe:Node_physics:is_trigger = 1` on the body itself: UsdPhysics has no
+  schema for a body that detects overlaps rather than colliding.
+- A collider whose shape is the prim's own mesh is `PhysicsCollisionAPI` plus
+  `PhysicsMeshCollisionAPI` on the `Mesh` prim, with
+  `physics:approximation` saying which of the two forms it is.
+- A collider that names a physics material applies `MaterialBindingAPI` and
+  writes `rel material:binding:physics` on the prim carrying the collider.
+- A physics material is `PhysicsMaterialAPI` on the prim of its record, with
+  `physics:staticFriction`, `physics:dynamicFriction`, `physics:restitution`
+  and `physics:density`; the combine modes and every other erhe-only value
+  are `erhe:Physics_material:` custom attributes, in the USD type the record
+  carries.
+- A collision filter is a `PhysicsCollisionGroup` prim: the three
+  `erhe:Collision_filter:` string arrays state the lists exactly,
+  `collection:colliders:includes` names the prims of the bodies using the
+  filter, and `physics:filteredGroups` names the groups of the scene its
+  `not_collide_with_systems` names.
+- A joint-settings item is a typeless prim applying one
+  `PhysicsLimitAPI:<axis>` instance per axis of each limit - a limit over
+  several axes is several instances of one value, which the reader joins back
+  - and one `PhysicsDriveAPI:<axis>` instance per drive. Rotational values are
+  degrees.
+- A joint is a `PhysicsJoint` child prim of the prim it sits on, named after
+  its settings item: `physics:body0` the prim itself, `physics:body1` the
+  connected prim, `physics:localPos1` / `localRot1` the prim's frame in the
+  connected prim's space (the first frame is the identity - the joint frame
+  is each prim's own), `physics:collisionEnabled`, the settings' limit and
+  drive instances inline, and `custom rel erhe:Node_joint:joint_settings`
+  naming the settings prim when the settings are a prim other joints share.
+- The physics world's gravity is one `PhysicsScene` prim below the prim the
+  stage names as its defaultPrim, with the direction and the magnitude the
+  caller has; a value the caller leaves unset is USD's own fallback.
+
+A collider entry names the prim its shape belongs to, so the guide prims a
+load reports in `Usd_physics::guide_collider_prims` are dropped and their
+shapes fold onto their body entry before a save - the shape of a collider is
+`Physics_shape`, and the mesh a guide prim carries is the tessellation of it
+the import built.
+
 ## Dependency
 
 LightUSD (Apache 2.0, C++17, dependency-free) through `CPMAddPackage` in the
@@ -1547,6 +1632,17 @@ asserts the shapes and their dimensions, the motion values and their unit
 conversions, the material and filter each collider resolves to, the guide
 prim list, the joined limits and the drive, and the joint each body carries.
 
+`test_usd_physics_export.cpp` covers the write: the physics of
+`physics.usda` is folded the way the editor folds it - the guide collider
+prims leave the tree and their shapes land on their body - written back,
+loaded again and asserted value for value, and the second write of the
+reloaded physics is byte for byte the first. `usdchecker` passes on the
+written file. The fixture itself is not in the writer's spelling: it binds a
+physics material on a body prim rather than on the collider below it, states
+one collision group the USD way through `physics:filteredGroups`, and spells
+one joint as a `PhysicsRevoluteJoint`, all of which the reader reads and the
+writer writes in its own one form.
+
 `test/data/looks.usda` covers where materials sit: two `Scope`s below one
 `Xform` holding three materials, two of them named alike, each bound by a
 mesh of its own. `test_usd_materials.cpp` asserts that the material prims
@@ -1693,8 +1789,8 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   `customLayerData` (doc/scene_serialization.md, USD-backed scenes), the
   materials travel as the prims they are, the folder tree travels as the
   `Scope` prims it is (E4d), and the brushes, styles and node graphs travel
-  as prims of their own. The writer emits no `UsdPhysics` content yet, though
-  the reader reads it ("Physics" above). The writer also emits no `.usdc` or
+  as prims of their own, and the physics travels as the `UsdPhysics` prims and
+  API schemas of the mapping ("Physics" above). The writer emits no `.usdc` or
   `.usdz`, and no `.mtlx` document (the inline OpenPBR network it writes for
   an anisotropic or transmissive material is not one).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written

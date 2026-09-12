@@ -233,10 +233,13 @@ TEST_F(Physics_import, erhe_body_values_and_tapered_capsule)
     ASSERT_NE(sensor, nullptr);
     ASSERT_TRUE(sensor->motion.has_value());
     EXPECT_NEAR(sensor->motion.value().gravity_factor, 0.5f, c_tolerance);
+    // A body the file marks as a trigger is a trigger of the description, and
+    // the flag is not one of the record's property values.
+    EXPECT_TRUE(sensor->trigger.has_value());
+    EXPECT_FALSE(sensor->collider.has_value());
     const std::size_t index = body_index("/World/Sensor");
     ASSERT_LT(index, result.data.physics_prims.bodies.size());
-    const std::string is_trigger = property_value(result.data.physics_prims.bodies[index], "Node_physics.is_trigger");
-    EXPECT_TRUE((is_trigger == "1") || (is_trigger == "true")) << is_trigger;
+    EXPECT_EQ(property_value(result.data.physics_prims.bodies[index], "Node_physics.is_trigger"), "");
 
     const erhe::scene::Physics_node_description* collider_prim = body("/World/Sensor/collider");
     ASSERT_NE(collider_prim, nullptr);
@@ -250,10 +253,24 @@ TEST_F(Physics_import, erhe_body_values_and_tapered_capsule)
     EXPECT_NEAR(shape.radius_top,    0.3f, c_tolerance);
 }
 
+TEST_F(Physics_import, a_scaled_box_collider_is_its_scaled_extents)
+{
+    const erhe::scene::Physics_node_description* collider_prim = body("/World/Slab/collider");
+    ASSERT_NE(collider_prim, nullptr);
+    ASSERT_TRUE(collider_prim->collider.has_value());
+    const erhe::scene::Physics_node_geometry& geometry = collider_prim->collider.value().geometry;
+    ASSERT_TRUE(geometry.shape_index.has_value());
+    const erhe::scene::Physics_shape& shape = result.data.physics.shapes[geometry.shape_index.value()];
+    EXPECT_EQ(shape.type, erhe::scene::Physics_shape_type::e_box);
+    EXPECT_NEAR(shape.size.x, 2.0f, c_tolerance);
+    EXPECT_NEAR(shape.size.y, 0.5f, c_tolerance);
+    EXPECT_NEAR(shape.size.z, 3.0f, c_tolerance);
+}
+
 TEST_F(Physics_import, guide_collider_prims_are_listed)
 {
     const std::vector<std::shared_ptr<erhe::scene::Node>>& guides = result.data.physics_prims.guide_collider_prims;
-    ASSERT_EQ(guides.size(), 3u);
+    ASSERT_EQ(guides.size(), 4u);
     for (const std::shared_ptr<erhe::scene::Node>& guide : guides) {
         ASSERT_TRUE(guide.operator bool());
         EXPECT_EQ(guide->get_name(), "collider");

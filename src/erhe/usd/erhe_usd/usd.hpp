@@ -630,6 +630,10 @@ class Usd_physics_property final
 {
 public:
     std::string name;
+    // The USD type the attribute was spelled with (`float`, `bool`,
+    // `string`, ...), which is what a writer needs to author it again; it is
+    // the same pair a node-graph parameter travels as.
+    std::string usd_type;
     std::string value;
 };
 
@@ -1072,6 +1076,39 @@ public:
 // What save_usda() writes. The content is erhe's own - the writer is handed
 // the scene it is to write, not a Usd_data - and the stage constants are the
 // caller's choice (the defaults are what erhe means: Y up, metres).
+// One physics record on the write side: the prim of the tree the record sits
+// on, and the erhe-only values of it the neutral description has no field for
+// (`Usd_physics_property`, in the same erhe property text the read side
+// hands back). The writer authors the record's schema on the prim the item
+// becomes, so the two-pass planner decides where it lands. A joint-settings
+// record with no item has no prim of its own: its limits and drives are
+// written inline on every joint that uses it.
+class Usd_save_physics_record final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    std::vector<Usd_physics_property>      properties;
+};
+
+// The physics of a scene to write (doc/usd_compatibility.md, "Physics"): the
+// format-neutral description, the USD half of each of its records, and the
+// physics world's gravity. The record lists are index for index with the
+// description's lists, the way `Usd_physics` is on the read side; a list
+// shorter than the description's leaves the records beyond it without an item
+// and without erhe-only values.
+class Usd_save_physics final
+{
+public:
+    const erhe::scene::Physics_description* description{nullptr};
+    std::vector<Usd_save_physics_record>    materials;
+    std::vector<Usd_save_physics_record>    collision_filters;
+    std::vector<Usd_save_physics_record>    joint_settings;
+    std::vector<Usd_save_physics_record>    bodies;
+    bool                                    has_physics_scene{false};
+    std::optional<glm::vec3>                gravity_direction;
+    std::optional<float>                    gravity_magnitude;
+};
+
 class Usd_save_arguments final
 {
 public:
@@ -1133,6 +1170,8 @@ public:
     // samples it wrote; the rate is the caller's, carried from the load
     // (Usd_data::time_codes), so a file's own rate survives a round trip.
     double                                                  time_codes_per_second{24.0};
+    // The physics to write, empty when the scene has none.
+    Usd_save_physics                                        physics;
     std::string                                             up_axis        {"Y"};
     double                                                  meters_per_unit{1.0};
 };

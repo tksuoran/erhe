@@ -44,12 +44,15 @@
 #include "usdGeom.hh"
 #include "usdShade.hh"
 #include "usdLux.hh"
+#include "usdPhysics.hh"
 #include "usdSkel.hh"
 #include "pprint-enum.hh"
 
 #include <fmt/format.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/trigonometric.hpp>
 
@@ -424,6 +427,33 @@ public:
     std::unique_ptr<Plan_prim>  prim;
 };
 
+// Whether an attribute a physics record writes is one the schema declares -
+// which USD spells without `custom` - or an erhe-only one, which is a custom
+// attribute.
+enum class Attribute_form : unsigned int {
+    schema_attribute = 0,
+    custom_attribute = 1
+};
+
+// Which of the six degrees of freedom a joint limit or drive names.
+enum class Limit_axis_kind : unsigned int {
+    linear  = 0,
+    angular = 1
+};
+
+// No physics record for this prim.
+constexpr std::size_t c_no_physics_index = ~std::size_t{0};
+
+// One prim a body adds below its own for a collider the tree holds no prim
+// for: the synthesized collider it is and the sibling-unique name the plan
+// gave it.
+class Plan_physics_child final
+{
+public:
+    std::size_t index{0};
+    std::string name;
+};
+
 class Plan_prim final
 {
 public:
@@ -461,6 +491,16 @@ public:
     // `children`: each is written inside its own variant block.
     std::vector<Plan_variant_prim>   variant_prims;
     std::vector<Plan_prim>           children;
+    // The physics this prim carries (doc/usd_compatibility.md, "Physics"):
+    // the body description it is the prim of, and the names the plan gave the
+    // prims that body adds below it.
+    std::size_t                      physics_body{c_no_physics_index};
+    std::string                      physics_collider_name;
+    std::string                      physics_joint_name;
+    std::vector<Plan_physics_child>  physics_synthesized;
+    // The prims a compound trigger names, each written as a collider prim
+    // below this one; `index` is the body entry the member's shape is on.
+    std::vector<Plan_physics_child>  physics_trigger_members;
 };
 
 // What pass one of the write decides: the prims with their paths, the name
@@ -805,6 +845,8 @@ public:
             }
         }
 
+        index_physics();
+
         for (const Usd_save_brush& entry : m_arguments.brushes) {
             if (entry.item) {
                 m_brushes[entry.item.get()] = &entry;
@@ -858,6 +900,11 @@ public:
             : ((single_prim != nullptr) ? single_prim->name : plan.front().name);
         assign_paths(plan, out_plan.wrapped ? fmt::format("/{}", c_world_prim_name) : std::string{});
         record_resource_paths(plan);
+        // Where every prim of the tree landed, which is what a physics record
+        // names its material, its filter and the prims a joint joins by.
+        m_planned_paths.clear();
+        collect_planned_paths_of(plan, m_planned_paths);
+        plan_physics_scene(plan, out_plan);
         out_plan.planned = true;
     }
 
@@ -945,6 +992,12 @@ public:
                 std::string error;
                 if (!world_prim.add_child(std::move(prim), false, &error)) {
                     add_warning(fmt::format("a top-level prim could not be added under '{}': {}", c_world_prim_name, error));
+                }
+            }
+            if (!m_physics_scene_name.empty() && (m_physics_scene_parent_path == fmt::format("/{}", c_world_prim_name))) {
+                std::string error;
+                if (!world_prim.add_child(write_physics_scene_prim(), false, &error)) {
+                    add_warning(fmt::format("the PhysicsScene prim could not be added: {}", error));
                 }
             }
             add_collections(world_prim);
@@ -1783,6 +1836,7 @@ private:
         if (open_pbr) {
             write_open_pbr_shader(material_prim, plan_prim.path, material);
         }
+        write_physics_material_on_prim(material, material_prim, plan_prim.path);
         return material_prim;
     }
 
@@ -2123,6 +2177,10 @@ private:
                     &plan_prim.variant_prims,
                     child_prim_holder(*child_prim, holder)
                 );
+                // The collider and joint prims the body on this prim adds
+                // take their names from the same scope its children took
+                // theirs from.
+                plan_physics_children(plan_prim, child_names);
             }
             if ((membership != nullptr) && (out_variant_prims != nullptr)) {
                 out_variant_prims->push_back(
@@ -2483,6 +2541,7 @@ private:
             (plan_prim.node     != nullptr) ? write_node         (plan_prim) :
                                               write_prim         (plan_prim);
 
+        write_physics_on_prim(plan_prim, prim);
         apply_defined_specifier(*plan_prim.item, prim);
 
         if (plan_prim.references != nullptr) {
@@ -2494,6 +2553,10 @@ private:
         std::vector<lightusd::Prim> child_prims;
         write_plan_prims(plan_prim.children, child_prims);
         write_override_prims(plan_prim, child_prims);
+        write_physics_child_prims(plan_prim, child_prims);
+        if (!m_physics_scene_name.empty() && (plan_prim.path == m_physics_scene_parent_path)) {
+            child_prims.push_back(write_physics_scene_prim());
+        }
         for (lightusd::Prim& child_prim : child_prims) {
             std::string error;
             if (!prim.add_child(std::move(child_prim), false, &error)) {
@@ -3138,6 +3201,12 @@ private:
         }
         if (is_node_graph_prim(*plan_prim.item)) {
             return write_node_graph_prim(*plan_prim.item, plan_prim.name, plan_prim.path);
+        }
+        if (m_physics_filter_record.count(plan_prim.item) != 0) {
+            return write_collision_group_prim(*plan_prim.item, plan_prim.name);
+        }
+        if (m_physics_settings_record.count(plan_prim.item) != 0) {
+            return write_joint_settings_prim(*plan_prim.item, plan_prim.name);
         }
         return erhe::is<erhe::Scope>(plan_prim.item)
             ? write_scope_prim(*plan_prim.item, plan_prim.name)
@@ -4779,6 +4848,1059 @@ private:
     }
 
     // -------------------------------------------------------------------
+    // Physics (doc/usd_compatibility.md, "Physics")
+    // -------------------------------------------------------------------
+
+    // The records of `Usd_save_physics`, by the item each names: what the
+    // plan and the write look a prim up in.
+    void index_physics()
+    {
+        const erhe::scene::Physics_description* description = m_arguments.physics.description;
+        if (description == nullptr) {
+            return;
+        }
+        for (std::size_t index = 0, end = description->node_physics.size(); index < end; ++index) {
+            const erhe::scene::Physics_node_description& body = description->node_physics[index];
+            if (body.node) {
+                m_physics_body_index[body.node.get()] = index;
+            }
+        }
+        for (std::size_t index = 0, end = description->synthesized_colliders.size(); index < end; ++index) {
+            const erhe::scene::Physics_synthesized_collider& collider = description->synthesized_colliders[index];
+            if (collider.parent) {
+                m_physics_synthesized_indices[collider.parent.get()].push_back(index);
+            }
+        }
+        index_physics_records(m_arguments.physics.materials,         m_physics_material_record);
+        index_physics_records(m_arguments.physics.collision_filters, m_physics_filter_record);
+        index_physics_records(m_arguments.physics.joint_settings,    m_physics_settings_record);
+        index_physics_records(m_arguments.physics.bodies,            m_physics_body_record);
+    }
+
+    static void index_physics_records(
+        const std::vector<Usd_save_physics_record>&          records,
+        std::map<const erhe::Item_base*, std::size_t>&       out_indices
+    )
+    {
+        for (std::size_t index = 0, end = records.size(); index < end; ++index) {
+            if (records[index].item) {
+                out_indices[records[index].item.get()] = index;
+            }
+        }
+    }
+
+    [[nodiscard]] auto physics_description() const -> const erhe::scene::Physics_description*
+    {
+        return m_arguments.physics.description;
+    }
+
+    [[nodiscard]] auto find_physics_record(
+        const std::vector<Usd_save_physics_record>&          records,
+        const std::map<const erhe::Item_base*, std::size_t>& indices,
+        const erhe::Item_base&                               item
+    ) const -> const Usd_save_physics_record*
+    {
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator i = indices.find(&item);
+        return (i == indices.end()) ? nullptr : &records[i->second];
+    }
+
+    // The shape one body states, as a collider or as a trigger: the two carry
+    // the same geometry and the same filter, and a trigger is a body that
+    // detects overlaps rather than colliding.
+    [[nodiscard]] static auto collider_geometry_of(
+        const erhe::scene::Physics_node_description& entry
+    ) -> const erhe::scene::Physics_node_geometry*
+    {
+        if (entry.collider.has_value()) {
+            return &entry.collider.value().geometry;
+        }
+        if (entry.trigger.has_value() && entry.trigger.value().geometry.has_value()) {
+            return &entry.trigger.value().geometry.value();
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] static auto collider_material_of(
+        const erhe::scene::Physics_node_description& entry
+    ) -> std::optional<std::size_t>
+    {
+        return entry.collider.has_value() ? entry.collider.value().material_index : std::optional<std::size_t>{};
+    }
+
+    [[nodiscard]] static auto collider_filter_of(
+        const erhe::scene::Physics_node_description& entry
+    ) -> std::optional<std::size_t>
+    {
+        if (entry.collider.has_value()) {
+            return entry.collider.value().filter_index;
+        }
+        return entry.trigger.has_value() ? entry.trigger.value().filter_index : std::optional<std::size_t>{};
+    }
+
+    // The name of the joint-settings item a joint uses, which is the name of
+    // the joint prim the body carries.
+    [[nodiscard]] auto joint_prim_name(const std::size_t joint_index) const -> std::string
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        if ((description == nullptr) || (joint_index >= description->joints.size()) || description->joints[joint_index].name.empty()) {
+            return std::string{"joint"};
+        }
+        return sanitize_usd_identifier(description->joints[joint_index].name);
+    }
+
+    // The prims a body adds below the prim it sits on: one `collider` child
+    // per implicit shape - the prim's own class says nothing about the shape,
+    // so the shape is a prim of its own - and one joint prim named after the
+    // settings item. Their names are taken from the same scope the planned
+    // children took theirs from, so a scene that already holds a prim of that
+    // name keeps it.
+    void plan_physics_children(Plan_prim& plan_prim, Name_scope& child_names)
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        if ((description == nullptr) || (plan_prim.node == nullptr)) {
+            return;
+        }
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator body =
+            m_physics_body_index.find(static_cast<const erhe::Item_base*>(plan_prim.node));
+        if (body != m_physics_body_index.end()) {
+            plan_prim.physics_body = body->second;
+            const erhe::scene::Physics_node_description& entry    = description->node_physics[body->second];
+            const erhe::scene::Physics_node_geometry*     geometry = collider_geometry_of(entry);
+            if ((geometry != nullptr) && geometry->shape_index.has_value()) {
+                plan_prim.physics_collider_name = child_names.make_unique(std::string{c_physics_collider_prim_name});
+            }
+            if (entry.trigger.has_value()) {
+                // A compound trigger states its shapes on the prims it names,
+                // and each of those is a collider prim below this one.
+                for (const std::shared_ptr<erhe::scene::Node>& member : entry.trigger.value().compound_nodes) {
+                    const std::size_t member_index = find_body_index(member.get());
+                    if (member_index == c_no_physics_index) {
+                        continue;
+                    }
+                    const erhe::scene::Physics_node_geometry* member_geometry =
+                        collider_geometry_of(description->node_physics[member_index]);
+                    if ((member_geometry == nullptr) || !member_geometry->shape_index.has_value()) {
+                        continue;
+                    }
+                    plan_prim.physics_trigger_members.push_back(
+                        Plan_physics_child{
+                            .index = member_index,
+                            .name  = child_names.make_unique(member->get_name())
+                        }
+                    );
+                }
+            }
+            if (entry.joint.has_value()) {
+                plan_prim.physics_joint_name = child_names.make_unique(joint_prim_name(entry.joint.value().joint_index));
+            }
+        }
+        const std::map<const erhe::Item_base*, std::vector<std::size_t>>::const_iterator synthesized =
+            m_physics_synthesized_indices.find(static_cast<const erhe::Item_base*>(plan_prim.node));
+        if (synthesized != m_physics_synthesized_indices.end()) {
+            for (const std::size_t index : synthesized->second) {
+                const erhe::scene::Physics_synthesized_collider& collider = description->synthesized_colliders[index];
+                plan_prim.physics_synthesized.push_back(
+                    Plan_physics_child{
+                        .index = index,
+                        .name  = child_names.make_unique(
+                            collider.name.empty() ? std::string{c_physics_collider_prim_name} : collider.name
+                        )
+                    }
+                );
+            }
+        }
+    }
+
+    [[nodiscard]] auto find_body_index(const erhe::scene::Node* node) const -> std::size_t
+    {
+        if (node == nullptr) {
+            return c_no_physics_index;
+        }
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator i =
+            m_physics_body_index.find(static_cast<const erhe::Item_base*>(node));
+        return (i == m_physics_body_index.end()) ? c_no_physics_index : i->second;
+    }
+
+    // Where the `PhysicsScene` prim goes: below the prim the stage names as
+    // its defaultPrim, so a save adds no top-level prim and the wrap decision
+    // above is the one the tree made.
+    void plan_physics_scene(std::vector<Plan_prim>& plan, const Prim_plan& prim_plan)
+    {
+        if (!m_arguments.physics.has_physics_scene) {
+            return;
+        }
+        if (prim_plan.wrapped) {
+            m_physics_scene_parent_path = fmt::format("/{}", c_world_prim_name);
+            m_physics_scene_name        = std::string{c_physics_scene_prim_type_name};
+            return;
+        }
+        for (const Plan_prim& prim : plan) {
+            if (prim.name != prim_plan.default_prim_name) {
+                continue;
+            }
+            Name_scope names;
+            for (const Plan_prim& child : prim.children) {
+                static_cast<void>(names.make_unique(child.name));
+            }
+            m_physics_scene_parent_path = prim.path;
+            m_physics_scene_name        = names.make_unique(std::string{c_physics_scene_prim_type_name});
+            return;
+        }
+    }
+
+    // The gravity of the physics world, as the one `PhysicsScene` prim of the
+    // file. Each value is written only when the caller has one: USD's own
+    // fallbacks - the stage's negative up axis, earth gravity - are what a
+    // file that authors neither means.
+    [[nodiscard]] auto write_physics_scene_prim() -> lightusd::Prim
+    {
+        lightusd::PhysicsScene scene;
+        scene.name = m_physics_scene_name;
+        if (m_arguments.physics.gravity_direction.has_value()) {
+            const glm::vec3 direction = m_arguments.physics.gravity_direction.value();
+            scene.gravityDirection.set_value(lightusd::value::vector3f{direction.x, direction.y, direction.z});
+        }
+        if (m_arguments.physics.gravity_magnitude.has_value()) {
+            scene.gravityMagnitude.set_value(m_arguments.physics.gravity_magnitude.value());
+        }
+        return lightusd::Prim{scene};
+    }
+
+    // The generic property map of a written prim: where an applied API
+    // schema's attributes and the `erhe:` custom attributes of a physics
+    // record go. Every prim class a physics record can land on is listed.
+    [[nodiscard]] auto mutable_props_of(lightusd::Prim& prim) -> std::map<std::string, lightusd::Property>*
+    {
+        std::map<std::string, lightusd::Property>* props = nullptr;
+        if ((props = props_of<lightusd::Xform         >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomMesh      >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::Model         >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::Scope         >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::Material      >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomCube      >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomSphere    >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomCapsule   >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomCylinder  >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::Skeleton      >(prim)) != nullptr) { return props; }
+        if ((props = props_of<lightusd::GeomCamera    >(prim)) != nullptr) { return props; }
+        return nullptr;
+    }
+
+    template <typename T>
+    [[nodiscard]] static auto props_of(lightusd::Prim& prim) -> std::map<std::string, lightusd::Property>*
+    {
+        T* typed = prim.get_data().as<T>();
+        return (typed != nullptr) ? &typed->props : nullptr;
+    }
+
+    static void add_float_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const float                                value,
+        const Attribute_form                       form
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(value);
+        props.emplace(name, lightusd::Property{std::move(attribute), form == Attribute_form::custom_attribute});
+    }
+
+    static void add_bool_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const bool                                 value,
+        const Attribute_form                       form
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(value);
+        props.emplace(name, lightusd::Property{std::move(attribute), form == Attribute_form::custom_attribute});
+    }
+
+    static void add_vector3f_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const glm::vec3&                           value
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::vector3f{value.x, value.y, value.z});
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_point3f_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const glm::vec3&                           value
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::point3f{value.x, value.y, value.z});
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_string_array_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const std::vector<std::string>&            values
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(values);
+        props.emplace(name, lightusd::Property{std::move(attribute), true});
+    }
+
+    static void add_relationship_property(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const std::vector<std::string>&            paths,
+        const Attribute_form                       form
+    )
+    {
+        if (paths.empty()) {
+            return;
+        }
+        lightusd::Relationship relationship;
+        if (paths.size() == 1) {
+            relationship.set(lightusd::Path{paths.front(), ""});
+        } else {
+            std::vector<lightusd::Path> path_vector;
+            path_vector.reserve(paths.size());
+            for (const std::string& path : paths) {
+                path_vector.emplace_back(path, "");
+            }
+            relationship.set(std::move(path_vector));
+        }
+        props.emplace(name, lightusd::Property{std::move(relationship), form == Attribute_form::custom_attribute});
+    }
+
+    // The erhe-only values of one physics record, as the `erhe:Owner:name`
+    // custom attributes they are. The value travels as property text and the
+    // record's USD type spells it again, the way a node-graph parameter does.
+    void write_physics_record_properties(
+        std::map<std::string, lightusd::Property>& props,
+        const Usd_save_physics_record*             record,
+        const std::string&                         owner
+    )
+    {
+        if (record == nullptr) {
+            return;
+        }
+        for (const Usd_physics_property& property : record->properties) {
+            const std::size_t separator = property.name.find('.');
+            if (separator == std::string::npos) {
+                continue;
+            }
+            const std::string attribute_name = fmt::format(
+                "erhe:{}:{}",
+                property.name.substr(0, separator),
+                property.name.substr(separator + 1)
+            );
+            props.emplace(
+                attribute_name,
+                lightusd::Property{make_node_graph_attribute(property.usd_type, property.value, owner), true}
+            );
+        }
+    }
+
+    // One value of a record that a schema attribute carries rather than an
+    // `erhe:` custom attribute: the reader reports it as a property because
+    // the neutral description has no field for it, and the writer puts it
+    // back where the schema keeps it.
+    [[nodiscard]] static auto find_record_property(
+        const Usd_save_physics_record* record,
+        const std::string&             name
+    ) -> const Usd_physics_property*
+    {
+        if (record == nullptr) {
+            return nullptr;
+        }
+        for (const Usd_physics_property& property : record->properties) {
+            if (property.name == name) {
+                return &property;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] auto planned_path_of(const erhe::Item_base* item) const -> std::string
+    {
+        if (item == nullptr) {
+            return std::string{};
+        }
+        const std::map<const erhe::Item_base*, std::string>::const_iterator i = m_planned_paths.find(item);
+        return (i == m_planned_paths.end()) ? std::string{} : i->second;
+    }
+
+    // The body and the collider one prim of the tree carries: the API schemas
+    // the mapping names, applied to the prim itself, and the attributes of
+    // each. A body with no motion is a static body, which is the collision
+    // schema alone.
+    void write_physics_on_prim(const Plan_prim& plan_prim, lightusd::Prim& prim)
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        if ((description == nullptr) || (plan_prim.physics_body == c_no_physics_index)) {
+            return;
+        }
+        std::map<std::string, lightusd::Property>* props = mutable_props_of(prim);
+        if (props == nullptr) {
+            add_warning(fmt::format("prim '{}' holds physics that its prim class cannot carry", plan_prim.path));
+            return;
+        }
+        const erhe::scene::Physics_node_description& entry  = description->node_physics[plan_prim.physics_body];
+        const Usd_save_physics_record* const         record = (plan_prim.physics_body < m_arguments.physics.bodies.size())
+            ? &m_arguments.physics.bodies[plan_prim.physics_body]
+            : nullptr;
+        if (entry.motion.has_value()) {
+            const erhe::scene::Physics_node_motion& motion = entry.motion.value();
+            apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsRigidBodyAPI, std::string{});
+            if (motion.is_kinematic) {
+                add_bool_attribute(*props, "physics:kinematicEnabled", true, Attribute_form::schema_attribute);
+            }
+            if (motion.linear_velocity != glm::vec3{0.0f}) {
+                add_vector3f_attribute(*props, "physics:velocity", motion.linear_velocity);
+            }
+            if (motion.angular_velocity != glm::vec3{0.0f}) {
+                // USD spells an angular velocity in degrees per second.
+                add_vector3f_attribute(
+                    *props,
+                    "physics:angularVelocity",
+                    glm::vec3{
+                        to_degrees(motion.angular_velocity.x),
+                        to_degrees(motion.angular_velocity.y),
+                        to_degrees(motion.angular_velocity.z)
+                    }
+                );
+            }
+            const bool has_mass = motion.mass.has_value() || (motion.center_of_mass != glm::vec3{0.0f}) || motion.inertia_diagonal.has_value();
+            if (has_mass) {
+                apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsMassAPI, std::string{});
+                if (motion.mass.has_value()) {
+                    add_float_attribute(*props, "physics:mass", motion.mass.value(), Attribute_form::schema_attribute);
+                }
+                if (motion.center_of_mass != glm::vec3{0.0f}) {
+                    add_point3f_attribute(*props, "physics:centerOfMass", motion.center_of_mass);
+                }
+                if (motion.inertia_diagonal.has_value()) {
+                    const glm::vec3     inertia = motion.inertia_diagonal.value();
+                    lightusd::Attribute attribute;
+                    attribute.set_value(lightusd::value::float3{inertia.x, inertia.y, inertia.z});
+                    props->emplace("physics:diagonalInertia", lightusd::Property{std::move(attribute), false});
+                    if (motion.inertia_orientation.has_value()) {
+                        const glm::quat     orientation = motion.inertia_orientation.value();
+                        lightusd::Attribute axes;
+                        axes.set_value(
+                            lightusd::value::quatf{
+                                {{orientation.x, orientation.y, orientation.z}},
+                                orientation.w
+                            }
+                        );
+                        props->emplace("physics:principalAxes", lightusd::Property{std::move(axes), false});
+                    }
+                }
+            }
+            if (motion.gravity_factor != 1.0f) {
+                add_float_attribute(
+                    *props,
+                    std::string{c_node_physics_gravity_factor_attribute},
+                    motion.gravity_factor,
+                    Attribute_form::custom_attribute
+                );
+            }
+        }
+        write_physics_record_properties(*props, record, plan_prim.path);
+        if (entry.trigger.has_value()) {
+            // A trigger is a body that detects overlaps rather than
+            // colliding, which no UsdPhysics schema states.
+            add_bool_attribute(*props, std::string{c_node_physics_is_trigger_attribute}, true, Attribute_form::custom_attribute);
+        }
+        const erhe::scene::Physics_node_geometry* const geometry = collider_geometry_of(entry);
+        if ((geometry != nullptr) && !geometry->shape_index.has_value()) {
+            // A mesh shape is the prim's own geometry, so the collision
+            // schemas go on the prim rather than on a child of it.
+            write_mesh_collider_on_prim(prim, *props, *geometry, collider_material_of(entry), plan_prim.path);
+        }
+    }
+
+    void write_mesh_collider_on_prim(
+        lightusd::Prim&                            prim,
+        std::map<std::string, lightusd::Property>& props,
+        const erhe::scene::Physics_node_geometry&  geometry,
+        const std::optional<std::size_t>&          material_index,
+        const std::string&                         prim_path
+    )
+    {
+        apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsCollisionAPI, std::string{});
+        apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsMeshCollisionAPI, std::string{});
+        add_token_attribute(props, "physics:approximation", geometry.convex_hull ? "convexHull" : "none");
+        write_physics_material_binding(prim, props, material_index, prim_path);
+    }
+
+    void write_physics_material_binding(
+        lightusd::Prim&                            prim,
+        std::map<std::string, lightusd::Property>& props,
+        const std::optional<std::size_t>&          material_index,
+        const std::string&                         prim_path
+    )
+    {
+        if (!material_index.has_value()) {
+            return;
+        }
+        if (material_index.value() >= m_arguments.physics.materials.size()) {
+            return;
+        }
+        const std::string path = planned_path_of(m_arguments.physics.materials[material_index.value()].item.get());
+        if (path.empty()) {
+            add_warning(
+                fmt::format("prim '{}' binds a physics material that is no prim of the tree - the binding is dropped", prim_path)
+            );
+            return;
+        }
+        apply_material_binding_api(prim);
+        add_relationship_property(props, std::string{c_physics_material_binding}, {path}, Attribute_form::schema_attribute);
+    }
+
+    // The prims a body adds below its own: the implicit shape of its
+    // collider, the shapes of the synthesized colliders that name it, and the
+    // joint it carries.
+    void write_physics_child_prims(const Plan_prim& plan_prim, std::vector<lightusd::Prim>& out_prims)
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        if (description == nullptr) {
+            return;
+        }
+        if (plan_prim.physics_body != c_no_physics_index) {
+            const erhe::scene::Physics_node_description&     entry    = description->node_physics[plan_prim.physics_body];
+            const erhe::scene::Physics_node_geometry* const  geometry = collider_geometry_of(entry);
+            if (!plan_prim.physics_collider_name.empty() && (geometry != nullptr)) {
+                out_prims.push_back(
+                    write_implicit_collider_prim(
+                        plan_prim.physics_collider_name,
+                        geometry->shape_index.value(),
+                        collider_material_of(entry),
+                        glm::vec3{0.0f},
+                        glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
+                        glm::vec3{1.0f},
+                        plan_prim.path
+                    )
+                );
+            }
+            for (const Plan_physics_child& member : plan_prim.physics_trigger_members) {
+                const erhe::scene::Physics_node_description&    member_entry    = description->node_physics[member.index];
+                const erhe::scene::Physics_node_geometry* const member_geometry = collider_geometry_of(member_entry);
+                out_prims.push_back(
+                    write_implicit_collider_prim(
+                        member.name,
+                        member_geometry->shape_index.value(),
+                        collider_material_of(member_entry),
+                        glm::vec3{0.0f},
+                        glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
+                        glm::vec3{1.0f},
+                        plan_prim.path
+                    )
+                );
+            }
+            if (!plan_prim.physics_joint_name.empty() && entry.joint.has_value()) {
+                out_prims.push_back(write_joint_prim(plan_prim, entry, entry.joint.value()));
+            }
+        }
+        for (const Plan_physics_child& child : plan_prim.physics_synthesized) {
+            const erhe::scene::Physics_synthesized_collider& collider = description->synthesized_colliders[child.index];
+            if (!collider.geometry.shape_index.has_value()) {
+                add_warning(
+                    fmt::format("the synthesized collider '{}' of prim '{}' carries no implicit shape - it is not written", child.name, plan_prim.path)
+                );
+                continue;
+            }
+            out_prims.push_back(
+                write_implicit_collider_prim(
+                    child.name,
+                    collider.geometry.shape_index.value(),
+                    collider.material_index,
+                    collider.translation,
+                    collider.rotation,
+                    collider.scale,
+                    plan_prim.path
+                )
+            );
+        }
+    }
+
+    // One implicit collision shape as the primitive-schema prim it is: a
+    // `guide` prim carrying the collision schema and the shape's dimensions,
+    // which is what says it is a collider rather than something to render.
+    [[nodiscard]] auto write_implicit_collider_prim(
+        const std::string&                prim_name,
+        const std::size_t                 shape_index,
+        const std::optional<std::size_t>& material_index,
+        const glm::vec3&                  translation,
+        const glm::quat&                  rotation,
+        const glm::vec3&                  scale,
+        const std::string&                parent_path
+    ) -> lightusd::Prim
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        const erhe::scene::Physics_shape        shape       = (shape_index < description->shapes.size())
+            ? description->shapes[shape_index]
+            : erhe::scene::Physics_shape{};
+        glm::vec3      shape_scale{1.0f};
+        lightusd::Prim prim  = make_shape_prim(shape, prim_name, shape_scale);
+        std::map<std::string, lightusd::Property>* props = mutable_props_of(prim);
+        if (props == nullptr) {
+            return prim;
+        }
+        apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsCollisionAPI, std::string{});
+        if ((shape.type == erhe::scene::Physics_shape_type::e_capsule) || (shape.type == erhe::scene::Physics_shape_type::e_cylinder)) {
+            if (shape.radius_bottom != shape.radius_top) {
+                add_float_attribute(*props, std::string{c_physics_shape_radius_bottom_attribute}, shape.radius_bottom, Attribute_form::custom_attribute);
+                add_float_attribute(*props, std::string{c_physics_shape_radius_top_attribute   }, shape.radius_top,    Attribute_form::custom_attribute);
+            }
+        }
+        write_physics_material_binding(prim, *props, material_index, parent_path + "/" + prim_name);
+        set_collider_transform(prim, translation, rotation, scale * shape_scale);
+        return prim;
+    }
+
+    // The shape's own prim class and dimensions. A tapered capsule or
+    // cylinder is written with the larger radius on the schema attribute and
+    // the exact pair on the two `erhe:Physics_shape:` attributes, so a reader
+    // without erhe simulates a shape of the right size. A box of unequal
+    // extents is a unit `Cube` scaled per axis - the form USD's own physics
+    // tooling authors - which `out_shape_scale` reports to the caller, who
+    // composes it with the place the collider sits at.
+    [[nodiscard]] auto make_shape_prim(
+        const erhe::scene::Physics_shape& shape,
+        const std::string&                prim_name,
+        glm::vec3&                        out_shape_scale
+    ) -> lightusd::Prim
+    {
+        switch (shape.type) {
+            case erhe::scene::Physics_shape_type::e_sphere: {
+                lightusd::GeomSphere sphere;
+                sphere.name = prim_name;
+                sphere.radius.set_value(static_cast<double>(shape.radius));
+                sphere.purpose.set_value(lightusd::Purpose::Guide);
+                return lightusd::Prim{sphere};
+            }
+            case erhe::scene::Physics_shape_type::e_capsule: {
+                lightusd::GeomCapsule capsule;
+                capsule.name = prim_name;
+                capsule.radius.set_value(static_cast<double>(std::max(shape.radius_bottom, shape.radius_top)));
+                capsule.height.set_value(static_cast<double>(shape.height));
+                capsule.axis.set_value(lightusd::Axis::Y);
+                capsule.purpose.set_value(lightusd::Purpose::Guide);
+                return lightusd::Prim{capsule};
+            }
+            case erhe::scene::Physics_shape_type::e_cylinder: {
+                lightusd::GeomCylinder cylinder;
+                cylinder.name = prim_name;
+                cylinder.radius.set_value(static_cast<double>(std::max(shape.radius_bottom, shape.radius_top)));
+                cylinder.height.set_value(static_cast<double>(shape.height));
+                cylinder.axis.set_value(lightusd::Axis::Y);
+                cylinder.purpose.set_value(lightusd::Purpose::Guide);
+                return lightusd::Prim{cylinder};
+            }
+            default: {
+                // A box is a `Cube`, whose one dimension is its edge length,
+                // so a box of unequal extents is the unit cube scaled by them.
+                lightusd::GeomCube cube;
+                cube.name = prim_name;
+                const bool cubical = (shape.size.x == shape.size.y) && (shape.size.y == shape.size.z);
+                if (cubical) {
+                    cube.size.set_value(static_cast<double>(shape.size.x));
+                } else {
+                    cube.size.set_value(1.0);
+                    out_shape_scale = shape.size;
+                }
+                cube.purpose.set_value(lightusd::Purpose::Guide);
+                return lightusd::Prim{cube};
+            }
+        }
+    }
+
+    // The place a collider sits in its body's space, and the size a box states
+    // through its scale, as the `xformOp`s of the collider prim: the plain
+    // translate / orient / scale triple USD's own physics tooling authors,
+    // which is also what the read applies back onto the shape. A collider at
+    // the body's own frame and of its own size writes none.
+    void set_collider_transform(
+        lightusd::Prim&   prim,
+        const glm::vec3&  translation,
+        const glm::quat&  rotation,
+        const glm::vec3&  scale
+    )
+    {
+        std::vector<lightusd::XformOp>* xform_ops =
+            xform_ops_of<lightusd::GeomCube   >(prim) ? xform_ops_of<lightusd::GeomCube   >(prim) :
+            xform_ops_of<lightusd::GeomSphere >(prim) ? xform_ops_of<lightusd::GeomSphere >(prim) :
+            xform_ops_of<lightusd::GeomCapsule>(prim) ? xform_ops_of<lightusd::GeomCapsule>(prim) :
+                                                        xform_ops_of<lightusd::GeomCylinder>(prim);
+        if (xform_ops == nullptr) {
+            return;
+        }
+        if (translation != glm::vec3{0.0f}) {
+            lightusd::XformOp op;
+            op.op_type = lightusd::XformOp::OpType::Translate;
+            op.set_value(lightusd::value::double3{translation.x, translation.y, translation.z});
+            xform_ops->push_back(op);
+        }
+        if (rotation != glm::quat{1.0f, 0.0f, 0.0f, 0.0f}) {
+            lightusd::XformOp op;
+            op.op_type = lightusd::XformOp::OpType::Orient;
+            op.set_value(lightusd::value::quatf{{{rotation.x, rotation.y, rotation.z}}, rotation.w});
+            xform_ops->push_back(op);
+        }
+        if (scale != glm::vec3{1.0f}) {
+            lightusd::XformOp op;
+            op.op_type = lightusd::XformOp::OpType::Scale;
+            op.set_value(lightusd::value::double3{scale.x, scale.y, scale.z});
+            xform_ops->push_back(op);
+        }
+    }
+
+    template <typename T>
+    [[nodiscard]] static auto xform_ops_of(lightusd::Prim& prim) -> std::vector<lightusd::XformOp>*
+    {
+        T* typed = prim.get_data().as<T>();
+        return (typed != nullptr) ? &typed->xformOps : nullptr;
+    }
+
+    // The joint one prim carries, as the `PhysicsJoint` prim below it: the
+    // two bodies it joins, the frame of the connected prim in the joint
+    // prim's space, and the limits and drives of its settings item - applied
+    // inline, and named by the relationship when the settings are a prim of
+    // their own that other joints share.
+    [[nodiscard]] auto write_joint_prim(
+        const Plan_prim&                             plan_prim,
+        const erhe::scene::Physics_node_description& entry,
+        const erhe::scene::Physics_node_joint&       joint
+    ) -> lightusd::Prim
+    {
+        lightusd::PhysicsJoint usd_joint;
+        usd_joint.name = plan_prim.physics_joint_name;
+        const std::string body0_path = plan_prim.path;
+        const std::string body1_path = planned_path_of(joint.connected_node.get());
+        usd_joint.body0.set(lightusd::Path{body0_path, ""});
+        if (!body1_path.empty()) {
+            usd_joint.body1.set(lightusd::Path{body1_path, ""});
+        } else if (joint.connected_node) {
+            add_warning(
+                fmt::format("the joint of prim '{}' names a prim that is not written - it is written with one body", plan_prim.path)
+            );
+        }
+        if (joint.enable_collision) {
+            usd_joint.collisionEnabled.set_value(true);
+        }
+        // The joint frame is each prim's own frame, so the first frame is the
+        // identity and the second is the joint prim's frame in the connected
+        // prim's space.
+        if (entry.node && joint.connected_node) {
+            const glm::mat4 connected_from_node =
+                glm::inverse(joint.connected_node->world_from_node()) * entry.node->world_from_node();
+            glm::vec3 translation{0.0f};
+            glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec3 scale{1.0f};
+            decompose_trs(connected_from_node, translation, rotation, scale);
+            if (translation != glm::vec3{0.0f}) {
+                usd_joint.localPos1.set_value(lightusd::value::point3f{translation.x, translation.y, translation.z});
+            }
+            if (rotation != glm::quat{1.0f, 0.0f, 0.0f, 0.0f}) {
+                usd_joint.localRot1.set_value(lightusd::value::quatf{{{rotation.x, rotation.y, rotation.z}}, rotation.w});
+            }
+        }
+        const erhe::scene::Physics_description* description = physics_description();
+        if (joint.joint_index < description->joints.size()) {
+            write_joint_limits_and_drives(usd_joint.props, usd_joint.meta, description->joints[joint.joint_index]);
+            const Usd_save_physics_record* const record = (joint.joint_index < m_arguments.physics.joint_settings.size())
+                ? &m_arguments.physics.joint_settings[joint.joint_index]
+                : nullptr;
+            const std::string settings_path = (record != nullptr) ? planned_path_of(record->item.get()) : std::string{};
+            if (!settings_path.empty()) {
+                add_relationship_property(
+                    usd_joint.props,
+                    std::string{c_node_joint_settings_relationship},
+                    {settings_path},
+                    Attribute_form::custom_attribute
+                );
+            }
+        }
+        return lightusd::Prim{usd_joint};
+    }
+
+    // The limits and drives of one joint-settings item, as the multi-apply
+    // instances they are: one `PhysicsLimitAPI:<axis>` instance per axis of a
+    // limit - a limit over several axes is several instances of one value,
+    // which the reader joins back - and one `PhysicsDriveAPI:<axis>` instance
+    // per drive.
+    void write_joint_limits_and_drives(
+        std::map<std::string, lightusd::Property>&    props,
+        lightusd::PrimMeta&                           meta,
+        const erhe::scene::Physics_joint_description& settings
+    )
+    {
+        for (const erhe::scene::Physics_joint_limit& limit : settings.limits) {
+            for (const int axis : limit.linear_axes) {
+                write_joint_limit(props, meta, limit, axis_instance_name(axis, Limit_axis_kind::linear), Limit_axis_kind::linear);
+            }
+            for (const int axis : limit.angular_axes) {
+                write_joint_limit(props, meta, limit, axis_instance_name(axis, Limit_axis_kind::angular), Limit_axis_kind::angular);
+            }
+        }
+        for (const erhe::scene::Physics_joint_drive& drive : settings.drives) {
+            const Limit_axis_kind kind = (drive.type == erhe::scene::Physics_drive_type::e_angular)
+                ? Limit_axis_kind::angular
+                : Limit_axis_kind::linear;
+            const std::string instance = axis_instance_name(drive.axis, kind);
+            apply_api_schema(meta, lightusd::APISchemas::APIName::PhysicsDriveAPI, instance);
+            const std::string prefix = std::string{c_physics_drive_prefix} + instance + ":";
+            if (drive.mode == erhe::scene::Physics_drive_mode::e_acceleration) {
+                add_token_attribute(props, prefix + "type", "acceleration");
+            }
+            if (std::isfinite(drive.max_force)) {
+                add_float_attribute(props, prefix + "maxForce", drive.max_force, Attribute_form::schema_attribute);
+            }
+            if (drive.position_target != 0.0f) {
+                add_float_attribute(
+                    props, prefix + "targetPosition",
+                    (kind == Limit_axis_kind::angular) ? to_degrees(drive.position_target) : drive.position_target,
+                    Attribute_form::schema_attribute
+                );
+            }
+            if (drive.velocity_target != 0.0f) {
+                add_float_attribute(
+                    props, prefix + "targetVelocity",
+                    (kind == Limit_axis_kind::angular) ? to_degrees(drive.velocity_target) : drive.velocity_target,
+                    Attribute_form::schema_attribute
+                );
+            }
+            if (drive.stiffness != 0.0f) {
+                add_float_attribute(props, prefix + "stiffness", drive.stiffness, Attribute_form::schema_attribute);
+            }
+            if (drive.damping != 0.0f) {
+                add_float_attribute(props, prefix + "damping", drive.damping, Attribute_form::schema_attribute);
+            }
+        }
+    }
+
+    void write_joint_limit(
+        std::map<std::string, lightusd::Property>& props,
+        lightusd::PrimMeta&                        meta,
+        const erhe::scene::Physics_joint_limit&    limit,
+        const std::string&                         instance,
+        const Limit_axis_kind                      kind
+    )
+    {
+        apply_api_schema(meta, lightusd::APISchemas::APIName::PhysicsLimitAPI, instance);
+        const std::string prefix = std::string{c_physics_limit_prefix} + instance + ":";
+        if (limit.min.has_value()) {
+            add_float_attribute(
+                props, prefix + "low",
+                (kind == Limit_axis_kind::angular) ? to_degrees(limit.min.value()) : limit.min.value(),
+                Attribute_form::schema_attribute
+            );
+        }
+        if (limit.max.has_value()) {
+            add_float_attribute(
+                props, prefix + "high",
+                (kind == Limit_axis_kind::angular) ? to_degrees(limit.max.value()) : limit.max.value(),
+                Attribute_form::schema_attribute
+            );
+        }
+        const std::string erhe_prefix = std::string{c_physics_limit_erhe_prefix} + instance;
+        if (limit.stiffness.has_value()) {
+            add_float_attribute(
+                props, erhe_prefix + std::string{c_physics_limit_stiffness_suffix}, limit.stiffness.value(), Attribute_form::custom_attribute
+            );
+        }
+        if (limit.damping != 0.0f) {
+            add_float_attribute(
+                props, erhe_prefix + std::string{c_physics_limit_damping_suffix}, limit.damping, Attribute_form::custom_attribute
+            );
+        }
+    }
+
+    [[nodiscard]] static auto axis_instance_name(const int axis, const Limit_axis_kind kind) -> std::string
+    {
+        const char* const axis_name = (axis == 1) ? "Y" : ((axis == 2) ? "Z" : "X");
+        return ((kind == Limit_axis_kind::angular) ? std::string{"rot"} : std::string{"trans"}) + axis_name;
+    }
+
+    // A physics material as the `Material` prim it is: the four schema
+    // attributes and the erhe-only values beside them.
+    void write_physics_material_on_prim(const erhe::Item_base& item, lightusd::Prim& prim, const std::string& prim_path)
+    {
+        const Usd_save_physics_record* const record =
+            find_physics_record(m_arguments.physics.materials, m_physics_material_record, item);
+        if (record == nullptr) {
+            return;
+        }
+        const erhe::scene::Physics_description* description = physics_description();
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator index = m_physics_material_record.find(&item);
+        if ((description == nullptr) || (index->second >= description->materials.size())) {
+            return;
+        }
+        std::map<std::string, lightusd::Property>* props = mutable_props_of(prim);
+        if (props == nullptr) {
+            add_warning(fmt::format("prim '{}' holds a physics material that its prim class cannot carry", prim_path));
+            return;
+        }
+        const erhe::scene::Physics_material_description& material = description->materials[index->second];
+        apply_api_schema(prim, lightusd::APISchemas::APIName::PhysicsMaterialAPI, std::string{});
+        add_float_attribute(*props, "physics:staticFriction",  material.static_friction,  Attribute_form::schema_attribute);
+        add_float_attribute(*props, "physics:dynamicFriction", material.dynamic_friction, Attribute_form::schema_attribute);
+        add_float_attribute(*props, "physics:restitution",     material.restitution,      Attribute_form::schema_attribute);
+        const Usd_physics_property* const density = find_record_property(record, "Physics_material.density");
+        if (density != nullptr) {
+            add_float_attribute(*props, "physics:density", std::strtof(density->value.c_str(), nullptr), Attribute_form::schema_attribute);
+        }
+        add_combine_mode_attribute(*props, "erhe:Physics_material:friction_combine",    material.friction_combine);
+        add_combine_mode_attribute(*props, "erhe:Physics_material:restitution_combine", material.restitution_combine);
+        for (const Usd_physics_property& property : record->properties) {
+            if (property.name == "Physics_material.density") {
+                continue;
+            }
+            props->emplace(
+                fmt::format("erhe:{}:{}", property.name.substr(0, property.name.find('.')), property.name.substr(property.name.find('.') + 1)),
+                lightusd::Property{make_node_graph_attribute(property.usd_type, property.value, prim_path), true}
+            );
+        }
+    }
+
+    static void add_combine_mode_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const erhe::scene::Physics_combine_mode    mode
+    )
+    {
+        if (mode == erhe::scene::Physics_combine_mode::e_average) {
+            return; // the erhe default
+        }
+        lightusd::Attribute attribute;
+        attribute.set_value(
+            (mode == erhe::scene::Physics_combine_mode::e_minimum ) ? std::string{"minimum" } :
+            (mode == erhe::scene::Physics_combine_mode::e_maximum ) ? std::string{"maximum" } :
+                                                                      std::string{"multiply"}
+        );
+        props.emplace(name, lightusd::Property{std::move(attribute), true});
+    }
+
+    // A collision filter as the `PhysicsCollisionGroup` prim it is: the three
+    // erhe lists it states exactly, the group's own members, and the groups
+    // its members do not collide with.
+    [[nodiscard]] auto write_collision_group_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::PhysicsCollisionGroup group;
+        group.name = prim_name;
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator index = m_physics_filter_record.find(&item);
+        const erhe::scene::Physics_description* description = physics_description();
+        if ((description != nullptr) && (index != m_physics_filter_record.end()) && (index->second < description->collision_filters.size())) {
+            const erhe::scene::Physics_collision_filter_description& filter = description->collision_filters[index->second];
+            if (!filter.collision_systems.empty()) {
+                add_string_array_attribute(group.props, std::string{c_collision_filter_systems_attribute}, filter.collision_systems);
+            }
+            if (!filter.collide_with_systems.empty()) {
+                add_string_array_attribute(group.props, std::string{c_collision_filter_collide_attribute}, filter.collide_with_systems);
+            }
+            if (!filter.not_collide_with_systems.empty()) {
+                add_string_array_attribute(group.props, std::string{c_collision_filter_not_collide_attribute}, filter.not_collide_with_systems);
+            }
+            add_relationship_property(
+                group.props,
+                std::string{c_physics_colliders_includes},
+                collect_filter_members(index->second),
+                Attribute_form::schema_attribute
+            );
+            const std::vector<std::string> filtered = collect_filtered_groups(filter);
+            if (!filtered.empty()) {
+                lightusd::Relationship relationship;
+                std::vector<lightusd::Path> paths;
+                paths.reserve(filtered.size());
+                for (const std::string& path : filtered) {
+                    paths.emplace_back(path, "");
+                }
+                relationship.set(std::move(paths));
+                group.filteredGroups = lightusd::RelationshipProperty{relationship};
+            }
+        }
+        write_erhe_properties(item, group);
+        return lightusd::Prim{group};
+    }
+
+    // The prims of the bodies that name one filter: what the group's
+    // collection holds.
+    [[nodiscard]] auto collect_filter_members(const std::size_t filter_index) -> std::vector<std::string>
+    {
+        std::vector<std::string>                      paths;
+        const erhe::scene::Physics_description* const description = physics_description();
+        if (description == nullptr) {
+            return paths;
+        }
+        for (const erhe::scene::Physics_node_description& entry : description->node_physics) {
+            if (!entry.collider.has_value() || !entry.collider.value().filter_index.has_value()) {
+                continue;
+            }
+            if (entry.collider.value().filter_index.value() != filter_index) {
+                continue;
+            }
+            const std::string path = planned_path_of(entry.node.get());
+            if (!path.empty()) {
+                paths.push_back(path);
+            }
+        }
+        return paths;
+    }
+
+    // The groups one filter does not collide with, by the name its list
+    // names them with: a group of the scene whose name is in the list.
+    [[nodiscard]] auto collect_filtered_groups(
+        const erhe::scene::Physics_collision_filter_description& filter
+    ) -> std::vector<std::string>
+    {
+        std::vector<std::string>                      paths;
+        const erhe::scene::Physics_description* const description = physics_description();
+        if (description == nullptr) {
+            return paths;
+        }
+        for (const std::string& name : filter.not_collide_with_systems) {
+            for (std::size_t index = 0, end = description->collision_filters.size(); index < end; ++index) {
+                if (description->collision_filters[index].name != name) {
+                    continue;
+                }
+                if (index >= m_arguments.physics.collision_filters.size()) {
+                    continue;
+                }
+                const std::string path = planned_path_of(m_arguments.physics.collision_filters[index].item.get());
+                if (!path.empty()) {
+                    paths.push_back(path);
+                }
+            }
+        }
+        return paths;
+    }
+
+    // A joint-settings item as the typeless prim it is: the limits and drives
+    // of the settings as the multi-apply instances of the mapping, on a prim
+    // that states nothing else.
+    [[nodiscard]] auto write_joint_settings_prim(const erhe::Typed& item, const std::string& prim_name) -> lightusd::Prim
+    {
+        lightusd::Model model;
+        model.name = prim_name;
+        const std::map<const erhe::Item_base*, std::size_t>::const_iterator index = m_physics_settings_record.find(&item);
+        const erhe::scene::Physics_description* description = physics_description();
+        if ((description != nullptr) && (index != m_physics_settings_record.end()) && (index->second < description->joints.size())) {
+            write_joint_limits_and_drives(model.props, model.meta, description->joints[index->second]);
+        }
+        write_active(item, model);
+        write_erhe_properties(item, model, Native_property_form::custom_attributes);
+        return lightusd::Prim{model};
+    }
+
+    [[nodiscard]] static auto to_degrees(const float radians) -> float
+    {
+        return radians * (180.0f / glm::pi<float>());
+    }
+
+    // -------------------------------------------------------------------
     // Tags
     // -------------------------------------------------------------------
 
@@ -4842,6 +5964,18 @@ private:
 
     const Usd_save_arguments& m_arguments;
     Usd_save_result&          m_result;
+
+    // The physics records of the arguments, by the item each names, and where
+    // every prim of the tree landed (doc/usd_compatibility.md, "Physics").
+    std::map<const erhe::Item_base*, std::size_t>              m_physics_body_index;
+    std::map<const erhe::Item_base*, std::size_t>              m_physics_body_record;
+    std::map<const erhe::Item_base*, std::size_t>              m_physics_material_record;
+    std::map<const erhe::Item_base*, std::size_t>              m_physics_filter_record;
+    std::map<const erhe::Item_base*, std::size_t>              m_physics_settings_record;
+    std::map<const erhe::Item_base*, std::vector<std::size_t>> m_physics_synthesized_indices;
+    std::map<const erhe::Item_base*, std::string>              m_planned_paths;
+    std::string                                                m_physics_scene_parent_path;
+    std::string                                                m_physics_scene_name;
 
     std::map<const erhe::primitive::Material*, std::size_t>  m_material_indices;
     std::map<const erhe::primitive::Material*, std::string>  m_material_paths;

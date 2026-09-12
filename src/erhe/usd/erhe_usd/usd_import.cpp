@@ -4070,6 +4070,20 @@ private:
             (type_name == "DomeLight");
     }
 
+    // The prim types the physics read consumes whole, so that the scene tree
+    // holds no prim for them.
+    [[nodiscard]] static auto is_physics_only_prim_type(const std::string& type_name) -> bool
+    {
+        return
+            (type_name == c_physics_scene_prim_type_name)           ||
+            (type_name == c_physics_joint_prim_type_name)           ||
+            (type_name == c_physics_revolute_joint_prim_type_name)  ||
+            (type_name == c_physics_prismatic_joint_prim_type_name) ||
+            (type_name == c_physics_spherical_joint_prim_type_name) ||
+            (type_name == c_physics_fixed_joint_prim_type_name)     ||
+            (type_name == c_physics_distance_joint_prim_type_name);
+    }
+
     // The typeNames erhe has a transformable class for: the `Xform` prim
     // itself, and the prim types whose content the conversion attaches to
     // the node the prim becomes (U2 and U3 make those their own classes).
@@ -4184,6 +4198,15 @@ private:
         }
         const lightusd::Prim* prim      = find_prim(usd_node.abs_path);
         const std::string     type_name = (prim != nullptr) ? get_usd_type_name(*prim) : std::string{"Xform"};
+        // A joint prim and the `PhysicsScene` prim are physics content, not
+        // prims of the scene tree (doc/usd_compatibility.md, "Physics"): a
+        // joint is an attachment of the prim it joins and the scene prim is
+        // the physics world's gravity, both of which read_physics reads and
+        // a save writes back from the physics description. Leaving them out
+        // here is what makes the round trip a fixed point.
+        if (is_physics_only_prim_type(type_name)) {
+            return;
+        }
         // A `Skeleton` prim carries a transform and holds one `Xform` prim
         // per joint, which no other prim type does
         // (doc/usd-compatibility-plan.md K1).

@@ -110,6 +110,24 @@ def Xform "World"
         }
     }
 
+    def Xform "Slab" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (0, 1, 6)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Cube "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 1
+            double3 xformOp:scale = (2, 0.5, 3)
+            uniform token[] xformOpOrder = ["xformOp:scale"]
+            uniform token purpose = "guide"
+        }
+    }
+
     def Xform "Sensor" (
         prepend apiSchemas = ["PhysicsRigidBodyAPI"]
     )
