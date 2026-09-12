@@ -353,6 +353,41 @@ now owns its behavior; `git log` on that record has the history.
   `SkelAnimation` below the skeleton. A save is a fixed point;
   `usdchecker` passes; the survey's CarbonFrameBike cables sit where
   pxr's `ComputeSkinnedPoints` puts them (4 mm).
+- C6 Composition the real assets use, three forms the plan's own
+  fixtures did not have. An arc a variant block authors (usd-wg
+  `full_assets/Teapot/Teapot_Geometry.usd` prepends the reference to
+  `UtahTeapot.usd` on its `Utah` variant) is the arc of the prim carrying
+  the set while that variant is selected: `read_prim_references` resolves
+  the selected variant's `references` and `payload` list ops after the
+  prim's own (the prim's are the stronger opinion), every `Usd_reference`
+  names the set and variant it came from, and the writer authors it back
+  inside that block, so such a file is a fixed point; a prim holds one
+  list of arcs and not one per variant, so an unselected variant's arcs
+  count toward the set's `unsupported_opinion_count`. A `def` a variant
+  block authors on a prim that also references (the `Materials` scope of
+  `Teapot_Materials.usd`) is the variant's own content rather than an
+  edit over the reference, so a carrier converts and writes back exactly
+  its hoisted variant children while its arcs supply the rest. An op a
+  prim's `xformOpOrder` names but one of its arcs supplies (the
+  duplicates of `DrawModes.usd`, whose first op arrives through an
+  internal reference) is resolved against the arc targets where the stack
+  is reconstructed - the arcs in order, the first target authoring the
+  property winning, a carrier target followed under a cycle guard, the
+  target's raw prim spec as the source so type and precision are kept;
+  an arc into another file is not followed and such an op leaves the
+  prim on its composed transform with one warning; a save authors the
+  resolved op as the carrier's local value, which composes to the same
+  transform. And an override path is resolved one segment at a time,
+  looking one level down through the clone of every carrier it crosses
+  and not only the first (`erhe::scene::find_instance_item`; a carrier
+  is a prim holding an attachment with the `prefab_instance` type bit),
+  so the intent-vfx teapot's `over "geo" { over "default" { over "Body"
+  } }` reaches the mesh below the second reference
+  (`src/erhe/usd/notes.md` "Variant sets", "xformOp stacks";
+  `src/erhe/scene/notes.md`). Teapot.usd imports its 1 mesh and 2
+  materials and DrawModes.usd its 35 meshes at the composed bounds; what
+  stays open there is section 6 (a nested `variantSet` inside a variant
+  block, the `UsdPrimvarReader`-fed material inputs, load performance).
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -539,50 +574,44 @@ section 6 entry it names, and nothing here restates one.
    hold; they are in section 2. What is left of the item is section 6
    "Time samples beyond the transform", which waits on the generalized
    animation channel of `doc/property-system.md` section 6 and ranks with
-   the shading work of item 7.
-2. Composition the real assets use (section 6 "Composition authored
-   inside a variant block", "An xformOp named in a prim's xformOpOrder
-   that one of its arcs supplies", "An override path that crosses a
-   reference inside an instance"). The usd-wg Teapot model, DrawModes and
-   the intent-vfx teapot asset are the surveyed files that stay empty or
-   warn per prim; each item names the two-part change that closes it.
-3. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+   the shading work of item 6.
+2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
    usdchecker"). Four defects in one dependency, each already diagnosed to
    the function; a fork branch carrying them removes a stripping pass, a
    quoting workaround, 2816 skipped instances and a validator finding.
-4. Load performance (section 6 "Load performance"). The scenes holding
+3. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-5. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+4. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-6. The round-trip residue (section 6 "Node-held secondary values",
+5. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
    of usdchecker"). Small, each one a value that leaves through a save
    and does not come back.
-7. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
+6. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
    input fed by a UsdPrimvarReader", "A material slot that a texture
    graph feeds AND that carries an authored factor", "Image formats",
    "An environment map from a DomeLight texture", "MaterialX"). The
    PrimvarReader case and the slot factor are importer work; the rest
    need a renderer or decoder erhe does not have, MaterialX documents a
    LightUSD option erhe's build leaves off.
-8. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+7. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-9. Composition beyond what erhe resolves (section 6 "Layer-stack
+8. Composition beyond what erhe resolves (section 6 "Layer-stack
     editing", "inherits and specializes arcs whose target is not a class
-    prim", "Variant opinions a variant set does not carry", "Overrides on
+   prim", "Variant opinions a variant set does not carry", "Overrides on
     applied API schemas inside an instance"). Each is a real USD feature
     with no surveyed asset that visibly depends on it, so they wait for a
     file that does.
 
 ## 4. Order
 
-Item 3 of section 3 goes with a fork tag bump and is best taken when a
+Item 2 of section 3 goes with a fork tag bump and is best taken when a
 fork clone is at hand (`memory-bank/local/context.md` records it). The
 remaining items have no ordering constraint among them; each is taken
 through the harness of `doc/agent-orchestration-harness.md`, one commit
@@ -648,44 +677,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
   `erhe::scene::Animation` channel names an `Animation_path` rather than a
   property, so this waits on the generalized channel of
   `doc/property-system.md` section 6.
-- Composition authored inside a variant block: a reference or payload arc
-  authored on a variant (usd-wg `full_assets/Teapot/Teapot_Geometry.usd`
-  prepends the reference to `UtahTeapot.usd` on its `Utah` variant), and a
-  prim defined inside a variant block over a referencing prim (the
-  `Materials` scope of `Teapot_Materials.usd`). The hoist carries a
-  variant's `def` children and its property opinions, not the arcs they
-  author, and the section 5 reference-structure rule drops a def a variant
-  authors over a reference, so the whole model stays empty:
-  `full_assets/Teapot/Teapot.usd` imports 0 of its 1 composed mesh and 0 of
-  its 2 materials, and `full_assets/Teapot/DrawModes.usd`, which references
-  it once per draw mode, 0 of 35 and 0 of 70. Closing it is two changes: the
-  variant hoisting carrying a hoisted prim's reference and payload list-ops
-  into the arc loop that already runs for a prim's own arcs, and the
-  reference-structure rule admitting the defs a variant authors, which are
-  the variant's own content rather than an edit made over someone else's
-  structure.
-- An `xformOp` named in a prim's `xformOpOrder` that one of its arcs
-  supplies: `full_assets/Teapot/DrawModes.usd` gives each duplicate
-  (`/World/FancyTeapot_1` and its siblings) the order
-  `["xformOp:transform", "xformOp:transform:duplicate1"]` while authoring
-  only the second, because the first arrives through its internal reference
-  to `/World/FancyTeapot_0`. The stack is reconstructed from the prim's own
-  properties, so the missing op makes the whole stack unreadable and the
-  prim keeps the composed transform instead, with one warning per prim.
-  Closing it means resolving an op the order names against the prim's arc
-  targets, in the same place the stack is reconstructed.
-- An override path that crosses a reference inside an instance: a carrier's
-  overrides are recorded as the paths USD composes them at, and X1 gives the
-  clone of an arc's target one level more than USD, which
-  `erhe::scene::find_instance_item` skips for the carrier's own clone and not
-  for a nested carrier deeper down. The intent-vfx teapot asset is the shape:
-  `assets/teapot/mtl.usd` authors `over "geo" { over "default" { over "Body" }
-  }` on the prim that references `geo.usd`, whose `default` scope references
-  `geo/UtahTeapot.usd` in turn, so the item the override names sits at
-  `teapot/geo/default/UtahTeapot/Body` and the lookup of `geo/default/Body`
-  misses it with a warning per carrier. Closing it means resolving an override
-  path segment by segment and looking through a `Prefab_instance` carrier's
-  clone at each step rather than only at the first.
 - Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
   "Node graphs"): Tydra fails a material whose input connects to a
   `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
@@ -714,7 +705,9 @@ ranks them. A USD scene loads, edits and saves without any of them.
 - Load performance of a scene holding thousands of prims (the intent-vfx
   scenes, several minutes with the stall watchdog firing - the teapot ones,
   and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset
-  arrive as 9862 prims and take 92 s to settle - and the
+  arrive as 9862 prims and take 92 s to settle, and
+  `full_assets/Teapot/DrawModes.usd`, whose 35 teapots trip the watchdog in
+  `raytrace: BVH commit` - and the
   usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
   hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
   prims and 146 meshes and the watchdog reports the tick stuck in
@@ -791,12 +784,15 @@ ranks them. A USD scene loads, edits and saves without any of them.
   variant block that the hoist does not reach - one authored below an
   `over` child of the variant, and any of them in a `.usdz` archive, whose
   asset paths resolve through the archive rather than the file system -
-  and a property the value reader cannot express. Each is counted in
-  `Usd_variant_set::unsupported_opinion_count`, reported per set, and
+  a `variantSet` a variant block itself declares (the `shadingVariant`
+  set inside each `modelVariant` of `Teapot_Materials.usd`, whose blocks are
+  not tabled), and a property the value reader cannot express. Each is
+  counted in `Usd_variant_set::unsupported_opinion_count`, reported per set, and
   named by the save warning. (`GeomModelAPI` draw-mode cards are the
   common case: Teapot.usd's two variants author nothing else.) Taking the
-  first up means hoisting through the `over` children too; the second is
-  the value reader's own coverage.
+  first up means hoisting through the `over` children too, the nested set
+  means tabling the sets a variant block declares, and the last is the
+  value reader's own coverage.
 - Overrides on applied API schemas inside an instance: the override walk
   of `erhe::scene::instance_override` visits prims only, so a local value
   on a `Node_physics`, `Node_joint` or other attachment below a carrier is
