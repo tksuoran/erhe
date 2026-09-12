@@ -540,7 +540,11 @@ now owns its behavior; `git log` on that record has the history.
   `physics.usda` value for value, writes it, reads it back and writes it a
   second time byte for byte, `usdchecker` passes on the written file, and
   the round-trip script's USD physics leg checks a body, a material and a
-  joint the way the glTF leg does.
+  joint the way the glTF leg does. A `convexHull` collider whose mesh spans
+  no volume gets no shape: `erhe::geometry::make_convex_hull` refuses a
+  point set that `erhe::math::classify_affine_span` finds flat, collinear
+  or coincident before geogram is reached, with one warning naming the
+  reason (`doc/geogram.md` "Degenerate convex hull input").
 - An animation plays through a value layer of its own and an edited clip
   saves as edited (A1). `Animation_sampler::apply` writes the animated
   layer of `doc/property-system.md` D5, so the transform a prim authored
@@ -662,9 +666,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     warned about and dropped, since the erhe six-dof joint takes its frames
     from the two nodes' world transforms; a joint authored off its node's
     origin lands at the origin.
-  - A degenerate convex hull (three coplanar points) aborts the process in
-    geogram's Delaunay path; `make_convex_hull` needs a guard that refuses
-    a volume-less input with an error instead.
   - Jolt asserts `Sleeping body has non-zero linear velocity` when the
     fixture simulates: a body imported with an initial velocity starts
     asleep. Same family as the P6 dynamic-body flake of the round-trip
