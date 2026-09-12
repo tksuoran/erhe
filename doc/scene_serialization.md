@@ -101,7 +101,7 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
    (`parsers/gltf_physics_export.cpp`) converts `Node_physics` /
    `Node_joint` attachments and the content library's physics materials,
    collision filters and joint settings into the plain-data
-   `erhe::gltf::Gltf_physics_data` carrier (`KHR_physics_rigid_bodies` +
+   `erhe::scene::Physics_description` carrier (`KHR_physics_rigid_bodies` +
    `KHR_implicit_shapes`; spec support notes in
    [`khr_physics_rigid_bodies_support.md`](khr_physics_rigid_bodies_support.md)).
    Compound / off-axis shapes export via synthesized child collider nodes;

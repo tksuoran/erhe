@@ -1498,7 +1498,7 @@ auto save_scene_gltf(Scene_root& scene_root, const std::filesystem::path& path) 
         return false;
     }
     std::vector<std::shared_ptr<erhe::physics::Physics_material>> physics_material_items;
-    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(scene, scene_root.get_content_library().get(), &physics_material_items);
+    const erhe::scene::Physics_description physics_data = build_gltf_physics_data(scene, scene_root.get_content_library().get(), &physics_material_items);
     erhe::gltf::Gltf_export_arguments export_arguments{
         .root_node             = *root_node,
         .binary                = path.extension() != std::filesystem::path{".gltf"},

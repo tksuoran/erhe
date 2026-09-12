@@ -4,12 +4,13 @@
 glTF file import and export using the fastgltf library. Loads .gltf/.glb files into
 erhe scene objects (nodes, meshes, cameras, lights, materials, textures, animations, skins)
 and exports erhe scene graphs back to glTF format. Carries KHR_implicit_shapes +
-KHR_physics_rigid_bodies content in and out as plain data (`gltf_physics.hpp`); the editor
+KHR_physics_rigid_bodies content in and out as plain data
+(`erhe::scene::Physics_description`, `erhe_scene/physics_description.hpp`); the editor
 performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_support.md`).
 
 ## Key Types
-- `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers; plus `Gltf_physics_data physics` and `unresolved_object_properties` (object-reference local values of the ERHE_* `properties` maps whose name did not resolve during the parse; the editor resolves them by name once its import operations ran).
-- `Gltf_physics_data` (`gltf_physics.hpp`) -- Plain-data 1:1 carrier for the physics extensions: implicit shapes, physics materials, collision filters, joints, per-node body descriptions (motion / collider / trigger / joint), and export-only `synthesized_colliders` (colliders the exporter places on synthesized glTF child nodes: compound shape children, non-Y shape axes, non-node wrapper scales). Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
+- `Gltf_data` -- Container for all imported scene data: vectors of shared_ptr to animations, cameras, lights, meshes, skins, nodes, materials, textures, samplers; plus `erhe::scene::Physics_description physics` and `unresolved_object_properties` (object-reference local values of the ERHE_* `properties` maps whose name did not resolve during the parse; the editor resolves them by name once its import operations ran).
+- `erhe::scene::Physics_description` (`erhe_scene/physics_description.hpp`, see `src/erhe/scene/notes.md`) -- Plain-data carrier for the physics extensions, filled 1:1 from KHR_implicit_shapes + KHR_physics_rigid_bodies on import and written back from it on export. Collider geometry is mesh-keyed (current spec); node-keyed geometry is still read/written for older files.
 - `Gltf_scan` -- Lightweight scan result listing names of all assets in a glTF file without fully loading them.
 - `Gltf_parse_arguments` -- Parameters for `parse_gltf()`: executor, `Gltf_device_options`, root node, mesh layer, file path. It deliberately holds NO `erhe::graphics::Device` and no `Image_transfer`: `parse_gltf` is structurally device-free so it can run on a worker thread (doc/async-asset-loading.md). Anything device-derived the parse needs is queried by the caller on the main thread via `query_gltf_device_options()` and passed by value.
 - `Gltf_device_options` -- The two device-derived values the parse needs: the transcode format preference for KTX2/Basis images, and max sampler anisotropy.
@@ -19,7 +20,7 @@ performs all mapping to/from erhe::physics (see `doc/khr_physics_rigid_bodies_su
 ## Public API
 - `parse_gltf(arguments)` -- Load a glTF file and return populated `Gltf_data`.
 - `scan_gltf(path)` -- Quick scan returning asset names without full parse.
-- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `Gltf_physics_data` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children/attachments, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0.
+- `export_gltf(Gltf_export_arguments)` -- Export a scene subtree to glTF/GLB string. The optional `erhe::scene::Physics_description` (built by the editor's `build_gltf_physics_data()`) adds the physics extension content and extensionsUsed entries. `external_assets` maps nodes to glTF 2.1 externalAsset references (deduplicated `files` entries; such nodes are written without children/attachments, and the asset version becomes 2.1 + minVersion 2.1). A `(root_node, binary, physics_data)` convenience overload exports plain glTF 2.0.
 - `Image_transfer(device)` -- Create image upload manager.
 - `Image_transfer::upload(image_info, pixels, texture, gen_mipmap)` -- Stage pixel data (full tightly packed mip chain) and record the per-level copies. `blocking_drain` mode only.
 - `Image_transfer::upload_into_frame(command_buffer, ..., remaining_budget_bytes)` -- Same, into the frame's command buffer, decrementing the caller's per-frame byte budget. `frame_recording` mode only. NOTE `Device::allocate_ring_buffer_entry` never refuses -- it spills a new ring buffer sized to the request -- so that budget is the only thing bounding staging memory in this mode.

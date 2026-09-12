@@ -29,6 +29,7 @@ erhe_target_sources_grouped(
     erhe_scene/node.hpp
     erhe_scene/node_attachment.cpp
     erhe_scene/node_attachment.hpp
+    erhe_scene/physics_description.hpp
     erhe_scene/point_instancer.cpp
     erhe_scene/point_instancer.hpp
     erhe_scene/projection.cpp

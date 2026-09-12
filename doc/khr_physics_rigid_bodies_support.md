@@ -17,7 +17,7 @@ content-library assets; triangle-mesh colliders via Jolt MeshShape (static/kinem
 | 2 | `fecd9665` | Shared `Physics_material` / `Collision_filter` / `Physics_joint_settings` items (Item_type bits 38-40); Jolt contact-listener friction/restitution combine (spec precedence); data-driven collision filters (GroupFilter, 64-system bitsets, pair exclusion); trigger enter/exit events on IWorld | done |
 | 3 | `45e406d2` | Generic six-DOF constraint: `Six_dof_constraint_settings` (frames in body node space; axes 0..2 translation, 3..5 rotation) -> JPH::SixDOFConstraint with limits, translation soft limits, position/velocity motors | done |
 | 4 | `cd5bc619`, `13a1fdcb` | Editor: content-library folders (physics_materials, collision_filters, physics_joints); Node_physics accessors (material, filter, trigger, gravity factor, initial velocities, COM offset); new `Node_joint` attachment with Scene_root constraint retry; scene JSON serialization (Scene_file v3, Node_physics_data v2, Collision_shape_data v3 + new defs); properties UI for all of it | done |
-| 5 | `6fa07a4a` | glTF import: extension bits enabled, `erhe_gltf/gltf_physics.hpp` plain-data carrier, `parse_physics()`, editor mapping `parsers/gltf_physics_import.*` (body roots, compound folding, implicit-shape table, hull/mesh colliders, triggers, joints) | done |
+| 5 | `6fa07a4a` | glTF import: extension bits enabled, `erhe_scene/physics_description.hpp` plain-data carrier, `parse_physics()`, editor mapping `parsers/gltf_physics_import.*` (body roots, compound folding, implicit-shape table, hull/mesh colliders, triggers, joints) | done |
 | 5.5 | - | fastgltf spec-compliance fixes, carried in the fork `tksuoran/fastgltf` branch `khr_physics_rigid_bodies` (pinned by commit in the root `CMakeLists.txt` `CPMAddPackage`; CPM `PATCHES` is banned repo-wide, see AGENTS.md): mesh-keyed collider geometry (current spec) for parse + write, spec inertia key names, missing member initializers (convexHull, combine modes, drive maxForce/targets), exporter JSON fixes (extension name, booleans, malformed motion arrays, missing rigid-body close brace, collisionFilters trailing commas, omit infinite maxForce). Editor side: mesh-keyed import via `build_shape_from_mesh()` (builds Geometry from Triangle_soup on demand) | done |
 | 6 | - | glTF export: `parsers/gltf_physics_export.*` `build_gltf_physics_data()` (shape introspection, wrapper unwrap, shared item dedup, synthesized child colliders) + `Gltf_exporter` physics pass + extensionsUsed | done |
 | 7 | - | Polish: trigger events surfaced in the Physics window (bounded per-scene log on Scene_root fed by the IWorld trigger callbacks; count also in MCP list_scenes), joint warnings identify settings + node (were empty Node_joint names), notes.md updates. Cone creation tool parity remains optional/not done | done |
@@ -47,17 +47,17 @@ available for Phase 6 round-trip verification.
 
 ## Design (as implemented)
 
-- Editor-side `build_gltf_physics_data(scene) -> erhe::gltf::Gltf_physics_data`
+- Editor-side `build_gltf_physics_data(scene) -> erhe::scene::Physics_description`
   (`src/editor/parsers/gltf_physics_export.{hpp,cpp}`): walks Node_physics / Node_joint
   attachments; collision shape introspection -> implicit shapes deduped into the top-level
   array; convex hull / mesh shapes -> mesh-keyed `geometry.mesh` references (current spec);
   compound shape children, non-Y shape axes and wrapper scales differing from the node world
-  scale -> `Gltf_physics_data::synthesized_colliders` (extra glTF child nodes created by the
+  scale -> `Physics_description::synthesized_colliders` (extra glTF child nodes created by the
   exporter, scale = wrapper_scale / parent_world_scale); OCOM wrapper unwraps into
   `motion.centerOfMass`; velocities rotate world -> node space; shared materials / filters /
   joint settings dedup by item pointer into top-level arrays.
 - `Gltf_exporter` (src/erhe/gltf/erhe_gltf/gltf_fastgltf.cpp) takes an optional
-  `const Gltf_physics_data*`: process_node records an erhe-node -> gltf-node-index map, then
+  `const erhe::scene::Physics_description*`: process_node records an erhe-node -> gltf-node-index map, then
   process_physics() (before combine_buffers, since mesh-keyed geometry may export meshes on
   demand) fills `asset.shapes` / `physicsMaterials` / `collisionFilters` / `physicsJoints`,
   per-node `node.physicsRigidBody`, synthesized collider child nodes (compound triggers

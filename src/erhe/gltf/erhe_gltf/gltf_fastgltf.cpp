@@ -3216,20 +3216,20 @@ private:
         return m_data_out.nodes[node_index];
     }
 
-    [[nodiscard]] static auto to_physics_combine_mode(const fastgltf::CombineMode combine_mode) -> Physics_combine_mode
+    [[nodiscard]] static auto to_physics_combine_mode(const fastgltf::CombineMode combine_mode) -> erhe::scene::Physics_combine_mode
     {
         switch (combine_mode) {
-            case fastgltf::CombineMode::Average:  return Physics_combine_mode::e_average;
-            case fastgltf::CombineMode::Minimum:  return Physics_combine_mode::e_minimum;
-            case fastgltf::CombineMode::Maximum:  return Physics_combine_mode::e_maximum;
-            case fastgltf::CombineMode::Multiply: return Physics_combine_mode::e_multiply;
-            default:                              return Physics_combine_mode::e_average;
+            case fastgltf::CombineMode::Average:  return erhe::scene::Physics_combine_mode::e_average;
+            case fastgltf::CombineMode::Minimum:  return erhe::scene::Physics_combine_mode::e_minimum;
+            case fastgltf::CombineMode::Maximum:  return erhe::scene::Physics_combine_mode::e_maximum;
+            case fastgltf::CombineMode::Multiply: return erhe::scene::Physics_combine_mode::e_multiply;
+            default:                              return erhe::scene::Physics_combine_mode::e_average;
         }
     }
 
-    [[nodiscard]] auto to_physics_geometry(const fastgltf::Geometry& geometry, const char* purpose) -> Physics_node_geometry
+    [[nodiscard]] auto to_physics_geometry(const fastgltf::Geometry& geometry, const char* purpose) -> erhe::scene::Physics_node_geometry
     {
-        Physics_node_geometry out{};
+        erhe::scene::Physics_node_geometry out{};
         if (geometry.shape.has_value()) {
             out.shape_index = geometry.shape.value();
         }
@@ -3249,35 +3249,35 @@ private:
     }
 
     // Maps KHR_implicit_shapes + KHR_physics_rigid_bodies data parsed by
-    // fastgltf into the plain-data Gltf_physics_data carried in Gltf_data.
+    // fastgltf into the plain-data erhe::scene::Physics_description carried in Gltf_data.
     // The editor performs all further mapping to erhe::physics types.
     void parse_physics()
     {
         ERHE_PROFILE_FUNCTION();
 
-        Gltf_physics_data& physics = m_data_out.physics;
+        erhe::scene::Physics_description& physics = m_data_out.physics;
 
         physics.shapes.reserve(m_asset->shapes.size());
         for (const fastgltf::Shape& shape : m_asset->shapes) {
-            Physics_shape out{};
+            erhe::scene::Physics_shape out{};
             std::visit(
                 fastgltf::visitor{
                     [&out](const fastgltf::SphereShape& sphere) {
-                        out.type   = Physics_shape_type::e_sphere;
+                        out.type   = erhe::scene::Physics_shape_type::e_sphere;
                         out.radius = static_cast<float>(sphere.radius);
                     },
                     [&out](const fastgltf::BoxShape& box) {
-                        out.type = Physics_shape_type::e_box;
+                        out.type = erhe::scene::Physics_shape_type::e_box;
                         out.size = glm::vec3{box.size[0], box.size[1], box.size[2]};
                     },
                     [&out](const fastgltf::CapsuleShape& capsule) {
-                        out.type          = Physics_shape_type::e_capsule;
+                        out.type          = erhe::scene::Physics_shape_type::e_capsule;
                         out.height        = static_cast<float>(capsule.height);
                         out.radius_bottom = static_cast<float>(capsule.radiusBottom);
                         out.radius_top    = static_cast<float>(capsule.radiusTop);
                     },
                     [&out](const fastgltf::CylinderShape& cylinder) {
-                        out.type          = Physics_shape_type::e_cylinder;
+                        out.type          = erhe::scene::Physics_shape_type::e_cylinder;
                         out.height        = static_cast<float>(cylinder.height);
                         out.radius_bottom = static_cast<float>(cylinder.radiusBottom);
                         out.radius_top    = static_cast<float>(cylinder.radiusTop);
@@ -3290,7 +3290,7 @@ private:
 
         physics.materials.reserve(m_asset->physicsMaterials.size());
         for (const fastgltf::PhysicsMaterial& material : m_asset->physicsMaterials) {
-            Physics_material_description out{};
+            erhe::scene::Physics_material_description out{};
             // fastgltf physics materials carry no name; the editor synthesizes one.
             out.static_friction     = static_cast<float>(material.staticFriction);
             out.dynamic_friction    = static_cast<float>(material.dynamicFriction);
@@ -3302,7 +3302,7 @@ private:
 
         physics.collision_filters.reserve(m_asset->collisionFilters.size());
         for (const fastgltf::CollisionFilter& filter : m_asset->collisionFilters) {
-            Physics_collision_filter_description out{};
+            erhe::scene::Physics_collision_filter_description out{};
             for (const auto& system : filter.collisionSystems) {
                 out.collision_systems.emplace_back(system.data(), system.size());
             }
@@ -3317,10 +3317,10 @@ private:
 
         physics.joints.reserve(m_asset->physicsJoints.size());
         for (const fastgltf::PhysicsJoint& joint : m_asset->physicsJoints) {
-            Physics_joint_description out{};
+            erhe::scene::Physics_joint_description out{};
             out.limits.reserve(joint.limits.size());
             for (const fastgltf::JointLimit& limit : joint.limits) {
-                Physics_joint_limit out_limit{};
+                erhe::scene::Physics_joint_limit out_limit{};
                 for (const uint8_t axis : limit.linearAxes) {
                     out_limit.linear_axes.push_back(static_cast<int>(axis));
                 }
@@ -3341,13 +3341,13 @@ private:
             }
             out.drives.reserve(joint.drives.size());
             for (const fastgltf::JointDrive& drive : joint.drives) {
-                Physics_joint_drive out_drive{};
+                erhe::scene::Physics_joint_drive out_drive{};
                 out_drive.type = (drive.type == fastgltf::DriveType::Angular)
-                    ? Physics_drive_type::e_angular
-                    : Physics_drive_type::e_linear;
+                    ? erhe::scene::Physics_drive_type::e_angular
+                    : erhe::scene::Physics_drive_type::e_linear;
                 out_drive.mode = (drive.mode == fastgltf::DriveMode::Acceleration)
-                    ? Physics_drive_mode::e_acceleration
-                    : Physics_drive_mode::e_force;
+                    ? erhe::scene::Physics_drive_mode::e_acceleration
+                    : erhe::scene::Physics_drive_mode::e_force;
                 out_drive.axis            = static_cast<int>(drive.axis);
                 out_drive.max_force       = static_cast<float>(drive.maxForce);
                 out_drive.position_target = static_cast<float>(drive.positionTarget);
@@ -3369,12 +3369,12 @@ private:
                 continue;
             }
             const fastgltf::PhysicsRigidBody& rigid_body = *node.physicsRigidBody.get();
-            Physics_node_description description{};
+            erhe::scene::Physics_node_description description{};
             description.node = erhe_node;
 
             if (rigid_body.motion.has_value()) {
                 const fastgltf::Motion& motion = rigid_body.motion.value();
-                Physics_node_motion out_motion{};
+                erhe::scene::Physics_node_motion out_motion{};
                 out_motion.is_kinematic = motion.isKinematic;
                 if (motion.mass.has_value()) {
                     out_motion.mass = static_cast<float>(motion.mass.value());
@@ -3396,7 +3396,7 @@ private:
 
             if (rigid_body.collider.has_value()) {
                 const fastgltf::Collider& collider = rigid_body.collider.value();
-                Physics_node_collider out_collider{};
+                erhe::scene::Physics_node_collider out_collider{};
                 out_collider.geometry = to_physics_geometry(collider.geometry, "collider geometry");
                 if (collider.physicsMaterial.has_value()) {
                     out_collider.material_index = collider.physicsMaterial.value();
@@ -3408,7 +3408,7 @@ private:
             }
 
             if (rigid_body.trigger.has_value()) {
-                Physics_node_trigger out_trigger{};
+                erhe::scene::Physics_node_trigger out_trigger{};
                 std::visit(
                     fastgltf::visitor{
                         [this, &out_trigger](const fastgltf::GeometryTrigger& geometry_trigger) {
@@ -3433,7 +3433,7 @@ private:
 
             if (rigid_body.joint.has_value()) {
                 const fastgltf::Joint& joint = rigid_body.joint.value();
-                Physics_node_joint out_joint{};
+                erhe::scene::Physics_node_joint out_joint{};
                 out_joint.connected_node   = resolve_physics_node(joint.connectedNode, "joint connected node");
                 out_joint.joint_index      = joint.joint;
                 out_joint.enable_collision = joint.enableCollision;
@@ -6534,13 +6534,13 @@ private:
     }
 
 #if FASTGLTF_ENABLE_KHR_PHYSICS_RIGID_BODIES
-    [[nodiscard]] static auto from_physics_combine_mode(const Physics_combine_mode mode) -> fastgltf::CombineMode
+    [[nodiscard]] static auto from_physics_combine_mode(const erhe::scene::Physics_combine_mode mode) -> fastgltf::CombineMode
     {
         switch (mode) {
-            case Physics_combine_mode::e_average:  return fastgltf::CombineMode::Average;
-            case Physics_combine_mode::e_minimum:  return fastgltf::CombineMode::Minimum;
-            case Physics_combine_mode::e_maximum:  return fastgltf::CombineMode::Maximum;
-            case Physics_combine_mode::e_multiply: return fastgltf::CombineMode::Multiply;
+            case erhe::scene::Physics_combine_mode::e_average:  return fastgltf::CombineMode::Average;
+            case erhe::scene::Physics_combine_mode::e_minimum:  return fastgltf::CombineMode::Minimum;
+            case erhe::scene::Physics_combine_mode::e_maximum:  return fastgltf::CombineMode::Maximum;
+            case erhe::scene::Physics_combine_mode::e_multiply: return fastgltf::CombineMode::Multiply;
             default:                               return fastgltf::CombineMode::Average;
         }
     }
@@ -6549,7 +6549,7 @@ private:
     // (current spec; the mesh is exported on demand) or node index (older
     // spec revision). Returns nullopt (with a warning) when nothing usable
     // can be referenced.
-    [[nodiscard]] auto to_gltf_geometry(const Physics_node_geometry& geometry, const std::string& owner_name) -> std::optional<fastgltf::Geometry>
+    [[nodiscard]] auto to_gltf_geometry(const erhe::scene::Physics_node_geometry& geometry, const std::string& owner_name) -> std::optional<fastgltf::Geometry>
     {
         fastgltf::Geometry out{};
         if (geometry.shape_index.has_value()) {
@@ -6573,23 +6573,23 @@ private:
 
     void process_physics()
     {
-        const Gltf_physics_data& physics = *m_arguments.physics_data;
+        const erhe::scene::Physics_description& physics = *m_arguments.physics_data;
 
-        for (const Physics_shape& shape : physics.shapes) {
+        for (const erhe::scene::Physics_shape& shape : physics.shapes) {
             switch (shape.type) {
-                case Physics_shape_type::e_sphere: {
+                case erhe::scene::Physics_shape_type::e_sphere: {
                     fastgltf::SphereShape sphere{};
                     sphere.radius = shape.radius;
                     m_gltf_asset.shapes.emplace_back(sphere);
                     break;
                 }
-                case Physics_shape_type::e_box: {
+                case erhe::scene::Physics_shape_type::e_box: {
                     fastgltf::BoxShape box{};
                     box.size = fastgltf::math::fvec3{shape.size.x, shape.size.y, shape.size.z};
                     m_gltf_asset.shapes.emplace_back(box);
                     break;
                 }
-                case Physics_shape_type::e_capsule: {
+                case erhe::scene::Physics_shape_type::e_capsule: {
                     fastgltf::CapsuleShape capsule{};
                     capsule.height       = shape.height;
                     capsule.radiusBottom = shape.radius_bottom;
@@ -6597,7 +6597,7 @@ private:
                     m_gltf_asset.shapes.emplace_back(capsule);
                     break;
                 }
-                case Physics_shape_type::e_cylinder:
+                case erhe::scene::Physics_shape_type::e_cylinder:
                 default: {
                     fastgltf::CylinderShape cylinder{};
                     cylinder.height       = shape.height;
@@ -6609,7 +6609,7 @@ private:
             }
         }
 
-        for (const Physics_material_description& material : physics.materials) {
+        for (const erhe::scene::Physics_material_description& material : physics.materials) {
             fastgltf::PhysicsMaterial out{};
             out.staticFriction     = material.static_friction;
             out.dynamicFriction    = material.dynamic_friction;
@@ -6619,7 +6619,7 @@ private:
             m_gltf_asset.physicsMaterials.push_back(out);
         }
 
-        for (const Physics_collision_filter_description& filter : physics.collision_filters) {
+        for (const erhe::scene::Physics_collision_filter_description& filter : physics.collision_filters) {
             fastgltf::CollisionFilter out{};
             for (const std::string& system : filter.collision_systems) {
                 out.collisionSystems.emplace_back(system.data(), system.size());
@@ -6633,9 +6633,9 @@ private:
             m_gltf_asset.collisionFilters.emplace_back(std::move(out));
         }
 
-        for (const Physics_joint_description& joint : physics.joints) {
+        for (const erhe::scene::Physics_joint_description& joint : physics.joints) {
             fastgltf::PhysicsJoint out{};
-            for (const Physics_joint_limit& limit : joint.limits) {
+            for (const erhe::scene::Physics_joint_limit& limit : joint.limits) {
                 fastgltf::JointLimit out_limit{};
                 for (const int axis : limit.linear_axes) {
                     out_limit.linearAxes.emplace_back(static_cast<uint8_t>(axis));
@@ -6655,12 +6655,12 @@ private:
                 out_limit.damping = limit.damping;
                 out.limits.emplace_back(std::move(out_limit));
             }
-            for (const Physics_joint_drive& drive : joint.drives) {
+            for (const erhe::scene::Physics_joint_drive& drive : joint.drives) {
                 fastgltf::JointDrive out_drive{};
-                out_drive.type = (drive.type == Physics_drive_type::e_angular)
+                out_drive.type = (drive.type == erhe::scene::Physics_drive_type::e_angular)
                     ? fastgltf::DriveType::Angular
                     : fastgltf::DriveType::Linear;
-                out_drive.mode = (drive.mode == Physics_drive_mode::e_acceleration)
+                out_drive.mode = (drive.mode == erhe::scene::Physics_drive_mode::e_acceleration)
                     ? fastgltf::DriveMode::Acceleration
                     : fastgltf::DriveMode::Force;
                 out_drive.axis           = static_cast<uint8_t>(drive.axis);
@@ -6677,7 +6677,7 @@ private:
         // Synthesized collider child nodes first, so that compound (node
         // list) triggers can reference them below.
         std::unordered_map<const erhe::scene::Node*, std::vector<std::size_t>> trigger_children_by_parent;
-        for (const Physics_synthesized_collider& collider : physics.synthesized_colliders) {
+        for (const erhe::scene::Physics_synthesized_collider& collider : physics.synthesized_colliders) {
             const std::optional<std::size_t> parent_index = find_gltf_node_index(collider.parent);
             if (!parent_index.has_value()) {
                 log_gltf->warn("glTF physics export: synthesized collider '{}' parent is outside the exported subtree - skipping", collider.name);
@@ -6720,7 +6720,7 @@ private:
             }
         }
 
-        for (const Physics_node_description& description : physics.node_physics) {
+        for (const erhe::scene::Physics_node_description& description : physics.node_physics) {
             const std::optional<std::size_t> node_index = find_gltf_node_index(description.node);
             if (!node_index.has_value()) {
                 log_gltf->warn(
@@ -6735,7 +6735,7 @@ private:
             fastgltf::PhysicsRigidBody& rigid_body = *gltf_node.physicsRigidBody;
 
             if (description.motion.has_value()) {
-                const Physics_node_motion& in_motion = description.motion.value();
+                const erhe::scene::Physics_node_motion& in_motion = description.motion.value();
                 fastgltf::Motion& motion = rigid_body.motion.emplace();
                 motion.isKinematic = in_motion.is_kinematic;
                 if (in_motion.mass.has_value()) {
@@ -6756,7 +6756,7 @@ private:
             }
 
             if (description.collider.has_value()) {
-                const Physics_node_collider& in_collider = description.collider.value();
+                const erhe::scene::Physics_node_collider& in_collider = description.collider.value();
                 const std::optional<fastgltf::Geometry> geometry = to_gltf_geometry(in_collider.geometry, node_name);
                 if (geometry.has_value()) {
                     fastgltf::Collider& collider = rigid_body.collider.emplace();
@@ -6771,7 +6771,7 @@ private:
             }
 
             if (description.trigger.has_value()) {
-                const Physics_node_trigger& in_trigger = description.trigger.value();
+                const erhe::scene::Physics_node_trigger& in_trigger = description.trigger.value();
                 if (in_trigger.geometry.has_value()) {
                     const std::optional<fastgltf::Geometry> geometry = to_gltf_geometry(in_trigger.geometry.value(), node_name);
                     if (geometry.has_value()) {
@@ -6799,7 +6799,7 @@ private:
             }
 
             if (description.joint.has_value()) {
-                const Physics_node_joint& in_joint = description.joint.value();
+                const erhe::scene::Physics_node_joint& in_joint = description.joint.value();
                 const std::optional<std::size_t> connected_index = find_gltf_node_index(in_joint.connected_node);
                 if (!connected_index.has_value()) {
                     log_gltf->warn("glTF physics export: joint on '{}' connects to a node outside the exported subtree - skipping joint", node_name);
@@ -7362,7 +7362,7 @@ auto Gltf_exporter::export_gltf() -> std::string
     return exporter.export_gltf();
 }
 
-[[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary, const Gltf_physics_data* physics_data) -> std::string
+[[nodiscard]] auto export_gltf(const erhe::scene::Node& root_node, bool binary, const erhe::scene::Physics_description* physics_data) -> std::string
 {
     return export_gltf(
         Gltf_export_arguments{

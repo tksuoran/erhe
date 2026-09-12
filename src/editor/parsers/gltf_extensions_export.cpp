@@ -24,7 +24,7 @@
 
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
-#include "erhe_gltf/gltf_physics.hpp"
+#include "erhe_scene/physics_description.hpp"
 #include "erhe_graphics/sampler.hpp"
 #include "erhe_item/hierarchy.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -574,7 +574,7 @@ void add_gltf_editor_state(
         if (arguments.physics_data != nullptr) {
             if (!arguments.physics_data->materials.empty()) {
                 nlohmann::json materials = nlohmann::json::array();
-                const std::vector<erhe::gltf::Physics_material_description>& descriptions = arguments.physics_data->materials;
+                const std::vector<erhe::scene::Physics_material_description>& descriptions = arguments.physics_data->materials;
                 for (std::size_t i = 0; i < descriptions.size(); ++i) {
                     nlohmann::json entry{{"name", descriptions[i].name}};
                     if ((i < physics_material_items.size()) && physics_material_items[i]) {
@@ -586,7 +586,7 @@ void add_gltf_editor_state(
             }
             if (!arguments.physics_data->collision_filters.empty()) {
                 nlohmann::json names = nlohmann::json::array();
-                for (const erhe::gltf::Physics_collision_filter_description& filter : arguments.physics_data->collision_filters) {
+                for (const erhe::scene::Physics_collision_filter_description& filter : arguments.physics_data->collision_filters) {
                     names.push_back(filter.name);
                 }
                 scene_json["collision_filter_names"] = std::move(names);

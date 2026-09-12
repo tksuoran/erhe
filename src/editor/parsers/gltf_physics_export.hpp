@@ -1,6 +1,6 @@
 #pragma once
 
-#include "erhe_gltf/gltf_physics.hpp"
+#include "erhe_scene/physics_description.hpp"
 
 #include <memory>
 #include <vector>
@@ -17,7 +17,7 @@ class Content_library;
 // export. The result references erhe nodes / meshes; Gltf_exporter maps those
 // to glTF indices and creates extra glTF child nodes for the
 // synthesized_colliders entries (compound shape children and non-Y-aligned
-// implicit shapes; see gltf_physics.hpp).
+// implicit shapes; see erhe_scene/physics_description.hpp).
 // When content_library is given, library physics materials / collision
 // filters / joint settings that no body or joint references are appended to
 // the top-level arrays so editor-authored assets survive save / load
@@ -29,6 +29,6 @@ class Content_library;
     const erhe::scene::Scene&                                      scene,
     const Content_library*                                         content_library = nullptr,
     std::vector<std::shared_ptr<erhe::physics::Physics_material>>* material_items  = nullptr
-) -> erhe::gltf::Gltf_physics_data;
+) -> erhe::scene::Physics_description;
 
 }

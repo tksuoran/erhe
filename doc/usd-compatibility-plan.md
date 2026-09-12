@@ -626,9 +626,9 @@ ranks them. A USD scene loads, edits and saves without any of them.
 
 - Physics on load: `UsdPhysics` API schemas become `Node_physics`,
   `Node_joint`, `Physics_material` and `Collision_filter` per the
-  mapping's physics table, through a USD-filled sibling of
-  `Gltf_physics_data` (the physics import operations already take a
-  plain-data carrier); today the importer counts the prims carrying such
+  mapping's physics table, by filling
+  `erhe::scene::Physics_description` from USD (the physics import
+  operations already take that plain-data carrier); today the importer counts the prims carrying such
   schemas in one warning and reads none. The matching save applies the
   API schemas per the same table; erhe-only physics properties (damping,
   wind receptivity, gravity factor, combine modes) ride `erhe:` custom

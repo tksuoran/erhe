@@ -27,7 +27,7 @@ auto export_gltf(const Gltf_export_arguments&) -> std::string
     return {};
 }
 
-auto export_gltf(const erhe::scene::Node&, bool, const Gltf_physics_data*) -> std::string
+auto export_gltf(const erhe::scene::Node&, bool, const erhe::scene::Physics_description*) -> std::string
 {
     return {};
 }

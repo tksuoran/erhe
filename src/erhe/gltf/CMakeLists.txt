@@ -7,7 +7,6 @@ erhe_target_sources_grouped(
     erhe_gltf/gltf_item_flags.hpp
     erhe_gltf/gltf_log.cpp
     erhe_gltf/gltf_log.hpp
-    erhe_gltf/gltf_physics.hpp
     erhe_gltf/image_transfer.cpp
     erhe_gltf/image_transfer.hpp
 )
@@ -38,6 +37,8 @@ target_link_libraries(${_target}
     PUBLIC
         # erhe::math types appear in the public API (Gltf_scan::bounding_box)
         erhe::math
+        # erhe::scene types appear in the public API (Gltf_data, Physics_description)
+        erhe::scene
     PRIVATE
         fmt::fmt
         simdjson::simdjson
@@ -49,7 +50,6 @@ target_link_libraries(${_target}
         erhe::graphics
         erhe::log
         erhe::primitive
-        erhe::scene
 )
 
 erhe_target_settings(${_target} "erhe")

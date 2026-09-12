@@ -1,7 +1,7 @@
 #pragma once
 
 #include "gltf_item_flags.hpp"
-#include "gltf_physics.hpp"
+#include "erhe_scene/physics_description.hpp"
 
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/sampler.hpp"
@@ -266,7 +266,7 @@ public:
     // parse_gltf every entry of `images` is null and the pixels live here.
     Gltf_image_residency                                    image_residency;
     std::vector<std::string>                                extensions;
-    Gltf_physics_data                                       physics;
+    erhe::scene::Physics_description                         physics;
     // KHR_materials_variants (see Gltf_material_variant above), empty when
     // the asset declares no variants.
     std::vector<Gltf_material_variant>                      material_variants;
@@ -495,7 +495,7 @@ public:
     bool                     binary{true};
     // Optional KHR_implicit_shapes + KHR_physics_rigid_bodies content built
     // by the editor (see editor parsers/gltf_physics_export.hpp).
-    const Gltf_physics_data* physics_data{nullptr};
+    const erhe::scene::Physics_description* physics_data{nullptr};
     // Nodes to export as glTF 2.1 externalAsset instances. When any entry
     // is emitted, the asset is written with version + minVersion "2.1";
     // otherwise the exporter keeps writing plain glTF 2.0.
@@ -549,9 +549,9 @@ public:
 
 // Convenience wrapper without glTF 2.1 external assets.
 [[nodiscard]] auto export_gltf(
-    const erhe::scene::Node& root_node,
-    bool                     binary,
-    const Gltf_physics_data* physics_data = nullptr
+    const erhe::scene::Node&                root_node,
+    bool                                    binary,
+    const erhe::scene::Physics_description* physics_data = nullptr
 ) -> std::string;
 
 }

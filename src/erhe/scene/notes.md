@@ -185,6 +185,25 @@ keeps treated as transparent: USD composes an arc's content directly under the
 referencing prim, while erhe keeps the target clone as a level of its own
 (`doc/usd-compatibility-plan.md` X1).
 
+## Physics description
+
+`physics_description.hpp` owns `erhe::scene::Physics_description`, the
+format-neutral plain-data record of a scene file's physics content: implicit
+shapes, physics materials, collision filters, joint descriptions, per-node body
+descriptions (motion / collider / trigger / joint) and export-only
+`synthesized_colliders` (colliders a writer places on child nodes it
+synthesizes: compound shape children, non-Y shape axes, non-node wrapper
+scales). It holds plain data only - glm and std types plus `shared_ptr`
+references into the parsed node set - and names no physics engine type.
+
+The glTF reader fills it from KHR_implicit_shapes + KHR_physics_rigid_bodies
+and the USD reader fills it from UsdPhysics; the editor performs all mapping
+between this record and `erhe::physics` / `Node_physics`, in both directions
+(`doc/khr_physics_rigid_bodies_support.md`,
+`doc/usd-compatibility-plan.md` P1). It lives in `erhe::scene` because both
+readers and the editor's export builder need it and `erhe::usd` does not link
+`erhe::gltf`.
+
 ## Public API
 - Create a `Scene`, add nodes with `register_node()`, attach meshes/cameras/lights.
 - Call `scene.update_node_transforms()` each frame to propagate world transforms.

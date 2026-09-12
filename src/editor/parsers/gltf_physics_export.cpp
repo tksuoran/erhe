@@ -32,14 +32,14 @@ namespace {
 constexpr float k_scale_epsilon     = 1.0e-4f;
 constexpr float k_transform_epsilon = 1.0e-5f;
 
-[[nodiscard]] auto to_gltf_combine_mode(const erhe::physics::Combine_mode mode) -> erhe::gltf::Physics_combine_mode
+[[nodiscard]] auto to_gltf_combine_mode(const erhe::physics::Combine_mode mode) -> erhe::scene::Physics_combine_mode
 {
     switch (mode) {
-        case erhe::physics::Combine_mode::e_average:  return erhe::gltf::Physics_combine_mode::e_average;
-        case erhe::physics::Combine_mode::e_minimum:  return erhe::gltf::Physics_combine_mode::e_minimum;
-        case erhe::physics::Combine_mode::e_maximum:  return erhe::gltf::Physics_combine_mode::e_maximum;
-        case erhe::physics::Combine_mode::e_multiply: return erhe::gltf::Physics_combine_mode::e_multiply;
-        default:                                      return erhe::gltf::Physics_combine_mode::e_average;
+        case erhe::physics::Combine_mode::e_average:  return erhe::scene::Physics_combine_mode::e_average;
+        case erhe::physics::Combine_mode::e_minimum:  return erhe::scene::Physics_combine_mode::e_minimum;
+        case erhe::physics::Combine_mode::e_maximum:  return erhe::scene::Physics_combine_mode::e_maximum;
+        case erhe::physics::Combine_mode::e_multiply: return erhe::scene::Physics_combine_mode::e_multiply;
+        default:                                      return erhe::scene::Physics_combine_mode::e_average;
     }
 }
 
@@ -60,7 +60,7 @@ constexpr float k_transform_epsilon = 1.0e-5f;
     return std::abs(1.0f - std::abs(q.w)) < k_transform_epsilon;
 }
 
-[[nodiscard]] auto same_shape(const erhe::gltf::Physics_shape& a, const erhe::gltf::Physics_shape& b) -> bool
+[[nodiscard]] auto same_shape(const erhe::scene::Physics_shape& a, const erhe::scene::Physics_shape& b) -> bool
 {
     return
         (a.type          == b.type)          &&
@@ -106,7 +106,7 @@ public:
 class Gltf_physics_builder
 {
 public:
-    erhe::gltf::Gltf_physics_data data;
+    erhe::scene::Physics_description data;
 
     std::vector<std::shared_ptr<erhe::physics::Physics_material>> material_items; // data.materials[i] describes material_items[i]
     std::unordered_map<const erhe::physics::Physics_material*,       std::size_t> material_index_map;
@@ -125,7 +125,7 @@ public:
         }
         const std::size_t index = data.materials.size();
         material_index_map.emplace(material.get(), index);
-        erhe::gltf::Physics_material_description description{};
+        erhe::scene::Physics_material_description description{};
         description.name                = material->get_name();
         description.static_friction     = material->get_static_friction();
         description.dynamic_friction    = material->get_dynamic_friction();
@@ -148,7 +148,7 @@ public:
         }
         const std::size_t index = data.collision_filters.size();
         filter_index_map.emplace(filter.get(), index);
-        erhe::gltf::Physics_collision_filter_description description{};
+        erhe::scene::Physics_collision_filter_description description{};
         description.name                     = filter->get_name();
         description.collision_systems        = filter->collision_systems;
         description.collide_with_systems     = filter->collide_with_systems;
@@ -166,7 +166,7 @@ public:
             // joints (the importer materializes a settings item from it).
             if (!free_joint_index.has_value()) {
                 free_joint_index = data.joints.size();
-                data.joints.push_back(erhe::gltf::Physics_joint_description{});
+                data.joints.push_back(erhe::scene::Physics_joint_description{});
             }
             return free_joint_index.value();
         }
@@ -176,11 +176,11 @@ public:
         }
         const std::size_t index = data.joints.size();
         joint_index_map.emplace(settings.get(), index);
-        erhe::gltf::Physics_joint_description description{};
+        erhe::scene::Physics_joint_description description{};
         description.name = settings->get_name();
         description.limits.reserve(settings->limits.size());
         for (const erhe::physics::Joint_limit& limit : settings->limits) {
-            erhe::gltf::Physics_joint_limit out_limit{};
+            erhe::scene::Physics_joint_limit out_limit{};
             for (int axis = 0; axis < 3; ++axis) {
                 if (limit.linear_axes[static_cast<std::size_t>(axis)]) {
                     out_limit.linear_axes.push_back(axis);
@@ -197,13 +197,13 @@ public:
         }
         description.drives.reserve(settings->drives.size());
         for (const erhe::physics::Joint_drive& drive : settings->drives) {
-            erhe::gltf::Physics_joint_drive out_drive{};
+            erhe::scene::Physics_joint_drive out_drive{};
             out_drive.type = (drive.type == erhe::physics::Drive_type::e_angular)
-                ? erhe::gltf::Physics_drive_type::e_angular
-                : erhe::gltf::Physics_drive_type::e_linear;
+                ? erhe::scene::Physics_drive_type::e_angular
+                : erhe::scene::Physics_drive_type::e_linear;
             out_drive.mode = (drive.mode == erhe::physics::Drive_mode::e_acceleration)
-                ? erhe::gltf::Physics_drive_mode::e_acceleration
-                : erhe::gltf::Physics_drive_mode::e_force;
+                ? erhe::scene::Physics_drive_mode::e_acceleration
+                : erhe::scene::Physics_drive_mode::e_force;
             out_drive.axis            = drive.axis;
             out_drive.max_force       = drive.max_force;
             out_drive.position_target = drive.position_target;
@@ -226,29 +226,29 @@ public:
     ) -> std::optional<std::size_t>
     {
         using erhe::physics::Collision_shape_type;
-        erhe::gltf::Physics_shape shape{};
+        erhe::scene::Physics_shape shape{};
         out_axis = base.get_axis().value_or(erhe::physics::Axis::Y);
         switch (base.get_shape_type()) {
             case Collision_shape_type::e_sphere: {
-                shape.type   = erhe::gltf::Physics_shape_type::e_sphere;
+                shape.type   = erhe::scene::Physics_shape_type::e_sphere;
                 shape.radius = base.get_radius().value_or(0.5f);
                 break;
             }
             case Collision_shape_type::e_box: {
-                shape.type = erhe::gltf::Physics_shape_type::e_box;
+                shape.type = erhe::scene::Physics_shape_type::e_box;
                 shape.size = 2.0f * base.get_half_extents().value_or(glm::vec3{0.5f});
                 break;
             }
             case Collision_shape_type::e_capsule: {
                 const float radius  = base.get_radius().value_or(0.25f);
-                shape.type          = erhe::gltf::Physics_shape_type::e_capsule;
+                shape.type          = erhe::scene::Physics_shape_type::e_capsule;
                 shape.height        = base.get_length().value_or(0.5f);
                 shape.radius_bottom = radius;
                 shape.radius_top    = radius;
                 break;
             }
             case Collision_shape_type::e_tapered_capsule: {
-                shape.type          = erhe::gltf::Physics_shape_type::e_capsule;
+                shape.type          = erhe::scene::Physics_shape_type::e_capsule;
                 shape.height        = base.get_length().value_or(0.5f);
                 shape.radius_bottom = base.get_bottom_radius().value_or(0.25f);
                 shape.radius_top    = base.get_top_radius().value_or(0.25f);
@@ -257,14 +257,14 @@ public:
             case Collision_shape_type::e_cylinder: {
                 // Jolt cylinder half extents: x = radius, y = half height.
                 const glm::vec3 half_extents = base.get_half_extents().value_or(glm::vec3{0.25f});
-                shape.type          = erhe::gltf::Physics_shape_type::e_cylinder;
+                shape.type          = erhe::scene::Physics_shape_type::e_cylinder;
                 shape.height        = 2.0f * half_extents.y;
                 shape.radius_bottom = half_extents.x;
                 shape.radius_top    = half_extents.x;
                 break;
             }
             case Collision_shape_type::e_tapered_cylinder: {
-                shape.type          = erhe::gltf::Physics_shape_type::e_cylinder;
+                shape.type          = erhe::scene::Physics_shape_type::e_cylinder;
                 shape.height        = base.get_length().value_or(0.5f);
                 shape.radius_bottom = base.get_bottom_radius().value_or(0.25f);
                 shape.radius_top    = base.get_top_radius().value_or(0.25f);
@@ -320,7 +320,7 @@ auto build_gltf_physics_data(
     const erhe::scene::Scene&                                      scene,
     const Content_library*                                         content_library,
     std::vector<std::shared_ptr<erhe::physics::Physics_material>>* material_items
-) -> erhe::gltf::Gltf_physics_data
+) -> erhe::scene::Physics_description
 {
     Gltf_physics_builder builder{};
 
@@ -352,7 +352,7 @@ auto build_gltf_physics_data(
             return true;
         }
 
-        erhe::gltf::Physics_node_description description{};
+        erhe::scene::Physics_node_description description{};
         description.node = node;
         bool has_content = false;
 
@@ -361,7 +361,7 @@ auto build_gltf_physics_data(
             const bool is_trigger = node_physics->is_trigger();
 
             if (motion_mode != erhe::physics::Motion_mode::e_static) {
-                erhe::gltf::Physics_node_motion motion{};
+                erhe::scene::Physics_node_motion motion{};
                 motion.is_kinematic = (motion_mode != erhe::physics::Motion_mode::e_dynamic);
                 const float mass = node_physics->get_mass(); // 0 while neither authored nor live
                 if (!motion.is_kinematic && (mass > 0.0f)) {
@@ -400,13 +400,13 @@ auto build_gltf_physics_data(
                 // Y axis, wrapper scale matching the node world scale - the
                 // form import produces for simple colliders) or needs a
                 // synthesized child node.
-                std::vector<erhe::gltf::Physics_synthesized_collider> synthesized;
-                std::optional<erhe::gltf::Physics_node_geometry>      direct_geometry;
+                std::vector<erhe::scene::Physics_synthesized_collider> synthesized;
+                std::optional<erhe::scene::Physics_node_geometry>      direct_geometry;
 
                 for (std::size_t entry_index = 0; entry_index < entries.size(); ++entry_index) {
                     const Flat_shape_entry& entry = entries[entry_index];
                     erhe::physics::Axis axis = erhe::physics::Axis::Y;
-                    erhe::gltf::Physics_node_geometry geometry{};
+                    erhe::scene::Physics_node_geometry geometry{};
                     const erhe::physics::Collision_shape_type base_type = entry.base->get_shape_type();
                     const std::optional<std::size_t> shape_index = builder.get_implicit_shape_index(*entry.base, axis);
                     if (shape_index.has_value()) {
@@ -466,7 +466,7 @@ auto build_gltf_physics_data(
                     if ((entries.size() == 1) && identity_transform && unit_scale_ratio) {
                         direct_geometry = geometry;
                     } else {
-                        erhe::gltf::Physics_synthesized_collider collider{};
+                        erhe::scene::Physics_synthesized_collider collider{};
                         collider.parent         = node;
                         collider.name           = fmt::format("{}_collider_{}", node->get_name(), entry_index);
                         collider.rotation       = rotation;
@@ -482,7 +482,7 @@ auto build_gltf_physics_data(
 
                 if (is_trigger) {
                     if (direct_geometry.has_value()) {
-                        erhe::gltf::Physics_node_trigger trigger{};
+                        erhe::scene::Physics_node_trigger trigger{};
                         trigger.geometry     = direct_geometry;
                         trigger.filter_index = filter_index;
                         description.trigger  = std::move(trigger);
@@ -490,14 +490,14 @@ auto build_gltf_physics_data(
                     } else if (!synthesized.empty()) {
                         // Compound trigger: the node gets a node-list trigger
                         // over its synthesized trigger children (the exporter
-                        // resolves the children; see gltf_physics.hpp).
-                        description.trigger = erhe::gltf::Physics_node_trigger{};
+                        // resolves the children; see erhe_scene/physics_description.hpp).
+                        description.trigger = erhe::scene::Physics_node_trigger{};
                         has_content = true;
                     } else {
                         log_parsers->warn("gltf physics export: trigger '{}' has no exportable geometry - skipping trigger", node->get_name());
                     }
                 } else if (direct_geometry.has_value()) {
-                    erhe::gltf::Physics_node_collider collider{};
+                    erhe::scene::Physics_node_collider collider{};
                     collider.geometry       = direct_geometry.value();
                     collider.material_index = material_index;
                     collider.filter_index   = filter_index;
@@ -508,7 +508,7 @@ auto build_gltf_physics_data(
                 // (static compounds without motion) need no rigid-body entry
                 // on the body node itself.
 
-                for (erhe::gltf::Physics_synthesized_collider& collider : synthesized) {
+                for (erhe::scene::Physics_synthesized_collider& collider : synthesized) {
                     builder.data.synthesized_colliders.push_back(std::move(collider));
                 }
             } else if (description.motion.has_value()) {
@@ -534,7 +534,7 @@ auto build_gltf_physics_data(
                     node->get_name()
                 );
             } else {
-                erhe::gltf::Physics_node_joint joint{};
+                erhe::scene::Physics_node_joint joint{};
                 joint.connected_node   = connected_node;
                 joint.joint_index      = builder.get_joint_index(node_joint->get_settings());
                 joint.enable_collision = node_joint->get_enable_collision();

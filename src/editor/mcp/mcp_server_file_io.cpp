@@ -364,7 +364,7 @@ auto Mcp_server::action_export_gltf(const json& args) -> std::string
     }
     const bool editor_state = args.value("editor_state", false);
     std::vector<std::shared_ptr<erhe::physics::Physics_material>> physics_material_items;
-    const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(sr->get_scene(), sr->get_content_library().get(), &physics_material_items);
+    const erhe::scene::Physics_description physics_data = build_gltf_physics_data(sr->get_scene(), sr->get_content_library().get(), &physics_material_items);
     // Prefab instances export as glTF 2.1 externalAsset references instead
     // of flattened content; URIs are relativized against the export
     // directory.

@@ -382,7 +382,7 @@ Ordered by value; each item is independent:
 - **Physics inside prefabs**: `import_gltf` builds physics through separate
   operations, not node attachments cloned by `Node::clone()`. First pass:
   prefab instances carry no physics; follow-up: instantiate
-  `Gltf_physics_data` per instance (needs the same node remap as skins).
+  `erhe::scene::Physics_description` per instance (needs the same node remap as skins).
 - **Content_library is per `Scene_root`** while `Prefab_library` is
   app-wide. Instantiating one prefab into two scenes registers the same
   shared materials/textures in both libraries -- acceptable (textures are

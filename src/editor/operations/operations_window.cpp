@@ -2522,7 +2522,7 @@ void Operations::export_callback(const char* const* filelist, int filter)
 
     if (path.has_value()) {
         const bool binary = true;
-        const erhe::gltf::Gltf_physics_data physics_data = build_gltf_physics_data(scene, scene_root->get_content_library().get());
+        const erhe::scene::Physics_description physics_data = build_gltf_physics_data(scene, scene_root->get_content_library().get());
         // Prefab instances export as glTF 2.1 externalAsset references
         // instead of flattened content.
         std::string gltf = erhe::gltf::export_gltf(

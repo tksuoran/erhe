@@ -1,7 +1,7 @@
 #pragma once
 
 #include "gltf_item_flags.hpp"
-#include "gltf_physics.hpp"
+#include "erhe_scene/physics_description.hpp"
 
 #include "erhe_math/aabb.hpp"
 #include "erhe_scene/instance_override.hpp"
@@ -116,7 +116,7 @@ public:
     std::vector<std::shared_ptr<Gltf_image_source>>         image_sources;
     Gltf_image_residency                                    image_residency;
     std::vector<std::string>                                extensions;
-    Gltf_physics_data                                       physics;
+    erhe::scene::Physics_description                         physics;
     // Object-reference local values of the ERHE_* "properties" maps whose
     // name did not resolve during the parse (see Unresolved_object_property);
     // the editor resolves them in its scene once its operations ran.
@@ -250,9 +250,9 @@ public:
 class Gltf_export_arguments
 {
 public:
-    const erhe::scene::Node& root_node;
-    bool                     binary{true};
-    const Gltf_physics_data* physics_data{nullptr};
+    const erhe::scene::Node&                root_node;
+    bool                                    binary{true};
+    const erhe::scene::Physics_description* physics_data{nullptr};
     std::map<const erhe::scene::Node*, Gltf_export_external_asset> external_assets;
     std::map<const erhe::primitive::Material*, Gltf_export_asset_reference> material_asset_references;
     std::function<std::shared_ptr<const Gltf_image_source>(const erhe::graphics::Texture*)> image_source_provider;
@@ -268,9 +268,9 @@ public:
 [[nodiscard]] auto export_gltf(const Gltf_export_arguments& arguments) -> std::string;
 
 [[nodiscard]] auto export_gltf(
-    const erhe::scene::Node& root_node,
-    bool                     binary,
-    const Gltf_physics_data* physics_data = nullptr
+    const erhe::scene::Node&                root_node,
+    bool                                    binary,
+    const erhe::scene::Physics_description* physics_data = nullptr
 ) -> std::string;
 
 }

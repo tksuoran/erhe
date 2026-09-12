@@ -1,10 +1,12 @@
 #pragma once
 
-// Plain-data description of glTF KHR_implicit_shapes + KHR_physics_rigid_bodies
-// content. erhe::gltf carries these structs in and out of glTF files 1:1 with
-// the glTF data model; the editor performs all mapping between these structs
-// and erhe::physics / Node_physics. This header must stay data-only: glm + std
-// types plus shared_ptr<erhe::scene::Node> references into the parsed node set.
+// Format-neutral, plain-data description of physics content in a scene file.
+// The glTF reader fills it from KHR_implicit_shapes + KHR_physics_rigid_bodies
+// and the USD reader fills it from UsdPhysics; the editor's physics import
+// performs all mapping between these classes and erhe::physics / Node_physics,
+// and the editor's export builder fills the same record for either writer.
+// This header must stay data-only: glm + std types plus shared_ptr references
+// into the parsed node set.
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -17,11 +19,9 @@
 #include <vector>
 
 namespace erhe::scene {
-    class Mesh;
-    class Xformable; using Node = Xformable;
-}
 
-namespace erhe::gltf {
+class Mesh;
+class Xformable; using Node = Xformable;
 
 enum class Physics_shape_type : int {
     e_sphere,
@@ -130,10 +130,10 @@ public:
 class Physics_node_geometry
 {
 public:
-    std::optional<std::size_t>         shape_index; // into Gltf_physics_data::shapes
-    std::shared_ptr<erhe::scene::Mesh> mesh;        // mesh-keyed geometry (current spec)
-    std::shared_ptr<erhe::scene::Node> node;        // mesh-providing node (older spec revision)
-    bool                               convex_hull{false};
+    std::optional<std::size_t> shape_index; // into Physics_description::shapes
+    std::shared_ptr<Mesh>      mesh;        // mesh-keyed geometry (current spec)
+    std::shared_ptr<Node>      node;        // mesh-providing node (older spec revision)
+    bool                       convex_hull{false};
 };
 
 class Physics_node_collider
@@ -147,23 +147,23 @@ public:
 class Physics_node_trigger
 {
 public:
-    std::optional<Physics_node_geometry>            geometry;       // simple trigger
-    std::optional<std::size_t>                      filter_index;
-    std::vector<std::shared_ptr<erhe::scene::Node>> compound_nodes; // compound trigger
+    std::optional<Physics_node_geometry> geometry;       // simple trigger
+    std::optional<std::size_t>           filter_index;
+    std::vector<std::shared_ptr<Node>>   compound_nodes; // compound trigger
 };
 
 class Physics_node_joint
 {
 public:
-    std::shared_ptr<erhe::scene::Node> connected_node;
-    std::size_t                        joint_index{0}; // into joints
-    bool                               enable_collision{false};
+    std::shared_ptr<Node> connected_node;
+    std::size_t           joint_index{0}; // into joints
+    bool                  enable_collision{false};
 };
 
 class Physics_node_description
 {
 public:
-    std::shared_ptr<erhe::scene::Node>   node;
+    std::shared_ptr<Node>                node;
     std::optional<Physics_node_motion>   motion;
     std::optional<Physics_node_collider> collider;
     std::optional<Physics_node_trigger>  trigger;
@@ -182,18 +182,18 @@ public:
 class Physics_synthesized_collider
 {
 public:
-    std::shared_ptr<erhe::scene::Node> parent;
-    std::string                        name;
-    glm::quat                          rotation   {1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3                          translation{0.0f};
-    glm::vec3                          scale      {1.0f};
-    Physics_node_geometry              geometry;
-    std::optional<std::size_t>         material_index; // into materials
-    std::optional<std::size_t>         filter_index;   // into collision_filters
-    bool                               is_trigger {false};
+    std::shared_ptr<Node>      parent;
+    std::string                name;
+    glm::quat                  rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3                  translation{0.0f};
+    glm::vec3                  scale      {1.0f};
+    Physics_node_geometry      geometry;
+    std::optional<std::size_t> material_index; // into materials
+    std::optional<std::size_t> filter_index;   // into collision_filters
+    bool                       is_trigger {false};
 };
 
-class Gltf_physics_data
+class Physics_description
 {
 public:
     std::vector<Physics_shape>                        shapes;
@@ -204,4 +204,4 @@ public:
     std::vector<Physics_synthesized_collider>         synthesized_colliders; // export only
 };
 
-} // namespace erhe::gltf
+} // namespace erhe::scene
