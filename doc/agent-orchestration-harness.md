@@ -14,13 +14,25 @@ output, screenshots it did not need to see).
   time, reviews the resulting diff, commits approved work, keeps the
   memory bank and the queue current.
 - Coder (a fresh `Agent` with `model: opus`, `subagent_type:
-  general-purpose`). Receives one brief, explores what it needs, edits,
+  general-purpose`; `opus` because the coder makes design decisions inside
+  its scope, builds and verifies, and its output is the diff the
+  orchestrator reviews). Receives one brief, explores what it needs, edits,
   builds, runs the brief's verification, and reports in the fixed format
   below. It leaves its changes uncommitted.
-- Scout (a fresh `Agent` with `subagent_type: Explore`, `model: sonnet`
-  or `haiku`). Answers a question the orchestrator needs before writing a
-  brief and returns the conclusion only: symbol locations, which call
-  sites exist, whether a test already covers something.
+- Scout (a fresh `Agent` with `subagent_type: Explore`). Answers a
+  question the orchestrator needs before writing a brief and returns the
+  conclusion only: symbol locations, which call sites exist, whether a
+  test already covers something. A scout always runs on a model cheaper
+  than the coder's: `model: haiku` for a lookup whose answer is a list of
+  locations or a yes / no (where is X declared, which files include Y,
+  does a fixture apply schema Z), `model: sonnet` for a question that
+  needs the code read and summarized (the shape of a class and how its
+  users consume it, how a subsystem's two paths differ). Never `opus`: a
+  scout reads and reports, it decides nothing and edits nothing, and its
+  report is measured in tens of lines, so the stronger model buys no
+  better answer while costing several times more per question. When a
+  scout's answer turns out wrong or thin, ask the same scout a narrower
+  follow-up or launch a second one; do not promote the scout to `opus`.
 
 A fresh agent gets `CLAUDE.md`, `AGENTS.md` and the memory bank the way
 the orchestrator does, so a brief states only what those do not: the
