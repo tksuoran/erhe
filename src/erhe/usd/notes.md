@@ -1017,7 +1017,8 @@ scene's animations over in `Usd_save_arguments::animations`.
 
 A stage is evaluated at one time code: the root layer stack's
 `startTimeCode` when it authors one, else the earliest time any prim of the
-stage samples an `xformOp` at, else USD's default time code. That is the time
+stage samples one of the attributes below at - an `xformOp` or one of the
+attributes "Beyond the transform" names - else USD's default time code. That is the time
 a viewer opens a stage at, so the pose the import gives the scene is the
 reference frame of its clips. Tydra's render-scene conversion, the
 `xformOp` stacks and every value the conversion reads use that one time code.
@@ -1098,8 +1099,46 @@ made while a clip plays writes the same samples a save made after stopping
 does.
 
 A `UsdSkel` `SkelAnimation` contributes its joint channels to this same
-animation ("Skinning" above). Not carried: time samples on any attribute other
-than an `xformOp` or a `SkelAnimation` array, and `Ts` splines.
+animation ("Skinning" above).
+
+#### Beyond the transform
+
+A closed list of attributes beyond the `xformOp`s travels the same way, each
+one an attribute the static conversion already reads one erhe property from,
+so the samples and the pose the import gives the scene say the same thing:
+
+| prim | attribute | erhe property |
+|---|---|---|
+| a UsdLux light | `inputs:intensity` | `Light.intensity` |
+| a UsdLux light | `inputs:color` | `Light.color` |
+| a material's `UsdPreviewSurface` | `inputs:diffuseColor` | `Material.base_color` |
+| a material's `UsdPreviewSurface` | `inputs:roughness` | `Material.roughness` |
+| a material's `UsdPreviewSurface` | `inputs:metallic` | `Material.metallic` |
+| a material's `UsdPreviewSurface` | `inputs:opacity` | `Material.opacity` |
+| any prim | `visibility` | `Item_base.visible` |
+
+The samples are read raw off the composed layer's prim spec: LightUSD
+evaluates an attribute carrying both a `default` and samples at its `default`
+whatever time code it is asked for, so the schema value is the pose at the
+evaluation time code and the layer is the authority on the keys. A blocked
+sample is skipped, and samples of a value type erhe has no counterpart for
+cost one warning and leave the attribute unanimated. Each attribute becomes
+one more channel of the file's animation, keyed in seconds and interpolated
+linearly. erhe's roughness is anisotropic and a `UsdPreviewSurface` roughness
+is one number, so each sample fills both components; `visibility` becomes the
+boolean `visible`, which has nothing between two keys and so holds the
+previous one (`src/erhe/scene/notes.md`, "Animation playback").
+
+A save writes these attributes' `timeSamples` from the clip's keys alone -
+there is no authored-sample record beside them, unlike `Xform_op::samples` -
+one sample per key, at `key time * timeCodesPerSecond` and beside the default
+the writer already wrote from the item's own value. The samples extend the
+same `startTimeCode` / `endTimeCode` range the sampled `xformOp`s do. A
+channel driving any property outside the table is not written, and one
+warning per animation names the properties.
+
+Not carried: time samples on any attribute other than those above, an
+`xformOp` or a `SkelAnimation` array, and `Ts` splines.
 
 ### Physics
 

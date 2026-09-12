@@ -421,6 +421,108 @@ template <typename T>
     return found;
 }
 
+// The non-xformOp attributes erhe carries as animation channels
+// (src/erhe/usd/notes.md, "Time samples"): every one of them is an attribute
+// the static conversion already reads one erhe property from, so the samples
+// and the pose the import gives the scene say the same thing.
+constexpr std::array<std::string_view, 7> c_sampled_attribute_names{
+    std::string_view{"visibility"},
+    std::string_view{"inputs:intensity"},
+    std::string_view{"inputs:color"},
+    std::string_view{"inputs:diffuseColor"},
+    std::string_view{"inputs:roughness"},
+    std::string_view{"inputs:metallic"},
+    std::string_view{"inputs:opacity"}
+};
+
+// How one sample value of such an attribute fills the components of the erhe
+// property it drives.
+enum class Sampled_attribute_kind
+{
+    scalar,      // one number, into the one component the property has
+    scalar_pair, // one number, into both components of a vec2 (roughness)
+    color,       // three numbers
+    visibility   // a token, as the boolean `visible`
+};
+
+// One sample value in the packing an Animation_sampler holds: the leading
+// components carry the value, the rest stay at zero. A number arrives as
+// `float`, `double` or `half`, a color as `color3f`, `float3` or `double3`,
+// and `visibility` as the token USD spells it with.
+[[nodiscard]] auto read_sampled_attribute_value(
+    const lightusd::value::Value& value,
+    const Sampled_attribute_kind  kind,
+    glm::vec4&                    out_value
+) -> bool
+{
+    out_value = glm::vec4{0.0f, 0.0f, 0.0f, 0.0f};
+    switch (kind) {
+        case Sampled_attribute_kind::scalar:
+        case Sampled_attribute_kind::scalar_pair: {
+            float scalar{0.0f};
+            if (const nonstd::optional<float> as_float = value.get_value<float>()) {
+                scalar = as_float.value();
+            } else if (const nonstd::optional<double> as_double = value.get_value<double>()) {
+                scalar = static_cast<float>(as_double.value());
+            } else if (const nonstd::optional<lightusd::value::half> as_half = value.get_value<lightusd::value::half>()) {
+                scalar = lightusd::value::half_to_float(as_half.value());
+            } else {
+                return false;
+            }
+            out_value.x = scalar;
+            if (kind == Sampled_attribute_kind::scalar_pair) {
+                out_value.y = scalar;
+            }
+            return true;
+        }
+        case Sampled_attribute_kind::color: {
+            if (const nonstd::optional<lightusd::value::color3f> as_color = value.get_value<lightusd::value::color3f>()) {
+                out_value = glm::vec4{as_color.value()[0], as_color.value()[1], as_color.value()[2], 0.0f};
+                return true;
+            }
+            if (const nonstd::optional<lightusd::value::float3> as_float3 = value.get_value<lightusd::value::float3>()) {
+                out_value = glm::vec4{as_float3.value()[0], as_float3.value()[1], as_float3.value()[2], 0.0f};
+                return true;
+            }
+            if (const nonstd::optional<lightusd::value::double3> as_double3 = value.get_value<lightusd::value::double3>()) {
+                out_value = glm::vec4{
+                    static_cast<float>(as_double3.value()[0]),
+                    static_cast<float>(as_double3.value()[1]),
+                    static_cast<float>(as_double3.value()[2]),
+                    0.0f
+                };
+                return true;
+            }
+            return false;
+        }
+        default: {
+            const nonstd::optional<lightusd::value::token> as_token = value.get_value<lightusd::value::token>();
+            if (!as_token) {
+                return false;
+            }
+            out_value.x = (as_token.value().str() == "invisible") ? 0.0f : 1.0f;
+            return true;
+        }
+    }
+}
+
+// The time samples one attribute of a layer prim spec authors, or null.
+[[nodiscard]] auto find_spec_attribute_time_samples(
+    const lightusd::PrimSpec& spec,
+    const std::string_view    attribute_name
+) -> const lightusd::value::TimeSamples*
+{
+    const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find(std::string{attribute_name});
+    if ((i == spec.props().end()) || !i->second.is_attribute()) {
+        return nullptr;
+    }
+    const lightusd::primvar::PrimVar& var = i->second.get_attribute().get_var();
+    if (!var.has_timesamples()) {
+        return nullptr;
+    }
+    return &var.ts_raw();
+}
+
 // One authored `xformOp:<type>[:<suffix>]` as an erhe Xform_op: the type, the
 // suffix and the invert flag as authored, the value at `time_code` in double
 // precision, the authored time samples when the op has any, and the authored
@@ -827,7 +929,42 @@ private:
         for (const lightusd::Prim& prim : stage.root_prims()) {
             find_earliest_sample_time(prim, earliest_sample_time, m_has_time_samples);
         }
+        if (has_layer()) {
+            for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_impl->layer.primspecs()) {
+                find_earliest_attribute_sample_time(entry.second, earliest_sample_time, m_has_time_samples);
+            }
+        }
         m_import_time_code = out.start_time_code_authored ? out.start_time_code : earliest_sample_time;
+    }
+
+    // The earliest time any prim spec of the layer samples one of the
+    // attributes the animation carries beyond the transform
+    // (c_sampled_attribute_names). A stage whose only samples are on those
+    // attributes is evaluated at that time, the way a sampled `xformOp`
+    // decides it.
+    static void find_earliest_attribute_sample_time(
+        const lightusd::PrimSpec& spec,
+        double&                   out_time_code,
+        bool&                     out_found
+    )
+    {
+        for (const std::string_view attribute_name : c_sampled_attribute_names) {
+            const lightusd::value::TimeSamples* samples = find_spec_attribute_time_samples(spec, attribute_name);
+            if (samples == nullptr) {
+                continue;
+            }
+            const nonstd::optional<double> time = samples->get_time(0);
+            if (!time) {
+                continue;
+            }
+            if (!out_found || (time.value() < out_time_code)) {
+                out_time_code = time.value();
+                out_found     = true;
+            }
+        }
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            find_earliest_attribute_sample_time(child, out_time_code, out_found);
+        }
     }
 
     // The earliest time any xformOp of `prim` or its descendants samples.
@@ -1050,6 +1187,154 @@ private:
         );
     }
 
+    // One time-sampled attribute of one prim as a channel of the file's
+    // animation (src/erhe/usd/notes.md, "Time samples"). The samples are read
+    // raw off the composed layer's prim spec - LightUSD evaluates an
+    // attribute that carries both a default and samples at its default,
+    // whatever time code it is asked for - and are keyed in seconds, the
+    // division the sampled `xformOp`s take. The static value the conversion
+    // already wrote stays what it is: it is the pose at the evaluation time
+    // code, which is the reference frame of the clip.
+    void add_attribute_channel(
+        std::shared_ptr<erhe::scene::Animation>&   animation,
+        const double                               time_codes_per_second,
+        const std::string&                         absolute_path,
+        const std::string_view                     attribute_name,
+        const std::shared_ptr<erhe::Item_base>&    target,
+        const erhe::property::Dependency_property* property,
+        const Sampled_attribute_kind               kind
+    )
+    {
+        if (!target || (property == nullptr)) {
+            return;
+        }
+        const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
+        if (spec == nullptr) {
+            return;
+        }
+        const lightusd::value::TimeSamples* samples = find_spec_attribute_time_samples(*spec, attribute_name);
+        if (samples == nullptr) {
+            return;
+        }
+        const std::size_t component_count = erhe::scene::get_component_count(*property);
+        if (component_count == 0) {
+            return;
+        }
+        const std::vector<lightusd::value::TimeSamples::Sample>& raw_samples = samples->get_samples();
+        std::vector<float> timestamps;
+        std::vector<float> values;
+        timestamps.reserve(raw_samples.size());
+        values.reserve(raw_samples.size() * component_count);
+        for (const lightusd::value::TimeSamples::Sample& sample : raw_samples) {
+            if (sample.blocked) {
+                continue;
+            }
+            glm::vec4 value{0.0f, 0.0f, 0.0f, 0.0f};
+            if (!read_sampled_attribute_value(sample.value, kind, value)) {
+                log_usd->warn(
+                    "USD prim '{}': the time samples of '{}' are of a value type erhe does not read - the attribute is not animated",
+                    absolute_path, attribute_name
+                );
+                return;
+            }
+            timestamps.push_back(static_cast<float>(sample.t / time_codes_per_second));
+            for (std::size_t component = 0; component < component_count; ++component) {
+                values.push_back(value[static_cast<glm::length_t>(component)]);
+            }
+        }
+        if (timestamps.empty()) {
+            return;
+        }
+        ensure_animation(animation);
+        // USD interpolates the time samples of a floating-point attribute
+        // linearly and authors no per-attribute interpolation; a value with
+        // nothing between two keys - `visibility` - holds the previous key
+        // whatever the sampler says (src/erhe/scene/notes.md, "Animation
+        // playback").
+        erhe::scene::Animation_sampler sampler{erhe::scene::Animation_interpolation_mode::LINEAR};
+        sampler.set(std::move(timestamps), std::move(values));
+        animation->samplers.push_back(std::move(sampler));
+        animation->channels.push_back(
+            erhe::scene::Animation_channel{
+                .property       = property,
+                .sampler_index  = animation->samplers.size() - 1,
+                .target         = target,
+                .start_position = 0,
+                .value_offset   = 0
+            }
+        );
+    }
+
+    // The time samples of the attributes beyond the transform, as channels of
+    // the file's animation: a UsdLux light's `inputs:intensity` and
+    // `inputs:color`, a UsdPreviewSurface's `inputs:diffuseColor`,
+    // `inputs:roughness`, `inputs:metallic` and `inputs:opacity`, and any
+    // prim's `visibility`. Each names the erhe property the static conversion
+    // reads from that same attribute, so the two never disagree.
+    void add_attribute_animation_channels(
+        std::shared_ptr<erhe::scene::Animation>& animation,
+        const double                             time_codes_per_second
+    )
+    {
+        if (!has_layer() || (m_scene == nullptr)) {
+            return;
+        }
+        for (std::size_t light_index = 0, end = m_scene->lights.size(); light_index < end; ++light_index) {
+            if (light_index >= m_result.data.lights.size()) {
+                break;
+            }
+            const std::shared_ptr<erhe::scene::Light>& light = m_result.data.lights[light_index];
+            if (!light) {
+                continue;
+            }
+            const std::string& path = m_scene->lights[light_index].abs_path;
+            add_attribute_channel(
+                animation, time_codes_per_second, path, "inputs:intensity",
+                light, erhe::scene::Light::intensity_property.get_ptr(), Sampled_attribute_kind::scalar
+            );
+            add_attribute_channel(
+                animation, time_codes_per_second, path, "inputs:color",
+                light, erhe::scene::Light::color_property.get_ptr(), Sampled_attribute_kind::color
+            );
+        }
+        for (std::size_t material_index = 0, end = m_scene->materials.size(); material_index < end; ++material_index) {
+            if (material_index >= m_result.data.materials.size()) {
+                break;
+            }
+            const std::shared_ptr<erhe::primitive::Material>& material = m_result.data.materials[material_index];
+            if (!material) {
+                continue;
+            }
+            const std::string shader_path = find_surface_shader_path(m_scene->materials[material_index].abs_path);
+            if (shader_path.empty()) {
+                continue;
+            }
+            using erhe::primitive::Material;
+            add_attribute_channel(
+                animation, time_codes_per_second, shader_path, "inputs:diffuseColor",
+                material, Material::base_color_property.get_ptr(), Sampled_attribute_kind::color
+            );
+            add_attribute_channel(
+                animation, time_codes_per_second, shader_path, "inputs:roughness",
+                material, Material::roughness_property.get_ptr(), Sampled_attribute_kind::scalar_pair
+            );
+            add_attribute_channel(
+                animation, time_codes_per_second, shader_path, "inputs:metallic",
+                material, Material::metallic_property.get_ptr(), Sampled_attribute_kind::scalar
+            );
+            add_attribute_channel(
+                animation, time_codes_per_second, shader_path, "inputs:opacity",
+                material, Material::opacity_property.get_ptr(), Sampled_attribute_kind::scalar
+            );
+        }
+        for (const std::pair<const std::string, std::shared_ptr<erhe::scene::Node>>& entry : m_node_by_path) {
+            add_attribute_channel(
+                animation, time_codes_per_second, entry.first, "visibility",
+                entry.second, erhe::Item_base::visible_property.get_ptr(), Sampled_attribute_kind::visibility
+            );
+        }
+    }
+
     void build_animation()
     {
         const double time_codes_per_second = (m_result.data.time_codes.time_codes_per_second > 0.0)
@@ -1120,12 +1405,13 @@ private:
             }
         }
         add_skeletal_animation_channels(animation, time_codes_per_second);
+        add_attribute_animation_channels(animation, time_codes_per_second);
         if (!animation) {
             return;
         }
         animation->notify_keyframes_changed();
         log_usd->info(
-            "USD '{}': {} time-sampled transform channel(s) as animation '{}'",
+            "USD '{}': {} time-sampled channel(s) as animation '{}'",
             m_arguments.path.generic_string(), animation->channels.size(), animation->get_name()
         );
         m_result.data.animations.push_back(std::move(animation));

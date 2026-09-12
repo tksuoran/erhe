@@ -533,6 +533,21 @@ public:
     const erhe::scene::Animation_sampler* scale      {nullptr};
 };
 
+// The channels of `Usd_save_arguments::animations` that drive one item's
+// non-xformOp attributes: the closed list of attributes a save carries
+// beyond the transform (src/erhe/usd/notes.md, "Time samples").
+class Item_attribute_channels final
+{
+public:
+    const erhe::scene::Animation_sampler* visible   {nullptr};
+    const erhe::scene::Animation_sampler* intensity {nullptr};
+    const erhe::scene::Animation_sampler* color     {nullptr};
+    const erhe::scene::Animation_sampler* base_color{nullptr};
+    const erhe::scene::Animation_sampler* roughness {nullptr};
+    const erhe::scene::Animation_sampler* metallic  {nullptr};
+    const erhe::scene::Animation_sampler* opacity   {nullptr};
+};
+
 class Skeleton_record final
 {
 public:
@@ -892,6 +907,7 @@ public:
         // written: a sampled stack is reconciled with them
         // (src/erhe/usd/notes.md, "Time samples").
         collect_transform_channels();
+        collect_attribute_channels();
 
         // Pass one: where every prim lands on the stage. A prim's path is
         // only known once its ancestors have their sanitized, sibling-unique
@@ -1088,6 +1104,10 @@ private:
     // the node each drives, and the prims whose edited clip the authored ops
     // could not hold ("Reconciling an edited clip with the authored ops").
     std::map<const erhe::scene::Node*, Node_transform_channels> m_transform_channels;
+
+    // The channels driving a non-xformOp attribute, by the item each drives
+    // (src/erhe/usd/notes.md, "Time samples").
+    std::map<const erhe::Item_base*, Item_attribute_channels>    m_attribute_channels;
     std::set<const erhe::scene::Node*>                          m_write_back_refusals;
     bool                                                        m_warned_interpolation{false};
 
@@ -1208,6 +1228,14 @@ private:
         if (is_local(item, erhe::Item_base::purpose_property.get())) {
             typed_prim.purpose.set_value(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property)));
         }
+        // A clip driving `visible` writes the token samples beside that
+        // value (src/erhe/usd/notes.md, "Time samples").
+        write_sampled_attribute<lightusd::Visibility>(
+            typed_prim.visibility, get_attribute_channels(item).visible, 1,
+            [](const glm::vec4& value) -> lightusd::Visibility {
+                return (value.x != 0.0f) ? lightusd::Visibility::Inherited : lightusd::Visibility::Invisible;
+            }
+        );
         write_active(item, typed_prim);
     }
 
@@ -1910,6 +1938,29 @@ private:
         if (is_local(material, Material::occlusion_texture_strength_property.get())) {
             surface.occlusion.set_value(material.get_value(Material::occlusion_texture_strength_property));
         }
+        // The samples of a clip driving the material, beside those values
+        // (src/erhe/usd/notes.md, "Time samples"). erhe's roughness is
+        // anisotropic and UsdPreviewSurface has one, so a sampled roughness
+        // writes the x component of each key, the way the plain value does.
+        const Item_attribute_channels channels = get_attribute_channels(material);
+        write_sampled_attribute<lightusd::value::color3f>(
+            surface.diffuseColor, channels.base_color, 3,
+            [](const glm::vec4& value) -> lightusd::value::color3f {
+                return lightusd::value::color3f{value.x, value.y, value.z};
+            }
+        );
+        write_sampled_attribute<float>(
+            surface.roughness, channels.roughness, 2,
+            [](const glm::vec4& value) -> float { return value.x; }
+        );
+        write_sampled_attribute<float>(
+            surface.metallic, channels.metallic, 1,
+            [](const glm::vec4& value) -> float { return value.x; }
+        );
+        write_sampled_attribute<float>(
+            surface.opacity, channels.opacity, 1,
+            [](const glm::vec4& value) -> float { return value.x; }
+        );
         // UsdPreviewSurface says a positive opacityThreshold is a cutout;
         // that threshold is the only form the erhe blending mode has, so it
         // is written for an alpha-test material and for nothing else.
@@ -3634,6 +3685,131 @@ private:
     // by the node each drives. A channel reading its sampler at a value
     // offset is left out: its keys are not the sampler's own, and the
     // write-back reads keys rather than resampling.
+    // Index the channels driving the attributes a save carries beyond the
+    // transform, by the item each drives (src/erhe/usd/notes.md, "Time
+    // samples"). A channel reading its sampler at a value offset is left out
+    // for the reason collect_transform_channels() gives, and a channel
+    // driving any other property is named in one warning per animation: USD
+    // has no carrier for it in this writer.
+    void collect_attribute_channels()
+    {
+        using erhe::primitive::Material;
+        using erhe::scene::Light;
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : m_arguments.animations) {
+            if (!animation) {
+                continue;
+            }
+            std::set<std::string> skipped_property_names;
+            for (const erhe::scene::Animation_channel& channel : animation->channels) {
+                if (
+                    !channel.target ||
+                    (channel.property == nullptr) ||
+                    (channel.sampler_index >= animation->samplers.size()) ||
+                    (channel.value_offset != 0)
+                ) {
+                    continue;
+                }
+                if (erhe::scene::get_animation_path(channel) != erhe::scene::Animation_path::INVALID) {
+                    continue; // a transform channel; collect_transform_channels() has it
+                }
+                const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
+                Item_attribute_channels&               entry   = m_attribute_channels[channel.target.get()];
+                const erhe::scene::Animation_sampler** target   = nullptr;
+                if (channel.property == erhe::Item_base::visible_property.get_ptr()) {
+                    target = &entry.visible;
+                } else if (channel.property == Light::intensity_property.get_ptr()) {
+                    target = &entry.intensity;
+                } else if (channel.property == Light::color_property.get_ptr()) {
+                    target = &entry.color;
+                } else if (channel.property == Material::base_color_property.get_ptr()) {
+                    target = &entry.base_color;
+                } else if (channel.property == Material::roughness_property.get_ptr()) {
+                    target = &entry.roughness;
+                } else if (channel.property == Material::metallic_property.get_ptr()) {
+                    target = &entry.metallic;
+                } else if (channel.property == Material::opacity_property.get_ptr()) {
+                    target = &entry.opacity;
+                } else {
+                    skipped_property_names.insert(std::string{channel.property->get_name()});
+                    continue;
+                }
+                if (*target == nullptr) {
+                    *target = &sampler;
+                }
+            }
+            if (!skipped_property_names.empty()) {
+                std::string names;
+                for (const std::string& name : skipped_property_names) {
+                    if (!names.empty()) {
+                        names += ", ";
+                    }
+                    names += name;
+                }
+                add_warning(
+                    fmt::format(
+                        "animation '{}' drives {} - USD carries no time samples for that property here, so the channel is not written",
+                        animation->get_name(), names
+                    )
+                );
+            }
+        }
+    }
+
+    // The channels of one item, or an empty record.
+    [[nodiscard]] auto get_attribute_channels(const erhe::Item_base& item) const -> Item_attribute_channels
+    {
+        const std::map<const erhe::Item_base*, Item_attribute_channels>::const_iterator i =
+            m_attribute_channels.find(&item);
+        return (i != m_attribute_channels.end()) ? i->second : Item_attribute_channels{};
+    }
+
+    // One schema attribute written with the samples of the channel driving it
+    // (src/erhe/usd/notes.md, "Time samples"): one sample per key, at
+    // `key time * timeCodesPerSecond`, beside the default the caller already
+    // wrote. No authored sample record is kept for these attributes, so the
+    // keys are always what a save writes.
+    template <typename T, typename Value_of_key>
+    void write_sampled_attribute(
+        lightusd::TypedAttributeWithFallback<lightusd::Animatable<T>>& attribute,
+        const erhe::scene::Animation_sampler*                          sampler,
+        const std::size_t                                              component_count,
+        Value_of_key&&                                                 value_of_key
+    )
+    {
+        if ((sampler == nullptr) || (component_count == 0)) {
+            return;
+        }
+        const std::size_t key_count = std::min(
+            sampler->timestamps.size(),
+            sampler->data.size() / component_count
+        );
+        if (key_count == 0) {
+            return;
+        }
+        const double time_codes_per_second = (m_arguments.time_codes_per_second > 0.0)
+            ? m_arguments.time_codes_per_second
+            : 24.0;
+        lightusd::Animatable<T> animatable;
+        if (attribute.authored() && attribute.get_value().has_value()) {
+            T scalar{};
+            if (attribute.get_value().get_scalar(&scalar)) {
+                animatable.set(scalar);
+            }
+        }
+        for (std::size_t key = 0; key < key_count; ++key) {
+            glm::vec4 value{0.0f, 0.0f, 0.0f, 0.0f};
+            for (std::size_t component = 0; component < component_count; ++component) {
+                value[static_cast<glm::length_t>(component)] = sampler->data[(key * component_count) + component];
+            }
+            const double time_code = static_cast<double>(sampler->timestamps[key]) * time_codes_per_second;
+            animatable.add_sample(time_code, value_of_key(value));
+            m_first_time_code = m_wrote_time_samples ? std::min(m_first_time_code, time_code) : time_code;
+            m_last_time_code  = m_wrote_time_samples ? std::max(m_last_time_code,  time_code) : time_code;
+            m_wrote_time_samples = true;
+        }
+        attribute.set_value(animatable);
+    }
+
     void collect_transform_channels()
     {
         for (const std::shared_ptr<erhe::scene::Animation>& animation : m_arguments.animations) {
@@ -5376,7 +5552,7 @@ private:
 
     // The UsdLux inputs erhe fills, shared by every light type.
     template <typename T>
-    static void write_light_api(const erhe::scene::Light& light, T& usd_light)
+    void write_light_api(const erhe::scene::Light& light, T& usd_light)
     {
         using erhe::scene::Light;
 
@@ -5397,6 +5573,19 @@ private:
         if (is_local(light, Light::cast_shadow_property.get())) {
             usd_light.shadowEnable.set_value(light.get_value(Light::cast_shadow_property));
         }
+        // The samples of a clip driving the light, beside those values
+        // (src/erhe/usd/notes.md, "Time samples").
+        const Item_attribute_channels channels = get_attribute_channels(light);
+        write_sampled_attribute<float>(
+            usd_light.intensity, channels.intensity, 1,
+            [](const glm::vec4& value) -> float { return value.x; }
+        );
+        write_sampled_attribute<lightusd::value::color3f>(
+            usd_light.color, channels.color, 3,
+            [](const glm::vec4& value) -> lightusd::value::color3f {
+                return lightusd::value::color3f{value.x, value.y, value.z};
+            }
+        );
     }
 
     [[nodiscard]] auto write_light_prim(

@@ -1,0 +1,77 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Y"
+    timeCodesPerSecond = 24
+    startTimeCode = 0
+    endTimeCode = 24
+    defaultPrim = "World"
+)
+
+def Xform "World"
+{
+    def Scope "Materials"
+    {
+        def Material "surf"
+        {
+            token outputs:surface.connect = </World/Materials/surf/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 0, 0)
+                color3f inputs:diffuseColor.timeSamples = {
+                    0: (1, 0, 0),
+                    24: (0, 0, 1),
+                }
+
+                float inputs:roughness = 0.25
+                float inputs:roughness.timeSamples = {
+                    0: 0.25,
+                    24: 0.75,
+                }
+
+                token outputs:surface
+            }
+        }
+    }
+
+    def Mesh "panel"
+    (
+         apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        normal3f[] normals = [(0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0)] (
+            interpolation = "faceVarying"
+        )
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        int[] faceVertexCounts = [4]
+        uniform token subdivisionScheme = "none"
+        token visibility = "inherited"
+        token visibility.timeSamples = {
+            0: "inherited",
+            12: "invisible",
+            24: "inherited",
+        }
+
+        rel material:binding = </World/Materials/surf>
+        custom bool erhe:Mesh:shadow_cast = 1
+    }
+
+    def SphereLight "key"
+    {
+        color3f inputs:color.timeSamples = {
+            0: (1, 1, 1),
+            24: (0, 1, 0),
+        }
+
+        float inputs:intensity = 100
+        float inputs:intensity.timeSamples = {
+            0: 100,
+            24: 300,
+        }
+
+        float inputs:radius = 0
+    }
+}
