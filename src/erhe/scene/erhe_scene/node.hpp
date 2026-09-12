@@ -188,6 +188,26 @@ public:
     // write the transform components in place.
     void handle_local_transform_written(World_transform_state world_state);
 
+    // The animated layer (doc/property-system.md D5) over the local
+    // transform: while an animation plays over this prim, the transform it
+    // holds is the pose and the base under it is the authored transform.
+    // A transform write made while the layer is present edits the base, so
+    // the next sampled frame still plays and a save writes the edit.
+    [[nodiscard]] auto is_local_transform_animated        () const -> bool;
+    // Drops the animated layer of all three transform components at once, so
+    // the prim holds the transform it authored again. The components come back
+    // one at a time but the tail of the write - the xformOp write-back, the
+    // world transform and the notification - runs once, when the transform is
+    // whole: a half-restored transform must never reach the authored stack.
+    void clear_animated_local_transform();
+    // True while clear_animated_local_transform() is writing the components of
+    // one transform; the bridged transform properties then only store.
+    [[nodiscard]] auto is_local_transform_write_deferred  () const -> bool;
+    // The local transform with the animated layer taken off: what the prim
+    // holds when playback stops, and what every serializer writes. Equal to
+    // parent_from_node_transform() while nothing animates the prim.
+    [[nodiscard]] auto authored_parent_from_node_transform() const -> Trs_transform;
+
     void node_sanity_check     (bool destruction_in_progress = false) const;
     void update_world_from_node();
     void update_transform      (uint64_t serial);
@@ -231,8 +251,17 @@ private:
     // Applies m_xform_op_stack's composition to parent_from_node without
     // running the write-back.
     void apply_xform_op_stack_composition();
+    // Writes a whole transform as the base under the animated layer (D5),
+    // component by component through the bridged properties: the component
+    // an animation drives keeps its pose and takes the new base, and a
+    // component nothing drives takes the write the way any authored write
+    // does. The setters call it in place of writing parent_from_node.
+    void write_animation_base_transform(const Trs_transform& transform);
 
     std::unique_ptr<Xform_op_stack> m_xform_op_stack;
+    // Set while clear_animated_local_transform() writes the components of one
+    // transform: the bridged property writes then only store.
+    bool                            m_local_transform_write_deferred{false};
     // The collapse of an unrepresentable edit is logged once per prim.
     bool                            m_xform_op_stack_collapse_logged{false};
 };

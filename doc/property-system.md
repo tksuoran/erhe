@@ -1371,13 +1371,20 @@ transform's skew component stays internal. `world_from_node` stays a
 derived cache; the world components are exposed as computed properties
 (D26), not stored ones.
 
-`Animation_sampler::apply` keeps writing the `Trs_transform` directly; the
-bridged properties read that storage, so playback and the property view
-agree. Playback therefore still overwrites the authored transform: the
-animated layer that preserves it exists (D5), and moving playback onto it
-is section 6 work.
+`Animation_sampler::apply` writes each sampled component through
+`set_animated_value` (D5), so playback holds the pose in the animated layer
+and the transform the prim authored stays readable as the base under it: a
+save writes the base, a transform edit made while playing edits the base, and
+`Animation::clear_applied` - what the editor's player calls when playback
+stops - puts every target back on it.
+`Xformable::authored_parent_from_node_transform()` is what the USD and glTF
+writers read, and `Xformable::clear_animated_local_transform()` restores the
+three components together. The rules the write paths follow are
+`src/erhe/scene/notes.md` "Animation playback".
 
-R14 holds by construction: no per-frame path changed.
+R14 holds by construction: an animated component write only stores, so a
+playing node still updates its world transform and notifies once per frame,
+as it did when playback wrote the `Trs_transform` directly.
 
 `Node::get_secondary_property_owner_type()` is `Node_attachment::
 property_owner_type()` (D30): a node holds the properties of every
@@ -2051,12 +2058,6 @@ style layer is D25 and the reference layer is D33.
 
 ## 6. Future work
 
-- Playback through the animated layer: `Animation_sampler::apply` sets the
-  animated layer (D5) instead of writing the `Trs_transform` directly, and
-  stopping an animation clears it, so playback never overwrites the
-  authored pose and keying (`doc/animation-keyframing-plan.md`) reads the
-  authored pose back. The layer itself is implemented; only playback still
-  has to move onto it.
 - Property serialization to glTF: expression text of driven properties
   (D22), material local values (materials export field by field, and
   default elision plus `Material::set_values` keep a round trip from

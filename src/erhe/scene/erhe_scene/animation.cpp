@@ -313,26 +313,30 @@ void Animation_sampler::apply(Animation_channel& channel, const float time_curre
 {
     seek(channel, time_current);
 
-    // The component write goes straight into the node data: a channel carries only
-    // one of translation / rotation / scale, and several channels can target the
-    // same node, so notifying per channel would be redundant. Animation::apply()
-    // does the world-transform update and the notification, once per target node.
-    Trs_transform& target = channel.target->node_data.transforms.parent_from_node;
+    // The sampled component goes into the target's animated layer
+    // (doc/property-system.md D5): the transform the prim authored is the base
+    // under it, so a save writes the authored pose whatever the playhead says
+    // and stopping the animation puts the prim back on it. The write notifies
+    // the property readers but not the scene - a channel carries only one of
+    // translation / rotation / scale, and several channels can target the same
+    // node, so Animation::apply() does the world-transform update and the
+    // scene notification once per target node.
+    Xformable& target = *channel.target;
 
     const glm::vec4 value = evaluate(channel, time_current);
 
     switch (channel.path) {
         case Animation_path::TRANSLATION: {
-            target.set_translation(glm::vec3{value});
+            target.set_animated_value(Xformable::translation_property, glm::vec3{value});
             break;
         }
         case Animation_path::ROTATION: {
-            target.set_rotation(glm::quat{value.w, value.x, value.y, value.z});
+            target.set_animated_value(Xformable::rotation_property, glm::quat{value.w, value.x, value.y, value.z});
             break;
         }
 
         case Animation_path::SCALE: {
-            target.set_scale(glm::vec3{value});
+            target.set_animated_value(Xformable::scale_property, glm::vec3{value});
             break;
         }
 
@@ -429,10 +433,11 @@ auto Animation::evaluate(const float time_current, const std::size_t channel_ind
 
 void Animation::apply(float time_current)
 {
-    // Animation_sampler::apply() writes the sampled component directly into the
-    // target's parent_from_node, bypassing the Node transform setters. Collect the
-    // touched nodes so that each one gets exactly one world-transform update and
-    // one handle_transform_update() after all of its channels have been applied.
+    // Animation_sampler::apply() writes the sampled component into the target's
+    // animated layer, which stores it without touching the world transform.
+    // Collect the touched nodes so that each one gets exactly one
+    // world-transform update and one handle_transform_update() after all of its
+    // channels have been applied.
     // Without that notification the attachments never see the new pose and the
     // node is never marked dirty, so Scene::update_node_transforms() - dirty-list
     // driven since 1d2375d6a - has nothing to propagate and the viewport keeps
@@ -462,6 +467,26 @@ void Animation::apply(float time_current)
     for (Node* node : m_applied_nodes) {
         node->update_world_from_node();
         node->handle_transform_update(serial);
+    }
+}
+
+void Animation::clear_applied()
+{
+    // Per target, not per channel: the three components of a transform come
+    // back together (Xformable::clear_animated_local_transform), which also
+    // runs the world-transform update and the notification once, as apply()
+    // does.
+    m_applied_nodes.clear();
+    for (Animation_channel& channel : channels) {
+        if (!channel.target) {
+            continue;
+        }
+        m_applied_nodes.push_back(channel.target.get());
+    }
+    std::sort(m_applied_nodes.begin(), m_applied_nodes.end());
+    m_applied_nodes.erase(std::unique(m_applied_nodes.begin(), m_applied_nodes.end()), m_applied_nodes.end());
+    for (Node* node : m_applied_nodes) {
+        node->clear_animated_local_transform();
     }
 }
 

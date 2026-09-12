@@ -6326,7 +6326,7 @@ private:
                 continue;
             }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::import_root) != 0) {
-                process_child_nodes(*erhe_child_node, pre_transform * erhe_child_node->parent_from_node_transform(), out_node_indices);
+                process_child_nodes(*erhe_child_node, pre_transform * erhe_child_node->authored_parent_from_node_transform(), out_node_indices);
                 continue;
             }
             if ((erhe_child_node->get_flag_bits() & erhe::Item_flags::render_proxy) != 0) {
@@ -6385,7 +6385,7 @@ private:
         fastgltf::Node gltf_node{};
 
         gltf_node.name = erhe_node.get_name();
-        gltf_node.transform = from_erhe(pre_transform * erhe_node.parent_from_node_transform());
+        gltf_node.transform = from_erhe(pre_transform * erhe_node.authored_parent_from_node_transform());
 
         // glTF 2.1: a prefab-instance node is written as an externalAsset
         // reference. Children and attachments are not exported - the

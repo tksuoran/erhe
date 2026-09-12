@@ -142,10 +142,45 @@ replaced by one `transform` op holding the matrix, logged once per prim at
 info level. So a prim always ends up exactly where the edit put it, whatever
 its authored stack looks like.
 
+A write that lands on what the stack already composes to carries nothing into
+it and leaves it exactly as authored: re-deriving the ops from the matrix can
+only lose the authored spelling (a `rotateXYZ` comes back from the quaternion
+with its own signs).
+
 Undo restores a recorded transform and its recorded stack verbatim through
 `Xformable::restore_local_transform`, which runs no write-back, so a stack a
 collapse replaced comes back whole; `Node_transform_operation` records the
 stack next to the matrices.
+
+## Animation playback
+
+An animation plays through the animated layer of the target's transform
+properties (`doc/property-system.md` D5), never over the transform the prim
+authored. `Animation_sampler::apply` writes each sampled component with
+`set_animated_value`, so the prim reads the pose while the transform it
+authored stays readable underneath it as the base
+(`Xformable::authored_parent_from_node_transform`,
+`is_local_transform_animated`). Three rules follow, and every serializer and
+every transform writer relies on them:
+
+- A pose is not authored state: it is not a local value, a save never sees it,
+  and it is not written back into the authored xformOp stack. The stack carries
+  the base.
+- Every serializer writes the base, whatever the playhead says: the USD and
+  glTF writers read `authored_parent_from_node_transform()`.
+- A transform written while the layer is present edits the base - the public
+  setters route to the bridged properties, whose write goes below the layer -
+  so a keyed edit during playback changes the authored pose and the next
+  sampled frame still plays.
+
+A pose is written one component at a time, so the per-component write only
+stores: `Animation::apply` runs the world-transform update and
+`handle_transform_update` once per target node, after every channel of the node
+is in. `Animation::clear_applied` - what the editor's player calls when
+playback stops and when it lets go of an animation - drops the layer of every
+target through `Xformable::clear_animated_local_transform`, which restores the
+three components together and runs that same tail once, with the transform
+whole.
 
 glTF does not carry the stack (`doc/usd-compatibility-plan.md` C1): a glTF
 save writes the composed TRS, and a glTF scene has no stack to start with.

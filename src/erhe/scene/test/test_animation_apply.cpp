@@ -15,11 +15,14 @@
 #include "erhe_scene/scene_host.hpp"
 #include "erhe_scene/xform.hpp"
 #include "erhe_property/dependency_property.hpp"
+#include "erhe_scene/xform_op.hpp"
 
 #include <gtest/gtest.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <memory>
 
@@ -135,6 +138,184 @@ TEST(animation_apply, keeps_moving_the_node_on_later_frames)
     animation.apply(0.75f);
     host.scene.update_node_transforms();
     EXPECT_FLOAT_EQ(node->world_from_node()[3][0], 7.5f);
+}
+
+// Playback writes the animated layer (doc/property-system.md D5), not the
+// authored transform: the prim reads the pose, the transform it authored stays
+// readable as the base under it, and nothing a save looks at moves.
+TEST(animation_apply, writes_the_animated_layer_and_keeps_the_authored_pose)
+{
+    using erhe::property::Value_source;
+    Test_scene_host host;
+
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
+    node->set_parent(host.scene.get_root_node());
+    node->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{1.0f, 2.0f, 3.0f}));
+
+    erhe::scene::Xform_op_stack stack;
+    erhe::scene::Xform_op op{};
+    op.type  = erhe::scene::Xform_op_type::translate;
+    op.value = glm::dvec3{1.0, 2.0, 3.0};
+    stack.ops.push_back(op);
+    node->set_xform_op_stack(stack);
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node);
+
+    animation.apply(0.5f);
+    host.scene.update_node_transforms();
+
+    // The pose is what the prim and the scene read.
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 5.0f);
+    EXPECT_FLOAT_EQ(node->world_from_node ()[3][0], 5.0f);
+    EXPECT_FLOAT_EQ(node->get_value(erhe::scene::Xformable::translation_property).x, 5.0f);
+    EXPECT_EQ(node->get_value_source(erhe::scene::Xformable::translation_property.get()), Value_source::animated);
+    EXPECT_TRUE(node->has_animated_value(erhe::scene::Xformable::translation_property.get()));
+
+    // The authored pose is the base under it, and it is what a save sees.
+    EXPECT_FLOAT_EQ(node->get_animation_base_value(erhe::scene::Xformable::translation_property).x, 1.0f);
+    EXPECT_FLOAT_EQ(node->authored_parent_from_node_transform().get_translation().x, 1.0f);
+    EXPECT_TRUE(node->is_local_transform_animated());
+    const std::optional<glm::vec3> local = node->read_local_value(erhe::scene::Xformable::translation_property);
+    ASSERT_TRUE(local.has_value());
+    EXPECT_FLOAT_EQ(local.value().x, 1.0f);
+
+    std::size_t seen_translations = 0;
+    node->for_each_local_value(
+        [&seen_translations](const erhe::property::Dependency_property& property, const erhe::property::Property_value& value) {
+            if (property.get_name() != "translation") {
+                return;
+            }
+            ++seen_translations;
+            EXPECT_FLOAT_EQ(std::get<glm::vec3>(value).x, 1.0f);
+        }
+    );
+    EXPECT_EQ(seen_translations, 1);
+
+    // The authored xformOp stack is the base, so playback does not touch it.
+    ASSERT_TRUE(node->has_xform_op_stack());
+    ASSERT_EQ(node->get_xform_op_stack()->ops.size(), 1);
+    EXPECT_EQ(std::get<glm::dvec3>(node->get_xform_op_stack()->ops.front().value).x, 1.0);
+}
+
+// Stopping an animation drops the layer, so the prim holds what it authored.
+TEST(animation_apply, clear_applied_restores_the_authored_pose)
+{
+    using erhe::property::Value_source;
+    Test_scene_host host;
+
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
+    node->set_parent(host.scene.get_root_node());
+    node->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{1.0f, 2.0f, 3.0f}));
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node);
+
+    animation.apply(1.0f);
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->world_from_node()[3][0], 10.0f);
+
+    animation.clear_applied();
+    host.scene.update_node_transforms();
+
+    EXPECT_FALSE(node->is_local_transform_animated());
+    EXPECT_EQ(node->get_value_source(erhe::scene::Xformable::translation_property.get()), Value_source::local);
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 1.0f);
+    EXPECT_FLOAT_EQ(node->world_from_node ()[3][0], 1.0f);
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][1], 2.0f);
+}
+
+// A transform edit made while an animation plays over the prim is an edit of
+// the authored pose, not of the playback pose: the next sampled frame still
+// plays, and the edit is what stopping shows.
+TEST(animation_apply, an_edit_while_playing_writes_the_base)
+{
+    Test_scene_host host;
+
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
+    node->set_parent(host.scene.get_root_node());
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node);
+
+    animation.apply(0.5f);
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 5.0f);
+
+    node->set_parent_from_node(glm::translate(glm::mat4{1.0f}, glm::vec3{0.0f, 7.0f, 0.0f}));
+
+    // The pose is untouched.
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 5.0f);
+    EXPECT_FLOAT_EQ(node->get_animation_base_value(erhe::scene::Xformable::translation_property).y, 7.0f);
+
+    // The next frame still plays.
+    animation.apply(1.0f);
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 10.0f);
+
+    // Stopping shows the edit.
+    animation.clear_applied();
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 0.0f);
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][1], 7.0f);
+}
+
+// Only some components animated (the usual sampled stack): a write of a
+// component the animation does not hold must carry the AUTHORED transform into
+// the stack - never the pose the animated components are in - and must not
+// write the stack's composition back over them.
+TEST(animation_apply, an_edit_of_an_unanimated_component_keeps_the_pose_and_the_authored_stack)
+{
+    Test_scene_host host;
+
+    auto node = std::make_shared<erhe::scene::Xform>("animated node");
+    node->set_parent(host.scene.get_root_node());
+
+    erhe::scene::Xform_op_stack stack;
+    erhe::scene::Xform_op translate_op{};
+    translate_op.type  = erhe::scene::Xform_op_type::translate;
+    translate_op.value = glm::dvec3{1.0, 2.0, 3.0};
+    stack.ops.push_back(translate_op);
+    erhe::scene::Xform_op rotate_op{};
+    rotate_op.type  = erhe::scene::Xform_op_type::orient;
+    rotate_op.value = glm::dquat{1.0, 0.0, 0.0, 0.0};
+    stack.ops.push_back(rotate_op);
+    node->set_xform_op_stack(stack);
+
+    erhe::scene::Animation animation{"test animation"};
+    make_translation_animation(animation, node); // translation only
+
+    animation.apply(1.0f);
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->parent_from_node()[3][0], 10.0f);
+
+    // A rotation edit, with the authored translation beside it - what a
+    // transform tool writes.
+    const glm::quat new_rotation = glm::angleAxis(glm::half_pi<float>(), glm::vec3{0.0f, 1.0f, 0.0f});
+    erhe::scene::Trs_transform edit;
+    edit.set_trs(glm::vec3{1.0f, 2.0f, 3.0f}, new_rotation, glm::vec3{1.0f, 1.0f, 1.0f});
+    node->set_parent_from_node(edit);
+
+    // The pose is untouched.
+    EXPECT_FLOAT_EQ(node->parent_from_node_transform().get_translation().x, 10.0f);
+    // The stack holds the authored translation and the edited rotation.
+    ASSERT_TRUE(node->has_xform_op_stack());
+    ASSERT_EQ(node->get_xform_op_stack()->ops.size(), 2);
+    EXPECT_EQ(std::get<glm::dvec3>(node->get_xform_op_stack()->ops[0].value), glm::dvec3(1.0, 2.0, 3.0));
+    const glm::dquat stack_rotation = std::get<glm::dquat>(node->get_xform_op_stack()->ops[1].value);
+    EXPECT_NEAR(static_cast<float>(stack_rotation.y), new_rotation.y, 1e-5f);
+    EXPECT_NEAR(static_cast<float>(stack_rotation.w), new_rotation.w, 1e-5f);
+
+    const erhe::scene::Trs_transform authored = node->authored_parent_from_node_transform();
+    EXPECT_FLOAT_EQ(authored.get_translation().x, 1.0f);
+    EXPECT_FLOAT_EQ(authored.get_translation().y, 2.0f);
+    EXPECT_NEAR(authored.get_rotation().y, new_rotation.y, 1e-5f);
+
+    animation.clear_applied();
+    host.scene.update_node_transforms();
+    EXPECT_FLOAT_EQ(node->parent_from_node_transform().get_translation().x, 1.0f);
+    EXPECT_FLOAT_EQ(node->parent_from_node_transform().get_translation().z, 3.0f);
+    EXPECT_NEAR(node->parent_from_node_transform().get_rotation().y, new_rotation.y, 1e-5f);
 }
 
 } // anonymous namespace

@@ -2096,7 +2096,7 @@ private:
             if ((child_node != nullptr) && ((flags & erhe::Item_flags::import_root) != 0)) {
                 plan_children(
                     *child_node,
-                    pre_transform * child_node->parent_from_node_transform().get_matrix(),
+                    pre_transform * child_node->authored_parent_from_node_transform().get_matrix(),
                     names,
                     out_prims
                 );
@@ -2124,7 +2124,7 @@ private:
                 // container's children are.
                 plan_children(
                     *child_node,
-                    pre_transform * child_node->parent_from_node_transform().get_matrix(),
+                    pre_transform * child_node->authored_parent_from_node_transform().get_matrix(),
                     names,
                     out_prims
                 );
@@ -2782,7 +2782,7 @@ private:
             return;
         }
         std::vector<lightusd::XformOp> ops;
-        set_transform(ops, *node, node->parent_from_node_transform().get_matrix());
+        set_transform(ops, *node, node->authored_parent_from_node_transform().get_matrix());
         write_xform_op_props(ops, props);
     }
 
@@ -3527,7 +3527,7 @@ private:
         ++m_node_count;
         const erhe::scene::Node& node      = *plan_prim.node;
         const std::string&       prim_name = plan_prim.name;
-        const glm::mat4          matrix    = plan_prim.pre_transform * node.parent_from_node_transform().get_matrix();
+        const glm::mat4          matrix    = plan_prim.pre_transform * node.authored_parent_from_node_transform().get_matrix();
 
         // A Mesh CHILD of this node is a prim of its own, planned as such.
         std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(
@@ -3588,9 +3588,10 @@ private:
         const glm::mat4&                   matrix
     )
     {
-        // A time-sampled stack is written whatever the transform the prim
-        // holds right now says: that transform is the pose the animation
-        // player put the prim in, and the stack is what the file authored
+        // `matrix` is the authored transform - the base under the animated
+        // layer (D5), so the pose a playing animation put the prim in never
+        // reaches here. A time-sampled stack is written whatever that matrix
+        // says: the samples are the authority over the stack's composition
         // (src/erhe/usd/notes.md, "Time samples").
         if ((stack != nullptr) && (stack->has_time_samples() || is_near(glm::mat4{stack->compose()}, matrix))) {
             write_xform_op_stack(xform_ops, *stack);
@@ -3687,7 +3688,7 @@ private:
             if (instance_node == nullptr) {
                 continue;
             }
-            const erhe::scene::Trs_transform transform   = instance_node->parent_from_node_transform();
+            const erhe::scene::Trs_transform transform   = instance_node->authored_parent_from_node_transform();
             const glm::vec3                  translation = transform.get_translation();
             const glm::quat                  rotation    = transform.get_rotation();
             const glm::vec3                  scale       = transform.get_scale();
@@ -4010,7 +4011,7 @@ private:
             for (std::size_t joint_index = 0, end = joint_tokens.size(); joint_index < end; ++joint_index) {
                 joints.emplace_back(joint_tokens[joint_index]);
                 bind_transforms.push_back(to_usd(record.bind_transforms[joint_index]));
-                rest_transforms.push_back(to_usd(record.joints[joint_index]->parent_from_node()));
+                rest_transforms.push_back(to_usd(record.joints[joint_index]->authored_parent_from_node_transform().get_matrix()));
             }
             skeleton.joints.set_value(std::move(joints));
             skeleton.bindTransforms.set_value(std::move(bind_transforms));
@@ -4196,7 +4197,7 @@ private:
                 glm::vec3 translation{0.0f, 0.0f, 0.0f};
                 glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
                 glm::vec3 scale{1.0f, 1.0f, 1.0f};
-                decompose_trs(record.joints[joint_index]->parent_from_node(), translation, rotation, scale);
+                decompose_trs(record.joints[joint_index]->authored_parent_from_node_transform().get_matrix(), translation, rotation, scale);
 
                 const Joint_channels& channels = joint_channels[joint_index];
                 glm::vec4             value{0.0f, 0.0f, 0.0f, 0.0f};

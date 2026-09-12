@@ -1002,10 +1002,13 @@ code. The samples are what the file authored, so:
   authors `timeCodesPerSecond`, `startTimeCode` and `endTimeCode` exactly when
   it wrote at least one sampled op, with the range the samples span.
   `Usd_save_arguments::time_codes_per_second` supplies the rate, which the
-  caller carries from the load, so a file keeps its own. A sampled stack is
-  written whatever transform the prim holds at the time of the save: that
-  transform is the pose the animation player put it in, and the stack is what
-  the file authored.
+  caller carries from the load, so a file keeps its own.
+- The transform the writer writes for a prim is the one the prim authored -
+  `Xformable::authored_parent_from_node_transform()`, the base under the
+  animated layer (`doc/property-system.md` D5) - so a save made while an
+  animation plays writes the same stage a save made when it is stopped does.
+  A sampled stack is written whatever that transform says: the samples are the
+  authority over the stack's composition.
 
 The playable projection of the samples is an `erhe::scene::Animation` - one
 per file, named after the file, listed in `Usd_data::animations` and attached

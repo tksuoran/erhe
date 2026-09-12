@@ -326,4 +326,31 @@ TEST_F(Time_samples, samples_and_time_codes_are_written_back)
     EXPECT_EQ(read_lines(second_path), read_lines(first_path));
 }
 
+// A save made while an animation plays writes what the prims authored, not the
+// pose the playback put them in: the animated layer (doc/property-system.md
+// D5) never reaches a serializer, and stopping leaves the stage byte for byte
+// where it started.
+TEST_F(Time_samples, a_save_during_playback_writes_the_authored_transforms)
+{
+    const std::filesystem::path resting_path = save("time_samples_resting.usda");
+
+    ASSERT_EQ(loaded.data.animations.size(), 1u);
+    erhe::scene::Animation& animation = *loaded.data.animations.front();
+    animation.apply(1.0f);
+
+    const std::shared_ptr<erhe::scene::Node> node = find_node(loaded.data, "animated");
+    ASSERT_TRUE(node);
+    EXPECT_TRUE(node->is_local_transform_animated());
+    EXPECT_NE(node->parent_from_node(), node->authored_parent_from_node_transform().get_matrix());
+
+    const std::filesystem::path playing_path = save("time_samples_playing.usda");
+    EXPECT_EQ(read_lines(playing_path), read_lines(resting_path));
+
+    animation.clear_applied();
+    EXPECT_FALSE(node->is_local_transform_animated());
+
+    const std::filesystem::path stopped_path = save("time_samples_stopped.usda");
+    EXPECT_EQ(read_lines(stopped_path), read_lines(resting_path));
+}
+
 } // anonymous namespace

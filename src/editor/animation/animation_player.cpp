@@ -46,7 +46,12 @@ void Animation_player::on_close_scene(erhe::Item_host* const closing_host)
     // scene's container record defines this one (transient tool state drops
     // the asset when its defining scene closes - the R3 decision).
     if (m_animation && (m_context.asset_manager != nullptr) && m_context.asset_manager->is_hosted_or_defined_by(*m_animation, closing_host)) {
-        set_animation({});
+        // The targets are going away with the scene, so the animated layer
+        // (D5) goes with them; the player only has to let go of its own
+        // references.
+        m_animation.reset();
+        m_playing         = false;
+        m_apply_requested = false;
     }
 }
 
@@ -97,6 +102,12 @@ void Animation_player::set_animation(const std::shared_ptr<erhe::scene::Animatio
     if (m_animation == animation) {
         return;
     }
+    if (m_animation) {
+        // The previous animation's targets go back to the pose they authored:
+        // a player that just lets go would leave them frozen in the last
+        // sampled pose (D5).
+        m_animation->clear_applied();
+    }
     m_animation = animation;
     m_playing   = false;
     refresh_time_range();
@@ -132,9 +143,15 @@ void Animation_player::pause()
 
 void Animation_player::stop()
 {
-    m_playing = false;
-    m_time    = m_start_time;
-    m_apply_requested = true;
+    m_playing         = false;
+    m_time            = m_start_time;
+    m_apply_requested = false;
+    if (m_animation) {
+        // Stopping rewinds AND drops the animated layer (D5): the targets hold
+        // the transform they authored again, which is also what an edit made
+        // while playing changed and what a save writes.
+        m_animation->clear_applied();
+    }
 }
 
 void Animation_player::seek(const float time)

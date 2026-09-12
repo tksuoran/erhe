@@ -18,6 +18,21 @@ namespace {
 // child's world transform be stored as parent-relative verbatim - no matrix round-trip and
 // no glm::decompose, which is numerically unstable for small scales (it can drift one axis,
 // e.g. 0.001 -> 0.4, across the repeated set/decompose round-trips that parenting forces).
+// Element-wise comparison with the tolerance the xformOp write-back and the
+// USD writer both use for "these are the same transform".
+[[nodiscard]] auto is_near_transform(const glm::mat4& lhs, const glm::mat4& rhs) -> bool
+{
+    constexpr float eps = 1e-5f;
+    for (int column = 0; column < 4; ++column) {
+        for (int row = 0; row < 4; ++row) {
+            if (std::abs(lhs[column][row] - rhs[column][row]) >= eps) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] auto is_identity_transform(const Trs_transform& t) -> bool
 {
     // Matrix comparison instead of TRS components: the TRS getters would
@@ -52,10 +67,16 @@ using erhe::property::Property_value;
 
 constexpr uint32_t c_transform_flags = Property_flags::serialize | Property_flags::affects_transform;
 
+// Names the registration the bridge belongs to. The three statics below are
+// still being initialized while the bridges are built, so the accessor is a
+// function called at write time, when they are complete.
+using Transform_property_accessor = const erhe::property::Dependency_property& (*)();
+
 template <typename T>
 auto make_transform_bridge(
     T (Trs_transform::*getter)() const,
-    void (Trs_transform::*setter)(T)
+    void (Trs_transform::*setter)(T),
+    const Transform_property_accessor property
 ) -> Property_bridge
 {
     return Property_bridge{
@@ -63,9 +84,23 @@ auto make_transform_bridge(
             const Xformable& node = static_cast<const Xformable&>(object);
             return (node.node_data.transforms.parent_from_node.*getter)();
         },
-        .set = [setter](Dependency_object& object, const Property_value& value) {
+        .set = [setter, property](Dependency_object& object, const Property_value& value) {
             Xformable& node = static_cast<Xformable&>(object);
+            // D5 tells the two kinds of write apart by the entry: a write of
+            // the animated layer arrives with the animated value already
+            // stored, and the restore of the base arrives with it already
+            // cleared.
+            const bool writes_animated_pose = node.has_animated_value(property());
             (node.node_data.transforms.parent_from_node.*setter)(std::get<T>(value));
+            if (writes_animated_pose || node.is_local_transform_write_deferred()) {
+                // A playback pose is not authored state: the authored xformOp
+                // stack (M8) carries the base under it and stays as the file
+                // wrote it, and the world transform follows once per node -
+                // Animation::apply() runs it when every channel of the node
+                // is in, so a three-channel node updates once, not three
+                // times.
+                return;
+            }
             // Same tail as the setters: an authored xformOp stack takes the
             // write (M8) before the world transform is recomputed.
             node.handle_local_transform_written(World_transform_state::needs_update);
@@ -81,7 +116,10 @@ const Property<glm::vec3> Xformable::translation_property = Property<glm::vec3>:
         .default_value = glm::vec3{0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
         .ui            = Property_ui{.step = 0.01f, .tooltip = "Position relative to the parent node", .label = "Translation"},
-        .bridge        = make_transform_bridge<glm::vec3>(&Trs_transform::get_translation, &Trs_transform::set_translation)
+        .bridge        = make_transform_bridge<glm::vec3>(
+            &Trs_transform::get_translation, &Trs_transform::set_translation,
+            []() -> const erhe::property::Dependency_property& { return Xformable::translation_property.get(); }
+        )
     }
 );
 const Property<glm::quat> Xformable::rotation_property = Property<glm::quat>::register_property(
@@ -90,7 +128,10 @@ const Property<glm::quat> Xformable::rotation_property = Property<glm::quat>::re
         .default_value = glm::quat{1.0f, 0.0f, 0.0f, 0.0f},
         .flags         = c_transform_flags,
         .ui            = Property_ui{.step = 0.5f, .tooltip = "Rotation relative to the parent node (edited as Euler degrees)", .label = "Rotation"},
-        .bridge        = make_transform_bridge<glm::quat>(&Trs_transform::get_rotation, &Trs_transform::set_rotation)
+        .bridge        = make_transform_bridge<glm::quat>(
+            &Trs_transform::get_rotation, &Trs_transform::set_rotation,
+            []() -> const erhe::property::Dependency_property& { return Xformable::rotation_property.get(); }
+        )
     }
 );
 const Property<glm::vec3> Xformable::scale_property = Property<glm::vec3>::register_property(
@@ -99,7 +140,10 @@ const Property<glm::vec3> Xformable::scale_property = Property<glm::vec3>::regis
         .default_value = glm::vec3{1.0f, 1.0f, 1.0f},
         .flags         = c_transform_flags,
         .ui            = Property_ui{.step = 0.01f, .tooltip = "Scale relative to the parent node", .label = "Scale"},
-        .bridge        = make_transform_bridge<glm::vec3>(&Trs_transform::get_scale, &Trs_transform::set_scale)
+        .bridge        = make_transform_bridge<glm::vec3>(
+            &Trs_transform::get_scale, &Trs_transform::set_scale,
+            []() -> const erhe::property::Dependency_property& { return Xformable::scale_property.get(); }
+        )
     }
 );
 
@@ -768,6 +812,14 @@ void Xformable::restore_local_transform(const Transform& parent_from_node, const
     } else {
         m_xform_op_stack.reset();
     }
+    if (is_local_transform_animated()) {
+        // The recorded transform is authored state: it goes to the base, and
+        // the pose the animation is playing stays where it is.
+        Trs_transform transform;
+        transform.set(parent_from_node.get_matrix(), parent_from_node.get_inverse_matrix());
+        write_animation_base_transform(transform);
+        return;
+    }
     node_data.transforms.parent_from_node.set(
         parent_from_node.get_matrix(),
         parent_from_node.get_inverse_matrix()
@@ -779,7 +831,36 @@ void Xformable::restore_local_transform(const Transform& parent_from_node, const
 void Xformable::handle_local_transform_written(World_transform_state world_state)
 {
     if (m_xform_op_stack) {
-        const Trs_transform& transform = node_data.transforms.parent_from_node;
+        // The stack is the authored form of the local transform, so what
+        // reaches it is the authored transform (D5): the base of every
+        // component an animation holds, and the storage of the others - which
+        // is what the storage says whole while nothing is animated. A pose
+        // must never be written into the stack, and the stack's composition
+        // must never be written back over a component the animation owns, so
+        // that path leaves the storage alone and only recomputes the world
+        // transform.
+        const bool    animated = is_local_transform_animated();
+        Trs_transform authored_transform;
+        if (animated) {
+            authored_transform = authored_parent_from_node_transform();
+        }
+        const Trs_transform& transform = animated ? authored_transform : node_data.transforms.parent_from_node;
+        // A write that lands on what the stack already composes to has nothing
+        // to carry into it, and writing back anyway would re-derive the ops
+        // from the matrix and lose the exact values the file authored (a
+        // rotateXYZ comes back from the quaternion with its own signs). This
+        // is the whole of the animated layer's restore: a pose is written
+        // without the stack, so the base the restore puts back is what the
+        // stack still holds unless an edit moved it.
+        if (is_near_transform(glm::mat4{m_xform_op_stack->compose()}, transform.get_matrix())) {
+            if (!animated) {
+                apply_xform_op_stack_composition();
+            } else if (world_state == World_transform_state::needs_update) {
+                update_world_from_node();
+            }
+            handle_transform_update(Node_transforms::get_next_serial());
+            return;
+        }
         const Xform_op_write_back_result result = write_trs_into_xform_op_stack(
             *m_xform_op_stack,
             transform.get_translation(),
@@ -807,9 +888,11 @@ void Xformable::handle_local_transform_written(World_transform_state world_state
                 );
             }
         }
-        // The stack is the authoritative form of the local transform.
-        apply_xform_op_stack_composition();
-        world_state = World_transform_state::up_to_date;
+        if (!animated) {
+            // The stack is the authoritative form of the local transform.
+            apply_xform_op_stack_composition();
+            world_state = World_transform_state::up_to_date;
+        }
     }
     if (world_state == World_transform_state::needs_update) {
         update_world_from_node();
@@ -817,8 +900,65 @@ void Xformable::handle_local_transform_written(World_transform_state world_state
     handle_transform_update(Node_transforms::get_next_serial());
 }
 
+auto Xformable::is_local_transform_animated() const -> bool
+{
+    return
+        has_animated_value(translation_property.get()) ||
+        has_animated_value(rotation_property.get()) ||
+        has_animated_value(scale_property.get());
+}
+
+auto Xformable::authored_parent_from_node_transform() const -> Trs_transform
+{
+    if (!is_local_transform_animated()) {
+        return node_data.transforms.parent_from_node;
+    }
+    Trs_transform transform;
+    transform.set_trs(
+        get_animation_base_value(translation_property),
+        get_animation_base_value(rotation_property),
+        get_animation_base_value(scale_property)
+    );
+    return transform;
+}
+
+auto Xformable::is_local_transform_write_deferred() const -> bool
+{
+    return m_local_transform_write_deferred;
+}
+
+void Xformable::clear_animated_local_transform()
+{
+    if (!is_local_transform_animated()) {
+        return;
+    }
+    m_local_transform_write_deferred = true;
+    clear_animated_value(translation_property);
+    clear_animated_value(rotation_property);
+    clear_animated_value(scale_property);
+    m_local_transform_write_deferred = false;
+    handle_local_transform_written(World_transform_state::needs_update);
+}
+
+void Xformable::write_animation_base_transform(const Trs_transform& transform)
+{
+    // One deferred decompose feeds all three components.
+    const glm::vec3 translation = transform.get_translation();
+    const glm::quat rotation    = transform.get_rotation();
+    const glm::vec3 scale       = transform.get_scale();
+    set_value(translation_property, translation);
+    set_value(rotation_property,    rotation);
+    set_value(scale_property,       scale);
+}
+
 void Xformable::set_parent_from_node(const glm::mat4 parent_from_node)
 {
+    if (is_local_transform_animated()) {
+        Trs_transform transform;
+        transform.set(parent_from_node);
+        write_animation_base_transform(transform);
+        return;
+    }
     node_data.transforms.parent_from_node.set(parent_from_node);
     handle_local_transform_written(World_transform_state::needs_update);
 }
@@ -827,6 +967,12 @@ void Xformable::set_parent_from_node(const Transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (is_local_transform_animated()) {
+        Trs_transform transform;
+        transform.set(parent_from_node.get_matrix(), parent_from_node.get_inverse_matrix());
+        write_animation_base_transform(transform);
+        return;
+    }
     node_data.transforms.parent_from_node.set(
         parent_from_node.get_matrix(),
         parent_from_node.get_inverse_matrix()
@@ -838,6 +984,10 @@ void Xformable::set_parent_from_node(const Trs_transform& parent_from_node)
 {
     ERHE_PROFILE_FUNCTION();
 
+    if (is_local_transform_animated()) {
+        write_animation_base_transform(parent_from_node);
+        return;
+    }
     // Copy the TRS components directly instead of going through the matrix. Re-decomposing
     // a matrix would lose the rotation when the scale is (near) zero (a rank-deficient
     // matrix has no recoverable rotation); copying preserves it.
@@ -847,6 +997,10 @@ void Xformable::set_parent_from_node(const Trs_transform& parent_from_node)
 
 void Xformable::set_node_from_parent(const glm::mat4 node_from_parent)
 {
+    if (is_local_transform_animated()) {
+        set_parent_from_node(glm::inverse(node_from_parent));
+        return;
+    }
     node_data.transforms.parent_from_node.set(
         glm::inverse(node_from_parent),
         node_from_parent
@@ -856,6 +1010,10 @@ void Xformable::set_node_from_parent(const glm::mat4 node_from_parent)
 
 void Xformable::set_node_from_parent(const Transform& node_from_parent)
 {
+    if (is_local_transform_animated()) {
+        set_parent_from_node(node_from_parent.get_inverse_matrix());
+        return;
+    }
     node_data.transforms.parent_from_node.set(
         node_from_parent.get_inverse_matrix(),
         node_from_parent.get_matrix()
@@ -903,6 +1061,13 @@ void Xformable::set_world_from_node(const Trs_transform& world_from_node)
 
 void Xformable::set_node_from_world(const glm::mat4 node_from_world)
 {
+    if (is_local_transform_animated()) {
+        // The animated layer holds the pose the world transform is computed
+        // from, so the write edits the base and the next applied frame
+        // recomputes the world transform from it.
+        set_world_from_node(glm::inverse(node_from_world));
+        return;
+    }
     node_data.transforms.world_from_node.set(glm::inverse(node_from_world), node_from_world);
     const auto& world_from_node = node_data.transforms.world_from_node.get_matrix();
     const auto& current_parent  = get_parent_node();
@@ -921,6 +1086,10 @@ void Xformable::set_node_from_world(const glm::mat4 node_from_world)
 
 void Xformable::set_node_from_world(const Transform& node_from_world)
 {
+    if (is_local_transform_animated()) {
+        set_world_from_node(node_from_world.get_inverse_matrix());
+        return;
+    }
     node_data.transforms.world_from_node.set(
         node_from_world.get_inverse_matrix(),
         node_from_world.get_matrix()

@@ -97,7 +97,17 @@ public:
     [[nodiscard]] auto get_first_time() const -> float;
     [[nodiscard]] auto get_last_time () const -> float;
 
+    // Puts every channel target into the sampled pose at `time_current` by
+    // writing the animated layer (doc/property-system.md D5) of the target's
+    // transform properties. The pose is not authored state: the transform the
+    // target authored stays readable as the base under it, a save writes that
+    // base, and clear_applied() puts the target back on it.
     void apply(float time_current);
+
+    // Drops the animated layer of every channel target, so each target holds
+    // the transform it authored again. The player calls it when playback stops
+    // and when it lets go of the animation.
+    void clear_applied();
 
     std::vector<Animation_sampler> samplers;
     std::vector<Animation_channel> channels;
