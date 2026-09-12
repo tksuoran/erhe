@@ -544,7 +544,8 @@ now owns its behavior; `git log` on that record has the history.
   no volume gets no shape: `erhe::geometry::make_convex_hull` refuses a
   point set that `erhe::math::classify_affine_span` finds flat, collinear
   or coincident before geogram is reached, with one warning naming the
-  reason (`doc/geogram.md` "Degenerate convex hull input").
+  reason (`doc/geogram.md` "Degenerate convex hull input (erhe-side
+  guard)").
 - An animation plays through a value layer of its own and an edited clip
   saves as edited (A1). `Animation_sampler::apply` writes the animated
   layer of `doc/property-system.md` D5, so the transform a prim authored
@@ -595,8 +596,9 @@ section 6 entry it names, and nothing here restates one.
    format; the output formats are what LightUSD's writer already offers.
 5. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
-   of usdchecker"). Small, each one a value that leaves through a save
-   and does not come back.
+   of usdchecker", and the four bullets of "Physics residue of P1").
+   Small, each one a value that leaves through a save and does not come
+   back, or a physics fixture case the import still drops.
 6. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
    input fed by a UsdPrimvarReader", "A material slot that a texture
    graph feeds AND that carries an authored factor", "Image formats",
