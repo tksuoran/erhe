@@ -545,7 +545,15 @@ now owns its behavior; `git log` on that record has the history.
   point set that `erhe::math::classify_affine_span` finds flat, collinear
   or coincident before geogram is reached, with one warning naming the
   reason (`doc/geogram.md` "Degenerate convex hull input (erhe-side
-  guard)").
+  guard)"). A joint prim's two frames are two nodes, since erhe's six-dof
+  joint reads its frames off the node the `Node_joint` sits on and the
+  node it names: a non-identity `localPos0` / `localRot0` is an `Xform`
+  frame prim `<joint>_frame0` below the first body carrying the joint,
+  `localPos1` / `localRot1` likewise `_frame1` below the second as the
+  connected node, and the writer names each side's nearest body prim with
+  that side's node transform in the body's space, so a file erhe wrote
+  reloads to the same tree (the `Node_joint` row of the mapping;
+  `physics.usda`'s `Flap`).
 - An animation plays through a value layer of its own and an edited clip
   saves as edited (A1). `Animation_sampler::apply` writes the animated
   layer of `doc/property-system.md` D5, so the transform a prim authored
@@ -596,7 +604,7 @@ section 6 entry it names, and nothing here restates one.
    format; the output formats are what LightUSD's writer already offers.
 5. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
-   of usdchecker", and the four bullets of "Physics residue of P1").
+   of usdchecker", and the three bullets of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
 6. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
@@ -664,10 +672,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     collision schema on the body prim, where a reload finds no mesh - the
     limitation the glTF export documents for compound children. Closing it
     means the collision shape remembering its source mesh.
-  - Joint frames: a `PhysicsJoint` prim's `localPos` / `localRot` are
-    warned about and dropped, since the erhe six-dof joint takes its frames
-    from the two nodes' world transforms; a joint authored off its node's
-    origin lands at the origin.
   - Jolt asserts `Sleeping body has non-zero linear velocity` when the
     fixture simulates: a body imported with an initial velocity starts
     asleep. Same family as the P6 dynamic-body flake of the round-trip
