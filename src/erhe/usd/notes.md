@@ -811,6 +811,24 @@ is what carries it, so nothing binds a material twice - and only the `over`
 children of a variant contribute opinions: a `def` child is a prim of the tree
 carrying its own attributes.
 
+A variant block authors composition arcs of its own, and only a selected
+variant contributes them, so the arcs of the selected variant of every set are
+part of what the prim carrying the set holds: `read_prim_references` resolves
+them off the layer's own variant block after the prim's own list ops - the
+prim's are the stronger opinion - and every `Usd_reference` names the
+`variant_set` and `variant_name` it came from, empty for an arc the prim
+authored itself. The same arcs are on `Usd_variant::references`, which is what
+lets a save put them back inside their block. A prim carries one list of arcs
+and not one per variant, so the arcs of an unselected variant are counted in
+`unsupported_opinion_count` instead.
+
+The `def` children a variant block authors are the variant's own content, not
+an edit made over someone else's structure, so a prim carrying both a
+reference and a variant set converts them: the reference-structure rule that
+drops a typed `def` below a referencing prim does not apply to a hoisted one,
+and the carrier converts exactly its hoisted children while its arcs supply the
+rest.
+
 `Usd_variant_set::base_values` is what the prims held for every path and
 property name any variant of the set authors, read before the selected
 variant's opinions were applied. A property with no local value there is a
@@ -1409,7 +1427,10 @@ over the tree with no file work in it.
   prim carrying the set. Its `active` metadatum is written only for the
   selected variant's prims: a prim of another variant is inactive because its
   variant is not the selection, which USD says by not building the prim at
-  all. glTF has no counterpart for any of this: a scene saved to glTF writes
+  all. The composition arcs of a variant (`Usd_save_variant::references`) are
+  written as the block's own `references` and `payload` list ops rather than on
+  the prim carrying the set, so a file whose arcs a variant authored is a fixed
+  point. glTF has no counterpart for any of this: a scene saved to glTF writes
   those prims as plain children with their `active` flags, and the membership
   is lost.
 - Item tags become `UsdCollectionAPI` collections on the default prim, one

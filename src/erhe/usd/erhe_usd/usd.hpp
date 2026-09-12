@@ -231,6 +231,14 @@ public:
     std::string        asset_path;
     std::string        prim_path;
     Usd_reference_kind kind{Usd_reference_kind::reference};
+    // The variant block that authored the arc, both empty when the prim
+    // authored it itself (doc/usd-compatibility-plan.md section 6,
+    // "Composition authored inside a variant block"). A variant's arcs reach
+    // the prim carrying the set because only the selected variant contributes
+    // them, and this is what a save needs to write them back inside the block
+    // they came from.
+    std::string        variant_set;
+    std::string        variant_name;
 };
 
 // The composition arcs one prim authors, and the erhe prim they were authored
@@ -374,6 +382,12 @@ public:
     std::vector<Usd_variant_binding>            bindings;
     std::vector<erhe::scene::Instance_override> overrides;
     std::vector<Usd_variant_prim>               prims;
+    // The `references` and `payload` arcs the variant block authors, in the
+    // order they resolve to. Only the selected variant's arcs are listed: they
+    // are the ones the prim carrying the set holds, so they are the ones erhe
+    // can write back. An unselected variant's arcs are counted in the set's
+    // `unsupported_opinion_count`.
+    std::vector<Usd_reference>                  references;
 };
 
 // One `variantSet` a prim of the stage authors, and the erhe item that prim
@@ -969,6 +983,10 @@ public:
     std::vector<Usd_save_variant_binding>       bindings;
     std::vector<erhe::scene::Instance_override> overrides;
     std::vector<Usd_save_variant_prim>          prims;
+    // The composition arcs the variant block authors, written inside the block
+    // as its own `references` and `payload` list ops rather than on the prim
+    // carrying the set.
+    std::vector<Usd_save_reference>             references;
 };
 
 // One `variantSet` the writer authors on a prim: the `variantSets` list op,

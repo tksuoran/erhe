@@ -198,16 +198,9 @@
  {
   "path": "full_assets/Teapot/Teapot.usd",
   "diagnostics": [
-   "authors .* opinion\\(s\\) that erhe has no place for",
-   "must be `.*` for UsdUVTexture",
-   "Failed to convert UsdPreviewSurface",
-   "TODO: Prim type NodeGraph",
-   "the referencing layer defines typed prims over the reference"
+   "authors .* opinion\\(s\\) that erhe has no place for"
   ],
-  "gaps": [
-   "no mesh loaded"
-  ],
-  "reason": "the model's geometry is composed entirely inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe's hoist carries a variant's def children and property opinions but not the arcs they author, and the section 5 reference-structure rule drops a def authored over a reference, so nothing composes - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result. The material lines behind it are the same file's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of section 6); erhe imports 0 of the 1 composed mesh and 0 of the 2 materials"
+  "reason": "the model's geometry is composed inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe carries a selected variant's arcs to the prim carrying the set and admits the defs a variant authors, so the model composes: the 1 mesh and the 2 materials are imported. The opinion line is the unselected `Fancy` variant's own reference, which a prim cannot hold beside the selected one's - a save writes it back inside its block"
  },
  {
   "path": "full_assets/Teapot/DrawModes.usd",
@@ -216,13 +209,9 @@
    "must be `.*` for UsdUVTexture",
    "Failed to convert UsdPreviewSurface",
    "TODO: Prim type NodeGraph",
-   "the referencing layer defines typed prims over the reference",
-   "the typeless prim has unreadable xformOps"
+   "Property `.*` not found"
   ],
-  "gaps": [
-   "no mesh loaded"
-  ],
-  "reason": "the model's geometry is composed entirely inside a variant block: Teapot.usd payloads Teapot_Payload.usd, whose sublayer Teapot_Materials.usd references Teapot_Geometry.usd, whose `Utah` and `Fancy` variants each author the reference to the geometry on the variant itself, and whose `Materials` scope is a def authored inside a variant block over that reference. erhe's hoist carries a variant's def children and property opinions but not the arcs they author, and the section 5 reference-structure rule drops a def authored over a reference, so nothing composes - a known limitation with its own item in doc/usd-compatibility-plan.md section 6, not a by-design result. The material lines behind it are the same file's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of section 6); this file references that model once per draw mode, so it imports 0 of 35 meshes and 0 of 70 materials. Its own extra line is the duplicates' xformOp stack: `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops `[\"xformOp:transform\", \"xformOp:transform:duplicate1\"]` while authoring only the second, because the first arrives through their internal reference to `/World/FancyTeapot_0`; the stack is reconstructed from a prim's own properties, so it reads as unreadable and the prim keeps the composed transform - the second of the two section 6 items, also a known limitation"
+  "reason": "the model composes through the variant-authored reference of Teapot_Geometry.usd the same way Teapot.usd does, once per draw mode: 35 of 35 meshes are imported. The material lines are that model's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of doc/usd-compatibility-plan.md section 6), and the opinion lines are the unselected `Fancy` variant's own reference. The `Property ... not found` lines are the duplicates' xformOp stack: `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops [\"xformOp:transform\", \"xformOp:transform:duplicate1\"] while authoring only the second, because the first arrives through their internal reference to `/World/FancyTeapot_0`; the stack is reconstructed from a prim's own properties, so it reads as unreadable and the prim keeps the composed transform - a known limitation with its own item in section 6"
  },
  {
   "path": "full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/vehicleVariants.usda",

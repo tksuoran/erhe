@@ -1,0 +1,54 @@
+#usda 1.0
+(
+    defaultPrim = "Carrier"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Carrier" (
+    variants = {
+        string modelVariant = "Plated"
+    }
+    prepend variantSets = "modelVariant"
+)
+{
+    variantSet "modelVariant" = {
+        "Barred" (
+            prepend references = @./reftarget.usda@</Library/Gadget>
+        ) {
+        }
+        "Plated" (
+            prepend references = @./reftarget.usda@</Widget>
+        ) {
+            def Scope "Extras"
+            {
+                def Mesh "marker"
+                {
+                    uniform token subdivisionScheme = "none"
+                    int[] faceVertexCounts = [4]
+                    int[] faceVertexIndices = [0, 1, 2, 3]
+                    point3f[] points = [(-1, 2, -1), (1, 2, -1), (1, 2, 1), (-1, 2, 1)]
+                }
+            }
+        }
+    }
+}
+
+def Xform "Direct" (
+    prepend references = @./reftarget.usda@</Widget>
+    variants = {
+        string shadingVariant = "Extra"
+    }
+    prepend variantSets = "shadingVariant"
+)
+{
+    variantSet "shadingVariant" = {
+        "Extra" {
+            def Scope "Looks"
+            {
+            }
+        }
+        "Plain" {
+        }
+    }
+}

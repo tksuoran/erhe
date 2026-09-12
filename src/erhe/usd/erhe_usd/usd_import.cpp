@@ -4164,7 +4164,10 @@ private:
         record_mesh_prim(usd_node, content);
 
         if (record_references(usd_node, node)) {
-            return; // the prims below came from the arcs; the targets supply them
+            // the prims below came from the arcs; the targets supply them -
+            // except the ones a variant block of this prim authored
+            convert_hoisted_variant_children(usd_node, node, glm::mat4{1.0f});
+            return;
         }
 
         // A `PointInstancer` converts its children itself: the prototypes
@@ -4551,7 +4554,10 @@ private:
         add_skeleton_joint(m_scene->skeletons[skeleton_index].root_node, node, skeleton_index);
 
         if (record_references(usd_node, node)) {
-            return; // the prims below came from the arcs; the targets supply them
+            // the prims below came from the arcs; the targets supply them -
+            // except the ones a variant block of this prim authored
+            convert_hoisted_variant_children(usd_node, node, glm::mat4{1.0f});
+            return;
         }
         const glm::mat4 child_transform{1.0f};
         for (const Tydra_node& usd_child : usd_node.children) {
@@ -4731,7 +4737,10 @@ private:
         record_variant_sets(usd_node.abs_path, prim);
 
         if (record_references(usd_node, prim)) {
-            return; // the prims below came from the arcs; the targets supply them
+            // the prims below came from the arcs; the targets supply them -
+            // except the ones a variant block of this prim authored
+            convert_hoisted_variant_children(usd_node, prim, extra_transform);
+            return;
         }
 
         for (const Tydra_node& usd_child : usd_node.children) {
@@ -4809,6 +4818,69 @@ private:
         out_references.insert(out_references.end(), resolved.begin(), resolved.end());
     }
 
+    // The `references` and `payload` list ops one spec's metadata authors, in
+    // arc order.
+    template <typename Spec>
+    static void read_spec_references(const Spec& spec, std::vector<Usd_reference>& out_references)
+    {
+        const lightusd::PrimMetas& metas = spec.metas();
+        if (metas.references.has_value()) {
+            resolve_reference_list_ops(metas.references.value(), Usd_reference_kind::reference, out_references);
+        }
+        if (metas.payload.has_value()) {
+            resolve_reference_list_ops(metas.payload.value(), Usd_reference_kind::payload, out_references);
+        }
+    }
+
+    // Which variant of `set` the layer selected: its own `variants` opinion,
+    // or the first variant when it authors none - the rule load_stage's hoist
+    // applies as well.
+    [[nodiscard]] static auto selected_variant_name(
+        const lightusd::PrimSpec&                                        spec,
+        const std::pair<const std::string, lightusd::VariantSetSpec>&    set
+    ) -> std::string
+    {
+        const lightusd::VariantSelectionMap&                selection = spec.get_variant_selection_map();
+        const lightusd::VariantSelectionMap::const_iterator i         = selection.find(set.first);
+        if (i != selection.end()) {
+            return i->second;
+        }
+        return set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first;
+    }
+
+    // The arcs the selected variant of every set on this prim authors
+    // (doc/usd-compatibility-plan.md section 6, "Composition authored inside a
+    // variant block"). A variant contributes a composition arc while it is
+    // selected, so its arcs are the carrying prim's, and LightUSD composes no
+    // variant - the layer's own spec is where the blocks are. Each entry names
+    // the block it came from, which is what a save writes it back into.
+    void read_selected_variant_references(const std::string& absolute_path, std::vector<Usd_reference>& out_references)
+    {
+        const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
+        if (spec == nullptr) {
+            return;
+        }
+        for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec->variantSets()) {
+            const std::string selected = selected_variant_name(*spec, set);
+            const std::map<std::string, lightusd::PrimSpec>::const_iterator variant = set.second.variantSet.find(selected);
+            if (variant == set.second.variantSet.end()) {
+                continue;
+            }
+            std::vector<Usd_reference> variant_references;
+            read_spec_references(variant->second, variant_references);
+            for (Usd_reference& reference : variant_references) {
+                reference.variant_set  = set.first;
+                reference.variant_name = selected;
+                out_references.push_back(std::move(reference));
+            }
+        }
+    }
+
+    // The arcs one prim carries: the ones it authors itself, and the ones the
+    // selected variant of each of its sets authors. The prim's own list ops
+    // are the stronger opinion (L before V in LIVRPS), so its arcs come first;
+    // the two lists resolve apart, so a `delete` op of one does not act on the
+    // other's entries.
     [[nodiscard]] auto read_prim_references(const std::string& absolute_path) -> std::vector<Usd_reference>
     {
         std::vector<Usd_reference> references;
@@ -4816,14 +4888,42 @@ private:
         if (prim == nullptr) {
             return references;
         }
-        const lightusd::PrimMetas& metas = prim->metas();
-        if (metas.references.has_value()) {
-            resolve_reference_list_ops(metas.references.value(), Usd_reference_kind::reference, references);
-        }
-        if (metas.payload.has_value()) {
-            resolve_reference_list_ops(metas.payload.value(), Usd_reference_kind::payload, references);
-        }
+        read_spec_references(*prim, references);
+        read_selected_variant_references(absolute_path, references);
         return references;
+    }
+
+    // Whether `prim_name` below `carrier_path` is a prim load_stage hoisted out
+    // of one of that prim's variant blocks (doc/usd-compatibility-plan.md X4).
+    [[nodiscard]] auto is_hoisted_variant_child(const std::string& carrier_path, const std::string& prim_name) const -> bool
+    {
+        if (m_impl == nullptr) {
+            return false;
+        }
+        for (const Variant_prim_record& record : m_impl->variant_prims) {
+            if ((record.carrier_path == carrier_path) && (record.prim_name == prim_name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The prims the variant blocks of a carrier authored, converted even
+    // though the carrier's arcs supply the rest of what is below it: a
+    // variant's `def` children are the variant's own content, which the
+    // reference the same prim carries has no part in
+    // (doc/usd-compatibility-plan.md section 6).
+    void convert_hoisted_variant_children(
+        const Tydra_node&                       usd_node,
+        const std::shared_ptr<erhe::Hierarchy>& parent,
+        const glm::mat4&                        extra_transform
+    )
+    {
+        for (const Tydra_node& usd_child : usd_node.children) {
+            if (is_hoisted_variant_child(usd_node.abs_path, usd_child.prim_name)) {
+                convert_node(usd_child, parent, extra_transform);
+            }
+        }
     }
 
     // A prim that authors composition arcs is a carrier: the arcs are reported
@@ -4884,6 +4984,14 @@ private:
     {
         std::string defined_names;
         for (const lightusd::PrimSpec& child : spec.children()) {
+            if (relative_path.empty() && is_hoisted_variant_child(absolute_path, child.name())) {
+                // A prim a variant block of this prim authored, which the
+                // hoist put here (doc/usd-compatibility-plan.md section 6). It
+                // is the variant's own content, not an edit someone made over
+                // the reference, so it is a child prim of the carrier and the
+                // structure rule below does not apply to it.
+                continue;
+            }
             const bool is_override =
                 (child.specifier() == lightusd::Specifier::Over) ||
                 ((child.specifier() == lightusd::Specifier::Def) && child.typeName().empty());
@@ -5691,24 +5799,34 @@ private:
         if (spec.variantSets().empty()) {
             return;
         }
-        const lightusd::VariantSelectionMap& selection = spec.get_variant_selection_map();
-        std::vector<Usd_variant_set>         sets;
+        std::vector<Usd_variant_set> sets;
         for (const std::pair<const std::string, lightusd::VariantSetSpec>& entry : spec.variantSets()) {
             Usd_variant_set set{};
             set.stage_path = path;
             set.set_name   = entry.first;
+            set.selected   = selected_variant_name(spec, entry);
             for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
                 Usd_variant variant{};
                 variant.name = variant_entry.first;
                 read_variant_prims(path, entry.first, variant);
                 read_variant_opinions(path, variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
+                // The arcs the block authors (doc/usd-compatibility-plan.md
+                // section 6). The selected variant's are the ones the carrying
+                // prim holds, so they are the ones a save writes back inside
+                // the block; a prim carries one list of arcs and not one per
+                // variant, so an unselected variant's are counted instead.
+                std::vector<Usd_reference> variant_references;
+                read_spec_references(variant_entry.second, variant_references);
+                if (variant.name == set.selected) {
+                    for (Usd_reference& reference : variant_references) {
+                        reference.variant_set  = entry.first;
+                        reference.variant_name = variant.name;
+                        variant.references.push_back(std::move(reference));
+                    }
+                } else {
+                    set.unsupported_opinion_count += variant_references.size();
+                }
                 set.variants.push_back(std::move(variant));
-            }
-            const lightusd::VariantSelectionMap::const_iterator i = selection.find(entry.first);
-            if (i != selection.end()) {
-                set.selected = i->second;
-            } else if (!set.variants.empty()) {
-                set.selected = set.variants.front().name;
             }
             sets.push_back(std::move(set));
         }

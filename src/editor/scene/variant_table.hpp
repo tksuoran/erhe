@@ -4,7 +4,10 @@
 
 #include "erhe_scene/instance_override.hpp"
 
+#include "prefabs/prefab_instance.hpp"
+
 #include <cstddef>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -41,6 +44,19 @@ public:
     std::string authored_name;
 };
 
+// One composition arc a variant block authors
+// (doc/usd-compatibility-plan.md section 6, "Composition authored inside a
+// variant block"). The prim carrying the set holds the selected variant's
+// arcs as Prefab_instance attachments, and this is what tells a save that the
+// arc belongs in the block rather than on the prim.
+class Variant_reference
+{
+public:
+    std::filesystem::path source_path;
+    std::string           prim_path;
+    Prefab_arc_kind       arc_kind{Prefab_arc_kind::reference};
+};
+
 // One variant of a variant set: its name, the bindings it authors, the
 // property opinions it authors and the prims it adds
 // (doc/usd-compatibility-plan.md X4). An opinion names the prim it is for by
@@ -55,6 +71,10 @@ public:
     std::vector<Variant_binding>                bindings;
     std::vector<erhe::scene::Instance_override> overrides;
     std::vector<Variant_prim>                   prims;
+    // The arcs the block authors. Only the selected variant's are listed: a
+    // prim carries one list of arcs and not one per variant, so those are the
+    // ones the scene holds and the ones a save writes back.
+    std::vector<Variant_reference>              references;
 };
 
 // One variant set of a scene: the prim carrying it, the set's name, its

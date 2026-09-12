@@ -1870,6 +1870,7 @@ void apply_planned_paths_to_variant_selections(
 // reader; the table is what lets the user pick another one.
 void fill_variant_table(
     const erhe::usd::Usd_data&                usd_data,
+    const std::filesystem::path&              source_path,
     const std::shared_ptr<erhe::scene::Node>& container_node,
     Variant_table&                            variant_table
 )
@@ -1893,6 +1894,20 @@ void fill_variant_table(
                     Variant_prim{
                         .relative_path = usd_prim.relative_path,
                         .authored_name = usd_prim.authored_name
+                    }
+                );
+            }
+            // The arcs the block authors (doc/usd-compatibility-plan.md
+            // section 6): the carrying prim holds them as prefab instances,
+            // and the table is what remembers the block they belong to.
+            for (const erhe::usd::Usd_reference& usd_reference : usd_variant.references) {
+                variant.references.push_back(
+                    Variant_reference{
+                        .source_path = resolve_reference_asset_path(source_path, usd_reference.asset_path),
+                        .prim_path   = usd_reference.prim_path,
+                        .arc_kind    = (usd_reference.kind == erhe::usd::Usd_reference_kind::payload)
+                            ? Prefab_arc_kind::payload
+                            : Prefab_arc_kind::reference
                     }
                 );
             }
@@ -2449,7 +2464,7 @@ auto make_import_usd_operation(
 
     // The file's variant sets join the target scene's table. The selected
     // variant is already bound by the reader, so an import needs no switch.
-    fill_variant_table(usd_data, root_node, scene_root->get_variant_table());
+    fill_variant_table(usd_data, path, root_node, scene_root->get_variant_table());
 
     // Composition arcs: each referencing prim gets one Prefab_instance per
     // arc, with the arc's target cloned below it. The instances ride the
@@ -2766,7 +2781,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
 
     // The file's variant sets, while the prims are still under the container
     // the material paths address them from.
-    fill_variant_table(usd_data, container_node, scene_root->get_variant_table());
+    fill_variant_table(usd_data, path, container_node, scene_root->get_variant_table());
 
     // Composition arcs: one Prefab_instance per arc under its carrier prim,
     // before the prims move under the scene root.
@@ -2876,6 +2891,7 @@ namespace {
 
 void collect_usd_references(
     const std::shared_ptr<erhe::Hierarchy>&                 prim,
+    const std::vector<erhe::usd::Usd_save_variant_set>&     variant_sets,
     std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
     std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
 );
@@ -2964,6 +2980,7 @@ void collect_point_instancer_prototypes(
 // added, removed or reordered in the tree is what the file gets.
 void collect_usd_point_instancers(
     const std::shared_ptr<erhe::scene::Point_instancer>&    instancer,
+    const std::vector<erhe::usd::Usd_save_variant_set>&     variant_sets,
     std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
     std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
 )
@@ -2976,7 +2993,7 @@ void collect_usd_point_instancers(
     for (const std::shared_ptr<erhe::Hierarchy>& child : instancer->get_children()) {
         if (!is_point_instancer_instance(child)) {
             // A prototype: a prim of its own, and its arcs are written.
-            collect_usd_references(child, out_references, out_point_instancers);
+            collect_usd_references(child, variant_sets, out_references, out_point_instancers);
             continue;
         }
         const std::shared_ptr<erhe::scene::Node> instance = std::dynamic_pointer_cast<erhe::scene::Node>(child);
@@ -3001,8 +3018,37 @@ void collect_usd_point_instancers(
 // is one arc, in the order the attachments hold (doc/usd-compatibility-plan.md
 // X1). The writer needs no prefab library - the attachment already names the
 // target file, the target prim and the arc form.
+// Whether one arc of `item` is an arc a variant block of one of its sets
+// authored: those are written inside the block, not on the prim
+// (doc/usd-compatibility-plan.md section 6).
+[[nodiscard]] auto is_variant_authored_arc(
+    const std::vector<erhe::usd::Usd_save_variant_set>& variant_sets,
+    const erhe::Item_base&                              item,
+    const erhe::usd::Usd_save_reference&                arc
+) -> bool
+{
+    for (const erhe::usd::Usd_save_variant_set& set : variant_sets) {
+        if (set.item.get() != &item) {
+            continue;
+        }
+        for (const erhe::usd::Usd_save_variant& variant : set.variants) {
+            for (const erhe::usd::Usd_save_reference& variant_arc : variant.references) {
+                if (
+                    (variant_arc.prim_path == arc.prim_path) &&
+                    (variant_arc.kind      == arc.kind)      &&
+                    (variant_arc.source_path.lexically_normal() == arc.source_path.lexically_normal())
+                ) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 void collect_usd_references(
     const std::shared_ptr<erhe::Hierarchy>&                 prim,
+    const std::vector<erhe::usd::Usd_save_variant_set>&     variant_sets,
     std::vector<erhe::usd::Usd_save_prim_references>&       out_references,
     std::vector<erhe::usd::Usd_save_point_instancer>&       out_point_instancers
 )
@@ -3014,7 +3060,7 @@ void collect_usd_references(
     const std::shared_ptr<erhe::scene::Point_instancer> point_instancer =
         std::dynamic_pointer_cast<erhe::scene::Point_instancer>(prim);
     if (point_instancer) {
-        collect_usd_point_instancers(point_instancer, out_references, out_point_instancers);
+        collect_usd_point_instancers(point_instancer, variant_sets, out_references, out_point_instancers);
         return;
     }
 
@@ -3026,15 +3072,17 @@ void collect_usd_references(
             if (!prefab_instance) {
                 continue;
             }
-            entry.references.push_back(
-                erhe::usd::Usd_save_reference{
-                    .source_path = prefab_instance->get_prefab_source_path(),
-                    .prim_path   = prefab_instance->get_prefab_prim_path(),
-                    .kind        = (prefab_instance->get_prefab_arc_kind() == Prefab_arc_kind::payload)
-                        ? erhe::usd::Usd_reference_kind::payload
-                        : erhe::usd::Usd_reference_kind::reference
-                }
-            );
+            const erhe::usd::Usd_save_reference arc{
+                .source_path = prefab_instance->get_prefab_source_path(),
+                .prim_path   = prefab_instance->get_prefab_prim_path(),
+                .kind        = (prefab_instance->get_prefab_arc_kind() == Prefab_arc_kind::payload)
+                    ? erhe::usd::Usd_reference_kind::payload
+                    : erhe::usd::Usd_reference_kind::reference
+            };
+            if (is_variant_authored_arc(variant_sets, *node.get(), arc)) {
+                continue; // the variant block writes it
+            }
+            entry.references.push_back(arc);
         }
         if (!entry.references.empty()) {
             entry.item = node;
@@ -3043,7 +3091,7 @@ void collect_usd_references(
         }
     }
     for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
-        collect_usd_references(child, out_references, out_point_instancers);
+        collect_usd_references(child, variant_sets, out_references, out_point_instancers);
     }
 }
 
@@ -3144,6 +3192,17 @@ void collect_usd_variant_sets(
                     }
                 );
             }
+            for (const Variant_reference& reference : variant.references) {
+                save_variant.references.push_back(
+                    erhe::usd::Usd_save_reference{
+                        .source_path = reference.source_path,
+                        .prim_path   = reference.prim_path,
+                        .kind        = (reference.arc_kind == Prefab_arc_kind::payload)
+                            ? erhe::usd::Usd_reference_kind::payload
+                            : erhe::usd::Usd_reference_kind::reference
+                    }
+                );
+            }
             save_set.variants.push_back(std::move(save_variant));
         }
         out_variant_sets.push_back(std::move(save_set));
@@ -3169,8 +3228,11 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     };
     save_arguments.time_codes_per_second = scene_root.get_usd_time_codes().time_codes_per_second;
 
+    // Before the arcs: a prim's arc that one of its variant blocks authored is
+    // written inside that block, so collecting the arcs needs the table.
+    collect_usd_variant_sets(scene_root, path, save_arguments.variant_sets);
     for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
-        collect_usd_references(child, save_arguments.references, save_arguments.point_instancers);
+        collect_usd_references(child, save_arguments.variant_sets, save_arguments.references, save_arguments.point_instancers);
     }
     // The domes the file this scene was opened from authored: written back as
     // the `DomeLight` prims they were. A scene that read none writes none -
@@ -3186,7 +3248,6 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
             }
         );
     }
-    collect_usd_variant_sets(scene_root, path, save_arguments.variant_sets);
     // A scene opened from a sublayered root layer is edited as the one
     // composed stage it became, so the save writes that content into this one
     // layer and authors no `subLayers` (src/erhe/usd/notes.md; a sublayer

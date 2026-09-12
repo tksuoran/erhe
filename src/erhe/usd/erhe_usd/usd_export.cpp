@@ -2079,6 +2079,16 @@ private:
         point_instancer = 2
     };
 
+    // Which children of a prim a pass plans: all of them, or only the ones a
+    // variant block of that prim authored. A carrier's other children are the
+    // instance content its arcs supply, which is not written, while a prim one
+    // of its variant blocks authored is the variant's own content
+    // (doc/usd-compatibility-plan.md section 6).
+    enum class Child_selection : unsigned int {
+        all_children       = 0,
+        variant_prims_only = 1
+    };
+
     [[nodiscard]] static auto plans_contentless_prims(const Prim_holder holder) -> bool
     {
         return (holder == Prim_holder::class_prim) || (holder == Prim_holder::point_instancer);
@@ -2100,7 +2110,8 @@ private:
         Name_scope&                     names,
         std::vector<Plan_prim>&         out_prims,
         std::vector<Plan_variant_prim>* out_variant_prims = nullptr,
-        const Prim_holder               holder            = Prim_holder::tree
+        const Prim_holder               holder            = Prim_holder::tree,
+        const Child_selection           selection         = Child_selection::all_children
     )
     {
         for (const std::shared_ptr<erhe::Hierarchy>& child : parent.get_children()) {
@@ -2176,6 +2187,9 @@ private:
             // it has in the tree is what keeps two variants' prims apart
             // there, and the block is a namespace of its own.
             const Variant_prim_membership* const membership = find_variant_prim_membership(*child_prim, parent);
+            if ((selection == Child_selection::variant_prims_only) && (membership == nullptr)) {
+                continue;
+            }
             Plan_prim plan_prim{};
             plan_prim.item          = child_prim;
             plan_prim.node          = child_node;
@@ -2188,6 +2202,20 @@ private:
             plan_prim.variant_sets  = find_prim_variant_sets(*child_prim);
             if (plan_prim.references != nullptr) {
                 plan_instance_overrides(*child_prim, plan_prim);
+                // The prims the carrier's own variant blocks authored are
+                // written back inside those blocks; everything else below a
+                // carrier is instance content the arcs supply.
+                Name_scope             carrier_names;
+                std::vector<Plan_prim> instance_content;
+                plan_children(
+                    *child_prim,
+                    (child_node != nullptr) ? glm::mat4{1.0f} : pre_transform,
+                    carrier_names,
+                    instance_content,
+                    &plan_prim.variant_prims,
+                    child_prim_holder(*child_prim, holder),
+                    Child_selection::variant_prims_only
+                );
             } else if (plan_prim.material == nullptr) {
                 // A prim that carries a transform writes it on itself, so its
                 // children start from identity; a prim without one passes the
@@ -2582,7 +2610,7 @@ private:
         apply_defined_specifier(*plan_prim.item, prim);
 
         if (plan_prim.references != nullptr) {
-            write_references(prim, *plan_prim.references);
+            write_references(prim.metas(), *plan_prim.references);
         }
         write_inherits(prim, *plan_prim.item);
         write_variant_sets(prim, plan_prim);
@@ -3022,6 +3050,12 @@ private:
                 prim->material = binding.material.get();
             }
         }
+        // The composition arcs the variant block authors, back inside the block
+        // they came from rather than on the prim carrying the set
+        // (doc/usd-compatibility-plan.md section 6).
+        if (!variant.references.empty()) {
+            write_references(usd_variant.metas(), variant.references);
+        }
         for (const Variant_prim& variant_prim : tree) {
             usd_variant.primChildren().push_back(write_variant_prim(variant_prim));
         }
@@ -3186,7 +3220,7 @@ private:
     // op per arc kind, holding the arcs in the order the caller named them,
     // which is the order USD composes them in
     // (doc/usd-compatibility-plan.md X1).
-    void write_references(lightusd::Prim& prim, const std::vector<Usd_save_reference>& references)
+    void write_references(lightusd::PrimMetas& metas, const std::vector<Usd_save_reference>& references)
     {
         std::vector<lightusd::Reference> usd_references;
         std::vector<lightusd::Payload>   usd_payloads;
@@ -3211,7 +3245,6 @@ private:
                 usd_references.push_back(std::move(usd_reference));
             }
         }
-        lightusd::PrimMetas& metas = prim.metas();
         if (!usd_references.empty()) {
             metas.references = std::vector<std::pair<lightusd::ListEditQual, std::vector<lightusd::Reference>>>{
                 std::make_pair(lightusd::ListEditQual::ResetToExplicit, std::move(usd_references))
