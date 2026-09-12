@@ -245,6 +245,33 @@ Vulkan and Metal.
 
 Metal swapchain provides only a color texture (from CAMetalLayer's nextDrawable). The depth-stencil texture is app-managed, created alongside the swapchain and recreated on resize.
 
+`Swapchain_impl` serves both window configurations. With `ERHE_WINDOW_LIBRARY=sdl`
+the context window hands out an SDL Metal view, `Surface_impl` owns the
+`CAMetalLayer`, and each frame draws into a layer drawable which
+`Device_impl::submit_command_buffers` hands to `presentDrawable`.
+
+With `ERHE_WINDOW_LIBRARY=none` there is no layer (`Surface_impl::is_headless()`),
+and the swapchain renders into an emulated backbuffer instead: a ring of three
+offscreen `MTL::Texture` color targets in the layer format
+(`BGRA8Unorm_sRGB`, render target + shader read, private storage), sized from
+`Context_window::get_width/get_height` and created once at construction.
+`begin_frame` advances the ring index, `get_current_color_texture` hands the
+current ring texture to the swapchain render pass exactly where the drawable
+texture goes, no drawable is acquired so nothing is presented, and frame pacing
+is the device's own completion tracking. This mirrors the Vulkan backend's
+`Emulated_swapchain_impl`. Configure it with
+`scripts/configure_xcode_metal_headless.sh`; the requirements and the
+verification list live in [`metal-headless.md`](metal-headless.md).
+
+Screenshot capture (`Device::capture_last_frame`) differs accordingly. Windowed,
+a drawable cannot be read after presentation, so capture is armed
+(`Device::request_frame_capture`) and the swapchain render pass epilogue blits
+the composited drawable into a persistent shared buffer on the frame's own
+command buffer. Headless, the ring textures stay owned and readable, so
+`request_frame_capture` is a no-op and `capture_last_frame` blits the most
+recently composited ring texture on a fresh command buffer and waits for it,
+returning the frame synchronously on the first call.
+
 ### Multi-Draw Indirect
 
 Metal does not support `glMultiDrawElementsIndirect`. The implementation loops over individual `drawIndexedPrimitives` calls, reading draw commands from the indirect buffer on the CPU side. Push constant index 15 carries the draw ID for vertex/compute shaders; fragment shaders receive draw ID via an interpolated varying (Metal does not support push constants in fragment).

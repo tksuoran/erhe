@@ -10,8 +10,10 @@
 
 #import <QuartzCore/CAMetalLayer.h>
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_metal.h>
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
+#   include <SDL3/SDL.h>
+#   include <SDL3/SDL_metal.h>
+#endif
 
 namespace erhe::graphics {
 
@@ -19,6 +21,7 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
     : m_device_impl        {device_impl}
     , m_surface_create_info{create_info}
 {
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
     if (create_info.context_window != nullptr) {
         SDL_Window* sdl_window = static_cast<SDL_Window*>(create_info.context_window->get_sdl_window());
         if (sdl_window != nullptr) {
@@ -41,6 +44,13 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
             }
         }
     }
+#endif
+
+    if (m_metal_layer == nullptr) {
+        log_startup->info(
+            "Metal surface is headless: rendering into an emulated swapchain of offscreen textures"
+        );
+    }
 
     m_swapchain = std::make_unique<Swapchain>(
         std::make_unique<Swapchain_impl>(
@@ -53,10 +63,12 @@ Surface_impl::Surface_impl(Device_impl& device_impl, const Surface_create_info& 
 Surface_impl::~Surface_impl() noexcept
 {
     m_swapchain.reset();
+#if defined(ERHE_WINDOW_LIBRARY_SDL)
     if (m_sdl_metal_view != nullptr) {
         SDL_Metal_DestroyView(m_sdl_metal_view);
         m_sdl_metal_view = nullptr;
     }
+#endif
 }
 
 auto Surface_impl::get_swapchain() -> Swapchain*
@@ -67,6 +79,25 @@ auto Surface_impl::get_swapchain() -> Swapchain*
 auto Surface_impl::get_metal_layer() const -> CA::MetalLayer*
 {
     return m_metal_layer;
+}
+
+auto Surface_impl::is_headless() const -> bool
+{
+    return m_metal_layer == nullptr;
+}
+
+auto Surface_impl::get_backbuffer_width() const -> int
+{
+    return (m_surface_create_info.context_window != nullptr)
+        ? m_surface_create_info.context_window->get_width()
+        : 0;
+}
+
+auto Surface_impl::get_backbuffer_height() const -> int
+{
+    return (m_surface_create_info.context_window != nullptr)
+        ? m_surface_create_info.context_window->get_height()
+        : 0;
 }
 
 } // namespace erhe::graphics

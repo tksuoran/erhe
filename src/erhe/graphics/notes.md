@@ -225,6 +225,7 @@ VUID-VkDescriptorImageInfo-imageView-01976.
 
 ## Notes
 - All major types use the pimpl pattern (`*_impl` classes) to isolate backend-specific code. Backend implementations live in `gl/` (OpenGL), `vulkan/` (Vulkan), `metal/` (Metal), and `null/` (headless).
+- `ERHE_WINDOW_LIBRARY=none` is a separate axis from the graphics API: the Vulkan and Metal backends both run surfaceless, rendering into an emulated swapchain of offscreen images (`vulkan/vulkan_emulated_swapchain.*`, the ring inside `metal/metal_swapchain.*`) that `Device::capture_last_frame` reads back synchronously.
 - The OpenGL backend requires OpenGL 4.5 with direct state access (DSA) as a hard minimum; device creation fails on older contexts, and there are no non-DSA or GL 4.1 fallback paths.
 - `Shader_resource` is used to programmatically build GLSL interface declarations from C++, keeping shader sources and C++ code in sync without reflection. For sampler declarations it is an implementation detail of `Bind_group_layout`.
 - `Reloadable_shader_stages` combines `Shader_stages_create_info` with a live `Shader_stages` for hot-reload via `Shader_monitor`.

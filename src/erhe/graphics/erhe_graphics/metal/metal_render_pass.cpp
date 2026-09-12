@@ -189,11 +189,13 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
     m_sample_count         = 1;
 
     if (m_swapchain != nullptr) {
-        // Swapchain render pass - use drawable texture
+        // Swapchain render pass - use the current backbuffer texture: the
+        // drawable's texture when windowed, the emulated ring texture when
+        // headless.
         Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
-        CA::MetalDrawable* drawable = swapchain_impl.get_current_drawable();
-        if (drawable == nullptr) {
-            // No drawable available (e.g. tick called from SDL event
+        MTL::Texture* const color_texture = swapchain_impl.get_current_color_texture();
+        if (color_texture == nullptr) {
+            // No backbuffer available (e.g. tick called from SDL event
             // before begin_frame). Bail out cleanly; the caller's cb
             // will be committed empty by submit_command_buffers.
             render_pass_desc->release();
@@ -201,9 +203,9 @@ void Render_pass_impl::start_render_pass(Command_buffer& command_buffer, Render_
             m_inter_encoder_fence = nullptr;
             return;
         }
-        configure_color_attachment(render_pass_desc, 0, drawable->texture(), m_color_attachments[0]);
-        m_color_pixel_formats[0] = static_cast<unsigned long>(drawable->texture()->pixelFormat());
-        m_sample_count = drawable->texture()->sampleCount();
+        configure_color_attachment(render_pass_desc, 0, color_texture, m_color_attachments[0]);
+        m_color_pixel_formats[0] = static_cast<unsigned long>(color_texture->pixelFormat());
+        m_sample_count = color_texture->sampleCount();
     } else {
         // Off-screen render pass - use texture attachments
         for (std::size_t i = 0; i < m_color_attachments.size(); ++i) {
@@ -338,10 +340,17 @@ void Render_pass_impl::end_render_pass(Command_buffer& command_buffer, Render_pa
     }
 
     if ((m_swapchain != nullptr) && (m_command_buffer != nullptr)) {
+        Swapchain_impl& swapchain_impl = m_swapchain->get_impl();
+
+        // The current backbuffer now holds the composited frame; the
+        // headless readback path reads exactly this one.
+        swapchain_impl.mark_render_pass_recorded();
+
         // Armed screenshot capture (Device::request_frame_capture): blit
         // the freshly composited drawable into the capture buffer while
         // this frame still owns it (before presentDrawable at submit).
-        m_swapchain->get_impl().record_capture(m_command_buffer);
+        // No-op when headless (nothing is ever armed there).
+        swapchain_impl.record_capture(m_command_buffer);
     }
 
     // The MTL::CommandBuffer is owned by the user's Command_buffer; we
