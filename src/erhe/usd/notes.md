@@ -1592,13 +1592,11 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
 ## Future work
 
 - No asynchronous load path: `load_usd` runs on the calling thread and the
-  editor's import is synchronous, where a glTF import goes through the asset
-  manager's `Asset_load_request` and the droppable-payload
+  editor's import and scene open are synchronous, where a glTF import goes
+  through the asset manager's `Asset_load_request` and the droppable-payload
   `Import_gltf_operation` (doc/reloadable-asset-loads.md). The conversion
   itself creates no GPU object, so it is ready to move onto a worker when the
   asset manager learns a second format.
-- A USD file cannot be opened as a scene or instantiated as a prefab yet, only
-  imported as an asset; the prefab library parses glTF only.
 - Of the editor state `ERHE_scene` and the asset-root extensions hold in
   glTF, the scene-level block travels as the `erhe:scene` string of
   `customLayerData` (doc/scene_serialization.md, USD-backed scenes), the
@@ -1624,7 +1622,3 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   `archive.usdz[entry]` form.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.
-- The Quest launch with the option on - the editor coming up on the headset
-  and answering `describe_usd_file` over the forwarded MCP port - is still
-  pending; only the Android build and its size and build-time cost are
-  measured (see "Configurations").

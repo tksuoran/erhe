@@ -370,14 +370,15 @@ the instance content below it is not written - the arcs' targets hold it. An
 arc names the target file relative to the layer being written, or no file at
 all when it targets a prim of that same layer.
 
-The editor state a USD file does not carry yet is the content-library folder
-tree (a style is a `class` prim,
-[`usd-compatibility-plan.md`](usd-compatibility-plan.md) X3; a brush is a
-`Brush` prim holding its geometry as a child `Mesh`, E4a; a node graph of
-either kind is a marked `NodeGraph` prim holding one `Shader` per node,
-[`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)). A save logs one
-line for it, so nothing disappears silently; carrying it is future work
-recorded in `src/erhe/usd/notes.md`. Textures are
+Every content-library kind is a prim of the layer where it sits: a style is
+a `class` prim ([`usd-compatibility-plan.md`](usd-compatibility-plan.md)
+X3), a brush a `Brush` prim holding its geometry as a child `Mesh`, a node
+graph of either kind a marked `NodeGraph` prim holding one `Shader` per node
+([`usd-texture-graphs-plan.md`](usd-texture-graphs-plan.md)), and a folder
+the `Scope` it is (E4). The editor state a USD file does not carry is the
+physics on nodes (`Node_physics`, `Node_joint`, physics materials and
+collision filters); a save logs one line for it, so nothing disappears
+silently, and carrying it is the plan's section 6. Textures are
 named by their source image file: a generated texture has no bytes on disk, so
 its slot is left out of the material's shading network with a warning - except
 a slot fed by a texture graph, which is written as a connection to that

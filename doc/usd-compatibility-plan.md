@@ -2,8 +2,8 @@
 
 The concept and naming mapping every step relies on is
 `doc/usd_compatibility.md` (referred to below as "the mapping"); this
-document holds the goal, what already holds, the remaining steps, their
-order and their verification.
+document holds the goal, what holds today, the candidate next steps
+and their order, what is out of scope and the future work.
 
 ## 1. Goal
 
@@ -78,11 +78,9 @@ Constraints every step respects:
 
 ## 2. What holds today
 
-G1 holds for the schemas the importer covers, G2 holds for scene
-content (editor state beyond the scene block is E4), and the reference-instance
-part of G3 holds (X2). Each landed step is
-listed with the record that now owns its behavior; `git log` on that
-record has the history.
+G1, G2 and G3 hold as section 1 states them, for the schemas the
+mapping's tables cover. Each landed step is listed with the record that
+now owns its behavior; `git log` on that record has the history.
 
 - M1 Item paths: `Hierarchy::get_path()`, `erhe::find_by_path`,
   `Item_base::get_reference_path()`; stored references, expressions and
@@ -171,9 +169,8 @@ record has the history.
   (`doc/asset_manager.md`); glTF carries a resource's tree position in
   `ERHE_scene` `library_folders` (`doc/gltf_extensions/ERHE_scene.md`)
   and USD writes and reads a `Material` prim where it sits
-  (`src/erhe/usd/notes.md`). `scene_roundtrip_verify.py` covers the
-  placements (215 checks). Not carried in USD yet: the other resource
-  kinds and an empty folder scope (E4).
+  (`src/erhe/usd/notes.md`); the other resource kinds and a folder are E4.
+  `scene_roundtrip_verify.py` covers the placements.
 - M6 The value types USD needs: `Property_type::double_floating`,
   `mat4`, `asset_path`, `float_array` and `int_array`, each with its D16
   text form, expression rule and Properties row
@@ -188,7 +185,8 @@ record has the history.
   the chain of the styles' local values, nearest first, and `set_style`
   refuses a cycle (`doc/property-system.md` D25, `doc/style-library.md`);
   `ERHE_scene` `styles[].style` carries it
-  (`doc/gltf_extensions/ERHE_scene.md`). USD carries no styles until E4.
+  (`doc/gltf_extensions/ERHE_scene.md`); USD carries a style as a `class`
+  prim and the chain as its `inherits` (X3).
 - M8 xformOp stacks: an `Xformable` carries the xformOp stack it was
   authored with (op types, suffixes, `!invert!`, authored precisions,
   `!resetXformStack!` stored only) and composes it to its TRS; a
@@ -210,9 +208,12 @@ record has the history.
   playable projection is one `erhe::scene::Animation` per file, keyed in
   seconds, holding one channel per sampled op of every prim whose stack is
   a `[translate, rotate, scale]` the channels can drive; a stack outside
-  that keeps its samples, keeps its start-time pose, and is named in one
-  warning. `erhe_usd_tests` round-trips a sampled stack to a fixed point
-  (`src/erhe/usd/notes.md`, "Time samples").
+  that (a pivot pair, a sampled matrix op, `[orient, translate]`, two ops
+  of a kind) is posed and composed at the union of its sample times and
+  baked into translation, rotation and scale channels, exact at every
+  sample, with one info line naming the reason; the samples stay on the
+  ops either way. `erhe_usd_tests` round-trips a sampled stack to a fixed
+  point (`src/erhe/usd/notes.md`, "Time samples").
 - X1 References as prefab instances: LightUSD composes nothing at load
   (its composition option is declared and not implemented), so a
   referencing prim arrives as authored with its `references` and
@@ -227,9 +228,15 @@ record has the history.
   itself and its subtree under the carrier, one level more than USD's
   own composition; a save writes the carrier as the referencing prim
   with its arcs and none of the content, so the round trip is a fixed
-  point (`src/erhe/usd/notes.md` "Export"). An arc inside a template is
-  instantiated through the same library (a cycle is refused); `Prefab_library::reload` refreshes a carrier with several
-  arcs from its first attachment.
+  point (`src/erhe/usd/notes.md` "Export"). A typeless or `Scope` prim
+  that authors an arc is an `Xform` carrier defined by the arc, keeping
+  the `xformOp` stack it authors, and a carrier's authored stack composes
+  in place of the target's own (`xformOpOrder` is one attribute, so the
+  referencing layer's stack wins), the target's clone getting the identity;
+  a carrier without a stack lets the target's transform stand. An arc
+  inside a template is instantiated through the same library (a cycle is
+  refused); `Prefab_library::reload` refreshes a carrier with several arcs
+  from its first attachment.
 - X2 Editable instances with sparse overrides: a USD reference is a
   composition arc, not a copy. Every item inside an instance names its
   template counterpart as its reference source
@@ -262,7 +269,10 @@ record has the history.
   save writes each overriding item as an `over` prim below the carrier
   holding its local values and `active` only, the clone of the target
   prim being the carrier prim itself, and the reader reads them off the
-  composed layer's prim specs (`src/erhe/usd/notes.md`); glTF carries the
+  composed layer's prim specs, a typeless `def` below the carrier being
+  the same override of the child of that name (a typed `def` adds
+  structure and is dropped with a warning, section 5)
+  (`src/erhe/usd/notes.md`); glTF carries the
   list as `ERHE_node.overrides` on the carrier
   (`doc/gltf_extensions/ERHE_node.md`); a prefab reload captures and
   re-applies them. Attachments inside an instance (applied API schemas)
@@ -367,233 +377,204 @@ record has the history.
   attribute. The `pcp` DAG engine stays the option for a full-stack case
   (sublayers, section 5); live re-composition after an edit is not planned.
 
-## 3. Remaining steps
+- E4 Editor state in a USD file: every resource kind of the content
+  library is written and read as a prim where it sits in the tree, one
+  `typeName` per kind (the class token `Typed` fixes) with attributes named
+  as the glTF fields are, `erhe::usd` recording what the layer authors and
+  the editor creating the item, as X3 does for a class prim
+  (`doc/scene_serialization.md`, "USD-backed scenes", owns the list of what
+  the layer carries and the `customLayerData` keys). A save logs no kind
+  it carries and the open side reads every kind it writes. The output is
+  `.usda` only (section 6).
+  - Brushes: a brush is a `Brush`-typed prim where it sits, its geometry
+    the child `Mesh` prim the mesh writer emits with
+    `subdivisionScheme = none` (normative on reload, the `ERHE_geometry`
+    role in glTF), facet materials as the child's `GeomSubset` bindings,
+    its own material as `material:binding` on the brush prim, `density`
+    and `normal_style` as `erhe:Brush:` custom attributes and
+    `purpose = guide` derived rather than authored; `Usd_data::brushes`
+    is the record and the scene conversion skips the brush's subtree
+    (`src/erhe/usd/notes.md` "Brush prims"). The round-trip script's
+    brushes leg holds; the first save of a brush built in memory differs
+    from the second in vertex order, since the mesh reader re-indexes,
+    and the file is a fixed point from the first reload on.
+  - Texture node graphs: a `Graph_texture` is the `UsdShade` network it
+    is - a `NodeGraph` prim where the asset sits, one `Shader` child per
+    node with an `erhe:texture:` `info:id`, parameters and pins as
+    `inputs:` / `outputs:` attributes, links as attribute connections, and
+    a material slot fed by the graph connected to the graph's interface
+    output in place of a `UsdUVTexture`. `doc/usd-texture-graphs-plan.md`
+    owns the design and the record between `erhe::usd` and the editor
+    (`src/erhe/usd/notes.md` "Node graphs"; MCP `get_scene_node_graphs`);
+    the round-trip script's `texture_graph.usda` leg holds with a
+    byte-identical second save.
+  - Geometry node graphs: a `Graph_mesh` reuses the texture-graph prim
+    form with `erhe:geometry:` node ids and the evaluated geometry as a
+    child `Mesh "result"` written the way a brush writes its geometry;
+    `doc/usd-texture-graphs-plan.md` section 4 states the rule, the
+    scene-block carrier for the bindings (each naming a prim by the path
+    the write plans for it, `erhe::usd::plan_usd_prim_paths`) and the
+    identifier spelling a pin and a parameter name travel in. The
+    round-trip script's geometry-graph leg holds with the save a fixed
+    point from the first reload.
+  - Folders: every `Scope` of the tree is written where it sits, whatever
+    it holds - a content-library folder, a kind scope (`Materials`,
+    `Brushes`, ...) and a `Scope` a file authored are one kind of prim, so
+    the folder tree survives a save empty; on reload a kind scope is
+    recognized by its name and adopted rather than made a second time
+    (`Content_library::adopt_kind_scopes`, `src/editor/parsers/notes.md`).
+    A top-level `Scope` does not force the `World` wrapper: a scene with
+    one prim of its own beside its kind scopes names that prim as the
+    stage's `defaultPrim` and writes the scopes beside it. A skin and an
+    animation are library resources the `Skeleton` prim and the sampled
+    `xformOp`s carry, so those items are not written as prims. The
+    round-trip script's library-folder leg drives the editor's own folders
+    through a save and a reload.
+- S1 USD Assets Working Group survey: every entry asset of the ASWF USD
+  Assets Working Group repository (`<usd-wg-assets>`, a local clone of
+  github.com/usd-wg/assets: `full_assets/*`, `test_assets/*` and
+  `intent-vfx/scenes/*`) is opened in a headless editor by
+  `scripts/usd_wg_asset_survey.py`, which regenerates `doc/usd-wg-assets.md`:
+  per entry whether it loads, the prim, mesh, material and light counts
+  against the composed stage (measured with pxr when an OpenUSD build is
+  at hand), a Storm render of erhe's own view compared by normalized cross
+  correlation, the bounds against pxr's, the diagnostics the load logs, a
+  screenshot and a verdict. Diagnostics an entry reports by design are
+  listed in `doc/usd-wg-assets-expected.json` and do not count against it;
+  by-eye verdicts live in `doc/usd-wg-assets-eye.json`. The gap loop of
+  `doc/usd-survey-gap-loop.md` walks the entries, fixes a gap or records
+  why it is by design, and runs clean on every scope: of the 146 entries,
+  138 work, 7 work with a named gap and 1 fails, and every non-working
+  entry is the MaterialX item of section 6. The survey doc is the
+  checklist a later fix takes its target from, and it re-runs per fix on
+  the affected entries only (`--only`), whole only after every identified
+  gap is closed. What the survey drove into the importer and the
+  renderers is stated where it holds: `src/erhe/usd/notes.md` for the
+  headlight, `DomeLight` ambient, arc carriers, `class` prototypes,
+  composed sublayers, `UsdGeom` primitive schemas, `PointInstancer`
+  expansion, the `st` V flip with `UsdTransform2d`, texture channels,
+  `UsdPreviewSurface` fallbacks, `.usdz` packed textures, vertex colors as
+  an unbound mesh's albedo, `doubleSided`, hole faces, baked sampled
+  stacks and the specifier of an undefined prim; `doc/editor_rendering.md`
+  for the grid as a blended overlay that writes no depth.
+- E2 Material fidelity: the erhe material fields `UsdPreviewSurface` has no
+  input for - anisotropic roughness and transmission - travel in an
+  `OpenPBRSurface` network beside the `UsdPreviewSurface` one, an inline
+  `UsdShade` network Tydra converts in every build, so neither direction
+  is conditional (`LIGHTUSD_WITH_USDMTLX`, off in erhe's build, concerns
+  only a separate `.mtlx` document, section 6). The importer reads the
+  OpenPBR network wherever a `Material` prim offers one and names a
+  material that offers both in one line saying which was read; the writer
+  authors one for exactly the materials that need it - a roughness whose
+  components differ, or a transmission that is not zero - through
+  `outputs:mtlx:surface`, reading the very texture prims the preview
+  surface reads. The pair the OpenPBR parameterization cannot spell
+  exactly rides as `erhe:Material:roughness`, applied after the network
+  on reload, so the erhe round trip is bit-exact while another reader
+  shades from the network; the fields no OpenPBR input carries
+  (`reflectance`, the brushed-metal block, `use_aniso_control`) keep their
+  `erhe:Material:<name>` custom-attribute path (`src/erhe/usd/notes.md`
+  "OpenPBR networks"; the round-trip script's `open_pbr.usda` leg).
 
-Steps are grouped by what they touch: M = model generalization (no USD
-code), E = export, X = composition; animation beyond the skeleton (K1)
-and physics are section 6, future work outside every stage. Sizes are relative: S = an afternoon, M = a few days, L = a
-week or more.
+Verification of all of the above: `erhe_usd_tests` (302 cases, built in
+`build_vs2026_vulkan` since `ERHE_BUILD_TESTS=ON` is passed by the main
+configure wrapper), the `usd-roundtrip` section of
+`scripts/scene_roundtrip_verify.py` (`doc/scene_serialization.md`,
+"Verifying round-trips"), and the survey run of S1.
 
-### E4 Editor state in a USD file (M; completes G2)
+## 3. Candidate next steps
 
-What: the editor state a USD-backed scene does not carry yet
-(`doc/scene_serialization.md`, "USD-backed scenes", owns the list and
-the `customLayerData` keys already in use) rides USD's own means (C1).
-The resources are prims (U4), so each kind is written and read as a
-prim where it sits in the tree, one custom `typeName` per kind (the
-class token `Typed` already fixes) with attributes named as the glTF
-fields are; `erhe::usd` records what the layer authors and the editor
-creates the item, as X3 does for a class prim. Animations and the
-physics API schemas on nodes (section 6) stay listed as not carried;
-skins are carried (K1). A save no longer logs a kind it carries; the open side reads
-every kind it writes. `.usdc` output follows once the `.usda` output
-round-trips through E3 with all of it. The parts below land
-independently, in the order E4a, S1, E4c, E4b, E4d.
+No step of the original plan remains: G1, G2 and G3 hold. What follows is
+the review of section 6 and of the future-work lists of
+`src/erhe/usd/notes.md` and `doc/usd_compatibility.md`, ranked by what
+each buys the editor; every item's substance is the section 6 entry it
+names, and nothing here restates one.
 
-#### E4a Brushes (S; landed, `src/erhe/usd/notes.md` "Brushes")
-
-A brush (`ERHE_brushes` in glTF: name, geometry, material, density,
-normal style; the collision shape is rebuilt from the geometry) is a
-`Brush`-typed prim where it sits:
-
-```
-def Scope "Brushes" {
-    def Brush "Cube" {
-        custom float erhe:Brush:density = 1
-        custom token erhe:Brush:normal_style = "polygon_normals"
-        rel material:binding = </World/Materials/Copper>
-        def Mesh "geometry" { points, faceVertexCounts, ... }
-    }
-}
-```
-
-- The geometry is the child `Mesh` prim, written by the mesh writer from
-  the brush's geometry with `subdivisionScheme = none`, which the I1
-  reader keeps normative on reload (the `ERHE_geometry` role in glTF).
-  The brush prim itself holds it, so no node-unreferenced carrier is
-  needed. Facet materials of the geometry, when it has them, ride the
-  child's `GeomSubset` bindings as on any `Mesh`.
-- `material:binding` on the brush prim is the brush's own material
-  property (the material a placed instance gets), by path as U4 binds.
-- `density` and `normal_style` are `erhe:Brush:` custom attributes, the
-  token spelled as the glTF field is.
-- `purpose = guide` is derived from the brush flag (M3) and not
-  authored, so a foreign viewer does not render the brush mesh; `Brush`
-  is not a USD schema, so such a viewer sees a prim of unknown type with
-  a `Mesh` child, and the U1 `Typed` fallback keeps its place when the
-  file comes back.
-- Reader: `Usd_data::brushes` (path, name, the child mesh's converted
-  geometry, material path, density, normal style); the editor creates
-  the `Brush` item at the path, as the glTF loader rebuilds one from
-  the carrier mesh, binds the material by path and places it in the
-  tree; the `Brush` prim's subtree is skipped by the scene conversion
-  (its mesh is not scene content).
-
-Verification (holds): the round-trip script's brushes leg over
-`brushes.usda` and a headless session with two brushes built over MCP,
-one with a material; reload lists both with the same counts, density,
-normal style and material, `place_brush` works on the reloaded brush,
-the file is a fixed point from the first reload on (the first save of a
-brush built in memory differs in vertex order, since the mesh reader
-re-indexes), and the scene closes clean.
-
-#### S1 USD Assets Working Group survey (M; landed, `doc/usd-wg-assets.md`; the gap loop of `doc/usd-survey-gap-loop.md` runs clean on every scope, every remaining gap is the section 6 MaterialX item)
-
-What: every entry asset of the ASWF USD Assets Working Group repository
-(`<usd-wg-assets>`, a local clone of github.com/usd-wg/assets:
-`full_assets/*`, `test_assets/*` and `intent-vfx/scenes/*`) is opened in
-the editor and its outcome recorded in `doc/usd-wg-assets.md`: the
-entry file, whether it loads, the prim, mesh, material and light counts
-against what the file authors, the warnings and errors the load logs,
-a screenshot, and a verdict (works, works with a named gap, fails with
-a named cause). The document is the checklist of USD support the editor
-still lacks, ordered by how many assets each gap blocks, and every
-later step of this plan takes its next fix from that list.
-`scripts/usd_wg_asset_survey.py` drives a headless editor over the
-whole set and regenerates the table, so the survey re-runs after each
-fix.
-
-The survey re-runs after each fix and the document is regenerated.
-What holds: an unlit scene is lit by a per-viewport headlight the way
-usdview's camera light lights it, a `DomeLight` is the scene's ambient
-light, a typeless or `Scope` prim that authors arcs is an `Xform`
-carrier, any prim is a reference target and a `class` prim's `def`
-descendants are prototypes held abstract, a root layer's subLayers are
-composed (the save writes one flattened layer) and every prim of the
-composed layer stack carries its authored opinions, `class` prims and
-`xformOp` stacks whichever layer authored it, every `Material` prim
-converts, a material binding authored as an `over` is an instance
-override and a template's material has an owner, the `UsdGeom`
-primitive schemas import as the meshes they describe, a `PointInstancer`
-is expanded into a prototype held abstract and one prim per instance
-holding an internal reference to it, with the instance prims the only
-record of what a save writes back, USD `st` crosses
-the V flip with `UsdTransform2d` carried through it, a scalar input
-reads the texture channel the file connects, an unauthored
-`diffuseColor` is USD's 0.18, a `UsdUVTexture`'s wrap, transform,
-scale and per-channel normal decode reach the material, with a texture
-packed in a `.usdz` read out of the archive, a mesh with no material
-of its own renders erhe's default look, and a prim's `doubleSided`
-opinion is a `Gprim.double_sided` property the renderers take together
-with the material's own flag, so a cross-shaped card shows both of its
-faces. A `UsdTransform2d` places
-its texture where usdview does, measured face on against the
-reference render and pinned by the placement case of
-`src/erhe/usd/test/test_usd_texture_channels.cpp`. An alpha-blended and
-an alpha-tested primitive reach the frame in a viewport that draws the
-grid, which is what puts McUsd's stained glass and its sunflower and
-fern cards back into the render: the grid is a blended overlay and
-writes no depth (`doc/editor_rendering.md`, Grid). The current run (146
-entries, 51 work as they are, none crash) leaves nothing in the S1 order:
-what it still shows - 16-bit and CMYK images undecoded, the intent-vfx
-teapot scenes tripping the stall watchdog on load, grid lines crossing
-opaque objects, a keyed animation edit not written back, MaterialX - is
-section 6. The document's rows are what the subset re-runs after each fix
-merged in; the next full run regenerates it whole.
-
-Verification (holds): the script runs over every entry asset without
-leaving the editor down, and the document lists every entry file once.
-
-#### E4c Texture node graphs (M; landed)
-
-A `Graph_texture` is the `UsdShade` network it is: a `NodeGraph` prim
-where the asset sits, one `Shader` child per node with an `erhe:texture:`
-`info:id`, parameters and pins as `inputs:` / `outputs:` attributes,
-links as attribute connections, and a material slot that samples the
-graph connected to the graph's interface output in place of a
-`UsdUVTexture`. `doc/usd-texture-graphs-plan.md` owns the design, the
-record between `erhe::usd` and the editor, the two phases and the
-verification. Both phases hold: `erhe::usd` reads and writes the prims as
-the neutral record (`src/erhe/usd/notes.md`, "Node graphs";
-`erhe_usd_tests` 245) and the editor collects and rebuilds a
-`Graph_texture` from it, binds the material slots, and the round-trip
-script's `texture_graph.usda` leg is green with a byte-identical second
-save (MCP `get_scene_node_graphs`).
-
-#### E4b Geometry node graphs (M; landed)
-
-A `Graph_mesh` reuses E4c's prim form with `erhe:geometry:` node ids and
-the evaluated geometry as a child `Mesh "result"` prim written the way
-a brush writes its geometry (E4a); `doc/usd-texture-graphs-plan.md`
-section 4 states the rule, the scene-block carrier for the bindings and
-the designations (each naming a prim by the path the write plans for it,
-`erhe::usd::plan_usd_prim_paths`), and the identifier spelling a pin and
-a parameter name travel in. `erhe::usd` reads and writes the prims as the neutral record
-(`erhe_usd_tests` 284) and the editor collects and rebuilds a
-`Graph_mesh` from it, binds the prims that drive their mesh from it
-again, and the round-trip script's geometry-graph leg is green with the
-save a fixed point from the first reload.
-
-#### E4d Content-library folders (S; landed)
-
-Every `Scope` of the tree is written where it sits, whatever it holds: a
-content-library folder, a kind scope (`Materials`, `Brushes`, ...) and a
-`Scope` a file authored are one kind of prim, so the folder tree survives
-a save empty. A `Scope` on reload is a folder in its place, and a kind
-scope is recognized by its name - the editor adopts the one the file
-brought back rather than making a second one
-(`Content_library::adopt_kind_scopes`, `src/editor/parsers/notes.md`).
-A top-level `Scope` is a namespace a reference has no use for, so it does
-not force the `World` wrapper: a scene with one prim of its own beside
-its kind scopes names that prim as the stage's `defaultPrim` and writes
-the scopes beside it, which is what keeps a save from adding a level to
-the tree it read. A skin and an animation are library resources that the
-`Skeleton` prim and the sampled `xformOp`s carry, so the item itself is
-not written wherever it sits. `erhe_usd_tests` 291 covers an empty
-`Scope`, a nested folder tree and the byte-identical second write, and
-the round-trip script's library-folder leg drives the editor's own
-folders through a save and a reload (23 checks).
-
-### E2 Material fidelity (M; landed)
-
-The erhe material fields `UsdPreviewSurface` has no input for - anisotropic
-roughness and transmission - travel in an `OpenPBRSurface` / MaterialX network
-beside the `UsdPreviewSurface` one. Such a network is an inline `UsdShade`
-network that Tydra converts in every build, so neither direction is
-conditional: `LIGHTUSD_WITH_USDMTLX` (off in erhe's build) only concerns a
-separate `.mtlx` document as an asset, which stays future work (section 6).
-
-The importer reads the OpenPBR network wherever a `Material` prim offers one
-and names a material that offers both in one line saying which was read,
-taking the two directional roughnesses, the transmission, the emission, the
-base layer, the opacity and the slot textures from it under the mapping's
-OpenPBR table. The writer authors one for exactly the materials that need it -
-a roughness whose components differ, or a transmission that is not zero -
-through `outputs:mtlx:surface`, with the inputs reading the very texture prims
-the preview surface reads; every other material writes the one terminal it
-always wrote. The pair the OpenPBR parameterization cannot spell exactly rides
-as the material's own `erhe:Material:roughness`, applied after the network on
-reload, so the erhe round trip is bit-exact while another reader shades from
-the network. The fields no OpenPBR input carries (`reflectance`, the
-brushed-metal block, `use_aniso_control`) keep their `erhe:Material:<name>`
-custom-attribute path (`src/erhe/usd/notes.md`, "OpenPBR networks";
-`erhe_usd_tests` 302, and the round-trip script's `open_pbr.usda` leg).
+1. Physics in USD (section 6 "Physics on load"). The largest editor
+   feature a USD-backed scene silently loses today: the importer counts
+   the `UsdPhysics` prims it skips and a save writes none, so a physics
+   scene cannot live in USD at all. The plain-data carrier the glTF
+   physics import already takes makes the reader a filling of that
+   carrier and the writer its inverse; it closes the last "not carried"
+   line `doc/scene_serialization.md` lists for a USD-backed scene.
+2. The animated value layer, then time samples on any attribute and the
+   write-back of an edit into the samples (three section 6 items). The
+   layer pays for itself without USD (it is the prerequisite of
+   `doc/animation-keyframing-plan.md`), and with it a keyed edit made in
+   erhe becomes something a USD save can carry instead of writing the
+   file's original samples. This is the second editor feature a USD scene
+   loses today.
+3. Composition the real assets use (section 6 "Composition authored
+   inside a variant block", "An xformOp named in a prim's xformOpOrder
+   that one of its arcs supplies", "An override path that crosses a
+   reference inside an instance"). The usd-wg Teapot model, DrawModes and
+   the intent-vfx teapot asset are the surveyed files that stay empty or
+   warn per prim; each item names the two-part change that closes it.
+4. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+   downstream", "Relationship targets a weaker sublayer contributes as a
+   single path", the `texCoord2f` finding of "Writer findings of
+   usdchecker"). Four defects in one dependency, each already diagnosed to
+   the function; a fork branch carrying them removes a stripping pass, a
+   quoting workaround, 2816 skipped instances and a validator finding.
+5. Load performance (section 6 "Load performance"). The scenes holding
+   thousands of prims take minutes and trip the stall watchdog; the three
+   fixes are named in order and the first, a shape-to-meshes index at the
+   change sites, is the one the other scene loaders benefit from too.
+6. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+   "Asynchronous load" and "Binary and packaged output"). The load moves
+   onto the asset manager's request path once the manager learns a second
+   format; the output formats are what LightUSD's writer already offers.
+7. The round-trip residue (section 6 "Node-held secondary values",
+   "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
+   of usdchecker"). Small, each one a value that leaves through a save
+   and does not come back.
+8. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
+   input fed by a UsdPrimvarReader", "A material slot that a texture
+   graph feeds AND that carries an authored factor", "Image formats",
+   "An environment map from a DomeLight texture", "MaterialX"). The
+   PrimvarReader case and the slot factor are importer work; the rest
+   need a renderer or decoder erhe does not have, MaterialX documents a
+   LightUSD option erhe's build leaves off.
+9. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+   is on for Windows and Android only.
+10. Composition beyond what erhe resolves (section 6 "Layer-stack
+    editing", "inherits and specializes arcs whose target is not a class
+    prim", "Variant opinions a variant set does not carry", "Overrides on
+    applied API schemas inside an instance"). Each is a real USD feature
+    with no surveyed asset that visibly depends on it, so they wait for a
+    file that does.
 
 ## 4. Order
 
-Every step of section 3 has landed (E4a, E4c, E4b, E4d and E2 as of
-2026-09-11), so G2 and G3 hold as section 2 states them. What remains is
-the future work of section 6, which has no fixed order; each item there
-is landable on its own.
+Items 1 and 2 of section 3 are independent of each other and of the rest,
+and each restores an editor feature to USD-backed scenes; take them first,
+in either order, through the harness of `doc/agent-orchestration-harness.md`
+one commit at a time (C2). Item 4 goes with a fork tag bump and is best
+taken when a fork clone is at hand (`memory-bank/local/context.md`
+records it). The remaining items have no ordering constraint among them.
 
 ## 5. Out of scope
 
 - Structural edits inside a reference (adding, removing or reparenting
   a prim under a referencing prim): an instance is the template's
   structure with value overrides, and a prim that is not wanted is
-  deactivated (X2).
+  deactivated (X2). A typeless `def` below a carrier is an override of the
+  child of that name, not a structural edit (X2).
 - Converting between the formats: a glTF scene saved as USD or a USD
   scene saved as glTF, and prefabs of one format inside a scene of the
   other (G3).
 - glTF extensions that carry USD-only features, and USD schemas that
   exist only to carry glTF-only encodings (C1).
 - OpenUSD as a build dependency (`src/erhe/usd/notes.md` "Dependency"
-  says how it is used instead: schema reference and validator only).
+  says how it is used instead: schema reference, validator and the
+  survey's reference renderer only).
 - Live re-composition of an edited stage (X5 names it as the step after
   provenance).
-- `specializes`, payload load policies, sublayer stacks and the session
-  layer: no erhe feature maps onto them yet; the mapping lists them as
-  having no erhe counterpart.
+- `specializes`, payload load policies and the session layer: no erhe
+  feature maps onto them; the mapping lists them as having no erhe
+  counterpart. A root layer's sublayers are composed at load and a save
+  writes one flattened layer (the mapping's `subLayers` row); editing the
+  stack layer by layer is section 6.
 - The schema attributes of a `Typed` prim of unsupported type (U1): the
   prim and its place survive a round trip, its attributes do not, until
   a step wants a generic property dictionary on `Typed` (the mapping's
@@ -601,78 +582,38 @@ is landable on its own.
 
 ## 6. Future work
 
-Physics, and the animation the transform time samples do not cover, are
-outside G1, G2 and G3: a USD scene loads, edits and saves without them
-until the items below are taken up, and E1 writes no `UsdPhysics`
-schemas. Each item is independent of the others and of every step in
-section 3 except where named.
+Each item is independent of the others except where named; section 3
+ranks them. A USD scene loads, edits and saves without any of them.
 
-- Stale world bounds on the first framing after a prefab instantiation:
-  `frame_scene` on the first scene a session opens through a reference or
-  payload reads the pre-instantiation bounds (the survey's
-  `payload_child_folder.usda` row at 4950% is this; a second framing reads
-  the right ones). The same load-settle family as the load-performance item.
-- `inherits` and `specializes` arcs whose target is not a `class` prim
-  (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
-  a style only of a class prim, so such an arc composes nothing and is
-  warned about; the surveyed file overrides every inherited opinion locally,
-  so nothing visible depends on it there.
-- Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
-  "Node graphs"): Tydra fails a material whose input connects to a
-  `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
-  the USDA parser does not round-trip an escaped double quote, so nested
-  parameter text travels with single quotes. Both go with a fork fix.
-- 16-bit PNG and CMYK JPEG decoding: the survey's TextureFileFormatTests
-  tiles for them render blank. wuffs can decode both to 8-bit RGBA, so this
-  is a failure in erhe's use of it that no log names per file yet
-  (`src/erhe/graphics/erhe_graphics/image_loader_wuffs.cpp`); diagnose with a
-  per-file decode-failure log line first. Radiance `.hdr` and OpenEXR
-  `.exr` need decoders erhe does not build (`stb_image.h` sits in the CPM
-  cache of fpng and LightUSD, and nothing in the tree reads `.exr`); the
-  StandardShaderBall scene's six neutral `.exr` maps are the surveyed
-  assets that ask for the second.
-- Load performance of a scene holding thousands of prims (the intent-vfx
-  scenes, several minutes with the stall watchdog firing - the teapot ones,
-  and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset
-  arrive as 9862 prims and take 92 s to settle - and the
-  usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
-  hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
-  prims and 146 meshes and the watchdog reports the tick stuck in
-  `raytrace: BVH commit`): each queued
-  raytrace commit scans every mesh of every layer
-  (`collect_meshes_sharing_primitives`, O(N) per commit, N commits per
-  load), hover traces the linear path every frame while the TLAS cannot
-  settle, and `finalize_imported_meshes` builds the per-shape BVHs serially
-  on the tick thread. A shape-to-meshes index maintained at the change
-  sites, a hover that does not trace while a load is in flight, and the
-  proxy build on the deferred path are the fixes, in that order.
-- Relationship targets a weaker sublayer contributes as a single path:
-  LightUSD's `CombinePrimSpecRec` (`src/composition.cc`) merges two layers'
-  `prepend` / `append` relationship opinions only when both are stored as a
-  path vector, and a single-target `prepend rel foo = </path>` is stored as a
-  path, so the weaker layer's target is dropped and the stronger layer's list
-  stands alone. The intent-vfx `scenes/teapotScene.usd` composes each
-  instancer's `prototypes` from two of its sublayers -
-  `teapotScene_layoutOverrides.usd` prepends the three coloured prototypes and
-  `teapotScene_layout.usd` prepends the single plain one - so pxr reads four
-  targets where erhe reads three, and every instance whose `protoIndices`
-  entry names the fourth is skipped, 2816 of them over the file's 23
-  instancers. The same merge puts the weaker layer's prepended targets before
-  the stronger's where USD puts the stronger's first, which would misname a
-  prototype even once the single-path opinion is admitted. Both go with a fork
-  fix, next to the two LightUSD limits above.
-- An override path that crosses a reference inside an instance: a carrier's
-  overrides are recorded as the paths USD composes them at, and X1 gives the
-  clone of an arc's target one level more than USD, which
-  `erhe::scene::find_instance_item` skips for the carrier's own clone and not
-  for a nested carrier deeper down. The intent-vfx teapot asset is the shape:
-  `assets/teapot/mtl.usd` authors `over "geo" { over "default" { over "Body" }
-  }` on the prim that references `geo.usd`, whose `default` scope references
-  `geo/UtahTeapot.usd` in turn, so the item the override names sits at
-  `teapot/geo/default/UtahTeapot/Body` and the lookup of `geo/default/Body`
-  misses it with a warning per carrier. Closing it means resolving an override
-  path segment by segment and looking through a `Prefab_instance` carrier's
-  clone at each step rather than only at the first.
+- Physics on load: `UsdPhysics` API schemas become `Node_physics`,
+  `Node_joint`, `Physics_material` and `Collision_filter` per the
+  mapping's physics table, through a USD-filled sibling of
+  `Gltf_physics_data` (the physics import operations already take a
+  plain-data carrier); today the importer counts the prims carrying such
+  schemas in one warning and reads none. The matching save applies the
+  API schemas per the same table; erhe-only physics properties (damping,
+  wind receptivity, gravity factor, combine modes) ride `erhe:` custom
+  attributes under C1.
+- Animated value layer: the property-system section 6 item, an animated
+  value between coerced and local in R3, set by `Animation_sampler::apply`
+  and cleared when playback stops, so playback never overwrites the
+  authored local value. USD resolves time samples above `default`;
+  importing a time-sampled attribute without this layer would clobber
+  the authored pose, and saving would write the playback pose as
+  `default`. It is also the prerequisite of the keyframing plan
+  (`doc/animation-keyframing-plan.md`) and of animation channels on
+  arbitrary properties, so it pays for itself without USD.
+- Time samples beyond the transform: a time-sampled `xformOp:*` attribute
+  is carried as authored and played as an `erhe::scene::Animation`
+  (`src/erhe/usd/notes.md`, "Time samples") and `SkelAnimation` joint
+  channels are K1, which leaves time samples on any other attribute, and
+  `Ts` splines re-encoded as cubic samplers.
+- Reconciling an edit with the authored ops: the samples an op carries are
+  what the file authored, so keying an animation or moving an animated
+  prim changes the playable channels and the composed pose but not the
+  ops a save writes, and an edited clip saves as the file's original
+  samples. Writing an edit back into the samples is what the animated
+  value layer above makes well defined.
 - Composition authored inside a variant block: a reference or payload arc
   authored on a variant (usd-wg `full_assets/Teapot/Teapot_Geometry.usd`
   prepends the reference to `UtahTeapot.usd` on its `Utah` variant), and a
@@ -699,14 +640,82 @@ section 3 except where named.
   prim keeps the composed transform instead, with one warning per prim.
   Closing it means resolving an op the order names against the prim's arc
   targets, in the same place the stack is reconstructed.
+- An override path that crosses a reference inside an instance: a carrier's
+  overrides are recorded as the paths USD composes them at, and X1 gives the
+  clone of an arc's target one level more than USD, which
+  `erhe::scene::find_instance_item` skips for the carrier's own clone and not
+  for a nested carrier deeper down. The intent-vfx teapot asset is the shape:
+  `assets/teapot/mtl.usd` authors `over "geo" { over "default" { over "Body" }
+  }` on the prim that references `geo.usd`, whose `default` scope references
+  `geo/UtahTeapot.usd` in turn, so the item the override names sits at
+  `teapot/geo/default/UtahTeapot/Body` and the lookup of `geo/default/Body`
+  misses it with a warning per carrier. Closing it means resolving an override
+  path segment by segment and looking through a `Prefab_instance` carrier's
+  clone at each step rather than only at the first.
+- Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
+  "Node graphs"): Tydra fails a material whose input connects to a
+  `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
+  the USDA parser does not round-trip an escaped double quote, so nested
+  parameter text travels with single quotes. Both go with a fork fix.
+- Relationship targets a weaker sublayer contributes as a single path:
+  LightUSD's `CombinePrimSpecRec` (`src/composition.cc`) merges two layers'
+  `prepend` / `append` relationship opinions only when both are stored as a
+  path vector, and a single-target `prepend rel foo = </path>` is stored as a
+  path, so the weaker layer's target is dropped and the stronger layer's list
+  stands alone. The intent-vfx `scenes/teapotScene.usd` composes each
+  instancer's `prototypes` from two of its sublayers -
+  `teapotScene_layoutOverrides.usd` prepends the three coloured prototypes and
+  `teapotScene_layout.usd` prepends the single plain one - so pxr reads four
+  targets where erhe reads three, and every instance whose `protoIndices`
+  entry names the fourth is skipped, 2816 of them over the file's 23
+  instancers. The same merge puts the weaker layer's prepended targets before
+  the stronger's where USD puts the stronger's first, which would misname a
+  prototype even once the single-path opinion is admitted. Both go with a fork
+  fix, next to the two LightUSD limits above.
+- Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
+  the `texCoord2f` typing of `UsdUVTexture` `inputs:st` (LightUSD's own
+  member type, a fork fix), and a texture packed in a `.usdz` written as a
+  path that names no file (the packed bytes extracted next to the file, or
+  the `archive.usdz[entry]` form).
+- Load performance of a scene holding thousands of prims (the intent-vfx
+  scenes, several minutes with the stall watchdog firing - the teapot ones,
+  and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset
+  arrive as 9862 prims and take 92 s to settle - and the
+  usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
+  hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
+  prims and 146 meshes and the watchdog reports the tick stuck in
+  `raytrace: BVH commit`): each queued
+  raytrace commit scans every mesh of every layer
+  (`collect_meshes_sharing_primitives`, O(N) per commit, N commits per
+  load), hover traces the linear path every frame while the TLAS cannot
+  settle, and `finalize_imported_meshes` builds the per-shape BVHs serially
+  on the tick thread. A shape-to-meshes index maintained at the change
+  sites, a hover that does not trace while a load is in flight, and the
+  proxy build on the deferred path are the fixes, in that order.
+- Asynchronous load: `load_usd` runs on the calling thread and the editor's
+  import and open are synchronous, where a glTF import goes through the
+  asset manager's `Asset_load_request` and the droppable-payload import
+  operation (`doc/reloadable-asset-loads.md`). The conversion creates no
+  GPU object, so it moves onto a worker once the asset manager learns a
+  second format.
+- Binary and packaged output: the writer emits `.usda` only; a scene opened
+  from `.usdc` or `.usdz` saves back as `.usda` beside it. LightUSD writes
+  both formats; the `.usdz` case also needs the packed-texture answer of the
+  `usdchecker` item above.
+- Node-held secondary values: a node-held value of another class (D30,
+  `Light.color` on a plain `Xform`) is written as `erhe:Light:color`, and
+  the import resolves neither the qualified nor the bare name against a
+  node, so such a value does not come back (`src/erhe/usd/notes.md`,
+  "Future work").
+- Camera `infinite_z_far`: no USD form; the finite `clippingRange` is
+  written and one warning says so.
 - A material slot that a texture graph feeds AND that carries an authored
   factor: the connection replaces the value in both terminals (a
   `UsdPreviewSurface` or OpenPBR input is either connected or valued), so
   the factor of such a slot is not written and reads back as the default.
-  Found while building `src/erhe/usd/test/data/open_pbr.usda` (E2). Closing
-  it means carrying the factor as the graph connection's `inputs:scale` the
-  way a `UsdUVTexture` carries erhe's factor, which needs the graph's
-  interface output to pass through a multiplying node.
+  Closing it means carrying the factor as the graph connection's
+  `inputs:scale` the way a `UsdUVTexture` carries erhe's factor, which
+  needs the graph's interface output to pass through a multiplying node.
 - A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`: Tydra accepts
   only a `UsdUVTexture` output on a shader input, so a network that reads a
   primvar into one - usd-wg
@@ -717,6 +726,10 @@ section 3 except where named.
   in Tydra or erhe reading the network from the composed layer itself and
   mapping the named primvar onto the value the input would take, which for
   `displayColor` is the vertex colors erhe already carries.
+- Image formats: Radiance `.hdr` and OpenEXR `.exr` need decoders erhe
+  does not build (`stb_image.h` sits in the CPM cache of fpng and LightUSD,
+  and nothing in the tree reads `.exr`); the StandardShaderBall scene's six
+  neutral `.exr` maps are the surveyed assets that ask for the second.
 - An environment map from a `DomeLight` texture: erhe has no environment
   map, so a dome's `inputs:texture:file` is named in one warning and not
   sampled, and the dome contributes the constant radiance of its `color`,
@@ -724,39 +737,22 @@ section 3 except where named.
   usd-wg McUsd entries are the surveyed assets that author one. Taking it
   up means an image-based ambient term in the renderer first; the reader
   already keeps the dome prim and its texture path.
+- MaterialX: a `.mtlx` document as a reference target (the editor refuses
+  the arc; the usd-wg chess set, MaterialXTest and the MaterialX color-space
+  tests are the surveyed assets), and the LightUSD usda reader's rejection
+  of `colorSpace` metadata on a shader attribute (the survey's one failing
+  entry). The `.mtlx` reader is behind `LIGHTUSD_WITH_USDMTLX`, off in
+  erhe's build. An inline `ND_standard_surface_surfaceshader` or
+  `ND_open_pbr_surface_surfaceshader` network needs none of that and is
+  read and written (E2).
 - Grid depth: the grid's depth does not agree with the content's, so grid
   lines cross opaque objects below the horizon (`doc/editor_rendering.md`,
   Grid). Needs a RenderDoc session on the windowed build.
-- Animation edits written back: a keyed edit made in erhe changes the
-  Animation channels and the pose but not the `Xform_op` samples a USD save
-  writes, so an edited clip saves as the file's original samples.
-- MaterialX: a `.mtlx` document as a reference target (the editor refuses
-  the arc), and the LightUSD usda reader's rejection of `colorSpace` metadata
-  on a shader attribute (the survey's one failing entry). The `.mtlx` reader
-  is behind `LIGHTUSD_WITH_USDMTLX`, off in erhe's build. An inline
-  `ND_standard_surface_surfaceshader` or `ND_open_pbr_surface_surfaceshader`
-  network needs none of that and is read and written (E2).
-- Animated value layer: the property-system section 6 item, an animated
-  value between coerced and local in R3, set by `Animation_sampler::apply`
-  and cleared when playback stops, so playback never overwrites the
-  authored local value. USD resolves time samples above `default`;
-  importing a time-sampled attribute without this layer would clobber
-  the authored pose, and saving would write the playback pose as
-  `default`. It is also the prerequisite of the keyframing plan
-  (`doc/animation-keyframing-plan.md`) and of animation channels on
-  arbitrary properties, so it pays for itself without USD.
-- Time samples beyond the transform: a time-sampled `xformOp:*` attribute
-  is carried as authored and played as an `erhe::scene::Animation`
-  (`src/erhe/usd/notes.md`, "Time samples") and `SkelAnimation` joint
-  channels are K1, which leaves time samples on any other attribute, and `Ts` splines re-encoded as cubic
-  samplers. A stack the TRS channels cannot drive keeps its samples and
-  its start-time pose and is named in one warning; driving it needs a
-  transform channel that composes ops rather than a TRS.
-- Reconciling an edit with the authored ops: the samples an op carries are
-  what the file authored, so keying an animation or moving an animated
-  prim changes the playable channels and the composed pose but not the
-  ops a save writes. Writing an edit back into the samples is what the
-  animated value layer above makes well defined.
+- `inherits` and `specializes` arcs whose target is not a `class` prim
+  (usd-wg inherit_and_specialize.usda inherits from a `def Cube`): X3 makes
+  a style only of a class prim, so such an arc composes nothing and is
+  warned about; the surveyed file overrides every inherited opinion locally,
+  so nothing visible depends on it there.
 - Variant opinions a variant set does not carry: the `def` children of a
   variant block that the hoist does not reach - one authored below an
   `over` child of the variant, and any of them in a `.usdz` archive, whose
@@ -774,13 +770,13 @@ section 3 except where named.
   prefab reload. Taking it up means walking the attachments in the same
   lockstep the counterpart link uses and giving each an `over` path
   (USD authors an applied schema's attributes on the prim itself).
-- Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
-  the `texCoord2f` typing of `UsdUVTexture` `inputs:st`, and a texture
-  packed in a `.usdz` written as a path that names no file.
-- Physics on load: `UsdPhysics` API schemas become
-  `Node_physics`, `Node_joint`, `Physics_material` and `Collision_filter`
-  per the mapping's physics table, through a USD-filled sibling of
-  `Gltf_physics_data` (the physics import operations already take a
-  plain-data carrier). The matching save applies the API schemas per the
-  same table; erhe-only physics properties (damping, wind receptivity,
-  gravity factor, combine modes) ride `erhe:` custom attributes under C1.
+- Layer-stack editing: a root layer's sublayers are composed at load and a
+  save writes one flattened layer with no `subLayers` (the mapping's
+  `subLayers` row; `src/erhe/usd/notes.md` "Sublayers"), so an edit cannot
+  be written back to the layer that authored the value. A stack the
+  editor edits layer by layer needs per-value layer provenance, which
+  `CompositeSublayers` does not keep (X5).
+- macOS and Linux wrappers: `configure_xcode_*.sh` and
+  `configure_ninja_linux_*.sh` leave `ERHE_USD_LIBRARY` at `none`; turning
+  it on there is the step that first needs USD on those platforms
+  (`src/erhe/usd/notes.md` "Configurations").
