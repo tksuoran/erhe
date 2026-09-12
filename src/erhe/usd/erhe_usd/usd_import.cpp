@@ -5057,8 +5057,7 @@ private:
     }
 
     // The arcs the selected variant of every set on this prim authors
-    // (doc/usd-compatibility-plan.md section 6, "Composition authored inside a
-    // variant block"). A variant contributes a composition arc while it is
+    // (doc/usd-compatibility-plan.md C6). A variant contributes a composition arc while it is
     // selected, so its arcs are the carrying prim's, and LightUSD composes no
     // variant - the layer's own spec is where the blocks are. Each entry names
     // the block it came from, which is what a save writes it back into.
@@ -5120,7 +5119,7 @@ private:
     // though the carrier's arcs supply the rest of what is below it: a
     // variant's `def` children are the variant's own content, which the
     // reference the same prim carries has no part in
-    // (doc/usd-compatibility-plan.md section 6).
+    // (doc/usd-compatibility-plan.md C6).
     void convert_hoisted_variant_children(
         const Tydra_node&                       usd_node,
         const std::shared_ptr<erhe::Hierarchy>& parent,
@@ -5194,7 +5193,7 @@ private:
         for (const lightusd::PrimSpec& child : spec.children()) {
             if (relative_path.empty() && is_hoisted_variant_child(absolute_path, child.name())) {
                 // A prim a variant block of this prim authored, which the
-                // hoist put here (doc/usd-compatibility-plan.md section 6). It
+                // hoist put here (doc/usd-compatibility-plan.md C6). It
                 // is the variant's own content, not an edit someone made over
                 // the reference, so it is a child prim of the carrier and the
                 // structure rule below does not apply to it.
@@ -6029,7 +6028,7 @@ private:
                 read_variant_prims(path, entry.first, variant);
                 read_variant_opinions(path, variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
                 // The arcs the block authors (doc/usd-compatibility-plan.md
-                // section 6). The selected variant's are the ones the carrying
+                // C6). The selected variant's are the ones the carrying
                 // prim holds, so they are the ones a save writes back inside
                 // the block; a prim carries one list of arcs and not one per
                 // variant, so an unselected variant's are counted instead.

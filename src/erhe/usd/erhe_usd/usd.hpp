@@ -232,8 +232,7 @@ public:
     std::string        prim_path;
     Usd_reference_kind kind{Usd_reference_kind::reference};
     // The variant block that authored the arc, both empty when the prim
-    // authored it itself (doc/usd-compatibility-plan.md section 6,
-    // "Composition authored inside a variant block"). A variant's arcs reach
+    // authored it itself (doc/usd-compatibility-plan.md C6). A variant's arcs reach
     // the prim carrying the set because only the selected variant contributes
     // them, and this is what a save needs to write them back inside the block
     // they came from.

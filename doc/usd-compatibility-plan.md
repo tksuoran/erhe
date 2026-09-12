@@ -603,11 +603,13 @@ section 6 entry it names, and nothing here restates one.
 7. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
 8. Composition beyond what erhe resolves (section 6 "Layer-stack
-    editing", "inherits and specializes arcs whose target is not a class
+   editing", "inherits and specializes arcs whose target is not a class
    prim", "Variant opinions a variant set does not carry", "Overrides on
-    applied API schemas inside an instance"). Each is a real USD feature
-    with no surveyed asset that visibly depends on it, so they wait for a
-    file that does.
+   applied API schemas inside an instance"). Each is a real USD feature
+   with no surveyed asset that visibly depends on it - the one exception,
+   the variant set the Teapot's variant blocks declare, selects among
+   materials the PrimvarReader item of item 6 fails first - so they wait
+   for a file that does.
 
 ## 4. Order
 

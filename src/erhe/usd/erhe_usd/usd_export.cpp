@@ -2083,7 +2083,7 @@ private:
     // variant block of that prim authored. A carrier's other children are the
     // instance content its arcs supply, which is not written, while a prim one
     // of its variant blocks authored is the variant's own content
-    // (doc/usd-compatibility-plan.md section 6).
+    // (doc/usd-compatibility-plan.md C6).
     enum class Child_selection : unsigned int {
         all_children       = 0,
         variant_prims_only = 1
@@ -3052,7 +3052,7 @@ private:
         }
         // The composition arcs the variant block authors, back inside the block
         // they came from rather than on the prim carrying the set
-        // (doc/usd-compatibility-plan.md section 6).
+        // (doc/usd-compatibility-plan.md C6).
         if (!variant.references.empty()) {
             write_references(usd_variant.metas(), variant.references);
         }

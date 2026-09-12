@@ -45,8 +45,7 @@ public:
 };
 
 // One composition arc a variant block authors
-// (doc/usd-compatibility-plan.md section 6, "Composition authored inside a
-// variant block"). The prim carrying the set holds the selected variant's
+// (doc/usd-compatibility-plan.md C6). The prim carrying the set holds the selected variant's
 // arcs as Prefab_instance attachments, and this is what tells a save that the
 // arc belongs in the block rather than on the prim.
 class Variant_reference

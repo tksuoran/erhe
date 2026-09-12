@@ -1,5 +1,5 @@
 // Composition authored inside a variant block (doc/usd-compatibility-plan.md
-// section 6, "Composition authored inside a variant block"). A variant block
+// C6). A variant block
 // authors composition arcs of its own, and the prim carrying the set holds
 // the selected variant's arcs: the reader reports them on that prim, named by
 // the block they came from, and the writer puts them back inside that block.

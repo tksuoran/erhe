@@ -1898,7 +1898,7 @@ void fill_variant_table(
                 );
             }
             // The arcs the block authors (doc/usd-compatibility-plan.md
-            // section 6): the carrying prim holds them as prefab instances,
+            // C6): the carrying prim holds them as prefab instances,
             // and the table is what remembers the block they belong to.
             for (const erhe::usd::Usd_reference& usd_reference : usd_variant.references) {
                 variant.references.push_back(
@@ -3020,7 +3020,7 @@ void collect_usd_point_instancers(
 // target file, the target prim and the arc form.
 // Whether one arc of `item` is an arc a variant block of one of its sets
 // authored: those are written inside the block, not on the prim
-// (doc/usd-compatibility-plan.md section 6).
+// (doc/usd-compatibility-plan.md C6).
 [[nodiscard]] auto is_variant_authored_arc(
     const std::vector<erhe::usd::Usd_save_variant_set>& variant_sets,
     const erhe::Item_base&                              item,
