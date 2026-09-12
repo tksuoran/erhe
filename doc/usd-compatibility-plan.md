@@ -553,7 +553,21 @@ now owns its behavior; `git log` on that record has the history.
   connected node, and the writer names each side's nearest body prim with
   that side's node transform in the body's space, so a file erhe wrote
   reloads to the same tree (the `Node_joint` row of the mapping;
-  `physics.usda`'s `Flap`).
+  `physics.usda`'s `Flap`). A hull or triangle collider remembers the
+  `Mesh` prim it was built from (`Node_physics::collision_mesh`, empty for
+  the body's own mesh), so a collider on a prim below its body
+  (`Rock/shell`) is written back on that prim in both formats and the
+  fixture's second save is byte for byte the first. A body whose file
+  authors a velocity enters the world active
+  (`IWorld::add_rigid_body` decides from the body's own velocity;
+  `erhe_physics_tests`), so `physics.usda`'s `Crate` moves as authored
+  while a body at rest still loads asleep. The kind `Scope` an import's
+  first resource of a kind brings into the tree (`Physics Joints`, and
+  every other kind, in both formats) is a step of the operation that
+  needed it (`Kind_scope_operation`, composed by
+  `make_library_insert_operation`), so an undo takes the scope out with
+  the resources while a scope another operation has since filled stands
+  (`src/editor/content_library/notes.md`).
 - An animation plays through a value layer of its own and an edited clip
   saves as edited (A1). `Animation_sampler::apply` writes the animated
   layer of `doc/property-system.md` D5, so the transform a prim authored
@@ -604,7 +618,7 @@ section 6 entry it names, and nothing here restates one.
    format; the output formats are what LightUSD's writer already offers.
 5. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
-   of usdchecker", and the three bullets of "Physics residue of P1").
+   of usdchecker", and the glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
 6. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
@@ -665,19 +679,13 @@ at a time (C2).
 Each item is independent of the others except where named; section 3
 ranks them. A USD scene loads, edits and saves without any of them.
 
-- Physics residue of P1, each small and independent:
-  - A mesh collider whose mesh is a child prim of the body (the `Rock/shell`
-    body of `src/erhe/usd/test/data/physics.usda`): an erhe hull shape keeps
-    no reference to the mesh it was built from, so the writer authors the
-    collision schema on the body prim, where a reload finds no mesh - the
-    limitation the glTF export documents for compound children. Closing it
-    means the collision shape remembering its source mesh.
-  - Jolt asserts `Sleeping body has non-zero linear velocity` when the
-    fixture simulates: a body imported with an initial velocity starts
-    asleep. Same family as the P6 dynamic-body flake of the round-trip
-    script.
-  - Undo of a USD import leaves an empty kind `Scope` behind (`Physics
-    Joints`), as the lazy kind scopes of the other kinds do.
+- Physics residue of P1:
+  - A glTF export of `physics.usda`'s scene does not re-import: fastgltf
+    rejects the file ("missing something or has invalid data") on the
+    `KHR_physics_rigid_bodies` `physicsJoints[].limits` the export writes,
+    while the same file with the limits stripped parses (bisected on the
+    written file; colliders and motions are fine). glTF-side; the limit
+    spelling the export uses is the suspect.
 - Time samples beyond the transform: a time-sampled `xformOp:*` attribute
   is carried, played and written back (`src/erhe/usd/notes.md`, "Time
   samples") and `SkelAnimation` joint channels are K1, which leaves time
