@@ -568,6 +568,65 @@ section 6 entry it names, and nothing here restates one.
     with no surveyed asset that visibly depends on it, so they wait for a
     file that does.
 
+### A1 Animated value layer and animation write-back (M; next)
+
+What: section 3 item 1, worked through `doc/agent-orchestration-harness.md`
+one commit per brief. The three section 6 items it closes are "Animated
+value layer", "Reconciling an edit with the authored ops" and, for the
+transform, "Time samples beyond the transform" stays open. The design
+record is `doc/property-system.md` (D5 entry layout, R3 resolution order,
+the section 6 "Animated value layer" item, and the note under the
+transform-property section that `Animation_sampler::apply` still writes
+the `Trs_transform` directly); `doc/animation-keyframing-plan.md` is the
+consumer that waits on it. The commits, in order:
+
+1. `erhe::property`: `Value_source::animated`, a layer between coerced and
+   local in R3 (coerced applies to it as to every base), held as a second
+   optional in the entry (D5). `Dependency_object::set_animated_value` /
+   `clear_animated_value` set and clear it and propagate to dependents and
+   users the way a local write does; `get_value` reads it first, a new
+   base-value accessor (WPF `GetAnimationBaseValue`) reads the resolution
+   without it, and `has_own_value` / serialization / `for_each_local_value`
+   ignore it, so a save never sees a playback pose. For a bridged property
+   the storage the bridge reads carries the animated value while the entry
+   keeps the authored base, and clearing writes the base back through the
+   bridge; for an entry-store property the entry keeps both. Tests in
+   `erhe_property_tests` for both storage forms, the propagation, the
+   provenance (`describe_property_origin` reports `animated`) and the
+   clear. `doc/property-system.md` D5 / R3 rewritten in the present tense,
+   the section 6 item removed, `src/erhe/property/notes.md` follows.
+2. `erhe::scene` playback through the layer: `Animation_sampler::apply`
+   writes every channel target through `set_animated_value` (the node's
+   transform components as bridged properties, joint transforms alike) and
+   the player's stop and rewind clear the layer, so the local transform is
+   the authored pose whatever the playhead says; a keyed edit made while
+   playing writes the local value (the base), never the animated one. The
+   USD writer then writes the base, not "whatever transform the prim holds
+   at save" (`src/erhe/usd/notes.md` "Time samples" rewritten), and the
+   xformOp samples stay the authority. `erhe_scene_tests` covers apply /
+   stop / edit-while-playing; headless: open a sampled fixture
+   (`src/erhe/usd/test/data`, the time-samples fixture), play, MCP
+   `get_item_properties` shows the transform `animated` with the authored
+   value as its local, save during playback writes the authored samples,
+   stop restores the pose, close clean.
+3. Write-back of an edited clip: a USD save derives an animated
+   `xformOp`'s `timeSamples` from the erhe channel when the channel's keys
+   differ from the samples the file authored (keys at `time *
+   timeCodesPerSecond`, one sample per key, the op's own value type and
+   precision), and keeps the authored samples when they do not, so an
+   unedited file stays byte-identical and an edited clip saves as edited;
+   a baked stack (the `[orient, translate]` case) writes back through its
+   composed pose into its ops. `erhe_usd_tests`: edit a key of the
+   time-samples fixture in memory, save, reload, the sample is the key;
+   unedited save byte-identical. glTF keeps writing its own channels (C1).
+   `src/erhe/usd/notes.md` "Time samples" states the rule; the section 6
+   items above go.
+
+Verification: `erhe_property_tests`, `erhe_scene_tests` and
+`erhe_usd_tests` after each commit; the headless session of commit 2;
+`scripts/scene_roundtrip_verify.py` stays at its current failures (2
+pre-existing plus the P6 flake).
+
 ## 4. Order
 
 Item 1 of section 3 restores an editor feature to USD-backed scenes and
