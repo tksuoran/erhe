@@ -211,5 +211,5 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 
 [TASK::time-samples-beyond-the-transform]{IN-PROGRESS-2026-09-12;via-harness;3-commits-planned}
 ✓commit-1{609628bf6:erhe::scene-Animation_channel-names-Dependency_property+Item_base-target;Animation_path=classification;WEIGHTS-gone;scene-tests-131->135;usd-344-green;headless-playback-verified}
-?commit-2{USD-reader/writer-time-samples-on-light/material/visibility-attributes;fixture+tests}
+✓commit-2{89083b431:USD-reader/writer-time-samples-on-light/material/visibility-attributes;attribute_samples.usda;usd-tests-344->351;headless-seek-0.5s-verified;usdchecker-Success}
 ?commit-3{Ts-splines-as-cubic-samplers}
