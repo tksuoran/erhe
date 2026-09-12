@@ -251,23 +251,25 @@ of "Texture node graphs" holds unchanged except the four below.
 
 `UsdPhysics` is the closest semantic match of all the domains: bodies,
 colliders, joints, materials, filtering and groups all exist on both
-sides.
+sides. The erhe-only fields ride `erhe:Owner:name` custom attributes
+(C1); a USD reader without them shades and simulates from the schema
+attributes alone.
 
 | erhe | USD (`UsdPhysics`) | notes |
 |---|---|---|
-| `Node_physics` on a node | `RigidBodyAPI` + `CollisionAPI` applied to the prim | |
-| `motion_mode` static / kinematic / dynamic | no `RigidBodyAPI` / `physics:kinematicEnabled` / `physics:rigidBodyEnabled` | |
-| `mass`, `center_of_mass_offset` | `MassAPI` `physics:mass`, `physics:centerOfMass` | erhe's density-derived default mass = `physics:mass = 0` |
-| `initial_linear_velocity`, `initial_angular_velocity` | `physics:velocity`, `physics:angularVelocity` | |
-| `is_trigger` | `PhysicsTriggerAPI` | |
-| `gravity_factor` | none in core (`PhysxRigidBodyAPI:disableGravity` is vendor) | erhe-only |
-| collision shapes (`KHR_implicit_shapes`) | `Cube` / `Sphere` / `Capsule` / `Cylinder` / `Mesh` with `CollisionAPI`, `MeshCollisionAPI` approximation | |
-| `Physics_material` `static_friction`, `dynamic_friction`, `restitution`, `density` | `MaterialAPI` `physics:staticFriction`, `physics:dynamicFriction`, `physics:restitution`, `physics:density` | exact match |
-| `friction_combine`, `restitution_combine` | none in core (PhysX vendor schema has them) | |
-| `linear_damping`, `angular_damping`, `wind_receptivity` | none in core (PhysX vendor schema has damping) | erhe-only |
-| `Collision_filter` (systems, collide-with lists) | `CollisionGroup` prims + `FilteredPairsAPI` | |
-| `Node_joint` + `Physics_joint_settings` | `PhysicsJoint` subclasses (`Fixed`, `Revolute`, `Prismatic`, `Spherical`, `Distance`) + `LimitAPI` / `DriveAPI` | the erhe six-dof settings-less joint = `PhysicsJoint` with no limits |
-| `enable_physics` (`ERHE_scene`), gravity | `PhysicsScene` prim (`physics:gravityDirection`, `physics:gravityMagnitude`) | |
+| `Node_physics` on a prim | `PhysicsRigidBodyAPI` applied to the prim; the body's colliders are the prims at or below it carrying `PhysicsCollisionAPI` | the body prim of a collider is its nearest ancestor-or-self with `PhysicsRigidBodyAPI`; a collider with no such ancestor is a static body on its own prim. Colliders below a body fold into one compound shape, as `KHR_physics_rigid_bodies` colliders do |
+| `motion_mode` static / kinematic / dynamic | `PhysicsCollisionAPI` without `PhysicsRigidBodyAPI` / `PhysicsRigidBodyAPI` with `physics:kinematicEnabled = true` / `PhysicsRigidBodyAPI` | `physics:rigidBodyEnabled = false` reads as static |
+| `mass`, `center_of_mass_offset`, inertia | `PhysicsMassAPI` `physics:mass`, `physics:centerOfMass`, `physics:diagonalInertia`, `physics:principalAxes` | erhe's density-derived default mass = `physics:mass = 0` (the schema default); an unauthored `centerOfMass` (`-inf`) is the body's own |
+| `initial_linear_velocity`, `initial_angular_velocity` | `physics:velocity`, `physics:angularVelocity` | body space on both sides |
+| `gravity_factor` | `erhe:Node_physics:gravity_factor` | none in core (`PhysxRigidBodyAPI:disableGravity` is vendor) |
+| `is_trigger` | `erhe:Node_physics:is_trigger` | none in core (`PhysxTriggerAPI` is vendor) |
+| implicit collision shape (`Physics_shape`: sphere, box, capsule, cylinder, the tapered variants) | a child `Sphere` / `Cube` / `Capsule` / `Cylinder` prim of the body prim, `purpose = guide`, with `PhysicsCollisionAPI`; `radius`, `size`, `height`, `axis = Y` as the schema spells them; a tapered capsule or cylinder adds `erhe:Physics_shape:radius_bottom` / `erhe:Physics_shape:radius_top` | the writer names it `collider` (sibling-unique); the reader takes any `PhysicsCollisionAPI`-carrying primitive-schema prim as a shape of its body, and a `guide` one it removes from the scene tree once folded, as the glTF import removes a synthesized carrier |
+| mesh collision shape (`Physics_node_geometry::mesh`, `convex_hull`) | `PhysicsCollisionAPI` on the `Mesh` prim itself, `PhysicsMeshCollisionAPI` `physics:approximation = convexHull` or `none` | a dynamic body's mesh shape is a convex hull on both sides (Jolt); `boundingCube` / `boundingSphere` / `convexDecomposition` / `meshSimplification` read as `convexHull` with one warning |
+| `Physics_material` (a `Typed` prim, `static_friction`, `dynamic_friction`, `restitution`, `density`) | `Material` prim where it sits with `PhysicsMaterialAPI`: `physics:staticFriction`, `physics:dynamicFriction`, `physics:restitution`, `physics:density`; bound from the body prim by `rel material:binding:physics` (`MaterialBindingAPI`) | erhe-only `friction_combine`, `restitution_combine`, `linear_damping`, `angular_damping`, `wind_receptivity` as `erhe:Physics_material:<name>` |
+| `Collision_filter` (a `Typed` prim: `collision_systems`, `collide_with_systems`, `not_collide_with_systems`) | `PhysicsCollisionGroup` prim where it sits: `collection:colliders:includes` lists the body prims using the filter, `physics:filteredGroups` lists the groups named in `not_collide_with_systems`, and `erhe:Collision_filter:collision_systems` / `collide_with_systems` / `not_collide_with_systems` (`string[]`) carry the exact lists | the reader takes the custom attributes when present, else `collision_systems = [group name]` and `not_collide_with_systems = filteredGroups` names (`collide_with_systems` when `physics:invertFilteredGroups`); a body is bound to the filter by its membership in `includes` |
+| `Physics_joint_settings` (a `Typed` prim: `limits`, `drives`) | typeless prim where it sits with `PhysicsLimitAPI:<axis>` (`physics:low`, `physics:high`) and `PhysicsDriveAPI:<axis>` (`physics:type`, `physics:maxForce`, `physics:targetPosition`, `physics:targetVelocity`, `physics:stiffness`, `physics:damping`) applied per axis; a limit's `stiffness` and `damping` as `erhe:limit:<axis>:stiffness` / `erhe:limit:<axis>:damping` | axis instance names `transX transY transZ rotX rotY rotZ`; a limit over several axes writes one instance per axis, and the reader joins instances with identical values back into one limit |
+| `Node_joint` on a prim (`connected_node`, `joint_settings`, `enable_collision`) | child `PhysicsJoint` prim of the node named after the settings item: `physics:body0 = <the node>`, `physics:body1 = <the connected node>`, `physics:localPos0` / `localRot0` identity (the joint frame is the node's), `physics:localPos1` / `localRot1` the node's frame in the connected node's space, `physics:collisionEnabled = enable_collision`, the settings' `LimitAPI` / `DriveAPI` instances applied inline, and `rel erhe:Node_joint:joint_settings = </path of the settings prim>` | the erhe six-dof joint is a plain `PhysicsJoint`; the reader shares a settings item through the relationship, else makes one from the inline instances; `PhysicsRevoluteJoint` / `PhysicsPrismaticJoint` read as one rotational / one linear limit on `physics:axis` (`lowerLimit`, `upperLimit`), `PhysicsFixedJoint` as six limits at zero, `PhysicsSphericalJoint` as the cone angles on the two axes beside `physics:axis`, `PhysicsDistanceJoint` as one linear limit over all three axes (`minDistance`, `maxDistance`); a subclass prim's own `localPos` / `localRot` frames are honored |
+| `enable_physics` (`erhe:scene`), gravity | one `PhysicsScene` prim at the root (`physics:gravityDirection`, `physics:gravityMagnitude`) written when the scene has a physics world; read to set the world's gravity | `enable_physics` stays in the `erhe:scene` block; a file with a `PhysicsScene` prim and no block enables physics |
 
 ## Animation
 

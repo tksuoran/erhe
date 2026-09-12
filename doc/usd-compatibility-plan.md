@@ -544,6 +544,45 @@ names, and nothing here restates one.
     with no surveyed asset that visibly depends on it, so they wait for a
     file that does.
 
+### P1 Physics in USD (M; in progress)
+
+What: the section 6 item "Physics on load", worked as the mapping's
+"Physics" table states it. The plain-data physics description the glTF
+reader fills and the editor's physics import consumes is made a
+format-neutral record of `erhe::scene` so the USD reader fills the same
+one and the editor's physics import and export take it from either
+format; `erhe::usd` reads and writes the `UsdPhysics` prims and API
+schemas as that record, and the editor's open, import and save paths
+carry it. The commits, in order:
+
+1. `erhe::scene` physics description: the classes of
+   `src/erhe/gltf/erhe_gltf/gltf_physics.hpp` move to
+   `src/erhe/scene/erhe_scene/physics_description.hpp` as
+   `erhe::scene::Physics_description` and its parts, every user renamed,
+   no behavior change (`src/erhe/scene/notes.md`, `src/erhe/gltf/notes.md`).
+2. `erhe::usd` reader: `Usd_data::physics` filled from the `UsdPhysics`
+   schemas per the mapping, with a fixture and `erhe_usd_tests` cases
+   (`src/erhe/usd/notes.md` "Physics").
+3. `erhe::usd` writer: `Usd_save_arguments::physics` written per the
+   mapping, `erhe_usd_tests` round-trips a body with each shape kind, a
+   material, a filter, a joint with limits and drives, and the scene prim
+   to a fixed point; `usdchecker` passes when available.
+4. Editor: `open_scene_usd` and `import_usd` build the physics items
+   through the import the glTF path uses, now taking the neutral record;
+   `save_scene_usd` fills the record through the builder the glTF save
+   uses; the physics warning of the importer goes; the round-trip
+   script's USD leg checks a body, a material and a joint the way the
+   glTF leg does; `doc/scene_serialization.md` no longer lists physics as
+   uncarried; `src/erhe/usd/notes.md` "Future work" and the memory bank
+   follow.
+
+Verification: `erhe_usd_tests` after commits 2 and 3; after commit 4 a
+headless session opens a USD scene, adds a body, a material and a joint
+over MCP (`create_physics_material`, `edit_physics_body`,
+`create_physics_joint`), saves, reopens and reads them back with
+`get_physics_items`, closes clean, and `scripts/scene_roundtrip_verify.py`
+stays green.
+
 ## 4. Order
 
 Items 1 and 2 of section 3 are independent of each other and of the rest,
