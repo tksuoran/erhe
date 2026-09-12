@@ -181,3 +181,9 @@
 ✓commit-3{a3cf13baf:writer+fixed-point+usdchecker;fixes:box-scale,trigger-form}
 ✓commit-4{721c745fa:editor-shared-import/export;fix:no-scale-baking-in-reader;headless:open/edit/save/reopen/undo-clean;roundtrip-411/413}
 ?user-interactive{open-physics.usda;simulate-fixture=Jolt-assert-known}
+
+[TASK::A1-animated-value-layer]{DONE-2026-09-12;via-harness;3-coders+2-scouts}
+✓commit-1{647273769:erhe::property-animated-layer;132-tests}
+✓commit-2{f2950f9d9:playback-through-layer+player-stop-clears+writers-read-base;scene-125;headless-verified}
+✓commit-3{b03a6dcfe:USD-write-back-of-edited-clip;usd-334;roundtrip-413/416-baseline}
+?user-interactive{play/edit/stop/save-on-time_samples.usda}
