@@ -208,3 +208,8 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-B{5af2ac2fe:Jolt_world::add_rigid_body-activation-from-body's-own-velocity{is_moving:non-static+non-near-zero-linear|angular->Activate,else-DontActivate};MEASURED:Jolt-USE_ASSERTS-OFF-in-every-erhe-tree->no-assert,velocity-SILENTLY-DROPPED{Crate-loaded-asleep,never-moved};set_linear_velocity-already-activates-in-world-body{documented};new-erhe_physics_tests{4;gated-ERHE_BUILD_TESTS+jolt;built-in-build_ninja_win_vulkan-reconfigured-with-tests-ON};AGENTS.md-suite-list+physics;headless:Crate-moves-1m/s+90deg/s,Rock-asleep,dynamic_enable-off=world-not-stepped}
 ✓commit-C{Content_library::get_scope-split=get_existing_scope+make_kind_scope{registered-before-placed;detached};make_library_insert_operation=single-resource-insert-builder{14-sites};Kind_scope_operation-prepended-when-scope-not-standing{execute=no-op-if-placed;undo=remove-only-while-childless};Content_library_folders_operation-same-rule;smoke-test-55/55{+3-kind-scope-checks};LEFT:gltf_extensions_import-legacy-folder_path-brush-read-non-undoable-get_scope}
   P1-RESIDUE-DONE-2026-09-12{section-6-left=glTF-physicsJoints[].limits-re-import-parse-failure}
+
+[TASK::time-samples-beyond-the-transform]{IN-PROGRESS-2026-09-12;via-harness;3-commits-planned}
+✓commit-1{609628bf6:erhe::scene-Animation_channel-names-Dependency_property+Item_base-target;Animation_path=classification;WEIGHTS-gone;scene-tests-131->135;usd-344-green;headless-playback-verified}
+?commit-2{USD-reader/writer-time-samples-on-light/material/visibility-attributes;fixture+tests}
+?commit-3{Ts-splines-as-cubic-samplers}
