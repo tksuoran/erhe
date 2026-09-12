@@ -5,6 +5,9 @@
 
 #include "erhe_usd/usd.hpp"
 
+#include "erhe_scene/animation.hpp"
+#include "erhe_scene/xform_op.hpp"
+
 #include "layer.hh"
 #include "stage.hh"
 
@@ -183,5 +186,32 @@ void read_usd_physics(
     Usd_data&                         data,
     std::vector<std::string>&         warnings
 );
+
+// The sampled-transform vocabulary the reader and the writer share
+// (src/erhe/usd/notes.md, "Time samples"). The reader (usd_import.cpp) owns
+// the definitions; the writer reads them to reconcile an edited clip's keys
+// with the samples the file authored.
+
+// Which erhe animation path an op drives, and in which order the three may
+// appear. False when the op drives none - a `transform` matrix op.
+[[nodiscard]] auto get_xform_op_animation_path(
+    erhe::scene::Xform_op_type   type,
+    erhe::scene::Animation_path& out_path
+) -> bool;
+
+// Why a stack's time samples cannot become one channel per op, or an empty
+// string when they can. A stack this refuses is baked into three channels of
+// its composed pose instead.
+[[nodiscard]] auto get_xform_op_stack_animation_refusal(const erhe::scene::Xform_op_stack& stack) -> std::string;
+
+// The value an op has at one time code: USD's time sample semantics for a
+// floating-point attribute.
+[[nodiscard]] auto get_xform_op_value_at(const erhe::scene::Xform_op& op, double time_code) -> erhe::scene::Xform_op_value;
+
+// The rotation one sample of a rotate / orient op holds, as a quaternion.
+[[nodiscard]] auto get_xform_op_sample_rotation(
+    const erhe::scene::Xform_op&        op,
+    const erhe::scene::Xform_op_sample& sample
+) -> glm::dquat;
 
 } // namespace erhe::usd

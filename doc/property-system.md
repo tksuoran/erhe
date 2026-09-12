@@ -2098,10 +2098,9 @@ style layer is D25 and the reference layer is D33.
   `visible_when` and a registering owner type on the editor side.
 - Animation channels targeting arbitrary properties (not only node TRS),
   which becomes possible once `Animation_channel` stores a
-  `Dependency_property` index instead of `Animation_path`. For playback
-  that does not overwrite the authored local value it also depends on the
-  animated value layer (above); without it a generalized channel would
-  clobber local values the way TRS playback clobbers the transform today.
+  `Dependency_property` index instead of `Animation_path`. Playback writes
+  the animated layer (D5), so a generalized channel leaves the authored
+  local value alone from the start.
 
 ## 7. Verification workflow (macOS, Metal build tree)
 

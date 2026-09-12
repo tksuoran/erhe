@@ -1135,6 +1135,15 @@ def section_reload_and_diff():
         check(S, "prerequisites available", False, "save-validate failed")
         return
 
+    # Targeting an animation applies it, and an applied clip holds its pose in
+    # the animated value layer (doc/property-system.md D5) over the transform
+    # the nodes authored. A save writes that authored base, so the live
+    # snapshot has to be taken on the base too: stopping the player drops the
+    # layer and puts every target back on what the file holds.
+    if E2E_STATE.get("animation"):
+        stopped = mutate("animation_playback", {"action": "stop"})
+        check(S, "playback stopped before the snapshot", bool(stopped) and not stopped.get("playing", False), str(stopped))
+
     exported_materials = {m.get("name") for m in doc.get("materials", [])}
     detail_nodes = ["P6 Sphere", "P6 Torus", "P6 GM Node", "P6 Light"]
     original = snapshot_scene(scene, exported_materials, detail_nodes)

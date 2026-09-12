@@ -506,8 +506,22 @@ now owns its behavior; `git log` on that record has the history.
   second time byte for byte, `usdchecker` passes on the written file, and
   the round-trip script's USD physics leg checks a body, a material and a
   joint the way the glTF leg does.
+- An animation plays through a value layer of its own and an edited clip
+  saves as edited (A1). `Animation_sampler::apply` writes the animated
+  layer of `doc/property-system.md` D5, so the transform a prim authored
+  stays readable under the pose and every serializer writes that base;
+  stopping playback drops the layer. A save reconciles each sampled
+  `xformOp` stack with the channels driving the prim: the authored samples
+  are written when the keys are still their projection, and the keys are
+  written as `timeSamples` when they are not, op by op for a stack the
+  channels drive and through the composed pose for a baked one
+  (`src/erhe/usd/notes.md`, "Time samples"). `erhe_usd_tests` edits a key
+  value, a key time, an added key, a rotation key and a baked stack of the
+  time-samples fixture, saves and reloads each, and asserts the unedited
+  save is byte-identical and an edit made while the clip plays saves as an
+  edit.
 
-Verification of all of the above: `erhe_usd_tests` (302 cases, built in
+Verification of all of the above: `erhe_usd_tests` (334 cases, built in
 `build_vs2026_vulkan` since `ERHE_BUILD_TESTS=ON` is passed by the main
 configure wrapper), the `usd-roundtrip` section of
 `scripts/scene_roundtrip_verify.py` (`doc/scene_serialization.md`,
@@ -521,13 +535,11 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The animated value layer, then time samples on any attribute and the
-   write-back of an edit into the samples (three section 6 items). The
-   layer pays for itself without USD (it is the prerequisite of
-   `doc/animation-keyframing-plan.md`), and with it a keyed edit made in
-   erhe becomes something a USD save can carry instead of writing the
-   file's original samples. This is the one editor feature a USD scene
-   still loses today.
+1. The animated value layer and the write-back of an edited transform clip
+   hold; they are in section 2. What is left of the item is section 6
+   "Time samples beyond the transform", which waits on the generalized
+   animation channel of `doc/property-system.md` section 6 and ranks with
+   the shading work of item 7.
 2. Composition the real assets use (section 6 "Composition authored
    inside a variant block", "An xformOp named in a prim's xformOpOrder
    that one of its arcs supplies", "An override path that crosses a
@@ -568,73 +580,13 @@ section 6 entry it names, and nothing here restates one.
     with no surveyed asset that visibly depends on it, so they wait for a
     file that does.
 
-### A1 Animated value layer and animation write-back (M; next)
-
-What: section 3 item 1, worked through `doc/agent-orchestration-harness.md`
-one commit per brief. The three section 6 items it closes are "Animated
-value layer", "Reconciling an edit with the authored ops" and, for the
-transform, "Time samples beyond the transform" stays open. The design
-record is `doc/property-system.md` (D5 entry layout, R3 resolution order,
-the section 6 "Animated value layer" item, and the note under the
-transform-property section that `Animation_sampler::apply` still writes
-the `Trs_transform` directly); `doc/animation-keyframing-plan.md` is the
-consumer that waits on it. The commits, in order:
-
-1. `erhe::property`: `Value_source::animated`, a layer between coerced and
-   local in R3 (coerced applies to it as to every base), held as a second
-   optional in the entry (D5). `Dependency_object::set_animated_value` /
-   `clear_animated_value` set and clear it and propagate to dependents and
-   users the way a local write does; `get_value` reads it first, a new
-   base-value accessor (WPF `GetAnimationBaseValue`) reads the resolution
-   without it, and `has_own_value` / serialization / `for_each_local_value`
-   ignore it, so a save never sees a playback pose. For a bridged property
-   the storage the bridge reads carries the animated value while the entry
-   keeps the authored base, and clearing writes the base back through the
-   bridge; for an entry-store property the entry keeps both. Tests in
-   `erhe_property_tests` for both storage forms, the propagation, the
-   provenance (`describe_property_origin` reports `animated`) and the
-   clear. `doc/property-system.md` D5 / R3 rewritten in the present tense,
-   the section 6 item removed, `src/erhe/property/notes.md` follows.
-2. `erhe::scene` playback through the layer: `Animation_sampler::apply`
-   writes every channel target through `set_animated_value` (the node's
-   transform components as bridged properties, joint transforms alike) and
-   the player's stop and rewind clear the layer, so the local transform is
-   the authored pose whatever the playhead says; a keyed edit made while
-   playing writes the local value (the base), never the animated one. The
-   USD writer then writes the base, not "whatever transform the prim holds
-   at save" (`src/erhe/usd/notes.md` "Time samples" rewritten), and the
-   xformOp samples stay the authority. `erhe_scene_tests` covers apply /
-   stop / edit-while-playing; headless: open a sampled fixture
-   (`src/erhe/usd/test/data`, the time-samples fixture), play, MCP
-   `get_item_properties` shows the transform `animated` with the authored
-   value as its local, save during playback writes the authored samples,
-   stop restores the pose, close clean.
-3. Write-back of an edited clip: a USD save derives an animated
-   `xformOp`'s `timeSamples` from the erhe channel when the channel's keys
-   differ from the samples the file authored (keys at `time *
-   timeCodesPerSecond`, one sample per key, the op's own value type and
-   precision), and keeps the authored samples when they do not, so an
-   unedited file stays byte-identical and an edited clip saves as edited;
-   a baked stack (the `[orient, translate]` case) writes back through its
-   composed pose into its ops. `erhe_usd_tests`: edit a key of the
-   time-samples fixture in memory, save, reload, the sample is the key;
-   unedited save byte-identical. glTF keeps writing its own channels (C1).
-   `src/erhe/usd/notes.md` "Time samples" states the rule; the section 6
-   items above go.
-
-Verification: `erhe_property_tests`, `erhe_scene_tests` and
-`erhe_usd_tests` after each commit; the headless session of commit 2;
-`scripts/scene_roundtrip_verify.py` stays at its current failures (2
-pre-existing plus the P6 flake).
-
 ## 4. Order
 
-Item 1 of section 3 restores an editor feature to USD-backed scenes and
-is independent of the rest; take it first, through the harness of
-`doc/agent-orchestration-harness.md` one commit at a time (C2). Item 3 goes
-with a fork tag bump and is best taken when a fork clone is at hand
-(`memory-bank/local/context.md` records it). The remaining items have no
-ordering constraint among them.
+Item 3 of section 3 goes with a fork tag bump and is best taken when a
+fork clone is at hand (`memory-bank/local/context.md` records it). The
+remaining items have no ordering constraint among them; each is taken
+through the harness of `doc/agent-orchestration-harness.md`, one commit
+at a time (C2).
 
 ## 5. Out of scope
 
@@ -688,26 +640,14 @@ ranks them. A USD scene loads, edits and saves without any of them.
     script.
   - Undo of a USD import leaves an empty kind `Scope` behind (`Physics
     Joints`), as the lazy kind scopes of the other kinds do.
-- Animated value layer: the property-system section 6 item, an animated
-  value between coerced and local in R3, set by `Animation_sampler::apply`
-  and cleared when playback stops, so playback never overwrites the
-  authored local value. USD resolves time samples above `default`;
-  importing a time-sampled attribute without this layer would clobber
-  the authored pose, and saving would write the playback pose as
-  `default`. It is also the prerequisite of the keyframing plan
-  (`doc/animation-keyframing-plan.md`) and of animation channels on
-  arbitrary properties, so it pays for itself without USD.
 - Time samples beyond the transform: a time-sampled `xformOp:*` attribute
-  is carried as authored and played as an `erhe::scene::Animation`
-  (`src/erhe/usd/notes.md`, "Time samples") and `SkelAnimation` joint
-  channels are K1, which leaves time samples on any other attribute, and
-  `Ts` splines re-encoded as cubic samplers.
-- Reconciling an edit with the authored ops: the samples an op carries are
-  what the file authored, so keying an animation or moving an animated
-  prim changes the playable channels and the composed pose but not the
-  ops a save writes, and an edited clip saves as the file's original
-  samples. Writing an edit back into the samples is what the animated
-  value layer above makes well defined.
+  is carried, played and written back (`src/erhe/usd/notes.md`, "Time
+  samples") and `SkelAnimation` joint channels are K1, which leaves time
+  samples on any other attribute - a material input, a light intensity, a
+  visibility - and `Ts` splines re-encoded as cubic samplers. An
+  `erhe::scene::Animation` channel names an `Animation_path` rather than a
+  property, so this waits on the generalized channel of
+  `doc/property-system.md` section 6.
 - Composition authored inside a variant block: a reference or payload arc
   authored on a variant (usd-wg `full_assets/Teapot/Teapot_Geometry.usd`
   prepends the reference to `UtahTeapot.usd` on its `Utah` variant), and a

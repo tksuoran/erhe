@@ -1032,9 +1032,36 @@ matrix op at its earlier sample) and composed, and the matrix decomposed into
 translation, rotation and scale becomes three channels - exact at every
 sample, linear between them. One info line per prim names the reason. The
 samples still travel through a save either way.
-Editing an animation's keys does not write back into the ops, and neither does
-moving an animated prim: the stack is the authored record, and reconciling the
-two is future work (`doc/usd-compatibility-plan.md` section 6).
+An edited clip writes back into the ops. A save is handed the scene's
+animations in `Usd_save_arguments::animations`, and for every prim whose stack
+carries samples it asks whether the channels driving that prim still key the
+projection of those samples - the same key times, at `time *
+timeCodesPerSecond`, and the same values, to within one part in 1e5. They do
+for a clip nothing edited, and then the authored samples are what the save
+writes, so a file a save only passed through stays byte for byte what it was.
+They do not for an edited clip, and then the op's `timeSamples` are derived
+from the keys: one sample per key, at the key's time code and in the op's own
+value type and precision. USD interpolates the samples of a floating-point
+attribute linearly and authors no per-attribute interpolation, so a channel
+erhe holds as `STEP` or `CUBICSPLINE` writes its keys and reads back `LINEAR`.
+
+A stack the channels drive op by op takes the keys of the channel driving each
+op. A baked stack takes the composed pose instead: at each key time the pose
+the three channels ask for is solved into the stack left to right, each op
+taking what its type can hold of what is left to account for - the translation
+column, the column lengths, the orthonormalized basis, the whole matrix for a
+`transform` op - and the rest travelling on to the next op. An op the
+write-back may not touch, an inverted or suffixed one (a pivot pair) or one
+the file authored a single value for, keeps that value and takes its part out
+all the same. What is left after the last op has to be the identity: when it
+is not - an edit a pivot pair cannot pivot into, a rotation a single-axis
+`rotateX` cannot turn - the prim keeps its authored samples and one warning
+names it.
+
+An edit and playback are independent: playback holds its pose in the animated
+layer (`doc/property-system.md` D5) while the keys hold the edit, so a save
+made while a clip plays writes the same samples a save made after stopping
+does.
 
 A `UsdSkel` `SkelAnimation` contributes its joint channels to this same
 animation ("Skinning" above). Not carried: time samples on any attribute other

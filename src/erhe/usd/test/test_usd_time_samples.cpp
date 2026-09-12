@@ -11,6 +11,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -108,6 +109,56 @@ protected:
         return path;
     }
 
+    // A save that hands the writer the animations the load built, which is
+    // what the editor's save does: the writer then reconciles each sampled
+    // stack with the clip's keys.
+    [[nodiscard]] auto save_with_animations(const char* file_name) -> std::filesystem::path
+    {
+        const std::filesystem::path path = temporary_path(file_name);
+        erhe::usd::Usd_save_arguments save_arguments{
+            .path      = path,
+            .root_node = root
+        };
+        save_arguments.time_codes_per_second = loaded.data.time_codes.time_codes_per_second;
+        save_arguments.animations            = loaded.data.animations;
+        const erhe::usd::Usd_save_result save_result = erhe::usd::save_usda(save_arguments);
+        EXPECT_TRUE(save_result.error.empty()) << save_result.error;
+        return path;
+    }
+
+    [[nodiscard]] auto reload(const std::filesystem::path& path) -> erhe::usd::Usd_load_result
+    {
+        const std::shared_ptr<erhe::scene::Node> reload_root = std::make_shared<erhe::scene::Xform>("import_root");
+        reload_roots.push_back(reload_root);
+        const erhe::usd::Usd_load_arguments load_arguments{
+            .path          = path,
+            .root_node     = reload_root,
+            .mesh_layer_id = 0
+        };
+        erhe::usd::Usd_load_result result = erhe::usd::load_usd(load_arguments);
+        EXPECT_TRUE(result.error.empty()) << result.error;
+        return result;
+    }
+
+    // The sampler of one channel of the loaded clip, which a test edits the
+    // way a keyed edit in the editor does.
+    [[nodiscard]] auto find_sampler(
+        const erhe::scene::Animation_path path,
+        const std::string&                target_name
+    ) -> erhe::scene::Animation_sampler*
+    {
+        if (loaded.data.animations.empty()) {
+            return nullptr;
+        }
+        erhe::scene::Animation&                  animation = *loaded.data.animations.front();
+        const erhe::scene::Animation_channel*    channel   = find_channel(animation, path, target_name);
+        if ((channel == nullptr) || (channel->sampler_index >= animation.samplers.size())) {
+            return nullptr;
+        }
+        return &animation.samplers[channel->sampler_index];
+    }
+
+    std::vector<std::shared_ptr<erhe::scene::Node>> reload_roots;
     std::filesystem::path              source_path;
     std::shared_ptr<erhe::scene::Node> root;
     erhe::usd::Usd_load_result         loaded;
@@ -351,6 +402,186 @@ TEST_F(Time_samples, a_save_during_playback_writes_the_authored_transforms)
 
     const std::filesystem::path stopped_path = save("time_samples_stopped.usda");
     EXPECT_EQ(read_lines(stopped_path), read_lines(resting_path));
+}
+
+
+// The op samples of one prim of a reload, by op index.
+[[nodiscard]] auto find_op(
+    const erhe::usd::Usd_data&       data,
+    const std::string&               node_name,
+    const erhe::scene::Xform_op_type type
+) -> const erhe::scene::Xform_op*
+{
+    for (const std::shared_ptr<erhe::scene::Node>& node : data.nodes) {
+        if (!node || (node->get_name() != node_name)) {
+            continue;
+        }
+        const erhe::scene::Xform_op_stack* stack = node->get_xform_op_stack();
+        if (stack == nullptr) {
+            return nullptr;
+        }
+        for (const erhe::scene::Xform_op& op : stack->ops) {
+            if (op.type == type) {
+                return &op;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// A save that hands the writer the clip is the save the editor makes, and an
+// unedited clip still writes the samples the file authored: the keys are the
+// projection of those samples, so there is nothing to write back.
+TEST_F(Time_samples, an_unedited_clip_writes_the_authored_samples)
+{
+    const std::filesystem::path without_clip = save("time_samples_plain.usda");
+    const std::filesystem::path with_clip    = save_with_animations("time_samples_clip.usda");
+    EXPECT_EQ(read_lines(with_clip), read_lines(without_clip));
+}
+
+// An edited key value reaches the op's `timeSamples`, and the keys the edit
+// did not touch - of this op and of the ops beside it - stay as authored.
+TEST_F(Time_samples, an_edited_key_value_is_written_back)
+{
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::TRANSLATION, "animated");
+    ASSERT_NE(sampler, nullptr);
+    ASSERT_EQ(sampler->data.size(), 9u);
+    sampler->data[4] = 5.0f; // the y of the key at 1 s (time code 24)
+
+    const erhe::usd::Usd_load_result reloaded = reload(save_with_animations("time_samples_edited_value.usda"));
+    const erhe::scene::Xform_op*     op       = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::translate);
+    ASSERT_NE(op, nullptr);
+    ASSERT_EQ(op->samples.size(), 3u);
+    EXPECT_DOUBLE_EQ(op->samples[1].time_code, 24.0);
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[0].value), glm::dvec3(0.0, 0.0, 0.0));
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[1].value), glm::dvec3(10.0, 5.0, 0.0));
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[2].value), glm::dvec3(20.0, 0.0, 0.0));
+
+    const erhe::scene::Xform_op* scale_op = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::scale);
+    ASSERT_NE(scale_op, nullptr);
+    ASSERT_EQ(scale_op->samples.size(), 3u);
+    EXPECT_EQ(std::get<glm::dvec3>(scale_op->samples[1].value), glm::dvec3(2.0, 2.0, 2.0));
+
+    // The layer's time coordinates are the ones the samples span, unchanged.
+    EXPECT_DOUBLE_EQ(reloaded.data.time_codes.time_codes_per_second, 24.0);
+    EXPECT_DOUBLE_EQ(reloaded.data.time_codes.start_time_code,        0.0);
+    EXPECT_DOUBLE_EQ(reloaded.data.time_codes.end_time_code,         48.0);
+}
+
+// A key moved in time is written at its new time code: the samples a save
+// writes are the keys, one for one.
+TEST_F(Time_samples, a_moved_key_time_is_written_back)
+{
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::TRANSLATION, "animated");
+    ASSERT_NE(sampler, nullptr);
+    ASSERT_EQ(sampler->timestamps.size(), 3u);
+    sampler->timestamps[1] = 1.5f; // time code 36
+
+    const erhe::usd::Usd_load_result reloaded = reload(save_with_animations("time_samples_moved_key.usda"));
+    const erhe::scene::Xform_op*     op       = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::translate);
+    ASSERT_NE(op, nullptr);
+    ASSERT_EQ(op->samples.size(), 3u);
+    EXPECT_DOUBLE_EQ(op->samples[0].time_code,  0.0);
+    EXPECT_DOUBLE_EQ(op->samples[1].time_code, 36.0);
+    EXPECT_DOUBLE_EQ(op->samples[2].time_code, 48.0);
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[1].value), glm::dvec3(10.0, 0.0, 0.0));
+}
+
+// A key added to a channel is a sample added to the op.
+TEST_F(Time_samples, an_added_key_is_written_back)
+{
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::TRANSLATION, "animated");
+    ASSERT_NE(sampler, nullptr);
+    sampler->timestamps.insert(sampler->timestamps.begin() + 2, 1.5f);
+    sampler->data.insert(sampler->data.begin() + 6, {15.0f, 3.0f, 0.0f});
+
+    const erhe::usd::Usd_load_result reloaded = reload(save_with_animations("time_samples_added_key.usda"));
+    const erhe::scene::Xform_op*     op       = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::translate);
+    ASSERT_NE(op, nullptr);
+    ASSERT_EQ(op->samples.size(), 4u);
+    EXPECT_DOUBLE_EQ(op->samples[2].time_code, 36.0);
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[2].value), glm::dvec3(15.0, 3.0, 0.0));
+}
+
+// An edited rotation key reaches the Euler op it was read from.
+TEST_F(Time_samples, an_edited_rotation_key_is_written_back_as_euler)
+{
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::ROTATION, "animated");
+    ASSERT_NE(sampler, nullptr);
+    ASSERT_EQ(sampler->data.size(), 12u);
+    // 180 degrees about y as (x, y, z, w).
+    sampler->data[4] = 0.0f;
+    sampler->data[5] = 1.0f;
+    sampler->data[6] = 0.0f;
+    sampler->data[7] = 0.0f;
+
+    const erhe::usd::Usd_load_result reloaded = reload(save_with_animations("time_samples_edited_rotation.usda"));
+    const erhe::scene::Xform_op*     op       = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::rotate_xyz);
+    ASSERT_NE(op, nullptr);
+    ASSERT_EQ(op->samples.size(), 3u);
+
+    // Euler angles name a rotation in more than one way, so the rotation the
+    // reload plays is what the edit has to survive as: at 1 s the prim turns
+    // a half turn about y, with the authored scale of 2 on its basis.
+    ASSERT_EQ(reloaded.data.animations.size(), 1u);
+    const std::shared_ptr<erhe::scene::Node> node = find_node(reloaded.data, "animated");
+    ASSERT_TRUE(node);
+    reloaded.data.animations.front()->apply(1.0f);
+    const glm::mat4 matrix = node->parent_from_node_transform().get_matrix();
+    EXPECT_NEAR(matrix[0][0], -2.0f, 1e-3f);
+    EXPECT_NEAR(matrix[1][1],  2.0f, 1e-3f);
+    EXPECT_NEAR(matrix[2][2], -2.0f, 1e-3f);
+}
+
+// A baked stack - `[orient, translate]` composes rotation * translation, so
+// no channel drives one op - writes back through its composed pose: the pose
+// the edited channels ask for is solved into the ops, and reloading the file
+// puts the prim where the edit put it.
+TEST_F(Time_samples, an_edited_baked_stack_writes_back_through_its_pose)
+{
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::TRANSLATION, "orient_then_translate");
+    ASSERT_NE(sampler, nullptr);
+    ASSERT_EQ(sampler->data.size(), 6u);
+    // At 1 s the baked translation is (0, 0, -10); ask for twice as far.
+    sampler->data[3] =   0.0f;
+    sampler->data[4] =   0.0f;
+    sampler->data[5] = -20.0f;
+
+    const erhe::usd::Usd_load_result reloaded = reload(save_with_animations("time_samples_edited_baked.usda"));
+    ASSERT_EQ(reloaded.data.animations.size(), 1u);
+    const std::shared_ptr<erhe::scene::Node> node = find_node(reloaded.data, "orient_then_translate");
+    ASSERT_TRUE(node);
+
+    reloaded.data.animations.front()->apply(1.0f);
+    const glm::mat4 matrix = node->parent_from_node_transform().get_matrix();
+    EXPECT_NEAR(matrix[3][0],   0.0f, 1e-3f);
+    EXPECT_NEAR(matrix[3][1],   0.0f, 1e-3f);
+    EXPECT_NEAR(matrix[3][2], -20.0f, 1e-3f);
+}
+
+// An edit made while the clip plays is an edit of the clip, not of the pose:
+// the animated layer holds the pose, the keys hold the edit, and a save made
+// without stopping writes the same samples a save made after stopping does.
+TEST_F(Time_samples, an_edit_made_while_the_clip_plays_is_written_back)
+{
+    ASSERT_EQ(loaded.data.animations.size(), 1u);
+    erhe::scene::Animation& animation = *loaded.data.animations.front();
+    animation.apply(1.0f);
+
+    erhe::scene::Animation_sampler* sampler = find_sampler(erhe::scene::Animation_path::TRANSLATION, "animated");
+    ASSERT_NE(sampler, nullptr);
+    sampler->data[5] = 7.0f; // the z of the key at 1 s
+
+    const std::filesystem::path playing_path = save_with_animations("time_samples_edited_playing.usda");
+    animation.clear_applied();
+    const std::filesystem::path stopped_path = save_with_animations("time_samples_edited_stopped.usda");
+    EXPECT_EQ(read_lines(playing_path), read_lines(stopped_path));
+
+    const erhe::usd::Usd_load_result reloaded = reload(playing_path);
+    const erhe::scene::Xform_op*     op       = find_op(reloaded.data, "animated", erhe::scene::Xform_op_type::translate);
+    ASSERT_NE(op, nullptr);
+    ASSERT_EQ(op->samples.size(), 3u);
+    EXPECT_EQ(std::get<glm::dvec3>(op->samples[1].value), glm::dvec3(10.0, 0.0, 7.0));
 }
 
 } // anonymous namespace

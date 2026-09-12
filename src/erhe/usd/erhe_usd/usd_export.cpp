@@ -54,6 +54,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/trigonometric.hpp>
 
 #include <algorithm>
@@ -521,6 +522,17 @@ public:
 // prim that is the pivot of at least one skin, that skin's joints in
 // `joints` order, and the bind transform each joint is written with. The
 // first skin registered for a skeleton is the one the bind pose comes from.
+// The three transform channels of `Usd_save_arguments::animations` that drive
+// one node: what the writer reconciles a sampled `xformOp` stack with
+// (src/erhe/usd/notes.md, "Time samples").
+class Node_transform_channels final
+{
+public:
+    const erhe::scene::Animation_sampler* translation{nullptr};
+    const erhe::scene::Animation_sampler* rotation   {nullptr};
+    const erhe::scene::Animation_sampler* scale      {nullptr};
+};
+
 class Skeleton_record final
 {
 public:
@@ -876,6 +888,11 @@ public:
         collect_skeletons(*m_arguments.root_node.get());
         collect_skeleton_tokens(*m_arguments.root_node.get());
 
+        // The transform channels an edited clip holds, before any prim is
+        // written: a sampled stack is reconciled with them
+        // (src/erhe/usd/notes.md, "Time samples").
+        collect_transform_channels();
+
         // Pass one: where every prim lands on the stage. A prim's path is
         // only known once its ancestors have their sanitized, sibling-unique
         // names and the wrapper decision below is made, and a mesh binds its
@@ -1066,6 +1083,13 @@ private:
     double m_first_time_code   {0.0};
     double m_last_time_code    {0.0};
     bool   m_wrote_time_samples{false};
+
+    // The transform channels of the animations the caller handed over, by
+    // the node each drives, and the prims whose edited clip the authored ops
+    // could not hold ("Reconciling an edited clip with the authored ops").
+    std::map<const erhe::scene::Node*, Node_transform_channels> m_transform_channels;
+    std::set<const erhe::scene::Node*>                          m_write_back_refusals;
+    bool                                                        m_warned_interpolation{false};
 
     void add_warning(const std::string& text)
     {
@@ -3568,6 +3592,550 @@ private:
         return prim;
     }
 
+    // ------------------------------------------------------------------
+    // Reconciling an edited clip with the authored ops
+    // (src/erhe/usd/notes.md, "Time samples")
+    // ------------------------------------------------------------------
+
+    // Index the transform channels of the animations the caller handed over
+    // by the node each drives. A channel reading its sampler at a value
+    // offset is left out: its keys are not the sampler's own, and the
+    // write-back reads keys rather than resampling.
+    void collect_transform_channels()
+    {
+        for (const std::shared_ptr<erhe::scene::Animation>& animation : m_arguments.animations) {
+            if (!animation) {
+                continue;
+            }
+            for (const erhe::scene::Animation_channel& channel : animation->channels) {
+                if (
+                    !channel.target ||
+                    (channel.sampler_index >= animation->samplers.size()) ||
+                    (channel.value_offset != 0)
+                ) {
+                    continue;
+                }
+                if (
+                    (channel.path != erhe::scene::Animation_path::TRANSLATION) &&
+                    (channel.path != erhe::scene::Animation_path::ROTATION) &&
+                    (channel.path != erhe::scene::Animation_path::SCALE)
+                ) {
+                    continue;
+                }
+                Node_transform_channels&               entry   = m_transform_channels[channel.target.get()];
+                const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
+                const erhe::scene::Animation_sampler** target  =
+                    (channel.path == erhe::scene::Animation_path::TRANSLATION) ? &entry.translation :
+                    (channel.path == erhe::scene::Animation_path::ROTATION)    ? &entry.rotation    :
+                                                                                 &entry.scale;
+                if (*target == nullptr) {
+                    *target = &sampler;
+                }
+            }
+        }
+    }
+
+    // How many keys a channel's sampler holds, counting only those its data
+    // array covers.
+    [[nodiscard]] static auto get_key_count(
+        const erhe::scene::Animation_sampler& sampler,
+        const std::size_t                     component_count
+    ) -> std::size_t
+    {
+        return std::min(
+            sampler.timestamps.size(),
+            (component_count > 0) ? (sampler.data.size() / component_count) : std::size_t{0}
+        );
+    }
+
+    [[nodiscard]] static auto get_key_value(
+        const erhe::scene::Animation_sampler& sampler,
+        const std::size_t                     component_count,
+        const std::size_t                     key
+    ) -> glm::vec4
+    {
+        glm::vec4 value{0.0f, 0.0f, 0.0f, 0.0f};
+        for (std::size_t component = 0; component < component_count; ++component) {
+            value[static_cast<glm::length_t>(component)] = sampler.data[(key * component_count) + component];
+        }
+        return value;
+    }
+
+    // Two values are the same when they differ by less than one part in 1e5.
+    // An unedited clip's keys and the samples they were read from travelled
+    // through one float conversion, so the tolerance only has to absorb a
+    // reload; an edit smaller than it is an edit a save does not carry.
+    [[nodiscard]] static auto is_near_value(const double lhs, const double rhs) -> bool
+    {
+        constexpr double tolerance = 1e-5;
+        return std::abs(lhs - rhs) <= (tolerance * std::max(1.0, std::max(std::abs(lhs), std::abs(rhs))));
+    }
+
+    [[nodiscard]] static auto is_near_vector(const glm::dvec3 lhs, const glm::dvec3 rhs) -> bool
+    {
+        return is_near_value(lhs.x, rhs.x) && is_near_value(lhs.y, rhs.y) && is_near_value(lhs.z, rhs.z);
+    }
+
+    // Two quaternions are the same rotation when they agree up to sign: the
+    // reader keeps a channel's sampled quaternions on one hemisphere, and
+    // which one it picked says nothing about the value.
+    [[nodiscard]] static auto is_near_rotation(const glm::dquat lhs, glm::dquat rhs) -> bool
+    {
+        if (glm::dot(lhs, rhs) < 0.0) {
+            rhs = -rhs;
+        }
+        return is_near_value(lhs.x, rhs.x) && is_near_value(lhs.y, rhs.y) &&
+               is_near_value(lhs.z, rhs.z) && is_near_value(lhs.w, rhs.w);
+    }
+
+    // The rotation a channel key holds. An erhe rotation channel keys
+    // (x, y, z, w).
+    [[nodiscard]] static auto get_key_rotation(const glm::vec4& key) -> glm::dquat
+    {
+        return glm::dquat{
+            static_cast<double>(key.w),
+            static_cast<double>(key.x),
+            static_cast<double>(key.y),
+            static_cast<double>(key.z)
+        };
+    }
+
+    [[nodiscard]] auto get_time_codes_per_second() const -> double
+    {
+        return (m_arguments.time_codes_per_second > 0.0) ? m_arguments.time_codes_per_second : 24.0;
+    }
+
+    [[nodiscard]] auto get_time_code(const float time) const -> double
+    {
+        return static_cast<double>(time) * get_time_codes_per_second();
+    }
+
+    // A rotation in the form the op's own type takes. False when the type is
+    // a single-axis rotate and the rotation turns about another axis too -
+    // the op cannot hold it.
+    [[nodiscard]] static auto make_rotation_op_value(
+        const erhe::scene::Xform_op_type type,
+        const glm::dquat                 rotation,
+        erhe::scene::Xform_op_value&     out_value
+    ) -> bool
+    {
+        using Op = erhe::scene::Xform_op_type;
+        if (type == Op::orient) {
+            out_value = rotation;
+            return true;
+        }
+        if ((type == Op::rotate_x) || (type == Op::rotate_y) || (type == Op::rotate_z)) {
+            const glm::dvec3 angles = erhe::scene::euler_degrees_from_rotation(Op::rotate_xyz, rotation);
+            const int        axis   = (type == Op::rotate_x) ? 0 : (type == Op::rotate_y) ? 1 : 2;
+            for (int component = 0; component < 3; ++component) {
+                if ((component != axis) && (std::abs(angles[component]) > 1e-3)) {
+                    return false;
+                }
+            }
+            out_value = angles[axis];
+            return true;
+        }
+        out_value = erhe::scene::euler_degrees_from_rotation(type, rotation);
+        return true;
+    }
+
+    // What one op can hold of a matrix that is still to be accounted for:
+    // the translation column, the column lengths, the orthonormalized basis,
+    // or - for a `transform` op - the whole matrix.
+    [[nodiscard]] static auto extract_op_value(
+        const erhe::scene::Xform_op_type type,
+        const glm::dmat4&                remaining,
+        erhe::scene::Xform_op_value&     out_value
+    ) -> bool
+    {
+        using Op = erhe::scene::Xform_op_type;
+        switch (type) {
+            case Op::transform: {
+                out_value = remaining;
+                return true;
+            }
+            case Op::translate: {
+                out_value = glm::dvec3{remaining[3]};
+                return true;
+            }
+            case Op::scale: {
+                out_value = glm::dvec3{
+                    glm::length(glm::dvec3{remaining[0]}),
+                    glm::length(glm::dvec3{remaining[1]}),
+                    glm::length(glm::dvec3{remaining[2]})
+                };
+                return true;
+            }
+            default: break;
+        }
+        glm::dmat3 basis{glm::dvec3{remaining[0]}, glm::dvec3{remaining[1]}, glm::dvec3{remaining[2]}};
+        for (int column = 0; column < 3; ++column) {
+            const double length = glm::length(basis[column]);
+            if (length > 0.0) {
+                basis[column] /= length;
+            }
+        }
+        return make_rotation_op_value(type, glm::normalize(glm::quat_cast(basis)), out_value);
+    }
+
+    // Whether an op of a sampled stack is one the write-back may put a new
+    // value into: an inverted or suffixed op is part of a construction the
+    // stack authored around the sampled ones (a pivot pair), and an op that
+    // carries no samples authored one value for the whole clip.
+    [[nodiscard]] static auto is_write_back_op(const erhe::scene::Xform_op& op) -> bool
+    {
+        return !op.samples.empty() && !op.inverted && op.suffix.empty();
+    }
+
+    // The union of the time codes the stack's ops sample at, in increasing
+    // order - the timeline the reader baked a stack it cannot drive op by op
+    // onto.
+    static void collect_stack_time_codes(const erhe::scene::Xform_op_stack& stack, std::vector<double>& out_time_codes)
+    {
+        out_time_codes.clear();
+        for (const erhe::scene::Xform_op& op : stack.ops) {
+            for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+                out_time_codes.push_back(sample.time_code);
+            }
+        }
+        std::sort(out_time_codes.begin(), out_time_codes.end());
+        out_time_codes.erase(std::unique(out_time_codes.begin(), out_time_codes.end()), out_time_codes.end());
+    }
+
+    // The pose the stack composes to at one time code, decomposed - what the
+    // reader's bake produced as the three channels' keys. `posed` is scratch
+    // the caller owns, so a sweep over a timeline allocates nothing.
+    static void get_stack_pose(
+        const erhe::scene::Xform_op_stack& stack,
+        const double                       time_code,
+        erhe::scene::Xform_op_stack&       posed,
+        glm::dvec3&                        out_translation,
+        glm::dquat&                        out_rotation,
+        glm::dvec3&                        out_scale
+    )
+    {
+        for (std::size_t i = 0, end = stack.ops.size(); i < end; ++i) {
+            posed.ops[i].value = get_xform_op_value_at(stack.ops[i], time_code);
+        }
+        const glm::mat4 matrix     = glm::mat4{posed.compose()};
+        glm::vec3       scale      {1.0f};
+        glm::quat       rotation   {1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3       translation{0.0f};
+        glm::vec3       skew       {0.0f};
+        glm::vec4       perspective{0.0f};
+        glm::decompose(matrix, scale, rotation, translation, skew, perspective);
+        out_translation = glm::dvec3{translation};
+        out_rotation    = glm::dquat{rotation};
+        out_scale       = glm::dvec3{scale};
+    }
+
+    // Whether one channel's keys are still the projection of the authored
+    // samples the reader made them from: the same key times, and the value
+    // `key_is_authored` accepts at each.
+    template <typename Key_predicate>
+    [[nodiscard]] auto channel_keys_are_authored(
+        const erhe::scene::Animation_sampler& sampler,
+        const std::size_t                     component_count,
+        const std::vector<double>&            time_codes,
+        Key_predicate&&                       key_is_authored
+    ) const -> bool
+    {
+        const std::size_t key_count = get_key_count(sampler, component_count);
+        if (key_count != time_codes.size()) {
+            return false;
+        }
+        for (std::size_t key = 0; key < key_count; ++key) {
+            if (!is_near_value(get_time_code(sampler.timestamps[key]), time_codes[key])) {
+                return false;
+            }
+            if (!key_is_authored(key, get_key_value(sampler, component_count, key))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] static auto get_path_channel(
+        const Node_transform_channels&    channels,
+        const erhe::scene::Animation_path path
+    ) -> const erhe::scene::Animation_sampler*
+    {
+        return (path == erhe::scene::Animation_path::TRANSLATION) ? channels.translation :
+               (path == erhe::scene::Animation_path::ROTATION)    ? channels.rotation    :
+               (path == erhe::scene::Animation_path::SCALE)       ? channels.scale       : nullptr;
+    }
+
+    // The samples of a stack the channels drive op by op, derived from the
+    // keys: one sample per key, at `time * timeCodesPerSecond` and in the
+    // op's own value form. An op whose channel still keys the authored
+    // samples keeps them, so a file only an edit reached is the only file a
+    // save changes.
+    [[nodiscard]] auto write_back_driven_stack(
+        const erhe::scene::Xform_op_stack& stack,
+        const Node_transform_channels&     channels,
+        erhe::scene::Xform_op_stack&       out_stack,
+        bool&                              out_refused
+    ) const -> bool
+    {
+        out_stack = stack;
+        bool any_change{false};
+        for (std::size_t i = 0, end = stack.ops.size(); i < end; ++i) {
+            const erhe::scene::Xform_op& op = stack.ops[i];
+            if (op.samples.empty()) {
+                continue;
+            }
+            erhe::scene::Animation_path path{erhe::scene::Animation_path::INVALID};
+            if (!get_xform_op_animation_path(op.type, path)) {
+                continue;
+            }
+            const erhe::scene::Animation_sampler* sampler = get_path_channel(channels, path);
+            if (sampler == nullptr) {
+                continue;
+            }
+            const std::size_t   component_count = erhe::scene::get_component_count(path);
+            std::vector<double> time_codes;
+            time_codes.reserve(op.samples.size());
+            for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+                time_codes.push_back(sample.time_code);
+            }
+            const bool authored = channel_keys_are_authored(
+                *sampler, component_count, time_codes,
+                [&op, path](const std::size_t key, const glm::vec4& value) -> bool {
+                    if (path == erhe::scene::Animation_path::ROTATION) {
+                        return is_near_rotation(get_key_rotation(value), get_xform_op_sample_rotation(op, op.samples[key]));
+                    }
+                    return is_near_vector(glm::dvec3{value}, std::get<glm::dvec3>(op.samples[key].value));
+                }
+            );
+            if (authored) {
+                continue;
+            }
+            const std::size_t key_count = get_key_count(*sampler, component_count);
+            if (key_count == 0) {
+                continue;
+            }
+            std::vector<erhe::scene::Xform_op_sample> samples;
+            samples.reserve(key_count);
+            for (std::size_t key = 0; key < key_count; ++key) {
+                const glm::vec4             value = get_key_value(*sampler, component_count, key);
+                erhe::scene::Xform_op_value op_value{};
+                if (path == erhe::scene::Animation_path::ROTATION) {
+                    if (!make_rotation_op_value(op.type, glm::normalize(get_key_rotation(value)), op_value)) {
+                        out_refused = true;
+                        return false;
+                    }
+                } else {
+                    op_value = glm::dvec3{value};
+                }
+                samples.push_back(
+                    erhe::scene::Xform_op_sample{
+                        .time_code = get_time_code(sampler->timestamps[key]),
+                        .value     = op_value
+                    }
+                );
+            }
+            out_stack.ops[i].samples = std::move(samples);
+            out_stack.ops[i].value   = get_xform_op_value_at(out_stack.ops[i], out_stack.ops[i].samples.front().time_code);
+            any_change = true;
+        }
+        return any_change;
+    }
+
+    // The samples of a baked stack, derived from the composed pose the three
+    // channels key: at each key time the pose the channels ask for is solved
+    // into the stack op by op, left to right, each op taking what it can hold
+    // of what is left and the rest travelling on. An op the write-back may
+    // not touch keeps its authored value and takes its part out all the same,
+    // so a pivot pair still pivots. What is left after the last op must be
+    // the identity - when it is not, the stack cannot carry the pose and the
+    // authored samples stay.
+    [[nodiscard]] auto write_back_baked_stack(
+        const erhe::scene::Xform_op_stack& stack,
+        const Node_transform_channels&     channels,
+        erhe::scene::Xform_op_stack&       out_stack,
+        bool&                              out_refused
+    ) const -> bool
+    {
+        if ((channels.translation == nullptr) && (channels.rotation == nullptr) && (channels.scale == nullptr)) {
+            return false;
+        }
+        std::vector<double> authored_time_codes;
+        collect_stack_time_codes(stack, authored_time_codes);
+        if (authored_time_codes.empty()) {
+            return false;
+        }
+        erhe::scene::Xform_op_stack posed = stack;
+
+        // Unedited? Every channel then keys the authored timeline with the
+        // pose the stack composes to there.
+        bool authored{true};
+        for (const erhe::scene::Animation_path path : {
+            erhe::scene::Animation_path::TRANSLATION,
+            erhe::scene::Animation_path::ROTATION,
+            erhe::scene::Animation_path::SCALE
+        }) {
+            const erhe::scene::Animation_sampler* sampler = get_path_channel(channels, path);
+            if (sampler == nullptr) {
+                continue;
+            }
+            authored = channel_keys_are_authored(
+                *sampler, erhe::scene::get_component_count(path), authored_time_codes,
+                [&stack, &posed, &authored_time_codes, path](const std::size_t key, const glm::vec4& value) -> bool {
+                    glm::dvec3 translation{0.0};
+                    glm::dquat rotation   {1.0, 0.0, 0.0, 0.0};
+                    glm::dvec3 scale      {1.0};
+                    get_stack_pose(stack, authored_time_codes[key], posed, translation, rotation, scale);
+                    switch (path) {
+                        case erhe::scene::Animation_path::TRANSLATION: return is_near_vector(glm::dvec3{value}, translation);
+                        case erhe::scene::Animation_path::ROTATION:    return is_near_rotation(get_key_rotation(value), rotation);
+                        default:                                      return is_near_vector(glm::dvec3{value}, scale);
+                    }
+                }
+            );
+            if (!authored) {
+                break;
+            }
+        }
+        if (authored) {
+            return false;
+        }
+
+        // The timeline the edited clip keys, which is the union of what its
+        // channels key rather than what the file authored.
+        std::vector<double> time_codes;
+        for (const erhe::scene::Animation_sampler* sampler : {channels.translation, channels.rotation, channels.scale}) {
+            if (sampler == nullptr) {
+                continue;
+            }
+            for (const float time : sampler->timestamps) {
+                time_codes.push_back(get_time_code(time));
+            }
+        }
+        std::sort(time_codes.begin(), time_codes.end());
+        time_codes.erase(std::unique(time_codes.begin(), time_codes.end()), time_codes.end());
+        if (time_codes.empty()) {
+            return false;
+        }
+
+        out_stack = stack;
+        for (erhe::scene::Xform_op& op : out_stack.ops) {
+            if (is_write_back_op(op)) {
+                op.samples.clear();
+                op.samples.reserve(time_codes.size());
+            }
+        }
+        for (const double time_code : time_codes) {
+            const float time = static_cast<float>(time_code / get_time_codes_per_second());
+            glm::dvec3  translation{0.0};
+            glm::dquat  rotation   {1.0, 0.0, 0.0, 0.0};
+            glm::dvec3  scale      {1.0};
+            get_stack_pose(stack, time_code, posed, translation, rotation, scale);
+            glm::vec4 value{0.0f, 0.0f, 0.0f, 0.0f};
+            if ((channels.translation != nullptr) && sample_channel(*channels.translation, 3, time, value)) {
+                translation = glm::dvec3{value};
+            }
+            if ((channels.rotation != nullptr) && sample_channel(*channels.rotation, 4, time, value)) {
+                rotation = glm::normalize(get_key_rotation(value));
+            }
+            if ((channels.scale != nullptr) && sample_channel(*channels.scale, 3, time, value)) {
+                scale = glm::dvec3{value};
+            }
+            const glm::dmat4 requested =
+                glm::translate(glm::dmat4{1.0}, translation) *
+                glm::dmat4{glm::dmat3{rotation}} *
+                glm::scale(glm::dmat4{1.0}, scale);
+
+            glm::dmat4 remaining = requested;
+            for (std::size_t i = 0, end = out_stack.ops.size(); i < end; ++i) {
+                erhe::scene::Xform_op& op   = out_stack.ops[i];
+                erhe::scene::Xform_op  step = stack.ops[i];
+                // The authored op says whether this one is written back: the
+                // one being filled has had its samples cleared.
+                if (is_write_back_op(stack.ops[i])) {
+                    erhe::scene::Xform_op_value op_value{};
+                    if (!extract_op_value(op.type, remaining, op_value)) {
+                        out_refused = true;
+                        return false;
+                    }
+                    step.value = op_value;
+                    op.samples.push_back(erhe::scene::Xform_op_sample{.time_code = time_code, .value = op_value});
+                } else {
+                    step.value = get_xform_op_value_at(stack.ops[i], time_code);
+                }
+                remaining = glm::inverse(step.to_matrix()) * remaining;
+            }
+            if (!is_near(glm::mat4{remaining}, glm::mat4{1.0f})) {
+                out_refused = true;
+                return false;
+            }
+        }
+        for (erhe::scene::Xform_op& op : out_stack.ops) {
+            if (!op.samples.empty()) {
+                op.value = get_xform_op_value_at(op, op.samples.front().time_code);
+            }
+        }
+        return true;
+    }
+
+    // USD gives the time samples of a floating-point attribute one
+    // interpolation, linear, and authors no per-attribute choice a reader
+    // could pick another one from. A clip keyed any other way writes its keys
+    // and reads back linear, which the save says once.
+    void warn_once_about_interpolation(const Node_transform_channels& channels)
+    {
+        if (m_warned_interpolation) {
+            return;
+        }
+        for (const erhe::scene::Animation_sampler* sampler : {channels.translation, channels.rotation, channels.scale}) {
+            if ((sampler != nullptr) && (sampler->interpolation_mode != erhe::scene::Animation_interpolation_mode::LINEAR)) {
+                m_warned_interpolation = true;
+                add_warning(
+                    fmt::format(
+                        "an edited animation interpolates its keys as {} - USD time samples are linear, and the file reads back as linear",
+                        erhe::scene::c_str(sampler->interpolation_mode)
+                    )
+                );
+                return;
+            }
+        }
+    }
+
+    // The stack a sampled prim is written with: the authored one when the
+    // animation's keys are still the projection of its samples, and one
+    // carrying the keys when they are not (src/erhe/usd/notes.md, "Time
+    // samples"). False when the authored stack is what gets written; an edit
+    // the ops cannot hold is named in one warning per prim.
+    [[nodiscard]] auto reconcile_sampled_stack(
+        const erhe::scene::Node&           node,
+        const erhe::scene::Xform_op_stack& stack,
+        erhe::scene::Xform_op_stack&       out_stack
+    ) -> bool
+    {
+        const std::map<const erhe::scene::Node*, Node_transform_channels>::const_iterator i =
+            m_transform_channels.find(&node);
+        if (i == m_transform_channels.end()) {
+            return false;
+        }
+        bool       refused{false};
+        const bool driven  = get_xform_op_stack_animation_refusal(stack).empty();
+        const bool written = driven
+            ? write_back_driven_stack(stack, i->second, out_stack, refused)
+            : write_back_baked_stack (stack, i->second, out_stack, refused);
+        if (written) {
+            warn_once_about_interpolation(i->second);
+        }
+        if (refused && (m_write_back_refusals.count(&node) == 0)) {
+            m_write_back_refusals.insert(&node);
+            add_warning(
+                fmt::format(
+                    "the edited animation of prim '{}' does not fit its authored xformOps - its samples are written as the file authored them",
+                    node.get_name()
+                )
+            );
+        }
+        return written;
+    }
+
     // The prim's transform (doc/usd-compatibility-plan.md M8): the ops it was
     // authored with when it carries a stack and the transform being written
     // is the stack's own composition, else the composed matrix as one
@@ -3579,7 +4147,15 @@ private:
     // op, so nothing about an editor-authored file changes.
     void set_transform(std::vector<lightusd::XformOp>& xform_ops, const erhe::scene::Node& node, const glm::mat4& matrix)
     {
-        set_transform(xform_ops, node.get_xform_op_stack(), matrix);
+        const erhe::scene::Xform_op_stack* stack = node.get_xform_op_stack();
+        if ((stack != nullptr) && stack->has_time_samples()) {
+            erhe::scene::Xform_op_stack edited;
+            if (reconcile_sampled_stack(node, *stack, edited)) {
+                write_xform_op_stack(xform_ops, edited);
+                return;
+            }
+        }
+        set_transform(xform_ops, stack, matrix);
     }
 
     void set_transform(

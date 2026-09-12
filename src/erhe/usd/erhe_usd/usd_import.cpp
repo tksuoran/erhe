@@ -848,122 +848,6 @@ private:
         }
     }
 
-    // Which erhe animation path an op drives, and in which order the three
-    // may appear: erhe applies a channel by writing the component into the
-    // node's TRS, so a stack the animation can drive is one whose composition
-    // IS that TRS - at most one translate, one rotate and one scale op, in
-    // that order, none inverted and none suffixed.
-    [[nodiscard]] static auto get_xform_op_animation_path(
-        const erhe::scene::Xform_op_type   type,
-        erhe::scene::Animation_path&       out_path
-    ) -> bool
-    {
-        using Op   = erhe::scene::Xform_op_type;
-        using Path = erhe::scene::Animation_path;
-        switch (type) {
-            case Op::translate:  out_path = Path::TRANSLATION; return true;
-            case Op::scale:      out_path = Path::SCALE;       return true;
-            case Op::rotate_x:
-            case Op::rotate_y:
-            case Op::rotate_z:
-            case Op::rotate_xyz:
-            case Op::rotate_xzy:
-            case Op::rotate_yxz:
-            case Op::rotate_yzx:
-            case Op::rotate_zxy:
-            case Op::rotate_zyx:
-            case Op::orient:     out_path = Path::ROTATION;    return true;
-            default:                                           return false;
-        }
-    }
-
-    // Why the stack's time samples cannot become animation channels, or an
-    // empty string when they can.
-    [[nodiscard]] static auto get_animation_refusal(const erhe::scene::Xform_op_stack& stack) -> std::string
-    {
-        using Path = erhe::scene::Animation_path;
-        int  previous_order{-1};
-        bool has_translation{false};
-        bool has_rotation   {false};
-        bool has_scale      {false};
-        for (const erhe::scene::Xform_op& op : stack.ops) {
-            if (op.inverted) {
-                return "the stack inverts an op";
-            }
-            if (!op.suffix.empty()) {
-                return "the stack has a suffixed op (a pivot pair)";
-            }
-            erhe::scene::Animation_path path{Path::INVALID};
-            if (!get_xform_op_animation_path(op.type, path)) {
-                return "the stack has a matrix op";
-            }
-            const int order = (path == Path::TRANSLATION) ? 0 : (path == Path::ROTATION) ? 1 : 2;
-            if (order < previous_order) {
-                return "the ops are not in translate, rotate, scale order";
-            }
-            previous_order = order;
-            bool& seen = (path == Path::TRANSLATION) ? has_translation : (path == Path::ROTATION) ? has_rotation : has_scale;
-            if (seen) {
-                return "the stack has more than one op of the same kind";
-            }
-            seen = true;
-        }
-        return std::string{};
-    }
-
-    // The value an op has at one time code: its sample there, the linear
-    // interpolation of the two samples around it (a quaternion slerps), the
-    // first or last sample outside the sampled range - USD's time sample
-    // semantics for a floating-point attribute. A matrix op holds its earlier
-    // sample: two matrices do not interpolate componentwise into a transform.
-    [[nodiscard]] static auto get_op_value_at(const erhe::scene::Xform_op& op, const double time_code) -> erhe::scene::Xform_op_value
-    {
-        if (op.samples.empty()) {
-            return op.value;
-        }
-        const erhe::scene::Xform_op_sample* before = nullptr;
-        const erhe::scene::Xform_op_sample* after  = nullptr;
-        for (const erhe::scene::Xform_op_sample& sample : op.samples) {
-            if ((sample.time_code <= time_code) && ((before == nullptr) || (sample.time_code > before->time_code))) {
-                before = &sample;
-            }
-            if ((sample.time_code >= time_code) && ((after == nullptr) || (sample.time_code < after->time_code))) {
-                after = &sample;
-            }
-        }
-        if (before == nullptr) {
-            return after->value;
-        }
-        if ((after == nullptr) || (after == before) || (after->time_code <= before->time_code)) {
-            return before->value;
-        }
-        const double t = (time_code - before->time_code) / (after->time_code - before->time_code);
-        if (std::holds_alternative<glm::dvec3>(before->value) && std::holds_alternative<glm::dvec3>(after->value)) {
-            return glm::mix(std::get<glm::dvec3>(before->value), std::get<glm::dvec3>(after->value), t);
-        }
-        if (std::holds_alternative<double>(before->value) && std::holds_alternative<double>(after->value)) {
-            return std::get<double>(before->value) + (std::get<double>(after->value) - std::get<double>(before->value)) * t;
-        }
-        if (std::holds_alternative<glm::dquat>(before->value) && std::holds_alternative<glm::dquat>(after->value)) {
-            return glm::slerp(std::get<glm::dquat>(before->value), std::get<glm::dquat>(after->value), t);
-        }
-        return before->value;
-    }
-
-    // The rotation one sample of a rotate / orient op holds, as a quaternion.
-    [[nodiscard]] static auto get_sample_rotation(
-        const erhe::scene::Xform_op&        op,
-        const erhe::scene::Xform_op_sample& sample
-    ) -> glm::dquat
-    {
-        if (op.type == erhe::scene::Xform_op_type::orient) {
-            return std::get<glm::dquat>(sample.value);
-        }
-        erhe::scene::Xform_op sample_op{};
-        sample_op.type  = op.type;
-        sample_op.value = sample.value;
-        return glm::quat_cast(glm::dmat3{sample_op.to_matrix()});
-    }
 
     // The file's time-sampled xformOps as one Animation
     // (src/erhe/usd/notes.md, "Time samples"). One channel per sampled op of
@@ -1135,7 +1019,7 @@ private:
         erhe::scene::Xform_op_stack posed = stack;
         for (const double time_code : time_codes) {
             for (std::size_t i = 0; i < stack.ops.size(); ++i) {
-                posed.ops[i].value = get_op_value_at(stack.ops[i], time_code);
+                posed.ops[i].value = get_xform_op_value_at(stack.ops[i], time_code);
             }
             const glm::mat4 matrix = glm::mat4{posed.compose()};
             glm::vec3 scale      {1.0f};
@@ -1192,7 +1076,7 @@ private:
             if ((stack == nullptr) || !stack->has_time_samples()) {
                 continue;
             }
-            const std::string refusal = get_animation_refusal(*stack);
+            const std::string refusal = get_xform_op_stack_animation_refusal(*stack);
             if (!refusal.empty()) {
                 bake_stack_animation(node, *stack, time_codes_per_second, refusal, animation);
                 continue;
@@ -1216,7 +1100,7 @@ private:
                 for (const erhe::scene::Xform_op_sample& sample : op.samples) {
                     timestamps.push_back(static_cast<float>(sample.time_code / time_codes_per_second));
                     if (path == erhe::scene::Animation_path::ROTATION) {
-                        glm::dquat rotation = get_sample_rotation(op, sample);
+                        glm::dquat rotation = get_xform_op_sample_rotation(op, sample);
                         // Keep the sampled quaternions on one hemisphere: a
                         // sign flip between two Euler samples would otherwise
                         // make the interpolation take the long way round.
@@ -6461,6 +6345,123 @@ private:
 };
 
 } // anonymous namespace
+
+// Which erhe animation path an op drives, and in which order the three
+// may appear: erhe applies a channel by writing the component into the
+// node's TRS, so a stack the animation can drive is one whose composition
+// IS that TRS - at most one translate, one rotate and one scale op, in
+// that order, none inverted and none suffixed.
+[[nodiscard]] auto get_xform_op_animation_path(
+    const erhe::scene::Xform_op_type   type,
+    erhe::scene::Animation_path&       out_path
+) -> bool
+{
+    using Op   = erhe::scene::Xform_op_type;
+    using Path = erhe::scene::Animation_path;
+    switch (type) {
+        case Op::translate:  out_path = Path::TRANSLATION; return true;
+        case Op::scale:      out_path = Path::SCALE;       return true;
+        case Op::rotate_x:
+        case Op::rotate_y:
+        case Op::rotate_z:
+        case Op::rotate_xyz:
+        case Op::rotate_xzy:
+        case Op::rotate_yxz:
+        case Op::rotate_yzx:
+        case Op::rotate_zxy:
+        case Op::rotate_zyx:
+        case Op::orient:     out_path = Path::ROTATION;    return true;
+        default:                                           return false;
+    }
+}
+
+// Why the stack's time samples cannot become animation channels, or an
+// empty string when they can.
+[[nodiscard]] auto get_xform_op_stack_animation_refusal(const erhe::scene::Xform_op_stack& stack) -> std::string
+{
+    using Path = erhe::scene::Animation_path;
+    int  previous_order{-1};
+    bool has_translation{false};
+    bool has_rotation   {false};
+    bool has_scale      {false};
+    for (const erhe::scene::Xform_op& op : stack.ops) {
+        if (op.inverted) {
+            return "the stack inverts an op";
+        }
+        if (!op.suffix.empty()) {
+            return "the stack has a suffixed op (a pivot pair)";
+        }
+        erhe::scene::Animation_path path{Path::INVALID};
+        if (!get_xform_op_animation_path(op.type, path)) {
+            return "the stack has a matrix op";
+        }
+        const int order = (path == Path::TRANSLATION) ? 0 : (path == Path::ROTATION) ? 1 : 2;
+        if (order < previous_order) {
+            return "the ops are not in translate, rotate, scale order";
+        }
+        previous_order = order;
+        bool& seen = (path == Path::TRANSLATION) ? has_translation : (path == Path::ROTATION) ? has_rotation : has_scale;
+        if (seen) {
+            return "the stack has more than one op of the same kind";
+        }
+        seen = true;
+    }
+    return std::string{};
+}
+
+// The value an op has at one time code: its sample there, the linear
+// interpolation of the two samples around it (a quaternion slerps), the
+// first or last sample outside the sampled range - USD's time sample
+// semantics for a floating-point attribute. A matrix op holds its earlier
+// sample: two matrices do not interpolate componentwise into a transform.
+[[nodiscard]] auto get_xform_op_value_at(const erhe::scene::Xform_op& op, const double time_code) -> erhe::scene::Xform_op_value
+{
+    if (op.samples.empty()) {
+        return op.value;
+    }
+    const erhe::scene::Xform_op_sample* before = nullptr;
+    const erhe::scene::Xform_op_sample* after  = nullptr;
+    for (const erhe::scene::Xform_op_sample& sample : op.samples) {
+        if ((sample.time_code <= time_code) && ((before == nullptr) || (sample.time_code > before->time_code))) {
+            before = &sample;
+        }
+        if ((sample.time_code >= time_code) && ((after == nullptr) || (sample.time_code < after->time_code))) {
+            after = &sample;
+        }
+    }
+    if (before == nullptr) {
+        return after->value;
+    }
+    if ((after == nullptr) || (after == before) || (after->time_code <= before->time_code)) {
+        return before->value;
+    }
+    const double t = (time_code - before->time_code) / (after->time_code - before->time_code);
+    if (std::holds_alternative<glm::dvec3>(before->value) && std::holds_alternative<glm::dvec3>(after->value)) {
+        return glm::mix(std::get<glm::dvec3>(before->value), std::get<glm::dvec3>(after->value), t);
+    }
+    if (std::holds_alternative<double>(before->value) && std::holds_alternative<double>(after->value)) {
+        return std::get<double>(before->value) + (std::get<double>(after->value) - std::get<double>(before->value)) * t;
+    }
+    if (std::holds_alternative<glm::dquat>(before->value) && std::holds_alternative<glm::dquat>(after->value)) {
+        return glm::slerp(std::get<glm::dquat>(before->value), std::get<glm::dquat>(after->value), t);
+    }
+    return before->value;
+}
+
+// The rotation one sample of a rotate / orient op holds, as a quaternion.
+[[nodiscard]] auto get_xform_op_sample_rotation(
+    const erhe::scene::Xform_op&        op,
+    const erhe::scene::Xform_op_sample& sample
+) -> glm::dquat
+{
+    if (op.type == erhe::scene::Xform_op_type::orient) {
+        return std::get<glm::dquat>(sample.value);
+    }
+    erhe::scene::Xform_op sample_op{};
+    sample_op.type  = op.type;
+    sample_op.value = sample.value;
+    return glm::quat_cast(glm::dmat3{sample_op.to_matrix()});
+}
 
 auto convert_stage(const Stage& stage, const Usd_load_arguments& arguments) -> Usd_load_result
 {
