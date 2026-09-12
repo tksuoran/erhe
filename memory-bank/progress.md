@@ -209,7 +209,8 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-C{Content_library::get_scope-split=get_existing_scope+make_kind_scope{registered-before-placed;detached};make_library_insert_operation=single-resource-insert-builder{14-sites};Kind_scope_operation-prepended-when-scope-not-standing{execute=no-op-if-placed;undo=remove-only-while-childless};Content_library_folders_operation-same-rule;smoke-test-55/55{+3-kind-scope-checks};LEFT:gltf_extensions_import-legacy-folder_path-brush-read-non-undoable-get_scope}
   P1-RESIDUE-DONE-2026-09-12{section-6-left=glTF-physicsJoints[].limits-re-import-parse-failure}
 
-[TASK::time-samples-beyond-the-transform]{IN-PROGRESS-2026-09-12;via-harness;3-commits-planned}
+[TASK::time-samples-beyond-the-transform]{DONE-2026-09-12;via-harness;3-commits}
 ✓commit-1{609628bf6:erhe::scene-Animation_channel-names-Dependency_property+Item_base-target;Animation_path=classification;WEIGHTS-gone;scene-tests-131->135;usd-344-green;headless-playback-verified}
 ✓commit-2{89083b431:USD-reader/writer-time-samples-on-light/material/visibility-attributes;attribute_samples.usda;usd-tests-344->351;headless-seek-0.5s-verified;usdchecker-Success}
-?commit-3{Ts-splines-as-cubic-samplers}
+✓commit-3{fbd21f60c:Ts-splines-on-intensity/roughness/metallic/opacity<->CUBICSPLINE;hermite-write-back;attribute_splines.usda;usd-tests-351->358;headless+usdchecker-verified}
+  plan-section-2-statement+section-6-entry-dropped;prompt_queue.txt-deleted|?user-interactive

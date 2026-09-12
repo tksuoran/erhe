@@ -582,8 +582,27 @@ now owns its behavior; `git log` on that record has the history.
   time-samples fixture, saves and reloads each, and asserts the unedited
   save is byte-identical and an edit made while the clip plays saves as an
   edit.
+- Time samples beyond the transform. An `erhe::scene::Animation_channel`
+  names the property it drives (`src/erhe/scene/notes.md`, "Animation
+  playback"), so the per-file animation carries a closed list of
+  non-`xformOp` attributes as channels of the same clip: a UsdLux light's
+  `inputs:intensity` and `inputs:color`, a `UsdPreviewSurface`'s
+  `inputs:diffuseColor`, `inputs:roughness`, `inputs:metallic` and
+  `inputs:opacity`, and any prim's `visibility` (the time-sample rows of
+  the mapping; `src/erhe/usd/notes.md`, "Time samples"). The samples are
+  read raw off the composed layer's prim spec and a save writes them from
+  the clip's keys alone, so the second save of `attribute_samples.usda`
+  is byte for byte the first. A `Ts` spline on one of the four scalar
+  attributes of that list reads as a cubic sampler (knot slopes per time
+  code become erhe's tangents per second; all-held and all-linear knots
+  make a STEP or LINEAR sampler) and a cubic channel writes back as a
+  hermite spline (`attribute_splines.usda`); a spline anywhere else is one
+  warning per prim. `erhe_usd_tests` covers the keys, the pose, the
+  playback, the save, the fixed point and an edited key of both fixtures,
+  and cross-checks the tangent conversion against LightUSD's own spline
+  evaluator.
 
-Verification of all of the above: `erhe_usd_tests` (334 cases, built in
+Verification of all of the above: `erhe_usd_tests` (358 cases, built in
 `build_vs2026_vulkan` since `ERHE_BUILD_TESTS=ON` is passed by the main
 configure wrapper), the `usd-roundtrip` section of
 `scripts/scene_roundtrip_verify.py` (`doc/scene_serialization.md`,
@@ -597,50 +616,46 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The animated value layer and the write-back of an edited transform clip
-   hold; they are in section 2. What is left of the item is section 6
-   "Time samples beyond the transform", which ranks with the shading work
-   of item 6.
-2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+1. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
    usdchecker"). Four defects in one dependency, each already diagnosed to
    the function; a fork branch carrying them removes a stripping pass, a
    quoting workaround, 2816 skipped instances and a validator finding.
-3. Load performance (section 6 "Load performance"). The scenes holding
+2. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-4. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+3. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-5. The round-trip residue (section 6 "Node-held secondary values",
+4. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
    of usdchecker", and the glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
-6. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
+5. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
    input fed by a UsdPrimvarReader", "A material slot that a texture
    graph feeds AND that carries an authored factor", "Image formats",
    "An environment map from a DomeLight texture", "MaterialX"). The
    PrimvarReader case and the slot factor are importer work; the rest
    need a renderer or decoder erhe does not have, MaterialX documents a
    LightUSD option erhe's build leaves off.
-7. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+6. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-8. Composition beyond what erhe resolves (section 6 "Layer-stack
+7. Composition beyond what erhe resolves (section 6 "Layer-stack
    editing", "inherits and specializes arcs whose target is not a class
    prim", "Variant opinions a variant set does not carry", "Overrides on
    applied API schemas inside an instance"). Each is a real USD feature
    with no surveyed asset that visibly depends on it - the one exception,
    the variant set the Teapot's variant blocks declare, selects among
-   materials the PrimvarReader item of item 6 fails first - so they wait
+   materials the PrimvarReader item of item 5 fails first - so they wait
    for a file that does.
 
 ## 4. Order
 
-Item 2 of section 3 goes with a fork tag bump and is best taken when a
+Item 1 of section 3 goes with a fork tag bump and is best taken when a
 fork clone is at hand (`memory-bank/local/context.md` records it). The
 remaining items have no ordering constraint among them; each is taken
 through the harness of `doc/agent-orchestration-harness.md`, one commit
@@ -685,14 +700,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     while the same file with the limits stripped parses (bisected on the
     written file; colliders and motions are fine). glTF-side; the limit
     spelling the export uses is the suspect.
-- Time samples beyond the transform: a time-sampled `xformOp:*` attribute
-  is carried, played and written back (`src/erhe/usd/notes.md`, "Time
-  samples") and `SkelAnimation` joint channels are K1, which leaves time
-  samples on any other attribute - a material input, a light intensity, a
-  visibility - and `Ts` splines re-encoded as cubic samplers. An
-  `erhe::scene::Animation_channel` already names the property it drives
-  (`src/erhe/scene/notes.md`, "Animation playback"), so the reader and the
-  writer are what is left.
 - Two LightUSD limits worked around downstream (`src/erhe/usd/notes.md`,
   "Node graphs"): Tydra fails a material whose input connects to a
   `NodeGraph`, so `load_stage` strips that wiring from the copy Tydra sees;
