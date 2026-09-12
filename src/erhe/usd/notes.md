@@ -196,9 +196,9 @@ translation units.
   header (`image_header.hpp`: sRGB when 8-bit with 3 or 4 components, data
   otherwise; PNG, JPEG, BMP and TGA headers are read, any other file is
   data).
-- Values are read at the stage's default time code, and `UsdPhysics` prims
-  and API schemas are counted and reported in one log line rather than
-  imported (`doc/usd-compatibility-plan.md` section 5).
+- Values are read at the stage's default time code, and the `UsdPhysics`
+  prims and API schemas become the file's physics description ("Physics"
+  below).
 - A local value is an authored value (`doc/property-system.md` D32). Tydra
   reports a schema fallback the same way it reports an authored opinion, so
   the conversion asks the composed prim instead: LightUSD's typed attribute
@@ -1037,6 +1037,84 @@ A `UsdSkel` `SkelAnimation` contributes its joint channels to this same
 animation ("Skinning" above). Not carried: time samples on any attribute other
 than an `xformOp` or a `SkelAnimation` array, and `Ts` splines.
 
+### Physics
+
+`usd_import_physics.cpp` reads the `UsdPhysics` prims and API schemas of the
+composed stage into `Usd_data::physics`, the format-neutral
+`erhe::scene::Physics_description` the glTF reader fills too, and into
+`Usd_data::physics_prims` beside it, which says where each record sits on the
+stage and carries the values the neutral record has no field for. The mapping
+is the "Physics" table of `doc/usd_compatibility.md`; the rules the read
+follows are:
+
+- A prim carrying `PhysicsRigidBodyAPI` is a body, and a prim carrying
+  `PhysicsCollisionAPI` is a collider; each becomes one
+  `Physics_node_description` naming the prim of the erhe tree it sits on, and
+  a prim that is both gets one entry holding both. `physics:rigidBodyEnabled
+  = false` and a collider with no body prim above it are static bodies, which
+  is an entry with a collider and no motion. Nothing folds here: the entries
+  say where the values are, and the physics import folds each body's
+  colliders into its compound by scene-graph ancestry, the same code the glTF
+  import uses.
+- A collider prim of a primitive schema (`Cube`, `Sphere`, `Capsule`,
+  `Capsule_1`, `Cylinder`, `Cylinder_1`) is an implicit shape appended to
+  `Physics_description::shapes`, with the schema's own dimensions and the
+  `erhe:Physics_shape:radius_bottom` / `radius_top` of a tapered one. The
+  shapes are Y-aligned and origin-centered on both sides, so only the
+  dimensions travel and a prim aligned along another axis is one warning. A
+  collider prim of any other type - a `Cone` among them - is one warning and
+  no collider. A collider prim whose `purpose` is `guide` carries the shape
+  and nothing else, so it is listed in
+  `Usd_physics::guide_collider_prims` for the caller to take out of the tree
+  once the bodies are built; `erhe::usd` removes no prim itself.
+- A `Mesh` collider prim names the mesh its prim became, and
+  `PhysicsMeshCollisionAPI` `physics:approximation` says whether it is a
+  convex hull: `none` is the triangle mesh, `convexHull` the hull, and every
+  other approximation is one warning and the hull.
+- The physics material of a collider is the `Material` prim its own
+  `material:binding:physics` names, else the one an ancestor up to and
+  including its body prim binds. The collision filter of a collider is the
+  `PhysicsCollisionGroup` whose `collection:colliders:includes` names it or
+  names its body prim.
+- Angles are degrees in UsdPhysics and radians in erhe: a rotational limit,
+  a spherical joint's cone angles, an angular drive's targets and a body's
+  `physics:angularVelocity` are converted. A drive's `stiffness` and
+  `damping` are per unit of the axis on both sides and travel as they are.
+- A prim applying `PhysicsLimitAPI:<axis>` or `PhysicsDriveAPI:<axis>` and
+  carrying no joint type is a joint-settings item, one
+  `Physics_joint_description` the joints naming it through
+  `rel erhe:Node_joint:joint_settings` share. Instances of identical value
+  join back into one erhe limit, the inverse of the writer's one instance per
+  axis. A joint prim that names no settings prim gets a settings record of
+  its own, from the instances it applies itself and from what its class
+  states: `PhysicsRevoluteJoint` and `PhysicsPrismaticJoint` are one limit on
+  `physics:axis`, `PhysicsFixedJoint` one limit at zero over all six axes,
+  `PhysicsSphericalJoint` the two cone angles on the two axes beside
+  `physics:axis`, and `PhysicsDistanceJoint` one linear limit over all three.
+- A joint prim's `physics:body0` (its holding prim when it names none) is the
+  prim the `Node_joint` sits on and `physics:body1` is the connected prim.
+  erhe's six-dof joint has no frames of its own - the joint frame is each
+  prim's own frame - so a joint authoring `localPos` / `localRot` of its own
+  is one warning naming it.
+- The `PhysicsScene` prim gives `Usd_physics::scene` the gravity it authors.
+  USD's fallbacks stand for what it leaves unauthored (a direction of
+  `(0, 0, 0)` is the stage's negative up axis, a magnitude of `-inf` is earth
+  gravity), so each is reported only when the file authors it.
+- Every `erhe:<Owner>:<name>` custom attribute of a physics prim that the
+  neutral record has no field for becomes a `Usd_physics_property` of that
+  record: the qualified erhe property name and the value as property text,
+  for the caller to set through `erhe::property::parse_value`. A material's
+  `physics:density` travels the same way.
+
+LightUSD's prim reconstruction keeps an applied API schema's attributes on
+the composed prim and drops its relationships, so every relationship of the
+mapping is read off the composed layer's prim spec, which carries what the
+file spells; the attributes a concrete schema declares (a joint's frames, a
+revolute joint's limits, the scene's gravity, a group's `filteredGroups`)
+are read from the typed prim struct, and the rest from the prim's generic
+property map.
+
+
 ## Export
 
 `usd_export.cpp` writes one `.usda` layer through LightUSD's `SaveAsUSDA`.
@@ -1456,6 +1534,19 @@ the unauthored prim has none, that a save writes exactly the two attributes
 and no `erhe:Gprim:double_sided`, that the values survive a reload, and that
 a second save is byte-identical.
 
+`test/data/physics.usda` covers the `UsdPhysics` read: a `PhysicsScene`, a
+dynamic body with a `guide` `Cube` collider bound to a physics `Material`, a
+kinematic body with a `Sphere` collider, a static `Mesh` collider, a dynamic
+body with a `convexHull` `Mesh` collider, a body carrying the erhe-only
+`gravity_factor` and `is_trigger` with a tapered `Capsule` collider, two
+`PhysicsCollisionGroup` prims (one stating its lists the USD way and one the
+erhe way), a joint-settings prim applying two limit instances of equal value
+and one drive instance, and three joints: one naming those settings, a
+`PhysicsRevoluteJoint` and a `PhysicsFixedJoint`. `test_usd_physics.cpp`
+asserts the shapes and their dimensions, the motion values and their unit
+conversions, the material and filter each collider resolves to, the guide
+prim list, the joined limits and the drive, and the joint each body carries.
+
 `test/data/looks.usda` covers where materials sit: two `Scope`s below one
 `Xform` holding three materials, two of them named alike, each bound by a
 mesh of its own. `test_usd_materials.cpp` asserts that the material prims
@@ -1602,8 +1693,8 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   `customLayerData` (doc/scene_serialization.md, USD-backed scenes), the
   materials travel as the prims they are, the folder tree travels as the
   `Scope` prims it is (E4d), and the brushes, styles and node graphs travel
-  as prims of their own. The physics materials, collision filters and joint
-  settings have no USD form yet (C1). The writer also emits no `.usdc` or
+  as prims of their own. The writer emits no `UsdPhysics` content yet, though
+  the reader reads it ("Physics" above). The writer also emits no `.usdc` or
   `.usdz`, and no `.mtlx` document (the inline OpenPBR network it writes for
   an anisotropic or transmissive material is not one).
 - A node-held secondary value (D30, `Light.color` on a plain Xform) is written

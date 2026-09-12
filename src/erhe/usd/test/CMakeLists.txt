@@ -26,6 +26,7 @@ add_executable(${_target}
     test_usd_node_graphs.cpp
     test_usd_open_pbr.cpp
     test_usd_primitives.cpp
+    test_usd_physics.cpp
     test_usd_point_instancers.cpp
     test_usd_prims.cpp
     test_usd_references.cpp

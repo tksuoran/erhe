@@ -523,47 +523,6 @@ template <typename T>
     return std::nullopt;
 }
 
-// A USDA literal rewritten in erhe's property text form (D16): a tuple or
-// array becomes space-separated components, a quoted token or string loses
-// its quotes. `(1, 0.5, 0)` becomes `1 0.5 0`, `"guide"` becomes `guide`,
-// `5000` stays `5000`. A string value that carries a comma or a bracket of
-// its own is not representable this way and is left to fail parsing.
-[[nodiscard]] auto usd_literal_to_property_text(const std::string& literal) -> std::string
-{
-    std::string text;
-    text.reserve(literal.size());
-    bool pending_space = false;
-    for (const char character : literal) {
-        switch (character) {
-            case '(':
-            case ')':
-            case '[':
-            case ']':
-            case '"':
-            case '\'': {
-                break;
-            }
-            case ',':
-            case ' ':
-            case '\t':
-            case '\n':
-            case '\r': {
-                pending_space = !text.empty();
-                break;
-            }
-            default: {
-                if (pending_space) {
-                    text.push_back(' ');
-                    pending_space = false;
-                }
-                text.push_back(character);
-                break;
-            }
-        }
-    }
-    return text;
-}
-
 // The USD `purpose` vocabulary, which erhe's Purpose enumeration mirrors
 // token for token (doc/usd_compatibility.md, property system).
 [[nodiscard]] auto to_erhe_purpose(const lightusd::Purpose purpose) -> erhe::Purpose
@@ -706,7 +665,6 @@ public:
         m_impl = &impl;
         const lightusd::Stage& stage = impl.stage;
 
-        report_skipped_physics(stage);
         read_time_codes(stage);
 
         lightusd::tydra::RenderSceneConverterEnv env{stage};
@@ -784,6 +742,7 @@ public:
         elide_default_local_values();
         apply_authored_opinions();
         build_animation();
+        read_physics();
 
         log_usd->info(
             "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights, {} classes",
@@ -1330,57 +1289,33 @@ private:
         }
     }
 
-    // UsdPhysics is future work (doc/usd-compatibility-plan.md section 5).
-    // Say so once per file rather than silently dropping the schemas.
-    void report_skipped_physics(const lightusd::Stage& stage)
+    // The UsdPhysics content of the stage, in the format-neutral record
+    // (usd_import_physics.cpp). It runs last: a body names the prim it sits
+    // on and a mesh collider the mesh its prim became, so every prim of the
+    // tree has to exist first.
+    void read_physics()
     {
-        std::size_t physics_prim_count = 0;
-        for (const lightusd::Prim& prim : stage.root_prims()) {
-            count_physics_prims(prim, physics_prim_count);
+        if (m_stage == nullptr) {
+            return;
         }
-        if (physics_prim_count > 0) {
-            log_usd->info(
-                "USD '{}': {} prim(s) carry UsdPhysics schemas - physics is not imported",
-                m_arguments.path.generic_string(),
-                physics_prim_count
-            );
+        std::map<std::string, std::shared_ptr<erhe::scene::Mesh>> meshes_by_path;
+        for (const std::pair<const std::string, Mesh_prim>& entry : m_mesh_by_path) {
+            meshes_by_path.emplace(entry.first, entry.second.mesh);
         }
-    }
-
-    void count_physics_prims(const lightusd::Prim& prim, std::size_t& count)
-    {
-        const std::string& type_name = prim.type_name();
-        if (type_name.rfind("Physics", 0) == 0) {
-            ++count;
-        } else if (prim.metas().has_apiSchemas()) {
-            const lightusd::APISchemas api_schemas = prim.metas().get_apiSchemas();
-            for (const std::pair<lightusd::APISchemas::APIName, std::string>& entry : api_schemas.names) {
-                if (is_physics_api_schema(entry.first)) {
-                    ++count;
-                    break;
-                }
+        const Usd_physics_read_arguments arguments{
+            .stage          = *m_stage,
+            .layer          = has_layer() ? &m_impl->layer : nullptr,
+            .nodes_by_path  = m_node_by_path,
+            .meshes_by_path = meshes_by_path,
+            .file_name      = m_arguments.path.generic_string()
+        };
+        std::vector<std::string> warnings;
+        read_usd_physics(arguments, m_result.data, warnings);
+        for (const std::string& warning : warnings) {
+            if (!m_result.warning.empty()) {
+                m_result.warning += "\n";
             }
-        }
-        for (const lightusd::Prim& child : prim.children()) {
-            count_physics_prims(child, count);
-        }
-    }
-
-    [[nodiscard]] static auto is_physics_api_schema(const lightusd::APISchemas::APIName name) -> bool
-    {
-        switch (name) {
-            case lightusd::APISchemas::APIName::PhysicsRigidBodyAPI:
-            case lightusd::APISchemas::APIName::PhysicsCollisionAPI:
-            case lightusd::APISchemas::APIName::PhysicsMaterialAPI:
-            case lightusd::APISchemas::APIName::PhysicsMeshCollisionAPI:
-            case lightusd::APISchemas::APIName::PhysicsMassAPI:
-            case lightusd::APISchemas::APIName::PhysicsFilteredPairsAPI:
-            case lightusd::APISchemas::APIName::PhysicsArticulationRootAPI:
-            case lightusd::APISchemas::APIName::PhysicsDriveAPI:
-            case lightusd::APISchemas::APIName::PhysicsLimitAPI:
-                return true;
-            default:
-                return false;
+            m_result.warning += warning;
         }
     }
 
@@ -4303,6 +4238,7 @@ private:
         node->update_world_from_node();
         node->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
         m_result.data.nodes.push_back(node);
+        m_node_by_path.emplace(usd_node.abs_path, node);
 
         // The prim's own opinions: `visibility` and `purpose` on the node
         // that holds its place in the scene graph, and every `erhe:` custom
@@ -6477,6 +6413,10 @@ private:
     // The mesh each `Mesh` prim of the stage became, by the prim's absolute
     // path: what a variant binding resolves against.
     std::map<std::string, Mesh_prim>               m_mesh_by_path;
+    // The prim of the erhe tree every converted prim of the stage became, by
+    // the prim's absolute path: what a physics record names its body,
+    // collider and joint prims by (read_physics).
+    std::map<std::string, std::shared_ptr<erhe::scene::Node>> m_node_by_path;
     // The `Skeleton` prims Tydra converted, by stage path, and the prims the
     // conversion made for each of them: the prim the `Skeleton` became and
     // one prim per joint, in the skeleton's `joints` order

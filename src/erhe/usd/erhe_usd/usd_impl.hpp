@@ -5,9 +5,12 @@
 
 #include "erhe_usd/usd.hpp"
 
+#include "layer.hh"
 #include "stage.hh"
 
 #include <filesystem>
+#include <map>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -68,6 +71,44 @@ constexpr std::string_view c_point_instancer_prim_type_name {"PointInstancer"};
 // token and the writer spells it, so both name it from here.
 constexpr std::string_view c_skeleton_prim_type_name {"Skeleton"};
 
+// How physics travels in a USD file (doc/usd_compatibility.md, "Physics").
+// The schema tokens the reader dispatches on and the writer spells, the
+// namespaces of the multi-apply limit and drive instances, and the erhe-only
+// attributes and relationships of the mapping. The reader and the writer both
+// name them from here.
+constexpr std::string_view c_physics_scene_prim_type_name           {"PhysicsScene"};
+constexpr std::string_view c_physics_joint_prim_type_name           {"PhysicsJoint"};
+constexpr std::string_view c_physics_revolute_joint_prim_type_name  {"PhysicsRevoluteJoint"};
+constexpr std::string_view c_physics_prismatic_joint_prim_type_name {"PhysicsPrismaticJoint"};
+constexpr std::string_view c_physics_spherical_joint_prim_type_name {"PhysicsSphericalJoint"};
+constexpr std::string_view c_physics_fixed_joint_prim_type_name     {"PhysicsFixedJoint"};
+constexpr std::string_view c_physics_distance_joint_prim_type_name  {"PhysicsDistanceJoint"};
+constexpr std::string_view c_physics_collision_group_prim_type_name {"PhysicsCollisionGroup"};
+// The name the writer gives the child prim holding a body's implicit shape.
+constexpr std::string_view c_physics_collider_prim_name             {"collider"};
+// The multi-apply instances of a joint: `physics:limit:<axis>:low` and
+// `physics:drive:<axis>:targetPosition` are the full attribute spellings the
+// `limit` / `drive` property namespace prefixes of the schema produce.
+constexpr std::string_view c_physics_limit_prefix                   {"physics:limit:"};
+constexpr std::string_view c_physics_drive_prefix                   {"physics:drive:"};
+// The physics-purpose material binding of a body or collider prim.
+constexpr std::string_view c_physics_material_binding               {"material:binding:physics"};
+// The collection of body prims a `PhysicsCollisionGroup` prim filters.
+constexpr std::string_view c_physics_colliders_includes             {"collection:colliders:includes"};
+// The erhe-only values of the mapping. The two tapered-shape radii and the
+// soft-limit spring of one axis have no UsdPhysics attribute, and the exact
+// collision-system lists of a filter are more than `filteredGroups` says.
+constexpr std::string_view c_physics_shape_radius_bottom_attribute  {"erhe:Physics_shape:radius_bottom"};
+constexpr std::string_view c_physics_shape_radius_top_attribute     {"erhe:Physics_shape:radius_top"};
+constexpr std::string_view c_physics_limit_erhe_prefix              {"erhe:limit:"};
+constexpr std::string_view c_physics_limit_stiffness_suffix         {":stiffness"};
+constexpr std::string_view c_physics_limit_damping_suffix           {":damping"};
+constexpr std::string_view c_collision_filter_systems_attribute     {"erhe:Collision_filter:collision_systems"};
+constexpr std::string_view c_collision_filter_collide_attribute     {"erhe:Collision_filter:collide_with_systems"};
+constexpr std::string_view c_collision_filter_not_collide_attribute {"erhe:Collision_filter:not_collide_with_systems"};
+constexpr std::string_view c_node_physics_gravity_factor_attribute  {"erhe:Node_physics:gravity_factor"};
+constexpr std::string_view c_node_joint_settings_relationship       {"erhe:Node_joint:joint_settings"};
+
 // One prim a variant block authors as a `def` child and the loader hoisted
 // out of it, into the tree below the prim carrying the set
 // (doc/usd-compatibility-plan.md X4). USD builds such a prim when its variant
@@ -108,5 +149,38 @@ public:
     // `stage` since load_stage hoisted them there.
     std::vector<Variant_prim_record> variant_prims;
 };
+
+// A USDA literal rewritten in erhe's property text form (D16), defined by
+// usd_import_physics.cpp and used by both import translation units.
+[[nodiscard]] auto usd_literal_to_property_text(const std::string& literal) -> std::string;
+
+// Everything read_usd_physics needs from the scene conversion that ran
+// before it: the stage, and the prims of the erhe tree the physics records
+// name, by stage path.
+class Usd_physics_read_arguments final
+{
+public:
+    const lightusd::Stage&                                           stage;
+    // The composed layer the stage was built from, null when load_stage kept
+    // none. LightUSD's prim reconstruction keeps an applied API schema's
+    // attributes on the prim and drops its relationships, so every
+    // relationship a physics record names is read off the layer's prim specs,
+    // which carry what the file spells.
+    const lightusd::Layer*                                           layer;
+    const std::map<std::string, std::shared_ptr<erhe::scene::Node>>& nodes_by_path;
+    const std::map<std::string, std::shared_ptr<erhe::scene::Mesh>>& meshes_by_path;
+    std::string                                                      file_name;
+};
+
+// Fill `data.physics` and `data.physics_prims` from the `UsdPhysics` content
+// of the stage (doc/usd_compatibility.md, "Physics", and
+// src/erhe/usd/notes.md, "Physics"). Every issue the read reports is
+// appended to `warnings` as one line, for the caller to put into
+// `Usd_load_result::warning`.
+void read_usd_physics(
+    const Usd_physics_read_arguments& arguments,
+    Usd_data&                         data,
+    std::vector<std::string>&         warnings
+);
 
 } // namespace erhe::usd

@@ -1,0 +1,186 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def PhysicsScene "PhysicsScene"
+    {
+        vector3f physics:gravityDirection = (0, -1, 0)
+        float physics:gravityMagnitude = 9.81
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Rubber" (
+            prepend apiSchemas = ["PhysicsMaterialAPI"]
+        )
+        {
+            float physics:staticFriction = 0.9
+            float physics:dynamicFriction = 0.8
+            float physics:restitution = 0.4
+            float physics:density = 1100
+            custom string erhe:Physics_material:friction_combine = "maximum"
+            custom string erhe:Physics_material:restitution_combine = "minimum"
+            custom float erhe:Physics_material:linear_damping = 0.25
+        }
+    }
+
+    def PhysicsCollisionGroup "Props"
+    {
+        rel collection:colliders:includes = [</World/Crate>, </World/Ball>]
+        rel physics:filteredGroups = [</World/Characters>]
+        bool physics:invertFilteredGroups = 0
+    }
+
+    def PhysicsCollisionGroup "Characters"
+    {
+        custom string[] erhe:Collision_filter:collision_systems = ["characters"]
+        custom string[] erhe:Collision_filter:collide_with_systems = ["props", "terrain"]
+    }
+
+    def Xform "Crate" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
+    )
+    {
+        double3 xformOp:translate = (0, 3, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        float physics:mass = 12
+        point3f physics:centerOfMass = (0, 0.25, 0)
+        vector3f physics:velocity = (1, 0, 0)
+        vector3f physics:angularVelocity = (0, 90, 0)
+        rel material:binding:physics = </World/Looks/Rubber>
+
+        def Cube "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 2
+            uniform token purpose = "guide"
+        }
+    }
+
+    def Xform "Ball" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (3, 3, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        bool physics:kinematicEnabled = 1
+
+        def Sphere "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double radius = 0.75
+            uniform token purpose = "guide"
+        }
+    }
+
+    def Mesh "Ground" (
+        prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+    )
+    {
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-4, 0, -4), (4, 0, -4), (4, 0, 4), (-4, 0, 4)]
+        uniform token subdivisionScheme = "none"
+        uniform token physics:approximation = "none"
+    }
+
+    def Xform "Rock" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (-3, 3, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Mesh "shell" (
+            prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMeshCollisionAPI"]
+        )
+        {
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+            uniform token subdivisionScheme = "none"
+            uniform token physics:approximation = "convexHull"
+        }
+    }
+
+    def Xform "Sensor" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (6, 1, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        custom float erhe:Node_physics:gravity_factor = 0.5
+        custom bool erhe:Node_physics:is_trigger = 1
+
+        def Capsule "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double height = 1.5
+            double radius = 0.5
+            uniform token axis = "Y"
+            uniform token purpose = "guide"
+            custom float erhe:Physics_shape:radius_bottom = 0.6
+            custom float erhe:Physics_shape:radius_top = 0.3
+        }
+    }
+
+    def Xform "Anchor"
+    {
+        double3 xformOp:translate = (0, 6, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Scope "Joints"
+    {
+        def "Hinge_settings" (
+            prepend apiSchemas = ["PhysicsLimitAPI:rotX", "PhysicsLimitAPI:rotY", "PhysicsDriveAPI:transZ"]
+        )
+        {
+            float physics:limit:rotX:low = -45
+            float physics:limit:rotX:high = 45
+            float physics:limit:rotY:low = -45
+            float physics:limit:rotY:high = 45
+            custom float erhe:limit:rotX:stiffness = 120
+            custom float erhe:limit:rotX:damping = 3
+            custom float erhe:limit:rotY:stiffness = 120
+            custom float erhe:limit:rotY:damping = 3
+            uniform token physics:drive:transZ:type = "acceleration"
+            float physics:drive:transZ:maxForce = 500
+            float physics:drive:transZ:targetPosition = 0.25
+            float physics:drive:transZ:targetVelocity = 1.5
+            float physics:drive:transZ:stiffness = 80
+            float physics:drive:transZ:damping = 4
+        }
+    }
+
+    def PhysicsJoint "Swing"
+    {
+        rel physics:body0 = </World/Crate>
+        rel physics:body1 = </World/Anchor>
+        bool physics:collisionEnabled = 1
+        custom rel erhe:Node_joint:joint_settings = </World/Joints/Hinge_settings>
+    }
+
+    def PhysicsRevoluteJoint "Door"
+    {
+        rel physics:body0 = </World/Ball>
+        rel physics:body1 = </World/Anchor>
+        uniform token physics:axis = "Y"
+        float physics:lowerLimit = -90
+        float physics:upperLimit = 90
+    }
+
+    def PhysicsFixedJoint "Weld"
+    {
+        rel physics:body0 = </World/Rock>
+        rel physics:body1 = </World/Anchor>
+    }
+}

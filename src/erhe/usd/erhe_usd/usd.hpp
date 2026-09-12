@@ -1,6 +1,7 @@
 #pragma once
 
 #include "erhe_scene/instance_override.hpp"
+#include "erhe_scene/physics_description.hpp"
 
 #include <glm/glm.hpp>
 
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -602,6 +604,71 @@ public:
     std::string texture_file;
 };
 
+// The `PhysicsScene` prim of a USD file (doc/usd_compatibility.md, "Physics"):
+// the gravity of the physics world the file describes. USD's own fallbacks
+// stand for the values the prim leaves unauthored - a direction of
+// `(0, 0, 0)` is the negative up axis of the stage and a magnitude of `-inf`
+// is earth gravity - so each is reported only when the file authors it and
+// the caller supplies its own value for the rest.
+class Usd_physics_scene final
+{
+public:
+    bool                     present{false};
+    std::string              stage_path;
+    std::optional<glm::vec3> gravity_direction;
+    std::optional<float>     gravity_magnitude;
+};
+
+// One erhe property a physics prim authors that
+// `erhe::scene::Physics_description` has no field for: the qualified erhe
+// property name (`Owner.name`) and the value as property text. The caller
+// sets it on the item it makes for the record
+// (`erhe::property::parse_value`). The `erhe:Owner:name` custom attributes of
+// the mapping arrive this way, and so do the schema attributes whose only
+// erhe home is a property (`physics:density` of a material).
+class Usd_physics_property final
+{
+public:
+    std::string name;
+    std::string value;
+};
+
+// Where one record of `erhe::scene::Physics_description` sits on the stage,
+// and the properties the record itself does not carry. One entry per record,
+// index for index with the list named in `Usd_physics`.
+class Usd_physics_record final
+{
+public:
+    std::string                       stage_path;
+    std::vector<Usd_physics_property> properties;
+};
+
+// The USD half of the physics content of a file: what
+// `erhe::scene::Physics_description` is not shaped to hold. The lists are
+// index for index with the lists of `Usd_data::physics`, so a caller that
+// makes an item per record knows the prim path to place it at and the
+// properties to set on it.
+class Usd_physics final
+{
+public:
+    Usd_physics_scene               scene;
+    // Index for index with `Physics_description::node_physics`.
+    std::vector<Usd_physics_record> bodies;
+    // Index for index with `Physics_description::materials`.
+    std::vector<Usd_physics_record> materials;
+    // Index for index with `Physics_description::collision_filters`.
+    std::vector<Usd_physics_record> collision_filters;
+    // Index for index with `Physics_description::joints`, which holds one
+    // joint-settings record per joint-settings prim and per joint prim that
+    // authors its limits and drives inline.
+    std::vector<Usd_physics_record> joint_settings;
+    // The prims that carry a body's implicit collision shape and nothing
+    // else: a `purpose = guide` primitive-schema prim below a body. Their
+    // shape folds into the body's compound, so the caller takes them out of
+    // the scene tree once it has built the bodies.
+    std::vector<std::shared_ptr<erhe::scene::Node>> guide_collider_prims;
+};
+
 // The stage's time coordinates (doc/usd-compatibility-plan.md section 5).
 // A time code becomes seconds by dividing by `time_codes_per_second`, whose
 // USD fallback is 24 when no layer of the stack authors one;
@@ -738,6 +805,15 @@ public:
     // (`color * intensity * 2^exposure`), black when the file authors none.
     glm::vec3 ambient_light{0.0f, 0.0f, 0.0f};
 
+    // The physics content of the file (doc/usd_compatibility.md, "Physics"),
+    // in the format-neutral record the glTF reader fills too: the bodies the
+    // `UsdPhysics` API schemas describe, the shapes their colliders name, the
+    // physics materials, the collision groups and the joints. `physics_prims`
+    // holds the USD half of the same content - where each record sits on the
+    // stage, and the properties the neutral record has no field for.
+    erhe::scene::Physics_description physics;
+    Usd_physics                      physics_prims;
+
     // The root layer's `customLayerData`, string entries only: what an erhe
     // save put there (the editor's scene state) and what another writer left
     // for a reader that understands it. Non-string entries are not reported.
@@ -779,8 +855,8 @@ public:
 
 // Load a USD file (through load_stage) and convert its composed stage into
 // erhe scene content: nodes and transforms, meshes, materials, image
-// references, cameras and lights. Values are read at the stage's default
-// time code; UsdPhysics API schemas are logged once per file and skipped.
+// references, cameras and lights, and the physics of `UsdPhysics` prims and
+// API schemas. Values are read at the stage's default time code.
 [[nodiscard]] auto load_usd(const Usd_load_arguments& arguments) -> Usd_load_result;
 
 // Convert an already loaded stage. load_usd() is this plus load_stage().
