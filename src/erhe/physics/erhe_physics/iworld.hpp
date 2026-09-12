@@ -47,6 +47,9 @@ public:
     [[nodiscard]] virtual auto get_constraint_count() const -> std::size_t               = 0;
     [[nodiscard]] virtual auto describe            () const -> std::vector<std::string>  = 0;
     virtual void update_fixed_step      (double dt)                                      = 0;
+    // A body at rest enters the world asleep, so loading a scene does not set
+    // it in motion; a body that already holds a non-zero linear or angular
+    // velocity is moving and enters the world active.
     virtual void add_rigid_body         (IRigid_body* rigid_body)                        = 0;
     virtual void remove_rigid_body      (IRigid_body* rigid_body)                        = 0;
     virtual void add_constraint         (IConstraint* constraint)                        = 0;

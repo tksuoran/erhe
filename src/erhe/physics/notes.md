@@ -65,6 +65,16 @@ a specific engine.
   motion mode. Use `teleport()` to snap a body to a newly authored pose (joint create/flip, editor
   move) so the simulation does not react with a corrective impulse or kinematic velocity injection.
 - Rigid body ownership is managed externally; the world does not own bodies.
+- Activation on entry to the world: a body at rest is added asleep, so opening a scene does not set
+  its contents in motion; a body that already holds a non-zero linear or angular velocity is moving
+  and is added active. Both cases are decided in `IWorld::add_rigid_body()` from the body's own
+  velocity, so a velocity taken from a create info, from a `set_linear_velocity()` call made before
+  the body joined the world, or from a body that left and re-entered the world is treated the same.
+  Jolt requires this: a sleeping non-static body holding a velocity trips `Body::ValidateMotion()`
+  in an asserts-enabled build, and a body added asleep is never integrated, so its velocity is
+  silently dropped. Assigning a non-zero velocity to a sleeping body that is already in the world
+  wakes it (Jolt's `BodyInterface` does this itself). The null backend never simulates and has no
+  activation state: its `is_active()` is always false.
 - The `IMotion_state` header appears to be an empty/placeholder file.
 - KHR_physics_rigid_bodies support status, design and known limitations are tracked in
   `doc/khr_physics_rigid_bodies_support.md`. Jolt-imposed limits: triangle mesh shapes are

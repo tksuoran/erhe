@@ -62,8 +62,8 @@ public:
     erhe::physics::Motion_mode        motion_mode      {Motion_mode::e_dynamic};
     glm::vec3                         position         {0.0f, 0.0f, 0.0f};
     glm::quat                         orientation      {1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3                         linear_velocity  {0.0f, 0.0f, 0.0f}; // world space, applied at creation
-    glm::vec3                         angular_velocity {0.0f, 0.0f, 0.0f}; // world space, applied at creation
+    glm::vec3                         linear_velocity  {0.0f, 0.0f, 0.0f}; // world space, applied at creation; a non-zero velocity makes the body enter the world active
+    glm::vec3                         angular_velocity {0.0f, 0.0f, 0.0f}; // world space, applied at creation; a non-zero velocity makes the body enter the world active
     float                             gravity_factor   {1.0f};
     bool                              is_sensor        {false};
     std::shared_ptr<Physics_material> physics_material {}; // shared material, the carrier of friction, restitution, damping, wind receptivity and density; none = the material defaults
@@ -107,6 +107,11 @@ public:
     virtual void apply_torque        (const glm::vec3& torque)                           = 0;
     virtual void apply_impulse       (const glm::vec3& impulse)                          = 0;
     virtual void apply_impulse_at    (const glm::vec3& impulse, const glm::vec3& point)  = 0;
+    // Velocity assignment, world space. A body that holds a non-zero velocity
+    // is moving, so setting one on a sleeping body in the world wakes it; a
+    // body that is not in the world yet is woken when it is added (see
+    // IWorld::add_rigid_body). Setting a zero velocity leaves the body's
+    // activation state alone - the simulation puts it back to sleep on its own.
     virtual void set_angular_velocity(const glm::vec3& velocity)                    = 0;
     virtual void set_damping         (float linear_damping, float angular_damping)  = 0;
     virtual void set_friction        (float friction)                               = 0;

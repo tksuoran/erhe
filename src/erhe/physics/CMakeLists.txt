@@ -92,3 +92,8 @@ target_link_libraries(
 )
 
 erhe_target_settings(${_target} "erhe")
+
+# The suite drives a simulation, so it needs a backend that simulates.
+if ((${ERHE_BUILD_TESTS} STREQUAL "ON") AND (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt"))
+    add_subdirectory(test)
+endif ()

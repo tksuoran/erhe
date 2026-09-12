@@ -12,6 +12,7 @@
 #include <Jolt/RegisterTypes.h>
 #include <Jolt/Core/Factory.h>
 #include <Jolt/Physics/Body/Body.h>
+#include <Jolt/Physics/Body/MotionProperties.h>
 #include <Jolt/Physics/StateRecorderImpl.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
@@ -535,6 +536,26 @@ auto Jolt_world::describe() const -> std::vector<std::string>
     return out;
 }
 
+namespace {
+
+// A non-static body with a non-zero linear or angular velocity is moving.
+// Static bodies have no motion properties and are never activated.
+[[nodiscard]] auto is_moving(const JPH::Body& body) -> bool
+{
+    if (body.IsStatic()) {
+        return false;
+    }
+    const JPH::MotionProperties* const motion_properties = body.GetMotionPropertiesUnchecked();
+    if (motion_properties == nullptr) {
+        return false;
+    }
+    return
+        !motion_properties->GetLinearVelocity ().IsNearZero() ||
+        !motion_properties->GetAngularVelocity().IsNearZero();
+}
+
+} // anonymous namespace
+
 void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
 {
     auto& body_interface  = m_physics_system.GetBodyInterface();
@@ -556,10 +577,16 @@ void Jolt_world::add_rigid_body(IRigid_body* rigid_body)
     } else
 #endif
     {
-        body_interface.AddBody(
-            jolt_body->GetID(),
-            JPH::EActivation::DontActivate
-        );
+        // A body that already carries a velocity is moving, so it enters the
+        // world active: Jolt forbids a sleeping non-static body from holding a
+        // non-zero velocity (Body::ValidateMotion()), and a body added asleep
+        // is never integrated, so an authored initial velocity would otherwise
+        // be silently dropped. A body at rest still enters the world asleep,
+        // which is what keeps scene loading quiet.
+        const JPH::EActivation activation = is_moving(*jolt_body)
+            ? JPH::EActivation::Activate
+            : JPH::EActivation::DontActivate;
+        body_interface.AddBody(jolt_body->GetID(), activation);
         m_rigid_bodies.push_back(jolt_rigid_body);
     }
 
