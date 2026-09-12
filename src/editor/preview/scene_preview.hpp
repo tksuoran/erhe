@@ -77,6 +77,15 @@ public:
     // ENQUEUES its reference, and applying it before the update is what makes
     // the set carry this thumbnail's material rather than the previous one's.
     void update_material_set    (erhe::graphics::Command_buffer& command_buffer);
+    // Applies the preview scene's queued material membership changes (the
+    // per-object lists the mesh material hooks enqueue) without touching the
+    // GPU copy. update_material_set() does this before its GPU update; a
+    // handler that unbinds a material outside a render (scene close, items
+    // removed) calls this so the set lets the material go right away - the
+    // preview scene is not among the scenes App_scenes flushes per frame,
+    // so nothing else applies the queue before the next render, which a
+    // preview rendered once (MCP assign_mesh_material) never gets.
+    void flush_material_membership();
 
     // Init-time prewarm. Drives Forward_renderer::prewarm_standard_variants
     // against this preview's own scene_root + content_library, so the

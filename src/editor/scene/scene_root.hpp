@@ -429,6 +429,7 @@ private:
 
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
+    void on_items_removed(const Removed_items& removed);
 
     // Live longest
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);

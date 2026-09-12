@@ -177,9 +177,13 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   the main loop serves requests); the cases wait for that 200 too and run
   one at a time; the stop test runs `mcp_server_tests --request-editor-exit`,
   which waits for a still-starting editor, calls that editor's `request_exit`
-  MCP tool and waits for it to go away. Every case prepares
-  its own scene over MCP (create_scene + textured glTF import + a material)
-  and closes it afterwards. Run `ctest -C Debug -R "Mcp_"` from the build
+  MCP tool and waits for it to go away. Every case begins with the
+  `reset_editor_state` MCP tool (selection, mesh component selection,
+  clipboard, undo/redo stacks, queued operations, shader-debug stack and thumbnail slots cleared, window visibility
+  back to the startup state, every scene closed - the call returns once the
+  scene list is empty) and then prepares its own scene over MCP
+  (create_scene + textured glTF import + a material); the last case's scene
+  is reset away at exit. Run `ctest -C Debug -R "Mcp_"` from the build
   directory; the windowed editor needs a live display (see "Windowed editor
   needs a live display" below). Visual Studio's Test Explorer runs the gtest
   binary directly (no ctest, no fixtures): there the binary launches the

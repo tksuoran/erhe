@@ -193,6 +193,12 @@ void Material_preview::on_items_removed(const Removed_items& removed)
     }
     if (m_mesh && !m_mesh->get_primitives().empty()) {
         m_mesh->set_primitive_material(0, {});
+        // The unbind only enqueued the sphere's new (empty) material list;
+        // apply it now, or the preview scene's Material_set keeps the
+        // material in its per-object list and slot record until the next
+        // render - which never comes for a preview rendered once (MCP
+        // assign_mesh_material), leaving the closed scene's material alive.
+        flush_material_membership();
     }
     m_last_material.reset();
 }
@@ -209,6 +215,12 @@ void Material_preview::on_close_scene(erhe::Item_host* const closing_host)
     }
     if (m_mesh && !m_mesh->get_primitives().empty()) {
         m_mesh->set_primitive_material(0, {});
+        // The unbind only enqueued the sphere's new (empty) material list;
+        // apply it now, or the preview scene's Material_set keeps the
+        // material in its per-object list and slot record until the next
+        // render - which never comes for a preview rendered once (MCP
+        // assign_mesh_material), leaving the closed scene's material alive.
+        flush_material_membership();
     }
     m_last_material.reset();
 }

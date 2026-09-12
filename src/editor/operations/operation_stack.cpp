@@ -297,6 +297,17 @@ void Operation_stack::clear_history()
     m_undone.clear();
 }
 
+auto Operation_stack::discard_queued() -> std::size_t
+{
+    verify_main_thread();
+    ERHE_VERIFY(!m_executing);
+    std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_thread_queue_mutex};
+    const std::size_t count = m_queued.size() + m_queued_from_threads.size();
+    m_queued.clear();
+    m_queued_from_threads.clear();
+    return count;
+}
+
 void Operation_stack::collect_item_references(std::unordered_set<const erhe::Item_base*>& out_items) const
 {
     verify_main_thread();

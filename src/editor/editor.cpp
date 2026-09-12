@@ -1741,7 +1741,7 @@ public:
             ERHE_TASK_HEADER(thumbnails_task)
             {
                 ERHE_GET_GL_CONTEXT
-                m_thumbnails = std::make_unique<Thumbnails>(m_editor_settings.thumbnails, *m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context);
+                m_thumbnails = std::make_unique<Thumbnails>(m_editor_settings.thumbnails, *m_graphics_device.get(), *m_app_context.current_command_buffer, m_app_context, *m_app_message_bus.get());
             }
             ERHE_TASK_FOOTER( .name("Thumbnails") );
 
@@ -2352,7 +2352,8 @@ public:
                     m_brush_preview = std::make_unique<Brush_preview>(
                         *m_graphics_device.get(),
                         *m_app_context.current_command_buffer,
-                        m_app_context
+                        m_app_context,
+                        *m_app_message_bus.get()
                     );
                 }
             }

@@ -272,13 +272,19 @@ auto Scene_preview::get_shadow_texture() const -> erhe::graphics::Texture*
     return m_shadow_texture.get();
 }
 
-void Scene_preview::update_material_set(erhe::graphics::Command_buffer& command_buffer)
+void Scene_preview::flush_material_membership()
 {
     erhe::scene_renderer::Material_set& material_set = m_scene_root_shared->get_material_set();
     const std::vector<std::shared_ptr<erhe::primitive::Material>>& materials =
         m_content_library->get_all<erhe::primitive::Material>();
     material_set.sync_library(std::span<const std::shared_ptr<erhe::primitive::Material>>{materials});
     material_set.flush_pending();
+}
+
+void Scene_preview::update_material_set(erhe::graphics::Command_buffer& command_buffer)
+{
+    flush_material_membership();
+    erhe::scene_renderer::Material_set& material_set = m_scene_root_shared->get_material_set();
     if (material_set.has_gpu()) {
         material_set.update(command_buffer);
     }

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "preview/scene_preview.hpp"
+#include "app_message.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -19,7 +21,8 @@ public:
     Brush_preview(
         erhe::graphics::Device&         graphics_device,
         erhe::graphics::Command_buffer& init_command_buffer,
-        App_context&                    app_context
+        App_context&                    app_context,
+        App_message_bus&                app_message_bus
     );
     ~Brush_preview() noexcept;
 
@@ -55,8 +58,21 @@ public:
         const Preview_edge_lines_config*                   edge_lines = nullptr
     );
 
+    // The preview mesh keeps the last rendered primitive and its material
+    // bound (and listed in the preview scene's Material_set) until the next
+    // render. Scene close / items removed: when that material is content of
+    // the closing scene or names a removed item, drop the mesh so the
+    // preview holds nothing of dead content.
+    void on_close_scene  (erhe::Item_host* closing_host);
+    void on_items_removed(const Removed_items& removed);
+
 private:
     void make_preview_scene();
+    void release_preview_mesh();
+    [[nodiscard]] auto get_preview_material() const -> const erhe::primitive::Material*;
+
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
 
     bool                                       m_solid_wireframe_supported;
     erhe::graphics::Base_render_pipeline       m_wireframe_pipeline;

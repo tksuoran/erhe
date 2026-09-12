@@ -8,6 +8,8 @@
 #include "app_message_bus.hpp"
 #include "app_rendering.hpp"
 #include "app_scenes.hpp"
+#include "graphics/thumbnails.hpp"
+#include "editor_log.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/scene_open_operation.hpp"
 #include "parsers/gltf.hpp"
@@ -16,6 +18,9 @@
 #include "parsers/gltf_physics_export.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_root.hpp"
+#include "tools/clipboard.hpp"
+#include "tools/mesh_component_selection.hpp"
+#include "tools/selection_tool.hpp"
 #if defined(ERHE_XR_LIBRARY_OPENXR)
 #include "xr/headset_view.hpp"
 #endif
@@ -23,6 +28,8 @@
 #include "erhe_dataformat/dataformat.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
+#include "erhe_imgui/imgui_window.hpp"
+#include "erhe_imgui/imgui_windows.hpp"
 #include "erhe_graphics/image_writer.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_item/hierarchy.hpp"
@@ -133,6 +140,114 @@ auto Mcp_server::action_close_scene(const json& args) -> std::string
         {"queued",     true},
         {"scene_name", sr->get_name()}
     }).dump();
+}
+
+auto Mcp_server::make_reset_result() -> std::string
+{
+    json result = m_reset_counts;
+    result["reset"]       = true;
+    result["scenes_open"] = 0;
+    return make_json_content(result).dump();
+}
+
+auto Mcp_server::action_reset_editor_state(const json& args) -> std::string
+{
+    static_cast<void>(args);
+
+    // Second and later passes: the scene closes queued below run from the
+    // message bus pump, one frame per pass; keep deferring until every scene
+    // is gone. The k_request_timeout expiry check bounds the wait.
+    if (m_reset_pending) {
+        if ((m_context.app_scenes != nullptr) && !m_context.app_scenes->get_scene_roots().empty()) {
+            m_defer_current_request = true;
+            return {};
+        }
+        m_reset_pending = false;
+        log_mcp->info("MCP server: reset_editor_state - every scene closed");
+        return make_reset_result();
+    }
+
+    // Transient editor state first, so nothing below keeps content of the
+    // closing scenes alive (the scene-close leak watchdog would report it).
+    if (m_context.selection != nullptr) {
+        m_context.selection->clear_selection();
+    }
+    if (m_context.mesh_component_selection != nullptr) {
+        m_context.mesh_component_selection->clear_all();
+        m_context.mesh_component_selection->set_mode(Mesh_component_mode::object);
+    }
+    if (m_context.clipboard != nullptr) {
+        m_context.clipboard->set_contents(std::vector<std::shared_ptr<erhe::Item_base>>{});
+    }
+    // Undo / redo stacks and the not-yet-executed operation queue: every
+    // recorded operation holds shared_ptrs to scene content, and a queued one
+    // would execute into a scene that is being closed.
+    std::size_t history_dropped = 0;
+    std::size_t queued_dropped  = 0;
+    if (m_context.operation_stack != nullptr) {
+        history_dropped =
+            m_context.operation_stack->get_undo_stack().size() +
+            m_context.operation_stack->get_redo_stack().size();
+        queued_dropped = m_context.operation_stack->discard_queued();
+        m_context.operation_stack->clear_history();
+    }
+    m_shader_debug_stack.clear();
+    // Thumbnail slots: pending render callbacks own the item they would
+    // render, and a slot keeps showing its last image for a reused id.
+    if (m_context.thumbnails != nullptr) {
+        m_context.thumbnails->flush();
+    }
+
+    // Windows: back to the visibility the editor started with (the persisted
+    // window state read at startup; a window the state does not name starts
+    // open). Docking is left alone - the layout is not test state.
+    int windows_shown  = 0;
+    int windows_hidden = 0;
+    if (m_context.imgui_windows != nullptr) {
+        for (erhe::imgui::Imgui_window* window : m_context.imgui_windows->get_windows()) {
+            if (window == nullptr) {
+                continue;
+            }
+            const bool startup_visible = m_context.imgui_windows->get_persistent_window_open(window->get_ini_label());
+            if (startup_visible == window->is_window_visible()) {
+                continue;
+            }
+            if (startup_visible) {
+                window->show_window();
+                ++windows_shown;
+            } else {
+                window->hide_window();
+                ++windows_hidden;
+            }
+        }
+    }
+
+    // Scenes: queue the close of every one (the Close context menu path, see
+    // action_close_scene) and defer this request until they are gone.
+    int scenes_closing = 0;
+    if ((m_context.app_scenes != nullptr) && (m_context.app_message_bus != nullptr)) {
+        for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
+            m_context.app_message_bus->close_scene.queue_message(Close_scene_message{.scene_root = scene_root});
+            ++scenes_closing;
+        }
+    }
+    log_mcp->info(
+        "MCP server: reset_editor_state - closing {} scene(s), {} window(s) shown, {} hidden, {} history + {} queued operation(s) dropped",
+        scenes_closing, windows_shown, windows_hidden, history_dropped, queued_dropped
+    );
+    m_reset_counts = {
+        {"scenes_closed",      scenes_closing},
+        {"windows_shown",      windows_shown},
+        {"windows_hidden",     windows_hidden},
+        {"history_dropped",    history_dropped},
+        {"queued_ops_dropped", queued_dropped}
+    };
+    if (scenes_closing > 0) {
+        m_reset_pending         = true;
+        m_defer_current_request = true;
+        return {};
+    }
+    return make_reset_result();
 }
 
 auto Mcp_server::action_create_scene(const json& args) -> std::string

@@ -131,6 +131,12 @@ public:
     // executing -- indefinitely.
     void clear_history();
 
+    // Drops every operation queued but not yet executed (both the main-thread
+    // queue and the cross-thread inbox) without running it. Returns the
+    // number dropped. Used by the editor state reset: a queued operation
+    // would otherwise execute into a scene that is being closed.
+    auto discard_queued() -> std::size_t;
+
     // Releases the payload of the deepest reloadable entry in the redo stack -
     // the one that would be redone FIRST - and discards every entry recorded
     // after it, which frees theirs too.

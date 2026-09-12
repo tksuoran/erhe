@@ -1,6 +1,8 @@
 #pragma once
 
+#include "app_message.hpp"
 #include "erhe_graphics/sampler.hpp"
+#include "erhe_message_bus/message_bus.hpp"
 #include "erhe_item/item.hpp"
 #include "erhe_property/dependency_object.hpp"
 
@@ -20,6 +22,7 @@ struct Thumbnails_config;
 namespace editor {
 
 class App_context;
+class App_message_bus;
 class Programs;
 
 
@@ -34,6 +37,9 @@ public:
     auto operator=(Thumbnail&&) noexcept -> Thumbnail&;
 
     std::size_t                              item_id{};
+    // The item this slot shows, for the removal / close checks only (never
+    // locked into a strong reference the slot would then pin).
+    std::weak_ptr<erhe::Item_base>           item{};
     uint64_t                                 last_use_frame_number{0};
     int64_t                                  time{0};
     std::shared_ptr<erhe::graphics::Texture> texture_view{};
@@ -51,11 +57,32 @@ public:
 class Thumbnails
 {
 public:
-    Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& init_command_buffer, App_context& context);
+    Thumbnails(
+        const Thumbnails_config&        thumbnails_config,
+        erhe::graphics::Device&         graphics_device,
+        erhe::graphics::Command_buffer& init_command_buffer,
+        App_context&                    context,
+        App_message_bus&                app_message_bus
+    );
     ~Thumbnails() noexcept;
 
     // This should be called once per frame, outside command encoder
     void update();
+
+    // Frees every slot: pending render callbacks are dropped unrendered
+    // (they own the item they would render), property observers are
+    // released and the slots forget their items, so the next draw() of any
+    // item renders it afresh. The editor state reset (MCP
+    // reset_editor_state) calls this before closing the scenes.
+    void flush();
+
+    // Scene close / items removed: a slot showing content of the closing
+    // scene, or an item the message names, is freed the same way (AGENTS.md
+    // "Scene-hosted references in editor parts"). Slot count is the
+    // configured capacity, so the walk is bounded and independent of the
+    // message size.
+    void on_close_scene  (erhe::Item_host* closing_host);
+    void on_items_removed(const Removed_items& removed);
 
     // The callback is NOT invoked from inside draw(): it is stored in a
     // thumbnail slot and invoked later from update() -- typically on the
@@ -76,7 +103,11 @@ public:
     ) -> bool;
 
 private:
+    void release_slot(Thumbnail& thumbnail);
+
     App_context&                             m_context;
+    erhe::message_bus::Subscription<Close_scene_message>   m_close_scene_subscription;
+    erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;
     erhe::graphics::Device&                  m_graphics_device;
     std::shared_ptr<erhe::graphics::Texture> m_color_texture;
     erhe::graphics::Sampler                  m_color_sampler;

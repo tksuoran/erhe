@@ -1,5 +1,8 @@
 #include "graphics/thumbnails.hpp"
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
+#include "scene/scene_root.hpp"
 #include "app_rendering.hpp"
 #include "editor_log.hpp"
 #include "app_settings.hpp"
@@ -21,7 +24,13 @@ Thumbnail::Thumbnail(Thumbnail&&) noexcept = default;
 auto Thumbnail::operator=(Thumbnail&&) noexcept -> Thumbnail& = default;
 Thumbnail::~Thumbnail() noexcept = default;
 
-Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphics::Device& graphics_device, erhe::graphics::Command_buffer& init_command_buffer, App_context& context)
+Thumbnails::Thumbnails(
+    const Thumbnails_config&        thumbnails_config,
+    erhe::graphics::Device&         graphics_device,
+    erhe::graphics::Command_buffer& init_command_buffer,
+    App_context&                    context,
+    App_message_bus&                app_message_bus
+)
     : m_context{context}
     , m_graphics_device{graphics_device}
     , m_color_sampler{
@@ -99,10 +108,72 @@ Thumbnails::Thumbnails(const Thumbnails_config& thumbnails_config, erhe::graphic
             t.texture_layer = static_cast<unsigned int>(i);
         }
     }
+
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
 }
 
 Thumbnails::~Thumbnails() noexcept
 {
+}
+
+void Thumbnails::release_slot(Thumbnail& thumbnail)
+{
+    thumbnail.callback.reset();
+    thumbnail.observer = {};
+    thumbnail.item.reset();
+    thumbnail.item_id               = 0;
+    thumbnail.last_use_frame_number = 0;
+    thumbnail.time                  = 0;
+    thumbnail.stale                 = false;
+}
+
+void Thumbnails::flush()
+{
+    for (Thumbnail& thumbnail : m_thumbnails) {
+        release_slot(thumbnail);
+    }
+}
+
+void Thumbnails::on_close_scene(erhe::Item_host* const closing_host)
+{
+    // R5.6: library assets (materials, brushes) are not hosted; the manager
+    // knows whether the closing scene's container record defines them.
+    Asset_manager* const asset_manager = m_context.asset_manager;
+    for (Thumbnail& thumbnail : m_thumbnails) {
+        if (thumbnail.item_id == 0) {
+            continue;
+        }
+        const std::shared_ptr<erhe::Item_base> item = thumbnail.item.lock();
+        const bool gone =
+            !item ||
+            ((asset_manager != nullptr) && asset_manager->is_hosted_or_defined_by(*item, closing_host)) ||
+            ((asset_manager == nullptr) && (item->get_item_host() == closing_host));
+        if (gone) {
+            release_slot(thumbnail);
+        }
+    }
+}
+
+void Thumbnails::on_items_removed(const Removed_items& removed)
+{
+    for (Thumbnail& thumbnail : m_thumbnails) {
+        if (thumbnail.item_id == 0) {
+            continue;
+        }
+        const std::shared_ptr<erhe::Item_base> item = thumbnail.item.lock();
+        if (!item || removed.lookup.contains(item.get())) {
+            release_slot(thumbnail);
+        }
+    }
 }
 
 auto Thumbnails::draw(
@@ -177,6 +248,7 @@ auto Thumbnails::draw(
 
     oldest_thumbnail->last_use_frame_number = m_context.graphics_device->get_frame_index();
     oldest_thumbnail->item_id  = item_id;
+    oldest_thumbnail->item     = item;
     oldest_thumbnail->callback = callback;
     oldest_thumbnail->stale    = false;
     // Follow the item's properties while the slot shows it; the token

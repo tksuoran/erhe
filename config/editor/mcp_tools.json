@@ -403,6 +403,14 @@
     "name": "request_exit"
   },
   {
+    "description": "Reset the editor to a fresh state, as a test harness does between test cases: clears the selection and the mesh component selection (mode back to object), empties the clipboard, drops the undo and redo stacks, the queued-but-unexecuted operations and the shader-debug stack, frees every thumbnail slot, restores every editor window to the visibility recorded at startup, and closes every open scene (unsaved changes are discarded). The scene closes complete on following frames; the call returns only once the scene list is empty, so no advance_time is needed afterwards. Persisted settings (editor_settings, graphics settings, window docking) are left as they are.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "reset_editor_state"
+  },
+  {
     "description": "Get in-flight operation counts: pending/running async workers plus queued_operations (queued on the operation stack, not yet executed on the main thread), pending_scene_commits (worker-prepared scene changes waiting for the main thread's per-tick flush) and asset_loads (asset load tasks in flight, which change the scene when they publish). The scene is settled only when all five are 0. Also carries a lightmap_prepare sub-object: in_flight/regions_done/regions_total/cancel_requested plus last_result{committed, mesh_count, piece_count, tile_count, abort_reason} of the most recent lightmap_prepare_tiles.",
     "inputSchema": {
       "properties": {},

@@ -199,7 +199,10 @@ Each drops the references its `on_close_scene` handler drops, keyed on identity 
 | `editor.cpp` | `Geometry_graph_window` / `Texture_graph_window` targets incl. the extra windows (factor the existing `on_close_scene` body at `:3313-3332` into a shared helper), and Selection pruning (below) |
 | `brushes/brush_tool.cpp` | `m_drag_and_drop_brush`, `m_active_brush` (`Asset_reference` → `set_key({})`) |
 | `tools/material_paint_tool.cpp` | `m_material` (`Asset_reference`) |
-| `preview/material_preview.cpp` | `m_last_material` |
+| `preview/material_preview.cpp` | `m_last_material`, and the preview sphere's bound material - unbinding it only enqueues the preview scene's `Material_set` membership change, so the handler applies it (`Scene_preview::flush_material_membership`); nothing else flushes a preview scene's set outside a render |
+| `preview/brush_preview.cpp` | the preview mesh (its last rendered primitive and material), dropped with the same membership flush |
+| `graphics/thumbnails.cpp` | every slot showing the item: its pending render callback (which owns the item), its property observer, and the item itself (`Thumbnail::item`, weak, for the check only) |
+| `scene/scene_root.cpp` | `Brush::m_material` of every brush in the scene's library that names the removed material - the brush lets go rather than hand a dead material to the next placement |
 | `content_library/brdf_slice.cpp` | the node material |
 | `operations/operations_window.cpp` | `m_make_mesh_config.material` |
 | `create/create.cpp`, `brushes/brush_placement.cpp` | `m_brush` — neither subscribes to `close_scene` today; both are raw-`shared_ptr` gaps |

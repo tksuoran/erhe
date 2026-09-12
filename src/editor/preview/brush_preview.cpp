@@ -1,6 +1,8 @@
 #include "preview/brush_preview.hpp"
 
 #include "app_context.hpp"
+#include "app_message_bus.hpp"
+#include "assets/asset_manager.hpp"
 #include "editor_log.hpp"
 #include "brushes/brush.hpp"
 #include "config/generated/editor_settings_config.hpp"
@@ -38,7 +40,8 @@ namespace editor {
 Brush_preview::Brush_preview(
     erhe::graphics::Device&         graphics_device,
     erhe::graphics::Command_buffer& init_command_buffer,
-    App_context&                    app_context
+    App_context&                    app_context,
+    App_message_bus&                app_message_bus
 )
     : Scene_preview{graphics_device, init_command_buffer, app_context}
     , m_solid_wireframe_supported{graphics_device.get_info().use_solid_wireframe}
@@ -60,6 +63,16 @@ Brush_preview::Brush_preview(
         }
     }
 {
+    m_close_scene_subscription = app_message_bus.close_scene.subscribe(
+        [this](Close_scene_message& message) {
+            on_close_scene(static_cast<erhe::Item_host*>(message.scene_root.get()));
+        }
+    );
+    m_items_removed_subscription = app_message_bus.items_removed.subscribe(
+        [this](Items_removed_message& message) {
+            on_items_removed(*message.removed.get());
+        }
+    );
     make_preview_scene();
 }
 
@@ -186,6 +199,50 @@ void Brush_preview::make_preview_scene()
             m_composer.composition_passes.push_back(m_wireframe_pass);
         }
     }
+}
+
+void Brush_preview::release_preview_mesh()
+{
+    if (!m_mesh) {
+        return;
+    }
+    erhe::scene::set_mesh_parent(m_mesh, {});
+    m_mesh.reset();
+    // The unparenting only enqueued the mesh's membership release; apply it,
+    // or the set keeps the material (see Scene_preview::flush_material_membership).
+    flush_material_membership();
+}
+
+auto Brush_preview::get_preview_material() const -> const erhe::primitive::Material*
+{
+    if (!m_mesh || m_mesh->get_primitives().empty()) {
+        return nullptr;
+    }
+    return m_mesh->get_primitives().front().material.get();
+}
+
+void Brush_preview::on_close_scene(erhe::Item_host* const closing_host)
+{
+    // R5.6: materials are not hosted; the manager knows whether the closing
+    // scene's container record defines the one bound to the preview mesh
+    // (same rule as Material_preview::on_close_scene).
+    const erhe::primitive::Material* material = get_preview_material();
+    if ((material == nullptr) ||
+        (m_context.asset_manager == nullptr) ||
+        !m_context.asset_manager->is_hosted_or_defined_by(*material, closing_host))
+    {
+        return;
+    }
+    release_preview_mesh();
+}
+
+void Brush_preview::on_items_removed(const Removed_items& removed)
+{
+    const erhe::primitive::Material* material = get_preview_material();
+    if ((material == nullptr) || !removed.lookup.contains(material)) {
+        return;
+    }
+    release_preview_mesh();
 }
 
 void Brush_preview::render_preview(

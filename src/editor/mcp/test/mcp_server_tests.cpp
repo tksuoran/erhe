@@ -149,12 +149,14 @@ void advance_frames(Mcp_client& client, int frames);
 [[nodiscard]] auto scene_names(Mcp_client& client) -> std::vector<std::string>;
 [[nodiscard]] auto wait_until_idle(Mcp_client& client, int timeout_ms) -> bool;
 
-// The scene every test runs in is created by Mcp_env::initialize(), from
+// The scene every test runs in is created by Mcp_env::prepare(), from
 // this asset (textures for the texture tests) plus a material of its own.
 constexpr const char* c_textured_gltf      = "res/editor/assets/SM_Deccer_Cubes_Textured.glb";
 constexpr const char* c_test_material_name = "MCP test material";
 
-// Single shared client + the prepared scene/material across all tests.
+// Single shared client across all tests, plus the scene/material each test
+// runs in. The client connects once; every test then starts from a reset
+// editor (reset_editor_state) and gets a scene of its own from prepare().
 class Mcp_env
 {
 public:
@@ -166,29 +168,30 @@ public:
 
     Mcp_client& client() { return *m_client; }
 
+    [[nodiscard]] auto connected() const -> bool { return m_connected; }
     [[nodiscard]] auto ready() const -> bool { return m_ready; }
     [[nodiscard]] auto scene_name() const -> const std::string& { return m_scene_name; }
     [[nodiscard]] auto material_name() const -> const std::string& { return m_material_name; }
     [[nodiscard]] auto first_texture_name() const -> const std::optional<std::string>& { return m_texture_name; }
     [[nodiscard]] auto first_texture_id  () const -> const std::optional<std::size_t>&  { return m_texture_id;   }
 
-    [[nodiscard]] auto initialize_attempted() const -> bool { return m_initialize_attempted; }
+    [[nodiscard]] auto connect_attempted() const -> bool { return m_connect_attempted; }
 
-    // Closes the scene initialize() created. Called once, after the last test.
+    // Leaves the editor in a reset state. Called once, after the last test.
     void teardown()
     {
-        if (!m_client || m_scene_name.empty()) {
+        if (!m_client || !m_connected) {
             return;
         }
-        m_client->call_tool("close_scene", json{{"scene_name", m_scene_name}});
-        advance_frames(*m_client, 6);
+        m_client->call_tool("reset_editor_state", json::object());
         m_scene_name.clear();
         m_ready = false;
     }
 
-    void initialize()
+    // Reaches (or launches) the editor. Once per run.
+    void connect()
     {
-        m_initialize_attempted = true;
+        m_connect_attempted = true;
 
         const std::string host       = env_or    ("ERHE_MCP_TEST_HOST",      "127.0.0.1");
         const int         port       = env_or_int("ERHE_MCP_TEST_PORT",      3743);
@@ -205,34 +208,51 @@ public:
                 return;
             }
         }
+        m_connected = true;
+    }
 
-        // Prepare a fresh scene: nothing here depends on whatever the editor
-        // happens to have open. The scene gets the textured test asset (so
-        // the texture tests have textures) and a material of its own for
-        // the material tests; teardown() closes it again.
-        const std::vector<std::string> scenes_before = scene_names(*m_client);
+    // Resets the editor and prepares this test's scene: nothing here depends
+    // on what an earlier test left behind. The scene gets the textured test
+    // asset (so the texture tests have textures) and a material of its own
+    // for the material tests. Returns false (with the reason logged) when
+    // the editor could not be brought into that state.
+    auto prepare() -> bool
+    {
+        m_ready = false;
+        m_scene_name.clear();
+        m_material_name.clear();
+        m_texture_name.reset();
+        m_texture_id.reset();
+
+        Mcp_client::Tool_result reset_res = m_client->call_tool("reset_editor_state", json::object());
+        if (reset_res.is_error) {
+            GTEST_LOG_(ERROR) << "reset_editor_state failed: " << reset_res.text;
+            return false;
+        }
+        if (!scene_names(*m_client).empty()) {
+            GTEST_LOG_(ERROR) << "reset_editor_state returned with scenes still open";
+            return false;
+        }
+
         m_client->call_tool("create_scene", json::object());
         advance_frames(*m_client, 6);
-        for (const std::string& name : scene_names(*m_client)) {
-            if (std::find(scenes_before.begin(), scenes_before.end(), name) == scenes_before.end()) {
-                m_scene_name = name;
-            }
+        const std::vector<std::string> scenes = scene_names(*m_client);
+        if (scenes.size() != 1) {
+            GTEST_LOG_(ERROR) << "create_scene after reset produced " << scenes.size() << " scenes (expected 1)";
+            return false;
         }
-        if (m_scene_name.empty()) {
-            GTEST_LOG_(ERROR) << "create_scene produced no new scene (list_scenes unchanged)";
-            return;
-        }
+        m_scene_name = scenes.front();
 
         Mcp_client::Tool_result import_res = m_client->call_tool(
             "import_gltf", json{{"scene_name", m_scene_name}, {"path", c_textured_gltf}}
         );
         if (import_res.is_error) {
             GTEST_LOG_(ERROR) << "import_gltf failed: " << import_res.text;
-            return;
+            return false;
         }
         if (!wait_until_idle(*m_client, 60000)) {
             GTEST_LOG_(ERROR) << "import of " << c_textured_gltf << " did not settle within 60 s";
-            return;
+            return false;
         }
 
         Mcp_client::Tool_result mat_res = m_client->call_tool(
@@ -240,7 +260,7 @@ public:
         );
         if (mat_res.is_error) {
             GTEST_LOG_(ERROR) << "create_material failed: " << mat_res.text;
-            return;
+            return false;
         }
         m_material_name = c_test_material_name;
 
@@ -249,27 +269,29 @@ public:
         );
         if (tex_res.is_error || !tex_res.payload.contains("textures")) {
             GTEST_LOG_(ERROR) << "get_scene_textures failed: " << tex_res.text;
-            return;
+            return false;
         }
         const json& textures = tex_res.payload["textures"];
         if (!textures.is_array() || textures.empty()) {
             GTEST_LOG_(ERROR) << "imported " << c_textured_gltf << " but the scene has no textures";
-            return;
+            return false;
         }
         const json& first = textures[0];
         if (!first.contains("name") || !first["name"].is_string() || !first.contains("id") || !first["id"].is_number()) {
             GTEST_LOG_(ERROR) << "first texture entry lacks name/id: " << first.dump();
-            return;
+            return false;
         }
         m_texture_name = first["name"].get<std::string>();
         m_texture_id   = first["id"].get<std::size_t>();
 
         m_ready = true;
+        return true;
     }
 
 private:
     std::unique_ptr<Mcp_client> m_client;
-    bool                        m_initialize_attempted{false};
+    bool                        m_connect_attempted{false};
+    bool                        m_connected{false};
     bool                        m_ready{false};
     std::string                 m_scene_name;
     std::string                 m_material_name;
@@ -278,8 +300,8 @@ private:
 };
 
 // Registered at static-init time (before main), so its TearDown runs after
-// every test: close the prepared scene, then stop the editor this process
-// launched (no-op when the editor came from the ctest fixture or by hand).
+// every test: reset the editor, then stop the editor this process launched
+// (no-op when the editor came from the ctest fixture or by hand).
 class Mcp_session_environment : public ::testing::Environment
 {
 public:
@@ -297,16 +319,19 @@ class Mcp_test : public ::testing::Test
 protected:
     void SetUp() override
     {
-        // One initialization attempt for the whole run: when the editor is not
+        // One connection attempt for the whole run: when the editor is not
         // there, the first test pays the /health wait and every later test
         // skips immediately instead of repeating the wait in its own SetUp.
         Mcp_env& env = Mcp_env::get();
-        if (!env.ready() && !env.initialize_attempted()) {
-            env.initialize();
+        if (!env.connected() && !env.connect_attempted()) {
+            env.connect();
         }
-        if (!env.ready()) {
+        if (!env.connected()) {
             GTEST_SKIP() << "MCP environment not ready (editor not running?)";
         }
+        // Every test starts from a reset editor with a scene of its own; a
+        // failure to get there is a failure of this test, not a skip.
+        ASSERT_TRUE(env.prepare()) << "could not reset the editor and prepare the test scene";
     }
 
     auto material_details() -> json
@@ -390,6 +415,50 @@ TEST_F(Mcp_test, list_scenes_returns_named_scenes)
         EXPECT_TRUE(s.contains("name"));
         EXPECT_TRUE(s.contains("material_count"));
     }
+}
+
+// reset_editor_state takes the editor back to no scenes, no selection and
+// no undo history - and returns only once the scene closes have run.
+TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+        {"scene_name",  env.scene_name()},
+        {"shape",       "box"},
+        {"name",        "reset test box"},
+        {"motion_mode", "none"}
+    });
+    ASSERT_FALSE(shape.is_error) << shape.text;
+    advance_frames(client, 2);
+    Mcp_client::Tool_result select = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({"reset test box"})}
+    });
+    ASSERT_FALSE(select.is_error) << select.text;
+    client.call_tool("create_scene", json::object());
+    advance_frames(client, 6);
+
+    Mcp_client::Tool_result selection_before = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection_before.is_error);
+    ASSERT_FALSE(selection_before.payload["items"].empty()) << "selection did not take";
+    ASSERT_EQ(scene_names(client).size(), 2u);
+    Mcp_client::Tool_result history_before = client.call_tool("get_undo_redo_stack", json::object());
+    ASSERT_TRUE(history_before.payload.value("can_undo", false));
+
+    Mcp_client::Tool_result reset = client.call_tool("reset_editor_state", json::object());
+    ASSERT_FALSE(reset.is_error) << reset.text;
+    EXPECT_TRUE(reset.payload.value("reset", false));
+
+    // No advance_time: the reset itself waited for the closes to complete.
+    EXPECT_TRUE(scene_names(client).empty());
+    Mcp_client::Tool_result selection_after = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection_after.is_error);
+    EXPECT_TRUE(selection_after.payload["items"].empty());
+    Mcp_client::Tool_result history_after = client.call_tool("get_undo_redo_stack", json::object());
+    EXPECT_FALSE(history_after.payload.value("can_undo", true));
+    EXPECT_FALSE(history_after.payload.value("can_redo", true));
 }
 
 TEST_F(Mcp_test, get_scene_materials_returns_array_with_basic_fields)
@@ -1292,7 +1361,7 @@ protected:
         m_token      = mcp_test::read_token_file(m_token_file);
         ASSERT_FALSE(m_token.empty()) << "cannot read the test token file '" << m_token_file << "'";
 
-        // Same as Mcp_env::initialize(): an editor started elsewhere (the
+        // Same as Mcp_env::connect(): an editor started elsewhere (the
         // ctest fixture) may still be coming up - give it the configured
         // wait before launching one. A single probe here once launched a
         // second editor beside the fixture's; both bound the port.
@@ -1306,17 +1375,39 @@ protected:
         }
         ASSERT_TRUE(mcp_test::wait_for_editor(m_host, m_port, 1))
             << "no auth-enabled editor at " << m_host << ":" << m_port;
+
+        // Every test starts from a reset editor, the same as Mcp_test.
+        httplib::Result reset = post_tool_call(m_token, "reset_editor_state");
+        ASSERT_TRUE(reset);
+        ASSERT_EQ(reset->status, 200) << "reset_editor_state was refused: " << reset->body;
+    }
+
+    auto post(const std::optional<std::string>& bearer, const json& body) -> httplib::Result
+    {
+        httplib::Client client{m_host, m_port};
+        client.set_read_timeout(10, 0);
+        if (bearer.has_value()) {
+            client.set_default_headers({{"Authorization", "Bearer " + bearer.value()}});
+        }
+        return client.Post("/mcp", body.dump(), "application/json");
     }
 
     auto post_tools_list(const std::optional<std::string>& bearer) -> httplib::Result
     {
-        httplib::Client client{m_host, m_port};
-        client.set_read_timeout(5, 0);
-        if (bearer.has_value()) {
-            client.set_default_headers({{"Authorization", "Bearer " + bearer.value()}});
-        }
-        const json body = {{"jsonrpc", "2.0"}, {"id", "auth-probe"}, {"method", "tools/list"}};
-        return client.Post("/mcp", body.dump(), "application/json");
+        return post(bearer, json{{"jsonrpc", "2.0"}, {"id", "auth-probe"}, {"method", "tools/list"}});
+    }
+
+    auto post_tool_call(const std::optional<std::string>& bearer, const std::string& tool_name) -> httplib::Result
+    {
+        return post(
+            bearer,
+            json{
+                {"jsonrpc", "2.0"},
+                {"id",      "auth-call"},
+                {"method",  "tools/call"},
+                {"params",  {{"name", tool_name}, {"arguments", json::object()}}}
+            }
+        );
     }
 
     std::string m_host;

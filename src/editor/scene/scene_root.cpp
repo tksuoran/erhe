@@ -322,8 +322,28 @@ Scene_root::Scene_root(
         m_items_removed_subscription = app_message_bus->items_removed.subscribe(
             [this](Items_removed_message& message) {
                 m_variant_table.on_items_removed(*message.removed.get());
+                on_items_removed(*message.removed.get());
             }
         );
+    }
+}
+
+void Scene_root::on_items_removed(const Removed_items& removed)
+{
+    // A brush keeps the material a placed instance gets; when that material
+    // leaves the editor (undo of the import or of the create that brought it
+    // in) the brush lets go, or the dead material lives on in the library
+    // and is handed to the next placement. One set lookup per brush of this
+    // scene's library - bounded by the library, not by the message.
+    if (!m_content_library) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_content_library->mutex};
+    for (const std::shared_ptr<Brush>& brush : m_content_library->get_all<Brush>()) {
+        const std::shared_ptr<erhe::primitive::Material>& material = brush->get_material();
+        if (material && removed.lookup.contains(material.get())) {
+            brush->set_material({});
+        }
     }
 }
 

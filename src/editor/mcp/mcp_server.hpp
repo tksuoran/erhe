@@ -189,6 +189,8 @@ private:
     auto action_undo              (const nlohmann::json& args) -> std::string;
     auto action_redo              (const nlohmann::json& args) -> std::string;
     auto action_request_exit      (const nlohmann::json& args) -> std::string;
+    auto action_reset_editor_state(const nlohmann::json& args) -> std::string;
+    auto make_reset_result        () -> std::string;
     auto undo_or_redo             (const nlohmann::json& args, bool undo) -> std::string;
     auto query_async_status     (const nlohmann::json& args) -> std::string;
     auto query_transform_update_stats(const nlohmann::json& args) -> std::string;
@@ -452,6 +454,11 @@ private:
     // (e.g. a minimized window that never renders).
     bool                                             m_defer_current_request{false};
     std::vector<std::unique_ptr<Queued_request>>     m_deferred_requests;
+
+    // reset_editor_state has queued the close of every open scene and is
+    // deferring itself until the scene list is empty (main thread only).
+    bool                                             m_reset_pending{false};
+    nlohmann::json                                   m_reset_counts;
 
     // Saved per-view shader debug modes for push_shader_debug /
     // pop_shader_debug (LIFO). Views that disappear between push and pop
