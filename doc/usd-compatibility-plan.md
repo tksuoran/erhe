@@ -476,6 +476,37 @@ now owns its behavior; `git log` on that record has the history.
   `erhe:Material:<name>` custom-attribute path (`src/erhe/usd/notes.md`
   "OpenPBR networks"; the round-trip script's `open_pbr.usda` leg).
 
+- P1 Physics in USD: the physics of a scene travels as the `UsdPhysics`
+  prims and API schemas of the mapping's "Physics" table, and the same
+  editor code serves both formats. `erhe::scene::Physics_description`
+  (`src/erhe/scene/notes.md`, "Physics description") is the format-neutral
+  record: the glTF reader fills it from `KHR_physics_rigid_bodies` and the
+  USD reader from `UsdPhysics` (`Usd_data::physics`, with the stage path,
+  the erhe-only property values and the guide collider prims of each
+  record beside it in `Usd_data::physics_prims`), and the editor's
+  `import_physics()` builds the library items, bodies, triggers and joints
+  from it while `build_physics_description()` is the export builder both
+  writers consume (`src/editor/parsers/notes.md`). A body is its prim's
+  `PhysicsRigidBodyAPI` with its colliders at or below it, an implicit
+  shape a `purpose = guide` primitive-schema child prim (a box of unequal
+  extents a unit `Cube` scaled per axis, the prim's own scale applied by
+  the fold and never baked into the shape), a mesh shape the `Mesh` prim
+  with `PhysicsMeshCollisionAPI`, a physics material a `Material` prim
+  with `PhysicsMaterialAPI` and no surface output, a collision filter a
+  `PhysicsCollisionGroup` prim, a joint-settings item a typeless prim with
+  per-axis `PhysicsLimitAPI` / `PhysicsDriveAPI` instances, a joint a
+  `PhysicsJoint` child prim naming its settings prim, a trigger the body's
+  own `erhe:Node_physics:is_trigger`, and the physics world's gravity one
+  `PhysicsScene` prim; every erhe-only value rides an `erhe:Owner:name`
+  custom attribute (`src/erhe/usd/notes.md`, "Physics" under Import and
+  Export). A physics material, a collision filter and a joint-settings
+  item take the place of the prim the file authored them on; a joint prim
+  and the scene prim are not prims of the tree. `erhe_usd_tests` reads
+  `physics.usda` value for value, writes it, reads it back and writes it a
+  second time byte for byte, `usdchecker` passes on the written file, and
+  the round-trip script's USD physics leg checks a body, a material and a
+  joint the way the glTF leg does.
+
 Verification of all of the above: `erhe_usd_tests` (302 cases, built in
 `build_vs2026_vulkan` since `ERHE_BUILD_TESTS=ON` is passed by the main
 configure wrapper), the `usd-roundtrip` section of
@@ -484,113 +515,67 @@ configure wrapper), the `usd-roundtrip` section of
 
 ## 3. Candidate next steps
 
-No step of the original plan remains: G1, G2 and G3 hold. What follows is
-the review of section 6 and of the future-work lists of
-`src/erhe/usd/notes.md` and `doc/usd_compatibility.md`, ranked by what
-each buys the editor; every item's substance is the section 6 entry it
-names, and nothing here restates one.
+No step of the original plan remains: G1, G2 and G3 hold, and physics
+(P1) is in section 2. What follows is the review of section 6 and of the
+future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
+ranked by what each buys the editor; every item's substance is the
+section 6 entry it names, and nothing here restates one.
 
-1. Physics in USD (section 6 "Physics on load"). The largest editor
-   feature a USD-backed scene silently loses today: the importer counts
-   the `UsdPhysics` prims it skips and a save writes none, so a physics
-   scene cannot live in USD at all. The plain-data carrier the glTF
-   physics import already takes makes the reader a filling of that
-   carrier and the writer its inverse; it closes the last "not carried"
-   line `doc/scene_serialization.md` lists for a USD-backed scene.
-2. The animated value layer, then time samples on any attribute and the
+1. The animated value layer, then time samples on any attribute and the
    write-back of an edit into the samples (three section 6 items). The
    layer pays for itself without USD (it is the prerequisite of
    `doc/animation-keyframing-plan.md`), and with it a keyed edit made in
    erhe becomes something a USD save can carry instead of writing the
-   file's original samples. This is the second editor feature a USD scene
-   loses today.
-3. Composition the real assets use (section 6 "Composition authored
+   file's original samples. This is the one editor feature a USD scene
+   still loses today.
+2. Composition the real assets use (section 6 "Composition authored
    inside a variant block", "An xformOp named in a prim's xformOpOrder
    that one of its arcs supplies", "An override path that crosses a
    reference inside an instance"). The usd-wg Teapot model, DrawModes and
    the intent-vfx teapot asset are the surveyed files that stay empty or
    warn per prim; each item names the two-part change that closes it.
-4. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+3. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
    usdchecker"). Four defects in one dependency, each already diagnosed to
    the function; a fork branch carrying them removes a stripping pass, a
    quoting workaround, 2816 skipped instances and a validator finding.
-5. Load performance (section 6 "Load performance"). The scenes holding
+4. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-6. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+5. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-7. The round-trip residue (section 6 "Node-held secondary values",
+6. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
    of usdchecker"). Small, each one a value that leaves through a save
    and does not come back.
-8. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
+7. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
    input fed by a UsdPrimvarReader", "A material slot that a texture
    graph feeds AND that carries an authored factor", "Image formats",
    "An environment map from a DomeLight texture", "MaterialX"). The
    PrimvarReader case and the slot factor are importer work; the rest
    need a renderer or decoder erhe does not have, MaterialX documents a
    LightUSD option erhe's build leaves off.
-9. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+8. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-10. Composition beyond what erhe resolves (section 6 "Layer-stack
+9. Composition beyond what erhe resolves (section 6 "Layer-stack
     editing", "inherits and specializes arcs whose target is not a class
     prim", "Variant opinions a variant set does not carry", "Overrides on
     applied API schemas inside an instance"). Each is a real USD feature
     with no surveyed asset that visibly depends on it, so they wait for a
     file that does.
 
-### P1 Physics in USD (M; in progress)
-
-What: the section 6 item "Physics on load", worked as the mapping's
-"Physics" table states it. The plain-data physics description the glTF
-reader fills and the editor's physics import consumes is made a
-format-neutral record of `erhe::scene` so the USD reader fills the same
-one and the editor's physics import and export take it from either
-format; `erhe::usd` reads and writes the `UsdPhysics` prims and API
-schemas as that record, and the editor's open, import and save paths
-carry it. The commits, in order:
-
-1. `erhe::scene` physics description: the classes of
-   `src/erhe/gltf/erhe_gltf/gltf_physics.hpp` move to
-   `src/erhe/scene/erhe_scene/physics_description.hpp` as
-   `erhe::scene::Physics_description` and its parts, every user renamed,
-   no behavior change (`src/erhe/scene/notes.md`, `src/erhe/gltf/notes.md`).
-2. `erhe::usd` reader: `Usd_data::physics` filled from the `UsdPhysics`
-   schemas per the mapping, with a fixture and `erhe_usd_tests` cases
-   (`src/erhe/usd/notes.md` "Physics").
-3. `erhe::usd` writer: `Usd_save_arguments::physics` written per the
-   mapping, `erhe_usd_tests` round-trips a body with each shape kind, a
-   material, a filter, a joint with limits and drives, and the scene prim
-   to a fixed point; `usdchecker` passes when available.
-4. Editor: `open_scene_usd` and `import_usd` build the physics items
-   through the import the glTF path uses, now taking the neutral record;
-   `save_scene_usd` fills the record through the builder the glTF save
-   uses; the physics warning of the importer goes; the round-trip
-   script's USD leg checks a body, a material and a joint the way the
-   glTF leg does; `doc/scene_serialization.md` no longer lists physics as
-   uncarried; `src/erhe/usd/notes.md` "Future work" and the memory bank
-   follow.
-
-Verification: `erhe_usd_tests` after commits 2 and 3; after commit 4 a
-headless session opens a USD scene, adds a body, a material and a joint
-over MCP (`create_physics_material`, `edit_physics_body`,
-`create_physics_joint`), saves, reopens and reads them back with
-`get_physics_items`, closes clean, and `scripts/scene_roundtrip_verify.py`
-stays green.
-
 ## 4. Order
 
-Items 1 and 2 of section 3 are independent of each other and of the rest,
-and each restores an editor feature to USD-backed scenes; take them first,
-in either order, through the harness of `doc/agent-orchestration-harness.md`
-one commit at a time (C2). Item 4 goes with a fork tag bump and is best
-taken when a fork clone is at hand (`memory-bank/local/context.md`
-records it). The remaining items have no ordering constraint among them.
+Item 1 of section 3 restores an editor feature to USD-backed scenes and
+is independent of the rest; take it first, through the harness of
+`doc/agent-orchestration-harness.md` one commit at a time (C2). Item 3 goes
+with a fork tag bump and is best taken when a fork clone is at hand
+(`memory-bank/local/context.md` records it). The remaining items have no
+ordering constraint among them.
 
 ## 5. Out of scope
 
@@ -624,15 +609,26 @@ records it). The remaining items have no ordering constraint among them.
 Each item is independent of the others except where named; section 3
 ranks them. A USD scene loads, edits and saves without any of them.
 
-- Physics on load: `UsdPhysics` API schemas become `Node_physics`,
-  `Node_joint`, `Physics_material` and `Collision_filter` per the
-  mapping's physics table, by filling
-  `erhe::scene::Physics_description` from USD (the physics import
-  operations already take that plain-data carrier); today the importer counts the prims carrying such
-  schemas in one warning and reads none. The matching save applies the
-  API schemas per the same table; erhe-only physics properties (damping,
-  wind receptivity, gravity factor, combine modes) ride `erhe:` custom
-  attributes under C1.
+- Physics residue of P1, each small and independent:
+  - A mesh collider whose mesh is a child prim of the body (the `Rock/shell`
+    body of `src/erhe/usd/test/data/physics.usda`): an erhe hull shape keeps
+    no reference to the mesh it was built from, so the writer authors the
+    collision schema on the body prim, where a reload finds no mesh - the
+    limitation the glTF export documents for compound children. Closing it
+    means the collision shape remembering its source mesh.
+  - Joint frames: a `PhysicsJoint` prim's `localPos` / `localRot` are
+    warned about and dropped, since the erhe six-dof joint takes its frames
+    from the two nodes' world transforms; a joint authored off its node's
+    origin lands at the origin.
+  - A degenerate convex hull (three coplanar points) aborts the process in
+    geogram's Delaunay path; `make_convex_hull` needs a guard that refuses
+    a volume-less input with an error instead.
+  - Jolt asserts `Sleeping body has non-zero linear velocity` when the
+    fixture simulates: a body imported with an initial velocity starts
+    asleep. Same family as the P6 dynamic-body flake of the round-trip
+    script.
+  - Undo of a USD import leaves an empty kind `Scope` behind (`Physics
+    Joints`), as the lazy kind scopes of the other kinds do.
 - Animated value layer: the property-system section 6 item, an animated
   value between coerced and local in R3, set by `Animation_sampler::apply`
   and cleared when playback stops, so playback never overwrites the

@@ -174,3 +174,10 @@
 [TASK::metal-headless]{DONE-2026-09-12;870efa949;via-harness;1-coder}
 ✓emulated-ring-in-Swapchain_impl+SDL-guarded-surface+synchronous-headless-readback+configure_xcode_metal_headless.sh+doc/metal-headless.md
 ?user-interactive{windowed-Metal-regression:present+armed-capture}
+
+[TASK::usd-physics-P1]{DONE-2026-09-12;via-harness;4-coders-3-agents}
+✓commit-1{0aecd7718:physics-description->erhe::scene}
+✓commit-2{4d4672caf:UsdPhysics-reader+physics.usda+13-tests}
+✓commit-3{a3cf13baf:writer+fixed-point+usdchecker;fixes:box-scale,trigger-form}
+✓commit-4{721c745fa:editor-shared-import/export;fix:no-scale-baking-in-reader;headless:open/edit/save/reopen/undo-clean;roundtrip-411/413}
+?user-interactive{open-physics.usda;simulate-fixture=Jolt-assert-known}
