@@ -1017,8 +1017,9 @@ scene's animations over in `Usd_save_arguments::animations`.
 
 A stage is evaluated at one time code: the root layer stack's
 `startTimeCode` when it authors one, else the earliest time any prim of the
-stage samples one of the attributes below at - an `xformOp` or one of the
-attributes "Beyond the transform" names - else USD's default time code. That is the time
+stage keys one of the attributes below at - a sample of an `xformOp` or of one
+of the attributes "Beyond the transform" names, or the first knot of a `Ts`
+spline on one of those - else USD's default time code. That is the time
 a viewer opens a stage at, so the pose the import gives the scene is the
 reference frame of its clips. Tydra's render-scene conversion, the
 `xformOp` stacks and every value the conversion reads use that one time code.
@@ -1138,7 +1139,57 @@ channel driving any property outside the table is not written, and one
 warning per animation names the properties.
 
 Not carried: time samples on any attribute other than those above, an
-`xformOp` or a `SkelAnimation` array, and `Ts` splines.
+`xformOp` or a `SkelAnimation` array.
+
+#### Ts splines
+
+A `Ts` spline (`<type> <attr>.spline = { ... }`) is a scalar value source, so
+the four scalar attributes of the table above carry one: `inputs:intensity`,
+`inputs:roughness`, `inputs:metallic` and `inputs:opacity`. A spline on any
+other attribute is one warning per prim naming it, and the attribute keeps the
+`default` or `timeSamples` it also authors. An attribute authoring both samples
+and a spline keeps its samples, which is the order USD resolves them in, and
+the spline is warned about.
+
+The USDA parser reads a spline into the attribute's own `PrimVar`, beside the
+default and the samples, so the reader takes it off the composed layer's prim
+spec the way it takes the samples. Its knots become the channel's keys, keyed
+in seconds; a knot value is the key's value, and a tangent slope - value units
+per time code - becomes erhe's tangent in value units per second by multiplying
+by `timeCodesPerSecond`. That is the same convention on both sides: a Hermite
+segment scales its tangents by the key delta, which is the delta in time codes
+either way.
+
+The interpolation each segment names decides the sampler:
+
+- Segments that are all `held` make a STEP sampler, and segments that are all
+  `linear` a LINEAR sampler. Both are exact, and both key the plain value.
+- Anything else makes a CUBICSPLINE sampler, keying
+  `[in tangent, value, out tangent]` at a value offset of one value, the way a
+  glTF cubic channel does. A `linear` segment inside it is exact - a Hermite
+  segment whose two tangents are the chord slope is that chord. A `held` or
+  `none` segment is not: it gets zero tangents, which eases from one key to the
+  next rather than holding, and costs one warning naming the approximation.
+- A `bezier` spline is read through its slopes, which is exact when every
+  tangent width is a third of its segment - the width at which a Bezier tangent
+  is the Hermite tangent of the same slope. Any other width is one warning.
+- Dual-valued knots keep the value each knot leaves with, extrapolation other
+  than `held` (erhe's own clamp to the end keys) and inner loops are held to
+  the end keys, and each costs one warning.
+
+A save writes a CUBICSPLINE channel on one of those four attributes back as a
+`hermite` spline of one knot per key, at `key time * timeCodesPerSecond`, with
+`held` extrapolation and the key's tangents divided by that same rate. The knot
+values beside it are the clip's - no authored spline record stands beside them -
+and they extend the same `startTimeCode` / `endTimeCode` range the samples do.
+The spline is authored as a property of the light prim or of the
+`UsdPreviewSurface` shader node rather than as the schema attribute, which
+carries no spline; the default written next to it is the item's own value, or
+the first knot when the item authors none, so a reader without spline support
+still sees the attribute and its type. A LINEAR or STEP channel writes
+`timeSamples` instead, so a spline of `linear` or `held` knots alone reloads as
+a plain sampler and saves back as time samples: the same values, spelled the way
+erhe keys them.
 
 ### Physics
 

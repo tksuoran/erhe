@@ -1921,27 +1921,22 @@ private:
             const glm::vec3 emissive = material.get_value(Material::emissive_property);
             surface.emissiveColor.set_value(lightusd::value::color3f{emissive.x, emissive.y, emissive.z});
         }
-        if (is_local(material, Material::metallic_property.get())) {
-            surface.metallic.set_value(material.get_value(Material::metallic_property));
-        }
-        if (is_local(material, Material::roughness_property.get())) {
-            // UsdPreviewSurface has one roughness; erhe's is anisotropic and
-            // its x component is the isotropic one.
-            surface.roughness.set_value(material.get_value(Material::roughness_property).x);
-        }
-        if (is_local(material, Material::opacity_property.get())) {
-            surface.opacity.set_value(material.get_value(Material::opacity_property));
-        }
+        // `metallic`, `roughness` and `opacity` are written below, beside the
+        // keys of the clip driving them: a cubic clip writes the attribute as
+        // a `Ts` spline carrying its own default.
         if (is_local(material, Material::ior_property.get())) {
             surface.ior.set_value(material.get_value(Material::ior_property));
         }
         if (is_local(material, Material::occlusion_texture_strength_property.get())) {
             surface.occlusion.set_value(material.get_value(Material::occlusion_texture_strength_property));
         }
-        // The samples of a clip driving the material, beside those values
+        // The keys of a clip driving the material, beside those values
         // (src/erhe/usd/notes.md, "Time samples"). erhe's roughness is
-        // anisotropic and UsdPreviewSurface has one, so a sampled roughness
+        // anisotropic and UsdPreviewSurface has one, so a keyed roughness
         // writes the x component of each key, the way the plain value does.
+        // A cubic clip writes a `Ts` spline as a property of the shader node
+        // instead of the schema attribute, which is why the values of those
+        // attributes are written here rather than above.
         const Item_attribute_channels channels = get_attribute_channels(material);
         write_sampled_attribute<lightusd::value::color3f>(
             surface.diffuseColor, channels.base_color, 3,
@@ -1949,18 +1944,42 @@ private:
                 return lightusd::value::color3f{value.x, value.y, value.z};
             }
         );
-        write_sampled_attribute<float>(
-            surface.roughness, channels.roughness, 2,
-            [](const glm::vec4& value) -> float { return value.x; }
-        );
-        write_sampled_attribute<float>(
-            surface.metallic, channels.metallic, 1,
-            [](const glm::vec4& value) -> float { return value.x; }
-        );
-        write_sampled_attribute<float>(
-            surface.opacity, channels.opacity, 1,
-            [](const glm::vec4& value) -> float { return value.x; }
-        );
+        const std::optional<float> roughness = is_local(material, Material::roughness_property.get())
+            ? std::optional<float>{material.get_value(Material::roughness_property).x}
+            : std::optional<float>{};
+        if (!write_spline_attribute(surface.props, "inputs:roughness", channels.roughness, 2, roughness)) {
+            if (roughness.has_value()) {
+                surface.roughness.set_value(roughness.value());
+            }
+            write_sampled_attribute<float>(
+                surface.roughness, channels.roughness, 2,
+                [](const glm::vec4& value) -> float { return value.x; }
+            );
+        }
+        const std::optional<float> metallic = is_local(material, Material::metallic_property.get())
+            ? std::optional<float>{material.get_value(Material::metallic_property)}
+            : std::optional<float>{};
+        if (!write_spline_attribute(surface.props, "inputs:metallic", channels.metallic, 1, metallic)) {
+            if (metallic.has_value()) {
+                surface.metallic.set_value(metallic.value());
+            }
+            write_sampled_attribute<float>(
+                surface.metallic, channels.metallic, 1,
+                [](const glm::vec4& value) -> float { return value.x; }
+            );
+        }
+        const std::optional<float> opacity = is_local(material, Material::opacity_property.get())
+            ? std::optional<float>{material.get_value(Material::opacity_property)}
+            : std::optional<float>{};
+        if (!write_spline_attribute(surface.props, "inputs:opacity", channels.opacity, 1, opacity)) {
+            if (opacity.has_value()) {
+                surface.opacity.set_value(opacity.value());
+            }
+            write_sampled_attribute<float>(
+                surface.opacity, channels.opacity, 1,
+                [](const glm::vec4& value) -> float { return value.x; }
+            );
+        }
         // UsdPreviewSurface says a positive opacityThreshold is a cutout;
         // that threshold is the only form the erhe blending mode has, so it
         // is written for an alpha-test material and for nothing else.
@@ -3704,8 +3723,7 @@ private:
                 if (
                     !channel.target ||
                     (channel.property == nullptr) ||
-                    (channel.sampler_index >= animation->samplers.size()) ||
-                    (channel.value_offset != 0)
+                    (channel.sampler_index >= animation->samplers.size())
                 ) {
                     continue;
                 }
@@ -3713,6 +3731,15 @@ private:
                     continue; // a transform channel; collect_transform_channels() has it
                 }
                 const erhe::scene::Animation_sampler&  sampler = animation->samplers[channel.sampler_index];
+                // A cubic sampler keys [in tangent, value, out tangent], so a
+                // channel of its own keys reads it one value in; any other
+                // offset is a channel reading someone else's keys, which is
+                // left out for the reason collect_transform_channels() gives.
+                const bool is_cubic = (sampler.interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE);
+                const std::size_t own_value_offset = is_cubic ? erhe::scene::get_component_count(channel) : std::size_t{0};
+                if (channel.value_offset != own_value_offset) {
+                    continue;
+                }
                 Item_attribute_channels&               entry   = m_attribute_channels[channel.target.get()];
                 const erhe::scene::Animation_sampler** target   = nullptr;
                 if (channel.property == erhe::Item_base::visible_property.get_ptr()) {
@@ -3808,6 +3835,75 @@ private:
             m_wrote_time_samples = true;
         }
         attribute.set_value(animatable);
+    }
+
+    // Whether a channel's sampler is one erhe writes as a `Ts` spline rather
+    // than as time samples (src/erhe/usd/notes.md, "Time samples").
+    [[nodiscard]] static auto is_spline_sampler(const erhe::scene::Animation_sampler* sampler) -> bool
+    {
+        return (sampler != nullptr) &&
+               (sampler->interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE);
+    }
+
+    // One scalar schema attribute written as a `Ts` spline of its own property
+    // (src/erhe/usd/notes.md, "Time samples"): a hermite spline of one knot
+    // per key, at `key time * timeCodesPerSecond`, whose tangent slopes are
+    // the key's tangents divided by that same rate - erhe keys value units per
+    // second, USD value units per time code. The default beside it is the
+    // item's own value, or the first key when the item authors none, so the
+    // attribute still declares its type to a reader that has no spline.
+    // Answers whether a spline was written; a caller whose channel is not
+    // cubic writes the attribute the way it always did.
+    [[nodiscard]] auto write_spline_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         attribute_name,
+        const erhe::scene::Animation_sampler*      sampler,
+        const std::size_t                          component_count,
+        const std::optional<float>&                default_value
+    ) -> bool
+    {
+        if (!is_spline_sampler(sampler) || (component_count == 0)) {
+            return false;
+        }
+        const std::size_t stride    = 3 * component_count;
+        const std::size_t key_count = std::min(sampler->timestamps.size(), sampler->data.size() / stride);
+        if (key_count == 0) {
+            return false;
+        }
+        const double time_codes_per_second = (m_arguments.time_codes_per_second > 0.0)
+            ? m_arguments.time_codes_per_second
+            : 24.0;
+        lightusd::primvar::PrimVar::SplineData spline;
+        spline.curveType         = 1; // hermite
+        spline.preExtrapolation  = 1; // held, which is erhe's clamp to the end keys
+        spline.postExtrapolation = 1;
+        spline.knots.reserve(key_count);
+        for (std::size_t key = 0; key < key_count; ++key) {
+            const std::size_t base        = key * stride;
+            const double      in_tangent  = static_cast<double>(sampler->data[base]);
+            const double      value       = static_cast<double>(sampler->data[base + component_count]);
+            const double      out_tangent = static_cast<double>(sampler->data[base + (2 * component_count)]);
+            const double      time_code   = static_cast<double>(sampler->timestamps[key]) * time_codes_per_second;
+            lightusd::primvar::PrimVar::SplineKnotData knot;
+            knot.time              = time_code;
+            knot.val               = lightusd::value::Value{value};
+            knot.preTangentSlope   = in_tangent  / time_codes_per_second;
+            knot.postTangentSlope  = out_tangent / time_codes_per_second;
+            knot.interpolationMode = 3; // curve
+            spline.knots.push_back(std::move(knot));
+            m_first_time_code = m_wrote_time_samples ? std::min(m_first_time_code, time_code) : time_code;
+            m_last_time_code  = m_wrote_time_samples ? std::max(m_last_time_code,  time_code) : time_code;
+            m_wrote_time_samples = true;
+        }
+        const double first_knot_value = spline.knots.front().val.get_value<double>().value_or(0.0);
+        const float  default_scalar   = default_value.value_or(static_cast<float>(first_knot_value));
+        lightusd::primvar::PrimVar var;
+        var.set_value(default_scalar);
+        var.set_spline(std::move(spline));
+        lightusd::Attribute attribute;
+        attribute.set_var(std::move(var));
+        props.emplace(attribute_name, lightusd::Property{std::move(attribute), false});
+        return true;
     }
 
     void collect_transform_channels()
@@ -5560,12 +5656,6 @@ private:
             const glm::vec3 color = light.get_value(Light::color_property);
             usd_light.color.set_value(lightusd::value::color3f{color.x, color.y, color.z});
         }
-        if (is_local(light, Light::intensity_property.get())) {
-            // erhe has no exposure on a light, so the whole quantity is the
-            // intensity and `inputs:exposure` stays at its zero fallback -
-            // which is what the importer folds back in.
-            usd_light.intensity.set_value(light.get_value(Light::intensity_property));
-        }
         if (is_local(light, Light::temperature_property.get())) {
             usd_light.enableColorTemperature.set_value(true);
             usd_light.colorTemperature.set_value(light.get_value(Light::temperature_property));
@@ -5573,13 +5663,26 @@ private:
         if (is_local(light, Light::cast_shadow_property.get())) {
             usd_light.shadowEnable.set_value(light.get_value(Light::cast_shadow_property));
         }
-        // The samples of a clip driving the light, beside those values
-        // (src/erhe/usd/notes.md, "Time samples").
+        // The keys of a clip driving the light, beside those values
+        // (src/erhe/usd/notes.md, "Time samples"). erhe has no exposure on a
+        // light, so the whole quantity is the intensity and `inputs:exposure`
+        // stays at its zero fallback - which is what the importer folds back
+        // in.
         const Item_attribute_channels channels = get_attribute_channels(light);
-        write_sampled_attribute<float>(
-            usd_light.intensity, channels.intensity, 1,
-            [](const glm::vec4& value) -> float { return value.x; }
-        );
+        const std::optional<float>    intensity = is_local(light, Light::intensity_property.get())
+            ? std::optional<float>{light.get_value(Light::intensity_property)}
+            : std::optional<float>{};
+        // A cubic clip writes the attribute as a spline carrying its own
+        // default, so the schema attribute is left to it.
+        if (!write_spline_attribute(usd_light.props, "inputs:intensity", channels.intensity, 1, intensity)) {
+            if (intensity.has_value()) {
+                usd_light.intensity.set_value(intensity.value());
+            }
+            write_sampled_attribute<float>(
+                usd_light.intensity, channels.intensity, 1,
+                [](const glm::vec4& value) -> float { return value.x; }
+            );
+        }
         write_sampled_attribute<lightusd::value::color3f>(
             usd_light.color, channels.color, 3,
             [](const glm::vec4& value) -> lightusd::value::color3f {

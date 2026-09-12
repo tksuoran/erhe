@@ -275,10 +275,11 @@ attributes alone.
 
 | erhe | USD | notes |
 |---|---|---|
-| animation samplers / channels targeting node TRS (glTF model) | time samples on `xformOp:*` attributes | carried: the samples travel on `erhe::scene::Xform_op` and play as one Animation per file, keyed in seconds; a stack outside `[translate, rotate, scale]` keeps its samples and drives nothing; cubic tangents re-encode as `Ts` splines |
+| animation samplers / channels targeting node TRS (glTF model) | time samples on `xformOp:*` attributes | carried: the samples travel on `erhe::scene::Xform_op` and play as one Animation per file, keyed in seconds; a stack outside `[translate, rotate, scale]` keeps its samples and drives nothing; a cubic channel writes its key values as samples and reloads as a linear one |
 | `Animation_player` playback writing the animated layer | time-sampled value resolution (stronger than `default`) | the value the item authored stays readable as the base under the pose, and that base is what a save writes |
 | channels on `Light.intensity`, `Light.color`, `Material.base_color`, `Material.roughness`, `Material.metallic`, `Material.opacity`, `Item_base.visible` | time samples on `inputs:intensity`, `inputs:color`, `inputs:diffuseColor`, `inputs:roughness`, `inputs:metallic`, `inputs:opacity` and `visibility` | carried both ways as channels of the same per-file Animation, keyed in seconds; a scalar `inputs:roughness` fills both components of erhe's anisotropic roughness and writes back its x; `visibility` is the boolean `visible` and holds the previous key between two of them; the samples a save writes are always derived from the clip's keys |
-| channels on any other property | time samples on any other attribute | one warning per animation at save, and no channel at load; a `Ts` spline is future work |
+| cubic channels on `Light.intensity`, `Material.roughness`, `Material.metallic`, `Material.opacity` | `Ts` spline (`<attr>.spline`) on `inputs:intensity`, `inputs:roughness`, `inputs:metallic`, `inputs:opacity` | carried both ways: knots are keys, and a slope in value units per time code is erhe's tangent in value units per second; a spline of `linear` or `held` knots alone reloads as a linear or step sampler and saves back as time samples |
+| channels on any other property | time samples or a `Ts` spline on any other attribute | one warning per animation at save, and no channel at load; a spline on any other attribute is one warning per prim |
 | skins | `UsdSkel` `SkelAnimation` | |
 
 ## Composition

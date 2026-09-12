@@ -1,0 +1,83 @@
+#usda 1.0
+(
+    metersPerUnit = 1
+    upAxis = "Y"
+    timeCodesPerSecond = 24
+    startTimeCode = 0
+    endTimeCode = 24
+    defaultPrim = "World"
+)
+
+def Xform "World"
+{
+    def Scope "Materials"
+    {
+        def Material "surf"
+        {
+            token outputs:surface.connect = </World/Materials/surf/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:clearcoat = 0
+                float inputs:clearcoat.spline = {
+                    hermite,
+                    0: 0; post curve (0.25),
+                    24: 1; pre (0.25); post curve (0),
+                }
+
+                float inputs:metallic = 0
+                float inputs:metallic.spline = {
+                    hermite,
+                    0: 0; post linear,
+                    24: 1,
+                }
+
+                float inputs:opacity = 1
+                float inputs:opacity.spline = {
+                    hermite,
+                    0: 1; post held,
+                    24: 0.5,
+                }
+
+                float inputs:roughness = 0.25
+                float inputs:roughness.spline = {
+                    hermite,
+                    0: 0.25; post curve (0.015625),
+                    12: 0.5; pre (0.015625); post curve (0),
+                }
+
+                token outputs:surface
+            }
+        }
+    }
+
+    def Mesh "panel"
+    (
+         apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        point3f[] points = [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]
+        normal3f[] normals = [(0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0)] (
+            interpolation = "faceVarying"
+        )
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        int[] faceVertexCounts = [4]
+        uniform token subdivisionScheme = "none"
+
+        rel material:binding = </World/Materials/surf>
+    }
+
+    def SphereLight "key"
+    {
+        float inputs:intensity = 100
+        float inputs:intensity.spline = {
+            hermite,
+            0: 100; post curve (8),
+            12: 200; pre (4); post curve (4),
+            24: 150; pre (-2); post curve (0),
+        }
+
+        float inputs:radius = 0
+    }
+}

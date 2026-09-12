@@ -435,6 +435,17 @@ constexpr std::array<std::string_view, 7> c_sampled_attribute_names{
     std::string_view{"inputs:opacity"}
 };
 
+// The attributes of c_sampled_attribute_names a `Ts` spline is carried on
+// (src/erhe/usd/notes.md, "Time samples"): a spline is a scalar value source
+// in USD, so the color-valued and token-valued attributes of the table cannot
+// author one.
+constexpr std::array<std::string_view, 4> c_spline_attribute_names{
+    std::string_view{"inputs:intensity"},
+    std::string_view{"inputs:roughness"},
+    std::string_view{"inputs:metallic"},
+    std::string_view{"inputs:opacity"}
+};
+
 // How one sample value of such an attribute fills the components of the erhe
 // property it drives.
 enum class Sampled_attribute_kind
@@ -521,6 +532,46 @@ enum class Sampled_attribute_kind
         return nullptr;
     }
     return &var.ts_raw();
+}
+
+// The `Ts` spline one attribute of a layer prim spec authors, or null. The
+// USDA parser reads a `<type> <attr>.spline = { ... }` block into the
+// attribute's own `PrimVar`, beside the default and the time samples, so the
+// spline travels the way the samples do.
+[[nodiscard]] auto find_spec_attribute_spline(
+    const lightusd::PrimSpec& spec,
+    const std::string_view    attribute_name
+) -> const lightusd::primvar::PrimVar::SplineData*
+{
+    const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find(std::string{attribute_name});
+    if ((i == spec.props().end()) || !i->second.is_attribute()) {
+        return nullptr;
+    }
+    const lightusd::primvar::PrimVar& var = i->second.get_attribute().get_var();
+    if (!var.has_spline()) {
+        return nullptr;
+    }
+    return &var.spline_data();
+}
+
+// One spline knot value as a double. A knot of a scalar attribute is authored
+// as `double`, `float` or `half` - the wire type the attribute's declared type
+// gives it.
+[[nodiscard]] auto read_spline_knot_value(const lightusd::value::Value& value, double& out_value) -> bool
+{
+    if (const nonstd::optional<double> as_double = value.get_value<double>()) {
+        out_value = as_double.value();
+        return true;
+    }
+    if (const nonstd::optional<float> as_float = value.get_value<float>()) {
+        out_value = static_cast<double>(as_float.value());
+        return true;
+    }
+    if (const nonstd::optional<lightusd::value::half> as_half = value.get_value<lightusd::value::half>()) {
+        out_value = static_cast<double>(lightusd::value::half_to_float(as_half.value()));
+        return true;
+    }
+    return false;
 }
 
 // One authored `xformOp:<type>[:<suffix>]` as an erhe Xform_op: the type, the
@@ -937,29 +988,34 @@ private:
         m_import_time_code = out.start_time_code_authored ? out.start_time_code : earliest_sample_time;
     }
 
-    // The earliest time any prim spec of the layer samples one of the
-    // attributes the animation carries beyond the transform
-    // (c_sampled_attribute_names). A stage whose only samples are on those
-    // attributes is evaluated at that time, the way a sampled `xformOp`
-    // decides it.
+    // The earliest time any prim spec of the layer keys one of the attributes
+    // the animation carries beyond the transform (c_sampled_attribute_names) -
+    // a time sample or the first knot of a `Ts` spline. A stage whose only
+    // keys are on those attributes is evaluated at that time, the way a
+    // sampled `xformOp` decides it.
     static void find_earliest_attribute_sample_time(
         const lightusd::PrimSpec& spec,
         double&                   out_time_code,
         bool&                     out_found
     )
     {
+        const auto consider = [&out_time_code, &out_found](const double time) {
+            if (!out_found || (time < out_time_code)) {
+                out_time_code = time;
+                out_found     = true;
+            }
+        };
         for (const std::string_view attribute_name : c_sampled_attribute_names) {
             const lightusd::value::TimeSamples* samples = find_spec_attribute_time_samples(spec, attribute_name);
-            if (samples == nullptr) {
-                continue;
+            if (samples != nullptr) {
+                const nonstd::optional<double> time = samples->get_time(0);
+                if (time) {
+                    consider(time.value());
+                }
             }
-            const nonstd::optional<double> time = samples->get_time(0);
-            if (!time) {
-                continue;
-            }
-            if (!out_found || (time.value() < out_time_code)) {
-                out_time_code = time.value();
-                out_found     = true;
+            const lightusd::primvar::PrimVar::SplineData* spline = find_spec_attribute_spline(spec, attribute_name);
+            if ((spline != nullptr) && !spline->knots.empty()) {
+                consider(spline->knots.front().time);
             }
         }
         for (const lightusd::PrimSpec& child : spec.children()) {
@@ -1187,6 +1243,199 @@ private:
         );
     }
 
+    // One `Ts` spline of one prim as a channel of the file's animation
+    // (src/erhe/usd/notes.md, "Time samples"). A spline is a scalar value
+    // source in USD, so only the scalar attributes of the table carry one;
+    // its knots become the sampler's keys, keyed in seconds the way the time
+    // samples are, and its tangent slopes - value units per time code -
+    // become erhe's tangents in value units per second.
+    void add_attribute_spline_channel(
+        std::shared_ptr<erhe::scene::Animation>&      animation,
+        const double                                  time_codes_per_second,
+        const std::string&                            absolute_path,
+        const std::string_view                        attribute_name,
+        const std::shared_ptr<erhe::Item_base>&       target,
+        const erhe::property::Dependency_property*    property,
+        const Sampled_attribute_kind                  kind,
+        const lightusd::primvar::PrimVar::SplineData& spline,
+        const std::size_t                             component_count
+    )
+    {
+        if ((kind != Sampled_attribute_kind::scalar) && (kind != Sampled_attribute_kind::scalar_pair)) {
+            log_usd->warn(
+                "USD prim '{}': '{}' authors a Ts spline, which erhe reads for a scalar attribute alone - the attribute is not animated",
+                absolute_path, attribute_name
+            );
+            return;
+        }
+        const std::size_t knot_count = spline.knots.size();
+        if (knot_count == 0) {
+            return;
+        }
+        std::vector<double> times;
+        std::vector<double> values;
+        std::vector<double> in_tangents;
+        std::vector<double> out_tangents;
+        times       .reserve(knot_count);
+        values      .reserve(knot_count);
+        in_tangents .reserve(knot_count);
+        out_tangents.reserve(knot_count);
+        bool dual_valued = false;
+        for (const lightusd::primvar::PrimVar::SplineKnotData& knot : spline.knots) {
+            double value{0.0};
+            if (!read_spline_knot_value(knot.val, value)) {
+                log_usd->warn(
+                    "USD prim '{}': the Ts spline of '{}' has knots of a value type erhe does not read - the attribute is not animated",
+                    absolute_path, attribute_name
+                );
+                return;
+            }
+            dual_valued = dual_valued || knot.hasDualValue;
+            times       .push_back(knot.time);
+            values      .push_back(value);
+            in_tangents .push_back(knot.preTangentSlope);
+            out_tangents.push_back(knot.postTangentSlope);
+        }
+        if (dual_valued) {
+            log_usd->warn(
+                "USD prim '{}': the Ts spline of '{}' has dual-valued knots - erhe keeps the value each knot leaves with",
+                absolute_path, attribute_name
+            );
+        }
+        // erhe clamps to the end keys, so every extrapolation but held - which
+        // is that clamp - and every inner loop changes what the clip says
+        // outside the knot range.
+        constexpr int c_extrapolation_none = 0;
+        constexpr int c_extrapolation_held = 1;
+        const bool clamped_extrapolation =
+            ((spline.preExtrapolation  == c_extrapolation_held) || (spline.preExtrapolation  == c_extrapolation_none)) &&
+            ((spline.postExtrapolation == c_extrapolation_held) || (spline.postExtrapolation == c_extrapolation_none));
+        if (!clamped_extrapolation || spline.hasLoop) {
+            log_usd->warn(
+                "USD prim '{}': the Ts spline of '{}' extrapolates or loops beyond its knots - erhe holds the end keys instead",
+                absolute_path, attribute_name
+            );
+        }
+
+        // The interpolation of a segment is named by the knot it starts at:
+        // 0 none, 1 held, 2 linear, 3 curve.
+        constexpr int c_interpolation_held   = 1;
+        constexpr int c_interpolation_linear = 2;
+        constexpr int c_interpolation_curve  = 3;
+        const std::size_t segment_count = knot_count - 1;
+        bool all_held   = (segment_count > 0);
+        bool all_linear = (segment_count > 0);
+        for (std::size_t segment = 0; segment < segment_count; ++segment) {
+            const int interpolation = spline.knots[segment].interpolationMode;
+            all_held   = all_held   && (interpolation == c_interpolation_held);
+            all_linear = all_linear && (interpolation == c_interpolation_linear);
+        }
+
+        std::vector<float> timestamps;
+        std::vector<float> data;
+        timestamps.reserve(knot_count);
+        for (const double time : times) {
+            timestamps.push_back(static_cast<float>(time / time_codes_per_second));
+        }
+
+        // A spline of held segments alone is exactly a STEP sampler and one of
+        // linear segments alone exactly a LINEAR sampler, both of which key the
+        // plain value; anything else is a cubic sampler, whose keys carry the
+        // tangents too.
+        const erhe::scene::Animation_interpolation_mode interpolation_mode =
+            all_held   ? erhe::scene::Animation_interpolation_mode::STEP   :
+            all_linear ? erhe::scene::Animation_interpolation_mode::LINEAR :
+                         erhe::scene::Animation_interpolation_mode::CUBICSPLINE;
+        const bool cubic = (interpolation_mode == erhe::scene::Animation_interpolation_mode::CUBICSPLINE);
+        if (!cubic) {
+            data.reserve(knot_count * component_count);
+            for (const double value : values) {
+                for (std::size_t component = 0; component < component_count; ++component) {
+                    data.push_back(static_cast<float>(value));
+                }
+            }
+        } else {
+            bool approximated_hold = false;
+            bool bezier_widths     = false;
+            for (std::size_t segment = 0; segment < segment_count; ++segment) {
+                const double delta_time_codes = times[segment + 1] - times[segment];
+                const int    interpolation    = spline.knots[segment].interpolationMode;
+                if (interpolation == c_interpolation_linear) {
+                    // A Hermite segment whose two tangents are the chord slope
+                    // is that chord, so a linear segment is carried exactly.
+                    const double chord_slope = (delta_time_codes > 0.0)
+                        ? ((values[segment + 1] - values[segment]) / delta_time_codes)
+                        : 0.0;
+                    out_tangents[segment    ] = chord_slope;
+                    in_tangents [segment + 1] = chord_slope;
+                    continue;
+                }
+                if (interpolation != c_interpolation_curve) {
+                    // A held segment - and a `none` segment, which has no value
+                    // at all - is not a cubic. Zero tangents leave the segment
+                    // easing from one key to the next instead of holding, which
+                    // is the closest a cubic sampler comes.
+                    out_tangents[segment    ] = 0.0;
+                    in_tangents [segment + 1] = 0.0;
+                    approximated_hold = true;
+                    continue;
+                }
+                if (spline.curveType == 0) {
+                    // A Bezier tangent of width `delta / 3` is the Hermite
+                    // tangent of the same slope; any other width is a curve
+                    // erhe's sampler cannot spell.
+                    const double expected_width = delta_time_codes / 3.0;
+                    const double tolerance      = 1e-4 * std::abs(delta_time_codes);
+                    bezier_widths = bezier_widths ||
+                        (std::abs(spline.knots[segment    ].postTangentWidth - expected_width) > tolerance) ||
+                        (std::abs(spline.knots[segment + 1].preTangentWidth  - expected_width) > tolerance);
+                }
+            }
+            if (approximated_hold) {
+                log_usd->warn(
+                    "USD prim '{}': the Ts spline of '{}' holds a segment inside a curve - erhe eases across it instead",
+                    absolute_path, attribute_name
+                );
+            }
+            if (bezier_widths) {
+                log_usd->warn(
+                    "USD prim '{}': the Ts spline of '{}' has Bezier tangent widths other than a third of their segment - erhe reads the slopes alone",
+                    absolute_path, attribute_name
+                );
+            }
+            data.reserve(knot_count * component_count * 3);
+            for (std::size_t knot = 0; knot < knot_count; ++knot) {
+                // A slope is value units per time code and erhe's tangents are
+                // value units per second.
+                const double in_tangent  = in_tangents [knot] * time_codes_per_second;
+                const double out_tangent = out_tangents[knot] * time_codes_per_second;
+                for (std::size_t component = 0; component < component_count; ++component) {
+                    data.push_back(static_cast<float>(in_tangent));
+                }
+                for (std::size_t component = 0; component < component_count; ++component) {
+                    data.push_back(static_cast<float>(values[knot]));
+                }
+                for (std::size_t component = 0; component < component_count; ++component) {
+                    data.push_back(static_cast<float>(out_tangent));
+                }
+            }
+        }
+
+        ensure_animation(animation);
+        erhe::scene::Animation_sampler sampler{interpolation_mode};
+        sampler.set(std::move(timestamps), std::move(data));
+        animation->samplers.push_back(std::move(sampler));
+        animation->channels.push_back(
+            erhe::scene::Animation_channel{
+                .property       = property,
+                .sampler_index  = animation->samplers.size() - 1,
+                .target         = target,
+                .start_position = 0,
+                .value_offset   = cubic ? component_count : std::size_t{0}
+            }
+        );
+    }
+
     // One time-sampled attribute of one prim as a channel of the file's
     // animation (src/erhe/usd/notes.md, "Time samples"). The samples are read
     // raw off the composed layer's prim spec - LightUSD evaluates an
@@ -1212,12 +1461,25 @@ private:
         if (spec == nullptr) {
             return;
         }
-        const lightusd::value::TimeSamples* samples = find_spec_attribute_time_samples(*spec, attribute_name);
-        if (samples == nullptr) {
-            return;
-        }
         const std::size_t component_count = erhe::scene::get_component_count(*property);
         if (component_count == 0) {
+            return;
+        }
+        const lightusd::value::TimeSamples*           samples = find_spec_attribute_time_samples(*spec, attribute_name);
+        const lightusd::primvar::PrimVar::SplineData* spline  = find_spec_attribute_spline(*spec, attribute_name);
+        if ((samples != nullptr) && (spline != nullptr)) {
+            log_usd->warn(
+                "USD prim '{}': '{}' authors both time samples and a Ts spline - USD resolves the samples first, so the spline is not read",
+                absolute_path, attribute_name
+            );
+        }
+        if (samples == nullptr) {
+            if (spline != nullptr) {
+                add_attribute_spline_channel(
+                    animation, time_codes_per_second, absolute_path, attribute_name,
+                    target, property, kind, *spline, component_count
+                );
+            }
             return;
         }
         const std::vector<lightusd::value::TimeSamples::Sample>& raw_samples = samples->get_samples();
@@ -1332,6 +1594,37 @@ private:
                 animation, time_codes_per_second, entry.first, "visibility",
                 entry.second, erhe::Item_base::visible_property.get_ptr(), Sampled_attribute_kind::visibility
             );
+        }
+        for (const std::pair<const std::string, lightusd::PrimSpec>& entry : m_impl->layer.primspecs()) {
+            warn_about_uncarried_splines(entry.second, std::string{});
+        }
+    }
+
+    // One warning per prim naming each attribute that authors a `Ts` spline
+    // erhe does not carry (src/erhe/usd/notes.md, "Time samples"): the
+    // attribute keeps whatever `default` or `timeSamples` it also authors, and
+    // the spline itself is read by nothing.
+    void warn_about_uncarried_splines(const lightusd::PrimSpec& spec, const std::string& parent_path)
+    {
+        const std::string path = parent_path + "/" + spec.name();
+        for (const std::pair<const std::string, lightusd::Property>& entry : spec.props()) {
+            if (!entry.second.is_attribute() || !entry.second.get_attribute().get_var().has_spline()) {
+                continue;
+            }
+            const std::string_view name{entry.first};
+            const bool carried = std::find(
+                c_spline_attribute_names.begin(), c_spline_attribute_names.end(), name
+            ) != c_spline_attribute_names.end();
+            if (carried) {
+                continue;
+            }
+            log_usd->warn(
+                "USD prim '{}': '{}' authors a Ts spline erhe does not carry - the attribute keeps the value it also authors",
+                path, entry.first
+            );
+        }
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            warn_about_uncarried_splines(child, path);
         }
     }
 

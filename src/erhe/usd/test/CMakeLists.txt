@@ -14,6 +14,7 @@ add_executable(${_target}
     test_usd_active.cpp
     test_usd_arc_supplied_xform_ops.cpp
     test_usd_attribute_samples.cpp
+    test_usd_attribute_splines.cpp
     test_usd_brushes.cpp
     test_usd_class_prototypes.cpp
     test_usd_defined.cpp
@@ -48,6 +49,12 @@ target_compile_definitions(${_target}
     PRIVATE
         ERHE_USD_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
 )
+
+# `spline-eval.hh` is the USD spline evaluator the Ts spline test checks the
+# reader's tangent conversion against; it is header-only, so the directory is
+# all the test needs. LightUSD's headers are not clean at erhe's warning
+# level, so it is a SYSTEM include, the way erhe_usd itself names it.
+target_include_directories(${_target} SYSTEM PRIVATE ${ERHE_LIGHTUSD_INCLUDE_DIR})
 
 target_link_libraries(${_target}
     PRIVATE
