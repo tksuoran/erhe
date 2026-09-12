@@ -150,6 +150,40 @@ def Xform "World"
         }
     }
 
+    def Xform "Panel" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (0, 2, -4)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        bool physics:kinematicEnabled = 1
+
+        def Cube "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 1
+            uniform token purpose = "guide"
+        }
+    }
+
+    def Xform "Post" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        double3 xformOp:translate = (0, 2, -6)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        bool physics:kinematicEnabled = 1
+
+        def Cube "collider" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            double size = 1
+            uniform token purpose = "guide"
+        }
+    }
+
     def Xform "Anchor"
     {
         double3 xformOp:translate = (0, 6, 0)
@@ -200,5 +234,18 @@ def Xform "World"
     {
         rel physics:body0 = </World/Rock>
         rel physics:body1 = </World/Anchor>
+    }
+
+    def PhysicsRevoluteJoint "Flap"
+    {
+        rel physics:body0 = </World/Panel>
+        rel physics:body1 = </World/Post>
+        point3f physics:localPos0 = (0.5, 0, 0)
+        quatf physics:localRot0 = (0.7071068, 0.7071068, 0, 0)
+        point3f physics:localPos1 = (0.5, 0, 2)
+        quatf physics:localRot1 = (0.7071068, 0.7071068, 0, 0)
+        uniform token physics:axis = "Y"
+        float physics:lowerLimit = -30
+        float physics:upperLimit = 30
     }
 }

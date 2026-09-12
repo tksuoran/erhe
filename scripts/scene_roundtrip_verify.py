@@ -2051,7 +2051,7 @@ def usd_physics_leg(S):
     check(S, "physics: the file's shared items are in the library",
           original["physics_materials"] == ["Roundtrip_ice", "Rubber"] and
           original["collision_filters"] == ["Characters", "Props"] and
-          original["physics_joint_settings"] == ["Door", "Hinge_settings", "Weld"],
+          original["physics_joint_settings"] == ["Door", "Flap", "Hinge_settings", "Weld"],
           str({k: original[k] for k in ("physics_materials", "collision_filters", "physics_joint_settings")}))
 
     saved = USD_SAVE_DIR / "usd_physics.usda"

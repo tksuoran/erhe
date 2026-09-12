@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -280,7 +281,7 @@ TEST_F(Physics_import, a_scaled_box_collider_keeps_its_scale_on_the_prim)
 TEST_F(Physics_import, guide_collider_prims_are_listed)
 {
     const std::vector<std::shared_ptr<erhe::scene::Node>>& guides = result.data.physics_prims.guide_collider_prims;
-    ASSERT_EQ(guides.size(), 4u);
+    ASSERT_EQ(guides.size(), 6u);
     for (const std::shared_ptr<erhe::scene::Node>& guide : guides) {
         ASSERT_TRUE(guide.operator bool());
         EXPECT_EQ(guide->get_name(), "collider");
@@ -335,6 +336,57 @@ TEST_F(Physics_import, joint_prim_uses_the_settings_it_names)
     EXPECT_EQ(joint.connected_node->get_name(), "Anchor");
     EXPECT_TRUE(joint.enable_collision);
     EXPECT_EQ(joint.joint_index, joint_index_by_name("Hinge_settings"));
+}
+
+// A joint prim that authors `localPos` / `localRot` of its own states two
+// frames, and erhe takes a joint's frames from two nodes: each authored frame
+// is a node below the body prim, which is where the joint then sits
+// (doc/usd_compatibility.md, "Physics").
+TEST_F(Physics_import, authored_joint_frames_become_frame_nodes)
+{
+    const erhe::scene::Physics_node_description* frame0 = body("/World/Panel/Flap_frame0");
+    ASSERT_NE(frame0, nullptr);
+    ASSERT_TRUE(frame0->node.operator bool());
+    EXPECT_EQ(frame0->node->get_name(), "Flap_frame0");
+    ASSERT_TRUE(frame0->node->get_parent_node().operator bool());
+    EXPECT_EQ(frame0->node->get_parent_node()->get_name(), "Panel");
+    // The frame node carries the authored frame and nothing else: no body of
+    // its own, only the joint.
+    EXPECT_FALSE(frame0->motion.has_value());
+    EXPECT_FALSE(frame0->collider.has_value());
+    ASSERT_TRUE(frame0->joint.has_value());
+
+    const erhe::scene::Trs_transform& frame0_transform = frame0->node->parent_from_node_transform();
+    EXPECT_NEAR(frame0_transform.get_translation().x, 0.5f, c_tolerance);
+    EXPECT_NEAR(frame0_transform.get_translation().y, 0.0f, c_tolerance);
+    EXPECT_NEAR(frame0_transform.get_translation().z, 0.0f, c_tolerance);
+    EXPECT_NEAR(std::abs(frame0_transform.get_rotation().w), 0.7071068f, c_tolerance);
+    EXPECT_NEAR(std::abs(frame0_transform.get_rotation().x), 0.7071068f, c_tolerance);
+
+    const std::shared_ptr<erhe::scene::Node>& connected = frame0->joint.value().connected_node;
+    ASSERT_TRUE(connected.operator bool());
+    EXPECT_EQ(connected->get_name(), "Flap_frame1");
+    ASSERT_TRUE(connected->get_parent_node().operator bool());
+    EXPECT_EQ(connected->get_parent_node()->get_name(), "Post");
+    const erhe::scene::Trs_transform& frame1_transform = connected->parent_from_node_transform();
+    EXPECT_NEAR(frame1_transform.get_translation().x, 0.5f, c_tolerance);
+    EXPECT_NEAR(frame1_transform.get_translation().y, 0.0f, c_tolerance);
+    EXPECT_NEAR(frame1_transform.get_translation().z, 2.0f, c_tolerance);
+
+    // The two frames are one point of the world: that is what a joint frame
+    // is for.
+    const glm::vec3 world0 = glm::vec3{frame0->node->world_from_node()[3]};
+    const glm::vec3 world1 = glm::vec3{connected->world_from_node()[3]};
+    EXPECT_NEAR(glm::distance(world0, world1), 0.0f, c_tolerance);
+
+    // The limit of the joint is the one the revolute joint states, read on
+    // the axis of the frame the frame node carries.
+    const erhe::scene::Physics_joint_description& settings =
+        result.data.physics.joints[frame0->joint.value().joint_index];
+    EXPECT_EQ(settings.name, "Flap");
+    ASSERT_EQ(settings.limits.size(), 1u);
+    ASSERT_EQ(settings.limits.front().angular_axes.size(), 1u);
+    EXPECT_EQ(settings.limits.front().angular_axes.front(), 1);
 }
 
 TEST_F(Physics_import, revolute_joint_becomes_one_angular_limit)

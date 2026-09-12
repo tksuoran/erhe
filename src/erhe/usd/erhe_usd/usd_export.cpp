@@ -6191,11 +6191,97 @@ private:
         return (typed != nullptr) ? &typed->xformOps : nullptr;
     }
 
+    // Which of a joint prim's two frames is written: `localPos0` /
+    // `localRot0`, the frame of the first body, or `localPos1` / `localRot1`,
+    // the frame of the second.
+    enum class Joint_frame
+    {
+        first,
+        second
+    };
+
+    // Whether one physics entry is a body rather than a joint frame: a frame
+    // node carries the joint alone.
+    [[nodiscard]] static auto is_rigid_body_entry(const erhe::scene::Physics_node_description& entry) -> bool
+    {
+        return entry.motion.has_value() || entry.collider.has_value() || entry.trigger.has_value();
+    }
+
+    // The nearest self-or-ancestor prim of `node` that carries a body: the
+    // prim a USD joint names as one of its two bodies, which is the prim
+    // erhe's constraint takes that body from.
+    [[nodiscard]] auto find_joint_body_node(const erhe::scene::Node* node) const -> const erhe::scene::Node*
+    {
+        const erhe::scene::Physics_description* description = physics_description();
+        if (description == nullptr) {
+            return nullptr;
+        }
+        const erhe::scene::Node* current = node;
+        while (current != nullptr) {
+            const std::size_t index = find_body_index(current);
+            if ((index != c_no_physics_index) && is_rigid_body_entry(description->node_physics[index])) {
+                return current;
+            }
+            current = current->get_parent_node().get();
+        }
+        return nullptr;
+    }
+
+    // One frame of a joint: the transform of the node holding that side of
+    // the joint in the space of the body prim it hangs below
+    // (doc/usd_compatibility.md, "Physics"). A node that is the body prim
+    // itself states the identity, which is left unwritten.
+    void write_joint_frame(
+        lightusd::PhysicsJoint&        usd_joint,
+        const Joint_frame              side,
+        const erhe::scene::Node* const body_node,
+        const erhe::scene::Node* const frame_node,
+        const std::string&             joint_path
+    )
+    {
+        if ((body_node == nullptr) || (frame_node == nullptr) || (body_node == frame_node)) {
+            return;
+        }
+        const glm::mat4 body_from_frame = glm::inverse(body_node->world_from_node()) * frame_node->world_from_node();
+        glm::vec3 translation{0.0f};
+        glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 scale{1.0f};
+        // The frame is read off the world transforms rather than off the
+        // node's own: a frame node reloads with the transform its prim
+        // states divided out of the composed one, and taking both sides the
+        // same way is what makes the second write of a file the first.
+        decompose_trs(body_from_frame, translation, rotation, scale);
+        if (glm::distance(scale, glm::vec3{1.0f}) > 1e-4f) {
+            add_warning(
+                fmt::format(
+                    "the joint of prim '{}' takes a frame from prim '{}', which is scaled against its body - a USD joint frame states no scale and the frame is written without it",
+                    joint_path, frame_node->get_name()
+                )
+            );
+        }
+        if (translation != glm::vec3{0.0f}) {
+            const lightusd::value::point3f value{translation.x, translation.y, translation.z};
+            if (side == Joint_frame::first) {
+                usd_joint.localPos0.set_value(value);
+            } else {
+                usd_joint.localPos1.set_value(value);
+            }
+        }
+        if (rotation != glm::quat{1.0f, 0.0f, 0.0f, 0.0f}) {
+            const lightusd::value::quatf value{{{rotation.x, rotation.y, rotation.z}}, rotation.w};
+            if (side == Joint_frame::first) {
+                usd_joint.localRot0.set_value(value);
+            } else {
+                usd_joint.localRot1.set_value(value);
+            }
+        }
+    }
+
     // The joint one prim carries, as the `PhysicsJoint` prim below it: the
-    // two bodies it joins, the frame of the connected prim in the joint
-    // prim's space, and the limits and drives of its settings item - applied
-    // inline, and named by the relationship when the settings are a prim of
-    // their own that other joints share.
+    // two bodies it joins, the frame of each in its body's space, and the
+    // limits and drives of its settings item - applied inline, and named by
+    // the relationship when the settings are a prim of their own that other
+    // joints share.
     [[nodiscard]] auto write_joint_prim(
         const Plan_prim&                             plan_prim,
         const erhe::scene::Physics_node_description& entry,
@@ -6204,11 +6290,26 @@ private:
     {
         lightusd::PhysicsJoint usd_joint;
         usd_joint.name = plan_prim.physics_joint_name;
-        const std::string body0_path = plan_prim.path;
-        const std::string body1_path = planned_path_of(joint.connected_node.get());
+        // The prim each side of the joint names is the nearest body at or
+        // above the node holding that side; that node states the frame.
+        const erhe::scene::Node* body0_node = find_joint_body_node(entry.node.get());
+        std::string              body0_path = planned_path_of(body0_node);
+        if (body0_path.empty()) {
+            body0_node = entry.node.get();
+            body0_path = plan_prim.path;
+        }
         usd_joint.body0.set(lightusd::Path{body0_path, ""});
+        write_joint_frame(usd_joint, Joint_frame::first, body0_node, entry.node.get(), plan_prim.path);
+
+        const erhe::scene::Node* body1_node = find_joint_body_node(joint.connected_node.get());
+        std::string              body1_path = planned_path_of(body1_node);
+        if (body1_path.empty()) {
+            body1_node = joint.connected_node.get();
+            body1_path = planned_path_of(joint.connected_node.get());
+        }
         if (!body1_path.empty()) {
             usd_joint.body1.set(lightusd::Path{body1_path, ""});
+            write_joint_frame(usd_joint, Joint_frame::second, body1_node, joint.connected_node.get(), plan_prim.path);
         } else if (joint.connected_node) {
             add_warning(
                 fmt::format("the joint of prim '{}' names a prim that is not written - it is written with one body", plan_prim.path)
@@ -6216,23 +6317,6 @@ private:
         }
         if (joint.enable_collision) {
             usd_joint.collisionEnabled.set_value(true);
-        }
-        // The joint frame is each prim's own frame, so the first frame is the
-        // identity and the second is the joint prim's frame in the connected
-        // prim's space.
-        if (entry.node && joint.connected_node) {
-            const glm::mat4 connected_from_node =
-                glm::inverse(joint.connected_node->world_from_node()) * entry.node->world_from_node();
-            glm::vec3 translation{0.0f};
-            glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
-            glm::vec3 scale{1.0f};
-            decompose_trs(connected_from_node, translation, rotation, scale);
-            if (translation != glm::vec3{0.0f}) {
-                usd_joint.localPos1.set_value(lightusd::value::point3f{translation.x, translation.y, translation.z});
-            }
-            if (rotation != glm::quat{1.0f, 0.0f, 0.0f, 0.0f}) {
-                usd_joint.localRot1.set_value(lightusd::value::quatf{{{rotation.x, rotation.y, rotation.z}}, rotation.w});
-            }
         }
         const erhe::scene::Physics_description* description = physics_description();
         if (joint.joint_index < description->joints.size()) {

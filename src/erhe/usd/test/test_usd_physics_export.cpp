@@ -536,4 +536,40 @@ TEST_F(Physics_export, the_joints_survive)
     EXPECT_NEAR(weld.limits.front().max.value(), 0.0f, c_tolerance);
 }
 
+// A joint sitting on a frame node below its body is written as the body it
+// hangs below plus that node's transform as the joint frame, and the frame
+// node is written as the `Xform` prim it is - so the reload finds that node
+// again rather than making a second one
+// (doc/usd_compatibility.md, "Physics").
+TEST_F(Physics_export, the_joint_frames_survive)
+{
+    const std::string first = read_file(trip->first_path);
+    EXPECT_NE(first.find("rel physics:body0 = </World/Panel>"), std::string::npos);
+    EXPECT_NE(first.find("rel physics:body1 = </World/Post>"),  std::string::npos);
+    EXPECT_NE(first.find("physics:localPos0 = (0.5, 0, 0)"),    std::string::npos);
+    EXPECT_NE(first.find("physics:localPos1 = (0.5, 0, 2)"),    std::string::npos);
+
+    const erhe::scene::Physics_node_description* frame0 = body_at(trip->reloaded.data, "/World/Panel/Flap_frame0");
+    ASSERT_NE(frame0, nullptr);
+    ASSERT_TRUE(frame0->joint.has_value());
+    ASSERT_TRUE(frame0->node.operator bool());
+    const erhe::scene::Trs_transform& frame0_transform = frame0->node->parent_from_node_transform();
+    EXPECT_NEAR(frame0_transform.get_translation().x, 0.5f, c_tolerance);
+    EXPECT_NEAR(std::abs(frame0_transform.get_rotation().w), 0.7071068f, c_tolerance);
+    EXPECT_NEAR(std::abs(frame0_transform.get_rotation().x), 0.7071068f, c_tolerance);
+
+    const std::shared_ptr<erhe::scene::Node>& connected = frame0->joint.value().connected_node;
+    ASSERT_TRUE(connected.operator bool());
+    EXPECT_EQ(connected->get_name(), "Flap_frame1");
+
+    // One frame node per side, and no second one beside it.
+    std::size_t frame_children = 0;
+    for (const std::shared_ptr<erhe::Hierarchy>& child : frame0->node->get_parent_node()->get_children()) {
+        if (child->get_name().find("Flap_frame0") != std::string::npos) {
+            ++frame_children;
+        }
+    }
+    EXPECT_EQ(frame_children, 1u);
+}
+
 } // anonymous namespace

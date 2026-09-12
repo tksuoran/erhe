@@ -1172,11 +1172,19 @@ follows are:
   `physics:axis`, `PhysicsFixedJoint` one limit at zero over all six axes,
   `PhysicsSphericalJoint` the two cone angles on the two axes beside
   `physics:axis`, and `PhysicsDistanceJoint` one linear limit over all three.
-- A joint prim's `physics:body0` (its holding prim when it names none) is the
-  prim the `Node_joint` sits on and `physics:body1` is the connected prim.
-  erhe's six-dof joint has no frames of its own - the joint frame is each
-  prim's own frame - so a joint authoring `localPos` / `localRot` of its own
-  is one warning naming it.
+- A joint prim's `physics:body0` (its holding prim when it names none) names
+  the first body and `physics:body1` the second. erhe takes a joint's two
+  frames from two nodes - the node the `Node_joint` sits on and the node it
+  names - so each frame the prim authors is a node: an identity
+  `localPos0` / `localRot0` puts the `Node_joint` on the first body's prim,
+  and a frame of its own puts it on an `Xform` frame node below that prim
+  carrying the frame, named `<joint prim name>_frame0`;
+  `localPos1` / `localRot1` and the second body give the connected node the
+  same way, with `_frame1`. A prim of that name already sitting below the
+  body whose local transform is the frame is that frame node, so reloading a
+  file erhe wrote finds the node the write left rather than making a second
+  one. A subclass joint's `physics:axis` is an axis of the frame, so a
+  `localRot` orienting the axis reaches the limit through the frame node.
 - The `PhysicsScene` prim gives `Usd_physics::scene` the gravity it authors.
   USD's fallbacks stand for what it leaves unauthored (a direction of
   `(0, 0, 0)` is the stage's negative up axis, a magnitude of `-inf` is earth
@@ -1528,12 +1536,20 @@ becomes. The rules the write follows:
   - and one `PhysicsDriveAPI:<axis>` instance per drive. Rotational values are
   degrees.
 - A joint is a `PhysicsJoint` child prim of the prim it sits on, named after
-  its settings item: `physics:body0` the prim itself, `physics:body1` the
-  connected prim, `physics:localPos1` / `localRot1` the prim's frame in the
-  connected prim's space (the first frame is the identity - the joint frame
-  is each prim's own), `physics:collisionEnabled`, the settings' limit and
-  drive instances inline, and `custom rel erhe:Node_joint:joint_settings`
-  naming the settings prim when the settings are a prim other joints share.
+  its settings item. Each of its two bodies is the nearest prim at or above
+  the node holding that side of the joint that carries a body, and each frame
+  is that node's transform in its body's space: `physics:body0` with
+  `physics:localPos0` / `localRot0` for the node the joint sits on, and
+  `physics:body1` with `physics:localPos1` / `localRot1` for the connected
+  node. A node that is its body's prim states the identity, which is left
+  unwritten. A side with no body at or above it names the node itself and
+  states the identity - erhe's constraint reads that side's frame off the
+  node's own transform either way. The prim also carries
+  `physics:collisionEnabled`, the settings' limit and drive instances inline,
+  and `custom rel erhe:Node_joint:joint_settings` naming the settings prim
+  when the settings are a prim other joints share. A frame node is an
+  ordinary `Xform` prim of the tree, written where it sits, so the reload
+  finds it again.
 - The physics world's gravity is one `PhysicsScene` prim below the prim the
   stage names as its defaultPrim, with the direction and the magnitude the
   caller has; a value the caller leaves unset is USD's own fallback.

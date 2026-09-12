@@ -13,6 +13,7 @@
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/trs_transform.hpp"
+#include "erhe_scene/xform.hpp"
 
 // LightUSD headers, as in usd_import.cpp: erhe::usd is the only erhe library
 // that includes them.
@@ -31,10 +32,12 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <set>
@@ -1255,38 +1258,130 @@ private:
                     )
                 );
             }
-            warn_about_joint_frames(entry, base);
+            // The two frames the joint prim authors are two nodes: erhe takes
+            // a joint's frames from the transforms of the node it sits on and
+            // of the node it names, so a frame of its own is a node of its
+            // own below the body (doc/usd_compatibility.md, "Physics").
+            std::string                             joint_node_path = body0_path;
+            const std::shared_ptr<erhe::scene::Node> joint_node =
+                resolve_joint_frame(entry, base, node0, body0_path, Joint_frame::first, joint_node_path);
+            const std::string                       body1_path     = body1_paths.empty() ? std::string{} : body1_paths.front();
+            std::string                             connected_path = body1_path;
+            const std::shared_ptr<erhe::scene::Node> connected_node =
+                resolve_joint_frame(entry, base, node1, body1_path, Joint_frame::second, connected_path);
 
             const std::size_t               joint_index = resolve_joint_settings(entry, props);
-            const std::size_t               body_index  = ensure_node_entry(body0_path, node0);
+            const std::size_t               body_index  = ensure_node_entry(joint_node_path, joint_node);
             erhe::scene::Physics_node_joint node_joint{};
-            node_joint.connected_node   = node1;
+            node_joint.connected_node   = connected_node;
             node_joint.joint_index      = joint_index;
             node_joint.enable_collision = (base != nullptr) && base->collisionEnabled.get_value();
             m_data.physics.node_physics[body_index].joint = std::move(node_joint);
         }
     }
 
-    // erhe's six-dof joint has no frames of its own: the joint frame is the
-    // frame of each body's prim.
-    void warn_about_joint_frames(const Prim_entry& entry, const lightusd::PhysicsJointBase* base)
+    // Which of a joint prim's two frames is being read: `localPos0` /
+    // `localRot0`, the frame of the joint in the first body's space, or
+    // `localPos1` / `localRot1`, the frame of the joint in the second body's
+    // space.
+    enum class Joint_frame
     {
-        if (base == nullptr) {
-            return;
+        first,
+        second
+    };
+
+    // The node one authored joint frame becomes (doc/usd_compatibility.md,
+    // "Physics"): the body prim itself for an identity frame, else a frame
+    // node below the body prim carrying the authored frame - the node erhe's
+    // constraint then reads the frame off. A file erhe wrote already holds
+    // that node as an `Xform` prim of the name the write gave it, so a
+    // reload finds it rather than making a second one.
+    [[nodiscard]] auto resolve_joint_frame(
+        const Prim_entry&                         entry,
+        const lightusd::PhysicsJointBase*         base,
+        const std::shared_ptr<erhe::scene::Node>& body_node,
+        const std::string&                        body_path,
+        const Joint_frame                         side,
+        std::string&                              out_path
+    ) -> std::shared_ptr<erhe::scene::Node>
+    {
+        out_path = body_path;
+        if ((base == nullptr) || !body_node) {
+            return body_node;
         }
-        const bool offset =
-            (to_glm(base->localPos0.get_value()) != glm::vec3{0.0f})                    ||
-            (to_glm(base->localPos1.get_value()) != glm::vec3{0.0f})                    ||
-            (to_glm(base->localRot0.get_value()) != glm::quat{1.0f, 0.0f, 0.0f, 0.0f})  ||
-            (to_glm(base->localRot1.get_value()) != glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
-        if (offset) {
+        const glm::vec3 translation = (side == Joint_frame::first)
+            ? to_glm(base->localPos0.get_value())
+            : to_glm(base->localPos1.get_value());
+        const glm::quat rotation = (side == Joint_frame::first)
+            ? to_glm(base->localRot0.get_value())
+            : to_glm(base->localRot1.get_value());
+        if (is_identity_frame(translation, rotation)) {
+            return body_node;
+        }
+        const std::string name = std::string{entry.prim->element_name()} +
+            ((side == Joint_frame::first) ? std::string{"_frame0"} : std::string{"_frame1"});
+        const std::string path = body_path + "/" + name;
+        const std::shared_ptr<erhe::scene::Node> existing = find_node(path);
+        if (existing) {
+            if (
+                (existing->get_parent_node().get() == body_node.get()) &&
+                frame_matches(*existing.get(), translation, rotation)
+            ) {
+                out_path = path;
+                return existing;
+            }
             add_warning(
                 fmt::format(
-                    "USD '{}': joint prim '{}' authors a joint frame of its own - erhe joins the two prims at their own frames",
-                    m_arguments.file_name, entry.path
+                    "USD '{}': joint prim '{}' authors a frame below '{}', which already holds a prim named '{}' of another transform - the frame is placed on a prim of its own",
+                    m_arguments.file_name, entry.path, body_path, name
                 )
             );
         }
+        std::shared_ptr<erhe::scene::Xform> frame = std::make_shared<erhe::scene::Xform>(name);
+        frame->set_source_path(std::filesystem::path{m_arguments.file_name});
+        frame->enable_flag_bits(
+            erhe::Item_flags::show_in_ui |
+            (body_node->get_flag_bits() & erhe::Item_flags::content)
+        );
+        frame->erhe::Hierarchy::set_parent(body_node);
+        frame->set_parent_from_node(erhe::scene::Trs_transform{translation, rotation});
+        frame->update_world_from_node();
+        frame->handle_transform_update(erhe::scene::Node_transforms::get_next_serial());
+        m_data.nodes.push_back(frame);
+        // The name a sibling of that name already took is not the one the
+        // node got (M2), so the path is read back off the node.
+        out_path = body_path + "/" + frame->get_name();
+        return frame;
+    }
+
+    [[nodiscard]] static auto is_identity_frame(const glm::vec3& translation, const glm::quat& rotation) -> bool
+    {
+        return
+            (translation == glm::vec3{0.0f}) &&
+            (rotation    == glm::quat{1.0f, 0.0f, 0.0f, 0.0f});
+    }
+
+    // Whether a prim already sitting where a frame node would go is that
+    // frame node: its local transform is the frame, up to the precision a
+    // `float`-valued `localPos` / `localRot` states it in.
+    [[nodiscard]] static auto frame_matches(
+        const erhe::scene::Node& node,
+        const glm::vec3&         translation,
+        const glm::quat&         rotation
+    ) -> bool
+    {
+        constexpr float tolerance = 1e-4f;
+        const erhe::scene::Trs_transform& transform = node.parent_from_node_transform();
+        if (glm::distance(transform.get_translation(), translation) > tolerance) {
+            return false;
+        }
+        if (glm::distance(glm::abs(transform.get_scale()), glm::vec3{1.0f}) > tolerance) {
+            return false;
+        }
+        const glm::quat node_rotation = transform.get_rotation();
+        // A quaternion and its negation are one rotation.
+        const float     dot           = glm::dot(node_rotation, rotation);
+        return std::abs(std::abs(dot) - 1.0f) <= tolerance;
     }
 
     // The joint-settings item one joint prim uses: the one its
