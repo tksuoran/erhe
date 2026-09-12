@@ -14,6 +14,7 @@
 #include "operations/mesh_material_assign_operation.hpp"
 #include "operations/operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "preview/material_preview.hpp"
 #include "scene/scene_root.hpp"
@@ -839,14 +840,7 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
     // undoable insert under the Materials scope
     // (doc/usd-compatibility-plan.md U4).
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = material,
-                .parent  = library->get_scope(erhe::Item_type::material),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, material)
     );
 
     return make_json_content({

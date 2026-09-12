@@ -21,6 +21,7 @@
 #include "texture_graph/graph_texture.hpp"
 #include "texture_graph/texture_graph_window.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_set_flag_bits_operation.hpp"
 #include "operations/property_set_operation.hpp"
@@ -536,14 +537,7 @@ auto Scene_root::make_browser_window(
                             if (payload != nullptr) {
                                 const std::shared_ptr<erhe::primitive::Material> new_material =
                                     context.asset_manager->create<erhe::primitive::Material>(*this, *source_material);
-                                auto op = std::make_shared<Item_insert_remove_operation>(
-                                    Item_insert_remove_operation::Parameters{
-                                        .context = context,
-                                        .item    = new_material,
-                                        .parent  = library->get_scope(erhe::Item_type::material),
-                                        .mode    = Item_insert_remove_operation::Mode::insert
-                                    }
-                                );
+                                auto op = make_library_insert_operation(context, library, new_material);
                                 context.operation_stack->queue(op);
                             }
                             ImGui::EndDragDropTarget();

@@ -6,6 +6,7 @@
 #include "editor_log.hpp"
 #include "operations/compound_operation.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 
@@ -108,14 +109,7 @@ auto make_style_from_values(
     }
     Compound_operation::Parameters parameters;
     parameters.operations.push_back(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = context,
-                .item    = style,
-                .parent  = library->get_scope(erhe::Item_type::style),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(context, library, style)
     );
     for (const std::shared_ptr<erhe::Item_base>& item : items) {
         if (!item || item->is_sealed()) {

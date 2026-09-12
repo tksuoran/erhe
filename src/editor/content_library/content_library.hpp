@@ -106,13 +106,28 @@ public:
     // or this library's own root scope.
     [[nodiscard]] auto get_prim_root() const -> std::shared_ptr<erhe::Hierarchy>;
 
-    // The `Scope` a resource of this kind is placed under. `get_scope()`
-    // adopts the child of the prim root that carries the kind's name - the
-    // scope a loaded scene brings back - and creates it on the first resource
-    // of that kind when the tree holds none, then keeps it, so a kind no
-    // resource ever reached adds no prim and a folder the user made under a
-    // scope survives emptying it.
+    // The `Scope` a resource of this kind is placed under, standing in the
+    // tree. `get_scope()` adopts the child of the prim root that carries the
+    // kind's name - the scope a loaded scene brings back - and creates it on
+    // the first resource of that kind when the tree holds none, then keeps
+    // it, so a kind no resource ever reached adds no prim and a folder the
+    // user made under a scope survives emptying it. A resource whose
+    // insertion is an operation asks `get_existing_scope()` /
+    // `make_kind_scope()` instead, so that creating the scope is an undoable
+    // step of that operation (`Kind_scope_operation`).
     [[nodiscard]] auto get_scope (uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>;
+    // The kind's scope as `get_scope()` answers it, without making one: the
+    // kind's registered scope, or the prim of the tree that carries the
+    // kind's name (adopted), or nullptr when the tree holds neither. What an
+    // operation asks, so that creating the scope can be a step of its own.
+    [[nodiscard]] auto get_existing_scope(uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>;
+    // A fresh `Scope` named for the kind, registered as the kind's scope and
+    // left detached: the caller parents it - see `Kind_scope_operation`,
+    // which is how an operation that needs a kind scope brings it into the
+    // tree and takes it back out on undo. Registering it before it is placed
+    // is what makes every resource of the kind built into the same compound
+    // target this one scope.
+    [[nodiscard]] auto make_kind_scope(uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>;
     // Hands the library the folder tree a file carries, before any resource of
     // it is attached: every `Scope` of the subtree whose name is a kind scope
     // name and whose kind has no scope yet becomes that kind's scope, so the

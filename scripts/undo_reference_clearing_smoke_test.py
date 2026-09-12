@@ -573,6 +573,53 @@ def section_truly_released():
         check(section, "unload returned a result", False, str(result)[:200])
 
 
+def kind_scope_names(scene_name):
+    """The names of the `Scope` prims of a scene's tree."""
+    return sorted(
+        entry.get("name")
+        for entry in call("get_scene_nodes", {"scene_name": scene_name}).get("nodes", [])
+        if entry.get("type") == "Scope"
+    )
+
+
+def section_kind_scopes():
+    """A kind `Scope` the import created leaves with the import.
+
+    Resources sit under a lazily made `Scope` named for their kind, and the
+    scope is part of the operation that needed it: undoing the import that
+    brought the first skin or animation into the scene takes the "Skins" and
+    "Animations" scopes back out with it, and redo brings them back.
+    """
+    section = "kind scopes"
+    before_scenes = set(scene_names())
+    call("create_scene")
+    advance(6)
+    created = [name for name in scene_names() if name not in before_scenes]
+    scene = created[-1] if created else (scene_names() or [None])[-1]
+
+    scopes_before = kind_scope_names(scene)
+    call("import_gltf", {"scene_name": scene, "path": GLTF})
+    advance(10)
+    scopes_after = kind_scope_names(scene)
+    added = [name for name in scopes_after if name not in scopes_before]
+    if not check(section, "the import created a kind scope", len(added) > 0,
+                 json.dumps(scopes_after)):
+        drop_scene(scene)
+        return
+
+    undo()
+    advance(6)
+    left = [name for name in kind_scope_names(scene) if name not in scopes_before]
+    check(section, "undo leaves no empty kind scope behind", not left, json.dumps(left))
+
+    redo()
+    advance(10)
+    back = [name for name in kind_scope_names(scene) if name not in scopes_before]
+    check(section, "redo brings the kind scope back", sorted(back) == sorted(added),
+          f"{back} != {added}")
+    drop_scene(scene)
+
+
 def section_no_close_regression():
     """Closing a scene must not regress the scene-close leak watchdog."""
     section = "scene close"
@@ -617,6 +664,7 @@ def main():
     run("tree window pin", section_tree_window_pin)
     run("selection", section_selection_pruning)
     run("truly released", section_truly_released)
+    run("kind scopes", section_kind_scopes)
     run("scene close", section_no_close_regression)
 
     failed = [entry for entry in RESULTS if not entry[2]]

@@ -618,6 +618,23 @@ reasoning stays readable.
   clears it (a removal can land mid-drag), but there is nothing for a headless
   test to arm, and a tool implying otherwise would have been dead API.
 
+## What an undo also takes out: the kind scope
+
+Undo has to leave the tree as it found it, and a resource's kind `Scope` is
+part of what its insert needed. A content library makes a kind's `Scope`
+(`Physics Joints`, `Skins`, `Textures`, ...) on the first resource of that
+kind, so an import can be the thing that brings a scope into the scene, and
+undoing that import has to take the scope back out with the resources - an
+empty kind scope left standing is the same class of residue as a stale
+reference.
+
+`make_library_insert_operation()` (`operations/library_attach_operation.hpp`)
+is the one way a resource insert is built, and it composes the scope's
+placement as a `Kind_scope_operation` step before the insert in the same
+compound. See `src/editor/content_library/notes.md` ("A kind scope belongs to
+the operation that needed it") for the rule, including why the scope's undo is
+conditional on the scope being childless at that moment.
+
 ## Coverage and its gaps
 
 - Unit: `editor_asset_tests`, 10 cases over the seam (cancellation, dedup, the
@@ -625,11 +642,11 @@ reasoning stays readable.
 - Integration: three cases in `mcp_server_tests` - both repro routes and the
   announcement itself. Verified discriminating: with
   `flush_pending_removals()` disabled, all three fail.
-- Smoke: `scripts/undo_reference_clearing_smoke_test.py`, 45 checks over both
+- Smoke: `scripts/undo_reference_clearing_smoke_test.py`, 55 checks over both
   routes, redo, the pinned Properties window, announcement content, the
   library-move false positive, the material-driven tool references, the tree
-  hover pin, selection pruning and its batching, the release criterion, and the
-  scene-close leak watchdog.
+  hover pin, selection pruning and its batching, the release criterion, the
+  kind scopes the import created, and the scene-close leak watchdog.
 - **Not covered headlessly:** brush references. The test glTF carries no
   `ERHE_brushes`, and `create_shape(add_brush)` records no undoable operation,
   so there is no way to remove a brush from a library over MCP. `Brush_tool`'s

@@ -372,7 +372,7 @@ void Content_library::adopt_kind_scopes(const erhe::Hierarchy& subtree)
     }
 }
 
-auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>
+auto Content_library::get_existing_scope(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>
 {
     const std::shared_ptr<erhe::Scope> existing = find_scope(kind_type_bit);
     if (existing) {
@@ -387,15 +387,45 @@ auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr
     // file carries a scope's name and its place: the name is the recognition,
     // so a reloaded "Materials" scope is adopted rather than joined by a
     // second one of the same name (doc/usd-compatibility-plan.md E4d).
-    std::shared_ptr<erhe::Scope> scope = find_kind_scope_prim(scope_name);
-    if (!scope) {
-        scope = std::make_shared<erhe::Scope>(scope_name);
-        scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
+    const std::shared_ptr<erhe::Scope> scope = find_kind_scope_prim(scope_name);
+    if (scope) {
         m_scopes.emplace(kind_type_bit, scope);
-        scope->set_parent(get_prim_root());
-        return scope;
     }
+    return scope;
+}
+
+auto Content_library::make_kind_scope(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>
+{
+    const std::string_view scope_name = get_kind_scope_name(kind_type_bit);
+    if (scope_name.empty()) {
+        log_scene->warn("content library: item type bit {:#x} names no resource kind", kind_type_bit);
+        return {};
+    }
+    // The scope is the kind's from here on, before it enters the tree: every
+    // further resource of the kind built into the same compound must target
+    // this one scope rather than make a second. Taking it out of the tree
+    // forgets it again (Item_host::unregister_prim -> forget_kind_scope), so
+    // an undone Kind_scope_operation leaves the library holding no stale
+    // scope.
+    const std::shared_ptr<erhe::Scope> scope = std::make_shared<erhe::Scope>(scope_name);
+    scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
     m_scopes.emplace(kind_type_bit, scope);
+    return scope;
+}
+
+auto Content_library::get_scope(const uint64_t kind_type_bit) -> std::shared_ptr<erhe::Scope>
+{
+    const std::shared_ptr<erhe::Scope> existing = get_existing_scope(kind_type_bit);
+    const std::shared_ptr<erhe::Scope> scope = existing ? existing : make_kind_scope(kind_type_bit);
+    if (!scope) {
+        return {};
+    }
+    if (!scope->get_parent().lock()) {
+        // Either freshly made, or made for an operation that has not executed
+        // yet: a caller that places a resource straight into the tree needs
+        // the scope in the tree.
+        scope->set_parent(get_prim_root());
+    }
     return scope;
 }
 

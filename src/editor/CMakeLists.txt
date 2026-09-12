@@ -344,6 +344,8 @@ erhe_target_sources_grouped(
     operations/async_raytrace_kickoff_operation.hpp
     operations/compound_operation.cpp
     operations/compound_operation.hpp
+    operations/kind_scope_operation.cpp
+    operations/kind_scope_operation.hpp
     operations/library_attach_operation.cpp
     operations/library_attach_operation.hpp
     operations/geometry_operations.cpp

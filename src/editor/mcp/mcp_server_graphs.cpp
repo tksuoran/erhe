@@ -16,6 +16,7 @@
 #include "graph/node_properties.hpp"
 #include "graph_editor/graph_link_routing.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/scene_root.hpp"
 #include "texture_graph/graph_texture.hpp"
@@ -967,14 +968,7 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
     const std::shared_ptr<Graph_texture> item = std::make_shared<Graph_texture>(name);
     // execute_now so the asset is live this frame and selectable immediately.
     m_context.operation_stack->execute_now(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = library->get_scope(erhe::Item_type::graph_texture),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, item)
     );
     // Issue #252: point the Texture Graph window at the new asset explicitly,
     // so the texture_graph_* tools (which operate on the window's target) act
@@ -1260,14 +1254,7 @@ auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
     const std::shared_ptr<Graph_mesh> item = std::make_shared<Graph_mesh>(name);
     // execute_now so the asset is live this frame and selectable immediately.
     m_context.operation_stack->execute_now(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = library->get_scope(erhe::Item_type::graph_mesh),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, item)
     );
     // Issue #252: point the Geometry Graph window at the new asset explicitly,
     // so the geometry_graph_* tools (which operate on the window's target) act

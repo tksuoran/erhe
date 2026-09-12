@@ -776,6 +776,9 @@ public:
         }
         m_moves.clear();
         for (auto it = m_created_folders.rbegin(); it != m_created_folders.rend(); ++it) {
+            if (!(*it)->get_children().empty()) {
+                continue; // what a later operation placed here is not ours to take away
+            }
             (*it)->set_parent(std::shared_ptr<erhe::Hierarchy>{});
         }
         m_created_folders.clear();
@@ -792,11 +795,12 @@ private:
 
     // A path whose first component names a resource kind's scope is a scope
     // path: the kind scope is taken (created when the scene has none yet) and
-    // every missing scope below it is created and recorded for undo. Any
-    // other path names a prim of the scene tree and is resolved against it -
-    // never created, because a node the file did not carry is not this
-    // operation's to invent. out_created is true when the last component was
-    // created by this call.
+    // every missing scope below it is created, and every scope this call
+    // creates - the kind scope included - is recorded for undo. Any other
+    // path names a prim of the scene tree and is resolved against it - never
+    // created, because a node the file did not carry is not this operation's
+    // to invent. out_created is true when the last component was created by
+    // this call.
     void resolve_destination(
         Content_library&                  content_library,
         const std::string&                path,
@@ -829,7 +833,19 @@ private:
             }
             return;
         }
-        std::shared_ptr<erhe::Hierarchy> current = content_library.get_scope(kind_type_bit);
+        // The kind scope is lazy (U4): when the scene has none standing, this
+        // operation is the one that brings it in and must take it back out on
+        // undo, exactly as it does for the folders below it.
+        const std::shared_ptr<erhe::Scope> found_scope = content_library.get_existing_scope(kind_type_bit);
+        const bool placed_here = !found_scope || !found_scope->get_parent().lock();
+        const std::shared_ptr<erhe::Scope> kind_scope = content_library.get_scope(kind_type_bit);
+        if (!kind_scope) {
+            return;
+        }
+        if (placed_here) {
+            m_created_folders.push_back(kind_scope);
+        }
+        std::shared_ptr<erhe::Hierarchy> current = kind_scope;
         std::size_t start = (first_slash == std::string::npos) ? path.size() : first_slash + 1;
         while (current && (start < path.size())) {
             const std::size_t slash = path.find('/', start);

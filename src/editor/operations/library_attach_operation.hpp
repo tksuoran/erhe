@@ -9,6 +9,7 @@
 namespace erhe {
     class Hierarchy;
     class Item_base;
+    class Scope;
 }
 namespace erhe::gltf {
     class Gltf_image_source;
@@ -40,6 +41,20 @@ class Operation;
     const std::shared_ptr<erhe::gltf::Gltf_image_source>& image_source = {},
     const std::optional<Asset_key>&                       asset_key    = {},
     const std::shared_ptr<erhe::Hierarchy>&               parent       = {}
+) -> std::shared_ptr<Operation>;
+
+// The undoable insert of a resource prim under its kind's `Scope` - the one
+// step every resource creator takes, so that every one of them creates the
+// kind scope the same way. The kind scope is lazy (Content_library U4), so
+// when the scene has none standing the returned operation is a compound of
+// `Kind_scope_operation` and the insert, in that order: undo takes the
+// resource out first and the scope it needed after, and only while nothing
+// else sits in it (see `Kind_scope_operation`). When the scope is already in
+// the tree the returned operation is the bare insert.
+[[nodiscard]] auto make_library_insert_operation(
+    App_context&                            context,
+    const std::shared_ptr<Content_library>& content_library,
+    const std::shared_ptr<erhe::Item_base>& item
 ) -> std::shared_ptr<Operation>;
 
 }

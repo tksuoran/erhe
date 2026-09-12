@@ -51,6 +51,23 @@ Indexes a scene's reusable resources - materials, brushes, styles, textures, phy
   tree, nearest the prim root first, before it creates one, and the record is
   dropped again when the prim leaves the tree.
 
+- **A kind scope belongs to the operation that needed it.** A resource whose
+  insertion is undoable asks `get_existing_scope()` and, when the kind has no
+  scope standing, `make_kind_scope()`, and composes the returned scope's
+  placement as a `Kind_scope_operation` step BEFORE its own insert in the same
+  compound - which `make_library_insert_operation()`
+  (`operations/library_attach_operation.hpp`) does for every resource creator,
+  the glTF and USD imports included. Undo then runs the steps in reverse: the
+  resource leaves, and the scope it needed leaves after it. The scope's undo
+  removes the scope only while the scope is childless, because a later
+  operation may have placed other resources under it, and its redo finds a
+  scope already standing and does nothing - so two operations may each carry
+  the placement of one scope, and whichever is undone last is the one that
+  removes it. `make_kind_scope()` registers the scope as the kind's before it
+  is placed, so every resource of the kind built into the same compound
+  targets that one scope. `get_scope()` remains the answer for a caller that
+  places a resource straight into the tree.
+
 ## The index
 
 The index lists what the scene OWNS and answers the queries consumers ask
@@ -138,7 +155,7 @@ A standalone image file carries no usage information, so it is decoded as **sRGB
 - `Content_library::add<T>()` / `make<T>()` -- place a resource prim under its kind scope
 - `Content_library::remove<T>()` -- take a resource out of the tree (or out of the referenced listings)
 - `Content_library::get_all<T>()` / `get_all_of_kind()` / `has_item()` -- the index
-- `Content_library::get_scope()` / `find_scope()` / `find_scope_kind()` -- the kind scopes
+- `Content_library::get_scope()` / `get_existing_scope()` / `make_kind_scope()` / `find_scope()` / `find_scope_kind()` -- the kind scopes
 - `Content_library::combo<T>()` -- ImGui combo box for selecting a resource
 - Used by `Scene_root`, `Scene_builder`, `Properties`, `Brush_tool`
 

@@ -13,6 +13,7 @@
 #include "content_library/content_library.hpp"
 #include "content_library/style.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/property_set_operation.hpp"
 #include "operations/compound_operation.hpp"
@@ -532,14 +533,7 @@ auto Mcp_server::action_create_style(const json& args) -> std::string
         style = std::make_shared<Style>(make_unique_style_name(*library, name));
     }
     m_context.operation_stack->execute_now(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = style,
-                .parent  = library->get_scope(erhe::Item_type::style),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, style)
     );
     return make_json_content(
         json{

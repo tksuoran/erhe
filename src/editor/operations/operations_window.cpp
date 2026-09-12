@@ -13,6 +13,7 @@
 #include "operations/flip_joint_operation.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
 #include "operations/merge_operation.hpp"
 #include "operations/mesh_operation.hpp"
@@ -1764,14 +1765,7 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
     Compound_operation::Parameters compound{};
     compound.operations.push_back(make_align_operation(alignment.moved_node, alignment.world_delta));
     compound.operations.push_back(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = settings,
-                .parent  = content_library->get_scope(erhe::Item_type::physics_joint_settings),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, content_library, settings)
     );
     compound.operations.push_back(
         std::make_shared<Item_insert_remove_operation>(
@@ -2780,14 +2774,7 @@ void Operations::create_material()
             }
         }
     );
-    std::shared_ptr<Item_insert_remove_operation> make_material_operation = std::make_shared<Item_insert_remove_operation>(
-        Item_insert_remove_operation::Parameters{
-            .context = m_context,
-            .item    = new_material,
-            .parent  = content_library->get_scope(erhe::Item_type::material),
-            .mode    = Item_insert_remove_operation::Mode::insert
-        }
-    );
+    const std::shared_ptr<Operation> make_material_operation = make_library_insert_operation(m_context, content_library, new_material);
 
     m_context.operation_stack->queue(make_material_operation);
 }
@@ -2804,14 +2791,7 @@ void Operations::create_physics_material()
     auto new_physics_material = std::make_shared<erhe::physics::Physics_material>("New Physics Material");
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_physics_material,
-                .parent  = content_library->get_scope(erhe::Item_type::physics_material),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, content_library, new_physics_material)
     );
 }
 
@@ -2827,14 +2807,7 @@ void Operations::create_collision_filter()
     auto new_collision_filter = std::make_shared<erhe::physics::Collision_filter>("New Collision Filter");
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_collision_filter,
-                .parent  = content_library->get_scope(erhe::Item_type::collision_filter),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, content_library, new_collision_filter)
     );
 }
 
@@ -2850,14 +2823,7 @@ void Operations::create_joint_settings()
     auto new_joint_settings = std::make_shared<erhe::physics::Physics_joint_settings>("New Joint Settings");
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = new_joint_settings,
-                .parent  = content_library->get_scope(erhe::Item_type::physics_joint_settings),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, content_library, new_joint_settings)
     );
 }
 

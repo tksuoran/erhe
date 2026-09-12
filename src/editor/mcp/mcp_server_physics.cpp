@@ -8,6 +8,7 @@
 #include "editor_log.hpp"
 #include "content_library/content_library.hpp"
 #include "operations/item_insert_remove_operation.hpp"
+#include "operations/library_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
@@ -580,14 +581,7 @@ auto Mcp_server::action_create_physics_material(const json& args) -> std::string
     item->set_density            (args.value("density",          item->get_density()));
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = library->get_scope(erhe::Item_type::physics_material),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, item)
     );
     return make_json_content({
         {"created", true},
@@ -681,14 +675,7 @@ auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
     if (args.contains("not_collide_with_systems")) { item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>(); }
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = library->get_scope(erhe::Item_type::collision_filter),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, item)
     );
     return make_json_content({
         {"created", true},
@@ -777,14 +764,7 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
     }
 
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = library->get_scope(erhe::Item_type::physics_joint_settings),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
-        )
+        make_library_insert_operation(m_context, library, item)
     );
     json result = joint_settings_to_json(*item);
     result["created"] = true;
