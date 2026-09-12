@@ -1,66 +1,32 @@
 #include "erhe_geometry/shapes/convex_hull.hpp"
-#include "erhe_geometry/geometry_log.hpp"
+#include "erhe_geometry/geometry.hpp"
 
 #include <geogram/mesh/mesh.h>
-//#include <geogram/mesh/mesh_repair.h>
-//#include <geogram/mesh/mesh_fill_holes.h>
-//#include <geogram/mesh/mesh_surface_intersection.h>
-
-#include <geogram/basic/command_line.h>
-#include <geogram/delaunay/delaunay.h>
 
 namespace erhe::geometry::shapes {
 
-void make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points)
+auto make_convex_hull(GEO::Mesh& mesh, const std::vector<glm::vec3>& in_points) -> bool
 {
-    GEO::vector<double> points;
-    GEO::index_t point_count = 0;
-    //log_geometry->info("Input points:");
-    for (glm::vec3 p : in_points) {
-        //log_geometry->info("  {}, {}, {}", p.x, p.y, p.z);
-        points.push_back(static_cast<double>(p.x));
-        points.push_back(static_cast<double>(p.y));
-        points.push_back(static_cast<double>(p.z));
-        ++point_count;
+    // The hull itself is built by erhe::geometry::make_convex_hull(), which
+    // owns the degenerate-input guard, the geogram lock and the sequential
+    // Delaunay ("BDEL"); see doc/geogram.md.
+    GEO::Mesh source_mesh{};
+    source_mesh.vertices.set_dimension(3);
+    source_mesh.vertices.set_single_precision();
+    source_mesh.vertices.create_vertices(static_cast<GEO::index_t>(in_points.size()));
+    for (GEO::index_t v = 0; v < source_mesh.vertices.nb(); ++v) {
+        float* p = source_mesh.vertices.single_precision_point_ptr(v);
+        p[0] = in_points[v].x;
+        p[1] = in_points[v].y;
+        p[2] = in_points[v].z;
     }
 
-    // Parallel 3D Delaunay ("PDEL"); create(dim, name) avoids the process-global
-    // set_arg. Requires geogram built with -ffp-contract=off (see CMakeLists.txt
-    // and the twin call in erhe_geometry/geometry.cpp).
-    GEO::Delaunay_var delaunay = GEO::Delaunay::create(3, "PDEL");
-    delaunay->set_keeps_infinite(true); // keep "vertex at infinity" (makes it easier to find the convex hull
-    delaunay->set_vertices(point_count, points.data());
-    GEO::vector<GEO::index_t> triangles_indices;
-    for (GEO::index_t t = delaunay->nb_finite_cells(); t < delaunay->nb_cells(); ++t) {
-        GEO::index_t v0 = delaunay->cell_vertex(t, 0);
-        GEO::index_t v1 = delaunay->cell_vertex(t, 1);
-        GEO::index_t v2 = delaunay->cell_vertex(t, 2);
-        GEO::index_t v3 = delaunay->cell_vertex(t, 3);
-        if(v0 == GEO::NO_INDEX) {
-            triangles_indices.push_back(v3);
-            triangles_indices.push_back(v2);
-            triangles_indices.push_back(v1);
-        } else if (v1 == GEO::NO_INDEX) {
-            triangles_indices.push_back(v0);
-            triangles_indices.push_back(v2);
-            triangles_indices.push_back(v3);
-        } else if (v2 == GEO::NO_INDEX) {
-            triangles_indices.push_back(v0);
-            triangles_indices.push_back(v3);
-            triangles_indices.push_back(v1);
-        } else if (v3 == GEO::NO_INDEX) {
-            triangles_indices.push_back(v0);
-            triangles_indices.push_back(v1);
-            triangles_indices.push_back(v2);
-        }
+    if (!erhe::geometry::make_convex_hull(source_mesh, mesh)) {
+        return false;
     }
 
-    mesh.vertices.set_dimension(3);
-    mesh.vertices.set_double_precision();
-    mesh.facets.assign_triangle_mesh(GEO::coord_index_t{3}, points, triangles_indices, true);
-    mesh.vertices.remove_isolated();
     mesh.facets.connect();
-    mesh.vertices.set_single_precision();
+    return true;
 }
 
 } // namespace erhe::geometry::shapes

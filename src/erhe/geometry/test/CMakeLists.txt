@@ -18,6 +18,7 @@ add_executable(${_target}
     test_chamfer_self_intersection.cpp
     test_clip_tile_tree.cpp
     test_component_selection_remap.cpp
+    test_convex_hull.cpp
     test_conway_texcoord_seam.cpp
     test_csg.cpp
     test_edge_sharpness.cpp
@@ -35,6 +36,7 @@ target_link_libraries(${_target}
         erhe::geometry
         erhe::log
         erhe::math
+        erhe::profile
         GTest::gtest
 )
 

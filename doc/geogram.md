@@ -86,7 +86,9 @@ non-interactive processes fail fast.
 ## Our workaround
 
 We switched `make_convex_hull` to the sequential `"BDEL"` Delaunay (hull
-inputs are small, so the parallel build gained nothing), and we set
+inputs are small, so the parallel build gained nothing) - which also avoids
+`"PDEL"`'s unbounded hang on a volume-less point set (four coplanar points
+never return from `set_vertices()`) - and we set
 `GEO::set_assert_mode(GEO::ASSERT_THROW)` explicitly when no debugger is
 attached, so future geogram assertions surface as catchable exceptions
 instead of an interactive abort prompt.
@@ -143,3 +145,20 @@ per-invocation clipping state; their piece post_processing self-locks via
 When the fork gains a reentrant thread manager (per-invocation context
 instead of the static counter) and upstream #68 lands, this contract can be
 relaxed.
+
+# Degenerate convex hull input (erhe-side guard)
+
+Geogram's Delaunay has no usable answer for a point set that spans no volume,
+and its behavior differs per implementation: `"BDEL"` (sequential, the one
+`erhe::geometry::make_convex_hull()` uses) logs `Warning: All the points are
+coplanar` and returns a triangulation that is not a hull, while `"PDEL"`
+(parallel) never returns from `set_vertices()` for the same input. Neither is
+reportable to the caller.
+
+`make_convex_hull()` therefore classifies its input with
+`erhe::math::classify_affine_span()` - the O(n), allocation-free far-point /
+far-from-line / far-from-plane search - and refuses anything but a volumetric
+set before Geogram is reached, returning false and logging the reason. Every
+caller treats false as "no hull for this geometry": the collision shape stays
+absent and the MCP `create_shape` convex hull tool answers with an
+`isError` reply naming the reason.

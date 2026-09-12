@@ -352,32 +352,35 @@ void Mesh_operation::make_entries(
                 if (m_parameters.context.editor_settings->physics.static_enable) {
 
                     GEO::Mesh convex_hull{};
+                    // A result geometry with no volume has no convex hull;
+                    // make_convex_hull() logs the reason and the result mesh
+                    // is left without a rigid body.
                     const bool convex_hull_ok = make_convex_hull(after_geometry->get_mesh(), convex_hull);
-                    ERHE_VERIFY(convex_hull_ok); // TODO handle error
+                    if (convex_hull_ok) {
+                        std::vector<float> coordinates;
+                        coordinates.resize(convex_hull.vertices.nb() * 3);
+                        for (GEO::index_t vertex : convex_hull.vertices) {
+                            const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+                            coordinates[3 * vertex + 0] = p.x;
+                            coordinates[3 * vertex + 1] = p.y;
+                            coordinates[3 * vertex + 2] = p.z;
+                        }
 
-                    std::vector<float> coordinates;
-                    coordinates.resize(convex_hull.vertices.nb() * 3);
-                    for (GEO::index_t vertex : convex_hull.vertices) {
-                        const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
-                        coordinates[3 * vertex + 0] = p.x;
-                        coordinates[3 * vertex + 1] = p.y;
-                        coordinates[3 * vertex + 2] = p.z;
-                    }
+                        auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                            coordinates.data(),
+                            static_cast<int>(convex_hull.vertices.nb()),
+                            static_cast<int>(3 * sizeof(float))
+                        );
 
-                    auto collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-                        coordinates.data(),
-                        static_cast<int>(convex_hull.vertices.nb()),
-                        static_cast<int>(3 * sizeof(float))
-                    );
+                        const erhe::physics::IRigid_body_create_info rigid_body_create_info{
+                            .collision_shape = collision_shape,
+                            .debug_label     = after_geometry->get_name(),
+                            .motion_mode     = motion_mode
+                        };
 
-                    const erhe::physics::IRigid_body_create_info rigid_body_create_info{
-                        .collision_shape = collision_shape,
-                        .debug_label     = after_geometry->get_name(),
-                        .motion_mode     = motion_mode
-                    };
-
-                    if (entry.before.node_physics) {
-                        entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                        if (entry.before.node_physics) {
+                            entry.after.node_physics = std::make_shared<Node_physics>(rigid_body_create_info);
+                        }
                     }
                 }
 

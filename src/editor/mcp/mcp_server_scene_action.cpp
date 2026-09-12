@@ -2092,19 +2092,17 @@ auto Mcp_server::action_create_shape(const json& args) -> std::string
                 }
                 points.emplace_back(point[0].get<float>(), point[1].get<float>(), point[2].get<float>());
             }
-            if (points.size() < 4) {
-                json r = make_text_content("convex_hull needs at least 4 non-coplanar points");
-                r["isError"] = true;
-                return r.dump();
-            }
+            // A hull needs four affinely independent points; make_convex_hull()
+            // refuses anything else (it takes the geogram lock itself).
             auto geometry = std::make_shared<erhe::geometry::Geometry>("convex_hull");
-            {
-                // make_convex_hull reaches Geogram (Delaunay)
-                const std::lock_guard<std::recursive_mutex> geogram_guard{erhe::geometry::geogram_lock()};
-                erhe::geometry::shapes::make_convex_hull(geometry->get_mesh(), points);
-            }
-            if (geometry->get_mesh().facets.nb() == 0) {
-                json r = make_text_content("convex_hull produced no facets - are the points coplanar?");
+            if (!erhe::geometry::shapes::make_convex_hull(geometry->get_mesh(), points)) {
+                const erhe::math::Affine_span affine_span = erhe::math::classify_affine_span(
+                    std::span<const glm::vec3>{points}
+                );
+                const std::string message = (affine_span == erhe::math::Affine_span::volumetric)
+                    ? std::string{"convex_hull failed to build a hull from the given points"}
+                    : std::string{"convex_hull needs 4 points spanning a volume: "} + erhe::math::c_str(affine_span);
+                json r = make_text_content(message);
                 r["isError"] = true;
                 return r.dump();
             }

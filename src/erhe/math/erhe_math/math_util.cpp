@@ -613,6 +613,87 @@ auto spherical_to_cartesian_iso(const float theta, const float phi) -> vec3
     };
 }
 
+auto c_str(const Affine_span affine_span) -> const char*
+{
+    switch (affine_span) {
+        case Affine_span::too_few_points: return "fewer than 4 points";
+        case Affine_span::single_point:   return "all points coincide";
+        case Affine_span::collinear:      return "all points are collinear";
+        case Affine_span::coplanar:       return "all points are coplanar";
+        case Affine_span::volumetric:     return "volumetric";
+        default:                          return "?";
+    }
+}
+
+auto classify_affine_span(const std::span<const glm::vec3> points, const float relative_epsilon) -> Affine_span
+{
+    const std::size_t point_count = points.size();
+    if (point_count < 4) {
+        return Affine_span::too_few_points;
+    }
+
+    // Extent of the set gives the length scale the independence tests are
+    // measured against.
+    glm::vec3 min_point = points[0];
+    glm::vec3 max_point = points[0];
+    for (const glm::vec3& point : points) {
+        min_point = glm::min(min_point, point);
+        max_point = glm::max(max_point, point);
+    }
+    const glm::vec3 extent_vector = max_point - min_point;
+    const float     extent        = glm::max(extent_vector.x, glm::max(extent_vector.y, extent_vector.z));
+    const float     span_epsilon  = extent * relative_epsilon;
+    if (!(extent > 0.0f)) {
+        return Affine_span::single_point;
+    }
+
+    // p0 = an arbitrary point, p1 = the point farthest from it.
+    const glm::vec3& p0                = points[0];
+    std::size_t      farthest_index    = 0;
+    float            farthest_distance = 0.0f;
+    for (std::size_t i = 1; i < point_count; ++i) {
+        const float distance = glm::length(points[i] - p0);
+        if (distance > farthest_distance) {
+            farthest_distance = distance;
+            farthest_index    = i;
+        }
+    }
+    if (farthest_distance <= span_epsilon) {
+        return Affine_span::single_point;
+    }
+
+    // p2 = the point farthest from the line (p0, p1).
+    const glm::vec3 axis           = (points[farthest_index] - p0) / farthest_distance;
+    std::size_t     off_line_index = 0;
+    float           off_line_distance = 0.0f;
+    for (std::size_t i = 1; i < point_count; ++i) {
+        const glm::vec3 delta    = points[i] - p0;
+        const float     distance = glm::length(delta - (axis * glm::dot(delta, axis)));
+        if (distance > off_line_distance) {
+            off_line_distance = distance;
+            off_line_index    = i;
+        }
+    }
+    if (off_line_distance <= span_epsilon) {
+        return Affine_span::collinear;
+    }
+
+    // p3 = the point farthest from the plane (p0, p1, p2).
+    const glm::vec3 plane_normal = glm::normalize(glm::cross(axis, points[off_line_index] - p0));
+    float           off_plane_distance = 0.0f;
+    for (std::size_t i = 1; i < point_count; ++i) {
+        const float distance = std::fabs(glm::dot(points[i] - p0, plane_normal));
+        if (distance > off_plane_distance) {
+            off_plane_distance = distance;
+        }
+    }
+    if (off_plane_distance <= span_epsilon) {
+        return Affine_span::coplanar;
+    }
+
+    return Affine_span::volumetric;
+}
+
 void calculate_bounding_convex_hull(const std::span<const glm::vec3> points, Convex_hull& out_hull)
 {
     ERHE_PROFILE_FUNCTION();

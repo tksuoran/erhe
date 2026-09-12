@@ -843,8 +843,7 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
 
     try {
         const GEO::index_t nb_pts = source.vertices.nb();
-#if ERHE_CONVEX_HULL_USE_QUICKHULL
-        // erhe QuickHull path (default; see ERHE_CONVEX_HULL_USE_QUICKHULL).
+
         // make_convex_hull() always emits a 3D triangle mesh, so the source
         // points are read as vec3 and the hull is built in single precision.
         std::vector<glm::vec3> in_points;
@@ -854,6 +853,22 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
             in_points.push_back(glm::vec3{p[0], p[1], p[2]});
         }
 
+        // A point set with no volume has no convex hull, and geogram's
+        // Delaunay has no usable answer for one: the sequential "BDEL" used
+        // below warns and returns a triangulation that is not a hull, the
+        // parallel "PDEL" never returns from set_vertices() (measured; see
+        // doc/geogram.md). Refuse such input here, before geogram is reached.
+        const erhe::math::Affine_span affine_span = erhe::math::classify_affine_span(std::span<const glm::vec3>{in_points});
+        if (affine_span != erhe::math::Affine_span::volumetric) {
+            log_geometry->warn(
+                "make_convex_hull: refusing degenerate input ({} points, {})",
+                nb_pts, erhe::math::c_str(affine_span)
+            );
+            return false;
+        }
+
+#if ERHE_CONVEX_HULL_USE_QUICKHULL
+        // erhe QuickHull path (see ERHE_CONVEX_HULL_USE_QUICKHULL).
         erhe::math::Convex_hull hull;
         erhe::math::calculate_bounding_convex_hull(std::span<const glm::vec3>{in_points}, hull);
         if (hull.triangle_indices.empty()) {
@@ -879,6 +894,7 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
             triangles_indices.push_back(static_cast<GEO::index_t>(tri[2]));
         }
         destination.vertices.set_dimension(3);
+        destination.vertices.set_double_precision();
         destination.facets.assign_triangle_mesh(3, hull_points, triangles_indices, true);
         destination.vertices.remove_isolated();
         destination.vertices.set_single_precision();
@@ -914,6 +930,10 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
 #endif
         delaunay->set_vertices(nb_pts, points.data());
         destination.vertices.set_dimension(dim);
+        // assign_triangle_mesh() below hands over double precision points,
+        // which a single precision destination (every erhe Geometry mesh is
+        // one) refuses with a geo_assert.
+        destination.vertices.set_double_precision();
         GEO::vector<GEO::index_t> triangles_indices;
         for (GEO::index_t t = delaunay->nb_finite_cells(); t < delaunay->nb_cells(); ++t) {
             for (GEO::index_t lv = 0; lv < 4; ++lv) {
@@ -928,7 +948,11 @@ auto make_convex_hull(const GEO::Mesh& source, GEO::Mesh& destination) -> bool
         destination.vertices.set_single_precision();
         return true;
 #endif // ERHE_CONVEX_HULL_USE_QUICKHULL
+    } catch (const std::exception& e) {
+        log_geometry->warn("make_convex_hull: failed: {}", e.what());
+        return false;
     } catch (...) {
+        log_geometry->warn("make_convex_hull: failed");
         return false;
     }
 }

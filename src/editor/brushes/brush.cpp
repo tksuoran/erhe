@@ -157,23 +157,26 @@ void Brush::late_initialize()
         ERHE_PROFILE_SCOPE("make brush convex hull collision shape");
 
         GEO::Mesh convex_hull{};
+        // A geometry with no volume (a flat or degenerate brush) has no convex
+        // hull; make_convex_hull() logs the reason and the brush stays without
+        // a collision shape.
         const bool convex_hull_ok = make_convex_hull(geometry->get_mesh(), convex_hull);
-        ERHE_VERIFY(convex_hull_ok); // TODO handle error
+        if (convex_hull_ok) {
+            std::vector<float> coordinates;
+            coordinates.resize(convex_hull.vertices.nb() * 3);
+            for (GEO::index_t vertex : convex_hull.vertices) {
+                const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
+                coordinates[3 * vertex + 0] = p.x;
+                coordinates[3 * vertex + 1] = p.y;
+                coordinates[3 * vertex + 2] = p.z;
+            }
 
-        std::vector<float> coordinates;
-        coordinates.resize(convex_hull.vertices.nb() * 3);
-        for (GEO::index_t vertex : convex_hull.vertices) {
-            const GEO::vec3f p = get_pointf(convex_hull.vertices, vertex);
-            coordinates[3 * vertex + 0] = p.x;
-            coordinates[3 * vertex + 1] = p.y;
-            coordinates[3 * vertex + 2] = p.z;
+            m_data.collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
+                coordinates.data(),
+                static_cast<int>(convex_hull.vertices.nb()),
+                static_cast<int>(3 * sizeof(float))
+            );
         }
-
-        m_data.collision_shape = erhe::physics::ICollision_shape::create_convex_hull_shape_shared(
-            coordinates.data(),
-            static_cast<int>(convex_hull.vertices.nb()),
-            static_cast<int>(3 * sizeof(float))
-        );
     }
 
     if ((m_data.volume == 0.0f) && m_data.collision_volume_calculator) {

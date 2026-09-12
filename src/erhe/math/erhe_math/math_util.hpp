@@ -806,6 +806,25 @@ public:
     }
 };
 
+// How many dimensions a point set actually spans. A convex hull builder needs
+// four affinely independent points; every other outcome names the reason the
+// set has no volume, so callers can report it.
+enum class Affine_span : unsigned int {
+    too_few_points = 0, // fewer than 4 points
+    single_point,       // every point coincides with the first one
+    collinear,          // all points lie on one line
+    coplanar,           // all points lie on one plane
+    volumetric          // four affinely independent points found
+};
+
+[[nodiscard]] auto c_str(Affine_span affine_span) -> const char*;
+
+// Classifies a point set with the classic far-point / far-from-line /
+// far-from-plane search: O(n), no allocation. Independence is measured
+// against a relative epsilon scaled by the set's own extent, so the verdict
+// does not depend on the scene's units.
+[[nodiscard]] auto classify_affine_span(std::span<const glm::vec3> points, float relative_epsilon = 1e-5f) -> Affine_span;
+
 // Out-parameter variants clear and refill the caller-owned output, so a
 // persistent output buffer stops allocating once it reaches steady-state
 // capacity; hot (per-frame) callers must use these. The by-value overloads
