@@ -1,6 +1,7 @@
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
+#include "erhe_scene/node_attachment.hpp"
 #include "erhe_scene/scene_log.hpp"
 
 #include "erhe_geometry/geometry.hpp"
@@ -169,21 +170,86 @@ void collect_item(
     }
 }
 
-// The item `relative_path` names below a carrier: an entry names the item at
-// its path below the first of the carrier's children that has one. An empty
-// path is that child itself.
-[[nodiscard]] auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
+// Whether one item of an instance is itself a carrier: a prim a composition
+// arc was applied to. The arc is an attachment of the prim - what a file
+// applies to a prim as an API schema - and carries the
+// `erhe::Item_type::prefab_instance` type bit, so erhe::scene recognizes a
+// carrier without naming the class the editor gives it.
+[[nodiscard]] auto is_instance_carrier(const erhe::Hierarchy& item) -> bool
 {
-    for (const std::shared_ptr<erhe::Hierarchy>& clone : carrier.get_children()) {
-        if (!clone) {
+    const Xformable* prim = dynamic_cast<const Xformable*>(&item);
+    if (prim == nullptr) {
+        return false;
+    }
+    for (const std::shared_ptr<Node_attachment>& attachment : prim->get_attachments()) {
+        if (attachment && ((attachment->get_type() & erhe::Item_type::prefab_instance) != 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Which of the two levels a path segment is resolved at.
+enum class Instance_level : unsigned int {
+    // The item is a carrier: erhe keeps the arc's target clone as one level of
+    // its own below it while USD composes the target's content directly under
+    // the referencing prim (doc/usd-compatibility-plan.md X1), so the level is
+    // transparent and the segment is looked for among the children of each
+    // clone the carrier holds first, and among the carrier's own children
+    // after - the referencing prim and the target clone are one prim in the
+    // composed stage, so a prim authored beside the clone has the same
+    // composed path as one inside it.
+    carrier  = 0,
+    // An ordinary item: the segment is one of its own children.
+    ordinary = 1
+};
+
+// The item `relative_path` names below `item`, one segment at a time, looking
+// through the clone of every carrier the path crosses - the carrier the path
+// starts at and every carrier deeper down, which is what a file's own path
+// composes through. An empty path at a carrier is its first clone.
+[[nodiscard]] auto find_below(erhe::Hierarchy& item, const std::string_view relative_path, const Instance_level level) -> erhe::Hierarchy*
+{
+    if (level == Instance_level::carrier) {
+        for (const std::shared_ptr<erhe::Hierarchy>& clone : item.get_children()) {
+            if (!clone) {
+                continue;
+            }
+            erhe::Hierarchy* target = find_below(*clone.get(), relative_path, Instance_level::ordinary);
+            if (target != nullptr) {
+                return target;
+            }
+        }
+    }
+    if (relative_path.empty()) {
+        return (level == Instance_level::carrier) ? nullptr : &item;
+    }
+    const std::size_t      separator = relative_path.find('/');
+    const std::string_view name      = (separator == std::string_view::npos) ? relative_path : relative_path.substr(0, separator);
+    const std::string_view rest      = (separator == std::string_view::npos) ? std::string_view{} : relative_path.substr(separator + 1);
+    for (const std::shared_ptr<erhe::Hierarchy>& child : item.get_children()) {
+        if (!child || (child->get_name() != name)) {
             continue;
         }
-        erhe::Hierarchy* target = erhe::find_by_path(*clone.get(), relative_path);
+        erhe::Hierarchy* target = find_below(
+            *child.get(),
+            rest,
+            is_instance_carrier(*child.get()) ? Instance_level::carrier : Instance_level::ordinary
+        );
         if (target != nullptr) {
             return target;
         }
     }
     return nullptr;
+}
+
+// The item `relative_path` names below a carrier: an entry names the item at
+// its path below the first of the carrier's children that has one, with the
+// clone of every carrier the path crosses transparent. An empty path is that
+// child itself.
+[[nodiscard]] auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
+{
+    return find_below(carrier, std::string_view{relative_path}, Instance_level::carrier);
 }
 
 [[nodiscard]] auto to_material(erhe::Hierarchy* item) -> std::shared_ptr<erhe::primitive::Material>

@@ -211,6 +211,26 @@ survives the items it came from - that form is what `erhe::gltf` writes, what
 a file reader produces, and what `apply_instance_overrides` puts back on a
 freshly attached instance.
 
+An override path is the path the file's own composition gives the item, so it
+skips the extra level erhe keeps at every carrier it crosses, not only at the
+one it starts at: USD composes an arc's content directly under the referencing
+prim, while erhe keeps the arc's target clone as a level of its own
+(`doc/usd-compatibility-plan.md` X1). `apply_instance_overrides` therefore
+resolves a path one segment at a time: among the direct children of an
+ordinary item, and at the carrier it starts at and at every item along the way
+that is itself a carrier, one level down through each clone first and among
+the carrier's own children after. The referencing prim and the clone of its
+target are one prim in the composed stage, so a prim authored beside the clone
+has the same composed path as one inside it and both forms resolve - which is
+also what makes the path `collect_instance_overrides` spells, naming the clone
+level the item tree has, reach the item again. A carrier
+is a prim holding an attachment with the `erhe::Item_type::prefab_instance`
+type bit (the editor's `Prefab_instance`), which is how `erhe::scene`
+recognizes one without naming the editor's class. An empty path is the
+carrier's own clone. This is the shape a real asset has: a referencing prim
+whose target references another file in turn, with the override authored at
+the path USD composes (`over "geo" { over "default" { over "Body" } }`).
+
 A binding that covers one group of facets rather than the whole mesh is an
 entry of its own whose relative path ends in the name of the group, the way a
 USD GeomSubset is a prim below its mesh; the group of a primitive is named by

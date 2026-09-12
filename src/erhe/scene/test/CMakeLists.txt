@@ -19,6 +19,7 @@ add_executable(${_target}
     test_gprim_double_sided.cpp
     test_imported_defaults.cpp
     test_instance_override_material.cpp
+    test_instance_override_nested.cpp
     test_layout_properties.cpp
     test_light_frame.cpp
     test_light_properties.cpp
