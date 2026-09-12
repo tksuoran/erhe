@@ -125,10 +125,24 @@ translation units.
   and exports as no `xformOp`s at all, so a saved layer says exactly what the
   loaded one did. An op whose value is time-sampled carries its samples too
   ("Time samples" below).
-  Three cases keep the composed matrix and no stack, each reported in the
+  An op the order names that the prim itself does not author is one a
+  composition arc of the prim supplies: USD composes the target's own opinion
+  into the referencing prim, so the op is resolved against the prim's arc
+  targets before the stack is reconstructed - the arcs in the order they
+  resolve to, the first one authoring the property winning, and a target that
+  is a carrier itself followed, so a chain of internal references resolves
+  (`full_assets/Teapot/DrawModes.usd` gives each duplicate the order
+  `["xformOp:transform", "xformOp:transform:duplicate1"]` and authors only the
+  second). An arc into another file is not followed - opening that file is a
+  load of its own - so an op only such a target could supply stays missing.
+  A save authors a resolved op as a local value of the carrier: that composes
+  to the same transform the file did, so the round trip is a fixed point from
+  the first save on rather than a copy of what the source authored.
+  Four cases keep the composed matrix and no stack, each reported in the
   log: a prim the stage lookup does not answer for or whose class carries no
   `xformOps`, an op of a value type erhe has no counterpart for (one
-  warning), and a stack whose composition disagrees with the transform the
+  warning), an op of the order that neither the prim nor any of its arcs
+  supplies (one warning naming the ops), and a stack whose composition disagrees with the transform the
   stage evaluates by more than 1e-5 (one warning - the two agreeing is what
   `erhe_usd_tests` asserts for every prim of the fixtures). A stack that
   carries time samples skips that last comparison, for the reason "Time
@@ -493,7 +507,9 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
   builds no xformOps for it and Tydra evaluates the identity for it - so
   the importer reconstructs the carrier's `xformOp:*` properties itself
   (`ReconstructXformOpsFromProperties`, the reader an `over`'s xformOps go
-  through) and takes that stack as the transform. The item
+  through) and takes that stack as the transform, resolving an op of the
+  order the carrier does not author against its own arc targets ("Import",
+  the M8 bullet). The item
   remembers nothing of having been typeless: the writer spells it
   `def Xform`, a legal and more explicit spelling of the same composition, and
   that spelling is the round trip's fixed point from the first save on. A

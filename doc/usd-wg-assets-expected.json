@@ -209,9 +209,13 @@
    "must be `.*` for UsdUVTexture",
    "Failed to convert UsdPreviewSurface",
    "TODO: Prim type NodeGraph",
-   "Property `.*` not found"
+   "Main loop STALLED",
+   "breadcrumb t="
   ],
-  "reason": "the model composes through the variant-authored reference of Teapot_Geometry.usd the same way Teapot.usd does, once per draw mode: 35 of 35 meshes are imported. The material lines are that model's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of doc/usd-compatibility-plan.md section 6), and the opinion lines are the unselected `Fancy` variant's own reference. The `Property ... not found` lines are the duplicates' xformOp stack: `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops [\"xformOp:transform\", \"xformOp:transform:duplicate1\"] while authoring only the second, because the first arrives through their internal reference to `/World/FancyTeapot_0`; the stack is reconstructed from a prim's own properties, so it reads as unreadable and the prim keeps the composed transform - a known limitation with its own item in section 6"
+  "gaps": [
+   "Main loop STALLED"
+  ],
+  "reason": "the model composes through the variant-authored reference of Teapot_Geometry.usd the same way Teapot.usd does, once per draw mode: 35 of 35 meshes are imported, and each duplicate sits where USD composes it - `/World/FancyTeapot_1` and its siblings give `xformOpOrder` the two ops [\"xformOp:transform\", \"xformOp:transform:duplicate1\"] while authoring only the second, and the first is resolved against their internal reference to `/World/FancyTeapot_0`, so the bounds deviate by 0.01 from the composed stage. The material lines are that model's UsdPreviewSurface reading a primvar through a connection Tydra refuses (the UsdPrimvarReader item of doc/usd-compatibility-plan.md section 6), and the opinion lines are the unselected `Fancy` variant's own reference. The seven teapots stand apart once they are placed, and committing their BVH takes long enough for the main-loop watchdog to report the tick stuck in `raytrace: BVH commit` and print its breadcrumbs - the load-performance item of section 6, a known limitation rather than a by-design result. The Storm reference render is of the draw modes themselves (cards, bounds, origin), which erhe does not implement, so it shows proxies where erhe shows the full geometry and the image match stays near zero"
  },
  {
   "path": "full_assets/Vehicles/USD_Mini_Car_Kit/assets/vehicles/vehicleVariants.usda",

@@ -12,6 +12,7 @@ set(_target "erhe_usd_tests")
 add_executable(${_target}
     main.cpp
     test_usd_active.cpp
+    test_usd_arc_supplied_xform_ops.cpp
     test_usd_brushes.cpp
     test_usd_class_prototypes.cpp
     test_usd_defined.cpp

@@ -1247,6 +1247,205 @@ private:
         return nullptr;
     }
 
+    // The tokens of a prim's `xformOpOrder`, in order. LightUSD parses the
+    // array as either of its two token-array representations, so both are
+    // asked for here the way its own reconstruction asks for them. A prim
+    // that authors no `xformOpOrder`, or authors it as another type, answers
+    // with an empty list.
+    [[nodiscard]] static auto read_xform_op_order_tokens(
+        const std::map<std::string, lightusd::Property>& properties
+    ) -> std::vector<std::string>
+    {
+        std::vector<std::string> tokens;
+        const std::map<std::string, lightusd::Property>::const_iterator i = properties.find("xformOpOrder");
+        if (i == properties.end()) {
+            return tokens;
+        }
+        const lightusd::Property& property = i->second;
+        if (property.is_relationship()) {
+            return tokens;
+        }
+        const nonstd::optional<lightusd::TypedArray<lightusd::value::token>> typed_array =
+            property.get_attribute().get_value<lightusd::TypedArray<lightusd::value::token>>();
+        if (typed_array) {
+            for (const lightusd::value::token& token : typed_array.value()) {
+                tokens.push_back(token.str());
+            }
+            return tokens;
+        }
+        const nonstd::optional<std::vector<lightusd::value::token>> array =
+            property.get_attribute().get_value<std::vector<lightusd::value::token>>();
+        if (array) {
+            for (const lightusd::value::token& token : array.value()) {
+                tokens.push_back(token.str());
+            }
+        }
+        return tokens;
+    }
+
+    // The property name one `xformOpOrder` token addresses: the token with its
+    // `!invert!` prefix removed. `!resetXformStack!` addresses no property and
+    // answers with an empty string.
+    [[nodiscard]] static auto get_xform_op_property_name(const std::string& token) -> std::string
+    {
+        static const std::string reset_token {"!resetXformStack!"};
+        static const std::string invert_prefix{"!invert!"};
+        if (token.compare(0, reset_token.size(), reset_token) == 0) {
+            return std::string{};
+        }
+        if (token.compare(0, invert_prefix.size(), invert_prefix) == 0) {
+            return token.substr(invert_prefix.size());
+        }
+        return token;
+    }
+
+    // Why an op a prim's `xformOpOrder` names is not readable: no arc of the
+    // prim authors it, or the only arc that could is into another file.
+    enum class Unresolved_xform_op_reason
+    {
+        no_arc,
+        external_target
+    };
+
+    // What a search of a prim's arcs for one `xformOp:*` property found: the
+    // property an arc target authors, or - when none does - whether the search
+    // stopped at an arc into another file.
+    class Arc_supplied_xform_op final
+    {
+    public:
+        const lightusd::Property* property       {nullptr};
+        bool                      external_target{false};
+    };
+
+    // The absolute stage path one internal arc names. An empty `prim_path` is
+    // the target layer's default prim, which for an internal reference is the
+    // stage's own default prim; an arc that names neither answers with an
+    // empty path.
+    [[nodiscard]] auto get_internal_reference_target_path(const Usd_reference& reference) const -> std::string
+    {
+        if (!reference.prim_path.empty()) {
+            return reference.prim_path;
+        }
+        if (!m_result.data.default_prim.empty()) {
+            return "/" + m_result.data.default_prim;
+        }
+        return std::string{};
+    }
+
+    // The `xformOp:*` property named `property_name` that one of the prim's
+    // arcs supplies (doc/usd-compatibility-plan.md X1): USD composes the
+    // target's own opinion into the referencing prim, so an `xformOpOrder`
+    // entry the prim itself does not author is the target's. The arcs are
+    // consulted in the order they resolve to - the first one that authors the
+    // property wins - and a target that is a carrier itself is followed, so a
+    // chain of internal references resolves; `visited` is what keeps a cyclic
+    // chain finite. An arc into another file is not followed: opening that
+    // file is a load of its own, so such a property stays unresolved and the
+    // caller says so.
+    [[nodiscard]] auto find_arc_supplied_xform_op_property(
+        const std::string&     absolute_path,
+        const std::string&     property_name,
+        std::set<std::string>& visited
+    ) -> Arc_supplied_xform_op
+    {
+        Arc_supplied_xform_op result{};
+        if (!visited.insert(absolute_path).second) {
+            return result;
+        }
+        const std::vector<Usd_reference> references = read_prim_references(absolute_path);
+        for (const Usd_reference& reference : references) {
+            if (!reference.asset_path.empty()) {
+                result.external_target = true;
+                continue;
+            }
+            const std::string target_path = get_internal_reference_target_path(reference);
+            if (target_path.empty()) {
+                continue;
+            }
+            const lightusd::PrimSpec* target_spec = find_layer_primspec(target_path);
+            if (target_spec != nullptr) {
+                const std::map<std::string, lightusd::Property>::const_iterator i = target_spec->props().find(property_name);
+                if (i != target_spec->props().end()) {
+                    result.property = &i->second;
+                    return result;
+                }
+            }
+            const Arc_supplied_xform_op from_target = find_arc_supplied_xform_op_property(target_path, property_name, visited);
+            if (from_target.property != nullptr) {
+                return from_target;
+            }
+            result.external_target = result.external_target || from_target.external_target;
+        }
+        return result;
+    }
+
+    // Fill in the `xformOp:*` properties a prim's `xformOpOrder` names but the
+    // prim does not author, from the arcs the prim carries: a carrier composes
+    // the target's own ops with its own, so the order names both while only
+    // the prim's own ops are on the prim. Without this the whole stack is
+    // unreadable - LightUSD's reconstruction stops at the first name it cannot
+    // find - and the prim falls back to the composed transform.
+    // The return value names the properties that stayed missing, and is empty
+    // when the stack is reconstructible.
+    [[nodiscard]] auto resolve_arc_supplied_xform_op_properties(
+        const std::string&                         absolute_path,
+        std::map<std::string, lightusd::Property>& properties,
+        Unresolved_xform_op_reason&                out_reason
+    ) -> std::string
+    {
+        std::string unresolved;
+        out_reason = Unresolved_xform_op_reason::no_arc;
+        const std::vector<std::string> tokens = read_xform_op_order_tokens(properties);
+        for (const std::string& token : tokens) {
+            const std::string property_name = get_xform_op_property_name(token);
+            if (property_name.empty() || (properties.find(property_name) != properties.end())) {
+                continue;
+            }
+            std::set<std::string>       visited;
+            const Arc_supplied_xform_op supplied = find_arc_supplied_xform_op_property(absolute_path, property_name, visited);
+            if (supplied.property != nullptr) {
+                properties.emplace(property_name, *supplied.property);
+                continue;
+            }
+            if (!unresolved.empty()) {
+                unresolved += ", ";
+            }
+            unresolved += property_name;
+            if (supplied.external_target) {
+                out_reason = Unresolved_xform_op_reason::external_target;
+            }
+        }
+        return unresolved;
+    }
+
+    // The one warning an unresolvable `xformOpOrder` entry costs.
+    static void log_unresolved_xform_ops(
+        const std::string&               absolute_path,
+        const std::string&               unresolved,
+        const Unresolved_xform_op_reason reason
+    )
+    {
+        switch (reason) {
+            case Unresolved_xform_op_reason::external_target: {
+                log_usd->warn(
+                    "USD prim '{}': xformOpOrder names ops ({}) an arc into another file supplies - the prim keeps the composed transform",
+                    absolute_path,
+                    unresolved
+                );
+                break;
+            }
+            case Unresolved_xform_op_reason::no_arc:
+            default: {
+                log_usd->warn(
+                    "USD prim '{}': xformOpOrder names ops ({}) the prim does not author and no arc of it supplies - the prim keeps the composed transform",
+                    absolute_path,
+                    unresolved
+                );
+                break;
+            }
+        }
+    }
+
     // The prim's authored xformOp stack (doc/usd-compatibility-plan.md M8).
     // Tydra composes the ops into one local matrix, so the stack is only on
     // the raw prim; reading it is what lets the prim be written back with the
@@ -1278,6 +1477,15 @@ private:
             std::map<std::string, lightusd::Property> properties = model->props;
             std::set<std::string>                     table;
             std::string                               error;
+            // An op the order names that one of the prim's arcs supplies is
+            // resolved against the arc targets first, so that the stack is the
+            // composed one USD gives the prim.
+            Unresolved_xform_op_reason                reason     = Unresolved_xform_op_reason::no_arc;
+            const std::string                         unresolved = resolve_arc_supplied_xform_op_properties(absolute_path, properties, reason);
+            if (!unresolved.empty()) {
+                log_unresolved_xform_ops(absolute_path, unresolved, reason);
+                return false;
+            }
             if (!lightusd::prim::ReconstructXformOpsFromProperties(model->spec, table, properties, &model_ops, &error)) {
                 log_usd->warn("USD prim '{}': the typeless prim has unreadable xformOps: {}", absolute_path, error);
                 return false;
@@ -5111,6 +5319,16 @@ private:
         std::set<std::string>                     table;
         std::vector<lightusd::XformOp>            usd_ops;
         std::string                               error;
+        // An `over` authors arcs of its own the way any prim does, so an op
+        // its order names but it does not author is resolved against them
+        // first (read_xform_op_stack).
+        const std::string                         override_path = entry.relative_path.empty() ? absolute_path : (absolute_path + "/" + entry.relative_path);
+        Unresolved_xform_op_reason                reason        = Unresolved_xform_op_reason::no_arc;
+        const std::string                         unresolved    = resolve_arc_supplied_xform_op_properties(override_path, properties, reason);
+        if (!unresolved.empty()) {
+            log_unresolved_xform_ops(override_path, unresolved, reason);
+            return;
+        }
         if (!lightusd::prim::ReconstructXformOpsFromProperties(spec.specifier(), table, properties, &usd_ops, &error)) {
             log_usd->warn("USD prim '{}': the override at '{}' has unreadable xformOps: {}", absolute_path, entry.relative_path, error);
             return;
