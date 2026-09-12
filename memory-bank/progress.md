@@ -170,3 +170,7 @@
 ✓commit-2{199d9a77c:export-OpenPBR-network-beside-preview{outputs:mtlx:surface;inverse-formula;exact-erhe:Material:roughness};usd-tests-302;roundtrip-398/401}
   E2-DONE;USD-PLAN-SECTION-3-COMPLETE-2026-09-11;left=section-6-future-work+3-unrelated-roundtrip-failures
 
+
+[TASK::metal-headless]{DONE-2026-09-12;870efa949;via-harness;1-coder}
+✓emulated-ring-in-Swapchain_impl+SDL-guarded-surface+synchronous-headless-readback+configure_xcode_metal_headless.sh+doc/metal-headless.md
+?user-interactive{windowed-Metal-regression:present+armed-capture}
