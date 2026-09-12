@@ -652,6 +652,13 @@ void import_physics(
         // contributing collider; differing assignments are reported - erhe
         // bodies carry a single material / filter).
         std::vector<Body_shape_entry> entries;
+        // The mesh a hull / triangle shape of this body was built from when
+        // that mesh is a prim below the body rather than the body's own
+        // (the `Rock/shell` form): the body remembers it, so a save states
+        // the collider on that prim again. A body collecting more than one
+        // mesh shape has no single source mesh and remembers none.
+        std::shared_ptr<erhe::scene::Mesh> collision_mesh{};
+        std::size_t                        mesh_geometry_count = 0;
         std::shared_ptr<erhe::physics::Physics_material> body_material{};
         std::shared_ptr<erhe::physics::Collision_filter> body_filter{};
         bool material_conflict = false;
@@ -685,6 +692,12 @@ void import_physics(
                     continue;
                 }
                 entries.push_back(Body_shape_entry{.node = description->node.get(), .shape = std::move(shape)});
+                if (collider.geometry.mesh || collider.geometry.node) {
+                    ++mesh_geometry_count;
+                    if (description->node.get() != root) {
+                        collision_mesh = erhe::scene::get_mesh(description->node.get());
+                    }
+                }
                 if (description->node.get() != root) {
                     // Non-root contributors always fold into the root's
                     // compound below; candidates for the carrier cleanup.
@@ -754,6 +767,12 @@ void import_physics(
         // bodies are created when the insert operation gives the nodes a
         // scene host.
         auto node_physics = std::make_shared<Node_physics>(create_info);
+        // A trigger senses with the shapes it collected and states them as a
+        // trigger of the body prim, which has no place for a source mesh of
+        // its own, so only a collider body remembers one.
+        if (!body_is_trigger && (mesh_geometry_count == 1) && collision_mesh) {
+            node_physics->set_collision_mesh(collision_mesh);
+        }
         apply_node_physics_properties(*node_physics, root);
         root->attach(node_physics);
         nodes_with_body.insert(root);

@@ -5,9 +5,11 @@
 #include "erhe_property/dependency_object.hpp"
 #include "erhe_property/dependency_property.hpp"
 
+#include <memory>
 #include <vector>
 
 namespace erhe          { class Item_host; }
+namespace erhe::scene   { class Mesh; }
 namespace erhe::physics {
     class Collision_filter;
     class IWorld;
@@ -69,6 +71,19 @@ public:
     static const erhe::property::Property<glm::vec3>                       center_of_mass_offset_property;
     static const erhe::property::Property<erhe::property::Object_reference> physics_material_property;
     static const erhe::property::Property<erhe::property::Object_reference> collision_filter_property;
+    // The mesh a convex hull / triangle collision shape was built from. A
+    // built shape keeps no reference to its source geometry, so the body
+    // remembers it: the mesh is a prim of the body's own subtree, and both
+    // exporters state the collider on that mesh's prim - USD's collision
+    // schemas belong on the `Mesh` prim, and a glTF collider on a
+    // descendant node belongs to the nearest ancestor body - so a reload
+    // finds the geometry again. No value names the body's own mesh, which
+    // is the convention of a body whose prim is its geometry. Bridged (D18)
+    // over the weak member below, the way Node_joint::connected_node is: a
+    // body keeps no strong reference to a prim of the scene. The value
+    // records where the shape came from; setting it does not rebuild the
+    // shape.
+    static const erhe::property::Property<erhe::property::Object_reference> collision_mesh_property;
 
     // Public API
     [[nodiscard]] auto get_rigid_body()       ->       erhe::physics::IRigid_body*;
@@ -140,6 +155,16 @@ public:
     [[nodiscard]] auto get_gravity_factor() const -> float;
     void               set_gravity_factor(float gravity_factor);
 
+    // The mesh the hull / triangle shape was built from (see
+    // collision_mesh_property); empty names the body's own mesh.
+    [[nodiscard]] auto get_collision_mesh() const -> std::shared_ptr<erhe::scene::Mesh>;
+    void               set_collision_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh);
+
+    // True when a collision mesh was named and that mesh is gone (an undo
+    // took it out of the scene while the body stayed). The built shape is
+    // kept; an export falls back to the body's own mesh and says so once.
+    [[nodiscard]] auto has_lost_collision_mesh() const -> bool;
+
     // Bodies enter the world deactivated (quiet scene loading). With
     // wake_on_attach set, a dynamic body is woken right after it is added
     // to the world, so a freshly created body starts simulating without a
@@ -192,6 +217,7 @@ private:
     std::shared_ptr<erhe::physics::IRigid_body> m_rigid_body;
     erhe::physics::Motion_mode                  m_motion_mode{erhe::physics::Motion_mode::e_dynamic}; // mirror of motion_mode (the intended mode)
     bool                                        m_wake_on_attach{false};
+    std::weak_ptr<erhe::scene::Mesh>            m_collision_mesh; // bridged storage of collision_mesh_property
     erhe::property::Observer_token              m_physics_material_observer;
 };
 

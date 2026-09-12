@@ -452,11 +452,34 @@ TEST_F(Physics_export, the_mesh_colliders_survive)
     EXPECT_TRUE(ground->collider.value().geometry.mesh.operator bool());
     EXPECT_FALSE(ground->collider.value().geometry.convex_hull);
 
+    // A body whose shape was built from a mesh prim below it states the
+    // collider on that prim: the collision schemas are on `/World/Rock/shell`,
+    // where a reload finds the mesh, and the body prim above states its
+    // motion alone.
     const erhe::scene::Physics_node_description* shell = body_at(trip->reloaded.data, "/World/Rock/shell");
     ASSERT_NE(shell, nullptr);
     ASSERT_TRUE(shell->collider.has_value());
-    EXPECT_TRUE(shell->collider.value().geometry.mesh.operator bool());
+    ASSERT_TRUE(shell->collider.value().geometry.mesh.operator bool());
+    EXPECT_EQ(shell->collider.value().geometry.mesh->get_name(), "shell");
     EXPECT_TRUE(shell->collider.value().geometry.convex_hull);
+
+    const erhe::scene::Physics_node_description* rock = body_at(trip->reloaded.data, "/World/Rock");
+    ASSERT_NE(rock, nullptr);
+    EXPECT_TRUE(rock->motion.has_value());
+    EXPECT_FALSE(rock->collider.has_value());
+
+    const std::string  first      = read_file(trip->first_path);
+    const std::size_t  rock_at    = first.find("def Xform \"Rock\"");
+    const std::size_t  shell_at   = first.find("def Mesh \"shell\"");
+    ASSERT_NE(rock_at,  std::string::npos);
+    ASSERT_NE(shell_at, std::string::npos);
+    EXPECT_LT(rock_at, shell_at);
+    const std::string rock_prim = first.substr(rock_at, shell_at - rock_at);
+    EXPECT_EQ(rock_prim.find("PhysicsCollisionAPI"),  std::string::npos);
+    EXPECT_EQ(rock_prim.find("physics:approximation"), std::string::npos);
+    const std::string shell_prim = first.substr(shell_at);
+    EXPECT_NE(shell_prim.find("PhysicsMeshCollisionAPI"), std::string::npos);
+    EXPECT_NE(shell_prim.find("token physics:approximation = \"convexHull\""), std::string::npos);
 }
 
 TEST_F(Physics_export, the_shared_joint_settings_survive)

@@ -6,6 +6,7 @@
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/physics_material.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_utility/bit_helpers.hpp"
 #include "erhe_math/math_util.hpp"
@@ -31,6 +32,7 @@ constexpr std::string_view c_group = "Rigid Body";
 const erhe::property::Owner_type c_owner = Node_physics::property_owner_type();
 using Material_traits = erhe::property::Member_value_traits<std::shared_ptr<erhe::physics::Physics_material>>;
 using Filter_traits   = erhe::property::Member_value_traits<std::shared_ptr<erhe::physics::Collision_filter>>;
+using Mesh_traits     = erhe::property::Member_value_traits<std::shared_ptr<erhe::scene::Mesh>>;
 
 // Evaluated on Node_physics objects only (a holder of Node_physics values
 // lists them by its own value, doc/property-system.md D30).
@@ -99,6 +101,30 @@ const Property<Object_reference> Node_physics::collision_filter_property = Prope
     Filter_traits::validate
 );
 
+// The source mesh of a built hull / triangle shape, bridged over the weak
+// member: a body names a prim of its own subtree without keeping it alive,
+// and the exporters state the collider on that prim.
+const Property<Object_reference> Node_physics::collision_mesh_property = Property<Object_reference>::register_property(
+    "collision_mesh", c_owner,
+    Property_metadata{
+        .ui = Property_ui{
+            .group                = c_group,
+            .tooltip              = "The mesh the convex hull / triangle shape was built from; none means the body's own mesh. Recorded for the exporters - changing it does not rebuild the shape",
+            .label                = "Collision Mesh",
+            .reference_item_types = erhe::Item_type::mesh
+        },
+        .bridge = erhe::property::Property_bridge{
+            .get = [](const Dependency_object& object) -> Property_value {
+                return Mesh_traits::to_value(static_cast<const Node_physics&>(object).get_collision_mesh());
+            },
+            .set = [](Dependency_object& object, const Property_value& value) {
+                static_cast<Node_physics&>(object).set_collision_mesh(Mesh_traits::from_value(value));
+            }
+        }
+    },
+    Mesh_traits::validate
+);
+
 Node_physics::Node_physics(const Node_physics& src)
     : Item              {src} // the property entries copy with the base (D10)
     , markers           {src.markers}
@@ -107,6 +133,7 @@ Node_physics::Node_physics(const Node_physics& src)
     , m_rigid_body      {src.m_rigid_body}
     , m_motion_mode     {src.m_motion_mode}
     , m_wake_on_attach  {src.m_wake_on_attach}
+    , m_collision_mesh  {src.m_collision_mesh}
 {
     observe_physics_material();
 }
@@ -120,6 +147,7 @@ Node_physics& Node_physics::operator=(const Node_physics& src)
     m_rigid_body       = src.m_rigid_body;
     m_motion_mode      = src.m_motion_mode;
     m_wake_on_attach   = src.m_wake_on_attach;
+    m_collision_mesh   = src.m_collision_mesh;
     observe_physics_material();
     return *this;
 }
@@ -131,6 +159,7 @@ Node_physics::Node_physics(const Node_physics& src, erhe::for_clone)
     , m_create_info {src.m_create_info}
     , m_rigid_body  {}        // clone rigid body is not initially created
     , m_motion_mode {src.m_motion_mode}
+    , m_collision_mesh{src.m_collision_mesh}
 {
     observe_physics_material();
 }
@@ -437,6 +466,29 @@ auto Node_physics::get_physics_material() const -> const std::shared_ptr<erhe::p
 void Node_physics::set_physics_material(const std::shared_ptr<erhe::physics::Physics_material>& physics_material)
 {
     set_value(physics_material_property, Material_traits::to_value(physics_material));
+}
+
+auto Node_physics::get_collision_mesh() const -> std::shared_ptr<erhe::scene::Mesh>
+{
+    return m_collision_mesh.lock();
+}
+
+void Node_physics::set_collision_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (m_collision_mesh.lock() == mesh) {
+        return;
+    }
+    m_collision_mesh = mesh;
+    invalidate_dependents(collision_mesh_property.get()); // bridged storage changed outside set_value (D22)
+}
+
+auto Node_physics::has_lost_collision_mesh() const -> bool
+{
+    const std::weak_ptr<erhe::scene::Mesh> unset{};
+    const bool names_a_mesh =
+        m_collision_mesh.owner_before(unset) ||
+        unset.owner_before(m_collision_mesh);
+    return names_a_mesh && m_collision_mesh.expired();
 }
 
 void Node_physics::reapply_physics_material()

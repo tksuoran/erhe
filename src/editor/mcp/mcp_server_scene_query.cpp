@@ -629,6 +629,10 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
             att_json["physics_material"] = physics_material ? physics_material->get_name() : "";
             const std::shared_ptr<erhe::physics::Collision_filter>& collision_filter = node_physics->get_collision_filter();
             att_json["collision_filter"] = collision_filter ? collision_filter->get_name() : "";
+            // The mesh prim a hull / triangle shape was built from; empty
+            // names the body's own mesh.
+            const std::shared_ptr<erhe::scene::Mesh> collision_mesh = node_physics->get_collision_mesh();
+            att_json["collision_mesh"] = collision_mesh ? collision_mesh->get_name() : "";
             const erhe::physics::IRigid_body* rigid_body = node_physics->get_rigid_body();
             if (rigid_body != nullptr) {
                 att_json["mass"]            = rigid_body->get_mass();

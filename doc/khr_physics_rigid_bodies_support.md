@@ -85,8 +85,11 @@ available for Phase 6 round-trip verification.
 - Plane shapes: not representable in fastgltf (Shape variant lacks plane; not added by the
   fork either).
 - Export: compound children with convex hull / mesh shapes are skipped with a warning (the
-  baked compound carries no source mesh reference); direct hull / mesh shapes reference the
-  owning node's mesh.
+  baked compound carries no source mesh reference). A direct hull / mesh shape references the
+  mesh it was built from (`Node_physics::collision_mesh`, no value = the body's own mesh);
+  when that mesh is a node below the body, the collider is exported on that node and the body
+  keeps the motion, which is the `KHR_physics_rigid_bodies` rule that a collider belongs to
+  its nearest ancestor body.
 - Export: world-attached joints (no connected node) are skipped with a warning; multiple
   Node_joints on one node export only the first (glTF carries one joint per node).
 - Export: inertia overrides are not exported (Node_physics does not expose them; matches the

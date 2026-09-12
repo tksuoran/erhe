@@ -22,6 +22,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -358,6 +359,9 @@ auto build_physics_description(
         erhe::scene::Physics_node_description description{};
         description.node = node;
         bool has_content = false;
+        // The collider entry of a body whose shape was built from a mesh prim
+        // below it: an entry of its own, on that prim (see below).
+        std::optional<erhe::scene::Physics_node_description> mesh_collider_description;
 
         if (node_physics) {
             const erhe::physics::Motion_mode motion_mode = node_physics->get_motion_mode();
@@ -418,9 +422,12 @@ auto build_physics_description(
                         (base_type == erhe::physics::Collision_shape_type::e_convex_hull) ||
                         (base_type == erhe::physics::Collision_shape_type::e_mesh)
                     ) {
-                        // erhe convention: hull / mesh shapes are built from
-                        // the owning node's mesh (compound children carry no
-                        // source mesh reference and cannot be exported).
+                        // A hull / mesh shape names the mesh it was built
+                        // from (Node_physics::collision_mesh_property); a body
+                        // that names none is its own geometry, the convention
+                        // a body whose prim is a mesh follows. Compound
+                        // children carry no source mesh reference and cannot
+                        // be exported.
                         if (entries.size() > 1) {
                             log_parsers->warn(
                                 "physics export: body '{}' compound child {} is a {} shape with no source mesh reference - skipping child",
@@ -430,7 +437,16 @@ auto build_physics_description(
                             );
                             continue;
                         }
-                        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+                        std::shared_ptr<erhe::scene::Mesh> mesh = node_physics->get_collision_mesh();
+                        if (!mesh) {
+                            if (node_physics->has_lost_collision_mesh()) {
+                                log_parsers->warn(
+                                    "physics export: body '{}' names a collision mesh that has left the scene - the collider is exported from the body's own mesh",
+                                    node->get_name()
+                                );
+                            }
+                            mesh = erhe::scene::get_mesh(node.get());
+                        }
                         if (!mesh) {
                             log_parsers->warn(
                                 "physics export: body '{}' has a {} shape but no mesh attachment - skipping collider",
@@ -504,8 +520,22 @@ auto build_physics_description(
                     collider.geometry       = direct_geometry.value();
                     collider.material_index = material_index;
                     collider.filter_index   = filter_index;
-                    description.collider    = std::move(collider);
-                    has_content = true;
+                    const std::shared_ptr<erhe::scene::Mesh>& source_mesh = collider.geometry.mesh;
+                    if (source_mesh && (static_cast<const erhe::Item_base*>(source_mesh.get()) != static_cast<const erhe::Item_base*>(node.get()))) {
+                        // The shape was built from a mesh prim below the body.
+                        // Both formats state such a collider on that prim -
+                        // USD's collision schemas belong on the `Mesh` prim,
+                        // and a glTF collider on a descendant node belongs to
+                        // the nearest ancestor body - so it becomes an entry
+                        // of its own, and the body states its motion alone.
+                        erhe::scene::Physics_node_description mesh_description{};
+                        mesh_description.node     = source_mesh;
+                        mesh_description.collider = std::move(collider);
+                        mesh_collider_description = std::move(mesh_description);
+                    } else {
+                        description.collider = std::move(collider);
+                        has_content = true;
+                    }
                 }
                 // Bodies represented purely by synthesized child colliders
                 // (static compounds without motion) need no rigid-body entry
@@ -548,6 +578,11 @@ auto build_physics_description(
 
         if (has_content) {
             builder.data.node_physics.push_back(std::move(description));
+        }
+        if (mesh_collider_description.has_value()) {
+            // Right after the body's own entry, which is the order the scene
+            // walk visits the two prims in.
+            builder.data.node_physics.push_back(std::move(mesh_collider_description.value()));
         }
         return true;
     });

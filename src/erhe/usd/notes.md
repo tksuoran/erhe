@@ -1511,7 +1511,12 @@ becomes. The rules the write follows:
   schema for a body that detects overlaps rather than colliding.
 - A collider whose shape is the prim's own mesh is `PhysicsCollisionAPI` plus
   `PhysicsMeshCollisionAPI` on the `Mesh` prim, with
-  `physics:approximation` saying which of the two forms it is.
+  `physics:approximation` saying which of the two forms it is. A body whose
+  shape was built from a mesh prim below it states that collider as an entry
+  of its own, on that mesh prim, so the schemas land where the geometry is and
+  the body prim above states its motion alone - the caller's
+  `Physics_description` names the prim, and the write puts the schemas where
+  the entry says.
 - A collider that names a physics material applies `MaterialBindingAPI` and
   writes `rel material:binding:physics` on the prim carrying the collider.
 - A physics material is `PhysicsMaterialAPI` on the prim of its record, with
