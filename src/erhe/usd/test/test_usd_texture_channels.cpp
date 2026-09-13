@@ -134,6 +134,62 @@ TEST(Texture_channels_appended, every_input_of_an_appended_material_reads_its_ow
     EXPECT_EQ(second->get_opacity_channel(), erhe::primitive::Texture_channel::r);
 }
 
+// Every image an appended material reads is one the render scene holds. Tydra
+// caches the images it has read by asset path, and that cache outlives the
+// conversion whose arrays it indexes: a material reading a file an earlier
+// one already read is handed the id of the image already in the scene, and
+// only a file no material read yet makes a new entry. The `arm` material is
+// converted first and reads one image of its own plus the one every material
+// here shares - the shape an ARM map gives a UsdPreviewSurface, whose
+// metallic, roughness and occlusion are three channels of one file - and the
+// two materials converted after it read that shared image again.
+TEST(Texture_channels_appended, an_appended_material_binds_a_fresh_and_a_reused_image)
+{
+    const std::shared_ptr<erhe::scene::Node> root   = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_result         result = load(test_data_path("appended_materials.usda"), root);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    erhe::primitive::Material* arm    = material_at(root, "World/materials/arm");
+    erhe::primitive::Material* first  = material_at(root, "World/materials/first");
+    erhe::primitive::Material* second = material_at(root, "World/materials/second");
+    ASSERT_NE(arm,    nullptr);
+    ASSERT_NE(first,  nullptr);
+    ASSERT_NE(second, nullptr);
+    const auto image_of = [&result](
+        const erhe::primitive::Material*         material,
+        const erhe::usd::Usd_material_texture_slot slot
+    ) -> std::string {
+        std::size_t material_index = result.data.materials.size();
+        for (std::size_t index = 0; index < result.data.materials.size(); ++index) {
+            if (result.data.materials[index].get() == material) {
+                material_index = index;
+            }
+        }
+        for (const erhe::usd::Usd_material_texture_binding& binding : result.data.material_texture_bindings) {
+            if ((binding.material_index == material_index) && (binding.slot == slot)) {
+                return (binding.image_index < result.data.images.size())
+                    ? result.data.images[binding.image_index].name
+                    : std::string{"out of range"};
+            }
+        }
+        return std::string{"unbound"};
+    };
+    EXPECT_EQ(image_of(arm,    erhe::usd::Usd_material_texture_slot::base_color),         "auto_rgb.jpg");
+    EXPECT_EQ(image_of(arm,    erhe::usd::Usd_material_texture_slot::metallic_roughness), "grid.png");
+    EXPECT_EQ(image_of(arm,    erhe::usd::Usd_material_texture_slot::occlusion),          "grid.png");
+    EXPECT_EQ(image_of(first,  erhe::usd::Usd_material_texture_slot::base_color),         "grid.png");
+    EXPECT_EQ(image_of(second, erhe::usd::Usd_material_texture_slot::base_color),         "grid.png");
+    // The three inputs the one image feeds read the channels the connections
+    // name, and each factor is the connected texture's scale - the plain
+    // roughness value the file also authors is what the connection replaces.
+    EXPECT_EQ(arm->get_metallic_channel(),  erhe::primitive::Texture_channel::b);
+    EXPECT_EQ(arm->get_roughness_channel(), erhe::primitive::Texture_channel::g);
+    EXPECT_EQ(arm->get_occlusion_channel(), erhe::primitive::Texture_channel::r);
+    EXPECT_NEAR(arm->get_value(erhe::primitive::Material::metallic_property), 1.0f, 1e-5f);
+    const glm::vec2 roughness = arm->get_value(erhe::primitive::Material::roughness_property);
+    EXPECT_NEAR(roughness.x, 1.0f, 1e-5f);
+    EXPECT_NEAR(roughness.y, 1.0f, 1e-5f);
+}
+
 TEST_F(Texture_channels_import, an_input_that_names_no_texture_reads_no_channel)
 {
     // UsdPreviewSurface reads metallic and roughness through separate inputs

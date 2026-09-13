@@ -977,12 +977,22 @@ a material is a prim of the erhe tree (U4) and a reference into the file is
 what gives it its meshes, so the `Material` prims the render-scene conversion
 left out are converted one by one with
 `RenderSceneConverter::ConvertMaterial` and appended to the render scene
-before the materials are converted. The converter moves its own texture
-and image lists into the render scene, so an extra conversion fills them again
-from index zero: the new entries are appended and the ids shifted by what was
-already there, for every UsdPreviewSurface input erhe reads (the six
-texture slots and `opacity`; `shift_texture_ids` lists them, and an input
-left out keeps an id into the textures of the material appended before it).
+before the materials are converted. The converter is handed the render
+scene's texture and image lists for those conversions and they are taken back
+after, so an id `ConvertMaterial` reports is an index into the render scene as
+it stands and nothing has to be moved afterwards. That is what the converter's
+own caches require: `imageMap` and `textureMap` outlive the conversion that
+filled them, while `ConvertToRenderScene` moved the arrays they index into the
+render scene, so a material reading an image an earlier material already read
+- two materials of one file reading one ARM map, which
+`full_assets/Teapot/Teapot_Materials.usd` authors once per `modelVariant`
+block - is handed the id of the image already in the scene, and only a file no
+material read yet makes an entry the extra conversion adds. Shifting those ids
+by the scene's size instead pushed the reused ones past the end of the image
+list, and the material then had a texture Tydra reported but no image: its
+`metallic` and `roughness` kept the connected texture's scale of one while no
+image reached the slot, which is a white fully-metallic surface - near-black
+under a single light.
 
 How a bound texture is sampled and how its texels are read comes across with
 it:

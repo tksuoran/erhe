@@ -6769,6 +6769,18 @@ private:
         for (const Tydra_material& material : scene.materials) {
             converted_material_paths.insert(material.abs_path);
         }
+        // Tydra's `imageMap` and `textureMap` outlive the conversion that
+        // filled them, while `ConvertToRenderScene` moved the arrays they
+        // index into the render scene. So an id `ConvertMaterial` takes from
+        // that cache - the id of an image an earlier material already read,
+        // which is what two materials reading one file give - is an index
+        // into the scene's list, and a fresh id is an index into the
+        // converter's own list. The two are one list here: the converter is
+        // handed the scene's textures and images for these conversions and
+        // they are taken back after, so every id `ConvertMaterial` reports
+        // indexes the render scene as it stands.
+        scene.textures.swap(converter.textures);
+        scene.images.swap(converter.images);
         for (const std::string& material_path : wanted_material_paths) {
             if (converted_material_paths.count(material_path) != 0) {
                 continue;
@@ -6781,9 +6793,7 @@ private:
             if (usd_material == nullptr) {
                 continue;
             }
-            const std::size_t texture_offset = scene.textures.size();
-            const std::size_t image_offset   = scene.images.size();
-            Tydra_material    render_material;
+            Tydra_material render_material;
             if (!converter.ConvertMaterial(env, lightusd::Path{material_path, ""}, *usd_material, &render_material)) {
                 add_warning(
                     fmt::format(
@@ -6794,46 +6804,10 @@ private:
                 );
                 continue;
             }
-            for (lightusd::tydra::UVTexture& texture : converter.textures) {
-                if (texture.texture_image_id >= 0) {
-                    texture.texture_image_id += static_cast<std::int64_t>(image_offset);
-                }
-                scene.textures.push_back(texture);
-            }
-            for (const lightusd::tydra::TextureImage& image : converter.images) {
-                scene.images.push_back(image);
-            }
-            converter.textures.clear();
-            converter.images.clear();
-            shift_texture_ids(render_material, texture_offset);
             scene.materials.push_back(std::move(render_material));
         }
-    }
-
-    // The texture ids of the seven UsdPreviewSurface inputs erhe reads
-    // (apply_preview_surface), moved by what the render scene already held.
-    // Every input apply_preview_surface reads is listed: an input left out
-    // keeps an id into the textures of the material appended before it.
-    static void shift_texture_ids(Tydra_material& material, const std::size_t texture_offset)
-    {
-        if (!material.surfaceShader.has_value() || (texture_offset == 0)) {
-            return;
-        }
-        lightusd::tydra::PreviewSurfaceShader& shader = material.surfaceShader.value();
-        const std::array<std::int32_t*, 7> texture_ids{
-            &shader.diffuseColor.texture_id,
-            &shader.emissiveColor.texture_id,
-            &shader.normal.texture_id,
-            &shader.occlusion.texture_id,
-            &shader.roughness.texture_id,
-            &shader.metallic.texture_id,
-            &shader.opacity.texture_id
-        };
-        for (std::int32_t* texture_id : texture_ids) {
-            if (*texture_id >= 0) {
-                *texture_id += static_cast<std::int32_t>(texture_offset);
-            }
-        }
+        scene.textures.swap(converter.textures);
+        scene.images.swap(converter.images);
     }
 
     // The `variantSet` blocks one prim spec authors. LightUSD composes

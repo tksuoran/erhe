@@ -50,6 +50,48 @@ def Xform "World"
                 token outputs:surface
             }
         }
+
+        def Material "arm"
+        {
+            token outputs:surface.connect = </World/materials/arm/surface.outputs:surface>
+
+            def Shader "uv_reader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                string inputs:varname = "st"
+                float2 outputs:result
+            }
+
+            def Shader "img_diffuseColor"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @images/auto_rgb.jpg@
+                float2 inputs:st.connect = </World/materials/arm/uv_reader.outputs:result>
+                float3 outputs:rgb
+            }
+
+            def Shader "img_ARM"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @../../../../../res/editor/assets/textures/grid.png@
+                float2 inputs:st.connect = </World/materials/arm/uv_reader.outputs:result>
+                token inputs:sourceColorSpace = "raw"
+                float outputs:r
+                float outputs:g
+                float outputs:b
+            }
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </World/materials/arm/img_diffuseColor.outputs:rgb>
+                float inputs:metallic.connect = </World/materials/arm/img_ARM.outputs:b>
+                float inputs:occlusion.connect = </World/materials/arm/img_ARM.outputs:r>
+                float inputs:roughness = 0.125
+                float inputs:roughness.connect = </World/materials/arm/img_ARM.outputs:g>
+                token outputs:surface
+            }
+        }
     }
 
     def Xform "FirstCarrier" (
@@ -66,5 +108,13 @@ def Xform "World"
     )
     {
         rel material:binding = </World/materials/second>
+    }
+
+    def Xform "ArmCarrier" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+        references = @override_target.usda@
+    )
+    {
+        rel material:binding = </World/materials/arm>
     }
 }
