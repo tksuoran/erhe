@@ -497,6 +497,14 @@ instance structure instead of a flattened copy; in the editor an arc becomes a
 - `asset_path` empty means an internal reference - a prim of the same layer -
   and `prim_path` empty means the target layer's default prim, which
   `Usd_data::default_prim` names.
+- `Usd_reference::variant_selections` is the `variants` selection the
+  referencing prim authors for what its arcs bring in, as
+  `Usd_load_arguments::variant_selections` spells it. The selection reaches
+  the variant sets of whatever the arcs compose in, so every arc of one prim
+  carries the same entries; a set the referencing prim declares itself is its
+  own selection and is not among them. A `variants` metadatum on an `over`
+  prim below the carrier is the entry of that prim's path below the target,
+  read the walk `read_instance_overrides` takes.
 - The carrier of an arc is transformable. USD gives a typeless referencing
   prim the type of the composed target, and LightUSD composes nothing, so the
   prim erhe reads is typeless; a typeless or `Scope` prim that authors an arc
@@ -811,8 +819,24 @@ archive rather than the file system - is counted for the set instead.
 
 `Usd_data::variant_sets` holds one `Usd_variant_set` per set: the erhe item
 the carrying prim became, the prim's stage path, the set name, one
-`Usd_variant` per variant, and the selection, which is the prim's `variants`
-metadatum or the first variant when the layer authors none.
+`Usd_variant` per variant, and the selection.
+
+The selection is resolved in the LIVRPS order: the `variants` selection a
+composition arc carried into this load, then the prim's own `variants`
+metadatum, then the first variant when neither names one. A prim that
+references or payloads a target may author `variants` for the sets the target
+declares, and USD resolves that selection stronger than the target's own, so
+two carriers of one target prim compose two different prim trees.
+`Usd_load_arguments::variant_selections` is how a caller loading a target for
+one such carrier hands the selection in: `root_prim_path` is the stage path of
+the prim the arc targets, and each entry names a variant set of a prim at a
+path relative to it, an empty path being that prim itself. `load_stage`
+validates the entries against the layer the prims come from - the prim must
+exist, declare the set and hold the variant, and each entry that fails is one
+warning and is dropped - and records what it kept on the stage, which is what
+the hoist and the reader both take, so an entry is checked once. A
+`convert_stage` of a stage `load_stage` was given no selection for selects
+nothing of its own.
 
 A `Usd_variant` carries two things. Its `bindings` are the
 `material:binding` relationships it authors, each as the M1 path of the bound
@@ -1471,6 +1495,13 @@ over the tree with no file work in it.
   binds no material of its own, so the child carries no `GeomSubset`. A brush
   prim of the tree the caller did not list is written without its geometry, and
   named in a warning.
+- Composition arcs. `Usd_save_reference::variant_selections` is written as the
+  carrier's `variants` metadatum for the entries of the empty path and inside
+  the `over` prim of its relative path for a deeper one, the `over` being
+  authored for the selection alone when nothing else overrides that path. The
+  metadatum is merged, never replaced: a carrier is free to declare variant
+  sets of its own, whose selection `write_variant_sets` authors into the same
+  place.
 - Composition arcs. A prim the caller names in
   `Usd_save_arguments::references` is written as the referencing prim it is:
   its own class, name, transform and authored values, plus one explicit

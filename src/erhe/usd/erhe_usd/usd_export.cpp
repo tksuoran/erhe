@@ -2711,6 +2711,11 @@ private:
         std::string                      name;
         const erhe::Item_base*           item                {nullptr};
         bool                             transform_overridden{false};
+        // The `variants` selection an arc of the carrier carries for this
+        // path (doc/usd-compatibility-plan.md section 6, "Variant selection
+        // through a composition arc"): an `over` prim is what carries a
+        // selection made for a prim below the target.
+        lightusd::VariantSelectionMap    variants;
         // The material the `over` binds, null when it binds none. A binding
         // that covers one group of facets is written on the GeomSubset prim
         // of the group, which is a child `over` of the mesh's.
@@ -2729,33 +2734,72 @@ private:
         return prims.back();
     }
 
+    // The `Override_prim` at one relative path below the carrier, made on the
+    // way down if it is not there yet: an item on the way to one that holds
+    // overrides is an `over` with no attributes, so the path exists.
+    [[nodiscard]] static auto find_or_add_override_path(std::vector<Override_prim>& tree, const std::string& relative_path) -> Override_prim&
+    {
+        std::vector<Override_prim>* level = &tree;
+        Override_prim*              prim  = nullptr;
+        std::size_t                 start = 0;
+        while (start < relative_path.size()) {
+            const std::size_t      slash = relative_path.find('/', start);
+            const std::string_view name  = (slash == std::string::npos)
+                ? std::string_view{relative_path}.substr(start)
+                : std::string_view{relative_path}.substr(start, slash - start);
+            start = (slash == std::string::npos) ? relative_path.size() : (slash + 1);
+            prim  = &find_or_add_override_prim(*level, name);
+            level = &prim->children;
+        }
+        return *prim;
+    }
+
+    // Whether an arc of this carrier carries a `variants` selection for a prim
+    // below the target, which is what an `over` prim of that path is written
+    // for even when nothing else overrides it.
+    [[nodiscard]] static auto has_deeper_variant_selection(const Plan_prim& plan_prim) -> bool
+    {
+        if (plan_prim.references == nullptr) {
+            return false;
+        }
+        for (const Usd_save_reference& reference : *plan_prim.references) {
+            for (const Usd_variant_selection& entry : reference.variant_selections) {
+                if (!entry.relative_path.empty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     void write_override_prims(const Plan_prim& plan_prim, std::vector<lightusd::Prim>& out_prims)
     {
-        if (plan_prim.overrides.empty() && plan_prim.root_subset_bindings.empty()) {
+        const bool has_deeper_selection = has_deeper_variant_selection(plan_prim);
+        if (plan_prim.overrides.empty() && plan_prim.root_subset_bindings.empty() && !has_deeper_selection) {
             return;
         }
         std::vector<Override_prim> tree;
         for (const std::pair<std::string, const erhe::primitive::Material*>& binding : plan_prim.root_subset_bindings) {
             find_or_add_override_prim(tree, binding.first).material = binding.second;
         }
+        if (has_deeper_selection) {
+            for (const Usd_save_reference& reference : *plan_prim.references) {
+                for (const Usd_variant_selection& entry : reference.variant_selections) {
+                    if (entry.relative_path.empty()) {
+                        continue; // written on the carrier itself
+                    }
+                    find_or_add_override_path(tree, entry.relative_path).variants.emplace(entry.set_name, entry.variant_name);
+                }
+            }
+        }
         for (const erhe::scene::Instance_override_item& entry : plan_prim.overrides) {
-            std::vector<Override_prim>* level = &tree;
-            Override_prim*              prim  = nullptr;
-            std::size_t                 start = 0;
-            while (start < entry.relative_path.size()) {
-                const std::size_t      slash = entry.relative_path.find('/', start);
-                const std::string_view name  = (slash == std::string::npos)
-                    ? std::string_view{entry.relative_path}.substr(start)
-                    : std::string_view{entry.relative_path}.substr(start, slash - start);
-                start = (slash == std::string::npos) ? entry.relative_path.size() : (slash + 1);
-                prim  = &find_or_add_override_prim(*level, name);
-                level = &prim->children;
+            if (entry.relative_path.empty()) {
+                continue;
             }
-            if (prim != nullptr) {
-                prim->item                 = entry.item;
-                prim->transform_overridden = entry.transform_overridden;
-                plan_override_bindings(entry, *prim);
-            }
+            Override_prim& prim = find_or_add_override_path(tree, entry.relative_path);
+            prim.item                 = entry.item;
+            prim.transform_overridden = entry.transform_overridden;
+            plan_override_bindings(entry, prim);
         }
         for (const Override_prim& prim : tree) {
             out_prims.push_back(write_override_prim(prim));
@@ -2850,6 +2894,9 @@ private:
             if (override_prim.transform_overridden) {
                 write_override_xform_ops(*override_prim.item, model.props);
             }
+        }
+        if (!override_prim.variants.empty()) {
+            model.meta.variants = override_prim.variants;
         }
         const bool override_bound = (override_prim.material != nullptr) && add_material_binding(model.props, *override_prim.material);
         lightusd::Prim prim{model};
@@ -3052,7 +3099,16 @@ private:
             std::make_pair(lightusd::ListEditQual::Append, std::move(set_names))
         };
         if (!selection.empty()) {
-            metas.variants = selection;
+            // Merged, not assigned: write_references ran before this and may
+            // have put the selection an arc carries into the same metadatum,
+            // and a carrier is free to have both its own sets and an arc's.
+            if (metas.variants.has_value()) {
+                for (const std::pair<const std::string, std::string>& entry : selection) {
+                    metas.variants.value()[entry.first] = entry.second;
+                }
+            } else {
+                metas.variants = selection;
+            }
         }
     }
 
@@ -3294,6 +3350,7 @@ private:
     {
         std::vector<lightusd::Reference> usd_references;
         std::vector<lightusd::Payload>   usd_payloads;
+        write_carried_variant_selection(metas, references);
         for (const Usd_save_reference& reference : references) {
             const std::string asset_path = to_reference_asset_path(reference.source_path, m_arguments.path);
             if (asset_path.empty() && reference.prim_path.empty()) {
@@ -3324,6 +3381,33 @@ private:
             metas.payload = std::vector<std::pair<lightusd::ListEditQual, std::vector<lightusd::Payload>>>{
                 std::make_pair(lightusd::ListEditQual::ResetToExplicit, std::move(usd_payloads))
             };
+        }
+    }
+
+    // The `variants` selection the carrier authors for what its arcs bring in
+    // (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+    // composition arc"): the entries of the empty path, which is the carrier
+    // itself. Every arc of one carrier holds the same entries, so the first
+    // arc that names a set is what it is written from. The selection is merged
+    // into whatever the prim's metadata already holds and never replaces it -
+    // the carrier's own variant sets author their selection into the same
+    // metadatum.
+    void write_carried_variant_selection(lightusd::PrimMetas& metas, const std::vector<Usd_save_reference>& references)
+    {
+        lightusd::VariantSelectionMap selection = metas.variants.has_value()
+            ? metas.variants.value()
+            : lightusd::VariantSelectionMap{};
+        const std::size_t before = selection.size();
+        for (const Usd_save_reference& reference : references) {
+            for (const Usd_variant_selection& entry : reference.variant_selections) {
+                if (!entry.relative_path.empty()) {
+                    continue; // written on the `over` prim of that path
+                }
+                selection.emplace(entry.set_name, entry.variant_name);
+            }
+        }
+        if (selection.size() != before) {
+            metas.variants = std::move(selection);
         }
     }
 

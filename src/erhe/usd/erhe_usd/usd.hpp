@@ -222,6 +222,42 @@ enum class Usd_reference_kind : unsigned int {
     payload   = 1
 };
 
+// One entry of a `variants` selection: the variant of `set_name` chosen for
+// the prim `relative_path` names. The path is relative to the root prim of
+// the selection (Usd_variant_selections::root_prim_path), an empty path
+// being that prim itself.
+class Usd_variant_selection final
+{
+public:
+    std::string relative_path;
+    std::string set_name;
+    std::string variant_name;
+};
+
+// A `variants` selection made from outside the prims that declare the sets:
+// the selection an arc carrier authors for the target it brings in, which
+// LIVRPS resolves stronger than the target's own
+// (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// composition arc"). A load consults it before the prim's own `variants`
+// metadatum, so two carriers selecting different variants of one target load
+// two stages, which is what USD composes - two prim indexes.
+class Usd_variant_selections final
+{
+public:
+    // The stage path of the prim `relative_path` is measured from: the target
+    // prim of the arc. Empty is the whole stage, and a relative path is then
+    // the stage path without its leading '/'.
+    std::string                        root_prim_path;
+    std::vector<Usd_variant_selection> entries;
+
+    [[nodiscard]] auto is_empty              () const -> bool;
+    // The stage path of the prim one entry names.
+    [[nodiscard]] auto get_absolute_prim_path(const Usd_variant_selection& entry) const -> std::string;
+    // The variant this selection names for `set_name` of the prim at
+    // `absolute_prim_path`, or null when it names none.
+    [[nodiscard]] auto find                  (std::string_view absolute_prim_path, std::string_view set_name) const -> const std::string*;
+};
+
 // One `references` or `payload` arc a prim authors. An empty `asset_path` is
 // an internal reference - a prim of the same layer - and an empty `prim_path`
 // names the target layer's default prim.
@@ -231,6 +267,12 @@ public:
     std::string        asset_path;
     std::string        prim_path;
     Usd_reference_kind kind{Usd_reference_kind::reference};
+    // The `variants` selection the referencing prim authors for what the arc
+    // brings in, shared by every arc of that prim: the selection applies to
+    // the target's variant sets whichever arc declared them. The sets the
+    // referencing prim declares itself are not among the entries - those are
+    // its own selection, which the reader applies to its own blocks.
+    std::vector<Usd_variant_selection> variant_selections;
     // The variant block that authored the arc, both empty when the prim
     // authored it itself (doc/usd-compatibility-plan.md C6). A variant's arcs reach
     // the prim carrying the set because only the selected variant contributes
@@ -431,7 +473,10 @@ public:
 // its content. Composition arcs are not composed away: a referencing prim
 // arrives as it was authored, and the arcs it names are read from its metadata
 // (doc/usd-compatibility-plan.md X1).
-[[nodiscard]] auto load_stage(const std::filesystem::path& path) -> Load_stage_result;
+[[nodiscard]] auto load_stage(
+    const std::filesystem::path&  path,
+    const Usd_variant_selections& variant_selections = Usd_variant_selections{}
+) -> Load_stage_result;
 
 // Summarize a loaded stage: prim count, per-schema-type prim counts sorted by
 // type name, and the layers the stage names.
@@ -858,6 +903,12 @@ public:
     std::shared_ptr<erhe::scene::Node>       root_node;
     erhe::scene::Layer_id                    mesh_layer_id{0};
     Stage_metrics                            stage_metrics{Stage_metrics::root};
+    // The `variants` selection a composition arc carries into this load, its
+    // relative paths measured from the prim the arc targets. load_usd() hands
+    // it to load_stage(), which validates it against the layer and records the
+    // entries it kept on the stage; the conversion reads them from there, so a
+    // convert_stage() of a stage loaded without them selects nothing.
+    Usd_variant_selections                   variant_selections;
 };
 
 // Result of load_usd(). `error` is non-empty exactly when the load failed,
@@ -935,6 +986,11 @@ public:
     std::filesystem::path source_path;
     std::string           prim_path;
     Usd_reference_kind    kind{Usd_reference_kind::reference};
+    // The `variants` selection the carrier authors for what this arc brings
+    // in. Every arc of one carrier holds the same entries; the writer writes
+    // the entry of the empty path as the carrier's own `variants` metadatum
+    // and a deeper one on the `over` prim at its relative path.
+    std::vector<Usd_variant_selection> variant_selections;
 };
 
 // The composition arcs one prim of the scene carries. The prim is written as

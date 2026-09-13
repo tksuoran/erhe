@@ -152,6 +152,12 @@ public:
     // The prims the variant blocks of `layer` authored, in the tree of
     // `stage` since load_stage hoisted them there.
     std::vector<Variant_prim_record> variant_prims;
+    // The `variants` selection a composition arc carried into this load, as
+    // load_stage validated it against `layer`: the entries naming a set the
+    // prim declares and a variant that set holds. The hoist applied it and the
+    // importer applies it again for the opinions and the arcs of the selected
+    // variant, both before the prim's own `variants` metadatum.
+    Usd_variant_selections           variant_selections;
 };
 
 // A USDA literal rewritten in erhe's property text form (D16), defined by

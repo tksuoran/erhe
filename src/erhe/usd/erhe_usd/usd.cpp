@@ -16,6 +16,8 @@
 #include "layer.hh"
 #include "stage.hh"
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -27,6 +29,29 @@
 #include <vector>
 
 namespace erhe::usd {
+
+auto Usd_variant_selections::is_empty() const -> bool
+{
+    return entries.empty();
+}
+
+auto Usd_variant_selections::get_absolute_prim_path(const Usd_variant_selection& entry) const -> std::string
+{
+    if (root_prim_path.empty()) {
+        return "/" + entry.relative_path;
+    }
+    return entry.relative_path.empty() ? root_prim_path : (root_prim_path + "/" + entry.relative_path);
+}
+
+auto Usd_variant_selections::find(const std::string_view absolute_prim_path, const std::string_view set_name) const -> const std::string*
+{
+    for (const Usd_variant_selection& entry : entries) {
+        if ((entry.set_name == set_name) && (get_absolute_prim_path(entry) == absolute_prim_path)) {
+            return &entry.variant_name;
+        }
+    }
+    return nullptr;
+}
 
 auto flip_texcoord_v(const glm::vec2& uv) -> glm::vec2
 {
@@ -349,17 +374,23 @@ void fill_stage_metas_from_sublayers(
 void hoist_variant_prims(
     const std::string&                path,
     lightusd::PrimSpec&               spec,
+    const Usd_variant_selections&     variant_selections,
     std::vector<Variant_prim_record>& records
 )
 {
     const lightusd::VariantSelectionMap& selection = spec.get_variant_selection_map();
     for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec.variantSets()) {
         const lightusd::VariantSelectionMap::const_iterator i = selection.find(set.first);
-        // The same selection rule the importer applies: the layer's own
-        // `variants` opinion, or the first variant when it authors none.
-        const std::string selected = (i != selection.end())
-            ? i->second
-            : (set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first);
+        // The same selection rule the importer applies: the selection a
+        // composition arc carries into this load, then the layer's own
+        // `variants` opinion, then the first variant. A carried selection is
+        // validated before the hoist, so it names a variant the set holds.
+        const std::string* const carried  = variant_selections.find(path, set.first);
+        const std::string        selected = (carried != nullptr)
+            ? *carried
+            : ((i != selection.end())
+                ? i->second
+                : (set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first));
         for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
             for (const lightusd::PrimSpec& child : variant.second.children()) {
                 if (child.specifier() != lightusd::Specifier::Def) {
@@ -387,17 +418,68 @@ void hoist_variant_prims(
     // By index: the loop above appended to this same vector, and a hoisted
     // prim can carry variant sets of its own.
     for (std::size_t index = 0; index < spec.children().size(); ++index) {
-        hoist_variant_prims(path + "/" + spec.children()[index].name(), spec.children()[index], records);
+        hoist_variant_prims(path + "/" + spec.children()[index].name(), spec.children()[index], variant_selections, records);
     }
 }
 
-void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record>& records)
+void hoist_variant_prims(
+    lightusd::Layer&                  layer,
+    const Usd_variant_selections&     variant_selections,
+    std::vector<Variant_prim_record>& records
+)
 {
     ERHE_PROFILE_FUNCTION();
 
     for (std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
-        hoist_variant_prims("/" + entry.first, entry.second, records);
+        hoist_variant_prims("/" + entry.first, entry.second, variant_selections, records);
     }
+}
+
+// The entries of `variant_selections` the layer's prims answer for, with one
+// warning for each entry that is dropped
+// (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// composition arc"). This is the one validation of a carried selection: the
+// hoist and the reader both take the result, so neither warns again.
+[[nodiscard]] auto validate_variant_selections(
+    const lightusd::Layer&        layer,
+    const std::string&            filename,
+    const Usd_variant_selections& variant_selections,
+    std::string&                  warning
+) -> Usd_variant_selections
+{
+    if (variant_selections.is_empty()) {
+        return variant_selections;
+    }
+    Usd_variant_selections kept{};
+    kept.root_prim_path = variant_selections.root_prim_path;
+    for (const Usd_variant_selection& entry : variant_selections.entries) {
+        const std::string         absolute_path = variant_selections.get_absolute_prim_path(entry);
+        const lightusd::PrimSpec* spec          = nullptr;
+        std::string               error;
+        std::string               reason;
+        if (!layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error) || (spec == nullptr)) {
+            reason = "is no prim of the target";
+        } else {
+            const std::map<std::string, lightusd::VariantSetSpec>::const_iterator set = spec->variantSets().find(entry.set_name);
+            if (set == spec->variantSets().end()) {
+                reason = "declares no such variant set";
+            } else if (set->second.variantSet.find(entry.variant_name) == set->second.variantSet.end()) {
+                reason = "holds no such variant";
+            }
+        }
+        if (!reason.empty()) {
+            const std::string message = fmt::format(
+                "USD '{}': a composition arc selects variant '{}' of set '{}' on '{}', which {} - the selection is dropped",
+                filename, entry.variant_name, entry.set_name, absolute_path, reason
+            );
+            log_usd->warn("{}", message);
+            warning += message;
+            warning += "\n";
+            continue;
+        }
+        kept.entries.push_back(entry);
+    }
+    return kept;
 }
 
 // Replace `stage` with the composition of `root_layer` and its `subLayers`
@@ -412,6 +494,8 @@ void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record
     const lightusd::Layer&            root_layer,
     lightusd::Stage&                  stage,
     lightusd::Layer&                  composed_layer_out,
+    Usd_variant_selections&           variant_selections,
+    bool&                             selections_validated,
     std::vector<Variant_prim_record>& variant_prims,
     std::string&                      warning
 ) -> bool
@@ -456,7 +540,12 @@ void hoist_variant_prims(lightusd::Layer& layer, std::vector<Variant_prim_record
     fill_stage_metas_from_sublayers(resolver, root_layer, metas, visited, 0);
     composed_layer.metas() = metas;
 
-    hoist_variant_prims(composed_layer, variant_prims);
+    // The composed layer is what a carried selection is validated against and
+    // what the reader reads back: a variant set a sublayer authors is a set of
+    // the composed prim, so a carried selection may name it.
+    variant_selections   = validate_variant_selections(composed_layer, filename, variant_selections, warning);
+    selections_validated = true;
+    hoist_variant_prims(composed_layer, variant_selections, variant_prims);
 
     // LayerToStage consumes the layer it builds from, so the layer the
     // importer reads is a copy taken here. It is the same tree the prims come
@@ -503,6 +592,7 @@ void compose_variant_prims(
     const std::filesystem::path&      path,
     lightusd::Layer&                  layer,
     lightusd::Stage&                  stage,
+    Usd_variant_selections&           variant_selections,
     std::vector<Variant_prim_record>& variant_prims,
     std::string&                      warning
 )
@@ -511,7 +601,8 @@ void compose_variant_prims(
 
     const std::string filename = path.generic_string();
     lightusd::Layer   hoisted_layer = layer;
-    hoist_variant_prims(hoisted_layer, variant_prims);
+    variant_selections = validate_variant_selections(hoisted_layer, filename, variant_selections, warning);
+    hoist_variant_prims(hoisted_layer, variant_selections, variant_prims);
 
     // LayerToStage consumes the layer it builds from, and the hoisted layer is
     // what the importer reads afterwards, so the stage is built from a copy.
@@ -653,7 +744,7 @@ auto node_graph_node_id_prefix(std::string_view format) -> std::string_view
     return std::string_view{};
 }
 
-auto load_stage(const std::filesystem::path& path) -> Load_stage_result
+auto load_stage(const std::filesystem::path& path, const Usd_variant_selections& variant_selections) -> Load_stage_result
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -694,6 +785,11 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
     const std::string base_dir = path.has_parent_path() ? path.parent_path().generic_string() : std::string{"."};
     std::string       layer_warning;
     std::string       layer_error;
+    // The selection a composition arc carried in, validated against the layer
+    // the prims come from and kept on the stage: the hoist takes it here and
+    // the reader takes the same entries off the stage, so it is checked once.
+    Usd_variant_selections kept_selections = variant_selections;
+    bool                   selections_validated = false;
     impl->layer_ok = lightusd::LoadLayerFromFile(filename, &impl->layer, &layer_warning, &layer_error, options);
     if (!impl->layer_ok) {
         log_usd->info("USD '{}': the root layer could not be read for composition: {}", filename, layer_error);
@@ -720,12 +816,19 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
             }
         } else if (sublayer_count > 0) {
             lightusd::Layer composed_layer;
-            if (compose_sublayers(path, impl->layer, impl->stage, composed_layer, impl->variant_prims, result.warning)) {
+            if (compose_sublayers(path, impl->layer, impl->stage, composed_layer, kept_selections, selections_validated, impl->variant_prims, result.warning)) {
                 impl->layer = std::move(composed_layer);
                 log_usd->info("USD '{}': composed {} subLayer(s)", filename, sublayer_count);
             }
         } else if (has_variant_prims(impl->layer)) {
-            compose_variant_prims(path, impl->layer, impl->stage, impl->variant_prims, result.warning);
+            compose_variant_prims(path, impl->layer, impl->stage, kept_selections, impl->variant_prims, result.warning);
+            selections_validated = true;
+        }
+        // A file whose variant blocks add no prim needs no hoist, so nothing
+        // validated the carried selection on the way: the layer the reader
+        // reads is what answers for it.
+        if (!selections_validated) {
+            kept_selections = validate_variant_selections(impl->layer, filename, kept_selections, result.warning);
         }
         if (!impl->variant_prims.empty()) {
             log_usd->info("USD '{}': {} prim(s) of variant blocks are in the tree", filename, impl->variant_prims.size());
@@ -746,6 +849,8 @@ auto load_stage(const std::filesystem::path& path) -> Load_stage_result
             }
         }
     }
+
+    impl->variant_selections = std::move(kept_selections);
 
     log_usd->info("Loaded USD stage '{}'", filename);
     result.stage = std::make_unique<Stage>(std::move(impl));

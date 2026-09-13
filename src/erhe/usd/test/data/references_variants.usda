@@ -1,0 +1,63 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Xform "FancyColumn" (
+        prepend references = @./references_variants_target.usda@</Teapot>
+        variants = {
+            string shapeVariant = "Fancy"
+        }
+    )
+    {
+    }
+
+    def Xform "UtahColumn" (
+        prepend references = @./references_variants_target.usda@</Teapot>
+        variants = {
+            string shapeVariant = "Utah"
+        }
+    )
+    {
+        over "Body" (
+            variants = {
+                string shadingVariant = "Red"
+            }
+        )
+        {
+        }
+    }
+
+    def Xform "UnknownColumn" (
+        prepend references = @./references_variants_target.usda@</Teapot>
+        variants = {
+            string shapeVariant = "Nonexistent"
+        }
+    )
+    {
+    }
+
+    def Xform "OwnSetColumn" (
+        prepend references = @./references_variants_target.usda@</Teapot>
+        variants = {
+            string localVariant = "On"
+            string shapeVariant = "Fancy"
+        }
+        prepend variantSets = "localVariant"
+    )
+    {
+        variantSet "localVariant" = {
+            "Off" {
+            }
+            "On" {
+                def Scope "OnScope"
+                {
+                }
+            }
+        }
+    }
+}

@@ -5607,14 +5607,24 @@ private:
         }
     }
 
-    // Which variant of `set` the layer selected: its own `variants` opinion,
-    // or the first variant when it authors none - the rule load_stage's hoist
-    // applies as well.
-    [[nodiscard]] static auto selected_variant_name(
-        const lightusd::PrimSpec&                                        spec,
-        const std::pair<const std::string, lightusd::VariantSetSpec>&    set
-    ) -> std::string
+    // Which variant of `set` the prim at `absolute_path` composes to: the
+    // selection a composition arc carried into this load, then the layer's own
+    // `variants` opinion, then the first variant when neither names one - the
+    // rule load_stage's hoist applies as well. LIVRPS resolves a carried
+    // selection stronger than the target's own, and load_stage validated it
+    // against the layer, so it names a variant the set holds.
+    [[nodiscard]] auto selected_variant_name(
+        const std::string&                                            absolute_path,
+        const lightusd::PrimSpec&                                     spec,
+        const std::pair<const std::string, lightusd::VariantSetSpec>& set
+    ) const -> std::string
     {
+        if (m_impl != nullptr) {
+            const std::string* const carried = m_impl->variant_selections.find(absolute_path, set.first);
+            if (carried != nullptr) {
+                return *carried;
+            }
+        }
         const lightusd::VariantSelectionMap&                selection = spec.get_variant_selection_map();
         const lightusd::VariantSelectionMap::const_iterator i         = selection.find(set.first);
         if (i != selection.end()) {
@@ -5635,7 +5645,7 @@ private:
             return;
         }
         for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec->variantSets()) {
-            const std::string selected = selected_variant_name(*spec, set);
+            const std::string selected = selected_variant_name(absolute_path, *spec, set);
             const std::map<std::string, lightusd::PrimSpec>::const_iterator variant = set.second.variantSet.find(selected);
             if (variant == set.second.variantSet.end()) {
                 continue;
@@ -5700,6 +5710,63 @@ private:
         }
     }
 
+    // The `variants` selection the referencing layer authors for what a prim's
+    // arcs bring in (doc/usd-compatibility-plan.md section 6, "Variant
+    // selection through a composition arc"). In LIVRPS such a selection is
+    // stronger than the target's own, and it reaches the sets of whatever the
+    // arcs compose in, so it belongs to the prim rather than to one arc. An
+    // entry naming a set the referencing prim declares itself is that prim's
+    // own selection - the reader applies it to its own blocks - so it is not
+    // carried into the target. A `variants` metadatum on an `over` prim below
+    // the carrier is the entry of that prim's relative path, read the walk
+    // read_instance_overrides takes.
+    [[nodiscard]] auto read_reference_variant_selections(const std::string& absolute_path) -> std::vector<Usd_variant_selection>
+    {
+        std::vector<Usd_variant_selection> selections;
+        const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
+        if (spec == nullptr) {
+            return selections;
+        }
+        read_spec_variant_selections(absolute_path, *spec, std::string{}, selections);
+        return selections;
+    }
+
+    void read_spec_variant_selections(
+        const std::string&                  absolute_path,
+        const lightusd::PrimSpec&           spec,
+        const std::string&                  relative_path,
+        std::vector<Usd_variant_selection>& selections
+    )
+    {
+        for (const std::pair<const std::string, std::string>& entry : spec.get_variant_selection_map()) {
+            if (spec.variantSets().find(entry.first) != spec.variantSets().end()) {
+                continue;
+            }
+            selections.push_back(
+                Usd_variant_selection{
+                    .relative_path = relative_path,
+                    .set_name      = entry.first,
+                    .variant_name  = entry.second
+                }
+            );
+        }
+        for (const lightusd::PrimSpec& child : spec.children()) {
+            if (relative_path.empty() && is_hoisted_variant_child(absolute_path, child.name())) {
+                continue;
+            }
+            const bool is_override =
+                (child.specifier() == lightusd::Specifier::Over) ||
+                ((child.specifier() == lightusd::Specifier::Def) && child.typeName().empty());
+            if (!is_override) {
+                continue;
+            }
+            const std::string child_path = relative_path.empty()
+                ? child.name()
+                : (relative_path + "/" + child.name());
+            read_spec_variant_selections(absolute_path, child, child_path, selections);
+        }
+    }
+
     // A prim that authors composition arcs is a carrier: the arcs are reported
     // and the composed prims below the carrier are left out, because the
     // targets are what supply them (doc/usd-compatibility-plan.md X1). True
@@ -5714,6 +5781,12 @@ private:
         std::vector<Usd_reference> references = read_prim_references(usd_node.abs_path);
         if (references.empty()) {
             return false;
+        }
+        const std::vector<Usd_variant_selection> variant_selections = read_reference_variant_selections(usd_node.abs_path);
+        if (!variant_selections.empty()) {
+            for (Usd_reference& reference : references) {
+                reference.variant_selections = variant_selections;
+            }
         }
         m_result.data.references.push_back(
             Usd_prim_references{
@@ -6588,7 +6661,7 @@ private:
             Usd_variant_set set{};
             set.stage_path = path;
             set.set_name   = entry.first;
-            set.selected   = selected_variant_name(spec, entry);
+            set.selected   = selected_variant_name(path, spec, entry);
             for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
                 Usd_variant variant{};
                 variant.name = variant_entry.first;
@@ -7379,7 +7452,7 @@ auto load_usd(const Usd_load_arguments& arguments) -> Usd_load_result
 {
     ERHE_PROFILE_FUNCTION();
 
-    Load_stage_result load_stage_result = load_stage(arguments.path);
+    Load_stage_result load_stage_result = load_stage(arguments.path, arguments.variant_selections);
     if (!load_stage_result.stage) {
         Usd_load_result result{};
         result.error   = load_stage_result.error;
