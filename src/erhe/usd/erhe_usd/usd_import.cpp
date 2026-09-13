@@ -4529,8 +4529,14 @@ private:
                 camera->set_value(erhe::scene::Camera::fov_y_property, usd_camera.yfov());
                 camera->set_value(erhe::scene::Camera::fov_x_property, usd_camera.xfov());
             }
+            // A USD camera's `exposure` is a stop - a log base-2 adjustment
+            // whose default 0 means "no adjustment" - while erhe's exposure is
+            // the linear multiplier that adjustment stands for, default 1. The
+            // two are the same quantity in different units, so the import
+            // raises 2 to the authored stop, the way the light path folds
+            // `inputs:exposure` into the intensity.
             if (is_authored(path, "exposure")) {
-                camera->set_exposure(usd_camera.exposure);
+                camera->set_exposure(std::pow(2.0f, usd_camera.exposure));
             }
             m_result.data.cameras.push_back(camera);
         }

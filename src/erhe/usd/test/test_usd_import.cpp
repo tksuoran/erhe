@@ -160,6 +160,35 @@ TEST_F(Cube_import, camera)
     EXPECT_NEAR(projection->fov_y,  expected_fov_y, 1e-4f);
     EXPECT_NEAR(projection->z_near, 0.1f,           1e-4f);
     EXPECT_NEAR(projection->z_far,  1000.0f,        1e-1f);
+    // cube.usda authors no `exposure`, so erhe's own default multiplier stands.
+    EXPECT_FLOAT_EQ(camera.get_exposure(), 1.0f);
+}
+
+// A USD `exposure` is a stop and erhe's is the linear multiplier that stop
+// stands for, so the import raises 2 to the authored value.
+TEST(Camera_exposure_import, stops_become_a_multiplier)
+{
+    const std::shared_ptr<erhe::scene::Xform> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_arguments arguments{
+        .path          = test_data_path("camera_exposure.usda"),
+        .root_node     = root,
+        .mesh_layer_id = 0
+    };
+    const erhe::usd::Usd_load_result result = erhe::usd::load_usd(arguments);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.cameras.size(), 2u);
+    float dim    = 0.0f;
+    float bright = 0.0f;
+    for (const std::shared_ptr<erhe::scene::Camera>& camera : result.data.cameras) {
+        ASSERT_TRUE(camera.operator bool());
+        if (camera->get_name() == "dim") {
+            dim = camera->get_exposure();
+        } else if (camera->get_name() == "bright") {
+            bright = camera->get_exposure();
+        }
+    }
+    EXPECT_FLOAT_EQ(dim,    0.5f);
+    EXPECT_FLOAT_EQ(bright, 4.0f);
 }
 
 TEST_F(Cube_import, light)

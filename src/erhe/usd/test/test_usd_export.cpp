@@ -113,6 +113,26 @@ public:
     erhe::usd::Usd_load_result         reloaded;
 };
 
+// The exposure write is the import's inverse: a stop in the file, the linear
+// multiplier it stands for in erhe, and the same stop in the file again.
+TEST(Camera_exposure_round_trip, multiplier_is_written_back_as_the_same_stop)
+{
+    Round_trip trip{"camera_exposure.usda"};
+    ASSERT_TRUE(trip.source.error.empty()) << trip.source.error;
+    trip.save_and_reload("camera_exposure.usda");
+    ASSERT_TRUE(trip.save.error.empty()) << trip.save.error;
+    ASSERT_TRUE(trip.reloaded.error.empty()) << trip.reloaded.error;
+    ASSERT_EQ(trip.reloaded.data.cameras.size(), 2u);
+    for (const std::shared_ptr<erhe::scene::Camera>& camera : trip.reloaded.data.cameras) {
+        ASSERT_TRUE(camera.operator bool());
+        if (camera->get_name() == "dim") {
+            EXPECT_FLOAT_EQ(camera->get_exposure(), 0.5f);
+        } else if (camera->get_name() == "bright") {
+            EXPECT_FLOAT_EQ(camera->get_exposure(), 4.0f);
+        }
+    }
+}
+
 class Cube_round_trip : public testing::Test
 {
 protected:

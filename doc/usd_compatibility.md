@@ -244,7 +244,7 @@ of "Texture node graphs" holds unchanged except the four below.
 | `fov_y` / `fov_x` | `focalLength` + `horizontalAperture` / `verticalAperture` | USD is physical-camera-first: three values carry two angles, so the exporter fixes `focalLength` at 50 and puts each angle in its aperture, `aperture = 2 * focalLength * tan(fov / 2)`, which the importer's `2 * atan(0.5 * aperture / focalLength)` reads back exactly |
 | `ortho_*` | `horizontalAperture` / `verticalAperture` in orthographic mode | USD apertures are in tenths of a scene unit, so `ortho_width` = `horizontalAperture` / 10 and `ortho_height` = `verticalAperture` / 10 |
 | `z_near`, `z_far`, `infinite_z_far` | `clippingRange` | infinite far has no USD form |
-| `exposure` | `exposure` | exact match |
+| `exposure` | `exposure` | the same quantity in different units: USD states it as a stop (a log base-2 adjustment, default 0 = none) and erhe as the linear multiplier it stands for (default 1), so the importer reads `2^exposure` and the exporter writes `log2(exposure)`. A zero or negative erhe exposure is no stop: it is named in a warning and left unwritten |
 | `shadow_range` | none | erhe-only |
 
 ## Physics

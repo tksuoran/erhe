@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Camera "dim"
+    {
+        float exposure = -1
+        float focalLength = 50
+        float horizontalAperture = 36
+        float verticalAperture = 24
+    }
+
+    def Camera "bright"
+    {
+        float exposure = 2
+        float focalLength = 50
+        float horizontalAperture = 36
+        float verticalAperture = 24
+    }
+}

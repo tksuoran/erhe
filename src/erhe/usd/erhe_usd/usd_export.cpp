@@ -5627,8 +5627,23 @@ private:
                 2.0f * c_export_focal_length * std::tan(0.5f * camera.get_value(Camera::fov_y_property))
             );
         }
+        // USD states the exposure as a stop and erhe as the linear multiplier
+        // that stop stands for, so the write is the import's inverse. Only a
+        // positive multiplier is a stop; a zero or negative one is named in a
+        // warning and left unwritten, and the file keeps USD's own default.
         if (is_local(camera, Camera::exposure_property.get())) {
-            geom_camera.exposure.set_value(camera.get_value(Camera::exposure_property));
+            const float exposure = camera.get_value(Camera::exposure_property);
+            if (exposure > 0.0f) {
+                geom_camera.exposure.set_value(std::log2(exposure));
+            } else {
+                add_warning(
+                    fmt::format(
+                        "camera '{}' has exposure {}, which USD's log base-2 `exposure` cannot express - it is not written",
+                        camera.get_name(),
+                        exposure
+                    )
+                );
+            }
         }
         if (is_local(camera, Camera::infinite_z_far_property.get()) && camera.get_value(Camera::infinite_z_far_property)) {
             add_warning(
