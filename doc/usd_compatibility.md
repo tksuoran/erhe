@@ -266,13 +266,14 @@ attributes on the prim itself, reaches the item that holds them
 | erhe `Draw_mode` property | USD `UsdGeomModelAPI` | notes |
 |---|---|---|
 | the attachment on a prim | `GeomModelAPI` in the prim's `apiSchemas` | a prim that authors a `model:` attribute without applying the schema gets a record too, with one info line: usdview honours the draw mode either way |
-| `draw_mode` (`inherited`, `default`, `origin`, `bounds`, `cards`) | `uniform token model:drawMode` | `inherited` defers to the nearest ancestor authoring one; the fallback of a hierarchy authoring none is `default` |
+| `draw_mode` (`inherited`, `default`, `origin`, `bounds`, `cards`) | `uniform token model:drawMode` | `inherited` defers to the nearest ancestor authoring one; the fallback of a hierarchy authoring none is `default`. A prim whose value is a proxy mode takes its children's subtrees out of render, pick and simulation through the derived `Item_flags::active` bit and keeps its own, since it carries the proxy |
 | `apply_draw_mode` | `uniform bool model:applyDrawMode` | read and written; it does not gate the proxy, the way the imaging adapter honours `drawMode` on every model prim |
 | `card_geometry` (`cross`, `box`, `fromTexture`) | `uniform token model:cardGeometry` | |
-| `card_visibility` (`inherited`, `full`, `simple`) | `uniform token model:cardVisibility` | `simple` leaves out the cards of the stage's up axis |
+| `card_visibility` (`inherited`, `full`, `simple`) | `uniform token model:cardVisibility` | `simple` leaves out the cards of the stage's up axis; `inherited` resolves the same way `draw_mode` does, with the root fallback `full` |
 | `card_texture_x_neg` .. `card_texture_z_pos` | `asset model:cardTexture{X,Y,Z}{Neg,Pos}` | the record holds the resolved absolute path, an authored relative one resolved against the stage file's directory the way an image's is; a texture packed inside a `.usdz` is named in a warning and left as the path beside the archive, the record carrying no bytes. The writer authors the path relative to the written file |
 | `draw_mode_color` | `uniform float3 model:drawModeColor` | the line color of `origin` and `bounds`, and the fallback quad color of `cards` |
-| `extents_hint_min`, `extents_hint_max` | `float3[] extentsHint` | one array of two entries carries both, the first pair being the default purpose's; the two properties are written together and an array of fewer than six numbers is one warning |
+| the proxy the editor draws | none - `UsdImagingGLDrawModeAdapter` | `bounds` is the 12 edges of the extent box and `origin` three axis lines from the prim's origin, in the prim's own space, depth-tested like the geometry they stand for. `cards` draws the extent box too until the card quads exist |
+| `extents_hint_min`, `extents_hint_max` | `float3[] extentsHint` | one array of two entries carries both, the first pair being the default purpose's; the two properties are written together and an array of fewer than six numbers is one warning. The box the proxies are sized from: without an authored hint the editor measures the meshes at and below the prim, once |
 
 Every `*_authored` flag of the record says whether the file spelled the value
 at all, and a save writes exactly the authored ones: USD's schema fallbacks

@@ -238,6 +238,12 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
     rederive_active_flag_bits();
 }
 
+auto Hierarchy::is_pruned_by_parent() const -> bool
+{
+    const std::shared_ptr<Hierarchy> parent = m_parent.lock();
+    return parent && parent->prunes_children();
+}
+
 auto Hierarchy::get_inheritance_parent() const -> const erhe::property::Dependency_object*
 {
     const std::shared_ptr<Hierarchy> parent = m_parent.lock();

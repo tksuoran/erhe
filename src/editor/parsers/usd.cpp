@@ -52,6 +52,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "parsers/gltf_extensions_names.hpp"
 #include "parsers/physics_export.hpp"
 #include "parsers/physics_import.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/variant_table.hpp"
@@ -2494,6 +2495,64 @@ void resolve_usd_physics(
     }
 }
 
+// The draw modes of one USD file as editor attachments: one `Draw_mode` per
+// record, applied to the prim the record names, holding exactly the values
+// the file authored. The attachment is applied to the loaded tree before the
+// tree's own insert, the way a `Node_physics` is, so the whole import is one
+// undoable operation.
+void resolve_usd_draw_modes(const erhe::usd::Usd_data& usd_data)
+{
+    for (const erhe::usd::Usd_draw_mode& record : usd_data.draw_modes) {
+        if (!record.prim) {
+            continue;
+        }
+        erhe::scene::Node* const node = dynamic_cast<erhe::scene::Node*>(record.prim.get());
+        if (node == nullptr) {
+            // A draw mode is a request to the imaging layer to draw a prim's
+            // subtree, so only a prim of the tree can carry one.
+            log_parsers->warn(
+                "USD draw mode of '{}' sits on a prim that is not part of the scene tree - the draw mode is dropped",
+                record.stage_path
+            );
+            continue;
+        }
+        std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(node);
+        if (!draw_mode) {
+            draw_mode = std::make_shared<Draw_mode>();
+            node->attach(draw_mode);
+        }
+        draw_mode->set_description(record.description);
+    }
+}
+
+// The draw modes of a scene to write: one entry per prim of the tree carrying
+// a `Draw_mode` attachment, with the values the attachment holds locally.
+void collect_usd_draw_modes(
+    erhe::scene::Node&                              root_node,
+    std::vector<erhe::usd::Usd_save_draw_mode>&     out_draw_modes
+)
+{
+    root_node.for_each<erhe::scene::Xformable>(
+        [&out_draw_modes](erhe::scene::Xformable& prim) -> bool {
+            const std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(&prim);
+            if (!draw_mode) {
+                return true;
+            }
+            const erhe::scene::Draw_mode_description description = draw_mode->get_description();
+            if (!description.has_authored_value()) {
+                return true;
+            }
+            out_draw_modes.push_back(
+                erhe::usd::Usd_save_draw_mode{
+                    .item        = prim.shared_node_from_this(),
+                    .description = description
+                }
+            );
+            return true;
+        }
+    );
+}
+
 // The physics world's gravity as the file's `PhysicsScene` prim states it.
 // USD's own fallbacks stand for what the prim leaves unauthored: the negative
 // up axis, and earth gravity.
@@ -2763,6 +2822,7 @@ auto make_import_usd_operation(
     // The file's physics, before the material attaches: a `Material` prim the
     // file made a physics material of is not a shading material of the scene.
     resolve_usd_physics(context, usd_data, scene_root, root_node, path, mesh_node_items, operations);
+    resolve_usd_draw_modes(usd_data);
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
     resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
     // An imported file's own scene block says which of its prims its geometry
@@ -3105,6 +3165,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // The file's physics, before the material attaches: a `Material` prim the
     // file made a physics material of is not a shading material of the scene.
     resolve_usd_physics(context, usd_data, scene_root, container_node, path, mesh_node_items, operations);
+    resolve_usd_draw_modes(usd_data);
     apply_usd_physics_scene(usd_data, *scene_root.get());
     append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
     resolve_usd_brushes(context, content_library, usd_data, container_node, path.generic_string(), operations);
@@ -3632,6 +3693,11 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
     const erhe::scene::Physics_description physics_description =
         build_physics_description(scene, content_library.get(), &physics_items);
     collect_usd_physics(scene_root, physics_description, physics_items, save_arguments.physics);
+
+    // The draw modes of the tree (doc/usd_compatibility.md, "Draw modes"):
+    // one `GeomModelAPI` per prim carrying the attachment, complete before
+    // the plan below, which turns each item into a path.
+    collect_usd_draw_modes(*root_node.get(), save_arguments.draw_modes);
 
     // The editor's scene state, in the JSON shape the glTF ERHE_scene block
     // carries, as one `customLayerData` string. What it says about a prim it

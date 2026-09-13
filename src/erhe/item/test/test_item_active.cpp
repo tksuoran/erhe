@@ -169,3 +169,74 @@ TEST(Item_active, copy_rederives_the_bit)
     Leaf inactive_copy{*child.get()};
     EXPECT_FALSE(inactive_copy.is_active());
 }
+
+// Draw-mode pruning (doc/usd_compatibility.md, "Draw modes"): a prim whose
+// draw mode asks for a proxy keeps its own bit and takes its children's
+// subtrees out, the way an inactive prim's subtree goes out.
+
+TEST(Item_active, pruning_parent_clears_the_children_subtrees)
+{
+    auto root = std::make_shared<Leaf>("root");
+    auto mid  = std::make_shared<Leaf>("mid");
+    auto leaf = std::make_shared<Leaf>("leaf");
+    mid->set_parent(root);
+    leaf->set_parent(mid);
+
+    EXPECT_FALSE(root->prunes_children());
+
+    root->set_prunes_children(true);
+    EXPECT_TRUE (root->prunes_children());
+    // The pruning prim itself stays active: it carries the proxy.
+    EXPECT_TRUE (root->is_active());
+    EXPECT_FALSE(mid ->is_active());
+    EXPECT_FALSE(leaf->is_active());
+    ASSERT_EQ(mid->flag_updates.size(), std::size_t{1});
+    EXPECT_EQ(mid->flag_updates[0], erhe::Item_flags::active);
+
+    // The children's own opinions are untouched - the pruning is derived
+    // state of the parent, never written into `active`.
+    EXPECT_TRUE(mid->get_value(erhe::Item_base::active_property));
+    EXPECT_EQ(mid->get_value_source(erhe::Item_base::active_property.get()), Value_source::default_value);
+
+    root->set_prunes_children(false);
+    EXPECT_TRUE(mid ->is_active());
+    EXPECT_TRUE(leaf->is_active());
+
+    root->set_prunes_children(false); // no change, no notification
+    ASSERT_EQ(mid->flag_updates.size(), std::size_t{2});
+}
+
+TEST(Item_active, pruning_and_the_items_own_opinion_are_both_required)
+{
+    auto root = std::make_shared<Leaf>("root");
+    auto mid  = std::make_shared<Leaf>("mid");
+    mid->set_parent(root);
+
+    set_active(mid, false);
+    root->set_prunes_children(true);
+    EXPECT_FALSE(mid->is_active());
+
+    // Lifting the pruning leaves the item's own `active = false` standing.
+    root->set_prunes_children(false);
+    EXPECT_FALSE(mid->is_active());
+    set_active(mid, true);
+    EXPECT_TRUE(mid->is_active());
+}
+
+TEST(Item_active, pruning_follows_the_tree_change)
+{
+    auto pruning = std::make_shared<Leaf>("pruning");
+    auto plain   = std::make_shared<Leaf>("plain");
+    auto child   = std::make_shared<Leaf>("child");
+    auto grand   = std::make_shared<Leaf>("grand");
+    grand->set_parent(child);
+    pruning->set_prunes_children(true);
+
+    child->set_parent(pruning);
+    EXPECT_FALSE(child->is_active());
+    EXPECT_FALSE(grand->is_active());
+
+    child->set_parent(plain);
+    EXPECT_TRUE(child->is_active());
+    EXPECT_TRUE(grand->is_active());
+}

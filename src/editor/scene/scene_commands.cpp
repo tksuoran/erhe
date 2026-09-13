@@ -26,6 +26,7 @@
 #include "rendertarget_imgui_host.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/node_joint.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_builder.hpp"
 #include "scene/scene_root.hpp"
@@ -1128,6 +1129,17 @@ auto Scene_commands::attach_new_grid(erhe::scene::Node& node) -> std::shared_ptr
     grid->enable_flag_bits(Item_flags::content | Item_flags::show_in_ui | Item_flags::show_debug_visualizations);
     m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(grid, node.shared_node_from_this()));
     return grid;
+}
+
+auto Scene_commands::attach_new_draw_mode(erhe::scene::Node& node) -> std::shared_ptr<Draw_mode>
+{
+    if (erhe::scene::get_attachment<Draw_mode>(&node)) {
+        log_scene->warn("Node '{}' already has a draw mode attachment", node.get_name());
+        return {};
+    }
+    auto draw_mode = std::make_shared<Draw_mode>();
+    m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(draw_mode, node.shared_node_from_this()));
+    return draw_mode;
 }
 
 auto Scene_commands::attach_new_frame_controller(erhe::scene::Node& node) -> std::shared_ptr<Frame_controller>

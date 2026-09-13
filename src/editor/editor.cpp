@@ -95,6 +95,7 @@
 #include "renderers/sky_renderer.hpp"
 #include "rendergraph/post_processing.hpp"
 #include "rendertarget_imgui_host.hpp"
+#include "scene/draw_mode_renderer.hpp"
 #include "scene/debug_draw.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "scene/scene_builder.hpp"
@@ -2453,6 +2454,10 @@ public:
                     *m_app_message_bus.get(),
                     *m_tools.get()
                 );
+                m_draw_mode_renderer = std::make_unique<Draw_mode_renderer>(
+                    m_app_context,
+                    *m_tools.get()
+                );
             }
             ERHE_TASK_FOOTER(
                 .name("Group 2")
@@ -4216,6 +4221,7 @@ public:
     std::unique_ptr<Material_paint_tool>                     m_material_paint_tool;
     std::unique_ptr<Mesh_component_selection_tool>           m_mesh_component_selection_tool;
     std::unique_ptr<Lattice_tool>                            m_lattice_tool;
+    std::unique_ptr<Draw_mode_renderer>                      m_draw_mode_renderer;
     std::unique_ptr<Paint_tool         >                     m_paint_tool;
     std::unique_ptr<Weight_paint_tool  >                     m_weight_paint_tool;
     std::unique_ptr<Physics_tool       >                     m_physics_tool;

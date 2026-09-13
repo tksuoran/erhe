@@ -74,6 +74,7 @@ class App_message_bus;
 class App_scenes;
 class App_settings;
 class Item_tree_window;
+class Draw_mode;
 class Node_joint;
 class Node_physics;
 class Raytrace_primitive;
@@ -284,6 +285,14 @@ public:
     void begin_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& mesh);
     void end_mesh_rt_update  (const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
+    // The draw-mode attachments of this scene, which is where the proxy
+    // renderer finds them: the attachment registers itself when it reaches a
+    // host and leaves the list when it leaves the host, so no pass scans the
+    // tree for them (doc/usd_compatibility.md, "Draw modes").
+    void register_draw_mode  (const std::shared_ptr<Draw_mode>& draw_mode);
+    void unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode);
+    [[nodiscard]] auto get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&;
+
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 
@@ -469,6 +478,7 @@ private:
     bool                                            m_physics_simulation_running{true};
     double                                          m_wind_time{0.0};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
+    std::vector<std::shared_ptr<Draw_mode>>         m_draw_modes;
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 

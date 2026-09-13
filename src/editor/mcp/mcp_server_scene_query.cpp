@@ -31,6 +31,7 @@
 #include "prefabs/prefab_instance.hpp"
 #include "scene/node_joint.hpp"
 #include "erhe_scene/layout.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/node_raytrace_mask.hpp"
 #include "scene/item_lookup.hpp"
@@ -642,6 +643,31 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
                 att_json["linear_damping"]  = rigid_body->get_linear_damping();
                 att_json["angular_damping"] = rigid_body->get_angular_damping();
             }
+        }
+
+        // Draw mode: the prim's own opinion, what it resolves to and the box
+        // the proxy is sized from (doc/usd_compatibility.md, "Draw modes").
+        auto draw_mode = std::dynamic_pointer_cast<Draw_mode>(att);
+        if (draw_mode) {
+            att_json["draw_mode"]          = erhe::scene::c_str(draw_mode->get_value(Draw_mode::draw_mode_property));
+            att_json["resolved_draw_mode"] = erhe::scene::c_str(draw_mode->resolved_draw_mode());
+            att_json["apply_draw_mode"]    = draw_mode->get_value(Draw_mode::apply_draw_mode_property);
+            att_json["card_geometry"]      = erhe::scene::c_str(draw_mode->get_value(Draw_mode::card_geometry_property));
+            att_json["card_visibility"]    = erhe::scene::c_str(draw_mode->resolved_card_visibility());
+            const glm::vec3 color = draw_mode->get_value(Draw_mode::draw_mode_color_property);
+            att_json["draw_mode_color"]    = {color.x, color.y, color.z};
+            glm::vec3 extent_min{0.0f};
+            glm::vec3 extent_max{0.0f};
+            if (draw_mode->get_extent(extent_min, extent_max)) {
+                att_json["extent_min"] = {extent_min.x, extent_min.y, extent_min.z};
+                att_json["extent_max"] = {extent_max.x, extent_max.y, extent_max.z};
+            }
+            json card_textures = json::array();
+            for (std::size_t face = 0; face < erhe::scene::c_draw_mode_card_face_count; ++face) {
+                const erhe::scene::Draw_mode_card_face card_face = static_cast<erhe::scene::Draw_mode_card_face>(face);
+                card_textures.push_back(draw_mode->get_value(Draw_mode::get_card_texture_property(card_face)).path);
+            }
+            att_json["card_textures"] = card_textures;
         }
 
         auto node_joint = std::dynamic_pointer_cast<Node_joint>(att);

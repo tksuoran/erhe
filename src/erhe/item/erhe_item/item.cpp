@@ -386,9 +386,32 @@ auto Item_base::is_parent_active() const -> bool
     return (parent_item == nullptr) || parent_item->is_active();
 }
 
+void Item_base::set_prunes_children(const bool value)
+{
+    if (m_prunes_children == value) {
+        return;
+    }
+    m_prunes_children = value;
+    bump_item_mutation_serial();
+    // Only the children's bits move: this item's own bit is a function of its
+    // parent's state and its own opinions, none of which changed.
+    for_each_inheritance_child(
+        [](erhe::property::Dependency_object& child) {
+            Item_base* const child_item = dynamic_cast<Item_base*>(&child);
+            if (child_item != nullptr) {
+                child_item->rederive_active_flag_bits();
+            }
+        }
+    );
+}
+
 void Item_base::rederive_active_flag_bits()
 {
-    const bool active     = is_parent_active() && get_value(active_property) && get_value(defined_property);
+    const bool active =
+        is_parent_active() &&
+        !is_pruned_by_parent() &&
+        get_value(active_property) &&
+        get_value(defined_property);
     const bool was_active = erhe::utility::test_bit_set(m_flag_bits, Item_flags::active);
     if (active == was_active) {
         // Every descendant's bit is a function of this one, so an unchanged

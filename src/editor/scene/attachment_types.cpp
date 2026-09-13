@@ -1,6 +1,7 @@
 #include "scene/attachment_types.hpp"
 
 #include "grid/grid.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/frame_controller.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
@@ -32,6 +33,7 @@ auto joint_gate           (const Node&     ) -> bool { return true; } // multipl
 auto layout_gate          (const Node& node) -> bool { return !erhe::scene::get_attachment<erhe::scene::Layout    >(&node); }
 auto grid_gate            (const Node& node) -> bool { return !erhe::scene::get_attachment<Grid                    >(&node); }
 auto frame_controller_gate(const Node& node) -> bool { return !erhe::scene::get_attachment<Frame_controller        >(&node); }
+auto draw_mode_gate       (const Node& node) -> bool { return !erhe::scene::get_attachment<Draw_mode               >(&node); }
 
 void make_camera          (Scene_commands& sc, Node& node) { sc.attach_new_camera          (node); }
 void make_light           (Scene_commands& sc, Node& node) { sc.attach_new_light           (node); }
@@ -41,6 +43,7 @@ void make_joint           (Scene_commands& sc, Node& node) { sc.create_new_joint
 void make_layout          (Scene_commands& sc, Node& node) { sc.attach_new_layout           (node); }
 void make_grid            (Scene_commands& sc, Node& node) { sc.attach_new_grid             (node); }
 void make_frame_controller(Scene_commands& sc, Node& node) { sc.attach_new_frame_controller (node); }
+void make_draw_mode       (Scene_commands& sc, Node& node) { sc.attach_new_draw_mode        (node); }
 
 } // anonymous namespace
 
@@ -54,7 +57,8 @@ auto get_attachment_types() -> const std::vector<Attachment_type_info>&
         {"joint",            "Joint",            Attachment_kind::api_schema, joint_gate,            make_joint           },
         {"layout",           "Layout",           Attachment_kind::api_schema, layout_gate,           make_layout          },
         {"grid",             "Grid",             Attachment_kind::api_schema, grid_gate,             make_grid            },
-        {"frame_controller", "Frame Controller", Attachment_kind::api_schema, frame_controller_gate, make_frame_controller}
+        {"frame_controller", "Frame Controller", Attachment_kind::api_schema, frame_controller_gate, make_frame_controller},
+        {"draw_mode",        "Draw Mode",        Attachment_kind::api_schema, draw_mode_gate,        make_draw_mode       }
     };
     return catalog;
 }

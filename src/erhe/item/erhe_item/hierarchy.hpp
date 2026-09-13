@@ -37,6 +37,12 @@ public:
     virtual void handle_remove_child (Hierarchy* child_node);
     virtual void handle_parent_update(Hierarchy* old_parent, Hierarchy* new_parent);
 
+    // Overrides Item_base: a child prim is drawn by its parent's proxy when
+    // the parent's draw mode asks for one (doc/usd_compatibility.md, "Draw
+    // modes"). Only a child of the hierarchy is: the parent's own
+    // attachments, which supply that proxy, are not children of it.
+    [[nodiscard]] auto is_pruned_by_parent() const -> bool override;
+
     // Implements erhe::property::Dependency_object: inherits-flagged
     // properties flow down the parent / child tree.
     [[nodiscard]] auto get_inheritance_parent() const -> const erhe::property::Dependency_object* override;

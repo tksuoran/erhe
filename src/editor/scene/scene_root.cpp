@@ -31,6 +31,7 @@
 #include "prefabs/prefab_instance.hpp"
 #include "scene/attachment_types.hpp"
 #include "scene/node_joint.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/node_physics.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/node_raytrace.hpp"
@@ -1723,6 +1724,29 @@ void Scene_root::flush_draw_lists()
     // registration reads. Lock order: item_host_mutex -> pending mutex.
     const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{item_host_mutex};
     m_draw_list_scene->flush_pending();
+}
+
+void Scene_root::register_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode)
+{
+    const std::vector<std::shared_ptr<Draw_mode>>::iterator i = std::find(m_draw_modes.begin(), m_draw_modes.end(), draw_mode);
+    if (i != m_draw_modes.end()) {
+        return;
+    }
+    m_draw_modes.push_back(draw_mode);
+}
+
+void Scene_root::unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode)
+{
+    const std::vector<std::shared_ptr<Draw_mode>>::iterator i = std::find(m_draw_modes.begin(), m_draw_modes.end(), draw_mode);
+    if (i == m_draw_modes.end()) {
+        return;
+    }
+    m_draw_modes.erase(i);
+}
+
+auto Scene_root::get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&
+{
+    return m_draw_modes;
 }
 
 void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node_physics)

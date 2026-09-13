@@ -283,7 +283,8 @@ public:
     static constexpr uint64_t index_boundable              = 53;
     static constexpr uint64_t index_gprim                  = 54;
     static constexpr uint64_t index_point_instancer        = 55;
-    static constexpr uint64_t count                        = 56;
+    static constexpr uint64_t index_draw_mode              = 56;
+    static constexpr uint64_t count                        = 57;
 
     static constexpr uint64_t none                   =  uint64_t{0};
     static constexpr uint64_t animation              = (uint64_t{1} << index_animation             );
@@ -341,6 +342,7 @@ public:
     static constexpr uint64_t boundable              = (uint64_t{1} << index_boundable             );
     static constexpr uint64_t gprim                  = (uint64_t{1} << index_gprim                 );
     static constexpr uint64_t point_instancer        = (uint64_t{1} << index_point_instancer       );
+    static constexpr uint64_t draw_mode              = (uint64_t{1} << index_draw_mode             );
 
     // NOTE: The names here must match the C++ class names
     static constexpr const char* c_bit_labels[] = {
@@ -399,7 +401,8 @@ public:
         "Xform",
         "Boundable",
         "Gprim",
-        "Point_instancer"
+        "Point_instancer",
+        "Draw_mode"
     };
 };
 
@@ -689,6 +692,27 @@ public:
     // subtree that did not move either, so the walk stops there.
     void rederive_active_flag_bits();
 
+    // Whether the children of this item are drawn by a proxy this item
+    // supplies instead of by themselves - the `UsdGeomModelAPI` draw mode of
+    // a model prim (doc/usd_compatibility.md, "Draw modes"). The item itself
+    // stays active, since it carries the proxy; every child's subtree leaves
+    // render, pick and simulation through the derived Item_flags::active bit,
+    // the way an inactive prim's does. This is derived state of the item, not
+    // an opinion a save persists: the persisted opinion is the draw mode
+    // itself, which the editor's Draw_mode attachment holds and mirrors here.
+    [[nodiscard]] auto prunes_children() const -> bool { return m_prunes_children; }
+
+    // Sets that state and rederives the children's bits. Change-driven: the
+    // one call site is the attachment reacting to its own draw-mode value.
+    void set_prunes_children(bool value);
+
+protected:
+    // True when the item is a child whose parent draws it as part of a proxy
+    // of its own. Only a Hierarchy has such a parent: an attachment is an
+    // inheritance child of its node but not a child prim of it, so a pruning
+    // prim keeps its own attachments - the proxy is one of them.
+    [[nodiscard]] virtual auto is_pruned_by_parent() const -> bool { return false; }
+
 private:
     // True when the item has no inheritance parent (an item outside a tree
     // uses its own value) or that parent's Item_flags::active bit is set.
@@ -703,6 +727,9 @@ protected:
     erhe::property::Dependency_object*     m_inheritance_container{nullptr};
     Unique_id<Item_base>                   m_id         {};
     uint64_t                               m_flag_bits  {Item_flags::visible | Item_flags::active}; // derived bits start at the property defaults
+    // Derived state, not copied: a copy starts outside any tree and draws no
+    // proxy of its own until its draw-mode attachment says so.
+    bool                                   m_prunes_children{false};
     std::string                            m_name       {};
     erhe::utility::Debug_label             m_debug_label{};
     std::unique_ptr<std::filesystem::path> m_source_path{};

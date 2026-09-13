@@ -513,6 +513,10 @@ erhe_target_sources_grouped(
     scene/frame_controller.hpp
     scene/mesh_intersect.cpp
     scene/mesh_intersect.hpp
+    scene/draw_mode.cpp
+    scene/draw_mode.hpp
+    scene/draw_mode_renderer.cpp
+    scene/draw_mode_renderer.hpp
     scene/node_joint.cpp
     scene/node_joint.hpp
     scene/node_physics.cpp
