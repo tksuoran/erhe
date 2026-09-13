@@ -1749,6 +1749,41 @@ auto Scene_root::get_draw_modes() const -> const std::vector<std::shared_ptr<Dra
     return m_draw_modes;
 }
 
+void Scene_root::queue_draw_mode_proxy_rebuild(const std::shared_ptr<Draw_mode>& draw_mode)
+{
+    if (!draw_mode) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_draw_mode_proxy_rebuilds_mutex};
+    for (const std::shared_ptr<Draw_mode>& pending : m_draw_mode_proxy_rebuilds) {
+        if (pending == draw_mode) {
+            return;
+        }
+    }
+    m_draw_mode_proxy_rebuilds.push_back(draw_mode);
+}
+
+void Scene_root::take_draw_mode_proxy_rebuilds(std::vector<std::shared_ptr<Draw_mode>>& out_draw_modes)
+{
+    out_draw_modes.clear();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_draw_mode_proxy_rebuilds_mutex};
+    std::swap(out_draw_modes, m_draw_mode_proxy_rebuilds);
+}
+
+auto Scene_root::find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>
+{
+    const std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>>::const_iterator i = m_card_textures.find(path);
+    if (i == m_card_textures.end()) {
+        return {};
+    }
+    return i->second.lock();
+}
+
+void Scene_root::add_card_texture(const std::string& path, const std::shared_ptr<erhe::graphics::Texture>& texture)
+{
+    m_card_textures[path] = texture;
+}
+
 void Scene_root::register_node_physics(const std::shared_ptr<Node_physics>& node_physics)
 {
     if (!m_physics_world) {

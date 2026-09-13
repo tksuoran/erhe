@@ -10,8 +10,11 @@
 #include <memory>
 
 namespace erhe { class Item_host; }
+namespace erhe::scene { class Mesh; }
 
 namespace editor {
+
+class App_context;
 
 // `UsdGeomModelAPI` as an erhe attachment (doc/usd_compatibility.md, "Draw
 // modes"): the request that a model prim's subtree be drawn as a proxy
@@ -24,8 +27,12 @@ namespace editor {
 //   - the prim's children leave render, pick and simulation while the
 //     resolved mode is not `default_` (Item_base::set_prunes_children), the
 //     way UsdImagingGLDrawModeAdapter prunes them;
-//   - the proxy in their place, which Draw_mode_renderer submits per viewport
-//     from get_extent() and the draw-mode color.
+//   - the proxy in their place: Draw_mode_renderer submits the lines of
+//     `bounds` and `origin` per viewport from get_extent() and the draw-mode
+//     color, and a `cards` mode owns generated quad geometry - a Mesh child
+//     prim of the model prim, flagged Item_flags::draw_mode_proxy (so the
+//     pruning does not reach it) and Item_flags::session_only (so no exporter
+//     writes it), rebuilt whenever a card property or the extent changes.
 //
 // The mode's own value is the prim's opinion and does NOT inherit down the
 // tree: `Draw_mode::inherited` is USD's own deferral token, resolved by
@@ -39,8 +46,9 @@ class Draw_mode
     >
 {
 public:
-    Draw_mode();
+    explicit Draw_mode(App_context& context);
     Draw_mode(const Draw_mode& src, erhe::for_clone);
+    ~Draw_mode() noexcept override;
 
     // Implements Item_base
     static constexpr std::string_view static_type_name{"Draw_mode"};
@@ -107,6 +115,18 @@ public:
     [[nodiscard]] auto get_extent(glm::vec3& out_min, glm::vec3& out_max) const -> bool;
     void invalidate_extent();
 
+    // The card proxy this attachment owns, null unless the resolved mode is
+    // `cards` and the attachment is in a scene. It is not a prim the file
+    // says anything about: a save writes the attributes, never the proxy.
+    [[nodiscard]] auto get_card_proxy() const -> const std::shared_ptr<erhe::scene::Mesh>&;
+
+    // Builds the card proxy the current values ask for and puts it under the
+    // node, taking the previous one out. Main thread only, and never from a
+    // change site: the build inserts a prim, so the change sites queue the
+    // attachment with their Scene_root and App_scenes::rebuild_draw_mode_proxies()
+    // is what calls this.
+    void rebuild_card_proxy();
+
 private:
     // Writes Item_base::set_prunes_children on the node from the resolved
     // mode. Called at every change site of the mode and at attach / detach.
@@ -116,6 +136,15 @@ private:
     // resolved mode is a proxy mode is already inside a pruned subtree, so
     // pruning it again changes nothing.
     [[nodiscard]] auto prunes_own_children() const -> bool;
+
+    // Asks this attachment's scene root for a rebuild on the next tick. The
+    // call sites are the value changes, the attach / detach and
+    // set_description().
+    void queue_card_proxy_rebuild();
+    void remove_card_proxy      ();
+
+    App_context&                       m_context;
+    std::shared_ptr<erhe::scene::Mesh> m_card_proxy{};
 
     mutable glm::vec3 m_extent_min  {0.0f};
     mutable glm::vec3 m_extent_max  {0.0f};

@@ -19,6 +19,7 @@ namespace erhe::scene {
 namespace editor {
 
 class App_context;
+class Draw_mode;
 class Scene_root;
 class Time_context;
 
@@ -51,6 +52,11 @@ public:
     // (Buffer_mesh::has_vertex_colors). Change-driven - a frame in which
     // nothing was written walks the registered roots and finds empty queues.
     void rebuild_display_colors              ();
+    // Main thread, once per frame beside rebuild_display_colors(): builds the
+    // card proxy of every draw-mode attachment whose values, extent or
+    // placement changed (doc/usd_compatibility.md, "Draw modes").
+    // Change-driven for the same reason and in the same shape.
+    void rebuild_draw_mode_proxies           ();
     // Step 2 of the per-frame material schedule
     // (doc/draw_list_material_set_plan.md D6), for every registered root:
     // reconcile each set against the root's content library, apply the
@@ -86,6 +92,9 @@ private:
     // Scratch of rebuild_display_colors(); cleared after use, capacity kept.
     std::vector<std::shared_ptr<Scene_root>>          m_display_color_roots;
     std::vector<std::shared_ptr<erhe::scene::Mesh>>   m_display_color_meshes;
+    // Scratch of rebuild_draw_mode_proxies(); cleared after use, capacity kept.
+    std::vector<std::shared_ptr<Scene_root>>          m_draw_mode_roots;
+    std::vector<std::shared_ptr<Draw_mode>>           m_draw_mode_rebuilds;
 };
 
 }

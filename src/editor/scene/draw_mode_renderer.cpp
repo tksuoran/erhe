@@ -105,14 +105,13 @@ void Draw_mode_renderer::tool_render(const Render_context& context)
                 submit_origin(min, max);
                 break;
             }
-            // The card quads are not built yet, so `cards` shows the box the
-            // cards would be cut from, in the same color a face with no
-            // texture is drawn in.
-            case erhe::scene::Draw_mode::bounds:
-            case erhe::scene::Draw_mode::cards: {
+            case erhe::scene::Draw_mode::bounds: {
                 submit_bounds(min, max);
                 break;
             }
+            // `cards` draws no lines: its proxy is the generated quad
+            // geometry the attachment owns (Draw_mode::get_card_proxy),
+            // which the ordinary content passes render.
             default: {
                 break;
             }

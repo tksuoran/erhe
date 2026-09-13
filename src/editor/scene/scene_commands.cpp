@@ -1137,7 +1137,7 @@ auto Scene_commands::attach_new_draw_mode(erhe::scene::Node& node) -> std::share
         log_scene->warn("Node '{}' already has a draw mode attachment", node.get_name());
         return {};
     }
-    auto draw_mode = std::make_shared<Draw_mode>();
+    auto draw_mode = std::make_shared<Draw_mode>(m_context);
     m_context.operation_stack->queue(std::make_shared<Node_attach_operation>(draw_mode, node.shared_node_from_this()));
     return draw_mode;
 }

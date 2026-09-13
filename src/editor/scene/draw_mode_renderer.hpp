@@ -19,9 +19,10 @@ class Tools;
 // window: it has no state and no UI, it only submits lines for the draw-mode
 // attachments the rendered scene registered with its Scene_root.
 //
-// `bounds` is the extent box, `origin` the three axis lines from the prim's
-// origin, both in the prim's own space and in the draw-mode color; `cards`
-// draws the extent box as well, until the card quads exist.
+// `bounds` is the extent box and `origin` the three axis lines from the
+// prim's origin, both in the prim's own space and in the draw-mode color.
+// `cards` needs nothing here: its proxy is generated quad geometry the
+// attachment owns as a child prim, which the ordinary content passes render.
 class Draw_mode_renderer : public Tool
 {
 public:

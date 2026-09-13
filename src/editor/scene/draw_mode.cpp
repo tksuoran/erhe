@@ -1,4 +1,5 @@
 #include "scene/draw_mode.hpp"
+#include "scene/draw_mode_cards.hpp"
 #include "scene/scene_root.hpp"
 
 #include "erhe_math/math_util.hpp"
@@ -127,7 +128,8 @@ auto Draw_mode::get_card_texture_property(const Draw_mode_card_face face) -> con
     }
 }
 
-Draw_mode::Draw_mode()
+Draw_mode::Draw_mode(App_context& context)
+    : m_context{context}
 {
     set_name("Draw Mode");
     enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
@@ -135,7 +137,13 @@ Draw_mode::Draw_mode()
 
 Draw_mode::Draw_mode(const Draw_mode& src, erhe::for_clone)
     : Item{src, erhe::for_clone{}} // the property entries copy with the base (D10)
+    , m_context{src.m_context}
 {
+}
+
+Draw_mode::~Draw_mode() noexcept
+{
+    remove_card_proxy();
 }
 
 void Draw_mode::handle_node_update(erhe::scene::Node* const old_node, erhe::scene::Node* const new_node)
@@ -148,6 +156,7 @@ void Draw_mode::handle_node_update(erhe::scene::Node* const old_node, erhe::scen
     Node_attachment::handle_node_update(old_node, new_node);
     m_extent_known = false;
     apply_pruning();
+    queue_card_proxy_rebuild();
 }
 
 void Draw_mode::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::Item_host* const new_item_host)
@@ -165,6 +174,15 @@ void Draw_mode::handle_item_host_update(erhe::Item_host* const old_item_host, er
     // a move to another host measures again.
     m_extent_known = false;
     apply_pruning();
+    // Queued with the host that is still registered, so that a detach is
+    // answered too: at flush time the attachment's own host says whether the
+    // proxy is rebuilt somewhere else or only taken out.
+    Scene_root* const rebuild_host = static_cast<Scene_root*>((old_item_host != nullptr) ? old_item_host : new_item_host);
+    if (rebuild_host != nullptr) {
+        rebuild_host->queue_draw_mode_proxy_rebuild(shared_this);
+    } else {
+        remove_card_proxy();
+    }
 }
 
 void Draw_mode::on_property_changed(const erhe::property::Property_changed_args& args)
@@ -181,6 +199,11 @@ void Draw_mode::on_property_changed(const erhe::property::Property_changed_args&
     ) {
         m_extent_known = false;
     }
+    // Every value of the attachment reaches the cards - the mode and the
+    // visibility say which faces exist, the geometry and the extent where
+    // they are, the textures and the color what they show - so any of them
+    // rebuilds the proxy, and only a change does.
+    queue_card_proxy_rebuild();
 }
 
 auto Draw_mode::prunes_own_children() const -> bool
@@ -247,6 +270,48 @@ auto Draw_mode::resolved_card_visibility() const -> Draw_mode_card_visibility
 void Draw_mode::invalidate_extent()
 {
     m_extent_known = false;
+    queue_card_proxy_rebuild();
+}
+
+auto Draw_mode::get_card_proxy() const -> const std::shared_ptr<erhe::scene::Mesh>&
+{
+    return m_card_proxy;
+}
+
+void Draw_mode::remove_card_proxy()
+{
+    if (!m_card_proxy) {
+        return;
+    }
+    m_card_proxy->set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    m_card_proxy.reset();
+}
+
+void Draw_mode::queue_card_proxy_rebuild()
+{
+    erhe::Item_host* const item_host = get_item_host();
+    if (item_host == nullptr) {
+        // Out of every scene: the proxy leaves with the attachment, and there
+        // is no tick that would take it out later.
+        remove_card_proxy();
+        return;
+    }
+    static_cast<Scene_root*>(item_host)->queue_draw_mode_proxy_rebuild(
+        std::static_pointer_cast<Draw_mode>(shared_from_this())
+    );
+}
+
+void Draw_mode::rebuild_card_proxy()
+{
+    remove_card_proxy();
+    erhe::scene::Node* const node = get_node();
+    if ((node == nullptr) || (get_item_host() == nullptr)) {
+        return;
+    }
+    m_card_proxy = build_draw_mode_card_proxy(m_context, *this);
+    if (m_card_proxy) {
+        erhe::scene::set_mesh_parent(m_card_proxy, node->shared_node_from_this());
+    }
 }
 
 auto Draw_mode::get_extent(glm::vec3& out_min, glm::vec3& out_max) const -> bool
@@ -271,6 +336,11 @@ auto Draw_mode::get_extent(glm::vec3& out_min, glm::vec3& out_max) const -> bool
                 erhe::math::Aabb bounds{};
                 const_cast<erhe::scene::Node*>(node)->for_each<erhe::scene::Mesh>(
                     [&bounds, &node_from_world](erhe::scene::Mesh& mesh) -> bool {
+                        // The proxy is what the extent produced; measuring it
+                        // back would make the box feed itself.
+                        if ((mesh.get_flag_bits() & erhe::Item_flags::draw_mode_proxy) != 0) {
+                            return true;
+                        }
                         const glm::mat4 node_from_mesh = node_from_world * mesh.world_from_node();
                         for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh.get_primitives()) {
                             if (!mesh_primitive.primitive) {
@@ -356,6 +426,7 @@ void Draw_mode::set_description(const Draw_mode_description& description)
     }
     m_extent_known = false;
     apply_pruning();
+    queue_card_proxy_rebuild();
 }
 
 } // namespace editor

@@ -5,6 +5,7 @@
 #include "editor_log.hpp"
 #include "app_settings.hpp"
 #include "tools/selection_tool.hpp"
+#include "scene/draw_mode.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_settings_resolve.hpp"
 #include "time.hpp"
@@ -213,6 +214,30 @@ void App_scenes::rebuild_display_colors()
         m_display_color_meshes.clear();
     }
     m_display_color_roots.clear();
+}
+
+// The generated quad geometry a `cards` draw mode supplies. Driven by the
+// change (Scene_root's queue) for the same reasons the display colors are: the
+// write can land on a worker thread or inside a tree walk, and the build
+// inserts a prim into the tree.
+void App_scenes::rebuild_draw_mode_proxies()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        m_draw_mode_roots = m_scene_roots;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_draw_mode_roots) {
+        scene_root->take_draw_mode_proxy_rebuilds(m_draw_mode_rebuilds);
+        for (const std::shared_ptr<Draw_mode>& draw_mode : m_draw_mode_rebuilds) {
+            if (draw_mode) {
+                draw_mode->rebuild_card_proxy();
+            }
+        }
+        m_draw_mode_rebuilds.clear();
+    }
+    m_draw_mode_roots.clear();
 }
 
 // One mesh's rebuild. The geometry and the triangle soup a primitive was built

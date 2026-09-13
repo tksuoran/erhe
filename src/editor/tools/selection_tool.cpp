@@ -1099,7 +1099,15 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
 
     using namespace erhe::utility;
 
-    erhe::scene::Node* const node = mesh.get();
+    // A card proxy stands in for the subtree its model prim replaced, so a
+    // pick of it selects that prim (doc/usd_compatibility.md, "Draw modes").
+    erhe::scene::Node* node = mesh.get();
+    if ((mesh->get_flag_bits() & erhe::Item_flags::draw_mode_proxy) != 0) {
+        const std::shared_ptr<erhe::scene::Xformable> owner = mesh->get_parent_node();
+        if (owner) {
+            node = owner.get();
+        }
+    }
 
     // Prefab instance subtrees are sealed: picking anything inside an
     // instance selects the outermost instance root instead of the picked

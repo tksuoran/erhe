@@ -240,6 +240,12 @@ void Hierarchy::set_parent(const std::shared_ptr<Hierarchy>& new_parent_, const 
 
 auto Hierarchy::is_pruned_by_parent() const -> bool
 {
+    // The proxy a pruning parent supplies is the one child the pruning does
+    // not reach: it stands in for the subtree that left, so pruning it would
+    // leave nothing drawn at all (Item_flags::draw_mode_proxy).
+    if ((m_flag_bits & Item_flags::draw_mode_proxy) != 0) {
+        return false;
+    }
     const std::shared_ptr<Hierarchy> parent = m_parent.lock();
     return parent && parent->prunes_children();
 }

@@ -17,6 +17,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 class btCollisionShape;
@@ -31,6 +32,7 @@ namespace erhe::geometry {
 namespace erhe::graphics {
     class Buffer;
     class Buffer_transfer_queue;
+    class Texture;
     class Vertex_format;
 }
 namespace erhe::imgui {
@@ -293,6 +295,21 @@ public:
     void unregister_draw_mode(const std::shared_ptr<Draw_mode>& draw_mode);
     [[nodiscard]] auto get_draw_modes() const -> const std::vector<std::shared_ptr<Draw_mode>>&;
 
+    // The draw-mode attachments whose card proxy is out of date. Enqueue
+    // only: a value change or an attach can land inside a tree walk or on a
+    // worker thread, and building the proxy inserts a prim, so the build is
+    // App_scenes::rebuild_draw_mode_proxies() on the main thread - the way a
+    // display-color change is handled.
+    void queue_draw_mode_proxy_rebuild(const std::shared_ptr<Draw_mode>& draw_mode);
+    void take_draw_mode_proxy_rebuilds(std::vector<std::shared_ptr<Draw_mode>>& out_draw_modes);
+
+    // The card images the draw-mode proxies of this scene read, keyed by the
+    // file each was read from, so two attachments naming the same file share
+    // one texture. Weakly held: the proxy materials own the textures, the
+    // cache only finds them, and it dies with the scene.
+    [[nodiscard]] auto find_card_texture(const std::string& path) const -> std::shared_ptr<erhe::graphics::Texture>;
+    void add_card_texture(const std::string& path, const std::shared_ptr<erhe::graphics::Texture>& texture);
+
     void register_node_physics  (const std::shared_ptr<Node_physics>& node_physics);
     void unregister_node_physics(const std::shared_ptr<Node_physics>& node_physics);
 
@@ -479,6 +496,9 @@ private:
     double                                          m_wind_time{0.0};
     std::vector<std::shared_ptr<Node_physics>>      m_node_physics;
     std::vector<std::shared_ptr<Draw_mode>>         m_draw_modes;
+    std::unordered_map<std::string, std::weak_ptr<erhe::graphics::Texture>> m_card_textures;
+    std::vector<std::shared_ptr<Draw_mode>>         m_draw_mode_proxy_rebuilds;
+    ERHE_PROFILE_MUTEX(std::mutex,                  m_draw_mode_proxy_rebuilds_mutex);
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 

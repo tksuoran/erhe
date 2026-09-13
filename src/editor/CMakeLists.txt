@@ -515,6 +515,8 @@ erhe_target_sources_grouped(
     scene/mesh_intersect.hpp
     scene/draw_mode.cpp
     scene/draw_mode.hpp
+    scene/draw_mode_cards.cpp
+    scene/draw_mode_cards.hpp
     scene/draw_mode_renderer.cpp
     scene/draw_mode_renderer.hpp
     scene/node_joint.cpp

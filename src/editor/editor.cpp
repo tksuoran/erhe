@@ -815,6 +815,12 @@ public:
         erhe::log::set_breadcrumb("tick: rebuild_display_colors");
         m_app_scenes->rebuild_display_colors();
 
+        // The card proxies of the draw modes whose values or extent changed,
+        // beside the display colors and for the same reason: the build
+        // inserts prims, so it must not run from the change site.
+        erhe::log::set_breadcrumb("tick: rebuild_draw_mode_proxies");
+        m_app_scenes->rebuild_draw_mode_proxies();
+
         erhe::log::set_breadcrumb("tick: flush_draw_lists");
         m_app_scenes->flush_draw_lists();
 

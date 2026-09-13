@@ -146,7 +146,15 @@ public:
     // serialized - the next open injects it again. The user's own content
     // never carries the bit, so a camera the user creates is saved.
     static constexpr uint64_t session_only              = (uint64_t{1} << 39);
-    static constexpr uint64_t count                     = 40;
+    // The generated proxy geometry a `cards` draw mode supplies in place of
+    // the subtree it replaces (doc/usd_compatibility.md, "Draw modes"): a
+    // child prim of the pruning model prim that the pruning itself must not
+    // reach, since it is the replacement. Carried by the proxy mesh and by
+    // the materials it owns; the item tree never shows it, no exporter
+    // writes it (it is session_only as well), and a viewport pick of it
+    // selects the model prim.
+    static constexpr uint64_t draw_mode_proxy           = (uint64_t{1} << 40);
+    static constexpr uint64_t count                     = 41;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -216,6 +224,7 @@ public:
         "IK Lock",
         "Active",
         "Session Only",
+        "Draw Mode Proxy",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

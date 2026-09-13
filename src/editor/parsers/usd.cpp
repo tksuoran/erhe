@@ -2500,7 +2500,7 @@ void resolve_usd_physics(
 // the file authored. The attachment is applied to the loaded tree before the
 // tree's own insert, the way a `Node_physics` is, so the whole import is one
 // undoable operation.
-void resolve_usd_draw_modes(const erhe::usd::Usd_data& usd_data)
+void resolve_usd_draw_modes(App_context& context, const erhe::usd::Usd_data& usd_data)
 {
     for (const erhe::usd::Usd_draw_mode& record : usd_data.draw_modes) {
         if (!record.prim) {
@@ -2518,7 +2518,7 @@ void resolve_usd_draw_modes(const erhe::usd::Usd_data& usd_data)
         }
         std::shared_ptr<Draw_mode> draw_mode = erhe::scene::get_attachment<Draw_mode>(node);
         if (!draw_mode) {
-            draw_mode = std::make_shared<Draw_mode>();
+            draw_mode = std::make_shared<Draw_mode>(context);
             node->attach(draw_mode);
         }
         draw_mode->set_description(record.description);
@@ -2822,7 +2822,7 @@ auto make_import_usd_operation(
     // The file's physics, before the material attaches: a `Material` prim the
     // file made a physics material of is not a shading material of the scene.
     resolve_usd_physics(context, usd_data, scene_root, root_node, path, mesh_node_items, operations);
-    resolve_usd_draw_modes(usd_data);
+    resolve_usd_draw_modes(context, usd_data);
     append_usd_content_library_operations(context, content_library, textures, usd_data, path_string, operations);
     resolve_usd_brushes(context, content_library, usd_data, root_node, path_string, operations);
     // An imported file's own scene block says which of its prims its geometry
@@ -3165,7 +3165,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // The file's physics, before the material attaches: a `Material` prim the
     // file made a physics material of is not a shading material of the scene.
     resolve_usd_physics(context, usd_data, scene_root, container_node, path, mesh_node_items, operations);
-    resolve_usd_draw_modes(usd_data);
+    resolve_usd_draw_modes(context, usd_data);
     apply_usd_physics_scene(usd_data, *scene_root.get());
     append_usd_content_library_operations(context, content_library, textures, usd_data, path.generic_string(), operations);
     resolve_usd_brushes(context, content_library, usd_data, container_node, path.generic_string(), operations);
