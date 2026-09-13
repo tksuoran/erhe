@@ -572,6 +572,89 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
     return false;
 }
 
+// The `variants` selection an arc carries, in the editor's own terms: the
+// prefab types name no erhe::usd type, because a prefab is a glTF file as
+// readily as a USD one and erhe::usd is an optional dependency.
+[[nodiscard]] auto to_prefab_variant_selections(
+    const std::vector<erhe::usd::Usd_variant_selection>& variant_selections
+) -> std::vector<Prefab_variant_selection>
+{
+    std::vector<Prefab_variant_selection> result;
+    result.reserve(variant_selections.size());
+    for (const erhe::usd::Usd_variant_selection& entry : variant_selections) {
+        result.push_back(Prefab_variant_selection{entry.relative_path, entry.set_name, entry.variant_name});
+    }
+    return result;
+}
+
+// The same selection back in erhe::usd's terms, for the load arguments and
+// for the writer.
+[[nodiscard]] auto to_usd_variant_selections(
+    const std::vector<Prefab_variant_selection>& variant_selections
+) -> std::vector<erhe::usd::Usd_variant_selection>
+{
+    std::vector<erhe::usd::Usd_variant_selection> result;
+    result.reserve(variant_selections.size());
+    for (const Prefab_variant_selection& entry : variant_selections) {
+        result.push_back(erhe::usd::Usd_variant_selection{entry.relative_path, entry.set_name, entry.variant_name});
+    }
+    return result;
+}
+
+// The entries of the selection carried into THIS file's load that reach the
+// prim at `stage_path`, re-rooted at it. USD composes one variant set per
+// prim out of the prim's whole index, so a selection made for a set of that
+// prim selects the same set wherever its opinions come from - including the
+// layers the prim's own arcs bring in, which erhe loads as templates of their
+// own. The selection therefore travels down the arc.
+[[nodiscard]] auto propagate_variant_selections(
+    const std::string&                           incoming_root_prim_path,
+    const std::vector<Prefab_variant_selection>& incoming,
+    const std::string&                           stage_path
+) -> std::vector<Prefab_variant_selection>
+{
+    std::vector<Prefab_variant_selection> result;
+    for (const Prefab_variant_selection& entry : incoming) {
+        const std::string absolute_path = entry.relative_path.empty()
+            ? incoming_root_prim_path
+            : (incoming_root_prim_path + "/" + entry.relative_path);
+        if (absolute_path == stage_path) {
+            result.push_back(Prefab_variant_selection{std::string{}, entry.set_name, entry.variant_name});
+            continue;
+        }
+        const std::string prefix = stage_path + "/";
+        if (absolute_path.compare(0, prefix.size(), prefix) == 0) {
+            result.push_back(
+                Prefab_variant_selection{absolute_path.substr(prefix.size()), entry.set_name, entry.variant_name}
+            );
+        }
+    }
+    return result;
+}
+
+// The selection one arc carries into its target: what the carrier prim
+// authors for it, plus - stronger, because it is the outer opinion of one and
+// the same set - what reached the carrier from the load above.
+[[nodiscard]] auto merge_variant_selections(
+    const std::vector<Prefab_variant_selection>& propagated,
+    const std::vector<Prefab_variant_selection>& authored
+) -> std::vector<Prefab_variant_selection>
+{
+    std::vector<Prefab_variant_selection> result = propagated;
+    for (const Prefab_variant_selection& entry : authored) {
+        const std::vector<Prefab_variant_selection>::const_iterator existing = std::find_if(
+            result.cbegin(), result.cend(),
+            [&entry](const Prefab_variant_selection& kept) {
+                return (kept.relative_path == entry.relative_path) && (kept.set_name == entry.set_name);
+            }
+        );
+        if (existing == result.cend()) {
+            result.push_back(entry);
+        }
+    }
+    return result;
+}
+
 // Instantiate every composition arc the file's prims author
 // (doc/usd-compatibility-plan.md X1): one Prefab_instance attachment per arc,
 // in the order the arcs resolved to, each with a clone of the template the arc
@@ -585,7 +668,13 @@ void resolve_usd_references(
     const std::filesystem::path&                   source_path,
     const erhe::scene::Layer_id                    content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>* out_mesh_node_items,
-    const std::string&                             prim_path_prefix
+    const std::string&                             prim_path_prefix,
+    // The selection the arc that named this file carried in, and the stage
+    // path its relative paths are measured from: it reaches the arcs of the
+    // prims it names (propagate_variant_selections). A scene opened or
+    // imported as itself has none.
+    const std::string&                             incoming_selection_root = {},
+    const std::vector<Prefab_variant_selection>&   incoming_selections = {}
 )
 {
     static_cast<void>(context);
@@ -615,6 +704,8 @@ void resolve_usd_references(
             );
             continue;
         }
+        const std::vector<Prefab_variant_selection> propagated_selections =
+            propagate_variant_selections(incoming_selection_root, incoming_selections, entry.stage_path);
         for (const erhe::usd::Usd_reference& reference : entry.references) {
             const std::filesystem::path target_path = resolve_reference_asset_path(source_path, reference.asset_path);
             if (is_materialx_document(target_path)) {
@@ -626,7 +717,14 @@ void resolve_usd_references(
                 continue;
             }
             const std::size_t children_before = carrier->get_children().size();
-            const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(target_path, reference.prim_path);
+            const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(
+                target_path,
+                reference.prim_path,
+                merge_variant_selections(
+                    propagated_selections,
+                    to_prefab_variant_selections(reference.variant_selections)
+                )
+            );
             if (!prefab) {
                 log_parsers->error(
                     "USD prim '{}': failed to load reference target '{}'{} (missing file, no prims, or a reference cycle - see log)",
@@ -2536,10 +2634,11 @@ auto make_import_usd_operation(
 }
 
 auto load_usd_prefab_template(
-    App_context&                 context,
-    Prefab_library&              prefab_library,
-    const std::filesystem::path& path,
-    const std::string&           prim_path
+    App_context&                                 context,
+    Prefab_library&                              prefab_library,
+    const std::filesystem::path&                 path,
+    const std::string&                           prim_path,
+    const std::vector<Prefab_variant_selection>& variant_selections
 ) -> Usd_prefab_template
 {
     ERHE_PROFILE_FUNCTION();
@@ -2571,7 +2670,16 @@ auto load_usd_prefab_template(
             // payload target, so its own upAxis / metersPerUnit are not
             // applied: the composing stage's correction reaches the template
             // through the carrier prim the instance hangs from.
-            .stage_metrics = erhe::usd::Stage_metrics::referenced
+            .stage_metrics = erhe::usd::Stage_metrics::referenced,
+            // The arc's selection is measured from the prim the arc targets
+            // (doc/usd-compatibility-plan.md section 6, "Variant selection
+            // through a composition arc"). An arc that names no prim path
+            // targets the file's default prim: the root is left empty and
+            // load_stage resolves it from the layer's own `defaultPrim`.
+            .variant_selections = erhe::usd::Usd_variant_selections{
+                .root_prim_path = prim_path,
+                .entries        = to_usd_variant_selections(variant_selections)
+            }
         }
     );
     if (!result.error.empty()) {
@@ -2589,15 +2697,19 @@ auto load_usd_prefab_template(
         nullptr
     );
 
-    // Which prim the template is rooted at: the arc's prim path, else the
-    // file's default prim, else the whole file.
+    // Which prim the template is rooted at, and the prim the selection is
+    // measured from: the arc's prim path, else the file's default prim, else
+    // the whole file.
     const std::string root_prim_path = !prim_path.empty()
         ? prim_path
         : (usd_data.default_prim.empty() ? std::string{} : ("/" + usd_data.default_prim));
 
     // Arcs authored inside the template subtree are instantiated the same way
     // the scene paths do it, so nested references reproduce.
-    resolve_usd_references(context, prefab_library, usd_data, path, 0, nullptr, root_prim_path);
+    resolve_usd_references(
+        context, prefab_library, usd_data, path, 0, nullptr, root_prim_path,
+        root_prim_path, variant_selections
+    );
 
     if (root_prim_path.empty()) {
         container_node->set_parent({});
@@ -3077,7 +3189,8 @@ void collect_usd_references(
                 .prim_path   = prefab_instance->get_prefab_prim_path(),
                 .kind        = (prefab_instance->get_prefab_arc_kind() == Prefab_arc_kind::payload)
                     ? erhe::usd::Usd_reference_kind::payload
-                    : erhe::usd::Usd_reference_kind::reference
+                    : erhe::usd::Usd_reference_kind::reference,
+                .variant_selections = to_usd_variant_selections(prefab_instance->get_prefab_variant_selections())
             };
             if (is_variant_authored_arc(variant_sets, *node.get(), arc)) {
                 continue; // the variant block writes it
@@ -3453,7 +3566,8 @@ auto load_usd_prefab_template(
     App_context&,
     Prefab_library&,
     const std::filesystem::path& path,
-    const std::string&
+    const std::string&,
+    const std::vector<Prefab_variant_selection>&
 ) -> Usd_prefab_template
 {
     log_parsers->error("USD prefab template '{}': USD support not built (ERHE_USD_LIBRARY=none)", path.generic_string());

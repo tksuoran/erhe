@@ -267,6 +267,35 @@ TEST(Reference_variants, a_carried_selection_wins_over_the_targets_own)
     EXPECT_FALSE(utah_extras ->get_value(erhe::Item_base::active_property));
 }
 
+TEST(Reference_variants, an_empty_selection_root_is_the_layers_default_prim)
+{
+    // An arc that names no prim path targets the layer's `defaultPrim`, which
+    // the caller cannot know before the file is read: it leaves the root empty
+    // and load_stage resolves it (the file declares `defaultPrim = "Teapot"`).
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("root");
+    const erhe::usd::Usd_load_result         result = load(
+        test_data_path("references_variants_target.usda"),
+        root,
+        make_selections(std::string{}, std::string{}, "shapeVariant", "Fancy")
+    );
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    // The root resolved, so nothing about the selection was dropped.
+    EXPECT_EQ(result.warning.find("the selection is dropped"), std::string::npos) << result.warning;
+
+    const erhe::usd::Usd_variant_set* const set = find_set(result.data, "/Teapot", "shapeVariant");
+    ASSERT_NE(set, nullptr);
+    EXPECT_EQ(set->selected, "Fancy");
+
+    erhe::Hierarchy* const teapot = find_child(*root.get(), "Teapot");
+    ASSERT_NE(teapot, nullptr);
+    erhe::Hierarchy* const fancy_extras = find_child(*teapot, "FancyExtras");
+    erhe::Hierarchy* const utah_extras  = find_child(*teapot, "UtahExtras");
+    ASSERT_NE(fancy_extras, nullptr);
+    ASSERT_NE(utah_extras,  nullptr);
+    EXPECT_TRUE (fancy_extras->get_value(erhe::Item_base::active_property));
+    EXPECT_FALSE(utah_extras ->get_value(erhe::Item_base::active_property));
+}
+
 TEST(Reference_variants, a_selection_the_target_does_not_declare_is_dropped)
 {
     erhe::usd::Usd_variant_selections selections = make_selections("/Teapot", std::string{}, "shapeVariant", "Nonexistent");

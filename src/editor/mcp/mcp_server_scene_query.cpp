@@ -671,12 +671,23 @@ auto Mcp_server::query_node_details(const json& args) -> std::string
 
         // Prefab instance: what the carrier instantiates - the source file and,
         // for a USD composition arc, the prim of it the arc named
-        // (doc/usd-compatibility-plan.md X1).
+        // (doc/usd-compatibility-plan.md X1) and the `variants` selection the
+        // arc carries into it (section 6, "Variant selection through a
+        // composition arc").
         auto prefab_instance = std::dynamic_pointer_cast<Prefab_instance>(att);
         if (prefab_instance) {
             att_json["prefab_source_path"] = prefab_instance->get_prefab_source_path().generic_string();
             att_json["prefab_name"]        = prefab_instance->get_prefab_name();
             att_json["prefab_prim_path"]   = prefab_instance->get_prefab_prim_path();
+            json variant_selections = json::array();
+            for (const Prefab_variant_selection& selection : prefab_instance->get_prefab_variant_selections()) {
+                json selection_json = json::object();
+                selection_json["path"]    = selection.relative_path;
+                selection_json["set"]     = selection.set_name;
+                selection_json["variant"] = selection.variant_name;
+                variant_selections.push_back(selection_json);
+            }
+            att_json["variant_selections"] = variant_selections;
         }
 
         attachments.push_back(att_json);

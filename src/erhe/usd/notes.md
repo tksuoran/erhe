@@ -830,7 +830,14 @@ two carriers of one target prim compose two different prim trees.
 `Usd_load_arguments::variant_selections` is how a caller loading a target for
 one such carrier hands the selection in: `root_prim_path` is the stage path of
 the prim the arc targets, and each entry names a variant set of a prim at a
-path relative to it, an empty path being that prim itself. `load_stage`
+path relative to it, an empty path being that prim itself. An arc that names
+no prim path targets the layer's `defaultPrim`, and a caller cannot know which
+prim that is before the file is read, so it leaves `root_prim_path` empty and
+`load_stage` fills it in from the layer's metadata - before it validates or
+hoists anything, so the root is resolved once and the stage records it. A
+layer that declares no `defaultPrim` keeps the empty root, which is the stage
+itself: a relative path is then the stage path without its leading '/'.
+`load_stage`
 validates the entries against the layer the prims come from - the prim must
 exist, declare the set and hold the variant, and each entry that fails is one
 warning and is dropped - and records what it kept on the stage, which is what

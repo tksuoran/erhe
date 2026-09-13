@@ -245,8 +245,13 @@ class Usd_variant_selections final
 {
 public:
     // The stage path of the prim `relative_path` is measured from: the target
-    // prim of the arc. Empty is the whole stage, and a relative path is then
-    // the stage path without its leading '/'.
+    // prim of the arc. Empty is the arc that names no prim path, which targets
+    // the layer's `defaultPrim`: load_stage() fills the root in from the
+    // layer's own metadata before it validates anything, so a caller that
+    // cannot know the target prim leaves this empty and the stage records the
+    // prim it resolved to. A layer that declares no `defaultPrim` leaves the
+    // root empty and a relative path is then the stage path without its
+    // leading '/'.
     std::string                        root_prim_path;
     std::vector<Usd_variant_selection> entries;
 

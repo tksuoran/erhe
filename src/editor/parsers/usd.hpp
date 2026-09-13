@@ -1,5 +1,7 @@
 #pragma once
 
+#include "prefabs/prefab_instance.hpp"
+
 #include <cstddef>
 #include <filesystem>
 #include <memory>
@@ -104,11 +106,18 @@ public:
 // authored inside the template subtree are instantiated recursively through
 // `prefab_library`, so a reference cycle is caught there. Failures are values
 // in `error`; a build without USD support answers with one.
+//
+// `variant_selections` is the `variants` selection the arc that named this
+// template carries in, measured from the prim the arc targets: it selects
+// among the target's variant sets before the target's own selection does
+// (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// composition arc").
 [[nodiscard]] auto load_usd_prefab_template(
-    App_context&                 context,
-    Prefab_library&              prefab_library,
-    const std::filesystem::path& path,
-    const std::string&           prim_path
+    App_context&                                 context,
+    Prefab_library&                              prefab_library,
+    const std::filesystem::path&                 path,
+    const std::string&                           prim_path,
+    const std::vector<Prefab_variant_selection>& variant_selections = {}
 ) -> Usd_prefab_template;
 
 // True for the file extensions the USD importer accepts (.usd / .usda /

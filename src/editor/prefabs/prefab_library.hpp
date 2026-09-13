@@ -32,26 +32,37 @@ class App_context;
 class Content_library;
 class Scene_root;
 
-// What one loaded template is: the source file, and - for a USD source - the
-// prim of it the template was taken from (doc/usd-compatibility-plan.md X1).
-// An empty prim path is a glTF file, or a USD file taken at its default prim,
-// so the two formats share one key.
+// What one loaded template is: the source file, the prim of it the template
+// was taken from - for a USD source (doc/usd-compatibility-plan.md X1) - and
+// the `variants` selection the arc that named it carries in. An empty prim
+// path is a glTF file, or a USD file taken at its default prim, so the two
+// formats share one key. The selection is part of the identity because USD
+// composes a target selected differently as a different prim index: two
+// carriers of one prim with different selections are two templates
+// (doc/usd-compatibility-plan.md section 6, "Variant selection through a
+// composition arc").
 class Prefab_key
 {
 public:
-    std::filesystem::path source_path; // canonical
-    std::string           prim_path;
+    std::filesystem::path                 source_path; // canonical
+    std::string                           prim_path;
+    std::vector<Prefab_variant_selection> variant_selections;
 
     [[nodiscard]] auto operator< (const Prefab_key& rhs) const -> bool
     {
         if (source_path != rhs.source_path) {
             return source_path < rhs.source_path;
         }
-        return prim_path < rhs.prim_path;
+        if (prim_path != rhs.prim_path) {
+            return prim_path < rhs.prim_path;
+        }
+        return variant_selections < rhs.variant_selections;
     }
     [[nodiscard]] auto operator==(const Prefab_key& rhs) const -> bool
     {
-        return (source_path == rhs.source_path) && (prim_path == rhs.prim_path);
+        return (source_path == rhs.source_path) &&
+            (prim_path == rhs.prim_path) &&
+            (variant_selections == rhs.variant_selections);
     }
 };
 
@@ -67,13 +78,14 @@ class Prefab
 public:
     std::filesystem::path                                   source_path;   // canonical
     std::string                                             prim_path;     // USD source prim, empty for glTF
+    std::vector<Prefab_variant_selection>                   variant_selections; // the arc's `variants`, empty for glTF
     std::string                                             name;          // display name
     erhe::gltf::Gltf_data                                   gltf_data;     // empty for a USD source
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
     std::shared_ptr<erhe::scene::Scene>                     holding_scene;
     std::shared_ptr<erhe::scene::Node>                      template_root; // parent of the template's scene roots
 
-    [[nodiscard]] auto get_key() const -> Prefab_key { return Prefab_key{source_path, prim_path}; }
+    [[nodiscard]] auto get_key() const -> Prefab_key { return Prefab_key{source_path, prim_path, variant_selections}; }
 };
 
 // App-wide cache of prefab templates, keyed by canonical source path plus USD
@@ -90,8 +102,15 @@ public:
     // the file's default prim); a glTF source ignores it. Returns nullptr
     // (with a log_parsers error) when the file is missing, produces no nodes,
     // or participates in a prefab reference cycle (prohibited by glTF 2.1, and
-    // rejected for USD the same way).
-    auto get_or_load(const std::filesystem::path& path, const std::string& prim_path = {}) -> std::shared_ptr<Prefab>;
+    // rejected for USD the same way). `variant_selections` is the `variants`
+    // selection the arc carries into the target, which selects among the
+    // target's variant sets before the target's own selection does; a glTF
+    // source has none.
+    auto get_or_load(
+        const std::filesystem::path&                 path,
+        const std::string&                           prim_path = {},
+        const std::vector<Prefab_variant_selection>& variant_selections = {}
+    ) -> std::shared_ptr<Prefab>;
 
     // Asynchronous form (doc/async-asset-loading-plan.md step 7): the file is
     // read, parsed and made GPU-resident off the tick, then the template is
@@ -107,9 +126,10 @@ public:
         std::function<void(const std::shared_ptr<Prefab>&)> on_ready
     );
     void get_or_load_async(
-        const std::filesystem::path&                       path,
-        const std::string&                                 prim_path,
-        std::function<void(const std::shared_ptr<Prefab>&)> on_ready
+        const std::filesystem::path&                         path,
+        const std::string&                                   prim_path,
+        const std::vector<Prefab_variant_selection>&         variant_selections,
+        std::function<void(const std::shared_ptr<Prefab>&)>  on_ready
     );
 
     // Re-parse a previously loaded prefab from its source file and propagate

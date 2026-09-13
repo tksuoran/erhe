@@ -790,6 +790,18 @@ auto load_stage(const std::filesystem::path& path, const Usd_variant_selections&
     // the reader takes the same entries off the stage, so it is checked once.
     Usd_variant_selections kept_selections = variant_selections;
     bool                   selections_validated = false;
+    // An arc that names no prim path targets the layer's `defaultPrim`, so a
+    // selection carried in without a root of its own is measured from that
+    // prim. The layer says which prim that is, and it says so before anything
+    // validates or hoists, so the root is resolved here once and every reader
+    // of the stage's selection - the validation, the hoist, the reader - sees
+    // the prim the caller meant.
+    if (!kept_selections.is_empty() && kept_selections.root_prim_path.empty()) {
+        const std::string default_prim = impl->stage.metas().defaultPrim.str();
+        if (!default_prim.empty()) {
+            kept_selections.root_prim_path = (default_prim.front() == '/') ? default_prim : ("/" + default_prim);
+        }
+    }
     impl->layer_ok = lightusd::LoadLayerFromFile(filename, &impl->layer, &layer_warning, &layer_error, options);
     if (!impl->layer_ok) {
         log_usd->info("USD '{}': the root layer could not be read for composition: {}", filename, layer_error);

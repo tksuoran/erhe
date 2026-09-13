@@ -250,9 +250,12 @@ namespace {
 // the template is one prim of a USD file.
 [[nodiscard]] auto to_string(const Prefab_key& key) -> std::string
 {
-    return key.prim_path.empty()
+    const std::string file_and_prim = key.prim_path.empty()
         ? erhe::file::to_string(key.source_path)
         : fmt::format("{}{}", erhe::file::to_string(key.source_path), key.prim_path);
+    return key.variant_selections.empty()
+        ? file_and_prim
+        : fmt::format("{} {{{}}}", file_and_prim, to_string(key.variant_selections));
 }
 
 // The display name of a template: the file name, and the prim path with it
@@ -266,9 +269,13 @@ namespace {
 
 } // namespace
 
-auto Prefab_library::get_or_load(const std::filesystem::path& path, const std::string& prim_path) -> std::shared_ptr<Prefab>
+auto Prefab_library::get_or_load(
+    const std::filesystem::path&                 path,
+    const std::string&                           prim_path,
+    const std::vector<Prefab_variant_selection>& variant_selections
+) -> std::shared_ptr<Prefab>
 {
-    const Prefab_key key{canonical_prefab_path(path), prim_path};
+    const Prefab_key key{canonical_prefab_path(path), prim_path, variant_selections};
 
     const auto existing = m_prefabs.find(key);
     if (existing != m_prefabs.end()) {
@@ -299,9 +306,10 @@ auto Prefab_library::get_or_load(const std::filesystem::path& path, const std::s
     }
 
     std::shared_ptr<Prefab> prefab = std::make_shared<Prefab>();
-    prefab->source_path = key.source_path;
-    prefab->prim_path   = key.prim_path;
-    prefab->name        = make_prefab_name(key);
+    prefab->source_path        = key.source_path;
+    prefab->prim_path          = key.prim_path;
+    prefab->variant_selections = key.variant_selections;
+    prefab->name               = make_prefab_name(key);
     if (!load_template(*prefab)) {
         log_parsers->error("Prefab '{}' produced no nodes - not caching", to_string(key));
         return {};
@@ -318,17 +326,18 @@ void Prefab_library::get_or_load_async(
     std::function<void(const std::shared_ptr<Prefab>&)> on_ready
 )
 {
-    get_or_load_async(path, std::string{}, std::move(on_ready));
+    get_or_load_async(path, std::string{}, std::vector<Prefab_variant_selection>{}, std::move(on_ready));
 }
 
 void Prefab_library::get_or_load_async(
-    const std::filesystem::path&                       path,
-    const std::string&                                 prim_path,
+    const std::filesystem::path&                        path,
+    const std::string&                                  prim_path,
+    const std::vector<Prefab_variant_selection>&        variant_selections,
     std::function<void(const std::shared_ptr<Prefab>&)> on_ready
 )
 {
     const std::filesystem::path canonical_path = canonical_prefab_path(path);
-    const Prefab_key            key{canonical_path, prim_path};
+    const Prefab_key            key{canonical_path, prim_path, variant_selections};
 
     // Already loaded: no task, no frame of latency.
     const auto existing = m_prefabs.find(key);
@@ -365,7 +374,7 @@ void Prefab_library::get_or_load_async(
     // Only the glTF parse has an asynchronous path; a USD template is loaded
     // inline (doc/usd-compatibility-plan.md X1).
     if ((m_context.asset_manager == nullptr) || is_usd_file_extension(canonical_path)) {
-        on_ready(get_or_load(canonical_path, prim_path));
+        on_ready(get_or_load(canonical_path, prim_path, variant_selections));
         return;
     }
 
@@ -411,7 +420,7 @@ void Prefab_library::get_or_load_async(
         }
     );
     if (!handle) {
-        on_ready(get_or_load(canonical_path, prim_path)); // async_gltf_load is off
+        on_ready(get_or_load(canonical_path, prim_path, variant_selections)); // async_gltf_load is off
     }
 }
 
@@ -452,7 +461,9 @@ auto Prefab_library::load_usd_template(Prefab& prefab) -> bool
     // On the stack while the template's own arcs are resolved, so a USD
     // reference cycle is caught exactly as a glTF one is.
     m_active_load_stack.push_back(prefab.get_key());
-    Usd_prefab_template usd_template = load_usd_prefab_template(m_context, *this, prefab.source_path, prefab.prim_path);
+    Usd_prefab_template usd_template = load_usd_prefab_template(
+        m_context, *this, prefab.source_path, prefab.prim_path, prefab.variant_selections
+    );
     m_active_load_stack.pop_back();
 
     if (!usd_template.error.empty()) {
@@ -856,7 +867,12 @@ void attach_prefab_instance(
     const std::vector<erhe::scene::Instance_override>* overrides
 )
 {
-    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(prefab->source_path, prefab->name, prefab->prim_path, arc_kind);
+    // The selection is the template's, not the caller's: the template was
+    // loaded for exactly this selection (it is part of its key), so an
+    // instance of it carries what it was composed with.
+    std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(
+        prefab->source_path, prefab->name, prefab->prim_path, arc_kind, prefab->variant_selections
+    );
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
 
@@ -946,7 +962,11 @@ void refresh_instance_subtrees(
 {
     const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
     if (prefab_instance) {
-        const Prefab_key key{prefab_instance->get_prefab_source_path(), prefab_instance->get_prefab_prim_path()};
+        const Prefab_key key{
+            prefab_instance->get_prefab_source_path(),
+            prefab_instance->get_prefab_prim_path(),
+            prefab_instance->get_prefab_variant_selections()
+        };
         if (rebuilt_keys.contains(key)) {
             const auto it = prefabs.find(key);
             if (it != prefabs.end()) {

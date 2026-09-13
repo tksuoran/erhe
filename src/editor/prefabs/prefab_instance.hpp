@@ -2,8 +2,11 @@
 
 #include "erhe_scene/node_attachment.hpp"
 
+#include "erhe_property/dependency_property.hpp"
+
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace erhe::scene {
     class Xformable; using Node = Xformable;
@@ -18,6 +21,30 @@ enum class Prefab_arc_kind : unsigned int {
     reference = 0,
     payload   = 1
 };
+
+// One entry of the `variants` selection a composition arc carries into the
+// template it brings in: the variant of `set_name` chosen for the prim
+// `relative_path` names below the arc's target prim, an empty path being the
+// target prim itself (doc/usd-compatibility-plan.md section 6, "Variant
+// selection through a composition arc"). This is
+// erhe::usd::Usd_variant_selection in the terms the editor's prefab types can
+// speak: erhe::usd is an optional dependency (ERHE_USD_LIBRARY) and a prefab
+// is a glTF file as readily as a USD one, so no prefab header names it.
+class Prefab_variant_selection final
+{
+public:
+    std::string relative_path;
+    std::string set_name;
+    std::string variant_name;
+
+    [[nodiscard]] auto operator< (const Prefab_variant_selection& rhs) const -> bool;
+    [[nodiscard]] auto operator==(const Prefab_variant_selection& rhs) const -> bool;
+};
+
+// The selection as one line of text: "<path> <set> = <variant>" per entry,
+// separated by "; ", the target prim itself spelled "."; empty for an empty
+// selection. What the read-only Properties row and the logs show.
+[[nodiscard]] auto to_string(const std::vector<Prefab_variant_selection>& variant_selections) -> std::string;
 
 // Marks a node as the root of a prefab instance: the node's subtree was
 // instantiated (cloned) from a source file managed by Prefab_library - a glTF
@@ -40,7 +67,8 @@ public:
         const std::filesystem::path& source_path,
         const std::string&           prefab_name,
         const std::string&           prim_path = {},
-        Prefab_arc_kind              arc_kind = Prefab_arc_kind::reference
+        Prefab_arc_kind              arc_kind = Prefab_arc_kind::reference,
+        const std::vector<Prefab_variant_selection>& variant_selections = {}
     );
 
     // Implements Item_base
@@ -57,12 +85,24 @@ public:
     // The arc form this instance was authored as; a USD save writes it back
     // as that form. Always a reference for a glTF prefab.
     [[nodiscard]] auto get_prefab_arc_kind   () const -> Prefab_arc_kind;
+    // The `variants` selection this arc carries into the target it brings in.
+    // Part of the template's identity - two carriers selecting different
+    // variants of one target compose two prim indexes and so load two
+    // templates - and what a USD save writes back on the carrier.
+    [[nodiscard]] auto get_prefab_variant_selections     () const -> const std::vector<Prefab_variant_selection>&;
+    // get_prefab_variant_selections() as to_string() spells it: the value of
+    // the read-only Properties row.
+    [[nodiscard]] auto get_prefab_variant_selections_text() const -> std::string;
+
+    static const erhe::property::Property<std::string> variant_selections_property;
 
 private:
     std::filesystem::path m_prefab_source_path;
     std::string           m_prefab_name;
     std::string           m_prefab_prim_path;
     Prefab_arc_kind       m_prefab_arc_kind{Prefab_arc_kind::reference};
+
+    std::vector<Prefab_variant_selection> m_prefab_variant_selections;
 };
 
 // Returns the outermost node, walking up from and including the given node,
