@@ -4,6 +4,7 @@
 
 #include "erhe_math/math_util.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 
@@ -138,6 +139,7 @@ Draw_mode::Draw_mode(App_context& context)
 Draw_mode::Draw_mode(const Draw_mode& src, erhe::for_clone)
     : Item{src, erhe::for_clone{}} // the property entries copy with the base (D10)
     , m_context{src.m_context}
+    , m_source_directory{src.m_source_directory}
 {
 }
 
@@ -384,7 +386,16 @@ auto Draw_mode::get_description() const -> Draw_mode_description
     description.card_visibility_authored = (get_value_source(card_visibility_property) == Value_source::local);
     for (std::size_t i = 0; i < c_draw_mode_card_face_count; ++i) {
         const Draw_mode_card_face face = static_cast<Draw_mode_card_face>(i);
-        description.card_textures[i] = get_value(get_card_texture_property(face)).path;
+        // A card texture is stated the way every other value is (D32): only
+        // what this attachment holds locally is what the prim authored. One
+        // the reference layer supplies is the template's opinion, written
+        // where the template writes it. The path is stated resolved, so the
+        // writer names the image relative to the file it writes whatever
+        // spelling the value arrived in.
+        if (get_value_source(get_card_texture_property(face)) != Value_source::local) {
+            continue;
+        }
+        description.card_textures[i] = resolve_card_texture_path(face).generic_string();
     }
     description.draw_mode_color          = get_value(draw_mode_color_property);
     description.draw_mode_color_authored = (get_value_source(draw_mode_color_property) == Value_source::local);
@@ -427,6 +438,61 @@ void Draw_mode::set_description(const Draw_mode_description& description)
     m_extent_known = false;
     apply_pruning();
     queue_card_proxy_rebuild();
+}
+
+void Draw_mode::set_source_directory(const std::filesystem::path& directory)
+{
+    m_source_directory = directory;
+}
+
+auto Draw_mode::get_source_directory() const -> const std::filesystem::path&
+{
+    return m_source_directory;
+}
+
+auto Draw_mode::resolve_card_texture_path(const Draw_mode_card_face face) const -> std::filesystem::path
+{
+    const erhe::property::Property<Asset_path>& property = get_card_texture_property(face);
+    const Asset_path                            value    = get_value(property);
+    if (value.path.empty()) {
+        return std::filesystem::path{};
+    }
+    std::filesystem::path path{value.path};
+    if (!path.is_relative()) {
+        return path;
+    }
+    // The directory of the file that authored the value: the attachment's own
+    // when the value is its own, and otherwise the one of the attachment the
+    // reference layer reads it from, which is the template a file's variant
+    // block authored it in.
+    const Draw_mode* supplier = this;
+    while (supplier->get_value_source(property) == Value_source::reference) {
+        const std::shared_ptr<const erhe::property::Dependency_object> counterpart = supplier->get_reference();
+        const Draw_mode* const next = dynamic_cast<const Draw_mode*>(counterpart.get());
+        if (next == nullptr) {
+            break;
+        }
+        supplier = next;
+    }
+    const std::filesystem::path& directory = supplier->get_source_directory();
+    if (directory.empty()) {
+        return path;
+    }
+    return (directory / path).lexically_normal();
+}
+
+void register_draw_mode_applied_schema(App_context& context)
+{
+    // `prepend apiSchemas = ["GeomModelAPI"]` in a variant block is what makes
+    // the schema present on the prim, so an opinion of one of its attributes
+    // arriving at a prim with no attachment makes the attachment.
+    erhe::scene::register_applied_schema_attachment(
+        Draw_mode::static_type_name,
+        Draw_mode::property_owner_type(),
+        [&context]() -> std::shared_ptr<erhe::scene::Node_attachment> {
+            return std::make_shared<Draw_mode>(context);
+        }
+    );
 }
 
 } // namespace editor

@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <filesystem>
 #include <memory>
 
 namespace erhe { class Item_host; }
@@ -115,6 +116,24 @@ public:
     [[nodiscard]] auto get_extent(glm::vec3& out_min, glm::vec3& out_max) const -> bool;
     void invalidate_extent();
 
+    // The directory a relative card-texture path is resolved against: the
+    // directory of the file that authored the value. A card texture a
+    // `Usd_draw_mode` record carries is already absolute (the reader resolves
+    // it), while one a variant block authors travels as the text the file
+    // spelled - which is what a save writes back, so it stays relative here
+    // and is resolved at the moment the image is read. Set by the importer,
+    // once, for the file the attachment came out of; a clone keeps its
+    // template's.
+    void               set_source_directory(const std::filesystem::path& directory);
+    [[nodiscard]] auto get_source_directory() const -> const std::filesystem::path&;
+
+    // The image of one card face as a path that can be opened: the value as
+    // it stands when it is absolute, and otherwise resolved against the
+    // source directory of the attachment that supplies the value - which for
+    // an instance is the template's attachment, reached through the reference
+    // layer. Empty when the face names no image.
+    [[nodiscard]] auto resolve_card_texture_path(erhe::scene::Draw_mode_card_face face) const -> std::filesystem::path;
+
     // The card proxy this attachment owns, null unless the resolved mode is
     // `cards` and the attachment is in a scene. It is not a prim the file
     // says anything about: a save writes the attributes, never the proxy.
@@ -145,11 +164,18 @@ private:
 
     App_context&                       m_context;
     std::shared_ptr<erhe::scene::Mesh> m_card_proxy{};
+    std::filesystem::path              m_source_directory{};
 
     mutable glm::vec3 m_extent_min  {0.0f};
     mutable glm::vec3 m_extent_max  {0.0f};
     mutable bool      m_extent_valid{false};
     mutable bool      m_extent_known{false};
 };
+
+// How a `Draw_mode` is made for a prim a file applies `GeomModelAPI` to
+// without erhe having made the attachment yet
+// (erhe::scene::register_applied_schema_attachment). Called once from
+// startup, while the process is still single threaded.
+void register_draw_mode_applied_schema(App_context& context);
 
 } // namespace editor

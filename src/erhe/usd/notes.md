@@ -933,7 +933,11 @@ rest.
 
 `Usd_variant_set::base_values` is what the prims held for every path and
 property name any variant of the set authors, read before the selected
-variant's opinions were applied. A property with no local value there is a
+variant's opinions were applied. It is read through the same
+`erhe::scene::find_override_property_target` the application uses, so a value
+of an applied API schema is read off the prim's attachment and put back there,
+and a `Draw_mode.<property>` name a variant authors makes the attachment
+whichever variant is selected. A property with no local value there is a
 `cleared` entry, so putting it back clears rather than writes. This is what
 a switch to another variant restores first: a property the chosen variant
 leaves unsaid goes back to what the file authored outside the variant blocks.

@@ -263,16 +263,27 @@ carrier's own clone. This is the shape a real asset has: a referencing prim
 whose target references another file in turn, with the override authored at
 the path USD composes (`over "geo" { over "default" { over "Body" } }`).
 
-A value's name is resolved by `find_override_property_target`: the property
-the registry finds for the item, and - for a name qualified with the class
-name of one of the prim's attachments (`Draw_mode.card_geometry`) - that
-attachment's property. USD authors an applied API schema's attributes on the
-prim itself while erhe holds them on an attachment of it, so the qualified
-name is what carries such a value through the same neutral form every other
-override travels in. The collectors walk prims only, so an attachment's own
-local value is not yet reported as an override (`doc/usd-compatibility-plan.md`
-section 6, "Overrides on applied API schemas inside an instance"); what the
-resolution serves today is a value a file authors.
+A value's name is resolved by `find_override_property_target`. A name
+qualified with the class name of an applied API schema's attachment
+(`Draw_mode.card_geometry`) is asked first and lands on that attachment of the
+prim: USD authors such a schema's attributes on the prim itself while erhe
+holds them on an attachment of it, and the prim is free to hold a value of
+another class as a secondary property of its own (`doc/property-system.md`
+D30), so the attachment has to own the name for the value to be the
+attachment's own opinion - which is what it draws from and what a save writes
+back. `register_applied_schema_attachment` is how a class says it stands for
+an applied schema: the class name, the owner type its properties are
+registered on, and how one is made. The prim need not hold the attachment yet
+- `prepend apiSchemas` in a variant block is what makes the schema present, so
+the first opinion naming it makes the attachment - and
+`is_applied_schema_attachment_class` is what the editor's pairing of an
+instance with its template asks to know which attachments read their
+counterpart's values through the reference layer. Every other name resolves on
+the item itself. The collectors walk prims only, so an attachment's own local
+value is not yet reported as an override
+(`doc/usd-compatibility-plan.md` section 6, "Overrides on applied API schemas
+inside an instance"); what the resolution serves today is a value a file
+authors.
 
 A binding that covers one group of facets rather than the whole mesh is an
 entry of its own whose relative path ends in the name of the group, the way a

@@ -464,17 +464,19 @@ auto build_draw_mode_card_proxy(App_context& context, Draw_mode& draw_mode) -> s
         if (!is_face_drawn(face, visibility)) {
             continue;
         }
-        const erhe::property::Asset_path texture_path = draw_mode.get_value(Draw_mode::get_card_texture_property(face));
+        // The value resolved against the file that authored it: a variant
+        // block's opinion travels as the relative path the file spelled.
+        const std::filesystem::path              texture_path = draw_mode.resolve_card_texture_path(face);
         std::shared_ptr<erhe::graphics::Texture> texture;
-        if (!texture_path.path.empty()) {
-            texture = load_card_texture(context, scene_root, std::filesystem::path{texture_path.path});
+        if (!texture_path.empty()) {
+            texture = load_card_texture(context, scene_root, texture_path);
         }
 
         Card_quad quad{};
         bool      placed = false;
         if (card_geometry == Draw_mode_card_geometry::from_texture) {
             glm::mat4 screen_from_world{1.0f};
-            if (!texture_path.path.empty() && read_png_world_to_screen(std::filesystem::path{texture_path.path}, screen_from_world)) {
+            if (!texture_path.empty() && read_png_world_to_screen(texture_path, screen_from_world)) {
                 quad   = from_texture_card(glm::inverse(screen_from_world));
                 placed = true;
             } else if (!from_texture_fallback_reported) {

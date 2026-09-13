@@ -261,7 +261,14 @@ A value of the attachment is named `Draw_mode.<property>` wherever a name
 addresses it - a variant opinion, an instance override, a class prim's
 opinions - which is how USD's spelling, an applied schema authoring its
 attributes on the prim itself, reaches the item that holds them
-(`erhe::scene::find_override_property_target`).
+(`erhe::scene::find_override_property_target`). Such a name is what applies
+the schema, too: a variant block that carries
+`prepend apiSchemas = ["GeomModelAPI"]` and its `model:` attributes reaches a
+prim erhe gave no attachment, and the first value naming one makes it. A prim
+that references a target reads the target's attachment through the reference
+layer, the way every other value of an instance is read (X2): the two are one
+prim in the composed stage, so the referencing prim's own file authors some of
+the attributes and the target's the rest.
 
 | erhe `Draw_mode` property | USD `UsdGeomModelAPI` | notes |
 |---|---|---|
@@ -270,7 +277,7 @@ attributes on the prim itself, reaches the item that holds them
 | `apply_draw_mode` | `uniform bool model:applyDrawMode` | read and written; it does not gate the proxy, the way the imaging adapter honours `drawMode` on every model prim |
 | `card_geometry` (`cross`, `box`, `fromTexture`) | `uniform token model:cardGeometry` | |
 | `card_visibility` (`inherited`, `full`, `simple`) | `uniform token model:cardVisibility` | `simple` leaves out the cards of the stage's up axis; `inherited` resolves the same way `draw_mode` does, with the root fallback `full` |
-| `card_texture_x_neg` .. `card_texture_z_pos` | `asset model:cardTexture{X,Y,Z}{Neg,Pos}` | the record holds the resolved absolute path, an authored relative one resolved against the stage file's directory the way an image's is; a texture packed inside a `.usdz` is named in a warning and left as the path beside the archive, the record carrying no bytes. The writer authors the path relative to the written file |
+| `card_texture_x_neg` .. `card_texture_z_pos` | `asset model:cardTexture{X,Y,Z}{Neg,Pos}` | the record holds the resolved absolute path, an authored relative one resolved against the stage file's directory the way an image's is; a texture packed inside a `.usdz` is named in a warning and left as the path beside the archive, the record carrying no bytes. A value a variant block or an `over` authors keeps the text the file spelled instead, because that is the text a save writes back inside the block, and the attachment resolves it against the file it came out of when it reads the image. The writer authors the path relative to the written file |
 | `draw_mode_color` | `uniform float3 model:drawModeColor` | the line color of `origin` and `bounds`, and the fallback quad color of `cards` |
 | the proxy the editor draws | none - `UsdImagingGLDrawModeAdapter` | `bounds` is the 12 edges of the extent box and `origin` three axis lines from the prim's origin, in the prim's own space, depth-tested like the geometry they stand for. `cards` is generated quad geometry: one `Mesh` child prim of the model prim with one primitive per drawn face and one unlit, double-sided material each - the face's `cardTexture` on white, or `draw_mode_color` when the face names none. `cross` puts the two faces of an axis on the extent's mid plane, `box` on the extent's own planes, in the adapter's own corner order and with its unflipped UV quad taken through erhe's `v' = 1 - v`; `fromTexture` places each face by the `worldtoscreen` matrix in its image's PNG text chunk and falls back to `box` for an image carrying none, with one warning per attachment. `card_visibility = simple` leaves the Y pair out. The proxy carries `Item_flags::draw_mode_proxy` (so the prim's own pruning does not reach it, and a viewport pick of it selects the model prim) and `Item_flags::session_only` (so no exporter writes it); the item tree does not list it, and it is rebuilt whenever a value of the attachment or the extent changes |
 | `extents_hint_min`, `extents_hint_max` | `float3[] extentsHint` | one array of two entries carries both, the first pair being the default purpose's; the two properties are written together and an array of fewer than six numbers is one warning. The box the proxies are sized from: without an authored hint the editor measures the meshes at and below the prim, once |

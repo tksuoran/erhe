@@ -2,8 +2,11 @@
 
 #include "erhe_scene/xform_op.hpp"
 
+#include "erhe_property/owner_type.hpp"
+
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -25,6 +28,8 @@ namespace erhe::property {
 }
 
 namespace erhe::scene {
+
+class Node_attachment;
 
 // Whether an override entry supplies a value at all. `cleared` is the state
 // of a property that has no local value: an override list that describes what
@@ -165,6 +170,31 @@ public:
     erhe::Item_base&   item,
     const std::string& name
 ) -> Override_property_target;
+
+// How an attachment standing for an applied API schema is made. USD applies a
+// schema to a prim - `prepend apiSchemas = ["GeomModelAPI"]` - and the schema
+// authors its attributes on that prim, so a file's opinion of one reaches a
+// prim erhe has given no such attachment yet: a variant block that applies
+// the schema and authors its attributes is exactly that, and the block
+// applying the schema is what makes the schema present. A class of attachment
+// registers the owner type its properties are registered on and how one is
+// made, and find_override_property_target makes one on the prim the first
+// time an opinion names it. erhe::scene names no editor class, so the editor
+// registers its own from startup, while the process is still single threaded
+// and no scene exists.
+using Applied_schema_attachment_factory = std::function<std::shared_ptr<Node_attachment>()>;
+void register_applied_schema_attachment(
+    std::string_view                  class_name,
+    erhe::property::Owner_type        owner_type,
+    Applied_schema_attachment_factory factory
+);
+
+// True while a class of that name has registered a factory. The pairing of an
+// instance with its template asks this: an applied schema's attachment is the
+// prim's own USD state, so a carrier's one reads its target's through the
+// reference layer, while every other attachment is paired by the clone walk
+// alone.
+[[nodiscard]] auto is_applied_schema_attachment_class(std::string_view class_name) -> bool;
 
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's

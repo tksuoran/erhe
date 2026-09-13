@@ -37,6 +37,18 @@ override. A template edit therefore reaches every instance live; MCP
 `set_prefab_template_property` is the way to make one (templates live in
 `Prefab::holding_scene`, which no scene lookup reaches).
 
+The referencing prim itself is paired too, for the attachments that stand for
+an applied API schema (`erhe::scene::is_applied_schema_attachment_class`).
+USD applies such a schema to the referencing prim and the arc's target alike -
+they are one prim in the composed stage - so
+`link_carrier_attachments_to_target` gives the carrier's attachment the
+target's attachment of the same class as its counterpart: what the carrier's
+own file authored stays local and everything else comes from the target, which
+is what colors the teapots of `full_assets/Teapot/DrawModes.usd`. The
+carrier's attachment is not a copy of the target's, so nothing of it is
+cleared - its local values are what its file authored, and what a save writes
+back.
+
 The overrides an instance holds are persisted with the scene that holds the
 instance, not with the template: `ERHE_node.overrides` on the carrier node in
 a glTF file (`doc/gltf_extensions/ERHE_node.md`) and `over` prims below the

@@ -13,6 +13,7 @@
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_property/property_string.hpp"
+#include "erhe_verify/verify.hpp"
 
 #include <cmath>
 #include <optional>
@@ -422,7 +423,95 @@ void apply_material_binding(
     return true;
 }
 
+// The applied API schemas erhe holds as attachments, by class name. The table
+// is written from startup only (single threaded, before any scene exists) and
+// read from every import, so it needs no lock of its own.
+class Applied_schema_attachment final
+{
+public:
+    std::string                       class_name;
+    erhe::property::Owner_type        owner_type;
+    Applied_schema_attachment_factory factory;
+};
+
+[[nodiscard]] auto get_applied_schema_attachments() -> std::vector<Applied_schema_attachment>&
+{
+    static std::vector<Applied_schema_attachment> s_entries;
+    return s_entries;
+}
+
+[[nodiscard]] auto find_applied_schema_attachment(const std::string_view class_name) -> const Applied_schema_attachment*
+{
+    for (const Applied_schema_attachment& entry : get_applied_schema_attachments()) {
+        if (entry.class_name == class_name) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+// Where a `<Class>.<member>` name of an applied schema lands: the prim's
+// attachment of that class, made on the prim when it holds none. The prim can
+// hold a value of another class as a secondary property of its own (D30), so
+// this is asked before find_override_property - a value USD authors on the
+// prim as the schema's is the attachment's own opinion, which is what the
+// attachment draws from and what a save writes back.
+[[nodiscard]] auto find_applied_schema_target(erhe::Item_base& item, const std::string& name) -> Override_property_target
+{
+    const std::size_t dot = name.find('.');
+    if (dot == std::string::npos) {
+        return Override_property_target{};
+    }
+    const Applied_schema_attachment* const entry = find_applied_schema_attachment(std::string_view{name}.substr(0, dot));
+    if (entry == nullptr) {
+        return Override_property_target{};
+    }
+    const std::string_view                     member   = std::string_view{name}.substr(dot + 1);
+    const erhe::property::Property_registry&   registry = erhe::property::Property_registry::get();
+    const erhe::property::Dependency_property* property = registry.find_for_object(entry->owner_type, member);
+    if (property == nullptr) {
+        return Override_property_target{};
+    }
+    Xformable* const prim = dynamic_cast<Xformable*>(&item);
+    if (prim == nullptr) {
+        return Override_property_target{};
+    }
+    for (const std::shared_ptr<Node_attachment>& attachment : prim->get_attachments()) {
+        if (attachment && (attachment->get_type_name() == entry->class_name)) {
+            return Override_property_target{.object = attachment.get(), .property = property};
+        }
+    }
+    const std::shared_ptr<Node_attachment> attachment = entry->factory();
+    if (!attachment) {
+        return Override_property_target{};
+    }
+    prim->attach(attachment);
+    return Override_property_target{.object = attachment.get(), .property = property};
+}
+
 } // anonymous namespace
+
+void register_applied_schema_attachment(
+    const std::string_view            class_name,
+    const erhe::property::Owner_type  owner_type,
+    Applied_schema_attachment_factory factory
+)
+{
+    ERHE_VERIFY(factory);
+    ERHE_VERIFY(find_applied_schema_attachment(class_name) == nullptr);
+    get_applied_schema_attachments().push_back(
+        Applied_schema_attachment{
+            .class_name = std::string{class_name},
+            .owner_type = owner_type,
+            .factory    = std::move(factory)
+        }
+    );
+}
+
+auto is_applied_schema_attachment_class(const std::string_view class_name) -> bool
+{
+    return find_applied_schema_attachment(class_name) != nullptr;
+}
 
 auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
 {
@@ -462,6 +551,10 @@ auto find_override_property(
 
 auto find_override_property_target(erhe::Item_base& item, const std::string& name) -> Override_property_target
 {
+    const Override_property_target applied = find_applied_schema_target(item, name);
+    if (applied.property != nullptr) {
+        return applied;
+    }
     const erhe::property::Dependency_property* property = find_override_property(item, name);
     if (property != nullptr) {
         return Override_property_target{.object = &item, .property = property};

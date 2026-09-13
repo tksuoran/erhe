@@ -7653,15 +7653,19 @@ private:
             if (already_recorded) {
                 continue;
             }
-            const erhe::property::Dependency_property* property = erhe::scene::find_override_property(target, value.name);
-            if (property == nullptr) {
+            // The same lookup apply_property_values makes, so the base value
+            // is taken from the object the opinion will be applied to - which
+            // for an applied schema's value is the prim's attachment, not the
+            // prim (find_override_property_target).
+            const erhe::scene::Override_property_target property_target = erhe::scene::find_override_property_target(target, value.name);
+            if (property_target.property == nullptr) {
                 continue; // apply_property_values warns about the name once
             }
-            if (target.has_local_value(*property)) {
+            if (property_target.object->has_local_value(*property_target.property)) {
                 base->values.push_back(
                     erhe::scene::Instance_override_value{
                         .name  = value.name,
-                        .text  = erhe::property::to_string(*property, target.get_value(*property)),
+                        .text  = erhe::property::to_string(*property_target.property, property_target.object->get_value(*property_target.property)),
                         .state = erhe::scene::Instance_override_value_state::supplied
                     }
                 );

@@ -29,6 +29,7 @@
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_metadata.hpp"
 #include "erhe_scene/animation.hpp"
+#include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
@@ -854,6 +855,42 @@ void resolve_external_assets(
     }
 }
 
+// Pair the carrier's own applied-schema attachments with the arc target's.
+// An applied API schema authors its attributes on the prim, so a carrier that
+// applies one states its own opinion of some of them and reads the rest from
+// the prim the arc named - which is the reference layer's job (X2), the same
+// one the cloned prims use. The carrier's attachment is not a clone of the
+// target's, so its local values are what its own file authored: they stand as
+// they are and only what it did not author comes from the counterpart, which
+// is also what keeps a save a fixed point. Only attachments of an applied
+// schema pair this way (erhe::scene::is_applied_schema_attachment_class); any
+// other attachment of a carrier is the editor's own state, with no
+// counterpart in the target.
+void link_carrier_attachments_to_target(
+    const std::shared_ptr<erhe::scene::Node>& carrier,
+    const std::shared_ptr<erhe::Hierarchy>&   target
+)
+{
+    const erhe::scene::Xformable* const target_prim = dynamic_cast<const erhe::scene::Xformable*>(target.get());
+    if (target_prim == nullptr) {
+        return;
+    }
+    for (const std::shared_ptr<erhe::scene::Node_attachment>& attachment : carrier->get_attachments()) {
+        if (!attachment || !erhe::scene::is_applied_schema_attachment_class(attachment->get_type_name())) {
+            continue;
+        }
+        if (attachment->get_reference()) {
+            continue; // a carrier of an outer instance: its own counterpart stands
+        }
+        for (const std::shared_ptr<erhe::scene::Node_attachment>& counterpart : target_prim->get_attachments()) {
+            if (counterpart && (counterpart->get_type_name() == attachment->get_type_name())) {
+                attachment->set_reference(counterpart);
+                break;
+            }
+        }
+    }
+}
+
 // Mark the node as a prefab instance and clone the prefab's template
 // subtree under it. Mesh clones share the template's Primitives (GPU
 // vertex/index ranges in Mesh_memory), so no GPU upload happens per
@@ -932,6 +969,7 @@ void attach_prefab_instance(
         // The counterpart link comes BEFORE any seal: set_reference and
         // clear_value are both refused on a sealed object (D24).
         link_instance_to_template(clone_prim, child);
+        link_carrier_attachments_to_target(node, child);
         clone_prims.push_back(clone_prim);
     }
 
