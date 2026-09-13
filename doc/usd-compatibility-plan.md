@@ -437,6 +437,35 @@ now owns its behavior; `git log` on that record has the history.
   `src/erhe/scene_renderer/notes.md`). A material converted after Tydra's
   pass takes its texture and image ids from the render scene's own lists,
   so two appended materials reading one file share the image.
+- C9 Nested variant sets and the constant displayColor opinion. A
+  `variantSet` a variant block declares is a set of the prim carrying the
+  outer set, tabled beside it and naming the block it is declared in
+  (`Usd_variant_set::enclosing_set_name` / `enclosing_variant_name`;
+  editor `Variant_set_key`); one rule resolves every selection - the
+  arc-carried one (C7), the enclosing block's own `variants`, the prim's,
+  the first block - and a nested set's blocks contribute only while every
+  enclosing block is the selected one, at the hoist (its prims active only
+  then), at the read (opinions, bindings, base values, arcs) and at a
+  switch (the sets of the block being left go off, the chosen block's come
+  on with the selections they hold, one compound). A variant's material
+  path is resolved through the prims its own chain of blocks hoisted, so
+  the M2 rename does not break a binding into the variant's own content.
+  A constant `primvars:displayColor` is `Gprim.display_color`, an
+  entry-store vec3 that inherits (default USD's 0.18 grey, authored exactly
+  when local): a write states the change to the scene host, which rebuilds
+  the mesh's primitives with the color once (`Build_info::constant_color`
+  for a geometry build, a recolored soup copy for a soup build); the
+  importer fills it from the constant it bakes and admits the primvar as a
+  variant / over opinion; the writer authors it back as the constant
+  primvar; a clone whose color the reference layer supplies rebuilds when
+  it enters its host. An opinion or binding whose path a composition arc
+  supplies is kept pending by the reader and applied by the editor once
+  the arcs are in the tree (`apply_pending_variant_opinions`, through
+  `find_instance_item`, which is transparent at every carrier level), on
+  the import, open-scene and template paths alike. DrawModes.usd's six
+  Utah columns render in their shading variant's color
+  (`src/erhe/usd/notes.md` "Variant sets"; `src/erhe/scene/notes.md`;
+  `src/editor/parsers/notes.md`; `src/editor/scene/notes.md`).
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -671,15 +700,15 @@ section 6 entry it names, and nothing here restates one.
    they are taken in this order, one entry per commit series:
    1. Variant selection through a composition arc - landed, section 2
       C7: each column now loads the template of its own selection.
-   2. The nested-set and constant-`displayColor` forms of "Variant
-      opinions a variant set does not carry" - the `shadingVariant`
-      selections choose the material binding and the color.
+   2. Nested variant sets and the constant `displayColor` opinion -
+      landed, section 2 C9: the `shadingVariant` selections choose the
+      material binding and the color.
    3. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` - landed,
       section 2 C8: the `Ceramic` material converts and reads its color
       from the vertex colors.
    4. "`GeomModelAPI` draw modes" - the 28 proxies; the `drawModeColor`
       and `cardTexture*` opinions the variant blocks author reach the
-      record through step 2's tabling.
+      record through C9's tabling.
    Verification is the survey entry itself
    (`py -3 scripts/usd_wg_asset_survey.py --only full_assets/Teapot/DrawModes.usd --usd-root <usd_root>`):
    the Fancy column is the textured porcelain teapot and the six Utah
@@ -868,39 +897,15 @@ ranks them. A USD scene loads, edits and saves without any of them.
   variant block that the hoist does not reach - one authored below an
   `over` child of the variant, and any of them in a `.usdz` archive, whose
   asset paths resolve through the archive rather than the file system -
-  a `variantSet` a variant block itself declares (the `shadingVariant`
-  set inside each `modelVariant` of `Teapot_Materials.usd`, whose blocks are
-  not tabled), and a property the value reader cannot express. Each is
-  counted in `Usd_variant_set::unsupported_opinion_count`, reported per set, and
-  named by the save warning. Taking the
-  first up means hoisting through the `over` children too, the nested set
-  means tabling the sets a variant block declares, and the last is the
-  value reader's own coverage.
-  The nested set is what `full_assets/Teapot/DrawModes.usd` depends on, and
-  it takes these forms there:
-  - A `variantSet` declared inside a variant block is a set of the prim
-    carrying the outer set, tabled beside it, with its blocks read off the
-    enclosing variant's spec; its selection is the strongest of the
-    carrier's arc-carried selection (section 2 C7), the enclosing variant
-    block's own `variants`
-    metadatum (`"Utah" ( variants = { string shadingVariant =
-    "CeramicLimeGreen" } )`), the prim's, and the first block. The blocks of
-    a nested set contribute only while their enclosing variant is selected,
-    which the table records so a switch of the outer set re-applies the
-    inner one.
-  - A constant `primvars:displayColor` an `over` child of a variant authors
-    is a property opinion. Its erhe form is a `Gprim` `display_color` entry
-    property (the whole-mesh color; a varying `displayColor` stays the
-    vertex colors), which the importer fills from the constant it today
-    bakes into the color attribute and which, on change, rebuilds that
-    attribute the way a geometry edit does - so the value the shader reads
-    is still the vertex color, and the override is a property write like
-    every other one. The writer authors the property back as the constant
-    primvar.
-  - `GeomModelAPI` attributes a variant block authors (`model:drawModeColor`
-    in the nested set, the six `model:cardTexture*` in the outer one) are
-    property opinions of the draw-mode record (section 6 "GeomModelAPI draw
-    modes"); until that record exists they are counted.
+  and a property the value reader cannot express (a `GeomModelAPI`
+  attribute a variant block authors is one until the draw-mode record of
+  section 6 "`GeomModelAPI` draw modes" exists: `model:drawModeColor` in
+  the Teapot's nested `shadingVariant` blocks, the six `model:cardTexture*`
+  in its `modelVariant` blocks). Each is counted in
+  `Usd_variant_set::unsupported_opinion_count`, reported per set, and
+  named by the save warning. Taking the first up means hoisting through
+  the `over` children too, and the last is the value reader's own
+  coverage.
 - `GeomModelAPI` draw modes: a model prim carrying the schema asks the
   imaging layer to draw its subtree as a proxy, and the imaging layer, not
   the composition, implements it (OpenUSD's `UsdImagingGLDrawModeAdapter`;
