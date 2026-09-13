@@ -409,6 +409,9 @@ void Properties::texture_properties(const std::shared_ptr<erhe::graphics::Textur
                 .texture_reference = texture, //texture.get(),
                 .width             = texture->get_width(),
                 .height            = texture->get_height(),
+                // Uploaded image content: identity UVs, not the render-target UVs
+                .uv0               = glm::vec2{0.0f, 0.0f},
+                .uv1               = glm::vec2{1.0f, 1.0f},
                 .debug_label       = "Properties::texture_properties()"
             }
         );

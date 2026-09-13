@@ -93,8 +93,13 @@ public:
     ImGuiID                                            id               {0};
     int                                                width            {0};
     int                                                height           {0};
-    glm::vec2                                          uv0              {0.0f, 1.0f};
-    glm::vec2                                          uv1              {1.0f, 0.0f};
+    // Identity UVs show uploaded image content upright on every backend:
+    // the loaders and Image_transfer write the image's top row into texture
+    // row 0, which V = 0 samples regardless of the device's texture origin.
+    // Render-target content depends on the texture origin; draw it with
+    // Imgui_renderer::get_rtt_uv0() / get_rtt_uv1().
+    glm::vec2                                          uv0              {0.0f, 0.0f};
+    glm::vec2                                          uv1              {1.0f, 1.0f};
     glm::vec4                                          background_color {0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec4                                          tint_color       {1.0f, 1.0f, 1.0f, 1.0f};
     erhe::graphics::Filter                             filter           {erhe::graphics::Filter::nearest};

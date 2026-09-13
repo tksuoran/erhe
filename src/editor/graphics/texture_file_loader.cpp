@@ -357,6 +357,9 @@ void draw_texture_preview(App_context& context, const std::shared_ptr<erhe::grap
             .texture_reference = texture,
             .width             = static_cast<int>(width  * scale),
             .height            = static_cast<int>(height * scale),
+            // Uploaded image content: identity UVs, not the render-target UVs
+            .uv0               = glm::vec2{0.0f, 0.0f},
+            .uv1               = glm::vec2{1.0f, 1.0f},
             .filter            = erhe::graphics::Filter::linear,
             .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::linear,
             .debug_label       = "draw_texture_preview()"

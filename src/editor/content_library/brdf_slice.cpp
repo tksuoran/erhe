@@ -231,6 +231,8 @@ void Brdf_slice::show_brdf_slice(int area_size)
                 .texture_reference = std::static_pointer_cast<erhe::graphics::Texture_reference>(texture),
                 .width             = area_size,
                 .height            = area_size,
+                .uv0               = m_context.imgui_renderer->get_rtt_uv0(),
+                .uv1               = m_context.imgui_renderer->get_rtt_uv1(),
                 .filter            = erhe::graphics::Filter::nearest,
                 .mipmap_mode       = erhe::graphics::Sampler_mipmap_mode::not_mipmapped,
                 .debug_label       = "Brdf_slice::show_brdf_slice"
