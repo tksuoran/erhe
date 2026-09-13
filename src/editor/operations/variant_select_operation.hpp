@@ -1,6 +1,7 @@
 #pragma once
 
 #include "operations/operation.hpp"
+#include "scene/variant_table.hpp"
 
 #include <memory>
 #include <string>
@@ -33,8 +34,9 @@ public:
         // alive (AGENTS.md "Scene-hosted references in editor parts"). An
         // undo after the scene closed has nothing to put back.
         std::weak_ptr<Scene_root>   scene_root;
-        std::string                 prim_path;
-        std::string                 set_name;
+        // Which set of the scene is switched: the prim, the set name and the
+        // variant block the set is declared inside (Variant_set_key).
+        Variant_set_key             key;
         // The table's selection before the switch - what the file authored,
         // or what an earlier switch chose.
         std::string                 before_variant_name;
@@ -66,10 +68,20 @@ private:
 // the scene has no such set or the set has no such variant. Selecting the
 // variant a set is already on records the selection entry and changes
 // nothing, which is how a scene pins the selection a file authored.
+//
+// A variant block is free to declare a variant set of its own, whose blocks
+// contribute only while that block is the selected one
+// (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant set
+// does not carry"), so the compound reaches those too: the sets the block
+// being left declares go off - their opinions back to their base values and
+// every prim of theirs inactive, their own nested sets first - and the sets
+// the chosen block declares come on, each applying the selection it holds,
+// and so on down. A switch of a set whose enclosing block is not the selected
+// one records the selection and nothing else: the set contributes nothing
+// until a switch of the enclosing set brings its branch in.
 [[nodiscard]] auto make_select_variant_operation(
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::string&                 prim_path,
-    const std::string&                 set_name,
+    const Variant_set_key&             key,
     const std::string&                 variant_name
 ) -> std::shared_ptr<Operation>;
 

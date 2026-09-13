@@ -393,16 +393,19 @@ public:
         immediate = 1
     };
     auto select_variant(
-        App_context&        context,
-        const std::string&  prim_path,
-        const std::string&  set_name,
-        const std::string&  variant_name,
-        Variant_switch_mode mode
+        App_context&           context,
+        const Variant_set_key& key,
+        const std::string&     variant_name,
+        Variant_switch_mode    mode
     ) -> std::string;
 
     // Applies every Scene_settings::variant_selections entry that names a set
     // of the table whose selection differs, without touching the undo stack:
-    // what a scene being opened does once its variant table is filled.
+    // what a scene being opened does once its variant table is filled. A set
+    // a variant block declares is applied after the set carrying that block,
+    // so the enclosing selection is standing when the inner one is applied
+    // (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant
+    // set does not carry").
     void apply_variant_selections(App_context& context);
 
     // Persistent scene identity (Scene_settings::scene_id, saved with the

@@ -18,6 +18,26 @@ namespace erhe::scene     { class Mesh; }
 
 namespace editor {
 
+// Which variant set of a scene an entry names. A variant block is free to
+// declare a variant set of its own, which is a set of the same prim
+// (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant set
+// does not carry"), so the prim and the set name do not name a set on their
+// own: two blocks of one set may each declare a nested set of the same name -
+// `full_assets/Teapot/DrawModes.usd` declares a `shadingVariant` inside both
+// of its `modelVariant` blocks. The block the set is declared inside
+// completes the name, both fields being empty for a set the prim declares
+// itself.
+class Variant_set_key
+{
+public:
+    std::string prim_path;
+    std::string set_name;
+    std::string enclosing_set_name;
+    std::string enclosing_variant_name;
+
+    [[nodiscard]] auto operator==(const Variant_set_key& other) const -> bool = default;
+};
+
 // One material binding of one variant (doc/usd-compatibility-plan.md X4).
 // `relative_path` is the M1 path of the bound prim below the prim carrying
 // the set, empty for that prim itself. The material is held weakly: a
@@ -105,6 +125,9 @@ public:
     // The M1 path of the carrying prim, empty when the prim is gone. Built
     // on demand from the item - never call it per frame.
     [[nodiscard]] auto get_prim_path() const -> std::string;
+    // The name of this set, built from the path above - never call it per
+    // frame either.
+    [[nodiscard]] auto get_key() const -> Variant_set_key;
     [[nodiscard]] auto find_variant(const std::string& variant_name) const -> const Variant*;
 };
 
@@ -143,12 +166,27 @@ public:
     void clear();
 
     [[nodiscard]] auto get_sets() const -> const std::vector<Variant_set>&;
-    [[nodiscard]] auto find(const std::string& prim_path, const std::string& set_name) -> Variant_set*;
+    [[nodiscard]] auto get_sets()       -> std::vector<Variant_set>&;
+    [[nodiscard]] auto find(const Variant_set_key& key) -> Variant_set*;
+
+    // The set whose selection gates this one: the set of the same prim that
+    // declares the block `set` is declared inside. Null for a set the prim
+    // declares itself, and for one whose enclosing set the table does not
+    // hold.
+    [[nodiscard]] auto find_enclosing_set(const Variant_set& set) -> Variant_set*;
+
+    // Whether every block `set` is declared inside is the selected one of its
+    // own set, so the set contributes at all. A set the prim declares itself
+    // always does.
+    [[nodiscard]] auto is_live(const Variant_set& set) -> bool;
+
+    // The sets one variant block of `set` declares, in table order.
+    [[nodiscard]] auto find_nested_sets(const Variant_set& set, const std::string& variant_name) -> std::vector<Variant_set*>;
 
     // Records the selection of one set; false when the set or the variant is
     // not there. The materials are assigned by the operation the caller
     // builds, not here.
-    auto set_selected(const std::string& prim_path, const std::string& set_name, const std::string& variant_name) -> bool;
+    auto set_selected(const Variant_set_key& key, const std::string& variant_name) -> bool;
 
     // Drops every set whose carrying prim is gone - expired, or named by an
     // items_removed message (an undo of the import that brought it in).
@@ -176,6 +214,25 @@ private:
 // The mesh primitives one binding of `set` names. An empty
 // `primitive_indices` means the binding reached nothing (a path that names no
 // mesh of the scene any more).
+// What the prims hold today for every path and property name any variant of
+// `set` authors, recorded on the set as its base values - what a switch away
+// from a variant goes back to. A name an earlier entry already recorded is
+// left alone, so this only ever fills in what is missing: the reader captures
+// the base values of a set whose blocks contribute at load, and a set that
+// only starts contributing when its enclosing block is selected has them
+// captured then.
+void capture_variant_base_values(Variant_set& set);
+
+// The base value one override entry needs on `target`: what the prim holds
+// for every property name the entry authors that no earlier entry of the set
+// already recorded. A property with no local value is a `cleared` entry, so
+// putting it back clears rather than writes.
+void capture_variant_base_value(
+    erhe::Hierarchy&                             target,
+    const erhe::scene::Instance_override&        entry,
+    std::vector<erhe::scene::Instance_override>& base_values
+);
+
 [[nodiscard]] auto resolve_variant_binding(
     const Variant_set&     set,
     const Variant&         variant,

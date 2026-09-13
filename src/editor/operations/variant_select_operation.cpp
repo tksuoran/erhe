@@ -71,10 +71,12 @@ namespace {
 // path and property name any of its variants authors, so this visits exactly
 // the opinions a switch can leave standing: the chosen variant's value where
 // it authors one, the base value - a local value or none at all - where it
-// does not.
+// does not. A null variant is the set contributing nothing at all, which is a
+// set whose enclosing block is being left: every opinion of it goes back to
+// its base value.
 void append_variant_property_operations(
     const Variant_set&                       set,
-    const Variant&                           variant,
+    const Variant*                           variant,
     std::vector<std::shared_ptr<Operation>>& operations
 )
 {
@@ -83,7 +85,8 @@ void append_variant_property_operations(
         if (!item) {
             continue; // the prim the opinion names is no longer in the scene
         }
-        const erhe::scene::Instance_override* const authored = find_variant_override(variant, base.relative_path);
+        const erhe::scene::Instance_override* const authored =
+            (variant != nullptr) ? find_variant_override(*variant, base.relative_path) : nullptr;
         for (const erhe::scene::Instance_override_value& base_value : base.values) {
             const erhe::property::Dependency_property* const property =
                 erhe::scene::find_override_property(*item.get(), base_value.name);
@@ -140,12 +143,12 @@ void append_variant_property_operations(
 // from the render, the pick and the simulation (X2).
 void append_variant_prim_operations(
     const Variant_set&                       set,
-    const Variant&                           variant,
+    const Variant*                           variant,
     std::vector<std::shared_ptr<Operation>>& operations
 )
 {
     for (const Variant& candidate : set.variants) {
-        const bool is_chosen = (candidate.name == variant.name);
+        const bool is_chosen = (variant != nullptr) && (candidate.name == variant->name);
         for (const Variant_prim& prim : candidate.prims) {
             const std::shared_ptr<erhe::Item_base> item = resolve_variant_prim(set, prim.relative_path);
             if (!item) {
@@ -174,6 +177,120 @@ void append_variant_prim_operations(
     }
 }
 
+// The material assignments one variant's bindings are.
+void append_variant_binding_operations(
+    const Variant_set&                       set,
+    const Variant&                           variant,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    for (const Variant_binding& binding : variant.bindings) {
+        const Variant_binding_target                     target   = resolve_variant_binding(set, variant, binding);
+        const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
+        if (!target.mesh || target.primitive_indices.empty()) {
+            continue; // the binding names no mesh of the scene any more
+        }
+        for (const std::size_t primitive_index : target.primitive_indices) {
+            const std::shared_ptr<Mesh_material_assign_operation> assign =
+                make_mesh_material_assign_operation(target.mesh, primitive_index, material);
+            if (assign) {
+                operations.push_back(assign);
+            }
+        }
+    }
+}
+
+void append_variant_set_off(
+    Variant_table&                           variant_table,
+    Variant_set&                             set,
+    std::vector<const Variant_set*>&         visited,
+    std::vector<std::shared_ptr<Operation>>& operations
+);
+
+// Whether the block a nested set is declared inside is the one being selected
+// or the one being left.
+enum class Nested_variant_action : unsigned int {
+    bring_on = 0,
+    take_off = 1
+};
+
+// The sets one block of `set` declares, brought in or taken out with that
+// block. `visited` is what stops a table whose enclosing names form a cycle.
+void append_nested_variant_sets(
+    Variant_table&                           variant_table,
+    const Variant_set&                       set,
+    const std::string&                       variant_name,
+    Nested_variant_action                    action,
+    std::vector<const Variant_set*>&         visited,
+    std::vector<std::shared_ptr<Operation>>& operations
+);
+
+// One set coming on: it applies the selection it holds. Its base values are
+// what its prims held before it reached them, and a set whose branch was not
+// the selected one at load has none captured yet - the reader captures them
+// only for the branch that contributes - so they are captured here, before
+// the first opinion of the set is written.
+void append_variant_set_on(
+    Variant_table&                           variant_table,
+    Variant_set&                             set,
+    std::vector<const Variant_set*>&         visited,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    if (std::find(visited.begin(), visited.end(), &set) != visited.end()) {
+        return;
+    }
+    visited.push_back(&set);
+    capture_variant_base_values(set);
+    const Variant* const variant = set.find_variant(set.selected);
+    append_variant_property_operations(set, variant, operations);
+    append_variant_prim_operations    (set, variant, operations);
+    if (variant != nullptr) {
+        append_variant_binding_operations(set, *variant, operations);
+    }
+    append_nested_variant_sets(variant_table, set, set.selected, Nested_variant_action::bring_on, visited, operations);
+}
+
+// One set going off: every opinion of it back to its base value and every
+// prim of it inactive, the sets its own blocks declare first - what was
+// written last comes off first.
+void append_variant_set_off(
+    Variant_table&                           variant_table,
+    Variant_set&                             set,
+    std::vector<const Variant_set*>&         visited,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    if (std::find(visited.begin(), visited.end(), &set) != visited.end()) {
+        return;
+    }
+    visited.push_back(&set);
+    for (const Variant& variant : set.variants) {
+        append_nested_variant_sets(variant_table, set, variant.name, Nested_variant_action::take_off, visited, operations);
+    }
+    append_variant_property_operations(set, nullptr, operations);
+    append_variant_prim_operations    (set, nullptr, operations);
+}
+
+void append_nested_variant_sets(
+    Variant_table&                           variant_table,
+    const Variant_set&                       set,
+    const std::string&                       variant_name,
+    const Nested_variant_action              action,
+    std::vector<const Variant_set*>&         visited,
+    std::vector<std::shared_ptr<Operation>>& operations
+)
+{
+    const std::vector<Variant_set*> nested = variant_table.find_nested_sets(set, variant_name);
+    for (Variant_set* const nested_set : nested) {
+        if (action == Nested_variant_action::bring_on) {
+            append_variant_set_on(variant_table, *nested_set, visited, operations);
+        } else {
+            append_variant_set_off(variant_table, *nested_set, visited, operations);
+        }
+    }
+}
+
 } // anonymous namespace
 
 Variant_select_operation::Variant_select_operation(Parameters&& parameters)
@@ -183,8 +300,8 @@ Variant_select_operation::Variant_select_operation(Parameters&& parameters)
         fmt::format(
             "Select variant {} of set {} on {}",
             m_parameters.after_variant_name,
-            m_parameters.set_name,
-            m_parameters.prim_path
+            m_parameters.key.set_name,
+            m_parameters.key.prim_path
         )
     );
 }
@@ -198,12 +315,16 @@ void Variant_select_operation::apply(const std::string& variant_name, const Entr
         return; // the scene closed: there is nothing to select in it
     }
     // The table's selection is what the UI, a save and a further switch read.
-    scene_root->get_variant_table().set_selected(m_parameters.prim_path, m_parameters.set_name, variant_name);
+    scene_root->get_variant_table().set_selected(m_parameters.key, variant_name);
 
     // The settings entry is what a saved scene carries the selection in.
     std::vector<Variant_selection>& selections = scene_root->get_scene_settings().variant_selections;
     const auto is_this_set = [this](const Variant_selection& selection) {
-        return (selection.prim_path == m_parameters.prim_path) && (selection.set_name == m_parameters.set_name);
+        return
+            (selection.prim_path              == m_parameters.key.prim_path) &&
+            (selection.set_name               == m_parameters.key.set_name) &&
+            (selection.enclosing_set_name     == m_parameters.key.enclosing_set_name) &&
+            (selection.enclosing_variant_name == m_parameters.key.enclosing_variant_name);
     };
     const std::vector<Variant_selection>::iterator i = std::find_if(selections.begin(), selections.end(), is_this_set);
     if (entry_state == Entry_state::absent) {
@@ -217,9 +338,11 @@ void Variant_select_operation::apply(const std::string& variant_name, const Entr
         return;
     }
     Variant_selection selection{};
-    selection.prim_path    = m_parameters.prim_path;
-    selection.set_name     = m_parameters.set_name;
-    selection.variant_name = variant_name;
+    selection.prim_path              = m_parameters.key.prim_path;
+    selection.set_name               = m_parameters.key.set_name;
+    selection.enclosing_set_name     = m_parameters.key.enclosing_set_name;
+    selection.enclosing_variant_name = m_parameters.key.enclosing_variant_name;
+    selection.variant_name           = variant_name;
     selections.push_back(std::move(selection));
 }
 
@@ -237,8 +360,7 @@ void Variant_select_operation::undo(App_context& context)
 
 auto make_select_variant_operation(
     const std::shared_ptr<Scene_root>& scene_root,
-    const std::string&                 prim_path,
-    const std::string&                 set_name,
+    const Variant_set_key&             key,
     const std::string&                 variant_name
 ) -> std::shared_ptr<Operation>
 {
@@ -246,7 +368,7 @@ auto make_select_variant_operation(
         return {};
     }
     Variant_table&     variant_table = scene_root->get_variant_table();
-    Variant_set* const set           = variant_table.find(prim_path, set_name);
+    Variant_set* const set           = variant_table.find(key);
     if (set == nullptr) {
         return {};
     }
@@ -254,48 +376,58 @@ auto make_select_variant_operation(
     if (variant == nullptr) {
         return {};
     }
+    const std::string before_variant_name = set->selected;
 
     std::vector<std::shared_ptr<Operation>> operations;
     Variant_select_operation::Parameters parameters{};
     parameters.scene_root          = scene_root;
-    parameters.prim_path           = prim_path;
-    parameters.set_name            = set_name;
-    parameters.before_variant_name = set->selected;
+    parameters.key                 = key;
+    parameters.before_variant_name = before_variant_name;
     parameters.after_variant_name  = variant_name;
     const std::vector<Variant_selection>& selections = scene_root->get_scene_settings().variant_selections;
     parameters.before_entry_state = std::any_of(
         selections.begin(),
         selections.end(),
-        [&prim_path, &set_name](const Variant_selection& selection) {
-            return (selection.prim_path == prim_path) && (selection.set_name == set_name);
+        [&key](const Variant_selection& selection) {
+            return
+                (selection.prim_path              == key.prim_path) &&
+                (selection.set_name               == key.set_name) &&
+                (selection.enclosing_set_name     == key.enclosing_set_name) &&
+                (selection.enclosing_variant_name == key.enclosing_variant_name);
         }
     ) ? Variant_select_operation::Entry_state::present
       : Variant_select_operation::Entry_state::absent;
     operations.push_back(std::make_shared<Variant_select_operation>(std::move(parameters)));
 
-    append_variant_property_operations(*set, *variant, operations);
-    append_variant_prim_operations(*set, *variant, operations);
-
-    for (const Variant_binding& binding : variant->bindings) {
-        const Variant_binding_target target   = resolve_variant_binding(*set, *variant, binding);
-        const std::shared_ptr<erhe::primitive::Material> material = binding.material.lock();
-        if (!target.mesh || target.primitive_indices.empty()) {
-            continue; // the binding names no mesh of the scene any more
+    // A set whose enclosing block is not the selected one contributes nothing
+    // to the scene, so the switch is the recorded selection alone: the branch
+    // reaches the prims when a switch of the enclosing set brings it in, and
+    // it brings this selection with it.
+    if (variant_table.is_live(*set)) {
+        std::vector<const Variant_set*> visited;
+        visited.push_back(set);
+        // What the block being left declares comes off first, deepest first,
+        // then this set's own opinions, then what the chosen block declares.
+        if (before_variant_name != variant_name) {
+            append_nested_variant_sets(
+                variant_table, *set, before_variant_name, Nested_variant_action::take_off, visited, operations
+            );
         }
-        for (const std::size_t primitive_index : target.primitive_indices) {
-            const std::shared_ptr<Mesh_material_assign_operation> assign =
-                make_mesh_material_assign_operation(target.mesh, primitive_index, material);
-            if (assign) {
-                operations.push_back(assign);
-            }
-        }
+        append_variant_property_operations(*set, variant, operations);
+        append_variant_prim_operations    (*set, variant, operations);
+        append_variant_binding_operations (*set, *variant, operations);
+        append_nested_variant_sets(
+            variant_table, *set, variant_name, Nested_variant_action::bring_on, visited, operations
+        );
     }
 
     std::shared_ptr<Compound_operation> compound = std::make_shared<Compound_operation>(
         Compound_operation::Parameters{.operations = std::move(operations)}
     );
     compound->set_description(
-        fmt::format("[{}] Select variant {} of {} on {}", compound->get_serial(), variant_name, set_name, prim_path)
+        fmt::format(
+            "[{}] Select variant {} of {} on {}", compound->get_serial(), variant_name, key.set_name, key.prim_path
+        )
     );
     return compound;
 }

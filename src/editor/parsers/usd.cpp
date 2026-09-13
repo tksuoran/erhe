@@ -1938,7 +1938,14 @@ void apply_planned_paths_to_variant_selections(
 {
     Variant_table& variant_table = scene_root.get_variant_table();
     for (Variant_selection& selection : settings.variant_selections) {
-        const Variant_set* const set = variant_table.find(selection.prim_path, selection.set_name);
+        const Variant_set* const set = variant_table.find(
+            Variant_set_key{
+                .prim_path              = selection.prim_path,
+                .set_name               = selection.set_name,
+                .enclosing_set_name     = selection.enclosing_set_name,
+                .enclosing_variant_name = selection.enclosing_variant_name
+            }
+        );
         if (set == nullptr) {
             continue;
         }
@@ -1959,73 +1966,6 @@ void apply_planned_paths_to_variant_selections(
 [[nodiscard]] auto is_graph_texture_slot(const erhe::primitive::Material_texture_sampler& sampler) -> bool
 {
     return dynamic_cast<const Graph_texture*>(sampler.texture_reference.get()) != nullptr;
-}
-
-// The base value one pending entry needs: what the prim holds for every
-// property name the entry authors that no earlier entry of the set already
-// recorded. A property with no local value is a `cleared` entry, so putting
-// it back clears rather than writes - the same record erhe::usd captures for
-// the entries it can resolve itself.
-void capture_pending_variant_base_value(
-    erhe::Hierarchy&                             target,
-    const erhe::scene::Instance_override&        entry,
-    std::vector<erhe::scene::Instance_override>& base_values
-)
-{
-    erhe::scene::Instance_override* base = nullptr;
-    for (erhe::scene::Instance_override& candidate : base_values) {
-        if (candidate.relative_path == entry.relative_path) {
-            base = &candidate;
-            break;
-        }
-    }
-    if (base == nullptr) {
-        erhe::scene::Instance_override new_base{};
-        new_base.relative_path = entry.relative_path;
-        base_values.push_back(std::move(new_base));
-        base = &base_values.back();
-    }
-    for (const erhe::scene::Instance_override_value& value : entry.values) {
-        bool already_recorded = false;
-        for (const erhe::scene::Instance_override_value& recorded : base->values) {
-            if (recorded.name == value.name) {
-                already_recorded = true;
-                break;
-            }
-        }
-        if (already_recorded) {
-            continue;
-        }
-        const erhe::property::Dependency_property* const property = erhe::scene::find_override_property(target, value.name);
-        if (property == nullptr) {
-            continue; // apply_property_values warns about the name once
-        }
-        if (target.has_local_value(*property)) {
-            base->values.push_back(
-                erhe::scene::Instance_override_value{
-                    .name  = value.name,
-                    .text  = erhe::property::to_string(*property, target.get_value(*property)),
-                    .state = erhe::scene::Instance_override_value_state::supplied
-                }
-            );
-        } else {
-            base->values.push_back(
-                erhe::scene::Instance_override_value{
-                    .name  = value.name,
-                    .text  = std::string{},
-                    .state = erhe::scene::Instance_override_value_state::cleared
-                }
-            );
-        }
-    }
-    if (entry.transform_overridden && !base->transform_overridden) {
-        const erhe::scene::Xformable* const xformable = dynamic_cast<const erhe::scene::Xformable*>(&target);
-        if (xformable != nullptr) {
-            base->transform_overridden = true;
-            base->transform            = xformable->parent_from_node_transform().get_matrix();
-            base->xform_op_stack       = xformable->copy_xform_op_stack();
-        }
-    }
 }
 
 // One pending material binding, on the primitives it names: a binding at a
@@ -2117,7 +2057,7 @@ void apply_pending_variant_opinions(
             for (const erhe::scene::Instance_override& entry : variant.pending_overrides) {
                 erhe::Hierarchy* const target = erhe::scene::find_instance_item(*carrier, entry.relative_path);
                 if (target != nullptr) {
-                    capture_pending_variant_base_value(*target, entry, set.base_values);
+                    capture_variant_base_value(*target, entry, set.base_values);
                 }
             }
         }

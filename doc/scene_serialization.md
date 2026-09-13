@@ -136,9 +136,17 @@ Entry point: `editor::save_scene_gltf(Scene_root&, path)` in
      the codegen struct (`scene/definitions/scene_settings.py`). One field
      of it is scene content rather than a setting override:
      `variant_selections`, which variant each variant set of the scene has
-     selected (`{prim_path, set_name, variant_name}` per switched set,
+     selected (`{prim_path, set_name, enclosing_set_name,
+     enclosing_variant_name, variant_name}` per switched set,
      doc/usd-compatibility-plan.md X4); a set without an entry keeps the
-     selection the file it came from authored. A glTF save writes the entry
+     selection the file it came from authored. The two enclosing fields (v2
+     of the codegen struct) name the variant block a set is declared inside,
+     both empty for a set the prim declares itself - which is what a file
+     written before them holds, so it reads unchanged. They are part of the
+     name because two blocks of one set may each declare a nested set of the
+     same name; an entry naming such a set is applied after the entry naming
+     the set that carries its block, because switching the outer set applies
+     what the block it selects declares. A glTF save writes the entry
      of the one set it carries (see "material variants" below) with an empty `prim_path`: the
      file's set is carried by the file's own root, which is the prim the
      reloaded scene carries it on. `KHR_materials_variants` itself has no

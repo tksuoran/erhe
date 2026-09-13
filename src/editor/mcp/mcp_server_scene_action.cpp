@@ -217,9 +217,16 @@ auto Mcp_server::action_set_scene_settings(const json& args) -> std::string
 auto Mcp_server::action_select_variant(const json& args) -> std::string
 {
     const std::string scene_name   = args.value("scene_name", "");
-    const std::string prim_path    = args.value("prim_path", "");
-    const std::string set_name     = args.value("set_name", "");
     const std::string variant_name = args.value("variant_name", "");
+    // An empty enclosing block is a set the prim declares itself, which is
+    // every set of a file that nests none (doc/usd-compatibility-plan.md
+    // section 6, "Variant opinions a variant set does not carry").
+    const Variant_set_key key{
+        .prim_path              = args.value("prim_path", ""),
+        .set_name               = args.value("set_name", ""),
+        .enclosing_set_name     = args.value("enclosing_set_name", ""),
+        .enclosing_variant_name = args.value("enclosing_variant_name", "")
+    };
     auto* sr = find_scene(scene_name);
     if (!sr) {
         json r = make_text_content("Scene not found: " + scene_name);
@@ -228,25 +235,25 @@ auto Mcp_server::action_select_variant(const json& args) -> std::string
     }
     // An empty prim_path is the scene's root prim, which is what carries a
     // glTF asset's one variant set (doc/usd-compatibility-plan.md X4).
-    if (set_name.empty() || variant_name.empty()) {
+    if (key.set_name.empty() || variant_name.empty()) {
         json r = make_text_content("set_name and variant_name are required");
         r["isError"] = true;
         return r.dump();
     }
-    const std::string error = sr->select_variant(
-        m_context, prim_path, set_name, variant_name, Scene_root::Variant_switch_mode::undoable
-    );
+    const std::string error = sr->select_variant(m_context, key, variant_name, Scene_root::Variant_switch_mode::undoable);
     if (!error.empty()) {
         json r = make_text_content(error);
         r["isError"] = true;
         return r.dump();
     }
     return make_json_content({
-        {"queued",       true},
-        {"scene_name",   sr->get_name()},
-        {"prim_path",    prim_path},
-        {"set_name",     set_name},
-        {"variant_name", variant_name}
+        {"queued",                 true},
+        {"scene_name",             sr->get_name()},
+        {"prim_path",              key.prim_path},
+        {"set_name",               key.set_name},
+        {"enclosing_set_name",     key.enclosing_set_name},
+        {"enclosing_variant_name", key.enclosing_variant_name},
+        {"variant_name",           variant_name}
     }).dump();
 }
 

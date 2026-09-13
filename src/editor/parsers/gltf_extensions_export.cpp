@@ -520,9 +520,12 @@ void add_gltf_editor_state(
         Scene_settings scene_settings = scene_root.get_scene_settings();
         scene_settings.variant_selections.clear();
         if (exported_variant_set != nullptr) {
+            const Variant_set_key exported_key = exported_variant_set->get_key();
             for (const Variant_selection& selection : scene_root.get_scene_settings().variant_selections) {
-                if ((selection.set_name == exported_variant_set->set_name) &&
-                    (selection.prim_path == exported_variant_set->get_prim_path()))
+                if ((selection.set_name               == exported_key.set_name) &&
+                    (selection.prim_path              == exported_key.prim_path) &&
+                    (selection.enclosing_set_name     == exported_key.enclosing_set_name) &&
+                    (selection.enclosing_variant_name == exported_key.enclosing_variant_name))
                 {
                     Variant_selection written = selection;
                     written.prim_path.clear();

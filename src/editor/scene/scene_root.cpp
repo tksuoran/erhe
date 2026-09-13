@@ -2159,19 +2159,18 @@ auto Scene_root::get_variant_table() const -> const Variant_table&
 
 auto Scene_root::select_variant(
     App_context&              context,
-    const std::string&        prim_path,
-    const std::string&        set_name,
+    const Variant_set_key&    key,
     const std::string&        variant_name,
     const Variant_switch_mode mode
 ) -> std::string
 {
     const std::shared_ptr<Operation> operation = make_select_variant_operation(
-        shared_from_this(), prim_path, set_name, variant_name
+        shared_from_this(), key, variant_name
     );
     if (!operation) {
         return fmt::format(
             "scene '{}' has no variant '{}' in set '{}' on '{}'",
-            get_name(), variant_name, set_name, prim_path
+            get_name(), variant_name, key.set_name, key.prim_path
         );
     }
     if (mode == Variant_switch_mode::undoable) {
@@ -2190,9 +2189,42 @@ void Scene_root::apply_variant_selections(App_context& context)
     // The file's own selection is already applied by the importer; only an
     // entry that names a different variant has anything to do.
     // A COPY: applying a selection rewrites m_scene_settings.variant_selections.
-    const std::vector<Variant_selection> selections = m_scene_settings.variant_selections;
+    std::vector<Variant_selection> selections = m_scene_settings.variant_selections;
+    // Outer before inner: a switch of a set applies what the block it selects
+    // declares, so an entry naming a nested set has to be applied after the
+    // entry naming the set that carries its block - otherwise the outer switch
+    // applies the nested set's file selection over the entry's.
+    const auto nesting_depth = [this](const Variant_selection& selection) -> std::size_t {
+        const Variant_set* set = m_variant_table.find(
+            Variant_set_key{
+                .prim_path              = selection.prim_path,
+                .set_name               = selection.set_name,
+                .enclosing_set_name     = selection.enclosing_set_name,
+                .enclosing_variant_name = selection.enclosing_variant_name
+            }
+        );
+        std::size_t depth = 0;
+        while ((set != nullptr) && !set->enclosing_set_name.empty() && (depth <= m_variant_table.get_sets().size())) {
+            set = m_variant_table.find_enclosing_set(*set);
+            ++depth;
+        }
+        return depth;
+    };
+    std::stable_sort(
+        selections.begin(),
+        selections.end(),
+        [&nesting_depth](const Variant_selection& lhs, const Variant_selection& rhs) {
+            return nesting_depth(lhs) < nesting_depth(rhs);
+        }
+    );
     for (const Variant_selection& selection : selections) {
-        const Variant_set* const set = m_variant_table.find(selection.prim_path, selection.set_name);
+        const Variant_set_key key{
+            .prim_path              = selection.prim_path,
+            .set_name               = selection.set_name,
+            .enclosing_set_name     = selection.enclosing_set_name,
+            .enclosing_variant_name = selection.enclosing_variant_name
+        };
+        const Variant_set* const set = m_variant_table.find(key);
         if (set == nullptr) {
             log_scene->warn(
                 "scene '{}': variant selection '{}' names set '{}' on '{}', which the scene does not carry",
@@ -2203,9 +2235,7 @@ void Scene_root::apply_variant_selections(App_context& context)
         if (set->selected == selection.variant_name) {
             continue;
         }
-        const std::string error = select_variant(
-            context, selection.prim_path, selection.set_name, selection.variant_name, Variant_switch_mode::immediate
-        );
+        const std::string error = select_variant(context, key, selection.variant_name, Variant_switch_mode::immediate);
         if (!error.empty()) {
             log_scene->warn("scene '{}': {}", get_name(), error);
         }

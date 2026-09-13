@@ -2462,7 +2462,7 @@
     "name": "get_scene_settings"
   },
   {
-    "description": "List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): per set the path of the prim carrying it, the set name, the selected variant, every variant with its material bindings, property opinions and the prims it adds (every variant's prims are in the scene; a switch flips their active property), and how many opinions the file's variants authored that are not carried and are not written back.",
+    "description": "List the variant sets a scene carries (doc/usd-compatibility-plan.md X4): per set the path of the prim carrying it, the set name, the variant block the set is declared inside (`enclosing_set_name` / `enclosing_variant_name`, both empty for a set the prim declares itself) and whether that block is the selected one (`enclosing_selected`, which is when the set's variants reach the scene at all), the selected variant, every variant with its material bindings, property opinions and the prims it adds (every variant's prims are in the scene; a switch flips their active property), and how many opinions the file's variants authored that are not carried and are not written back.",
     "inputSchema": {
       "properties": {
         "scene_name": {
@@ -2511,9 +2511,17 @@
     "name": "set_scene_settings"
   },
   {
-    "description": "Select one variant of one variant set of a scene: the chosen variant's material bindings are assigned and the selection is recorded in the scene settings (Scene_settings.variant_selections), as one undoable operation. Use get_scene_variants for the prim paths, set names and variant names.",
+    "description": "Select one variant of one variant set of a scene: the chosen variant's material bindings are assigned and the selection is recorded in the scene settings (Scene_settings.variant_selections), as one undoable operation. Switching a set applies what the block it selects declares, so a variant set declared inside that block comes on with its own selection and the sets of the block being left go off. Use get_scene_variants for the prim paths, set names, enclosing blocks and variant names.",
     "inputSchema": {
       "properties": {
+        "enclosing_set_name": {
+          "description": "Name of the variant set whose block declares this set (as get_scene_variants reports it); empty, the default, names a set the prim declares itself",
+          "type": "string"
+        },
+        "enclosing_variant_name": {
+          "description": "Name of the variant block this set is declared inside; empty, the default, names a set the prim declares itself",
+          "type": "string"
+        },
         "prim_path": {
           "description": "Path of the prim carrying the variant set (as get_scene_variants reports it); empty names the scene's root prim, which is what carries a glTF asset's variant set",
           "type": "string"

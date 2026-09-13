@@ -7,7 +7,17 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_property/dependency_property.hpp"
+
+#include "erhe_property/property_string.hpp"
+
+#include "erhe_scene/instance_override.hpp"
+
 #include "erhe_scene/mesh.hpp"
+
+#include "erhe_scene/node.hpp"
+
+#include "erhe_scene/transform.hpp"
 
 #include <fmt/format.h>
 
@@ -45,8 +55,16 @@ auto primitive_subset_name(const erhe::scene::Mesh& mesh, const std::size_t prim
 
 namespace {
 
-// The item one binding path names below the prim carrying the set: the prim
-// itself for an empty path, and the item find_by_path reaches otherwise.
+// The item one path of a variant set names below the prim carrying it: the
+// prim itself for the empty path, the item the path names below it where the
+// tree holds one, and otherwise the item the path names through the clone of
+// every composition arc it crosses. erhe composes no arc - the editor
+// instantiates each one after a load returns (doc/usd-compatibility-plan.md
+// C6) - so a variant that authors an opinion or a binding for a prim an arc
+// supplies names it through the arc's target clone, and a switch of the set
+// reaches the same prim the load did (erhe::scene::find_instance_item, which
+// parsers/usd.cpp apply_pending_variant_opinions() applies such an entry
+// with).
 [[nodiscard]] auto find_binding_item(
     const std::shared_ptr<erhe::Item_base>& prim,
     const std::string&                      relative_path
@@ -59,7 +77,8 @@ namespace {
     if (relative_path.empty()) {
         return hierarchy;
     }
-    return erhe::find_by_path(*hierarchy, relative_path);
+    erhe::Hierarchy* const own = erhe::find_by_path(*hierarchy, relative_path);
+    return (own != nullptr) ? own : erhe::scene::find_instance_item(*hierarchy, relative_path);
 }
 
 // Everything before the last path separator, empty when the path holds none.
@@ -87,6 +106,16 @@ auto Variant_set::get_prim_path() const -> std::string
     return (hierarchy != nullptr) ? hierarchy->get_path() : item->get_name();
 }
 
+auto Variant_set::get_key() const -> Variant_set_key
+{
+    return Variant_set_key{
+        .prim_path              = get_prim_path(),
+        .set_name               = set_name,
+        .enclosing_set_name     = enclosing_set_name,
+        .enclosing_variant_name = enclosing_variant_name
+    };
+}
+
 auto Variant_set::find_variant(const std::string& variant_name) const -> const Variant*
 {
     for (const Variant& variant : variants) {
@@ -112,7 +141,12 @@ auto Variant_table::get_sets() const -> const std::vector<Variant_set>&
     return m_sets;
 }
 
-auto Variant_table::find(const std::string& prim_path, const std::string& set_name) -> Variant_set*
+auto Variant_table::get_sets() -> std::vector<Variant_set>&
+{
+    return m_sets;
+}
+
+auto Variant_table::find(const Variant_set_key& key) -> Variant_set*
 {
     for (Variant_set& set : m_sets) {
         if (set.prim.expired()) {
@@ -120,20 +154,109 @@ auto Variant_table::find(const std::string& prim_path, const std::string& set_na
             // also the path of a set the scene's root prim carries.
             continue;
         }
-        if ((set.set_name == set_name) && (set.get_prim_path() == prim_path)) {
+        if ((set.set_name               == key.set_name) &&
+            (set.enclosing_set_name     == key.enclosing_set_name) &&
+            (set.enclosing_variant_name == key.enclosing_variant_name) &&
+            (set.get_prim_path()        == key.prim_path))
+        {
             return &set;
         }
     }
     return nullptr;
 }
 
+auto Variant_table::find_enclosing_set(const Variant_set& set) -> Variant_set*
+{
+    if (set.enclosing_set_name.empty()) {
+        return nullptr;
+    }
+    const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+    if (!prim) {
+        return nullptr;
+    }
+    // A set of the same prim, of the enclosing name, holding the block this
+    // set is declared inside. Nesting repeats while the table names one level
+    // up, so a chain declaring one set name at two depths offers more than one
+    // candidate: the one whose own chain is selected is the one this set
+    // contributes through, and the first match answers for everything else.
+    Variant_set* first_match = nullptr;
+    for (Variant_set& candidate : m_sets) {
+        if ((&candidate == &set) ||
+            (candidate.prim.lock() != prim) ||
+            (candidate.set_name != set.enclosing_set_name) ||
+            (candidate.find_variant(set.enclosing_variant_name) == nullptr))
+        {
+            continue;
+        }
+        if (first_match == nullptr) {
+            first_match = &candidate;
+        }
+        if (is_live(candidate)) {
+            return &candidate;
+        }
+    }
+    return first_match;
+}
+
+auto Variant_table::is_live(const Variant_set& set) -> bool
+{
+    // The chain is at most as long as the table, and a table read from a file
+    // whose enclosing names form a cycle would loop without the bound.
+    const Variant_set* current = &set;
+    for (std::size_t depth = 0, end = m_sets.size() + 1; depth < end; ++depth) {
+        if (current->enclosing_set_name.empty()) {
+            return true;
+        }
+        const std::shared_ptr<erhe::Item_base> prim = current->prim.lock();
+        if (!prim) {
+            return false;
+        }
+        const Variant_set* enclosing = nullptr;
+        for (const Variant_set& candidate : m_sets) {
+            if ((&candidate == current) ||
+                (candidate.prim.lock() != prim) ||
+                (candidate.set_name != current->enclosing_set_name) ||
+                (candidate.selected != current->enclosing_variant_name))
+            {
+                continue;
+            }
+            enclosing = &candidate;
+            break;
+        }
+        if (enclosing == nullptr) {
+            return false; // the block this set is declared inside is not the selected one
+        }
+        current = enclosing;
+    }
+    return false;
+}
+
+auto Variant_table::find_nested_sets(const Variant_set& set, const std::string& variant_name) -> std::vector<Variant_set*>
+{
+    std::vector<Variant_set*> nested;
+    const std::shared_ptr<erhe::Item_base> prim = set.prim.lock();
+    if (!prim) {
+        return nested;
+    }
+    for (Variant_set& candidate : m_sets) {
+        if ((&candidate == &set) ||
+            (candidate.prim.lock() != prim) ||
+            (candidate.enclosing_set_name != set.set_name) ||
+            (candidate.enclosing_variant_name != variant_name))
+        {
+            continue;
+        }
+        nested.push_back(&candidate);
+    }
+    return nested;
+}
+
 auto Variant_table::set_selected(
-    const std::string& prim_path,
-    const std::string& set_name,
-    const std::string& variant_name
+    const Variant_set_key& key,
+    const std::string&     variant_name
 ) -> bool
 {
-    Variant_set* const set = find(prim_path, set_name);
+    Variant_set* const set = find(key);
     if ((set == nullptr) || (set->find_variant(variant_name) == nullptr)) {
         return false;
     }
@@ -210,6 +333,81 @@ auto make_variant_binding_path(
     }
     path += fmt::format("#{}", primitive_index);
     return path;
+}
+
+void capture_variant_base_value(
+    erhe::Hierarchy&                             target,
+    const erhe::scene::Instance_override&        entry,
+    std::vector<erhe::scene::Instance_override>& base_values
+)
+{
+    erhe::scene::Instance_override* base = nullptr;
+    for (erhe::scene::Instance_override& candidate : base_values) {
+        if (candidate.relative_path == entry.relative_path) {
+            base = &candidate;
+            break;
+        }
+    }
+    if (base == nullptr) {
+        erhe::scene::Instance_override new_base{};
+        new_base.relative_path = entry.relative_path;
+        base_values.push_back(std::move(new_base));
+        base = &base_values.back();
+    }
+    for (const erhe::scene::Instance_override_value& value : entry.values) {
+        bool already_recorded = false;
+        for (const erhe::scene::Instance_override_value& recorded : base->values) {
+            if (recorded.name == value.name) {
+                already_recorded = true;
+                break;
+            }
+        }
+        if (already_recorded) {
+            continue;
+        }
+        const erhe::property::Dependency_property* const property = erhe::scene::find_override_property(target, value.name);
+        if (property == nullptr) {
+            continue; // apply_property_values warns about the name once
+        }
+        if (target.has_local_value(*property)) {
+            base->values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name  = value.name,
+                    .text  = erhe::property::to_string(*property, target.get_value(*property)),
+                    .state = erhe::scene::Instance_override_value_state::supplied
+                }
+            );
+        } else {
+            base->values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name  = value.name,
+                    .text  = std::string{},
+                    .state = erhe::scene::Instance_override_value_state::cleared
+                }
+            );
+        }
+    }
+    if (entry.transform_overridden && !base->transform_overridden) {
+        const erhe::scene::Xformable* const xformable = dynamic_cast<const erhe::scene::Xformable*>(&target);
+        if (xformable != nullptr) {
+            base->transform_overridden = true;
+            base->transform            = xformable->parent_from_node_transform().get_matrix();
+            base->xform_op_stack       = xformable->copy_xform_op_stack();
+        }
+    }
+}
+
+void capture_variant_base_values(Variant_set& set)
+{
+    for (const Variant& variant : set.variants) {
+        for (const erhe::scene::Instance_override& entry : variant.overrides) {
+            const std::shared_ptr<erhe::Item_base> item = resolve_variant_prim(set, entry.relative_path);
+            erhe::Hierarchy* const target = dynamic_cast<erhe::Hierarchy*>(item.get());
+            if (target != nullptr) {
+                capture_variant_base_value(*target, entry, set.base_values);
+            }
+        }
+    }
 }
 
 auto resolve_variant_binding(

@@ -1034,10 +1034,18 @@ auto Mcp_server::query_scene_variants(const json& args) -> std::string
                 }
             );
         }
+        // A set a variant block declares is named by that block as well: two
+        // blocks of one set may each declare a nested set of the same name
+        // (doc/usd-compatibility-plan.md section 6). `enclosing_selected` is
+        // whether the block is the selected one, which is when the set's
+        // variants reach the scene at all.
         variant_sets.push_back(
             json{
                 {"prim_path",                 set.get_prim_path()},
                 {"set_name",                  set.set_name},
+                {"enclosing_set_name",        set.enclosing_set_name},
+                {"enclosing_variant_name",    set.enclosing_variant_name},
+                {"enclosing_selected",        variant_table.is_live(set)},
                 {"selected",                  set.selected},
                 {"variants",                  variants},
                 {"unsupported_opinion_count", set.unsupported_opinion_count}

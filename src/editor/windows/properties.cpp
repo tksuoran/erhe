@@ -251,8 +251,14 @@ void Properties::variant_properties(Scene_root& scene_root)
 
     // One combo per variant set the scene carries
     // (doc/usd-compatibility-plan.md X4). Change-driven: the combo is drawn
-    // from the table, and only a change queues the switch.
-    const std::vector<Variant_set>& sets = scene_root.get_variant_table().get_sets();
+    // from the table, and only a change queues the switch. A set a variant
+    // block declares is listed below the set carrying that block, indented and
+    // named by the block, and is editable only while that block is the
+    // selected one - its variants reach the scene through nothing else
+    // (doc/usd-compatibility-plan.md section 6, "Variant opinions a variant
+    // set does not carry").
+    Variant_table&                  variant_table = scene_root.get_variant_table();
+    const std::vector<Variant_set>& sets          = variant_table.get_sets();
     if (sets.empty()) {
         return;
     }
@@ -262,31 +268,59 @@ void Properties::variant_properties(Scene_root& scene_root)
         if (!prim) {
             continue; // the carrying prim is gone; the table drops the set on the removal message
         }
-        const std::string prim_path = set.get_prim_path();
-        const std::string set_name  = set.set_name;
+        const Variant_set_key key  = set.get_key();
+        const bool            live = variant_table.is_live(set);
+        // How deep the chain of blocks this set is declared inside runs, which
+        // is how far its row is indented. The table lists a set after the set
+        // carrying the block it is declared in, so the rows read as the tree
+        // they are.
+        std::size_t depth = 0;
+        for (const Variant_set* enclosing = variant_table.find_enclosing_set(set);
+             (enclosing != nullptr) && (depth <= sets.size());
+             enclosing = variant_table.find_enclosing_set(*enclosing))
+        {
+            ++depth;
+        }
         // A set the scene's root prim carries has the empty path (a glTF
         // asset's one variant list, X4): label it by the prim's name.
-        std::string label = (prim_path.empty() ? prim->get_name() : prim_path) + " : " + set_name;
+        const std::string prim_label = key.prim_path.empty() ? prim->get_name() : key.prim_path;
+        std::string label = key.enclosing_set_name.empty()
+            ? (prim_label + " : " + key.set_name)
+            : (std::string(4 * depth, ' ') + key.enclosing_set_name + "=" + key.enclosing_variant_name + " : " + key.set_name);
+        std::string tooltip = key.enclosing_set_name.empty()
+            ? std::string{"Which variant of this variant set the scene has selected."}
+            : fmt::format(
+                "Which variant of this variant set the scene has selected. The set is declared inside the '{}' "
+                "block of '{}'{}",
+                key.enclosing_variant_name,
+                key.enclosing_set_name,
+                live ? "." : ", which is not the selected block: select it to bring this set in."
+            );
         add_entry(
             std::move(label),
-            [this, &scene_root, &set, prim_path, set_name]() {
-                if (!ImGui::BeginCombo("##", set.selected.c_str())) {
-                    return;
+            [this, &scene_root, &set, key, live]() {
+                if (!live) {
+                    ImGui::BeginDisabled();
                 }
-                for (const Variant& variant : set.variants) {
-                    const bool is_selected = (variant.name == set.selected);
-                    if (ImGui::Selectable(variant.name.c_str(), is_selected) && !is_selected) {
-                        const std::string error = scene_root.select_variant(
-                            m_context, prim_path, set_name, variant.name, Scene_root::Variant_switch_mode::undoable
-                        );
-                        if (!error.empty()) {
-                            log_scene->warn("select variant: {}", error);
+                if (ImGui::BeginCombo("##", set.selected.c_str())) {
+                    for (const Variant& variant : set.variants) {
+                        const bool is_selected = (variant.name == set.selected);
+                        if (ImGui::Selectable(variant.name.c_str(), is_selected) && !is_selected) {
+                            const std::string error = scene_root.select_variant(
+                                m_context, key, variant.name, Scene_root::Variant_switch_mode::undoable
+                            );
+                            if (!error.empty()) {
+                                log_scene->warn("select variant: {}", error);
+                            }
                         }
                     }
+                    ImGui::EndCombo();
                 }
-                ImGui::EndCombo();
+                if (!live) {
+                    ImGui::EndDisabled();
+                }
             },
-            "Which variant of this variant set the scene has selected."
+            std::move(tooltip)
         );
     }
     pop_group();
