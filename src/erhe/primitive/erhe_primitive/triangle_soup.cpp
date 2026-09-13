@@ -8,6 +8,7 @@
 #include <geogram/mesh/mesh_geometry.h>
 #include <geogram/points/colocate.h>
 
+#include <cstring>
 #include <numeric>
 #include <set>
 
@@ -424,6 +425,63 @@ private:
 
     GEO::Attribute<GEO::Numeric::int32> m_corner_indices;
 };
+
+auto make_triangle_soup_with_constant_color(
+    const Triangle_soup& source,
+    const glm::vec4&     color
+) -> std::shared_ptr<Triangle_soup>
+{
+    using erhe::dataformat::Format;
+    using erhe::dataformat::Vertex_attribute;
+    using erhe::dataformat::Vertex_attribute_usage;
+    using erhe::dataformat::Vertex_stream;
+
+    if (source.vertex_format.streams.empty() || source.vertex_data.empty()) {
+        return {};
+    }
+    const std::size_t source_stride = source.vertex_format.streams.front().stride;
+    if (source_stride == 0) {
+        return {};
+    }
+    const std::size_t vertex_count = source.vertex_data.size() / source_stride;
+    if (vertex_count == 0) {
+        return {};
+    }
+
+    std::shared_ptr<Triangle_soup> result = std::make_shared<Triangle_soup>();
+    result->primitive_type = source.primitive_type;
+    result->index_data     = source.index_data;
+    result->vertex_format  = source.vertex_format;
+
+    Vertex_stream&  stream    = result->vertex_format.streams.front();
+    const bool      had_color = (stream.find_attribute(Vertex_attribute_usage::color, 0) != nullptr);
+    if (!had_color) {
+        stream.emplace_back(Format::format_32_vec4_float, Vertex_attribute_usage::color, 0);
+        stream.finalize_stride();
+    }
+    const Vertex_attribute* const attribute = stream.find_attribute(Vertex_attribute_usage::color, 0);
+    if (attribute == nullptr) {
+        return {};
+    }
+    const std::size_t stride = stream.stride;
+
+    result->vertex_data.resize(vertex_count * stride, std::uint8_t{0});
+    const std::uint8_t* const src_base = source.vertex_data.data();
+    std::uint8_t* const       dst_base = result->vertex_data.data();
+    for (std::size_t vertex = 0; vertex < vertex_count; ++vertex) {
+        // The attributes the source already carries keep their offsets: an
+        // appended attribute only grows the stride past them.
+        std::memcpy(dst_base + (vertex * stride), src_base + (vertex * source_stride), source_stride);
+        erhe::dataformat::convert(
+            &color.x,
+            Format::format_32_vec4_float,
+            dst_base + (vertex * stride) + attribute->offset,
+            attribute->format,
+            1.0f
+        );
+    }
+    return result;
+}
 
 void mesh_from_triangle_soup(const Triangle_soup& triangle_soup, GEO::Mesh& mesh, Element_mappings& element_mappings)
 {

@@ -55,6 +55,7 @@ public:
     void on_mesh_flags_changed         (const std::shared_ptr<erhe::scene::Mesh>&, uint64_t, uint64_t) override {}
     void on_mesh_transform_changed     (const std::shared_ptr<erhe::scene::Mesh>&) override {}
     void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>&) override {}
+    void on_mesh_display_color_changed (const std::shared_ptr<erhe::scene::Mesh>&) override {}
     void on_light_changed              (const std::shared_ptr<erhe::scene::Light>&) override {}
 
     erhe::scene::Scene              scene;

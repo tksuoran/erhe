@@ -308,7 +308,13 @@ reserved default material slot, whose base color is the same 0.18 grey (see
 `src/erhe/scene_renderer/notes.md`). A mesh's `primvars:displayColor` arrives
 through Tydra as vertex colors; on an unbound mesh the fragment shader takes
 them as the albedo (Storm's shading of a mesh with no binding), under a bound
-material they multiply into its base color.
+material they multiply into its base color. A `displayColor` authored at
+constant interpolation - one value for the whole surface - is in addition the
+mesh's `Gprim.display_color` local value, so the whole-surface color is a
+property like every other one: an `over` inside a variant that authors it is
+carried as an override of that property, and the writer authors a local value
+back as the constant primvar rather than as a per-corner array. A
+`displayColor` that varies stays vertex color data alone.
 
 A scalar input is connected through a named output of its `UsdUVTexture`
 (`outputs:r` / `g` / `b` / `a`), and that names the channel to read.

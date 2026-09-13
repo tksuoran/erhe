@@ -242,7 +242,14 @@ public:
     void on_mesh_flags_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh, uint64_t old_flag_bits, uint64_t new_flag_bits) override;
     void on_mesh_transform_changed     (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
+    void on_mesh_display_color_changed (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
+
+    // The meshes whose Gprim.display_color changed since the last call, moved
+    // out of this scene root. App_scenes::rebuild_display_colors() is what
+    // rebuilds them: the rebuild needs Mesh_memory, which the scene root does
+    // not have, and the property may be written from a worker thread.
+    void take_display_color_meshes(std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes);
 
     // The scene's resolved light set (which lights are shaded / shadow-mapped,
     // in light UBO slot order). Invalidated by the light hooks (register /
@@ -434,6 +441,8 @@ private:
     // Live longest
     mutable ERHE_PROFILE_MUTEX(std::mutex, m_mutex);
     ERHE_PROFILE_MUTEX        (std::mutex, m_rendertarget_meshes_mutex);
+    ERHE_PROFILE_MUTEX        (std::mutex, m_display_color_meshes_mutex);
+    std::vector<std::shared_ptr<erhe::scene::Mesh>> m_display_color_meshes;
 
     // Publisher for Skin_registered_message; nullptr for scenes that do not
     // take part in editor messaging (previews, the tool scene).

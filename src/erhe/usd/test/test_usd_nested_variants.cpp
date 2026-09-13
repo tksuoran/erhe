@@ -10,6 +10,7 @@
 #include "erhe_item/item.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_primitive/primitive.hpp"
+#include "erhe_scene/gprim.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/xform.hpp"
@@ -271,8 +272,15 @@ TEST_F(Nested_variant_import, only_the_selected_branch_binds)
     ASSERT_NE(fancy_look, nullptr);
     EXPECT_EQ(bound_material(*mesh), utah_look);
 
-    // The opinion of the same block reached the mesh too.
+    // The opinions of the same block reached the mesh too - the erhe custom
+    // attribute, and the constant `primvars:displayColor` that is the one
+    // color of the surface (Gprim.display_color).
     EXPECT_FALSE(mesh->get_value(erhe::scene::Mesh::shadow_cast_property));
+    const std::optional<glm::vec3> display_color = mesh->read_local_value(erhe::scene::Gprim::display_color_property);
+    ASSERT_TRUE(display_color.has_value());
+    EXPECT_NEAR(display_color.value().x, 0.325f, 1e-6f);
+    EXPECT_NEAR(display_color.value().y, 0.825f, 1e-6f);
+    EXPECT_NEAR(display_color.value().z, 0.0f,   1e-6f);
 }
 
 // A `def` child of a nested block is hoisted to the prim like any other, and

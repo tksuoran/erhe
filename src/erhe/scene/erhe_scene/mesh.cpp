@@ -160,6 +160,28 @@ void Mesh::handle_gprim_render_state_changed()
     notify_primitives_changed();
 }
 
+void Mesh::handle_gprim_display_color_changed()
+{
+    notify_display_color_changed();
+}
+
+// The color lives in the vertex data of the renderable mesh, and building
+// that needs the buffer sinks the host owns - so the mesh states the change
+// and the host rebuilds. Change-driven: this runs on the property write, not
+// per frame.
+void Mesh::notify_display_color_changed()
+{
+    const std::shared_ptr<Mesh> shared_this = std::static_pointer_cast<Mesh>(weak_from_this().lock());
+    if (!shared_this) {
+        return;
+    }
+    Scene_host* scene_host = get_scene_host();
+    if (scene_host == nullptr) {
+        return;
+    }
+    scene_host->on_mesh_display_color_changed(shared_this);
+}
+
 void Mesh::notify_primitives_changed()
 {
     // The computed world bounds (D26) follow the primitives.

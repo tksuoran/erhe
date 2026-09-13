@@ -46,9 +46,13 @@ owns the rest:
   **`Gprim`** (USD `UsdGeomGprim`, base `Boundable`) is the level that draws
   geometry, and holds `double_sided` (USD `doubleSided`): an entry-store
   property, default false, that inherits, so a holding prim or a style can
-  carry `Gprim.double_sided` for the geometry below it. `displayColor` belongs
-  to this level too and is not held yet. **`Mesh`** (USD `Mesh`, base `Gprim`)
-  is the geometric prim erhe draws.
+  carry `Gprim.double_sided` for the geometry below it. It also holds
+  `display_color` (USD `primvars:displayColor` at constant interpolation): the
+  one color of the whole surface, an entry-store property that inherits the
+  same way, defaulting to USD's fallback grey and authored exactly when the
+  item has a local value. A `displayColor` that varies is vertex color data
+  and stays in the geometry. **`Mesh`** (USD `Mesh`, base `Gprim`) is the
+  geometric prim erhe draws.
 - `erhe::scene::is_double_sided(mesh, mesh_primitive)` (`mesh.hpp`) is the one
   place the double-sided rule is spelled, so no two render passes can
   disagree: a primitive is drawn from both sides when its material asks for it
@@ -58,6 +62,19 @@ owns the rest:
   and a `double_sided` write reaches them through
   `Mesh::notify_primitives_changed()`, which re-registers the mesh's draw list
   entries - nothing polls the flag per frame.
+- The display color reaches the renderers differently, because they read a
+  mesh's own color out of its vertex data
+  (`erhe::primitive::Buffer_mesh::has_vertex_colors`): a write states the
+  change to the scene host (`Scene_host::on_mesh_display_color_changed`,
+  `Mesh::handle_gprim_display_color_changed`), and the host rebuilds the
+  mesh's primitives with the color, which needs the buffer sinks the mesh
+  itself has no access to. In the editor that is
+  `App_scenes::rebuild_display_colors()`, once per frame over the meshes the
+  scene roots queued - change-driven, so a frame with no write does nothing.
+  The rebuild edits neither the shared `Geometry` nor the shared
+  `Triangle_soup`: a geometry build takes the color as
+  `Build_info::constant_color`, a soup build gets a recolored copy of the soup
+  (`erhe::primitive::make_triangle_soup_with_constant_color`).
 
 Any prim may parent any other prim, so the rules that walk the tree take it as
 the tree of prims it is:

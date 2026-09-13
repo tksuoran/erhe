@@ -808,6 +808,12 @@ public:
         // rendergraph renders any Draw_list_scene-owning root (viewports,
         // shadow nodes, headset). Thumbnails above render preview roots,
         // which have no Draw_list_scene. Main thread only.
+        // Rebuild the primitives of meshes whose Gprim.display_color changed,
+        // before the flush that re-registers them: the rebuild swaps
+        // primitives, which enqueues a re-register of its own.
+        erhe::log::set_breadcrumb("tick: rebuild_display_colors");
+        m_app_scenes->rebuild_display_colors();
+
         erhe::log::set_breadcrumb("tick: flush_draw_lists");
         m_app_scenes->flush_draw_lists();
 

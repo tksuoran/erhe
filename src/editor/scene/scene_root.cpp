@@ -1673,6 +1673,29 @@ void Scene_root::on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scen
     }
 }
 
+// Display color hook: any thread, enqueue only (Scene_host contract). The
+// rebuild itself is App_scenes::rebuild_display_colors(), on the main thread.
+void Scene_root::on_mesh_display_color_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (!mesh) {
+        return;
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_display_color_meshes_mutex};
+    for (const std::shared_ptr<erhe::scene::Mesh>& pending : m_display_color_meshes) {
+        if (pending == mesh) {
+            return;
+        }
+    }
+    m_display_color_meshes.push_back(mesh);
+}
+
+void Scene_root::take_display_color_meshes(std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes)
+{
+    out_meshes.clear();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_display_color_meshes_mutex};
+    std::swap(out_meshes, m_display_color_meshes);
+}
+
 auto Scene_root::get_material_set() -> erhe::scene_renderer::Material_set&
 {
     return m_material_set;

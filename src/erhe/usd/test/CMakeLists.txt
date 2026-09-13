@@ -18,6 +18,7 @@ add_executable(${_target}
     test_usd_brushes.cpp
     test_usd_class_prototypes.cpp
     test_usd_defined.cpp
+    test_usd_display_color.cpp
     test_usd_double_sided.cpp
     test_usd_export.cpp
     test_usd_folders.cpp

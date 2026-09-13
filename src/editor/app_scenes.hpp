@@ -12,6 +12,9 @@ namespace erhe {
 namespace erhe::graphics {
     class Command_buffer;
 }
+namespace erhe::scene {
+    class Mesh;
+}
 
 namespace editor {
 
@@ -42,6 +45,12 @@ public:
     // draw list changes of every registered scene root
     // (doc/draw_list_renderer_plan.md, threading contract).
     void flush_draw_lists                    ();
+    // Main thread, once per frame before flush_draw_lists(): rebuilds the
+    // primitives of every mesh whose Gprim.display_color changed, so the one
+    // color of the surface is in the vertex data the renderers read
+    // (Buffer_mesh::has_vertex_colors). Change-driven - a frame in which
+    // nothing was written walks the registered roots and finds empty queues.
+    void rebuild_display_colors              ();
     // Step 2 of the per-frame material schedule
     // (doc/draw_list_material_set_plan.md D6), for every registered root:
     // reconcile each set against the root's content library, apply the
@@ -69,9 +78,14 @@ public:
     void imgui();
 
 private:
+    void rebuild_display_color(erhe::scene::Mesh& mesh);
+
     App_context&                                m_context;
     ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);
     std::vector<std::shared_ptr<Scene_root>>    m_scene_roots;
+    // Scratch of rebuild_display_colors(); cleared after use, capacity kept.
+    std::vector<std::shared_ptr<Scene_root>>          m_display_color_roots;
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>   m_display_color_meshes;
 };
 
 }

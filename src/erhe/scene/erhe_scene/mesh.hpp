@@ -214,6 +214,10 @@ protected:
     // between the single- and double-sided draw lists.
     void handle_gprim_render_state_changed() override;
 
+    // Implements Gprim: the display color is the mesh's own vertex color, so
+    // the host is asked to rebuild the primitives with it.
+    void handle_gprim_display_color_changed() override;
+
 private:
     static void on_render_flag_property_changed(erhe::property::Dependency_object& object, const erhe::property::Property_changed_args& args);
     void        rederive_render_flag_bits();
@@ -229,6 +233,7 @@ private:
     // Scene_host of the node this mesh is attached to, or nullptr.
     [[nodiscard]] auto get_scene_host() const -> Scene_host*;
     void notify_primitives_changed();
+    void notify_display_color_changed();
     // Mesh_primitive::material_property after_set: the scene host sees the
     // reassignment (the body set_primitive_material ran inline before D29).
     void notify_primitive_material_changed();

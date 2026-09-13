@@ -143,12 +143,17 @@ public:
 // `primvars:displayColor` as `vertex_colors` when it varies, and a single
 // constant value (the whole mesh one color) in `displayColor` with
 // `has_authored_displayColor` set; both are authored colors.
+[[nodiscard]] auto has_varying_vertex_colors(const lightusd::tydra::RenderMesh& usd_mesh) -> bool
+{
+    return !usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3);
+}
+
 [[nodiscard]] auto usd_mesh_has_color(const lightusd::tydra::RenderMesh& usd_mesh) -> bool
 {
     if (usd_mesh.has_authored_displayColor) {
         return true;
     }
-    return !usd_mesh.vertex_colors.empty() && (attribute_component_count(usd_mesh.vertex_colors.format) >= 3);
+    return has_varying_vertex_colors(usd_mesh);
 }
 
 [[nodiscard]] auto read_attribute(const Tydra_attribute& attribute, const std::size_t element) -> glm::vec4;
@@ -3969,6 +3974,19 @@ private:
 
             std::shared_ptr<erhe::scene::Mesh> mesh = make_mesh_shell(mesh_name);
 
+            // A constant `primvars:displayColor` is the one color of the whole
+            // surface, which is `Gprim.display_color` (doc/usd_compatibility.md).
+            // The color is baked into the vertex data as well - that is what the
+            // shader reads - and the property is what says the value was
+            // authored, so an override of it is a property write like any other.
+            // Set before the primitives are built, and on a mesh no host has
+            // seen yet, so no rebuild is asked for.
+            if (usd_mesh.has_authored_displayColor && !has_varying_vertex_colors(usd_mesh)) {
+                mesh->set_display_color(
+                    glm::vec3{usd_mesh.displayColor.r, usd_mesh.displayColor.g, usd_mesh.displayColor.b}
+                );
+            }
+
             // A primitive-schema prim is the shape its schema attributes
             // describe, tessellated by the erhe generator of that shape
             // (S1). Tydra converts one of these to a triangle list with no
@@ -5930,6 +5948,34 @@ private:
     // the `erhe:Owner:name` custom attributes as `Owner.name`, `visibility`
     // and `purpose` as the erhe properties they map onto, and the `active`
     // metadatum. Shared by the `over` prims of X2 and the `class` prims of X3.
+    // The one color a constant `primvars:displayColor` authors, or false when
+    // the attribute is not one element of a color array - a varying
+    // displayColor is vertex color data rather than a property value.
+    [[nodiscard]] static auto read_constant_display_color(
+        const lightusd::Attribute& attribute,
+        glm::vec3&                 out_color
+    ) -> bool
+    {
+        const lightusd::value::Value& value = attribute.get_var().value_raw();
+        if (const nonstd::optional<std::vector<lightusd::value::color3f>> as_colors = value.get_value<std::vector<lightusd::value::color3f>>()) {
+            if (as_colors.value().size() != 1) {
+                return false;
+            }
+            const lightusd::value::color3f& color = as_colors.value().front();
+            out_color = glm::vec3{color.r, color.g, color.b};
+            return true;
+        }
+        if (const nonstd::optional<std::vector<lightusd::value::float3>> as_float3 = value.get_value<std::vector<lightusd::value::float3>>()) {
+            if (as_float3.value().size() != 1) {
+                return false;
+            }
+            const lightusd::value::float3& color = as_float3.value().front();
+            out_color = glm::vec3{color[0], color[1], color[2]};
+            return true;
+        }
+        return false;
+    }
+
     static void read_spec_values(
         const lightusd::PrimSpec&                          spec,
         std::vector<erhe::scene::Instance_override_value>& out_values
@@ -5953,6 +5999,22 @@ private:
                         .text = attribute_text(property.second.get_attribute())
                     }
                 );
+                continue;
+            }
+            if (name == "primvars:displayColor") {
+                // Constant interpolation only: one element is the whole
+                // surface's color, which is Gprim.display_color. A varying
+                // displayColor is vertex color data, which no property
+                // carries, so it is left to the unsupported count.
+                glm::vec3 display_color{0.0f, 0.0f, 0.0f};
+                if (read_constant_display_color(property.second.get_attribute(), display_color)) {
+                    out_values.push_back(
+                        erhe::scene::Instance_override_value{
+                            .name = "Gprim.display_color",
+                            .text = erhe::property::to_string(erhe::property::Property_value{display_color})
+                        }
+                    );
+                }
                 continue;
             }
             if (name == "visibility") {
@@ -6974,6 +7036,12 @@ private:
         }
         if (name.compare(0, erhe_prefix.size(), erhe_prefix) == 0) {
             return true;
+        }
+        if (name == "primvars:displayColor") {
+            // Carried when it is the one color of the whole surface; a
+            // varying one is vertex color data, which no property carries.
+            glm::vec3 display_color{0.0f, 0.0f, 0.0f};
+            return read_constant_display_color(property.get_attribute(), display_color);
         }
         return (name == "visibility") || (name == "purpose");
     }

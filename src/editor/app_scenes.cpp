@@ -12,12 +12,17 @@
 
 #include "content_library/content_library.hpp"
 
+#include "erhe_primitive/build_info.hpp"
 #include "erhe_primitive/material.hpp"
+#include "erhe_primitive/primitive.hpp"
+#include "erhe_primitive/triangle_soup.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/layout.hpp"
+#include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
 #include "erhe_scene/scene.hpp"
 #include "erhe_scene_renderer/draw_list_scene.hpp"
+#include "erhe_scene_renderer/mesh_memory.hpp"
 
 #include <imgui/imgui.h>
 
@@ -164,6 +169,127 @@ void App_scenes::flush_draw_lists()
     for (const std::shared_ptr<Scene_root>& scene_root : scene_roots) {
         scene_root->flush_draw_lists();
     }
+}
+
+namespace {
+
+// The rebuilt primitive's color stream carries an authored color, whichever
+// build it came from: the constant is the mesh's own displayColor. Both builds
+// are marked - the optimized variant is a copy of the same vertices.
+void mark_vertex_colored(erhe::primitive::Primitive& primitive)
+{
+    static constexpr erhe::primitive::Mesh_variant variants[2] = {
+        erhe::primitive::Mesh_variant::original,
+        erhe::primitive::Mesh_variant::optimized
+    };
+    for (const erhe::primitive::Mesh_variant variant : variants) {
+        const std::shared_ptr<erhe::primitive::Primitive_render_shape>& shape = primitive.get_render_shape(variant);
+        if (shape) {
+            shape->get_mutable_renderable_mesh().has_vertex_colors = true;
+        }
+    }
+}
+
+} // anonymous namespace
+
+// The one color of a surface is vertex data, so a display color change is a
+// rebuild of the mesh's primitives. Driven by the change (Scene_root's queue),
+// never by a scan: a frame in which nothing was written does nothing here.
+void App_scenes::rebuild_display_colors()
+{
+    ERHE_PROFILE_FUNCTION();
+
+    {
+        const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mutex};
+        m_display_color_roots = m_scene_roots;
+    }
+    for (const std::shared_ptr<Scene_root>& scene_root : m_display_color_roots) {
+        scene_root->take_display_color_meshes(m_display_color_meshes);
+        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : m_display_color_meshes) {
+            if (mesh) {
+                rebuild_display_color(*mesh.get());
+            }
+        }
+        m_display_color_meshes.clear();
+    }
+    m_display_color_roots.clear();
+}
+
+// One mesh's rebuild. The geometry and the triangle soup a primitive was built
+// from are shared with every other mesh built from them, so neither is edited:
+// a geometry build takes the color as Build_info::constant_color (the value the
+// builder writes wherever the geometry authors no color of its own), and a soup
+// build gets a recolored copy of the soup.
+void App_scenes::rebuild_display_color(erhe::scene::Mesh& mesh)
+{
+    if (m_context.mesh_memory == nullptr) {
+        return;
+    }
+    const glm::vec3 display_color = mesh.get_display_color();
+    const glm::vec4 color{display_color.x, display_color.y, display_color.z, 1.0f};
+
+    erhe::primitive::Build_info build_info{
+        .primitive_types = {
+            .fill_triangles          = true,
+            .fill_triangles_expanded = true,
+            .edge_lines              = true,
+            .corner_points           = true,
+            .centroid_points         = true
+        },
+        // Skinned meshes must rebuild into the skinned vertex format or the
+        // GPU streams silently lose their joints.
+        .buffer_info = mesh.skin
+            ? m_context.mesh_memory->make_skinned_primitive_buffer_info()
+            : m_context.mesh_memory->make_primitive_buffer_info(),
+        .constant_color = GEO::vec4f{color.x, color.y, color.z, color.w}
+    };
+
+    std::vector<erhe::scene::Mesh_primitive> new_primitives = mesh.get_primitives();
+    bool                                     any_rebuilt    = false;
+    for (erhe::scene::Mesh_primitive& mesh_primitive : new_primitives) {
+        const erhe::primitive::Primitive* const source = mesh_primitive.primitive.get();
+        if ((source == nullptr) || !source->render_shape) {
+            continue;
+        }
+        const erhe::primitive::Primitive_render_shape& render_shape = *source->render_shape.get();
+        const erhe::primitive::Normal_style            normal_style = render_shape.get_normal_style();
+        const std::shared_ptr<erhe::geometry::Geometry> geometry     = render_shape.get_geometry_const();
+        std::shared_ptr<erhe::primitive::Primitive>     new_primitive;
+        if (geometry) {
+            new_primitive = std::make_shared<erhe::primitive::Primitive>(geometry);
+        } else {
+            const std::shared_ptr<erhe::primitive::Triangle_soup>& soup = render_shape.get_triangle_soup();
+            if (!soup) {
+                continue;
+            }
+            const std::shared_ptr<erhe::primitive::Triangle_soup> colored_soup =
+                erhe::primitive::make_triangle_soup_with_constant_color(*soup.get(), color);
+            if (!colored_soup) {
+                continue;
+            }
+            new_primitive = std::make_shared<erhe::primitive::Primitive>(colored_soup);
+        }
+        if (!new_primitive->make_renderable_mesh(build_info, normal_style)) {
+            log_scene->warn("display color rebuild of '{}' failed to build a renderable mesh", mesh.get_name());
+            continue;
+        }
+        static_cast<void>(new_primitive->make_raytrace());
+        // The constant is the mesh's authored color, so the renderable mesh
+        // says so: an unbound mesh with vertex colors renders with the
+        // vertex-colored default material (Material_set).
+        mark_vertex_colored(*new_primitive.get());
+        mesh_primitive.primitive = std::move(new_primitive);
+        any_rebuilt              = true;
+    }
+    if (!any_rebuilt) {
+        return;
+    }
+
+    // Re-attach raytrace the way an edit that swaps primitives does.
+    const std::shared_ptr<erhe::Hierarchy> parent = mesh.get_parent().lock();
+    mesh.set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    mesh.set_primitives(new_primitives);
+    mesh.set_parent(parent);
 }
 
 void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_buffer)

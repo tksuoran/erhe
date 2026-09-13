@@ -602,6 +602,11 @@ public:
         if (name == "active" ) { return "active (prim metadata)"; }
         return {};
     }
+    if ((owner == "Gprim") && (name == "display_color")) {
+        // A primvar, not a schema attribute: a typeless `over` carries it as
+        // readily as a `Mesh` prim does, so it is native in both forms.
+        return "primvars:displayColor";
+    }
     if (form == Native_property_form::custom_attributes) {
         return {};
     }
@@ -2889,6 +2894,7 @@ private:
         model.spec = lightusd::Specifier::Over;
         if (override_prim.item != nullptr) {
             write_token_visibility_and_purpose(*override_prim.item, model.props);
+            write_display_color(*override_prim.item, model.props);
             write_active(*override_prim.item, model);
             write_erhe_properties(*override_prim.item, model, Native_property_form::custom_attributes);
             if (override_prim.transform_overridden) {
@@ -2931,6 +2937,34 @@ private:
         if (is_local(item, erhe::Item_base::purpose_property.get())) {
             add_token_attribute(props, "purpose", lightusd::to_string(to_usd_purpose(item.get_value(erhe::Item_base::purpose_property))));
         }
+    }
+
+    // `primvars:displayColor` at constant interpolation: the one color of the
+    // whole surface a `Gprim.display_color` names. Written wherever the value
+    // is local - on the `Mesh` prim itself, on an `over` of one, and inside a
+    // variant block - so the reader reads it back through one form.
+    static void add_constant_display_color(std::map<std::string, lightusd::Property>& props, const glm::vec3& color)
+    {
+        std::vector<lightusd::value::color3f> colors;
+        colors.push_back(lightusd::value::color3f{color.x, color.y, color.z});
+        lightusd::Attribute attribute;
+        attribute.set_value(colors);
+        attribute.metas().set_interpolation_enum(lightusd::Interpolation::Constant);
+        props.emplace("primvars:displayColor", lightusd::Property{std::move(attribute), false});
+    }
+
+    // The display color of a typeless prim - an `over` (X2) or a `class`
+    // (X3) - which carries no schema attribute but carries a primvar.
+    static void write_display_color(const erhe::Item_base& item, std::map<std::string, lightusd::Property>& props)
+    {
+        const erhe::scene::Gprim* gprim = dynamic_cast<const erhe::scene::Gprim*>(&item);
+        if (gprim == nullptr) {
+            return;
+        }
+        if (!is_local(*gprim, erhe::scene::Gprim::display_color_property.get())) {
+            return;
+        }
+        add_constant_display_color(props, gprim->get_display_color());
     }
 
     static void add_token_attribute(std::map<std::string, lightusd::Property>& props, const std::string& name, const std::string& text)
@@ -3310,6 +3344,18 @@ private:
             }
             if (value.name == "active") {
                 metas.set_active(value.text != "false");
+                continue;
+            }
+            if (value.name == "Gprim.display_color") {
+                const std::optional<erhe::property::Property_value> parsed_color =
+                    erhe::property::parse_value(erhe::property::Property_type::vec3, value.text);
+                if (!parsed_color.has_value()) {
+                    add_warning(
+                        fmt::format("a variant authors '{}' as '{}', which does not parse - the opinion is not written", value.name, value.text)
+                    );
+                    continue;
+                }
+                add_constant_display_color(props, std::get<glm::vec3>(parsed_color.value()));
                 continue;
             }
             const erhe::property::Dependency_property* property = find_property_by_qualified_name(value.name);
@@ -5460,7 +5506,7 @@ private:
 
     // The vertex arrays of one accumulator on a GeomMesh, with the
     // interpolation each of them is authored at.
-    void fill_geom_mesh(lightusd::GeomMesh& geom_mesh, const Mesh_accumulator& accumulator)
+    void fill_geom_mesh(lightusd::GeomMesh& geom_mesh, const Mesh_accumulator& accumulator, const erhe::scene::Gprim* gprim)
     {
         geom_mesh.points.set_value(accumulator.points);
         geom_mesh.faceVertexCounts.set_value(accumulator.face_vertex_counts);
@@ -5472,10 +5518,57 @@ private:
         if (accumulator.has_texcoords) {
             add_primvar(geom_mesh, "primvars:st", accumulator.texcoords);
         }
+        // A local `Gprim.display_color` is the whole surface's one color: the
+        // vertex data carries it at every corner (that is what the shader
+        // reads), and USD says it once, at constant interpolation - which is
+        // also the form the reader reads back as the property. The
+        // faceVarying arrays are what a color that actually varies needs.
+        const bool constant_display_color =
+            (gprim != nullptr) &&
+            is_local(*gprim, erhe::scene::Gprim::display_color_property.get()) &&
+            colors_equal_display_color(accumulator, gprim->get_display_color());
+        if (constant_display_color) {
+            add_constant_display_color(geom_mesh.props, gprim->get_display_color());
+            return;
+        }
+        if ((gprim != nullptr) && is_local(*gprim, erhe::scene::Gprim::display_color_property.get())) {
+            add_warning(
+                fmt::format(
+                    "'{}' authors a display color its vertex colors do not carry - the vertex colors are written and the property is lost",
+                    gprim->get_name()
+                )
+            );
+        }
         if (accumulator.has_colors) {
             add_primvar(geom_mesh, "primvars:displayColor", accumulator.colors);
             add_primvar(geom_mesh, "primvars:displayOpacity", accumulator.opacities);
         }
+    }
+
+    // Whether the accumulated vertex colors say nothing the one display color
+    // does not: no colors at all, or every one of them that color at full
+    // opacity.
+    [[nodiscard]] static auto colors_equal_display_color(const Mesh_accumulator& accumulator, const glm::vec3& display_color) -> bool
+    {
+        if (!accumulator.has_colors) {
+            return true;
+        }
+        constexpr float epsilon = 1.0f / 512.0f;
+        for (const lightusd::value::color3f& color : accumulator.colors) {
+            if (
+                (std::fabs(color.r - display_color.x) > epsilon) ||
+                (std::fabs(color.g - display_color.y) > epsilon) ||
+                (std::fabs(color.b - display_color.z) > epsilon)
+            ) {
+                return false;
+            }
+        }
+        for (const float opacity : accumulator.opacities) {
+            if (std::fabs(opacity - 1.0f) > epsilon) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // One erhe geometry as one `Mesh` prim of its own: no transform, no
@@ -5494,7 +5587,7 @@ private:
 
         Mesh_accumulator accumulator;
         append_geometry(accumulator, geometry);
-        fill_geom_mesh(geom_mesh, accumulator);
+        fill_geom_mesh(geom_mesh, accumulator, nullptr);
         return lightusd::Prim{geom_mesh};
     }
 
@@ -5547,7 +5640,7 @@ private:
             groups.push_back(std::move(group));
         }
 
-        fill_geom_mesh(geom_mesh, accumulator);
+        fill_geom_mesh(geom_mesh, accumulator, &mesh);
 
         write_visibility_and_purpose(node, geom_mesh);
         write_double_sided(mesh, geom_mesh);

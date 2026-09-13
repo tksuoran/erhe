@@ -118,6 +118,9 @@ def Xform "Teapot" (
                     )
                     {
                         bool erhe:Mesh:shadow_cast = 0
+                        color3f[] primvars:displayColor = [(0.325, 0.825, 0)] (
+                            interpolation = "constant"
+                        )
                         rel material:binding = </Teapot/Look>
                     }
                 }
