@@ -638,10 +638,8 @@ section 6 entry it names, and nothing here restates one.
    lime green, orange, red and white; after step 4 the `storm_match`
    column is above the threshold and the entry's expected-results record
    (`doc/usd-wg-assets-expected.json`) drops its near-zero-match reason.
-   The entry's survey capture is an empty viewport today, so the first
-   commit of step 1 makes the capture show the loaded scene before
-   anything is compared against it. Section 6 "Load performance" (item 3)
-   is not needed for fidelity: the 35 teapots load, slowly.
+   Section 6 "Load performance" (item 3) is not needed for fidelity: the
+   35 teapots load, slowly.
 2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
@@ -897,10 +895,13 @@ ranks them. A USD scene loads, edits and saves without any of them.
   indexes), and `Prefab_instance` records the map so the writer authors
   `variants = { ... }` on the carrier and the selection survives a round
   trip. A selection that names a set or variant the target does not declare
-  is one warning and is dropped. The set an arc-carried selection selects
-  is tabled on the carrier as read-only in this step - a switch of it means
-  re-targeting the instance to the template of the other selection, which
-  is the editor half of X4 for such a set and is taken when a file needs it.
+  is one warning and is dropped. A template's own variant sets are not
+  tabled (only a file opened as or imported into a scene fills the
+  `Variant_table`), so an arc-carried selection is shown read-only on the
+  instance's Properties rows and by `get_node_details`, and is not a table
+  entry - a switch of it means re-targeting the instance to the template
+  of the other selection, which is the editor half of X4 for such a set
+  and is taken when a file needs it.
   The one-template-with-overrides shape (one template per file and prim,
   the carrier's selection applied as instance overrides after
   instantiation) is not taken: the two variants of `Teapot_Geometry.usd`
