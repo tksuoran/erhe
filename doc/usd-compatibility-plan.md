@@ -386,8 +386,8 @@ now owns its behavior; `git log` on that record has the history.
   (`src/erhe/usd/notes.md` "Variant sets", "xformOp stacks";
   `src/erhe/scene/notes.md`). Teapot.usd imports its 1 mesh and 2
   materials and DrawModes.usd its 35 meshes at the composed bounds; what
-  stays open there is section 6 (a nested `variantSet` inside a variant
-  block, the `UsdPrimvarReader`-fed material inputs, load performance).
+  DrawModes.usd still needs to render as usdview renders it is section 3
+  item 1.
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -616,50 +616,74 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+1. `full_assets/Teapot/DrawModes.usd` rendered as usdview renders it: the
+   seven `default` teapots in their variant's material and color, and the
+   28 proxies. Four section 6 entries, each a prerequisite of the next, so
+   they are taken in this order, one entry per commit series:
+   1. "Variant selection through a composition arc" - without it every
+      column is the target file's own `Utah` selection, and nothing the
+      later steps carry reaches the right teapot.
+   2. The nested-set and constant-`displayColor` forms of "Variant
+      opinions a variant set does not carry" - the `shadingVariant`
+      selections choose the material binding and the color.
+   3. "A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`" - the
+      `Ceramic` material's `diffuseColor` is that color.
+   4. "`GeomModelAPI` draw modes" - the 28 proxies; the `drawModeColor`
+      and `cardTexture*` opinions the variant blocks author reach the
+      record through step 2's tabling.
+   Verification is the survey entry itself
+   (`py -3 scripts/usd_wg_asset_survey.py --only full_assets/Teapot/DrawModes.usd --usd-root <usd_root>`):
+   after step 1 the Fancy column is the textured porcelain teapot and the
+   six Utah columns differ; after step 3 their teapots are black, blue,
+   lime green, orange, red and white; after step 4 the `storm_match`
+   column is above the threshold and the entry's expected-results record
+   (`doc/usd-wg-assets-expected.json`) drops its near-zero-match reason.
+   The entry's survey capture is an empty viewport today, so the first
+   commit of step 1 makes the capture show the loaded scene before
+   anything is compared against it. Section 6 "Load performance" (item 3)
+   is not needed for fidelity: the 35 teapots load, slowly.
+2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
    usdchecker"). Four defects in one dependency, each already diagnosed to
    the function; a fork branch carrying them removes a stripping pass, a
    quoting workaround, 2816 skipped instances and a validator finding.
-2. Load performance (section 6 "Load performance"). The scenes holding
+3. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-3. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+4. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-4. The round-trip residue (section 6 "Node-held secondary values",
+5. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
    of usdchecker", and the glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
-5. Shading and imaging the survey names (section 6 "A UsdPreviewSurface
-   input fed by a UsdPrimvarReader", "A material slot that a texture
-   graph feeds AND that carries an authored factor", "Image formats",
-   "An environment map from a DomeLight texture", "MaterialX"). The
-   PrimvarReader case and the slot factor are importer work; the rest
-   need a renderer or decoder erhe does not have, MaterialX documents a
-   LightUSD option erhe's build leaves off.
-6. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+6. Shading and imaging the survey names (section 6 "A material slot that
+   a texture graph feeds AND that carries an authored factor", "Image
+   formats", "An environment map from a DomeLight texture", "MaterialX").
+   The slot factor is importer work; the rest need a renderer or decoder
+   erhe does not have, MaterialX documents a LightUSD option erhe's build
+   leaves off.
+7. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-7. Composition beyond what erhe resolves (section 6 "Layer-stack
+8. Composition beyond what erhe resolves (section 6 "Layer-stack
    editing", "inherits and specializes arcs whose target is not a class
-   prim", "Variant opinions a variant set does not carry", "Overrides on
-   applied API schemas inside an instance"). Each is a real USD feature
-   with no surveyed asset that visibly depends on it - the one exception,
-   the variant set the Teapot's variant blocks declare, selects among
-   materials the PrimvarReader item of item 5 fails first - so they wait
-   for a file that does.
+   prim", the `over`-child and `.usdz` forms of "Variant opinions a
+   variant set does not carry", "Overrides on applied API schemas inside
+   an instance"). Each is a real USD feature with no surveyed asset that
+   visibly depends on it, so they wait for a file that does.
 
 ## 4. Order
 
-Item 1 of section 3 goes with a fork tag bump and is best taken when a
-fork clone is at hand (`memory-bank/local/context.md` records it). The
-remaining items have no ordering constraint among them; each is taken
-through the harness of `doc/agent-orchestration-harness.md`, one commit
-at a time (C2).
+Item 1 of section 3 comes first, its four steps in the order the item
+gives, since each step's result is what the next one acts on. Item 2 goes
+with a fork tag bump and is best taken when a fork clone is at hand
+(`memory-bank/local/context.md` records it). The remaining items have no
+ordering constraint among them; each is taken through the harness of
+`doc/agent-orchestration-harness.md`, one commit at a time (C2).
 
 ## 5. Out of scope
 
@@ -771,11 +795,26 @@ ranks them. A USD scene loads, edits and saves without any of them.
   primvar into one - usd-wg
   `full_assets/SubdivisionSurfaces/Creases_SpinningPyramids.usda` connects
   `inputs:diffuseColor` to a `UsdPrimvarReader_float3` reading
-  `displayColor` - fails the whole material, and the file's meshes arrive
-  with no material at all (0 of 3 there). Closing it is either a fork change
-  in Tydra or erhe reading the network from the composed layer itself and
-  mapping the named primvar onto the value the input would take, which for
-  `displayColor` is the vertex colors erhe already carries.
+  `displayColor`, and the `Ceramic` material of
+  `full_assets/Teapot/Teapot_Materials.usd` does the same for its six
+  shading variants - fails the whole material, and the file's meshes arrive
+  with no material at all (0 of 3 in the first, every Utah teapot in the
+  second). erhe closes it on its own side, reading from the composed layer:
+  a surface input connected to a `UsdPrimvarReader_<type>` whose `varname`
+  is `displayColor` (or `displayOpacity`, for `opacity`) makes the material
+  take that input from the mesh's vertex colors, and every other primvar
+  name is one warning naming the material, the input and the primvar. The
+  erhe form is a `Material` property per such input (`base_color_source`,
+  `opacity_source`: `value` or `vertex_color`) that the shader key and the
+  material record carry the way the vertex-colored default material already
+  reads its albedo from the color attribute
+  (`Material_set::vertex_colored_default_material_slot_index`); the writer
+  authors the `UsdPrimvarReader` prim and the connection back from the
+  property. The network is read before Tydra sees the layer, the way the
+  node-graph wiring is stripped in `load_stage`, so Tydra converts the rest
+  of the material. A Tydra change in the fork is the alternative and is not
+  taken: the mapping is erhe's own (a primvar onto an erhe vertex
+  attribute), so it is erhe code either way.
 - Image formats: Radiance `.hdr` and OpenEXR `.exr` need decoders erhe
   does not build (`stb_image.h` sits in the CPM cache of fpng and LightUSD,
   and nothing in the tree reads `.exr`); the StandardShaderBall scene's six
@@ -811,11 +850,101 @@ ranks them. A USD scene loads, edits and saves without any of them.
   set inside each `modelVariant` of `Teapot_Materials.usd`, whose blocks are
   not tabled), and a property the value reader cannot express. Each is
   counted in `Usd_variant_set::unsupported_opinion_count`, reported per set, and
-  named by the save warning. (`GeomModelAPI` draw-mode cards are the
-  common case: Teapot.usd's two variants author nothing else.) Taking the
+  named by the save warning. Taking the
   first up means hoisting through the `over` children too, the nested set
   means tabling the sets a variant block declares, and the last is the
   value reader's own coverage.
+  The nested set is what `full_assets/Teapot/DrawModes.usd` depends on, and
+  it takes these forms there:
+  - A `variantSet` declared inside a variant block is a set of the prim
+    carrying the outer set, tabled beside it, with its blocks read off the
+    enclosing variant's spec; its selection is the strongest of the
+    carrier's arc-carried selection (section 6 "Variant selection through a
+    composition arc"), the enclosing variant block's own `variants`
+    metadatum (`"Utah" ( variants = { string shadingVariant =
+    "CeramicLimeGreen" } )`), the prim's, and the first block. The blocks of
+    a nested set contribute only while their enclosing variant is selected,
+    which the table records so a switch of the outer set re-applies the
+    inner one.
+  - A constant `primvars:displayColor` an `over` child of a variant authors
+    is a property opinion. Its erhe form is a `Gprim` `display_color` entry
+    property (the whole-mesh color; a varying `displayColor` stays the
+    vertex colors), which the importer fills from the constant it today
+    bakes into the color attribute and which, on change, rebuilds that
+    attribute the way a geometry edit does - so the value the shader reads
+    is still the vertex color, and the override is a property write like
+    every other one. The writer authors the property back as the constant
+    primvar.
+  - `GeomModelAPI` attributes a variant block authors (`model:drawModeColor`
+    in the nested set, the six `model:cardTexture*` in the outer one) are
+    property opinions of the draw-mode record (section 6 "GeomModelAPI draw
+    modes"); until that record exists they are counted.
+- Variant selection through a composition arc: a prim that references or
+  payloads a target may author `variants = { ... }` selecting the sets the
+  target declares, and in LIVRPS that selection is stronger than the
+  target's own. erhe reads a set's selection from the target prim's own
+  spec (`selected_variant_name` in `usd_import.cpp`, the same rule
+  `load_stage`'s hoist applies), and a template is keyed by file and prim
+  path alone (`Prefab_key`), so every carrier of `Teapot.usd</Teapot>` gets
+  the target file's `Utah`: `full_assets/Teapot/DrawModes.usd` selects
+  `Fancy` on one column and six `shadingVariant`s on the others, and all
+  seven columns import as the same lime-green Utah teapot. The fix keys the
+  template by the selection as well: `Usd_load_arguments` carries a
+  selection map (set name to variant, per prim path below the target) that
+  `load_stage` and the reader consult before the prim's own `variants`
+  metadatum, `Prefab_key` gains the map so two carriers with different
+  selections load two templates (which is what USD composes: two prim
+  indexes), and `Prefab_instance` records the map so the writer authors
+  `variants = { ... }` on the carrier and the selection survives a round
+  trip. A selection that names a set or variant the target does not declare
+  is one warning and is dropped. The set an arc-carried selection selects
+  is tabled on the carrier as read-only in this step - a switch of it means
+  re-targeting the instance to the template of the other selection, which
+  is the editor half of X4 for such a set and is taken when a file needs it.
+  The one-template-with-overrides shape (one template per file and prim,
+  the carrier's selection applied as instance overrides after
+  instantiation) is not taken: the two variants of `Teapot_Geometry.usd`
+  author different reference arcs, and a prim holds one list of arcs
+  (C6), so a template cannot hold both.
+- `GeomModelAPI` draw modes: a model prim carrying the schema asks the
+  imaging layer to draw its subtree as a proxy, and the imaging layer, not
+  the composition, implements it (OpenUSD's `UsdImagingGLDrawModeAdapter`;
+  LightUSD's `next` API evaluates the attributes in
+  `lightusd::next::GetGeomModelData` and Tydra, like erhe, images
+  nothing of them). The attributes are `model:drawMode` (`default`,
+  `origin`, `bounds`, `cards`, `inherited`), `model:applyDrawMode`,
+  `model:cardGeometry` (`cross`, `box`, `fromTexture`),
+  `model:cardVisibility`, the six `model:cardTexture{X,Y,Z}{Neg,Pos}`
+  asset paths, `model:drawModeColor`, and `extentsHint`, the model bounds
+  the proxies are sized from. `full_assets/Teapot/DrawModes.usd` authors
+  `drawMode` and `cardGeometry` on its 35 prims (7 `default`, 14 `cards`
+  as `cross` and `box`, 7 `bounds`, 7 `origin`), the card textures and
+  `extentsHint` inside `Teapot.usd`'s `modelVariant` blocks, and
+  `drawModeColor` inside the nested `shadingVariant` blocks; usdview shows
+  7 teapots and 28 proxies, erhe 35 teapots. The erhe form is a
+  `Draw_mode` applied-schema attachment on the prim (the `Node_physics`
+  shape) holding every attribute above as an entry property, read from
+  the composed stage for every prim carrying the schema and written back
+  in the schema's spelling. A prim whose resolved mode (`inherited` walks
+  to the nearest ancestor with an authored one; the root fallback is
+  `default`) is not `default` has its subtree taken out of render and pick
+  through the derived `Item_flags::active` bit (X2), the way the adapter
+  prunes it, and the attachment supplies the proxy in its place: `bounds`
+  is the `extentsHint` box (the subtree's computed bounds when the hint is
+  absent) as lines in `drawModeColor` through the line renderer; `origin`
+  is the three axis lines from the prim's origin, sized from the same
+  extent; `cards` is generated quad geometry - `cross` three axis-aligned
+  quads through the extent's center, `box` the six faces of the extent,
+  `fromTexture` the quads the textures' `worldtoscreen` metadata places -
+  each face textured with its `cardTexture` (a face with no texture drawn
+  in `drawModeColor`), the faces `cardVisibility = simple` suppresses
+  left out, drawn unlit and double-sided as the adapter draws them. The
+  proxy geometry is the attachment's own, rebuilt when its properties or
+  the extent change, and is not a prim of the tree (a save writes the
+  attributes, never the proxy). `applyDrawMode` is read and written and
+  does not gate the proxy: the adapter honors `drawMode` on every model
+  prim of a stage, with `applyDrawMode` a hint for assemblies, and the
+  reference image shows the modes applied without it.
 - Overrides on applied API schemas inside an instance: the override walk
   of `erhe::scene::instance_override` visits prims only, so a local value
   on a `Node_physics`, `Node_joint` or other attachment below a carrier is
