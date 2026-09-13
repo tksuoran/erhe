@@ -20,6 +20,7 @@ add_executable(${_target}
     test_usd_defined.cpp
     test_usd_display_color.cpp
     test_usd_double_sided.cpp
+    test_usd_draw_modes.cpp
     test_usd_export.cpp
     test_usd_folders.cpp
     test_usd_geometry_graphs.cpp

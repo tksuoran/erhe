@@ -1413,6 +1413,37 @@ are read from the typed prim struct, and the rest from the prim's generic
 property map.
 
 
+### Draw modes
+
+`read_draw_modes` walks the stage's own prims - `UsdGeomModelAPI` is applied
+to a prim rather than defining one - and records a `Usd_draw_mode` for every
+prim that applies the schema and for every prim that authors a `model:`
+attribute without it, the second with one info line, because usdview honours
+the draw mode either way. The record names the stage path, the item the prim
+became and the format-neutral `erhe::scene::Draw_mode_description`; the
+mapping is the "Draw modes" table of `doc/usd_compatibility.md`. Every
+attribute is read off the composed prim through Tydra's `GetAttribute` and the
+`authored_property_names` set that decides authoredness everywhere else, so an
+opinion arriving over a reference or a sublayer is read the way a local one
+is. A card texture's asset path is resolved against the stage file's own
+directory, as an image's is; one packed inside a `.usdz` is named in a warning
+and left as the path beside the archive, since the record carries no bytes.
+
+The attributes are values of the prim's draw-mode attachment rather than of
+the prim, so a variant block or an `over` carries one under the name
+`Draw_mode.<property>` - the spelling `erhe::scene::find_override_property_target`
+resolves through the attachments of the prim. `is_carried_spec_property`
+admits them, so a `GeomModelAPI` opinion inside a variant block is a carried
+opinion rather than one counted in
+`Usd_variant_set::unsupported_opinion_count`. `extentsHint` carries the min
+and the max in one `float3[]`, so it reads as the two values
+`Draw_mode.extents_hint_min` and `Draw_mode.extents_hint_max` and is written
+back from the pair. A value of this family travels in the record's own
+vocabulary - erhe's three draw-mode enumerations spell USD's tokens verbatim -
+so both the read and the write spell the text themselves rather than asking
+the property registry, which the editor's attachment owns.
+
+
 ## Export
 
 `usd_export.cpp` writes one `.usda` layer through LightUSD's `SaveAsUSDA`.
@@ -1783,6 +1814,21 @@ load reports in `Usd_physics::guide_collider_prims` are dropped and their
 shapes fold onto their body entry before a save - the shape of a collider is
 `Physics_shape`, and the mesh a guide prim carries is the tessellation of it
 the import built.
+
+### Draw modes
+
+`Usd_save_arguments::draw_modes` is one entry per prim carrying a draw mode:
+the item, which the two-pass planner turns into a path, and the description to
+author. The writer applies `GeomModelAPI` to that prim and spells exactly the
+values the description marks authored, in the schema's own types
+(`uniform token`, `uniform bool`, `uniform float3`, `asset`, `float3[]`) -
+USD's fallbacks stand for the rest, so a file that authored none keeps none
+and a save is a fixed point. A card texture is written relative to the written
+file, the way an image is. A `Draw_mode.<property>` opinion of a variant block
+is authored as its `model:` attribute inside the block, with the two
+`extentsHint` values held and written together; the text is the authored one,
+so a card texture opinion keeps the path the file spelled.
+
 
 ## Dependency
 

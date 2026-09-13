@@ -1,5 +1,6 @@
 #pragma once
 
+#include "erhe_scene/draw_mode_description.hpp"
 #include "erhe_scene/instance_override.hpp"
 #include "erhe_scene/physics_description.hpp"
 
@@ -757,6 +758,21 @@ public:
     std::vector<std::shared_ptr<erhe::scene::Node>> guide_collider_prims;
 };
 
+// The `UsdGeomModelAPI` of one prim (doc/usd_compatibility.md, "Draw modes"):
+// where it sits on the stage, the item that prim became, and the
+// format-neutral record of the schema's attributes. The reader makes one per
+// prim that applies the schema and per prim that authors a `model:` attribute
+// without it, which is what usdview honours as well.
+class Usd_draw_mode final
+{
+public:
+    std::string                            stage_path;
+    // The prim of the tree the record sits on, null when the conversion made
+    // no item for that prim.
+    std::shared_ptr<erhe::Item_base>       prim;
+    erhe::scene::Draw_mode_description     description;
+};
+
 // The stage's time coordinates (doc/usd-compatibility-plan.md section 5).
 // A time code becomes seconds by dividing by `time_codes_per_second`, whose
 // USD fallback is 24 when no layer of the stack authors one;
@@ -901,6 +917,11 @@ public:
     // stage, and the properties the neutral record has no field for.
     erhe::scene::Physics_description physics;
     Usd_physics                      physics_prims;
+
+    // The draw modes the file's prims author, in the order the prims were
+    // visited (doc/usd_compatibility.md, "Draw modes"). A draw-mode record is
+    // never a prim of its own: it is an applied schema of the prim it names.
+    std::vector<Usd_draw_mode> draw_modes;
 
     // The root layer's `customLayerData`, string entries only: what an erhe
     // save put there (the editor's scene state) and what another writer left
@@ -1212,6 +1233,17 @@ public:
     std::optional<float>                    gravity_magnitude;
 };
 
+// One draw-mode record to write: the prim of the tree it sits on and the
+// attributes to author on it. The writer applies `GeomModelAPI` to the prim
+// the item becomes and spells exactly the record's authored values, so a file
+// that authored none keeps none.
+class Usd_save_draw_mode final
+{
+public:
+    std::shared_ptr<const erhe::Item_base> item;
+    erhe::scene::Draw_mode_description     description;
+};
+
 class Usd_save_arguments final
 {
 public:
@@ -1275,6 +1307,8 @@ public:
     double                                                  time_codes_per_second{24.0};
     // The physics to write, empty when the scene has none.
     Usd_save_physics                                        physics;
+    // The draw modes to write, one entry per prim that carries one.
+    std::vector<Usd_save_draw_mode>                         draw_modes;
     std::string                                             up_axis        {"Y"};
     double                                                  meters_per_unit{1.0};
 };

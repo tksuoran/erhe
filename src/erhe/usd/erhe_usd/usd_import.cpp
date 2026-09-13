@@ -71,6 +71,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -914,6 +915,7 @@ public:
         apply_authored_opinions();
         build_animation();
         read_physics();
+        read_draw_modes();
 
         log_usd->info(
             "USD '{}': {} nodes, {} meshes, {} materials, {} images, {} cameras, {} lights, {} classes",
@@ -1780,6 +1782,223 @@ private:
             }
             m_result.warning += warning;
         }
+    }
+
+    // The `UsdGeomModelAPI` of every prim of the stage
+    // (doc/usd_compatibility.md, "Draw modes"). The schema is applied to a
+    // prim rather than defining one, so the walk is over the stage's own
+    // prims and each record names the prim it sits on; it runs after the
+    // conversion so that the item a prim became is known.
+    void read_draw_modes()
+    {
+        if (m_stage == nullptr) {
+            return;
+        }
+        for (const lightusd::Prim& prim : m_stage->root_prims()) {
+            read_draw_modes_of_prim(prim, std::string{});
+        }
+    }
+
+    void read_draw_modes_of_prim(const lightusd::Prim& prim, const std::string& parent_path)
+    {
+        const std::string path = parent_path + "/" + std::string{prim.element_name()};
+        read_draw_mode(prim, path);
+        for (const lightusd::Prim& child : prim.children()) {
+            read_draw_modes_of_prim(child, path);
+        }
+    }
+
+    void read_draw_mode(const lightusd::Prim& prim, const std::string& path)
+    {
+        const bool applied = has_api_schema(path, lightusd::APISchemas::APIName::GeomModelAPI);
+        bool       authors = false;
+        for (const std::string_view name : draw_mode_attribute_names()) {
+            if (is_authored(path, std::string{name})) {
+                authors = true;
+                break;
+            }
+        }
+        if (!applied && !authors) {
+            return;
+        }
+        if (!applied) {
+            // usdview honours a draw mode a prim authors without applying the
+            // schema, so the record is read either way and the difference is
+            // reported rather than acted on.
+            log_usd->info("USD prim '{}': draw-mode attributes without GeomModelAPI - they are read as authored", path);
+        }
+        Usd_draw_mode record{};
+        record.stage_path = path;
+        const std::map<std::string, std::shared_ptr<erhe::scene::Node>>::const_iterator node = m_node_by_path.find(path);
+        if (node != m_node_by_path.end()) {
+            record.prim = node->second;
+        }
+        erhe::scene::Draw_mode_description& description = record.description;
+
+        std::string token;
+        if (read_draw_mode_token(prim, path, c_usd_draw_mode_attribute, token)) {
+            if (erhe::scene::draw_mode_from_string(token, description.draw_mode)) {
+                description.draw_mode_authored = true;
+            } else {
+                log_usd->warn("USD prim '{}': model:drawMode '{}' is not a draw mode - it is not read", path, token);
+            }
+        }
+        if (read_draw_mode_token(prim, path, c_usd_card_geometry_attribute, token)) {
+            if (erhe::scene::draw_mode_card_geometry_from_string(token, description.card_geometry)) {
+                description.card_geometry_authored = true;
+            } else {
+                log_usd->warn("USD prim '{}': model:cardGeometry '{}' is not a card geometry - it is not read", path, token);
+            }
+        }
+        if (read_draw_mode_token(prim, path, c_usd_card_visibility_attribute, token)) {
+            if (erhe::scene::draw_mode_card_visibility_from_string(token, description.card_visibility)) {
+                description.card_visibility_authored = true;
+            } else {
+                log_usd->warn("USD prim '{}': model:cardVisibility '{}' is not a card visibility - it is not read", path, token);
+            }
+        }
+        if (read_draw_mode_token(prim, path, c_usd_apply_draw_mode_attribute, token)) {
+            description.apply_draw_mode          = (token == "1") || (token == "true");
+            description.apply_draw_mode_authored = true;
+        }
+        std::vector<float> numbers;
+        if (read_draw_mode_numbers(prim, path, c_usd_draw_mode_color_attribute, numbers) && (numbers.size() >= 3)) {
+            description.draw_mode_color          = glm::vec3{numbers[0], numbers[1], numbers[2]};
+            description.draw_mode_color_authored = true;
+        }
+        if (read_draw_mode_numbers(prim, path, c_usd_extents_hint_attribute, numbers)) {
+            if (numbers.size() >= 6) {
+                description.extents_hint_min      = glm::vec3{numbers[0], numbers[1], numbers[2]};
+                description.extents_hint_max      = glm::vec3{numbers[3], numbers[4], numbers[5]};
+                description.extents_hint_authored = true;
+            } else {
+                log_usd->warn(
+                    "USD prim '{}': extentsHint holds {} number(s) rather than a min and a max - it is not read",
+                    path,
+                    numbers.size()
+                );
+            }
+        }
+        for (std::size_t face = 0; face < erhe::scene::c_draw_mode_card_face_count; ++face) {
+            const std::string name = std::string{"model:"} + std::string{usd_card_texture_attribute_names()[face]};
+            std::string       asset_path;
+            if (read_draw_mode_asset(prim, path, name, asset_path)) {
+                description.card_textures[face] = resolve_draw_mode_asset_path(asset_path);
+            }
+        }
+        m_result.data.draw_modes.push_back(std::move(record));
+    }
+
+    [[nodiscard]] static auto draw_mode_attribute_names() -> const std::array<std::string_view, 6>&
+    {
+        static const std::array<std::string_view, 6> names{
+            c_usd_draw_mode_attribute,
+            c_usd_apply_draw_mode_attribute,
+            c_usd_card_geometry_attribute,
+            c_usd_card_visibility_attribute,
+            c_usd_draw_mode_color_attribute,
+            c_usd_extents_hint_attribute
+        };
+        return names;
+    }
+
+    [[nodiscard]] auto read_draw_mode_literal(
+        const lightusd::Prim& prim,
+        const std::string&    path,
+        const std::string&    name,
+        std::string&          out_literal
+    ) -> bool
+    {
+        if (!is_authored(path, name)) {
+            return false;
+        }
+        lightusd::Attribute attribute;
+        std::string         error;
+        if (!lightusd::tydra::GetAttribute(prim, name, &attribute, &error)) {
+            log_usd->warn("USD prim '{}': '{}' has no value: {}", path, name, error);
+            return false;
+        }
+        out_literal = lightusd::value::pprint_value(attribute.get_var().value_raw());
+        return true;
+    }
+
+    [[nodiscard]] auto read_draw_mode_token(
+        const lightusd::Prim&  prim,
+        const std::string&     path,
+        const std::string_view name,
+        std::string&           out_token
+    ) -> bool
+    {
+        std::string literal;
+        if (!read_draw_mode_literal(prim, path, std::string{name}, literal)) {
+            return false;
+        }
+        out_token = usd_literal_to_property_text(literal);
+        return true;
+    }
+
+    [[nodiscard]] auto read_draw_mode_asset(
+        const lightusd::Prim& prim,
+        const std::string&    path,
+        const std::string&    name,
+        std::string&          out_asset_path
+    ) -> bool
+    {
+        std::string literal;
+        if (!read_draw_mode_literal(prim, path, name, literal)) {
+            return false;
+        }
+        const std::optional<std::string> asset_path = usd_asset_literal_path(literal);
+        out_asset_path = asset_path.has_value() ? asset_path.value() : usd_literal_to_property_text(literal);
+        return !out_asset_path.empty();
+    }
+
+    // The numbers of a `float3` or a `float3[]` literal, in the order they are
+    // spelled: the brackets, parentheses and commas are separators.
+    [[nodiscard]] auto read_draw_mode_numbers(
+        const lightusd::Prim&  prim,
+        const std::string&     path,
+        const std::string_view name,
+        std::vector<float>&    out_numbers
+    ) -> bool
+    {
+        out_numbers.clear();
+        std::string literal;
+        if (!read_draw_mode_literal(prim, path, std::string{name}, literal)) {
+            return false;
+        }
+        const std::string  text = usd_literal_to_property_text(literal);
+        std::istringstream stream{text};
+        float              number = 0.0f;
+        while (stream >> number) {
+            out_numbers.push_back(number);
+        }
+        if (out_numbers.empty()) {
+            log_usd->warn("USD prim '{}': '{}' value '{}' holds no numbers - it is not read", path, name, text);
+            return false;
+        }
+        return true;
+    }
+
+    // A card texture's asset path as a path the caller can open: an authored
+    // relative path is resolved against the stage file's own directory, the
+    // way an image's is (convert_images). A card texture packed inside a
+    // `.usdz` has no loose file and the record carries no bytes, so such a
+    // path is reported and left as the name beside the archive.
+    [[nodiscard]] auto resolve_draw_mode_asset_path(const std::string& asset_identifier) -> std::string
+    {
+        std::filesystem::path       texture_path{asset_identifier};
+        const std::filesystem::path directory = m_arguments.path.parent_path();
+        if (texture_path.is_relative() && !directory.empty()) {
+            texture_path = (directory / texture_path).lexically_normal();
+        }
+        if (!usdz_entry_bytes(asset_identifier).empty()) {
+            log_usd->warn(
+                "USD card texture '{}' is packed inside the usdz archive - the record names the path beside the archive, which no file answers",
+                asset_identifier
+            );
+        }
+        return texture_path.generic_string();
     }
 
     [[nodiscard]] auto find_prim(const std::string& absolute_path) const -> const lightusd::Prim*
@@ -6124,6 +6343,9 @@ private:
                 );
                 continue;
             }
+            if (read_draw_mode_spec_value(name, property.second.get_attribute(), out_values)) {
+                continue;
+            }
         }
         if (spec.metas().has_active()) {
             out_values.push_back(
@@ -6188,6 +6410,58 @@ private:
 
     // A USDA attribute value in erhe's property text form (D16), the way an
     // `erhe:` custom attribute of a composed prim is read.
+    // One `UsdGeomModelAPI` attribute of a prim spec as the override value it
+    // is: the draw-mode attachment holds the schema's attributes, so a value
+    // of one is named `Draw_mode.<property>` (X2's spelling of a value an
+    // applied schema authors on the prim itself). `extentsHint` carries the
+    // min and the max in one array, so it is two values. False when the
+    // attribute is not a draw-mode attribute.
+    [[nodiscard]] static auto read_draw_mode_spec_value(
+        const std::string&                                 name,
+        const lightusd::Attribute&                         attribute,
+        std::vector<erhe::scene::Instance_override_value>& out_values
+    ) -> bool
+    {
+        const std::string_view value_name = usd_draw_mode_value_name_of_attribute(name);
+        if (value_name.empty()) {
+            return false;
+        }
+        const std::string text = attribute_text(attribute);
+        if (name == c_usd_extents_hint_attribute) {
+            std::istringstream stream{text};
+            std::vector<float> numbers;
+            float              number = 0.0f;
+            while (stream >> number) {
+                numbers.push_back(number);
+            }
+            if (numbers.size() < 6) {
+                return true; // read, and nothing to carry
+            }
+            out_values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name = "Draw_mode.extents_hint_min",
+                    .text = fmt::format("{} {} {}", numbers[0], numbers[1], numbers[2])
+                }
+            );
+            out_values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name = "Draw_mode.extents_hint_max",
+                    .text = fmt::format("{} {} {}", numbers[3], numbers[4], numbers[5])
+                }
+            );
+            return true;
+        }
+        out_values.push_back(
+            erhe::scene::Instance_override_value{
+                .name = std::string{value_name},
+                .text = (name == c_usd_apply_draw_mode_attribute)
+                    ? (((text == "1") || (text == "true")) ? "true" : "false")
+                    : text
+            }
+        );
+        return true;
+    }
+
     [[nodiscard]] static auto attribute_text(const lightusd::Attribute& attribute) -> std::string
     {
         const std::string                literal    = lightusd::value::pprint_value(attribute.get_var().value_raw());
@@ -7108,6 +7382,12 @@ private:
             glm::vec3 display_color{0.0f, 0.0f, 0.0f};
             return read_constant_display_color(property.get_attribute(), display_color);
         }
+        if (!usd_draw_mode_value_name_of_attribute(name).empty()) {
+            // A `UsdGeomModelAPI` attribute is a value of the prim's draw-mode
+            // attachment (doc/usd_compatibility.md, "Draw modes"), which a
+            // variant block and an `over` carry the way they carry any other.
+            return true;
+        }
         return (name == "visibility") || (name == "purpose");
     }
 
@@ -7850,6 +8130,101 @@ private:
     sample_op.type  = op.type;
     sample_op.value = sample.value;
     return glm::quat_cast(glm::dmat3{sample_op.to_matrix()});
+}
+
+auto usd_card_texture_attribute_names() -> const std::array<std::string_view, erhe::scene::c_draw_mode_card_face_count>&
+{
+    static const std::array<std::string_view, erhe::scene::c_draw_mode_card_face_count> names{
+        "cardTextureXNeg", "cardTextureXPos",
+        "cardTextureYNeg", "cardTextureYPos",
+        "cardTextureZNeg", "cardTextureZPos"
+    };
+    return names;
+}
+
+namespace {
+
+// The one table pairing a draw-mode property with the attribute it is
+// authored as; the two lookups below read it in either direction.
+struct Draw_mode_value_name_pair
+{
+    std::string_view value_name;
+    std::string_view attribute_name;
+};
+
+[[nodiscard]] auto draw_mode_value_name_pairs() -> const std::vector<Draw_mode_value_name_pair>&
+{
+    static const std::vector<Draw_mode_value_name_pair> pairs = [] {
+        std::vector<Draw_mode_value_name_pair> result{
+            {"Draw_mode.draw_mode",        c_usd_draw_mode_attribute      },
+            {"Draw_mode.apply_draw_mode",  c_usd_apply_draw_mode_attribute},
+            {"Draw_mode.card_geometry",    c_usd_card_geometry_attribute  },
+            {"Draw_mode.card_visibility",  c_usd_card_visibility_attribute},
+            {"Draw_mode.draw_mode_color",  c_usd_draw_mode_color_attribute},
+            {"Draw_mode.extents_hint_min", c_usd_extents_hint_attribute   },
+            {"Draw_mode.extents_hint_max", c_usd_extents_hint_attribute   }
+        };
+        return result;
+    }();
+    return pairs;
+}
+
+// The `Draw_mode.<property>` names of the six card textures, held so the
+// lookups can return a stable string_view.
+[[nodiscard]] auto draw_mode_card_texture_value_names() -> const std::array<std::string, erhe::scene::c_draw_mode_card_face_count>&
+{
+    static const std::array<std::string, erhe::scene::c_draw_mode_card_face_count> names = [] {
+        std::array<std::string, erhe::scene::c_draw_mode_card_face_count> result{};
+        for (std::size_t i = 0; i < erhe::scene::c_draw_mode_card_face_count; ++i) {
+            result[i] = std::string{c_draw_mode_owner_name} + "." + erhe::scene::c_str(static_cast<erhe::scene::Draw_mode_card_face>(i));
+        }
+        return result;
+    }();
+    return names;
+}
+
+[[nodiscard]] auto draw_mode_card_texture_attribute_names() -> const std::array<std::string, erhe::scene::c_draw_mode_card_face_count>&
+{
+    static const std::array<std::string, erhe::scene::c_draw_mode_card_face_count> names = [] {
+        std::array<std::string, erhe::scene::c_draw_mode_card_face_count> result{};
+        for (std::size_t i = 0; i < erhe::scene::c_draw_mode_card_face_count; ++i) {
+            result[i] = std::string{"model:"} + std::string{usd_card_texture_attribute_names()[i]};
+        }
+        return result;
+    }();
+    return names;
+}
+
+} // anonymous namespace
+
+auto usd_draw_mode_attribute_of_value_name(const std::string_view value_name) -> std::string_view
+{
+    for (const Draw_mode_value_name_pair& pair : draw_mode_value_name_pairs()) {
+        if (pair.value_name == value_name) {
+            return pair.attribute_name;
+        }
+    }
+    for (std::size_t i = 0; i < erhe::scene::c_draw_mode_card_face_count; ++i) {
+        if (draw_mode_card_texture_value_names()[i] == value_name) {
+            return draw_mode_card_texture_attribute_names()[i];
+        }
+    }
+    return std::string_view{};
+}
+
+auto usd_draw_mode_value_name_of_attribute(const std::string_view attribute_name) -> std::string_view
+{
+    for (const Draw_mode_value_name_pair& pair : draw_mode_value_name_pairs()) {
+        if (pair.attribute_name == attribute_name) {
+            return pair.value_name;
+        }
+    }
+    for (std::size_t i = 0; i < erhe::scene::c_draw_mode_card_face_count; ++i) {
+        if (draw_mode_card_texture_attribute_names()[i] == attribute_name) {
+            return draw_mode_card_texture_value_names()[i];
+        }
+    }
+    return std::string_view{};
 }
 
 auto convert_stage(const Stage& stage, const Usd_load_arguments& arguments) -> Usd_load_result

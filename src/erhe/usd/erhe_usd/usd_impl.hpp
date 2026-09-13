@@ -11,6 +11,7 @@
 #include "layer.hh"
 #include "stage.hh"
 
+#include <array>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -66,6 +67,39 @@ constexpr std::string_view c_node_graph_info_id_attribute  {"info:id"};
 // The USD schema token of a point instancer (doc/usd-compatibility-plan.md
 // S1). The reader dispatches on it and the writer spells it, so both name it
 // from here; the erhe class is erhe::scene::Point_instancer.
+// How a draw mode travels in a USD file (doc/usd_compatibility.md, "Draw
+// modes"). `UsdGeomModelAPI` is an applied schema, so every one of these
+// attributes sits on the prim it describes; the reader, the writer and the
+// override spelling all name them from here. `extentsHint` is the one that
+// carries no `model:` namespace: it is the model's bounds hint, which the
+// schema documents beside the draw mode and which the proxies are sized from.
+constexpr std::string_view c_usd_draw_mode_attribute       {"model:drawMode"};
+constexpr std::string_view c_usd_apply_draw_mode_attribute {"model:applyDrawMode"};
+constexpr std::string_view c_usd_card_geometry_attribute   {"model:cardGeometry"};
+constexpr std::string_view c_usd_card_visibility_attribute {"model:cardVisibility"};
+constexpr std::string_view c_usd_draw_mode_color_attribute {"model:drawModeColor"};
+constexpr std::string_view c_usd_extents_hint_attribute    {"extentsHint"};
+
+// The class name of the erhe attachment a draw-mode record becomes, which is
+// what qualifies the record's properties wherever a value of one travels by
+// name - an instance override, a variant opinion, a class prim's opinions
+// (erhe::scene::find_override_property_target).
+constexpr std::string_view c_draw_mode_owner_name{"Draw_mode"};
+
+// The card-texture attribute names without the `model:` namespace, in the
+// order erhe::scene::Draw_mode_card_face holds the faces.
+[[nodiscard]] auto usd_card_texture_attribute_names() -> const std::array<std::string_view, erhe::scene::c_draw_mode_card_face_count>&;
+
+// The `model:` attribute one `Draw_mode.<property>` value name is authored
+// as, empty when the name is not a draw-mode property. `extents_hint_min` and
+// `extents_hint_max` both name `extentsHint`, which carries the pair.
+[[nodiscard]] auto usd_draw_mode_attribute_of_value_name(std::string_view value_name) -> std::string_view;
+
+// The `Draw_mode.<property>` value name one `model:` attribute carries, empty
+// when the attribute is not a draw-mode attribute. `extentsHint` answers
+// `Draw_mode.extents_hint_min`, the first of the pair it holds.
+[[nodiscard]] auto usd_draw_mode_value_name_of_attribute(std::string_view attribute_name) -> std::string_view;
+
 constexpr std::string_view c_point_instancer_prim_type_name {"PointInstancer"};
 
 // The USD schema token of a skeleton (doc/usd-compatibility-plan.md K1). A

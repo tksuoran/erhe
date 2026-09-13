@@ -1,0 +1,76 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def Xform "Plain" (
+        prepend apiSchemas = ["GeomModelAPI"]
+        kind = "component"
+    )
+    {
+        uniform token model:drawMode = "default"
+
+        def Mesh "body"
+        {
+            uniform token subdivisionScheme = "none"
+            int[] faceVertexCounts = [4]
+            int[] faceVertexIndices = [0, 1, 2, 3]
+            point3f[] points = [(-1, 0, 0), (1, 0, 0), (1, 2, 0), (-1, 2, 0)]
+        }
+    }
+
+    def Xform "Boxed" (
+        prepend apiSchemas = ["GeomModelAPI"]
+        variants = {
+            string cardVariant = "Textured"
+        }
+        prepend variantSets = "cardVariant"
+    )
+    {
+        uniform bool model:applyDrawMode = 1
+        uniform token model:cardGeometry = "box"
+        uniform token model:cardVisibility = "simple"
+        uniform token model:drawMode = "cards"
+
+        variantSet "cardVariant" = {
+            "Plainer" {
+                uniform token model:cardGeometry = "cross"
+
+                variantSet "colorVariant" = {
+                    "Dark" {
+                        uniform float3 model:drawModeColor = (0.025, 0.025, 0.025)
+                    }
+                    "Light" {
+                        uniform float3 model:drawModeColor = (0.767, 0.767, 0.767)
+                    }
+                }
+            }
+            "Textured" {
+                float3[] extentsHint = [(-0.5, 0, -0.25), (0.5, 1, 0.25)]
+                asset model:cardTextureXNeg = @./images/auto_rgba.png@
+                asset model:cardTextureXPos = @./images/auto_rgba.png@
+                asset model:cardTextureZPos = @./images/auto_rgba.png@
+            }
+        }
+    }
+
+    def Xform "Sketchy"
+    {
+        uniform token model:drawMode = "origin"
+    }
+
+    def "Cards" (
+        prepend apiSchemas = ["GeomModelAPI"]
+        prepend references = </World/Plain>
+    )
+    {
+        uniform token model:cardGeometry = "cross"
+        uniform token model:drawMode = "cards"
+        uniform float3 model:drawModeColor = (0.936, 0, 0)
+        float3[] extentsHint = [(-1, 0, 0), (1, 2, 0)]
+    }
+}

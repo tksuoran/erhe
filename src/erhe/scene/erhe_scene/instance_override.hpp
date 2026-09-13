@@ -146,6 +146,26 @@ void apply_property_values(
     const std::string&                       name
 ) -> const erhe::property::Dependency_property*;
 
+// Where one override value's name lands: the object that holds the property
+// and the property itself, both null when the name reaches neither. A name
+// qualified with the class name of an applied-schema attachment of the prim
+// (`Draw_mode.card_geometry`, `Node_physics.mass`) resolves to that
+// attachment's property, which is how USD's spelling - an applied schema
+// authors its attributes on the prim itself - reaches the erhe item that
+// holds them. Every other name resolves on the item, through
+// find_override_property.
+class Override_property_target final
+{
+public:
+    erhe::property::Dependency_object*         object  {nullptr};
+    const erhe::property::Dependency_property* property{nullptr};
+};
+
+[[nodiscard]] auto find_override_property_target(
+    erhe::Item_base&   item,
+    const std::string& name
+) -> Override_property_target;
+
 // Put `overrides` back on the items of a freshly attached instance: each
 // entry names the item at its relative path below the first of the carrier's
 // children that has one, except an entry whose path ends in the name of a

@@ -63,6 +63,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -653,6 +654,12 @@ public:
         if (name == "double_sided") { return "doubleSided"; }
         return {};
     }
+    if (owner == "Draw_mode") {
+        // An applied API schema authors its attributes on the prim itself, so
+        // the draw-mode attachment's values are native in both forms.
+        const std::string_view attribute = usd_draw_mode_attribute_of_value_name(fmt::format("Draw_mode.{}", name));
+        return attribute;
+    }
     if (owner == "Brush") {
         // The material a placed instance gets is the brush prim's own
         // material binding (doc/usd-compatibility-plan.md E4a).
@@ -882,6 +889,7 @@ public:
         }
 
         index_physics();
+        index_draw_modes();
 
         for (const Usd_save_brush& entry : m_arguments.brushes) {
             if (entry.item) {
@@ -2747,6 +2755,7 @@ private:
                                               write_prim         (plan_prim);
 
         write_physics_on_prim(plan_prim, prim);
+        write_draw_mode_on_prim(plan_prim, prim);
         apply_defined_specifier(*plan_prim.item, prim);
 
         if (plan_prim.references != nullptr) {
@@ -3391,6 +3400,8 @@ private:
         lightusd::PrimMetas&                       metas
     )
     {
+        std::string extents_hint_min;
+        std::string extents_hint_max;
         for (const erhe::scene::Instance_override_value& value : entry.values) {
             if (value.state == erhe::scene::Instance_override_value_state::cleared) {
                 continue; // a base value, which is never written
@@ -3423,6 +3434,11 @@ private:
                 add_constant_display_color(props, std::get<glm::vec3>(parsed_color.value()));
                 continue;
             }
+            if (write_draw_mode_value(props, value.name, value.text, extents_hint_min, extents_hint_max)) {
+                // A `UsdGeomModelAPI` attribute of the prim's draw-mode
+                // attachment, authored in the schema's spelling.
+                continue;
+            }
             const erhe::property::Dependency_property* property = find_property_by_qualified_name(value.name);
             if (property == nullptr) {
                 add_warning(fmt::format("a variant authors '{}', which names no property - the opinion is not written", value.name));
@@ -3442,6 +3458,7 @@ private:
             );
             props.emplace(attribute_name, lightusd::Property{make_custom_attribute(*property, parsed.value()), true});
         }
+        write_draw_mode_extents_hint(props, extents_hint_min, extents_hint_max);
         if (entry.transform_overridden) {
             write_value_xform_ops(entry, props);
         }
@@ -6044,6 +6061,197 @@ private:
     }
 
     // -------------------------------------------------------------------
+    // Draw modes (doc/usd_compatibility.md, "Draw modes")
+    // -------------------------------------------------------------------
+
+    void index_draw_modes()
+    {
+        for (const Usd_save_draw_mode& record : m_arguments.draw_modes) {
+            if (record.item) {
+                m_draw_mode_record[record.item.get()] = &record;
+            }
+        }
+    }
+
+    // The `UsdGeomModelAPI` of one prim of the tree: the schema applied to the
+    // prim itself and exactly the attributes the record says were authored, in
+    // the schema's own spelling and types. USD's fallbacks stand for the rest.
+    void write_draw_mode_on_prim(const Plan_prim& plan_prim, lightusd::Prim& prim)
+    {
+        const std::map<const erhe::Item_base*, const Usd_save_draw_mode*>::const_iterator i =
+            m_draw_mode_record.find(plan_prim.item);
+        if (i == m_draw_mode_record.end()) {
+            return;
+        }
+        std::map<std::string, lightusd::Property>* props = mutable_props_of(prim);
+        if (props == nullptr) {
+            add_warning(fmt::format("prim '{}' holds a draw mode that its prim class cannot carry", plan_prim.path));
+            return;
+        }
+        apply_api_schema(prim, lightusd::APISchemas::APIName::GeomModelAPI, std::string{});
+        const erhe::scene::Draw_mode_description& description = i->second->description;
+        if (description.draw_mode_authored) {
+            add_uniform_token_attribute(*props, std::string{c_usd_draw_mode_attribute}, erhe::scene::c_str(description.draw_mode));
+        }
+        if (description.apply_draw_mode_authored) {
+            add_uniform_bool_attribute(*props, std::string{c_usd_apply_draw_mode_attribute}, description.apply_draw_mode);
+        }
+        if (description.card_geometry_authored) {
+            add_uniform_token_attribute(*props, std::string{c_usd_card_geometry_attribute}, erhe::scene::c_str(description.card_geometry));
+        }
+        if (description.card_visibility_authored) {
+            add_uniform_token_attribute(*props, std::string{c_usd_card_visibility_attribute}, erhe::scene::c_str(description.card_visibility));
+        }
+        if (description.draw_mode_color_authored) {
+            add_uniform_float3_attribute(*props, std::string{c_usd_draw_mode_color_attribute}, description.draw_mode_color);
+        }
+        if (description.extents_hint_authored) {
+            add_extents_hint_attribute(*props, description.extents_hint_min, description.extents_hint_max);
+        }
+        for (std::size_t face = 0; face < erhe::scene::c_draw_mode_card_face_count; ++face) {
+            const std::string& path = description.card_textures[face];
+            if (path.empty()) {
+                continue;
+            }
+            add_asset_attribute(
+                *props,
+                std::string{"model:"} + std::string{usd_card_texture_attribute_names()[face]},
+                asset_path_of(std::filesystem::path{path})
+            );
+        }
+    }
+
+    // One `Draw_mode.<property>` override value as the `model:` attribute it
+    // is authored as. The value travels as the property text of the record's
+    // own vocabulary - a token for the three enumerations, `true` / `false`
+    // for the flag, three numbers for the color, the authored asset path for
+    // a card texture - so the text is spelled again here rather than parsed
+    // through the property registry, which the attachment owns. `extentsHint`
+    // carries the min and the max in one array, so the two values are held
+    // and written together (write_draw_mode_extents_hint).
+    [[nodiscard]] auto write_draw_mode_value(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         value_name,
+        const std::string&                         text,
+        std::string&                               out_extents_hint_min,
+        std::string&                               out_extents_hint_max
+    ) -> bool
+    {
+        const std::string_view attribute_name = usd_draw_mode_attribute_of_value_name(value_name);
+        if (attribute_name.empty()) {
+            return false;
+        }
+        if (value_name == "Draw_mode.extents_hint_min") {
+            out_extents_hint_min = text;
+            return true;
+        }
+        if (value_name == "Draw_mode.extents_hint_max") {
+            out_extents_hint_max = text;
+            return true;
+        }
+        if (value_name == "Draw_mode.apply_draw_mode") {
+            add_uniform_bool_attribute(props, std::string{attribute_name}, text == "true");
+            return true;
+        }
+        if (value_name == "Draw_mode.draw_mode_color") {
+            glm::vec3          color{0.18f, 0.18f, 0.18f};
+            std::istringstream stream{text};
+            stream >> color.x >> color.y >> color.z;
+            add_uniform_float3_attribute(props, std::string{attribute_name}, color);
+            return true;
+        }
+        if (value_name.compare(0, 24, "Draw_mode.card_texture_x") == 0 ||
+            value_name.compare(0, 24, "Draw_mode.card_texture_y") == 0 ||
+            value_name.compare(0, 24, "Draw_mode.card_texture_z") == 0
+        ) {
+            add_asset_attribute(props, std::string{attribute_name}, text);
+            return true;
+        }
+        add_uniform_token_attribute(props, std::string{attribute_name}, text);
+        return true;
+    }
+
+    void write_draw_mode_extents_hint(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         minimum_text,
+        const std::string&                         maximum_text
+    )
+    {
+        if (minimum_text.empty() || maximum_text.empty()) {
+            return;
+        }
+        glm::vec3          minimum{0.0f};
+        glm::vec3          maximum{0.0f};
+        std::istringstream minimum_stream{minimum_text};
+        std::istringstream maximum_stream{maximum_text};
+        minimum_stream >> minimum.x >> minimum.y >> minimum.z;
+        maximum_stream >> maximum.x >> maximum.y >> maximum.z;
+        add_extents_hint_attribute(props, minimum, maximum);
+    }
+
+    static void add_uniform_token_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const std::string&                         text
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::token{text});
+        attribute.variability() = lightusd::Variability::Uniform;
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_uniform_bool_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const bool                                 value
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(value);
+        attribute.variability() = lightusd::Variability::Uniform;
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_uniform_float3_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const glm::vec3&                           value
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::float3{value.x, value.y, value.z});
+        attribute.variability() = lightusd::Variability::Uniform;
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_asset_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const std::string&                         name,
+        const std::string&                         asset_path
+    )
+    {
+        lightusd::Attribute attribute;
+        attribute.set_value(lightusd::value::AssetPath{asset_path});
+        props.emplace(name, lightusd::Property{std::move(attribute), false});
+    }
+
+    static void add_extents_hint_attribute(
+        std::map<std::string, lightusd::Property>& props,
+        const glm::vec3&                           minimum,
+        const glm::vec3&                           maximum
+    )
+    {
+        std::vector<lightusd::value::float3> extents{
+            lightusd::value::float3{minimum.x, minimum.y, minimum.z},
+            lightusd::value::float3{maximum.x, maximum.y, maximum.z}
+        };
+        lightusd::Attribute attribute;
+        attribute.set_value(extents);
+        props.emplace(std::string{c_usd_extents_hint_attribute}, lightusd::Property{std::move(attribute), false});
+    }
+
+    // -------------------------------------------------------------------
     // Physics (doc/usd_compatibility.md, "Physics")
     // -------------------------------------------------------------------
 
@@ -7269,6 +7477,9 @@ private:
     // every prim of the tree landed (doc/usd_compatibility.md, "Physics").
     std::map<const erhe::Item_base*, std::size_t>              m_physics_body_index;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_body_record;
+    // The draw-mode records of the arguments, by the item each names
+    // (doc/usd_compatibility.md, "Draw modes").
+    std::map<const erhe::Item_base*, const Usd_save_draw_mode*> m_draw_mode_record;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_material_record;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_filter_record;
     std::map<const erhe::Item_base*, std::size_t>              m_physics_settings_record;

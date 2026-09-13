@@ -263,6 +263,17 @@ carrier's own clone. This is the shape a real asset has: a referencing prim
 whose target references another file in turn, with the override authored at
 the path USD composes (`over "geo" { over "default" { over "Body" } }`).
 
+A value's name is resolved by `find_override_property_target`: the property
+the registry finds for the item, and - for a name qualified with the class
+name of one of the prim's attachments (`Draw_mode.card_geometry`) - that
+attachment's property. USD authors an applied API schema's attributes on the
+prim itself while erhe holds them on an attachment of it, so the qualified
+name is what carries such a value through the same neutral form every other
+override travels in. The collectors walk prims only, so an attachment's own
+local value is not yet reported as an override (`doc/usd-compatibility-plan.md`
+section 6, "Overrides on applied API schemas inside an instance"); what the
+resolution serves today is a value a file authors.
+
 A binding that covers one group of facets rather than the whole mesh is an
 entry of its own whose relative path ends in the name of the group, the way a
 USD GeomSubset is a prim below its mesh; the group of a primitive is named by
@@ -273,6 +284,20 @@ holds) and then from the carrier's ancestors, with the extra level an instance
 keeps treated as transparent: USD composes an arc's content directly under the
 referencing prim, while erhe keeps the target clone as a level of its own
 (`doc/usd-compatibility-plan.md` X1).
+
+## Draw mode description
+
+`draw_mode_description.hpp` owns `erhe::scene::Draw_mode_description`, the
+format-neutral plain-data record of one prim's `UsdGeomModelAPI`: the draw
+mode, the apply flag, the card geometry and visibility, the six card texture
+paths, the draw-mode color and the extents hint, each with the flag that says
+whether the file authored it. The three enumerations spell USD's tokens
+verbatim (`c_str` / `*_from_string`, and one `Enum_info` table each for the
+property registration of the attachment that holds them), so a value travels
+as that token wherever it travels as text. The header holds plain data and the
+enumerator tables and nothing else; the mapping is the "Draw modes" table of
+`doc/usd_compatibility.md`, the reader and writer are `erhe::usd`, and what
+the record draws is the editor's.
 
 ## Physics description
 
