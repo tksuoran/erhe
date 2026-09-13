@@ -1,0 +1,136 @@
+#usda 1.0
+(
+    defaultPrim = "Teapot"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Teapot" (
+    variants = {
+        string modelVariant = "Utah"
+        string trimVariant = "Gold"
+    }
+    prepend variantSets = "modelVariant"
+)
+{
+    def Mesh "Geometry"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 0, 1)]
+    }
+
+    variantSet "modelVariant" = {
+        "Fancy" (
+            variants = {
+                string shadingVariant = "PorcelainFlowers"
+            }
+            prepend variantSets = "shadingVariant"
+        ) {
+            def Material "Look"
+            {
+                token outputs:surface.connect = </Teapot/Look/surface.outputs:surface>
+
+                def Shader "surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (1, 0, 0)
+                    token outputs:surface
+                }
+            }
+            variantSet "shadingVariant" = {
+                "PorcelainFlowers" {
+                    def Xform "FancyTrim"
+                    {
+                    }
+
+                    over "Geometry" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding = </Teapot/Look>
+                    }
+                }
+            }
+        }
+        "Utah" (
+            variants = {
+                string shadingVariant = "CeramicLimeGreen"
+            }
+            prepend variantSets = "shadingVariant"
+        ) {
+            def Material "Look"
+            {
+                token outputs:surface.connect = </Teapot/Look/surface.outputs:surface>
+
+                def Shader "surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (0, 1, 0)
+                    token outputs:surface
+                }
+            }
+
+            def Material "LookDark"
+            {
+                token outputs:surface.connect = </Teapot/LookDark/surface.outputs:surface>
+
+                def Shader "surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (0, 0, 0)
+                    token outputs:surface
+                }
+            }
+            variantSet "extraVariant" = {
+                "First" {
+                    def Xform "FirstExtra"
+                    {
+                    }
+                }
+                "Second" {
+                    def Xform "SecondExtra"
+                    {
+                    }
+                }
+            }
+            variantSet "shadingVariant" = {
+                "CeramicBlack" {
+                    def Xform "BlackTrim"
+                    {
+                    }
+
+                    over "Geometry" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                    )
+                    {
+                        rel material:binding = </Teapot/LookDark>
+                    }
+                }
+                "CeramicLimeGreen" {
+                    def Xform "GreenTrim"
+                    {
+                    }
+
+                    over "Geometry" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                    )
+                    {
+                        bool erhe:Mesh:shadow_cast = 0
+                        rel material:binding = </Teapot/Look>
+                    }
+                }
+            }
+            variantSet "trimVariant" = {
+                "Gold" {
+                    def Xform "GoldTrim"
+                    {
+                    }
+                }
+                "None" {
+                }
+            }
+        }
+    }
+}

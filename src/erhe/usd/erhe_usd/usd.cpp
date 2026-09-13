@@ -101,6 +101,32 @@ auto Stage::get_impl() const -> const Impl&
     return *m_impl.get();
 }
 
+auto resolve_selected_variant_name(
+    const Usd_variant_selections&        variant_selections,
+    const std::string&                   absolute_prim_path,
+    const lightusd::VariantSelectionMap* enclosing_block_selection,
+    const lightusd::VariantSelectionMap& prim_selection,
+    const std::string&                   set_name,
+    const lightusd::VariantSetSpec&      set
+) -> std::string
+{
+    const std::string* const carried = variant_selections.find(absolute_prim_path, set_name);
+    if (carried != nullptr) {
+        return *carried;
+    }
+    if (enclosing_block_selection != nullptr) {
+        const lightusd::VariantSelectionMap::const_iterator block = enclosing_block_selection->find(set_name);
+        if (block != enclosing_block_selection->end()) {
+            return block->second;
+        }
+    }
+    const lightusd::VariantSelectionMap::const_iterator prim = prim_selection.find(set_name);
+    if (prim != prim_selection.end()) {
+        return prim->second;
+    }
+    return set.variantSet.empty() ? std::string{} : set.variantSet.begin()->first;
+}
+
 namespace {
 
 // How deep a chain of `subLayers` a load follows. A file that nests deeper
@@ -311,18 +337,32 @@ void fill_stage_metas_from_sublayers(
     }
 }
 
-// Whether any prim spec below `spec` carries a variant block with a `def`
-// child: what hoist_variant_prims has work to do for.
-[[nodiscard]] auto has_variant_prims(const lightusd::PrimSpec& spec) -> bool
+// Whether any variant block of `sets`, or of a `variantSet` one of those
+// blocks declares itself, holds a `def` child: what hoist_variant_prims has
+// work to do for.
+[[nodiscard]] auto has_variant_set_prims(const std::map<std::string, lightusd::VariantSetSpec>& sets) -> bool
 {
-    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec.variantSets()) {
+    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : sets) {
         for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
             for (const lightusd::PrimSpec& child : variant.second.children()) {
                 if (child.specifier() == lightusd::Specifier::Def) {
                     return true;
                 }
             }
+            if (has_variant_set_prims(variant.second.variantSets())) {
+                return true;
+            }
         }
+    }
+    return false;
+}
+
+// Whether any prim spec below `spec` carries a variant block with a `def`
+// child: what hoist_variant_prims has work to do for.
+[[nodiscard]] auto has_variant_prims(const lightusd::PrimSpec& spec) -> bool
+{
+    if (has_variant_set_prims(spec.variantSets())) {
+        return true;
     }
     for (const lightusd::PrimSpec& child : spec.children()) {
         if (has_variant_prims(child)) {
@@ -371,27 +411,33 @@ void fill_stage_metas_from_sublayers(
 // lost: the importer reads the blocks off the same layer for the property
 // opinions and the material bindings, and the writer puts each prim back
 // inside its own variant block under the name recorded here.
-void hoist_variant_prims(
-    const std::string&                path,
-    lightusd::PrimSpec&               spec,
-    const Usd_variant_selections&     variant_selections,
-    std::vector<Variant_prim_record>& records
+// The `def` children of every block of one group of variant sets, hoisted
+// into `spec`. `sets` is the prim's own group for a top-level set and the
+// group a variant block declares for a nested one, which is a set of the same
+// prim: its blocks contribute only while the enclosing block is the selected
+// one, so a prim of a nested set is active only when both are selected.
+void hoist_variant_set_group(
+    const std::string&                                     path,
+    lightusd::PrimSpec&                                    spec,
+    const std::map<std::string, lightusd::VariantSetSpec>& sets,
+    const std::string&                                     enclosing_set_name,
+    const std::string&                                     enclosing_variant_name,
+    const lightusd::VariantSelectionMap*                   enclosing_block_selection,
+    const Variant_branch_state                             branch_state,
+    const Usd_variant_selections&                          variant_selections,
+    std::vector<Variant_prim_record>&                      records
 )
 {
-    const lightusd::VariantSelectionMap& selection = spec.get_variant_selection_map();
-    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec.variantSets()) {
-        const lightusd::VariantSelectionMap::const_iterator i = selection.find(set.first);
-        // The same selection rule the importer applies: the selection a
-        // composition arc carries into this load, then the layer's own
-        // `variants` opinion, then the first variant. A carried selection is
-        // validated before the hoist, so it names a variant the set holds.
-        const std::string* const carried  = variant_selections.find(path, set.first);
-        const std::string        selected = (carried != nullptr)
-            ? *carried
-            : ((i != selection.end())
-                ? i->second
-                : (set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first));
+    const lightusd::VariantSelectionMap& prim_selection = spec.get_variant_selection_map();
+    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : sets) {
+        const std::string selected = resolve_selected_variant_name(
+            variant_selections, path, enclosing_block_selection, prim_selection, set.first, set.second
+        );
         for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
+            const Variant_branch_state variant_state =
+                ((branch_state == Variant_branch_state::selected) && (variant.first == selected))
+                    ? Variant_branch_state::selected
+                    : Variant_branch_state::unselected;
             for (const lightusd::PrimSpec& child : variant.second.children()) {
                 if (child.specifier() != lightusd::Specifier::Def) {
                     continue; // an `over` child is an opinion on a prim the tree already has
@@ -399,22 +445,60 @@ void hoist_variant_prims(
                 lightusd::PrimSpec hoisted     = child;
                 const std::string  unique_name = make_unique_child_name(spec, child.name());
                 hoisted.name() = unique_name;
-                if (variant.first != selected) {
+                if (variant_state == Variant_branch_state::unselected) {
                     hoisted.metas().set_active(false);
                 }
                 records.push_back(
                     Variant_prim_record{
-                        .carrier_path  = path,
-                        .set_name      = set.first,
-                        .variant_name  = variant.first,
-                        .prim_name     = unique_name,
-                        .authored_name = child.name()
+                        .carrier_path           = path,
+                        .set_name               = set.first,
+                        .variant_name           = variant.first,
+                        .enclosing_set_name     = enclosing_set_name,
+                        .enclosing_variant_name = enclosing_variant_name,
+                        .prim_name              = unique_name,
+                        .authored_name          = child.name()
                     }
                 );
                 spec.children().push_back(std::move(hoisted));
             }
+            // A `variantSet` the block declares is a set of this same prim,
+            // hoisted into it beside the enclosing set's own prims.
+            if (!variant.second.variantSets().empty()) {
+                const lightusd::VariantSelectionMap& block_selection = variant.second.get_variant_selection_map();
+                hoist_variant_set_group(
+                    path,
+                    spec,
+                    variant.second.variantSets(),
+                    set.first,
+                    variant.first,
+                    &block_selection,
+                    variant_state,
+                    variant_selections,
+                    records
+                );
+            }
         }
     }
+}
+
+void hoist_variant_prims(
+    const std::string&                path,
+    lightusd::PrimSpec&               spec,
+    const Usd_variant_selections&     variant_selections,
+    std::vector<Variant_prim_record>& records
+)
+{
+    hoist_variant_set_group(
+        path,
+        spec,
+        spec.variantSets(),
+        std::string{},
+        std::string{},
+        nullptr,
+        Variant_branch_state::selected,
+        variant_selections,
+        records
+    );
     // By index: the loop above appended to this same vector, and a hoisted
     // prim can carry variant sets of its own.
     for (std::size_t index = 0; index < spec.children().size(); ++index) {
@@ -433,6 +517,30 @@ void hoist_variant_prims(
     for (std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
         hoist_variant_prims("/" + entry.first, entry.second, variant_selections, records);
     }
+}
+
+// The `variantSet` of that name a prim declares, whether the prim declares it
+// itself or one of its variant blocks does - a nested set is a set of the same
+// prim, so a carried selection names it the same way. Null when no set of the
+// prim carries the name.
+[[nodiscard]] auto find_variant_set_spec(
+    const std::map<std::string, lightusd::VariantSetSpec>& sets,
+    const std::string&                                     set_name
+) -> const lightusd::VariantSetSpec*
+{
+    const std::map<std::string, lightusd::VariantSetSpec>::const_iterator i = sets.find(set_name);
+    if (i != sets.end()) {
+        return &i->second;
+    }
+    for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : sets) {
+        for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
+            const lightusd::VariantSetSpec* const nested = find_variant_set_spec(variant.second.variantSets(), set_name);
+            if (nested != nullptr) {
+                return nested;
+            }
+        }
+    }
+    return nullptr;
 }
 
 // The entries of `variant_selections` the layer's prims answer for, with one
@@ -460,10 +568,10 @@ void hoist_variant_prims(
         if (!layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error) || (spec == nullptr)) {
             reason = "is no prim of the target";
         } else {
-            const std::map<std::string, lightusd::VariantSetSpec>::const_iterator set = spec->variantSets().find(entry.set_name);
-            if (set == spec->variantSets().end()) {
+            const lightusd::VariantSetSpec* const set = find_variant_set_spec(spec->variantSets(), entry.set_name);
+            if (set == nullptr) {
                 reason = "declares no such variant set";
-            } else if (set->second.variantSet.find(entry.variant_name) == set->second.variantSet.end()) {
+            } else if (set->variantSet.find(entry.variant_name) == set->variantSet.end()) {
                 reason = "holds no such variant";
             }
         }

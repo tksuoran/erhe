@@ -1980,6 +1980,8 @@ void fill_variant_table(
         Variant_set set{};
         set.prim                      = usd_set.prim;
         set.set_name                  = usd_set.set_name;
+        set.enclosing_set_name        = usd_set.enclosing_set_name;
+        set.enclosing_variant_name    = usd_set.enclosing_variant_name;
         set.selected                  = usd_set.selected;
         set.unsupported_opinion_count = usd_set.unsupported_opinion_count;
         set.base_values = usd_set.base_values;
@@ -3266,9 +3268,11 @@ void collect_usd_variant_sets(
             );
         }
         erhe::usd::Usd_save_variant_set save_set{};
-        save_set.item     = prim;
-        save_set.set_name = set.set_name;
-        save_set.selected = set.selected;
+        save_set.item                   = prim;
+        save_set.set_name               = set.set_name;
+        save_set.enclosing_set_name     = set.enclosing_set_name;
+        save_set.enclosing_variant_name = set.enclosing_variant_name;
+        save_set.selected               = set.selected;
         for (const Variant& variant : set.variants) {
             erhe::usd::Usd_save_variant save_variant{};
             save_variant.name      = variant.name;

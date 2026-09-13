@@ -3068,15 +3068,34 @@ private:
     // The variant sets of one prim: the `variantSets` list op, the `variants`
     // selection and one `variantSet` block per set. A set whose variants all
     // came out empty is not written at all, because an empty block is not a
-    // variant set USD would read back.
+    // variant set USD would read back. Only the sets the prim declares itself
+    // are written here; a set declared inside a variant block goes back inside
+    // that block, which write_variant does.
     void write_variant_sets(lightusd::Prim& prim, const Plan_prim& plan_prim)
     {
         if (plan_prim.variant_sets.empty()) {
             return;
         }
+        write_variant_set_group(prim.variantSets(), prim.metas(), plan_prim, std::string{}, std::string{});
+    }
+
+    // The sets of `plan_prim` declared inside one variant block - both names
+    // empty for the prim itself - written into that block's `variantSets` map
+    // with its own list op and selection metadata.
+    void write_variant_set_group(
+        std::map<std::string, lightusd::VariantSet>& out_variant_sets,
+        lightusd::PrimMetas&                         metas,
+        const Plan_prim&                             plan_prim,
+        const std::string&                           enclosing_set_name,
+        const std::string&                           enclosing_variant_name
+    )
+    {
         std::vector<std::string>      set_names;
         lightusd::VariantSelectionMap selection;
         for (const Usd_save_variant_set* set : plan_prim.variant_sets) {
+            if ((set->enclosing_set_name != enclosing_set_name) || (set->enclosing_variant_name != enclosing_variant_name)) {
+                continue;
+            }
             lightusd::VariantSet usd_set;
             usd_set.name = set->set_name;
             for (const Usd_save_variant& variant : set->variants) {
@@ -3089,12 +3108,11 @@ private:
             if (!set->selected.empty()) {
                 selection[set->set_name] = set->selected;
             }
-            prim.variantSets().emplace(set->set_name, std::move(usd_set));
+            out_variant_sets.emplace(set->set_name, std::move(usd_set));
         }
         if (set_names.empty()) {
             return;
         }
-        lightusd::PrimMetas& metas = prim.metas();
         metas.variantSets = std::vector<std::pair<lightusd::ListEditQual, std::vector<std::string>>>{
             std::make_pair(lightusd::ListEditQual::Append, std::move(set_names))
         };
@@ -3201,6 +3219,10 @@ private:
             }
             usd_variant.primChildren().push_back(std::move(prim));
         }
+        // A `variantSet` this block declares: a set of the same prim, written
+        // back inside the block it came from, with its selection on the
+        // block's own `variants` metadatum.
+        write_variant_set_group(usd_variant.variantSets(), usd_variant.metas(), plan_prim, set.set_name, variant.name);
         return usd_variant;
     }
 

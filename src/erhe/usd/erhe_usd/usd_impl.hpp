@@ -126,6 +126,11 @@ public:
     std::string carrier_path;
     std::string set_name;
     std::string variant_name;
+    // The block the set is declared in, both empty when the prim declares the
+    // set itself: what keeps a nested set's prims apart from a top-level
+    // set's of the same name.
+    std::string enclosing_set_name;
+    std::string enclosing_variant_name;
     // The name the hoisted prim has below the carrier, sibling-unique by the
     // M2 rule: two variants of one set are free to author the same name and
     // the tree is not.
@@ -159,6 +164,31 @@ public:
     // variant, both before the prim's own `variants` metadatum.
     Usd_variant_selections           variant_selections;
 };
+
+// Whether every variant block a nested `variantSet` is declared inside is the
+// selected one of its own set: what decides whether the nested set's blocks
+// contribute at all. A set the prim declares itself is always `selected`.
+enum class Variant_branch_state : unsigned int {
+    selected   = 0,
+    unselected = 1
+};
+
+// Which variant of one `variantSet` a prim composes to, in the strength order
+// USD resolves it in: the selection a composition arc carried into this load
+// (section 2 C7), then the `variants` metadatum of the variant block the set
+// is declared inside - null for a set the prim declares itself - then the
+// prim's own `variants` metadatum, then the first block. load_stage's hoist
+// and the importer both take the selection from here, so both read one rule.
+// A carried selection is validated before the hoist, so it names a variant
+// the set holds.
+[[nodiscard]] auto resolve_selected_variant_name(
+    const Usd_variant_selections&              variant_selections,
+    const std::string&                         absolute_prim_path,
+    const lightusd::VariantSelectionMap*       enclosing_block_selection,
+    const lightusd::VariantSelectionMap&       prim_selection,
+    const std::string&                         set_name,
+    const lightusd::VariantSetSpec&            set
+) -> std::string;
 
 // A USDA literal rewritten in erhe's property text form (D16), defined by
 // usd_import_physics.cpp and used by both import translation units.

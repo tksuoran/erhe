@@ -86,6 +86,12 @@ class Variant_set
 public:
     std::weak_ptr<erhe::Item_base> prim;
     std::string                    set_name;
+    // The variant block the set is declared inside, both empty when the prim
+    // declares the set itself (doc/usd-compatibility-plan.md section 6,
+    // "Variant opinions a variant set does not carry"). A save writes such a
+    // set back inside that block, which is where the file authored it.
+    std::string                    enclosing_set_name;
+    std::string                    enclosing_variant_name;
     std::vector<Variant>           variants;
     std::string                    selected;
     // What the prims held for every path and property name any variant of the

@@ -26,6 +26,7 @@ add_executable(${_target}
     test_usd_image_header.cpp
     test_usd_import.cpp
     test_usd_materials.cpp
+    test_usd_nested_variants.cpp
     test_usd_node_graphs.cpp
     test_usd_open_pbr.cpp
     test_usd_primitives.cpp

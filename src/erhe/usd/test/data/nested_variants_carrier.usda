@@ -1,0 +1,19 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def "FancyTeapot" (
+        prepend references = @./nested_variants.usda@</Teapot>
+        variants = {
+            string modelVariant = "Fancy"
+            string shadingVariant = "PorcelainFlowers"
+        }
+    )
+    {
+    }
+}

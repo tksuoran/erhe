@@ -441,12 +441,22 @@ public:
 // first variant when the layer authors none - LightUSD composes nothing, so
 // the reader is what applies the selected variant's bindings to the imported
 // result.
+//
+// A `variantSet` a variant block itself declares is a set of the prim
+// carrying the outer set, tabled beside it and naming the block it is
+// declared in (`enclosing_set_name` / `enclosing_variant_name`, both empty
+// for a set the prim declares itself). Its blocks contribute only while that
+// enclosing variant is the selected one, so a switch of the outer set
+// re-applies the inner one. Nesting repeats: an enclosing set is free to be
+// a nested set itself, named by its own two fields.
 class Usd_variant_set final
 {
 public:
     std::shared_ptr<erhe::Item_base> prim;
     std::string                      stage_path;
     std::string                      set_name;
+    std::string                      enclosing_set_name;
+    std::string                      enclosing_variant_name;
     std::vector<Usd_variant>         variants;
     std::string                      selected;
     // What the prims held before the selected variant's opinions were applied,
@@ -1055,12 +1065,16 @@ public:
 // as an `over` prim at its relative path, the way X2 writes an override below
 // a reference carrier. The prim's own attributes stay what the writer writes
 // for the state the scene holds today, which the selected variant's opinions
-// equal.
+// equal. A set naming an enclosing set and variant is written inside that
+// variant's block - its `variantSets` list op and its `variants` selection on
+// the block rather than on the prim - which is where the reader found it.
 class Usd_save_variant_set final
 {
 public:
     std::shared_ptr<const erhe::Item_base> item;
     std::string                            set_name;
+    std::string                            enclosing_set_name;
+    std::string                            enclosing_variant_name;
     std::vector<Usd_save_variant>          variants;
     std::string                            selected;
 };

@@ -818,12 +818,28 @@ or any of them in a `.usdz` archive, whose asset paths resolve through the
 archive rather than the file system - is counted for the set instead.
 
 `Usd_data::variant_sets` holds one `Usd_variant_set` per set: the erhe item
-the carrying prim became, the prim's stage path, the set name, one
-`Usd_variant` per variant, and the selection.
+the carrying prim became, the prim's stage path, the set name, the block the
+set is declared inside, one `Usd_variant` per variant, and the selection.
 
-The selection is resolved in the LIVRPS order: the `variants` selection a
-composition arc carried into this load, then the prim's own `variants`
-metadatum, then the first variant when neither names one. A prim that
+A `variantSet` a variant block itself declares is a set of the same prim,
+tabled beside the set that carries the block and naming it
+(`enclosing_set_name` / `enclosing_variant_name`, both empty for a set the
+prim declares itself); nesting repeats, and an enclosing set is free to be a
+nested set of its own. Such a set's blocks are read off the enclosing block's
+spec, and they contribute only while that block is the selected one: their
+prims are hoisted like any other but are active only when every block of the
+chain is selected, their opinions and bindings are applied only then, their
+arcs are counted for the set otherwise, and nothing of an unselected branch is
+captured as a base value - a switch of the enclosing set is what brings the
+inner set in. A carried selection names a nested set the same way it names a
+top-level one, so `load_stage`'s validation looks for the set among the prim's
+own and among every set its blocks declare.
+
+The selection is resolved in the LIVRPS order by
+`resolve_selected_variant_name`, which the hoist and the reader both call: the
+`variants` selection a composition arc carried into this load, then the
+`variants` metadatum of the block a nested set is declared inside, then the
+prim's own `variants` metadatum, then the first variant when none names one. A prim that
 references or payloads a target may author `variants` for the sets the target
 declares, and USD resolves that selection stronger than the target's own, so
 two carriers of one target prim compose two different prim trees.
@@ -848,7 +864,11 @@ nothing of its own.
 A `Usd_variant` carries two things. Its `bindings` are the
 `material:binding` relationships it authors, each as the M1 path of the bound
 prim below the carrying prim and the absolute stage path of the `Material`
-prim. Its `overrides` are the property opinions it authors, recorded exactly
+prim. A path a variant authors names the prims of its own chain of blocks by
+the names the file gave them, and the hoist's M2 rule renames one whose name
+another variant claimed first, so the first segment below the carrying prim is
+resolved through the prims that chain hoisted: the `Look` of the selected
+block is `Look_1` in the tree when another block took `Look`. Its `overrides` are the property opinions it authors, recorded exactly
 the way an `over` below a reference carrier is (X2): one
 `erhe::scene::Instance_override` per path, an empty path being the carrying
 prim itself, holding the `erhe:Owner:name` custom attributes, `visibility`,
@@ -1561,8 +1581,11 @@ over the tree with no file work in it.
   composed stage gives it.
 - Variant sets. `Usd_save_arguments::variant_sets` names the prim carrying
   each set, its variants with their material bindings and property opinions,
-  and the selection; the writer gives the prim an `append variantSets` list
-  op, a `variants` selection and one `variantSet` block per set. A binding or
+  the block the set is declared inside and the selection; the writer gives the
+  prim an `append variantSets` list op, a `variants` selection and one
+  `variantSet` block per set the prim declares itself, and writes a set naming
+  an enclosing block inside that block - its own list op and selection on the
+  block - which is where the reader found it. A binding or
   an opinion of the carrying prim itself is written on the variant, and a
   deeper one on an `over` prim at its relative path, exactly as the X2
   override writer spells them: `visibility` and `purpose` as the native

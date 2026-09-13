@@ -89,6 +89,19 @@ using Tydra_light     = lightusd::tydra::RenderLight;
 using Tydra_attribute = lightusd::tydra::VertexAttribute;
 using Tydra_subset    = lightusd::tydra::MaterialSubset;
 
+// One step of the chain of variant blocks a variant is declared inside: the
+// set and the block, outermost first, the variant itself last. A path a
+// variant authors below the prim carrying the set names the prims of its own
+// chain by the names the file gave them, which the hoist's M2 rule renames
+// when another variant claimed the name first - so the chain is what a path
+// is resolved through.
+class Variant_branch_step final
+{
+public:
+    std::string set_name;
+    std::string variant_name;
+};
+
 // Number of float components an attribute format carries. Tydra converts
 // primvars to float formats; anything else is reported and skipped.
 [[nodiscard]] auto attribute_component_count(const lightusd::tydra::VertexAttributeFormat format) -> std::size_t
@@ -5607,45 +5620,61 @@ private:
         }
     }
 
-    // Which variant of `set` the prim at `absolute_path` composes to: the
-    // selection a composition arc carried into this load, then the layer's own
-    // `variants` opinion, then the first variant when neither names one - the
-    // rule load_stage's hoist applies as well. LIVRPS resolves a carried
-    // selection stronger than the target's own, and load_stage validated it
-    // against the layer, so it names a variant the set holds.
+    // Which variant of `set` the prim at `absolute_path` composes to, by the
+    // one rule load_stage's hoist applies as well: the selection a composition
+    // arc carried into this load, then the `variants` metadatum of the block
+    // the set is declared inside (null for a set the prim declares itself),
+    // then the prim's own `variants` opinion, then the first variant.
     [[nodiscard]] auto selected_variant_name(
-        const std::string&                                            absolute_path,
-        const lightusd::PrimSpec&                                     spec,
-        const std::pair<const std::string, lightusd::VariantSetSpec>& set
+        const std::string&                   absolute_path,
+        const lightusd::VariantSelectionMap& prim_selection,
+        const lightusd::VariantSelectionMap* enclosing_block_selection,
+        const std::string&                   set_name,
+        const lightusd::VariantSetSpec&      set
     ) const -> std::string
     {
-        if (m_impl != nullptr) {
-            const std::string* const carried = m_impl->variant_selections.find(absolute_path, set.first);
-            if (carried != nullptr) {
-                return *carried;
-            }
-        }
-        const lightusd::VariantSelectionMap&                selection = spec.get_variant_selection_map();
-        const lightusd::VariantSelectionMap::const_iterator i         = selection.find(set.first);
-        if (i != selection.end()) {
-            return i->second;
-        }
-        return set.second.variantSet.empty() ? std::string{} : set.second.variantSet.begin()->first;
+        static const Usd_variant_selections s_no_selections{};
+        return resolve_selected_variant_name(
+            (m_impl != nullptr) ? m_impl->variant_selections : s_no_selections,
+            absolute_path,
+            enclosing_block_selection,
+            prim_selection,
+            set_name,
+            set
+        );
     }
 
     // The arcs the selected variant of every set on this prim authors
     // (doc/usd-compatibility-plan.md C6). A variant contributes a composition arc while it is
     // selected, so its arcs are the carrying prim's, and LightUSD composes no
     // variant - the layer's own spec is where the blocks are. Each entry names
-    // the block it came from, which is what a save writes it back into.
+    // the block it came from, which is what a save writes it back into. A
+    // `variantSet` a block declares is a set of this same prim, so its
+    // selected variant's arcs are the prim's too while the enclosing block is
+    // the selected one.
     void read_selected_variant_references(const std::string& absolute_path, std::vector<Usd_reference>& out_references)
     {
         const lightusd::PrimSpec* spec = find_layer_primspec(absolute_path);
         if (spec == nullptr) {
             return;
         }
-        for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : spec->variantSets()) {
-            const std::string selected = selected_variant_name(absolute_path, *spec, set);
+        read_selected_variant_set_group_references(
+            absolute_path, spec->get_variant_selection_map(), spec->variantSets(), nullptr, out_references
+        );
+    }
+
+    void read_selected_variant_set_group_references(
+        const std::string&                                     absolute_path,
+        const lightusd::VariantSelectionMap&                   prim_selection,
+        const std::map<std::string, lightusd::VariantSetSpec>& sets,
+        const lightusd::VariantSelectionMap*                   enclosing_block_selection,
+        std::vector<Usd_reference>&                            out_references
+    )
+    {
+        for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : sets) {
+            const std::string selected = selected_variant_name(
+                absolute_path, prim_selection, enclosing_block_selection, set.first, set.second
+            );
             const std::map<std::string, lightusd::PrimSpec>::const_iterator variant = set.second.variantSet.find(selected);
             if (variant == set.second.variantSet.end()) {
                 continue;
@@ -5656,6 +5685,15 @@ private:
                 reference.variant_set  = set.first;
                 reference.variant_name = selected;
                 out_references.push_back(std::move(reference));
+            }
+            if (!variant->second.variantSets().empty()) {
+                read_selected_variant_set_group_references(
+                    absolute_path,
+                    prim_selection,
+                    variant->second.variantSets(),
+                    &variant->second.get_variant_selection_map(),
+                    out_references
+                );
             }
         }
     }
@@ -6656,17 +6694,57 @@ private:
         if (spec.variantSets().empty()) {
             return;
         }
-        std::vector<Usd_variant_set> sets;
-        for (const std::pair<const std::string, lightusd::VariantSetSpec>& entry : spec.variantSets()) {
+        std::vector<Usd_variant_set>     sets;
+        std::vector<Variant_branch_step> branch;
+        record_variant_set_group(
+            path,
+            spec.get_variant_selection_map(),
+            spec.variantSets(),
+            std::string{},
+            std::string{},
+            nullptr,
+            Variant_branch_state::selected,
+            branch,
+            sets
+        );
+        m_variant_sets_by_path.emplace(path, std::move(sets));
+    }
+
+    // One group of variant sets of the prim at `path`: the group the prim
+    // declares itself, and then the group each of its blocks declares, which
+    // is a set of the same prim tabled beside the enclosing one. A nested
+    // set's blocks contribute only while the enclosing block is the selected
+    // one, so an arc a block of an unselected branch authors is counted for
+    // the set rather than listed.
+    void record_variant_set_group(
+        const std::string&                                     path,
+        const lightusd::VariantSelectionMap&                   prim_selection,
+        const std::map<std::string, lightusd::VariantSetSpec>& sets,
+        const std::string&                                     enclosing_set_name,
+        const std::string&                                     enclosing_variant_name,
+        const lightusd::VariantSelectionMap*                   enclosing_block_selection,
+        const Variant_branch_state                             branch_state,
+        std::vector<Variant_branch_step>&                      branch,
+        std::vector<Usd_variant_set>&                          out_sets
+    )
+    {
+        for (const std::pair<const std::string, lightusd::VariantSetSpec>& entry : sets) {
             Usd_variant_set set{};
-            set.stage_path = path;
-            set.set_name   = entry.first;
-            set.selected   = selected_variant_name(path, spec, entry);
+            set.stage_path             = path;
+            set.set_name               = entry.first;
+            set.enclosing_set_name     = enclosing_set_name;
+            set.enclosing_variant_name = enclosing_variant_name;
+            set.selected               = selected_variant_name(
+                path, prim_selection, enclosing_block_selection, entry.first, entry.second
+            );
             for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
                 Usd_variant variant{};
                 variant.name = variant_entry.first;
-                read_variant_prims(path, entry.first, variant);
+                read_variant_prims(path, set, variant);
                 read_variant_opinions(path, variant_entry.second, std::string{}, variant, set.unsupported_opinion_count);
+                branch.push_back(Variant_branch_step{.set_name = entry.first, .variant_name = variant.name});
+                resolve_variant_binding_paths(path, branch, variant);
+                branch.pop_back();
                 // The arcs the block authors (doc/usd-compatibility-plan.md
                 // C6). The selected variant's are the ones the carrying
                 // prim holds, so they are the ones a save writes back inside
@@ -6674,7 +6752,7 @@ private:
                 // variant, so an unselected variant's are counted instead.
                 std::vector<Usd_reference> variant_references;
                 read_spec_references(variant_entry.second, variant_references);
-                if (variant.name == set.selected) {
+                if ((variant.name == set.selected) && (branch_state == Variant_branch_state::selected)) {
                     for (Usd_reference& reference : variant_references) {
                         reference.variant_set  = entry.first;
                         reference.variant_name = variant.name;
@@ -6685,20 +6763,106 @@ private:
                 }
                 set.variants.push_back(std::move(variant));
             }
-            sets.push_back(std::move(set));
+            const std::string selected = set.selected;
+            out_sets.push_back(std::move(set));
+            for (const std::pair<const std::string, lightusd::PrimSpec>& variant_entry : entry.second.variantSet) {
+                if (variant_entry.second.variantSets().empty()) {
+                    continue;
+                }
+                const Variant_branch_state variant_state =
+                    ((branch_state == Variant_branch_state::selected) && (variant_entry.first == selected))
+                        ? Variant_branch_state::selected
+                        : Variant_branch_state::unselected;
+                branch.push_back(Variant_branch_step{.set_name = entry.first, .variant_name = variant_entry.first});
+                record_variant_set_group(
+                    path,
+                    prim_selection,
+                    variant_entry.second.variantSets(),
+                    entry.first,
+                    variant_entry.first,
+                    &variant_entry.second.get_variant_selection_map(),
+                    variant_state,
+                    branch,
+                    out_sets
+                );
+                branch.pop_back();
+            }
         }
-        m_variant_sets_by_path.emplace(path, std::move(sets));
+    }
+
+    // The material paths of one variant, resolved through the names the hoist
+    // gave the prims of the variant's own chain of blocks. A path a variant
+    // authors below the prim carrying the set names those prims by the names
+    // the file gave them, and the M2 rule renames one whose name another
+    // variant claimed first (`/Teapot/Materials` of the selected `Utah` block
+    // is `Materials_1` in the tree when `Fancy` took `Materials`), so the
+    // first segment below the carrier is looked up among the prims the chain
+    // hoisted.
+    void resolve_variant_binding_paths(
+        const std::string&                      path,
+        const std::vector<Variant_branch_step>& branch,
+        Usd_variant&                            variant
+    )
+    {
+        if (m_impl == nullptr) {
+            return;
+        }
+        const std::string prefix = path + "/";
+        for (Usd_variant_binding& binding : variant.bindings) {
+            if (binding.material_path.compare(0, prefix.size(), prefix) != 0) {
+                continue;
+            }
+            const std::size_t  end     = binding.material_path.find('/', prefix.size());
+            const std::string  segment = (end == std::string::npos)
+                ? binding.material_path.substr(prefix.size())
+                : binding.material_path.substr(prefix.size(), end - prefix.size());
+            const std::string* prim_name = find_branch_prim_name(path, branch, segment);
+            if ((prim_name == nullptr) || (*prim_name == segment)) {
+                continue;
+            }
+            binding.material_path = (end == std::string::npos)
+                ? (prefix + *prim_name)
+                : (prefix + *prim_name + binding.material_path.substr(end));
+        }
+    }
+
+    // The name in the tree of the prim one block of `branch` authored as
+    // `authored_name` below `path`, or null when no block of the chain
+    // authored one.
+    [[nodiscard]] auto find_branch_prim_name(
+        const std::string&                      path,
+        const std::vector<Variant_branch_step>& branch,
+        const std::string&                      authored_name
+    ) const -> const std::string*
+    {
+        for (const Variant_prim_record& record : m_impl->variant_prims) {
+            if ((record.carrier_path != path) || (record.authored_name != authored_name)) {
+                continue;
+            }
+            for (const Variant_branch_step& step : branch) {
+                if ((step.set_name == record.set_name) && (step.variant_name == record.variant_name)) {
+                    return &record.prim_name;
+                }
+            }
+        }
+        return nullptr;
     }
 
     // The prims of one variant, as load_stage hoisted them into the tree
     // below the prim carrying the set (doc/usd-compatibility-plan.md X4).
-    void read_variant_prims(const std::string& path, const std::string& set_name, Usd_variant& variant)
+    void read_variant_prims(const std::string& path, const Usd_variant_set& set, Usd_variant& variant)
     {
         if (m_impl == nullptr) {
             return;
         }
         for (const Variant_prim_record& record : m_impl->variant_prims) {
-            if ((record.carrier_path == path) && (record.set_name == set_name) && (record.variant_name == variant.name)) {
+            if (
+                (record.carrier_path           == path) &&
+                (record.set_name               == set.set_name) &&
+                (record.variant_name           == variant.name) &&
+                (record.enclosing_set_name     == set.enclosing_set_name) &&
+                (record.enclosing_variant_name == set.enclosing_variant_name)
+            ) {
                 variant.prims.push_back(
                     Usd_variant_prim{
                         .relative_path = record.prim_name,
@@ -6843,6 +7007,41 @@ private:
         );
     }
 
+    // Whether every block a nested set is declared inside is the selected one
+    // of its own set, so the set's blocks contribute at all. A set the prim
+    // declares itself always does.
+    [[nodiscard]] auto get_variant_set_branch_state(const Usd_variant_set& set) const -> Variant_branch_state
+    {
+        if (set.enclosing_set_name.empty()) {
+            return Variant_branch_state::selected;
+        }
+        for (const Usd_variant_set& candidate : m_result.data.variant_sets) {
+            if ((candidate.stage_path != set.stage_path) || (candidate.set_name != set.enclosing_set_name)) {
+                continue;
+            }
+            if (candidate.selected != set.enclosing_variant_name) {
+                return Variant_branch_state::unselected;
+            }
+            return get_variant_set_branch_state(candidate);
+        }
+        return Variant_branch_state::unselected;
+    }
+
+    void warn_unsupported_variant_opinions(const Usd_variant_set& set)
+    {
+        if (set.unsupported_opinion_count == 0) {
+            return;
+        }
+        add_warning(
+            fmt::format(
+                "USD prim '{}': variant set '{}' authors {} opinion(s) that erhe has no place for - they are not carried",
+                set.stage_path,
+                set.set_name,
+                set.unsupported_opinion_count
+            )
+        );
+    }
+
     // The selected variant of every set, applied to the imported result: USD
     // resolves a variant selection in composition, and LightUSD composes
     // nothing, so what a variant authors only reaches the scene through this.
@@ -6852,17 +7051,16 @@ private:
     void apply_variant_bindings()
     {
         for (Usd_variant_set& set : m_result.data.variant_sets) {
-            capture_variant_base_values(set);
-            if (set.unsupported_opinion_count != 0) {
-                add_warning(
-                    fmt::format(
-                        "USD prim '{}': variant set '{}' authors {} opinion(s) that erhe has no place for - they are not carried",
-                        set.stage_path,
-                        set.set_name,
-                        set.unsupported_opinion_count
-                    )
-                );
+            if (get_variant_set_branch_state(set) == Variant_branch_state::unselected) {
+                // A nested set declared inside a block nobody selected: its
+                // blocks are not part of the composed prim, so nothing of it
+                // is applied and no base value of it is captured. A switch of
+                // the enclosing set is what brings it in.
+                warn_unsupported_variant_opinions(set);
+                continue;
             }
+            capture_variant_base_values(set);
+            warn_unsupported_variant_opinions(set);
             const Usd_variant* variant = nullptr;
             for (const Usd_variant& candidate : set.variants) {
                 if (candidate.name == set.selected) {
