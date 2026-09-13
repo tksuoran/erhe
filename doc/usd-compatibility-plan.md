@@ -466,6 +466,39 @@ now owns its behavior; `git log` on that record has the history.
   Utah columns render in their shading variant's color
   (`src/erhe/usd/notes.md` "Variant sets"; `src/erhe/scene/notes.md`;
   `src/editor/parsers/notes.md`; `src/editor/scene/notes.md`).
+- C10 `GeomModelAPI` draw modes. A model prim's `UsdGeomModelAPI` is an
+  `editor::Draw_mode` attachment of that prim (`Item_type::draw_mode`),
+  holding every attribute of the schema as an entry property named as
+  `doc/usd_compatibility.md` "Draw modes" names it; the neutral record is
+  `erhe::scene::Draw_mode_description`, whose enumerations spell USD's
+  tokens, read per prim applying the schema (or authoring a `model:`
+  attribute) and written back in the schema's spelling. A value of the
+  record is named `Draw_mode.<property>` wherever a name addresses it: a
+  variant block's `model:` attributes are carried under that name,
+  `find_override_property_target` resolves it to the attachment - made on
+  the spot through the applied-schema attachment registry
+  (`erhe::scene::register_applied_schema_attachment`) when the prim holds
+  none, which is what `prepend apiSchemas` inside the block means - and a
+  carrier's attachment reads its arc target's through the reference layer
+  (`link_carrier_attachments_to_target`). A prim whose own mode asks for a
+  proxy takes its children's subtrees out of render, pick and simulation
+  (`Item_base::set_prunes_children`, ANDed into the derived active bit;
+  the prim and its attachments stay) and supplies the proxy: `bounds` and
+  `origin` as lines per viewport from `Draw_mode_renderer` (the authored
+  `extentsHint`, else the measured bounds of the meshes below), `cards` as
+  a session-only child `Mesh` flagged `Item_flags::draw_mode_proxy`
+  (exempt from the pruning, pick redirected to the model prim, never
+  written), one unlit double-sided face per card cut the way
+  `UsdImagingDrawModeAdapter` cuts it, its image alpha-tested at the
+  adapter's 0.1 threshold, in `drawModeColor` when the face has no image;
+  an inactive prim owns no proxy. `resolved_draw_mode()` walks `inherited`
+  up to the nearest authored ancestor. DrawModes.usd renders as usdview
+  renders it: seven teapots and 28 proxies in their columns' colors and
+  card images; the survey's Storm render draws `bounds` and `origin` as
+  filled slabs where usdview draws lines, which is the entry's remaining
+  image difference and what its expected-results record states
+  (`src/editor/scene/notes.md` "Draw modes"; `src/erhe/usd/notes.md`
+  "Draw modes"; `src/erhe/item/notes.md`).
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -694,58 +727,34 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. `full_assets/Teapot/DrawModes.usd` rendered as usdview renders it: the
-   seven `default` teapots in their variant's material and color, and the
-   28 proxies. Four section 6 entries, each a prerequisite of the next, so
-   they are taken in this order, one entry per commit series:
-   1. Variant selection through a composition arc - landed, section 2
-      C7: each column now loads the template of its own selection.
-   2. Nested variant sets and the constant `displayColor` opinion -
-      landed, section 2 C9: the `shadingVariant` selections choose the
-      material binding and the color.
-   3. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` - landed,
-      section 2 C8: the `Ceramic` material converts and reads its color
-      from the vertex colors.
-   4. "`GeomModelAPI` draw modes" - the 28 proxies; the `drawModeColor`
-      and `cardTexture*` opinions the variant blocks author reach the
-      record through C9's tabling.
-   Verification is the survey entry itself
-   (`py -3 scripts/usd_wg_asset_survey.py --only full_assets/Teapot/DrawModes.usd --usd-root <usd_root>`):
-   the Fancy column is the textured porcelain teapot and the six Utah
-   columns are plain; after step 3 their teapots are black, blue,
-   lime green, orange, red and white; after step 4 the `storm_match`
-   column is above the threshold and the entry's expected-results record
-   (`doc/usd-wg-assets-expected.json`) drops its near-zero-match reason.
-   Section 6 "Load performance" (item 3) is not needed for fidelity: the
-   35 teapots load, slowly.
-2. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
+1. The LightUSD fork fixes (section 6 "Two LightUSD limits worked around
    downstream", "Relationship targets a weaker sublayer contributes as a
    single path", the `texCoord2f` finding of "Writer findings of
    usdchecker"). Four defects in one dependency, each already diagnosed to
    the function; a fork branch carrying them removes a stripping pass, a
    quoting workaround, 2816 skipped instances and a validator finding.
-3. Load performance (section 6 "Load performance"). The scenes holding
+2. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-4. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+3. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-5. The round-trip residue (section 6 "Node-held secondary values",
+4. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
    of usdchecker", and the glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
-6. Shading and imaging the survey names (section 6 "A material slot that
+5. Shading and imaging the survey names (section 6 "A material slot that
    a texture graph feeds AND that carries an authored factor", "Image
    formats", "An environment map from a DomeLight texture", "MaterialX").
    The slot factor is importer work; the rest need a renderer or decoder
    erhe does not have, MaterialX documents a LightUSD option erhe's build
    leaves off.
-7. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+6. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-8. Composition beyond what erhe resolves (section 6 "Layer-stack
+7. Composition beyond what erhe resolves (section 6 "Layer-stack
    editing", "inherits and specializes arcs whose target is not a class
    prim", the `over`-child and `.usdz` forms of "Variant opinions a
    variant set does not carry", "Overrides on applied API schemas inside
@@ -754,12 +763,11 @@ section 6 entry it names, and nothing here restates one.
 
 ## 4. Order
 
-Item 1 of section 3 comes first, its four steps in the order the item
-gives, since each step's result is what the next one acts on. Item 2 goes
-with a fork tag bump and is best taken when a fork clone is at hand
-(`memory-bank/local/context.md` records it). The remaining items have no
-ordering constraint among them; each is taken through the harness of
-`doc/agent-orchestration-harness.md`, one commit at a time (C2).
+Item 1 of section 3 goes with a fork tag bump and is best taken when a
+fork clone is at hand (`memory-bank/local/context.md` records it). The
+remaining items have no ordering constraint among them; each is taken
+through the harness of `doc/agent-orchestration-harness.md`, one commit
+at a time (C2).
 
 ## 5. Out of scope
 
@@ -897,55 +905,14 @@ ranks them. A USD scene loads, edits and saves without any of them.
   variant block that the hoist does not reach - one authored below an
   `over` child of the variant, and any of them in a `.usdz` archive, whose
   asset paths resolve through the archive rather than the file system -
-  and a property the value reader cannot express (a `GeomModelAPI`
-  attribute a variant block authors is one until the draw-mode record of
-  section 6 "`GeomModelAPI` draw modes" exists: `model:drawModeColor` in
-  the Teapot's nested `shadingVariant` blocks, the six `model:cardTexture*`
-  in its `modelVariant` blocks). Each is counted in
+  and a property the value reader cannot express. Each is counted in
   `Usd_variant_set::unsupported_opinion_count`, reported per set, and
   named by the save warning. Taking the first up means hoisting through
   the `over` children too, and the last is the value reader's own
   coverage.
-- `GeomModelAPI` draw modes: a model prim carrying the schema asks the
-  imaging layer to draw its subtree as a proxy, and the imaging layer, not
-  the composition, implements it (OpenUSD's `UsdImagingGLDrawModeAdapter`;
-  LightUSD's `next` API evaluates the attributes in
-  `lightusd::next::GetGeomModelData` and Tydra, like erhe, images
-  nothing of them). The attributes are `model:drawMode` (`default`,
-  `origin`, `bounds`, `cards`, `inherited`), `model:applyDrawMode`,
-  `model:cardGeometry` (`cross`, `box`, `fromTexture`),
-  `model:cardVisibility`, the six `model:cardTexture{X,Y,Z}{Neg,Pos}`
-  asset paths, `model:drawModeColor`, and `extentsHint`, the model bounds
-  the proxies are sized from. `full_assets/Teapot/DrawModes.usd` authors
-  `drawMode` and `cardGeometry` on its 35 prims (7 `default`, 14 `cards`
-  as `cross` and `box`, 7 `bounds`, 7 `origin`), the card textures and
-  `extentsHint` inside `Teapot.usd`'s `modelVariant` blocks, and
-  `drawModeColor` inside the nested `shadingVariant` blocks; usdview shows
-  7 teapots and 28 proxies, erhe 35 teapots. The erhe form is a
-  `Draw_mode` applied-schema attachment on the prim (the `Node_physics`
-  shape) holding every attribute above as an entry property, read from
-  the composed stage for every prim carrying the schema and written back
-  in the schema's spelling. A prim whose resolved mode (`inherited` walks
-  to the nearest ancestor with an authored one; the root fallback is
-  `default`) is not `default` has its subtree taken out of render and pick
-  through the derived `Item_flags::active` bit (X2), the way the adapter
-  prunes it, and the attachment supplies the proxy in its place: `bounds`
-  is the `extentsHint` box (the subtree's computed bounds when the hint is
-  absent) as lines in `drawModeColor` through the line renderer; `origin`
-  is the three axis lines from the prim's origin, sized from the same
-  extent; `cards` is generated quad geometry - `cross` three axis-aligned
-  quads through the extent's center, `box` the six faces of the extent,
-  `fromTexture` the quads the textures' `worldtoscreen` metadata places -
-  each face textured with its `cardTexture` (a face with no texture drawn
-  in `drawModeColor`), the faces `cardVisibility = simple` suppresses
-  left out, drawn unlit and double-sided as the adapter draws them. The
-  proxy geometry is the attachment's own, rebuilt when its properties or
-  the extent change, and is not a prim of the tree (a save writes the
-  attributes, never the proxy). `applyDrawMode` is read and written and
-  does not gate the proxy: the adapter honors `drawMode` on every model
-  prim of a stage, with `applyDrawMode` a hint for assemblies, and the
-  reference image shows the modes applied without it.
-- Overrides on applied API schemas inside an instance: the override walk
+- Overrides on applied API schemas inside an instance: an attachment of an
+  applied schema reads its counterpart through the reference layer (C10),
+  and the override walk
   of `erhe::scene::instance_override` visits prims only, so a local value
   on a `Node_physics`, `Node_joint` or other attachment below a carrier is
   neither written as part of the carrier's `over` prims nor kept across a
