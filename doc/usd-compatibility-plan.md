@@ -416,6 +416,27 @@ now owns its behavior; `git log` on that record has the history.
   DrawModes.usd loads seven distinct templates and its Fancy column holds
   the Fancy geometry (`src/erhe/usd/notes.md` "Variant sets", "Composition
   arcs"; `src/editor/parsers/notes.md`).
+- C8 A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`. Tydra
+  resolves a connected input to a `UsdUVTexture` or fails the whole
+  material, so `load_stage` takes a connection to a `UsdPrimvarReader_*`
+  out of the layer copy the stage is built from (the texture-graph strip's
+  shape) and records the material, the input and the primvar; the
+  importer maps `displayColor` onto `Material::base_color_source =
+  vertex_color` and `displayOpacity` onto `opacity_source = vertex_color`
+  (`erhe::primitive::Material_input_source`; any other primvar is one
+  warning and the input keeps its own value), and the writer authors the
+  reader prim and the connection back. The pair rides the material record
+  as `input_sources` (a `uvec2` beside `texture_channels`); with
+  `vertex_color` the shaders take the mesh's color attribute alone, the
+  factor and the texture unread, and with `value` the factor, the texture
+  and the vertex color multiply as before. A material's `outputs:surface`
+  is followed through `NodeGraph` prims to the Shader that holds the
+  inputs. The usd-wg Teapot's `Ceramic` and SubdivisionSurfaces'
+  `PyramidMaterial` convert (3 of 3 there; `src/erhe/usd/notes.md`
+  "UsdPreviewSurface fallbacks and channel outputs";
+  `src/erhe/scene_renderer/notes.md`). A material converted after Tydra's
+  pass takes its texture and image ids from the render scene's own lists,
+  so two appended materials reading one file share the image.
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -653,8 +674,9 @@ section 6 entry it names, and nothing here restates one.
    2. The nested-set and constant-`displayColor` forms of "Variant
       opinions a variant set does not carry" - the `shadingVariant`
       selections choose the material binding and the color.
-   3. "A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`" - the
-      `Ceramic` material's `diffuseColor` is that color.
+   3. A `UsdPreviewSurface` input fed by a `UsdPrimvarReader` - landed,
+      section 2 C8: the `Ceramic` material converts and reads its color
+      from the vertex colors.
    4. "`GeomModelAPI` draw modes" - the 28 proxies; the `drawModeColor`
       and `cardTexture*` opinions the variant blocks author reach the
       record through step 2's tabling.
@@ -815,31 +837,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
   Closing it means carrying the factor as the graph connection's
   `inputs:scale` the way a `UsdUVTexture` carries erhe's factor, which
   needs the graph's interface output to pass through a multiplying node.
-- A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`: Tydra accepts
-  only a `UsdUVTexture` output on a shader input, so a network that reads a
-  primvar into one - usd-wg
-  `full_assets/SubdivisionSurfaces/Creases_SpinningPyramids.usda` connects
-  `inputs:diffuseColor` to a `UsdPrimvarReader_float3` reading
-  `displayColor`, and the `Ceramic` material of
-  `full_assets/Teapot/Teapot_Materials.usd` does the same for its six
-  shading variants - fails the whole material, and the file's meshes arrive
-  with no material at all (0 of 3 in the first, every Utah teapot in the
-  second). erhe closes it on its own side, reading from the composed layer:
-  a surface input connected to a `UsdPrimvarReader_<type>` whose `varname`
-  is `displayColor` (or `displayOpacity`, for `opacity`) makes the material
-  take that input from the mesh's vertex colors, and every other primvar
-  name is one warning naming the material, the input and the primvar. The
-  erhe form is a `Material` property per such input (`base_color_source`,
-  `opacity_source`: `value` or `vertex_color`) that the shader key and the
-  material record carry the way the vertex-colored default material already
-  reads its albedo from the color attribute
-  (`Material_set::vertex_colored_default_material_slot_index`); the writer
-  authors the `UsdPrimvarReader` prim and the connection back from the
-  property. The network is read before Tydra sees the layer, the way the
-  node-graph wiring is stripped in `load_stage`, so Tydra converts the rest
-  of the material. A Tydra change in the fork is the alternative and is not
-  taken: the mapping is erhe's own (a primvar onto an erhe vertex
-  attribute), so it is erhe code either way.
 - Image formats: Radiance `.hdr` and OpenEXR `.exr` need decoders erhe
   does not build (`stb_image.h` sits in the CPM cache of fpng and LightUSD,
   and nothing in the tree reads `.exr`); the StandardShaderBall scene's six
