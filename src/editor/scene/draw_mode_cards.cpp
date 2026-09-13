@@ -384,6 +384,21 @@ public:
     return geometry;
 }
 
+// The cutout a card image is drawn through
+// (UsdImagingDrawModeAdapter::GetMaterialResource puts exactly this
+// value in the surface's `opacityThreshold` when it connects the card
+// texture's alpha to `opacity`).
+constexpr float c_card_opacity_threshold = 0.1f;
+
+// A card image carries the silhouette of the subtree it stands for in its
+// alpha channel, and the imaging adapter cuts the card out along it: the
+// texture's alpha feeds the surface's `opacity` and an `opacityThreshold` of
+// 0.1 makes that a cutout rather than a blend. The erhe equivalent is the
+// alpha_test blending mode with that cutoff - the fragment alpha is the
+// material's opacity times the alpha channel of the base color slot, which is
+// what the default `opacity_channel` names - so the card stays in the opaque
+// pass, the way the adapter's cutout does. A face with no image is the flat
+// draw-mode color and covers its whole quad.
 [[nodiscard]] auto make_card_material(
     const std::string_view                          name,
     const glm::vec3&                                base_color,
@@ -394,9 +409,13 @@ public:
         erhe::primitive::Material_create_info{
             .name   = std::string{name},
             .values = {
-                .base_color   = base_color,
-                .bxdf_model   = erhe::primitive::Bxdf_model::unlit,
-                .double_sided = true
+                .base_color    = base_color,
+                .bxdf_model    = erhe::primitive::Bxdf_model::unlit,
+                .blending_mode = texture
+                    ? erhe::primitive::Material_blending_mode::alpha_test
+                    : erhe::primitive::Material_blending_mode::opaque,
+                .double_sided  = true,
+                .alpha_cutoff  = c_card_opacity_threshold
             }
         }
     );

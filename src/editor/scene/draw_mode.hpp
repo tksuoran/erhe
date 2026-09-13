@@ -63,6 +63,11 @@ public:
     void handle_node_update     (erhe::scene::Node* old_node, erhe::scene::Node* new_node) override;
     void handle_item_host_update(erhe::Item_host* old_item_host, erhe::Item_host* new_item_host) override;
 
+    // Overrides Item_base: an inactive prim draws nothing, so it owns no card
+    // proxy either; the proxy is built when the derived Item_flags::active
+    // bit comes back.
+    void handle_flag_bits_update(uint64_t old_flag_bits, uint64_t new_flag_bits) override;
+
     // Implements Dependency_object: a change of the mode re-applies the
     // pruning, a change of the extents hint drops the cached extent.
     void on_property_changed(const erhe::property::Property_changed_args& args) override;
@@ -140,10 +145,13 @@ public:
     [[nodiscard]] auto get_card_proxy() const -> const std::shared_ptr<erhe::scene::Mesh>&;
 
     // Builds the card proxy the current values ask for and puts it under the
-    // node, taking the previous one out. Main thread only, and never from a
-    // change site: the build inserts a prim, so the change sites queue the
-    // attachment with their Scene_root and App_scenes::rebuild_draw_mode_proxies()
-    // is what calls this.
+    // node, taking the previous one out. An inactive prim - one its own
+    // opinion, or the pruning of an ancestor's draw mode, took out of render,
+    // pick and simulation - builds none: it is drawn by nothing, so a proxy
+    // of it would be geometry, materials and textures nobody sees. Main
+    // thread only, and never from a change site: the build inserts a prim, so
+    // the change sites queue the attachment with their Scene_root and
+    // App_scenes::rebuild_draw_mode_proxies() is what calls this.
     void rebuild_card_proxy();
 
 private:

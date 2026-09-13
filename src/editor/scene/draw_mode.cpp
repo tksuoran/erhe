@@ -187,6 +187,19 @@ void Draw_mode::handle_item_host_update(erhe::Item_host* const old_item_host, er
     }
 }
 
+void Draw_mode::handle_flag_bits_update(const uint64_t old_flag_bits, const uint64_t new_flag_bits)
+{
+    erhe::scene::Node_attachment::handle_flag_bits_update(old_flag_bits, new_flag_bits);
+    // The derived active bit of the attachment follows its node's (X2), and a
+    // node an ancestor's draw mode pruned is one of the ways it goes out. An
+    // inactive prim owns no proxy, so the bit going out takes the proxy out
+    // and the bit coming back builds it.
+    if (((old_flag_bits ^ new_flag_bits) & erhe::Item_flags::active) == 0u) {
+        return;
+    }
+    queue_card_proxy_rebuild();
+}
+
 void Draw_mode::on_property_changed(const erhe::property::Property_changed_args& args)
 {
     if (!erhe::property::is_owner_type_or_descendant(c_owner, args.property.get_owner_type())) {
@@ -308,6 +321,14 @@ void Draw_mode::rebuild_card_proxy()
     remove_card_proxy();
     erhe::scene::Node* const node = get_node();
     if ((node == nullptr) || (get_item_host() == nullptr)) {
+        return;
+    }
+    // An inactive prim is out of render, pick and simulation, so the subtree
+    // it stands for is not drawn and neither is the proxy that would stand in
+    // for it. The clones of an instance below a pruning prim are the case
+    // this is measured on: without it every one of them owns a set of cards
+    // nothing ever draws.
+    if (!is_active()) {
         return;
     }
     m_card_proxy = build_draw_mode_card_proxy(m_context, *this);
