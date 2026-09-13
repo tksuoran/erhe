@@ -388,6 +388,34 @@ now owns its behavior; `git log` on that record has the history.
   materials and DrawModes.usd its 35 meshes at the composed bounds; what
   DrawModes.usd still needs to render as usdview renders it is section 3
   item 1.
+- C7 Variant selection through a composition arc. A prim that references
+  or payloads a target may author `variants = { ... }` for the sets the
+  target declares, and LIVRPS resolves that selection stronger than the
+  target's own. `Usd_reference::variant_selections` is what the referencing
+  prim authors for what its arcs bring in (the same entries on every arc of
+  the prim; a `variants` on an `over` child below the carrier is the entry
+  of that child's path), `Usd_load_arguments::variant_selections` hands it
+  to the target's load rooted at the prim the arc names (an empty root is
+  the layer's `defaultPrim`, resolved inside `load_stage`), `load_stage`
+  validates every entry once against the layer - the prim must exist,
+  declare the set and hold the variant, each failing entry one warning and
+  dropped - and the hoist and the reader both consult the kept entries
+  before the prim's own `variants` metadatum. The editor keys a template by
+  the selection (`Prefab_key`, `Prefab_variant_selection`), so two carriers
+  selecting different variants of one target load two templates, which is
+  what USD composes; a selection also reaches the arcs of the prims it
+  names, because a variant set is composed once out of the prim's whole
+  index. `Prefab_instance` records the selection, a read-only Properties
+  row and `get_node_details` show it, and the writer authors it back on the
+  carrier - merged into the carrier's own `variants` metadatum, a deeper
+  entry inside the `over` prim of its path. A template's own variant sets
+  are not tabled, so the selection is not a `Variant_table` entry; a switch
+  of it means re-targeting the instance to the template of the other
+  selection, which is taken when a file needs it. Fixtures
+  `references_variants.usda` / `references_variants_target.usda`;
+  DrawModes.usd loads seven distinct templates and its Fancy column holds
+  the Fancy geometry (`src/erhe/usd/notes.md` "Variant sets", "Composition
+  arcs"; `src/editor/parsers/notes.md`).
 - X5 Composition provenance in the Properties window: erhe resolves every
   arc itself - references and payloads as prefab instances with the
   reference layer (X1, X2), `over` opinions as local values (X2), class
@@ -620,9 +648,8 @@ section 6 entry it names, and nothing here restates one.
    seven `default` teapots in their variant's material and color, and the
    28 proxies. Four section 6 entries, each a prerequisite of the next, so
    they are taken in this order, one entry per commit series:
-   1. "Variant selection through a composition arc" - without it every
-      column is the target file's own `Utah` selection, and nothing the
-      later steps carry reaches the right teapot.
+   1. Variant selection through a composition arc - landed, section 2
+      C7: each column now loads the template of its own selection.
    2. The nested-set and constant-`displayColor` forms of "Variant
       opinions a variant set does not carry" - the `shadingVariant`
       selections choose the material binding and the color.
@@ -633,8 +660,8 @@ section 6 entry it names, and nothing here restates one.
       record through step 2's tabling.
    Verification is the survey entry itself
    (`py -3 scripts/usd_wg_asset_survey.py --only full_assets/Teapot/DrawModes.usd --usd-root <usd_root>`):
-   after step 1 the Fancy column is the textured porcelain teapot and the
-   six Utah columns differ; after step 3 their teapots are black, blue,
+   the Fancy column is the textured porcelain teapot and the six Utah
+   columns are plain; after step 3 their teapots are black, blue,
    lime green, orange, red and white; after step 4 the `storm_match`
    column is above the threshold and the entry's expected-results record
    (`doc/usd-wg-assets-expected.json`) drops its near-zero-match reason.
@@ -857,8 +884,8 @@ ranks them. A USD scene loads, edits and saves without any of them.
   - A `variantSet` declared inside a variant block is a set of the prim
     carrying the outer set, tabled beside it, with its blocks read off the
     enclosing variant's spec; its selection is the strongest of the
-    carrier's arc-carried selection (section 6 "Variant selection through a
-    composition arc"), the enclosing variant block's own `variants`
+    carrier's arc-carried selection (section 2 C7), the enclosing variant
+    block's own `variants`
     metadatum (`"Utah" ( variants = { string shadingVariant =
     "CeramicLimeGreen" } )`), the prim's, and the first block. The blocks of
     a nested set contribute only while their enclosing variant is selected,
@@ -877,36 +904,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     in the nested set, the six `model:cardTexture*` in the outer one) are
     property opinions of the draw-mode record (section 6 "GeomModelAPI draw
     modes"); until that record exists they are counted.
-- Variant selection through a composition arc: a prim that references or
-  payloads a target may author `variants = { ... }` selecting the sets the
-  target declares, and in LIVRPS that selection is stronger than the
-  target's own. erhe reads a set's selection from the target prim's own
-  spec (`selected_variant_name` in `usd_import.cpp`, the same rule
-  `load_stage`'s hoist applies), and a template is keyed by file and prim
-  path alone (`Prefab_key`), so every carrier of `Teapot.usd</Teapot>` gets
-  the target file's `Utah`: `full_assets/Teapot/DrawModes.usd` selects
-  `Fancy` on one column and six `shadingVariant`s on the others, and all
-  seven columns import as the same lime-green Utah teapot. The fix keys the
-  template by the selection as well: `Usd_load_arguments` carries a
-  selection map (set name to variant, per prim path below the target) that
-  `load_stage` and the reader consult before the prim's own `variants`
-  metadatum, `Prefab_key` gains the map so two carriers with different
-  selections load two templates (which is what USD composes: two prim
-  indexes), and `Prefab_instance` records the map so the writer authors
-  `variants = { ... }` on the carrier and the selection survives a round
-  trip. A selection that names a set or variant the target does not declare
-  is one warning and is dropped. A template's own variant sets are not
-  tabled (only a file opened as or imported into a scene fills the
-  `Variant_table`), so an arc-carried selection is shown read-only on the
-  instance's Properties rows and by `get_node_details`, and is not a table
-  entry - a switch of it means re-targeting the instance to the template
-  of the other selection, which is the editor half of X4 for such a set
-  and is taken when a file needs it.
-  The one-template-with-overrides shape (one template per file and prim,
-  the carrier's selection applied as instance overrides after
-  instantiation) is not taken: the two variants of `Teapot_Geometry.usd`
-  author different reference arcs, and a prim holds one list of arcs
-  (C6), so a template cannot hold both.
 - `GeomModelAPI` draw modes: a model prim carrying the schema asks the
   imaging layer to draw its subtree as a proxy, and the imaging layer, not
   the composition, implements it (OpenUSD's `UsdImagingGLDrawModeAdapter`;

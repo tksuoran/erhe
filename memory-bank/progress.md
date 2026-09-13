@@ -214,3 +214,8 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-2{89083b431:USD-reader/writer-time-samples-on-light/material/visibility-attributes;attribute_samples.usda;usd-tests-344->351;headless-seek-0.5s-verified;usdchecker-Success}
 ✓commit-3{fbd21f60c:Ts-splines-on-intensity/roughness/metallic/opacity<->CUBICSPLINE;hermite-write-back;attribute_splines.usda;usd-tests-351->358;headless+usdchecker-verified}
   plan-section-2-statement+section-6-entry-dropped;prompt_queue.txt-deleted|?user-interactive
+
+[TASK::drawmodes-fidelity]{plan-section-3-item-1;via-harness;started-2026-09-13}
+✓camera-exposure-stop{3f93df1e3:import-2^stop,export-log2;capture-no-longer-black;usd-tests-360}
+✓step-1-arc-carried-variant-selection{daa4f7fc9-erhe::usd+30c2fba97-editor;C7;usd-tests-366;headless:references_variants.usda+DrawModes.usd-7-templates;roundtrip-411/414}
+?step-2-nested-variantSets+constant-displayColor->step-3-PrimvarReader->step-4-GeomModelAPI-draw-modes
