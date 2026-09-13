@@ -40,6 +40,7 @@ add_executable(${_target}
     test_usd_skinning.cpp
     test_usd_styles.cpp
     test_usd_sublayers.cpp
+    test_usd_primvar_reader_inputs.cpp
     test_usd_texture_channels.cpp
     test_usd_texture_inputs.cpp
     test_usd_time_samples.cpp

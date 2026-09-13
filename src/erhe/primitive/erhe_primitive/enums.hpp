@@ -144,6 +144,20 @@ enum class Texture_channel : uint16_t {
     none = 4
 };
 
+// Where a shading input takes its value from.
+//
+// `value` is the material's own: the factor, times the slot's texture where
+// one is bound, times the mesh's vertex color where the mesh carries one.
+// `vertex_color` is the mesh's color attribute alone - the factor and the
+// texture of that input are not read at all - which is what a
+// `UsdPreviewSurface` input fed by a `UsdPrimvarReader` of `displayColor` /
+// `displayOpacity` says (doc/usd_compatibility.md, "Materials"). The
+// enumerator values are what the material record carries to the shader.
+enum class Material_input_source : uint16_t {
+    value        = 0,
+    vertex_color = 1
+};
+
 enum class Normalmap_encoding : uint16_t {
     right_handed_three_channel  = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_THREE_CHANNEL,
     right_handed_two_channel_ga = ERHE_NORMALMAP_ENCODING_RIGHT_HANDED_TWO_CHANNEL_GA,
@@ -201,6 +215,11 @@ static const char* const c_texgen_mode_names[] = {
     "Tangent"
 };
 
+static const char* const c_material_input_source_names[] = {
+    "Value",
+    "Vertex Color"
+};
+
 static const char* const c_normalmap_encoding_names[] = {
     "Right Handed RGB",
     "Right Handed X+Y (GA)",
@@ -217,6 +236,7 @@ extern const erhe::property::Enum_info c_material_blending_mode_enum_info;
 extern const erhe::property::Enum_info c_texgen_mode_enum_info;
 extern const erhe::property::Enum_info c_normalmap_encoding_enum_info;
 extern const erhe::property::Enum_info c_texture_channel_enum_info;
+extern const erhe::property::Enum_info c_material_input_source_enum_info;
 // The erhe::graphics sampler enums, for the Material slot sampler properties.
 extern const erhe::property::Enum_info c_sampler_address_mode_enum_info;
 extern const erhe::property::Enum_info c_filter_enum_info;
@@ -230,8 +250,10 @@ extern const erhe::property::Enum_info c_sampler_mipmap_mode_enum_info;
 [[nodiscard]] auto c_str(Texgen_mode texgen_mode) -> const char*;
 [[nodiscard]] auto c_str(Normalmap_encoding normalmap_encoding) -> const char*;
 [[nodiscard]] auto c_str(Texture_channel texture_channel) -> const char*;
+[[nodiscard]] auto c_str(Material_input_source input_source) -> const char*;
 [[nodiscard]] auto to_uint32(Texgen_mode texgen_mode) -> uint32_t;
 [[nodiscard]] auto to_uint32(Normalmap_encoding normalmap_encoding) -> uint32_t;
 [[nodiscard]] auto to_uint32(Texture_channel texture_channel) -> uint32_t;
+[[nodiscard]] auto to_uint32(Material_input_source input_source) -> uint32_t;
 
 } // namespace erhe::primitive

@@ -158,6 +158,14 @@ const Property<Texture_channel> Material::opacity_channel_property = Property<Te
     "opacity_channel", c_owner, c_texture_channel_enum_info,
     Property_metadata{.default_value = erhe::property::make_value(Texture_channel::a), .inherits = true, .ui = Property_ui{.tooltip = "Channel of the base color texture the fragment alpha comes from", .label = "Opacity Channel"}}
 );
+const Property<Material_input_source> Material::base_color_source_property = Property<Material_input_source>::register_property(
+    "base_color_source", c_owner, c_material_input_source_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Material_input_source::value), .inherits = true, .ui = Property_ui{.tooltip = "Where the base color comes from: the material's own value, or the mesh vertex color alone", .label = "Base Color Source"}}
+);
+const Property<Material_input_source> Material::opacity_source_property = Property<Material_input_source>::register_property(
+    "opacity_source", c_owner, c_material_input_source_enum_info,
+    Property_metadata{.default_value = erhe::property::make_value(Material_input_source::value), .inherits = true, .ui = Property_ui{.tooltip = "Where the fragment alpha comes from: the material's own value, or the mesh vertex color alpha alone", .label = "Opacity Source"}}
+);
 const Property<Bxdf_model> Material::bxdf_model_property = Property<Bxdf_model>::register_property(
     "bxdf_model", c_owner, c_bxdf_model_enum_info,
     Property_metadata{.default_value = erhe::property::make_value(Bxdf_model::isotropic_brdf), .inherits = true, .flags = c_partition_variant_native, .ui = Property_ui{.label = "BxDF Model"}}
@@ -701,6 +709,8 @@ auto Material::get_values() const -> Material_values
         .roughness_channel                  = get_roughness_channel(),
         .occlusion_channel                  = get_occlusion_channel(),
         .opacity_channel                    = get_opacity_channel(),
+        .base_color_source                  = get_base_color_source(),
+        .opacity_source                     = get_opacity_source(),
         .bxdf_model                         = get_bxdf_model(),
         .blending_mode                      = get_blending_mode(),
         .double_sided                       = get_double_sided(),
@@ -751,6 +761,8 @@ void Material::set_values(const Material_values& values)
     set_or_clear(*this, roughness_channel_property,                  values.roughness_channel);
     set_or_clear(*this, occlusion_channel_property,                  values.occlusion_channel);
     set_or_clear(*this, opacity_channel_property,                    values.opacity_channel);
+    set_or_clear(*this, base_color_source_property,                  values.base_color_source);
+    set_or_clear(*this, opacity_source_property,                     values.opacity_source);
     set_or_clear(*this, bxdf_model_property,                         values.bxdf_model);
     set_or_clear(*this, blending_mode_property,                      values.blending_mode);
     set_or_clear(*this, double_sided_property,                       values.double_sided);
@@ -781,6 +793,8 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
     result.set(roughness_channel_property,                  make_value(values.roughness_channel));
     result.set(occlusion_channel_property,                  make_value(values.occlusion_channel));
     result.set(opacity_channel_property,                    make_value(values.opacity_channel));
+    result.set(base_color_source_property,                  make_value(values.base_color_source));
+    result.set(opacity_source_property,                     make_value(values.opacity_source));
     result.set(bxdf_model_property,                         make_value(values.bxdf_model));
     result.set(blending_mode_property,                      make_value(values.blending_mode));
     result.set(double_sided_property,                       make_value(values.double_sided));
@@ -842,6 +856,8 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
         (lhs.roughness_channel                  == rhs.roughness_channel                 ) &&
         (lhs.occlusion_channel                  == rhs.occlusion_channel                 ) &&
         (lhs.opacity_channel                    == rhs.opacity_channel                   ) &&
+        (lhs.base_color_source                  == rhs.base_color_source                 ) &&
+        (lhs.opacity_source                     == rhs.opacity_source                    ) &&
         (lhs.bxdf_model                         == rhs.bxdf_model                        ) &&
         (lhs.blending_mode                      == rhs.blending_mode                     ) &&
         (lhs.double_sided                       == rhs.double_sided                      ) &&

@@ -132,9 +132,15 @@ constexpr erhe::property::Enum_entry c_texture_channel_entries[] = {
     {"None",  static_cast<int32_t>(Texture_channel::none)},
 };
 
+constexpr erhe::property::Enum_entry c_material_input_source_entries[] = {
+    {"Value",        static_cast<int32_t>(Material_input_source::value)},
+    {"Vertex Color", static_cast<int32_t>(Material_input_source::vertex_color)},
+};
+
 } // anonymous namespace
 
 const erhe::property::Enum_info c_texture_channel_enum_info{"Texture_channel", c_texture_channel_entries};
+const erhe::property::Enum_info c_material_input_source_enum_info{"Material_input_source", c_material_input_source_entries};
 
 constexpr erhe::property::Enum_entry c_sampler_address_mode_entries[] = {
     {"Repeat",          static_cast<int32_t>(erhe::graphics::Sampler_address_mode::repeat)},
@@ -242,6 +248,28 @@ auto to_uint32(const Texture_channel texture_channel) -> uint32_t
         case Texture_channel::none: return 4u;
         default: {
             ERHE_FATAL("Bad Texture_channel");
+        }
+    }
+}
+
+auto c_str(const Material_input_source input_source) -> const char*
+{
+    switch (input_source) {
+        case Material_input_source::value:        return "Value";
+        case Material_input_source::vertex_color: return "Vertex Color";
+        default: {
+            ERHE_FATAL("Bad Material_input_source");
+        }
+    }
+}
+
+auto to_uint32(const Material_input_source input_source) -> uint32_t
+{
+    switch (input_source) {
+        case Material_input_source::value:        return 0u;
+        case Material_input_source::vertex_color: return 1u;
+        default: {
+            ERHE_FATAL("Bad Material_input_source");
         }
     }
 }

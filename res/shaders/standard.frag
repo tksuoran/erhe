@@ -293,12 +293,7 @@ void main()
 // top of this file. Gate the body on POSITION_PASS too so the ID-render
 // variant does not pull them in.
 #if !defined(ERHE_VARIANT_POSITION_PASS)
-    Material material   = material.materials[v_material_index];
-    vec3     base_color = material.base_color.rgb;
-
-#ifdef ERHE_USE_VERTEX_VARYING_COLOR
-    base_color *= v_color.rgb;
-#endif
+    Material material = material.materials[v_material_index];
 
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
     uvec2 base_color_texture = material.base_color_texture;
@@ -308,8 +303,26 @@ void main()
         material.base_color_rotation_scale,
         material.base_color_offset
     );
-    base_color *= base_color_sample.rgb;
 #endif
+
+    // material.input_sources.x names where the base color comes from. With
+    // ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR the mesh's color attribute is
+    // the base color on its own; with ERHE_MATERIAL_INPUT_SOURCE_VALUE the
+    // material's factor, its base color texture and the vertex color (where
+    // the mesh carries one) multiply together, which is what every glTF
+    // material and every UsdPreviewSurface with a plain diffuseColor wants.
+    vec3 base_color;
+    if (material.input_sources.x == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
+        base_color = v_color.rgb;
+    } else {
+        base_color = material.base_color.rgb;
+#ifdef ERHE_USE_VERTEX_VARYING_COLOR
+        base_color *= v_color.rgb;
+#endif
+#ifdef ERHE_USE_BASE_COLOR_TEXTURE
+        base_color *= base_color_sample.rgb;
+#endif
+    }
 
 #ifdef ERHE_USES_LIT_LOCALS
     vec3 view_position_in_world = vec3(
@@ -693,13 +706,20 @@ void main()
     // base color texture's alpha (if sampled). v_texcoord_0/1 fall back
     // to (0.5, 0.5) when the corresponding varying is not present, so
     // the sample call is always legal.
-    float sampled_alpha = material.opacity;
+    // material.input_sources.y names where the alpha comes from, the way
+    // input_sources.x does for the base color.
+    float sampled_alpha;
+    if (material.input_sources.y == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
+        sampled_alpha = v_color.a;
+    } else {
+        sampled_alpha = material.opacity;
 #ifdef ERHE_USE_VERTEX_VARYING_COLOR
-    sampled_alpha *= v_color.a;
+        sampled_alpha *= v_color.a;
 #endif
 #ifdef ERHE_USE_BASE_COLOR_TEXTURE
-    sampled_alpha *= texture_channel_value(base_color_sample, material.texture_channels.w);
+        sampled_alpha *= texture_channel_value(base_color_sample, material.texture_channels.w);
 #endif
+    }
 
 #if ERHE_MATERIAL_BLENDING_MODE == ERHE_MATERIAL_BLENDING_MODE_ALPHA_TEST
     if (sampled_alpha < material.alpha_cutoff) {

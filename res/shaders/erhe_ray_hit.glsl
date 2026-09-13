@@ -246,6 +246,12 @@ bool light_visible(vec3 position, vec3 offset_normal, vec3 L, float t_max)
 
 vec3 surface_base_color(Hit_surface surface, Material m)
 {
+    // m.input_sources.x names where the base color comes from; see
+    // standard.frag. The vertex color source reads the mesh's color
+    // attribute alone.
+    if (m.input_sources.x == ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR) {
+        return surface.vertex_color.rgb;
+    }
     vec3 base_color = m.base_color.rgb * surface.vertex_color.rgb;
     base_color *= sample_texture_lod0(
         m.base_color_texture,

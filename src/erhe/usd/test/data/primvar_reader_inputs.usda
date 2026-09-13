@@ -1,0 +1,87 @@
+#usda 1.0
+(
+    defaultPrim = "root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "root"
+{
+    def Mesh "vertex_colored"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+        color3f[] primvars:displayColor = [(0.25, 0.5, 0.75)] (
+            interpolation = "constant"
+        )
+        rel material:binding = </root/materials/VertexColor>
+    }
+
+    def Mesh "unknown_primvar"
+    {
+        uniform token subdivisionScheme = "none"
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(2, 0, 0), (3, 0, 0), (3, 1, 0), (2, 1, 0)]
+        rel material:binding = </root/materials/UnknownPrimvar>
+    }
+
+    def Scope "materials"
+    {
+        def Material "VertexColor"
+        {
+            token outputs:surface.connect = </root/materials/VertexColor/UsdPreview.outputs:surface>
+
+            def NodeGraph "UsdPreview"
+            {
+                token outputs:surface.connect = </root/materials/VertexColor/UsdPreview/surface.outputs:surface>
+
+                def Shader "surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor.connect = </root/materials/VertexColor/UsdPreview/primvar_displayColor.outputs:result>
+                    float inputs:opacity.connect = </root/materials/VertexColor/UsdPreview/primvar_displayOpacity.outputs:result>
+                    float inputs:roughness = 0.125
+                    float inputs:metallic = 0.75
+                    token outputs:surface
+                }
+
+                def Shader "primvar_displayColor"
+                {
+                    uniform token info:id = "UsdPrimvarReader_float3"
+                    string inputs:varname = "displayColor"
+                    vector3f outputs:result
+                }
+
+                def Shader "primvar_displayOpacity"
+                {
+                    uniform token info:id = "UsdPrimvarReader_float"
+                    string inputs:varname = "displayOpacity"
+                    float outputs:result
+                }
+            }
+        }
+
+        def Material "UnknownPrimvar"
+        {
+            token outputs:surface.connect = </root/materials/UnknownPrimvar/surface.outputs:surface>
+
+            def Shader "surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </root/materials/UnknownPrimvar/primvar_paint.outputs:result>
+                float inputs:roughness = 0.375
+                token outputs:surface
+            }
+
+            def Shader "primvar_paint"
+            {
+                uniform token info:id = "UsdPrimvarReader_float3"
+                string inputs:varname = "paint"
+                vector3f outputs:result
+            }
+        }
+    }
+}

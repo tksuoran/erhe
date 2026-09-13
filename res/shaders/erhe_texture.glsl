@@ -135,4 +135,11 @@ float texture_channel_value(vec4 texel, uint channel)
     return (channel < 4u) ? texel[channel] : 1.0;
 }
 
+// The values of erhe::primitive::Material_input_source, which a material
+// record carries in `input_sources` for the base color and the fragment
+// alpha. `vertex_color` means the mesh's color attribute alone supplies the
+// input: neither the material's factor nor its texture is read.
+#define ERHE_MATERIAL_INPUT_SOURCE_VALUE        0u
+#define ERHE_MATERIAL_INPUT_SOURCE_VERTEX_COLOR 1u
+
 #endif // ERHE_TEXTURE_GLSL

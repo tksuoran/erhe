@@ -337,6 +337,35 @@ it, a roughness map would modulate a constant metallic through whatever the
 image holds in the channel the glTF default names - which is what
 `test_assets/RoughnessTest` authors.
 
+A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds reads the mesh's own
+data rather than a texture, and Tydra resolves a connected shading input to a
+`UsdUVTexture` or fails the whole material over it (it falls back to the
+input's plain value only when the file also authors one, which a
+connection-only input does not). So `load_stage` takes those connections out
+of the layer copy the stage is built from - the way it takes the erhe
+texture-graph wiring out - and records the material prim, the input and the
+primvar name for the importer; the kept layer still holds them, and the rest
+of the material converts.
+
+`inputs:diffuseColor` and `inputs:opacity` are the two inputs erhe reads that
+way. A reader of `displayColor` (or `displayOpacity` for `opacity`) sets the
+material's `base_color_source` / `opacity_source` to
+`Material_input_source::vertex_color`: the mesh's vertex colors are that
+input, and neither the factor nor the slot's texture is read (see
+`src/erhe/primitive/notes.md`). Nothing of that input is then written as a
+local value, and the writer authors the `UsdPrimvarReader` prim and the
+connection back in place of a value, so a file round-trips to itself. Any
+other primvar name is one warning naming the material, the input and the
+primvar, and the input keeps its own value. Only the `UsdPreviewSurface` path
+reads the sources; the OpenPBR terminal has no such form.
+
+A material's `outputs:surface` may be forwarded through a `NodeGraph` before
+it names the `Shader` prim - which is how the usd-wg Teapot and
+SubdivisionSurfaces assets spell a UsdPreviewSurface network - so
+`find_surface_shader_path` follows the terminal until it reaches a `Shader`
+prim. That path is where the importer asks which inputs the file authors, so
+without following it every input of such a material read as its fallback.
+
 ### OpenPBR networks
 
 A `Material` prim can offer more than one surface terminal, and Tydra reports

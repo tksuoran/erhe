@@ -79,6 +79,12 @@ Material_interface::Material_interface(erhe::graphics::Device& graphics_device, 
         // The channel each scalar input reads out of its slot's texture:
         // (metallic, roughness, occlusion, opacity). uvec4, vec4-aligned.
         .texture_channels            = material_struct.add_uvec4("texture_channels"           )->get_offset_in_parent(),
+
+        // Where the base color and the fragment alpha come from
+        // (erhe::primitive::Material_input_source): (base_color, opacity).
+        // The padding after it keeps the struct size a multiple of 16 bytes.
+        .input_sources               = material_struct.add_uvec2("input_sources"              )->get_offset_in_parent(),
+        .input_sources_padding       = material_struct.add_uvec2("input_sources_padding"      )->get_offset_in_parent(),
     }
     , max_material_count{static_cast<std::size_t>(max_material_count)}
 {
@@ -128,6 +134,10 @@ auto gather_material_record_inputs(
         erhe::primitive::to_uint32(data.roughness_channel),
         erhe::primitive::to_uint32(data.occlusion_channel),
         erhe::primitive::to_uint32(data.opacity_channel)
+    };
+    inputs.input_sources               = glm::uvec2{
+        erhe::primitive::to_uint32(data.base_color_source),
+        erhe::primitive::to_uint32(data.opacity_source)
     };
 
     const auto gather_texture = [&sampler_cache](
@@ -190,6 +200,10 @@ auto get_default_material_record_inputs() -> Material_record_inputs
         erhe::primitive::to_uint32(defaults.roughness_channel),
         erhe::primitive::to_uint32(defaults.occlusion_channel),
         erhe::primitive::to_uint32(defaults.opacity_channel)
+    };
+    inputs.input_sources               = glm::uvec2{
+        erhe::primitive::to_uint32(defaults.base_color_source),
+        erhe::primitive::to_uint32(defaults.opacity_source)
     };
     // Every texture slot stays empty, so the handles resolve to
     // invalid_texture_handle and no heap allocation is made.
@@ -290,6 +304,7 @@ void Material_buffer::write_record(
     write(gpu_data, write_offset + offsets.normal_texture_decode_scale,       as_span(inputs.normal_texture_decode_scale));
     write(gpu_data, write_offset + offsets.normal_texture_decode_bias,        as_span(inputs.normal_texture_decode_bias));
     write(gpu_data, write_offset + offsets.texture_channels,                  as_span(inputs.texture_channels));
+    write(gpu_data, write_offset + offsets.input_sources,                     as_span(inputs.input_sources));
 }
 
 void Material_buffer::write_records(

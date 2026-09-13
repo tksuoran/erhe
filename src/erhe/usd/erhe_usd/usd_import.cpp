@@ -2986,8 +2986,35 @@ private:
         );
     }
 
+    // How many prims a material's `outputs:surface` may be forwarded through
+    // before the `Shader` prim that answers for the inputs.
+    static constexpr int c_max_surface_terminal_depth{8};
+
+    // The prim one connection of a prim spec names, empty when the spec has
+    // no such connection.
+    [[nodiscard]] static auto read_spec_connection_target(
+        const lightusd::PrimSpec& spec,
+        const std::string&        property_name
+    ) -> std::string
+    {
+        const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find(property_name);
+        if ((i == spec.props().end()) || !i->second.is_attribute()) {
+            return std::string{};
+        }
+        const std::vector<lightusd::Path>& connections = i->second.get_attribute().connections();
+        if (connections.empty()) {
+            return std::string{};
+        }
+        const lightusd::tstring_view prim_part = connections[0].prim_part();
+        return std::string{prim_part.data(), prim_part.size()};
+    }
+
     // The Shader prim the material's `outputs:surface` connects to: where
-    // the UsdPreviewSurface inputs Tydra reports are authored (or not).
+    // the UsdPreviewSurface inputs Tydra reports are authored (or not). A
+    // material is free to put its shaders inside a `NodeGraph` that forwards
+    // `outputs:surface` to the one below it - which is how the usd-wg assets
+    // spell a UsdPreviewSurface network - so the terminal is followed until
+    // it names a `Shader` prim.
     [[nodiscard]] auto find_surface_shader_path(const std::string& material_absolute_path) -> std::string
     {
         const lightusd::Prim* prim = find_prim(material_absolute_path);
@@ -3003,7 +3030,50 @@ private:
             return {};
         }
         const lightusd::tstring_view prim_part = connections[0].prim_part();
-        return std::string{prim_part.data(), prim_part.size()};
+        std::string                  path{prim_part.data(), prim_part.size()};
+        for (int depth = 0; depth < c_max_surface_terminal_depth; ++depth) {
+            const lightusd::PrimSpec* spec = find_layer_primspec(path);
+            if ((spec == nullptr) || (spec->typeName() == "Shader")) {
+                return path;
+            }
+            const std::string next = read_spec_connection_target(*spec, "outputs:surface");
+            if (next.empty()) {
+                return path;
+            }
+            path = next;
+        }
+        return path;
+    }
+
+    // Where one shading input of a material takes its value from
+    // (doc/usd_compatibility.md, "Materials"). load_stage recorded every
+    // `UsdPreviewSurface` input a `UsdPrimvarReader` feeds; the reader of
+    // `displayColor` / `displayOpacity` is the mesh's vertex colors, and
+    // every other primvar is one warning naming the material, the input and
+    // the primvar.
+    [[nodiscard]] auto read_input_source(
+        const std::string& material_absolute_path,
+        const std::string& material_name,
+        const std::string& input_name,
+        const std::string& vertex_color_primvar
+    ) -> erhe::primitive::Material_input_source
+    {
+        if (m_impl == nullptr) {
+            return erhe::primitive::Material_input_source::value;
+        }
+        for (const Primvar_input_record& record : m_impl->primvar_inputs) {
+            if ((record.material_path != material_absolute_path) || (record.input_name != input_name)) {
+                continue;
+            }
+            if (record.primvar_name == vertex_color_primvar) {
+                return erhe::primitive::Material_input_source::vertex_color;
+            }
+            log_usd->warn(
+                "USD material '{}': inputs:{} reads primvar '{}', which erhe has no shading input for - the input keeps its own value",
+                material_name, input_name, record.primvar_name
+            );
+        }
+        return erhe::primitive::Material_input_source::value;
     }
 
     // Whether erhe carries the `inputs:scale` of the UsdUVTexture a shading
@@ -3161,6 +3231,7 @@ private:
         const lightusd::tydra::PreviewSurfaceShader& shader,
         const std::string&                           shader_path,
         const std::size_t                            material_index,
+        const erhe::primitive::Material_input_source base_color_source,
         erhe::primitive::Material&                   material
     )
     {
@@ -3176,7 +3247,13 @@ private:
         const lightusd::tydra::UVTexture* metallic_texture  = uv_texture_of(shader.metallic.texture_id);
         const lightusd::tydra::UVTexture* roughness_texture = uv_texture_of(shader.roughness.texture_id);
         const std::string&                material_name     = material.get_name();
-        if (diffuse_texture != nullptr) {
+        // A base color the mesh's vertex colors supply reads neither the
+        // factor nor the texture of the input, so nothing of `diffuseColor`
+        // is written - and the UsdPreviewSurface fallback below is not
+        // written either, which is what makes a save reproduce the file.
+        if (base_color_source == erhe::primitive::Material_input_source::vertex_color) {
+            // Nothing to write for diffuseColor.
+        } else if (diffuse_texture != nullptr) {
             const glm::vec3 factor{diffuse_texture->scale[0], diffuse_texture->scale[1], diffuse_texture->scale[2]};
             set_or_clear_value(material, Material::base_color_property, factor);
         } else if (is_authored(shader_path, "inputs:diffuseColor")) {
@@ -3502,10 +3579,24 @@ private:
                 );
             } else if (usd_material.surfaceShader.has_value()) {
                 const std::string shader_path = find_surface_shader_path(usd_material.abs_path);
+                // The two inputs a `UsdPrimvarReader` is allowed to feed. The
+                // OpenPBR path above has no such form, so the sources are
+                // read on this path alone.
+                const erhe::primitive::Material_input_source base_color_source =
+                    read_input_source(usd_material.abs_path, create_info.name, "diffuseColor", "displayColor");
+                const erhe::primitive::Material_input_source opacity_source =
+                    read_input_source(usd_material.abs_path, create_info.name, "opacity", "displayOpacity");
+                if (base_color_source != erhe::primitive::Material_input_source::value) {
+                    material->set_value(erhe::primitive::Material::base_color_source_property, base_color_source);
+                }
+                if (opacity_source != erhe::primitive::Material_input_source::value) {
+                    material->set_value(erhe::primitive::Material::opacity_source_property, opacity_source);
+                }
                 apply_preview_surface(
                     usd_material.surfaceShader.value(),
                     shader_path,
                     material_index,
+                    base_color_source,
                     *material.get()
                 );
                 read_material_graph_bindings(material_index, shader_path);

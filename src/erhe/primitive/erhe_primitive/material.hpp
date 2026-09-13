@@ -141,6 +141,13 @@ public:
     Texture_channel           roughness_channel                 {Texture_channel::g};
     Texture_channel           occlusion_channel                 {Texture_channel::r};
     Texture_channel           opacity_channel                   {Texture_channel::a};
+    // Where the base color and the fragment alpha come from: the material's
+    // own value (the factor, the slot's texture and the mesh's vertex color
+    // multiplied together) or the mesh's vertex color alone. A
+    // `UsdPreviewSurface` input a `UsdPrimvarReader` of `displayColor` /
+    // `displayOpacity` feeds is what names `vertex_color`.
+    Material_input_source     base_color_source                 {Material_input_source::value};
+    Material_input_source     opacity_source                    {Material_input_source::value};
     Bxdf_model                bxdf_model                        {Bxdf_model::isotropic_brdf};
     Material_blending_mode    blending_mode                     {Material_blending_mode::opaque};
     bool                      double_sided                      {false};
@@ -207,6 +214,8 @@ public:
     static const erhe::property::Property<Texture_channel>        roughness_channel_property;
     static const erhe::property::Property<Texture_channel>        occlusion_channel_property;
     static const erhe::property::Property<Texture_channel>        opacity_channel_property;
+    static const erhe::property::Property<Material_input_source>  base_color_source_property;
+    static const erhe::property::Property<Material_input_source>  opacity_source_property;
     static const erhe::property::Property<Bxdf_model>             bxdf_model_property;
     static const erhe::property::Property<Material_blending_mode> blending_mode_property;
     static const erhe::property::Property<bool>                   double_sided_property;
@@ -309,6 +318,8 @@ public:
     [[nodiscard]] auto get_roughness_channel                 () const -> Texture_channel        { return get_value(roughness_channel_property); }
     [[nodiscard]] auto get_occlusion_channel                 () const -> Texture_channel        { return get_value(occlusion_channel_property); }
     [[nodiscard]] auto get_opacity_channel                   () const -> Texture_channel        { return get_value(opacity_channel_property); }
+    [[nodiscard]] auto get_base_color_source                 () const -> Material_input_source  { return get_value(base_color_source_property); }
+    [[nodiscard]] auto get_opacity_source                    () const -> Material_input_source  { return get_value(opacity_source_property); }
     [[nodiscard]] auto get_bxdf_model                        () const -> Bxdf_model             { return get_value(bxdf_model_property); }
     [[nodiscard]] auto get_blending_mode                     () const -> Material_blending_mode { return get_value(blending_mode_property); }
     [[nodiscard]] auto get_double_sided                      () const -> bool                   { return get_value(double_sided_property); }

@@ -139,6 +139,27 @@ public:
     std::string authored_name;
 };
 
+// One `UsdPreviewSurface` input a `UsdPrimvarReader` feeds, as load_stage
+// read it off the composed layer before it built the stage
+// (src/erhe/usd/notes.md, "UsdPreviewSurface fallbacks and channel outputs").
+// Tydra resolves a shading input to a `UsdUVTexture` or fails the whole
+// material over it, so load_stage takes the connection out of the layer copy
+// the stage is built from - the way it takes the erhe texture-graph wiring
+// out - and records what it took here for the importer to apply.
+class Primvar_input_record final
+{
+public:
+    // Stage path of the `Material` prim the shader belongs to: what the
+    // importer has in hand, the shader prim sitting an unknown number of
+    // `NodeGraph` levels below it.
+    std::string material_path;
+    // The input the connection was on, without the `inputs:` prefix
+    // (`diffuseColor` or `opacity`).
+    std::string input_name;
+    // `inputs:varname` of the `UsdPrimvarReader` prim it named.
+    std::string primvar_name;
+};
+
 class Stage::Impl final
 {
 public:
@@ -163,6 +184,9 @@ public:
     // importer applies it again for the opinions and the arcs of the selected
     // variant, both before the prim's own `variants` metadatum.
     Usd_variant_selections           variant_selections;
+    // The `UsdPrimvarReader` connections load_stage took out of the layer the
+    // stage was built from, so Tydra converts the rest of those materials.
+    std::vector<Primvar_input_record> primvar_inputs;
 };
 
 // Whether every variant block a nested `variantSet` is declared inside is the

@@ -627,6 +627,10 @@ public:
         if (name == "normal_texture")             { return "surface.inputs:normal.connect"; }
         if (name == "occlusion_texture")          { return "surface.inputs:occlusion.connect"; }
         if (name == "emissive_texture")           { return "surface.inputs:emissiveColor.connect"; }
+        // A vertex color source is the UsdPrimvarReader the shader input
+        // connects to, so the property needs no `erhe:` attribute of its own.
+        if (name == "base_color_source")          { return "surface.inputs:diffuseColor.connect (UsdPrimvarReader)"; }
+        if (name == "opacity_source")             { return "surface.inputs:opacity.connect (UsdPrimvarReader)"; }
         // The decode of the normal slot's texture and the wrap modes of
         // every slot's are the UsdUVTexture's own inputs, written for a
         // bound texture whatever the erhe value is: USD's fallbacks are not
@@ -1586,6 +1590,43 @@ private:
         return shader.name;
     }
 
+    // The `UsdPrimvarReader` prim one shading input reads its primvar
+    // through, added under the material and named after the primvar. A
+    // material whose base color or opacity comes from the mesh's vertex
+    // colors (erhe::primitive::Material_input_source::vertex_color) is what
+    // authors one.
+    template <typename Reader>
+    [[nodiscard]] auto add_primvar_reader(
+        lightusd::Prim&    material_prim,
+        const std::string& material_path,
+        const char*        primvar_name,
+        const char*        info_id
+    ) -> bool
+    {
+        Reader reader;
+        reader.varname.set_value(std::string{primvar_name});
+        reader.result.set_authored(true);
+
+        lightusd::Shader shader;
+        shader.name    = std::string{primvar_name} + "_reader";
+        shader.info_id = info_id;
+        shader.value   = std::move(reader);
+
+        std::string error;
+        if (!material_prim.add_child(lightusd::Prim{shader}, false, &error)) {
+            add_warning(
+                fmt::format("primvar reader '{}' of '{}' could not be added: {}", shader.name, material_path, error)
+            );
+            return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] static auto primvar_reader_output(const std::string& material_path, const char* primvar_name) -> lightusd::Path
+    {
+        return lightusd::Path{material_path + "/" + std::string{primvar_name} + "_reader", "outputs:result"};
+    }
+
     void add_uv_reader(lightusd::Prim& material_prim)
     {
         lightusd::UsdPrimvarReader_float2 reader;
@@ -1908,6 +1949,15 @@ private:
         lightusd::UsdPreviewSurface surface;
         surface.outputsSurface.set_authored(true);
 
+        // Where the base color and the fragment alpha come from. A vertex
+        // color source is written as the `UsdPrimvarReader` prim the importer
+        // reads back, and the input carries nothing else: no value, no
+        // sampled keys and no texture connection.
+        const bool base_color_from_vertex_color =
+            (material.get_base_color_source() == erhe::primitive::Material_input_source::vertex_color);
+        const bool opacity_from_vertex_color =
+            (material.get_opacity_source() == erhe::primitive::Material_input_source::vertex_color);
+
         // `diffuseColor` is the one input whose UsdPreviewSurface fallback
         // (c_usd_diffuse_color_fallback) is not the erhe default, so leaving
         // an erhe default unauthored would mean 0.18 grey to every other
@@ -1916,7 +1966,7 @@ private:
         // reproduce itself, since the importer writes the fallback back as a
         // local value. Every other input is written only where it is local
         // (D32), the two fallbacks agreeing.
-        {
+        if (!base_color_from_vertex_color) {
             const glm::vec3 base_color = material.get_value(Material::base_color_property);
             if (base_color != c_usd_diffuse_color_fallback) {
                 surface.diffuseColor.set_value(lightusd::value::color3f{base_color.x, base_color.y, base_color.z});
@@ -1943,12 +1993,14 @@ private:
         // instead of the schema attribute, which is why the values of those
         // attributes are written here rather than above.
         const Item_attribute_channels channels = get_attribute_channels(material);
-        write_sampled_attribute<lightusd::value::color3f>(
-            surface.diffuseColor, channels.base_color, 3,
-            [](const glm::vec4& value) -> lightusd::value::color3f {
-                return lightusd::value::color3f{value.x, value.y, value.z};
-            }
-        );
+        if (!base_color_from_vertex_color) {
+            write_sampled_attribute<lightusd::value::color3f>(
+                surface.diffuseColor, channels.base_color, 3,
+                [](const glm::vec4& value) -> lightusd::value::color3f {
+                    return lightusd::value::color3f{value.x, value.y, value.z};
+                }
+            );
+        }
         const std::optional<float> roughness = is_local(material, Material::roughness_property.get())
             ? std::optional<float>{material.get_value(Material::roughness_property).x}
             : std::optional<float>{};
@@ -1973,10 +2025,12 @@ private:
                 [](const glm::vec4& value) -> float { return value.x; }
             );
         }
-        const std::optional<float> opacity = is_local(material, Material::opacity_property.get())
+        const std::optional<float> opacity = (is_local(material, Material::opacity_property.get()) && !opacity_from_vertex_color)
             ? std::optional<float>{material.get_value(Material::opacity_property)}
             : std::optional<float>{};
-        if (!write_spline_attribute(surface.props, "inputs:opacity", channels.opacity, 1, opacity)) {
+        if (opacity_from_vertex_color) {
+            // Nothing of `opacity` is written: the reader below supplies it.
+        } else if (!write_spline_attribute(surface.props, "inputs:opacity", channels.opacity, 1, opacity)) {
             if (opacity.has_value()) {
                 surface.opacity.set_value(opacity.value());
             }
@@ -1992,7 +2046,18 @@ private:
             surface.opacityThreshold.set_value(material.get_value(Material::alpha_cutoff_property));
         }
 
-        connect_texture(material_prim, material_path, material, Usd_material_texture_slot::base_color, "outputs:rgb", surface.diffuseColor);
+        if (base_color_from_vertex_color) {
+            if (add_primvar_reader<lightusd::UsdPrimvarReader_float3>(material_prim, material_path, "displayColor", "UsdPrimvarReader_float3")) {
+                surface.diffuseColor.set_connection(primvar_reader_output(material_path, "displayColor"));
+            }
+        } else {
+            connect_texture(material_prim, material_path, material, Usd_material_texture_slot::base_color, "outputs:rgb", surface.diffuseColor);
+        }
+        if (opacity_from_vertex_color) {
+            if (add_primvar_reader<lightusd::UsdPrimvarReader_float>(material_prim, material_path, "displayOpacity", "UsdPrimvarReader_float")) {
+                surface.opacity.set_connection(primvar_reader_output(material_path, "displayOpacity"));
+            }
+        }
         connect_texture(material_prim, material_path, material, Usd_material_texture_slot::emissive,   "outputs:rgb", surface.emissiveColor);
         connect_texture(material_prim, material_path, material, Usd_material_texture_slot::normal,     "outputs:rgb", surface.normal);
         connect_texture(
@@ -2021,7 +2086,7 @@ private:
         // of its own: alpha is what a reader assumes anyway, and connecting
         // it unasked would make every textured material's opacity
         // texture-driven.
-        if (is_local(material, Material::opacity_channel_property.get())) {
+        if (is_local(material, Material::opacity_channel_property.get()) && !opacity_from_vertex_color) {
             connect_texture(
                 material_prim, material_path, material, Usd_material_texture_slot::base_color,
                 channel_output_name(material.get_opacity_channel()), surface.opacity

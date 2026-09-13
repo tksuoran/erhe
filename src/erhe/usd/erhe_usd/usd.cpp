@@ -25,6 +25,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -812,17 +813,226 @@ void strip_node_graph_connections(lightusd::PrimSpec& spec, const std::set<std::
     }
 }
 
-// Replace `stage` with `layer` stripped of its texture-graph wiring and built
+// A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds, and the erhe input
+// name it belongs to. Tydra resolves a shading input to a `UsdUVTexture` or
+// fails the whole material over it (an authored plain value beside the
+// connection is the one case it falls back to), so these two connections are
+// taken out of the layer copy the stage is built from and recorded for the
+// importer, which maps `displayColor` / `displayOpacity` onto the mesh's
+// vertex colors (doc/usd_compatibility.md, "Materials").
+constexpr std::string_view c_preview_surface_info_id      {"UsdPreviewSurface"};
+constexpr std::string_view c_primvar_reader_info_id_prefix{"UsdPrimvarReader_"};
+constexpr std::string_view c_shader_prim_type_name        {"Shader"};
+constexpr std::string_view c_material_prim_type_name      {"Material"};
+constexpr std::string_view c_primvar_reader_inputs[]      {"inputs:diffuseColor", "inputs:opacity"};
+
+// The string an attribute of a prim spec holds, empty when the spec has no
+// such attribute or it holds something else. The ASCII parser hands a string
+// back as `StringData` (which also carries the quote form the layer spelled)
+// and a token as `value::token`, so both are asked for.
+[[nodiscard]] auto read_spec_text(const lightusd::PrimSpec& spec, const std::string_view name) -> std::string
+{
+    const std::map<std::string, lightusd::Property>::const_iterator i = spec.props().find(std::string{name});
+    if ((i == spec.props().end()) || !i->second.is_attribute()) {
+        return std::string{};
+    }
+    const lightusd::Attribute& attribute = i->second.get_attribute();
+    const nonstd::optional<std::string> text = attribute.get_value<std::string>();
+    if (text.has_value()) {
+        return text.value();
+    }
+    const nonstd::optional<lightusd::value::StringData> string_data = attribute.get_value<lightusd::value::StringData>();
+    if (string_data.has_value()) {
+        return string_data.value().value;
+    }
+    const nonstd::optional<lightusd::value::token> token = attribute.get_value<lightusd::value::token>();
+    if (token.has_value()) {
+        return token.value().str();
+    }
+    return std::string{};
+}
+
+// Every `Shader` prim spec of a subtree, by absolute path, each with the
+// `Material` prim it belongs to - which is what the importer has in hand,
+// the shader sitting any number of `NodeGraph` levels below it.
+class Shader_spec_entry final
+{
+public:
+    const lightusd::PrimSpec* spec{nullptr};
+    std::string               material_path;
+    std::string               info_id;
+};
+
+void collect_shader_specs(
+    const std::string&                        path,
+    const std::string&                        material_path,
+    const lightusd::PrimSpec&                 spec,
+    std::map<std::string, Shader_spec_entry>& out_shaders
+)
+{
+    const std::string own_material_path = (spec.typeName() == c_material_prim_type_name) ? path : material_path;
+    if (spec.typeName() == c_shader_prim_type_name) {
+        out_shaders.emplace(
+            path,
+            Shader_spec_entry{
+                .spec          = &spec,
+                .material_path = own_material_path,
+                .info_id       = read_spec_text(spec, "info:id")
+            }
+        );
+    }
+    for (const lightusd::PrimSpec& child : spec.children()) {
+        collect_shader_specs(path + "/" + child.name(), own_material_path, child, out_shaders);
+    }
+}
+
+// One connection to take out of the layer copy the stage is built from: the
+// absolute path of the `UsdPreviewSurface` prim spec and the name of the
+// property carrying it.
+class Primvar_input_connection final
+{
+public:
+    std::string shader_path;
+    std::string property_name;
+};
+
+// Every `UsdPreviewSurface` input of `layer` a `UsdPrimvarReader` feeds: what
+// the importer applies (`out_records`) and what the stage is built without
+// (`out_connections`).
+void collect_primvar_reader_inputs(
+    const lightusd::Layer&                 layer,
+    std::vector<Primvar_input_record>&     out_records,
+    std::vector<Primvar_input_connection>& out_connections
+)
+{
+    std::map<std::string, Shader_spec_entry> shaders;
+    for (const std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
+        collect_shader_specs("/" + entry.first, std::string{}, entry.second, shaders);
+    }
+    for (const std::pair<const std::string, Shader_spec_entry>& shader : shaders) {
+        if (shader.second.info_id != c_preview_surface_info_id) {
+            continue;
+        }
+        for (const std::string_view input_name : c_primvar_reader_inputs) {
+            const std::map<std::string, lightusd::Property>::const_iterator i =
+                shader.second.spec->props().find(std::string{input_name});
+            if ((i == shader.second.spec->props().end()) || !i->second.is_attribute()) {
+                continue;
+            }
+            const lightusd::Attribute& attribute = i->second.get_attribute();
+            if (!attribute.has_connections()) {
+                continue;
+            }
+            const lightusd::tstring_view prim_part = attribute.connections()[0].prim_part();
+            const std::string            target{prim_part.data(), prim_part.size()};
+            const std::map<std::string, Shader_spec_entry>::const_iterator reader = shaders.find(target);
+            if (reader == shaders.end()) {
+                continue;
+            }
+            const std::string& reader_info_id = reader->second.info_id;
+            if (reader_info_id.compare(0, c_primvar_reader_info_id_prefix.size(), c_primvar_reader_info_id_prefix) != 0) {
+                continue;
+            }
+            out_records.push_back(
+                Primvar_input_record{
+                    .material_path = shader.second.material_path,
+                    .input_name    = std::string{input_name.substr(std::string_view{"inputs:"}.size())},
+                    .primvar_name  = read_spec_text(*reader->second.spec, "inputs:varname")
+                }
+            );
+            out_connections.push_back(
+                Primvar_input_connection{
+                    .shader_path   = shader.first,
+                    .property_name = std::string{input_name}
+                }
+            );
+        }
+    }
+}
+
+// The prim spec of `layer` at an absolute path, or null.
+[[nodiscard]] auto find_mutable_primspec(lightusd::Layer& layer, const std::string& absolute_path) -> lightusd::PrimSpec*
+{
+    lightusd::PrimSpec* current = nullptr;
+    std::size_t         start   = 1; // the leading '/'
+    while (start <= absolute_path.size()) {
+        const std::size_t separator = absolute_path.find('/', start);
+        const std::string name = (separator == std::string::npos)
+            ? absolute_path.substr(start)
+            : absolute_path.substr(start, separator - start);
+        if (name.empty()) {
+            return nullptr;
+        }
+        if (current == nullptr) {
+            const std::unordered_map<std::string, lightusd::PrimSpec>::iterator root = layer.primspecs().find(name);
+            if (root == layer.primspecs().end()) {
+                return nullptr;
+            }
+            current = &root->second;
+        } else {
+            lightusd::PrimSpec* child_spec = nullptr;
+            for (lightusd::PrimSpec& child : current->children()) {
+                if (child.name() == name) {
+                    child_spec = &child;
+                    break;
+                }
+            }
+            if (child_spec == nullptr) {
+                return nullptr;
+            }
+            current = child_spec;
+        }
+        if (separator == std::string::npos) {
+            break;
+        }
+        start = separator + 1;
+    }
+    return current;
+}
+
+// Take the recorded connections out of `layer`. A connection beside an
+// authored value loses the connection alone, so the value Tydra then reads is
+// the one the file spells.
+void strip_primvar_reader_connections(
+    lightusd::Layer&                             layer,
+    const std::vector<Primvar_input_connection>& connections
+)
+{
+    for (const Primvar_input_connection& connection : connections) {
+        lightusd::PrimSpec* spec = find_mutable_primspec(layer, connection.shader_path);
+        if (spec == nullptr) {
+            continue;
+        }
+        const std::map<std::string, lightusd::Property>::iterator i = spec->props().find(connection.property_name);
+        if (i == spec->props().end()) {
+            continue;
+        }
+        lightusd::Attribute* attribute = i->second.get_attribute_or_null();
+        if (attribute == nullptr) {
+            continue;
+        }
+        if (attribute->has_value()) {
+            attribute->set_connections(std::vector<lightusd::Path>{});
+        } else {
+            spec->props().erase(i);
+        }
+    }
+}
+
+// Replace `stage` with `layer` stripped of the wiring Tydra cannot follow -
+// the erhe texture graphs and the `UsdPrimvarReader` shading inputs - built
 // into a stage, the way compose_variant_prims replaces it with the hoisted
 // layer. `layer` itself keeps the wiring: it is what the importer reads the
-// graphs and the material slot bindings off. A stage that cannot be built
-// leaves `stage` as it was and is reported.
+// graphs and the material slot bindings off, and the connections of
+// `primvar_connections` are taken out of the copy alone. A stage that cannot
+// be built leaves `stage` as it was and is reported.
 void compose_node_graph_stage(
-    const std::filesystem::path& path,
-    const lightusd::Layer&       layer,
-    lightusd::Stage&             stage,
-    const std::set<std::string>& graph_paths,
-    std::string&                 warning
+    const std::filesystem::path&       path,
+    const lightusd::Layer&             layer,
+    lightusd::Stage&                   stage,
+    const std::set<std::string>&       graph_paths,
+    const std::vector<Primvar_input_connection>& primvar_connections,
+    std::string&                       warning
 )
 {
     ERHE_PROFILE_FUNCTION();
@@ -832,6 +1042,7 @@ void compose_node_graph_stage(
     for (std::pair<const std::string, lightusd::PrimSpec>& entry : stripped.primspecs()) {
         strip_node_graph_connections(entry.second, graph_paths);
     }
+    strip_primvar_reader_connections(stripped, primvar_connections);
 
     std::string     load_warning;
     std::string     load_error;
@@ -966,15 +1177,26 @@ auto load_stage(const std::filesystem::path& path, const Usd_variant_selections&
         // converts is built without it (doc/usd-texture-graphs-plan.md 2.3).
         std::set<std::string> node_graph_paths;
         collect_node_graph_paths(impl->layer, node_graph_paths);
-        if (!node_graph_paths.empty()) {
+        std::vector<Primvar_input_connection> primvar_connections;
+        collect_primvar_reader_inputs(impl->layer, impl->primvar_inputs, primvar_connections);
+        if (!node_graph_paths.empty() || !primvar_connections.empty()) {
             if (path.extension() == ".usdz") {
                 log_usd->warn(
                     "USD '{}': {} texture graph(s) inside a .usdz archive are not resolved",
                     filename, node_graph_paths.size()
                 );
+                impl->primvar_inputs.clear();
             } else {
-                compose_node_graph_stage(path, impl->layer, impl->stage, node_graph_paths, result.warning);
-                log_usd->info("USD '{}': resolved {} texture graph(s)", filename, node_graph_paths.size());
+                compose_node_graph_stage(path, impl->layer, impl->stage, node_graph_paths, primvar_connections, result.warning);
+                if (!node_graph_paths.empty()) {
+                    log_usd->info("USD '{}': resolved {} texture graph(s)", filename, node_graph_paths.size());
+                }
+                if (!impl->primvar_inputs.empty()) {
+                    log_usd->info(
+                        "USD '{}': {} UsdPreviewSurface input(s) are fed by a UsdPrimvarReader",
+                        filename, impl->primvar_inputs.size()
+                    );
+                }
             }
         }
     }

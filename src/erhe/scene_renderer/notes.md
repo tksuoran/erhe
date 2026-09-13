@@ -64,3 +64,17 @@ color, glTF `COLOR_0` semantics). Material slots start at
 The reserved record is written once per buffer update, not per primitive; the
 set holds no `Material` object for it, so it costs one record and no
 membership.
+
+### Where a material record's base color and alpha come from
+
+A material record carries `uvec2 input_sources` -
+`erhe::primitive::Material_input_source` for the base color and for the
+fragment alpha - beside `uvec4 texture_channels` at the tail of the struct,
+with an explicit `uvec2` of padding after it so the struct size stays a
+multiple of 16 bytes. `value` (0) is the multiply the shader has always done:
+the material's factor, the slot's texture where one is bound, and the mesh's
+vertex color where the mesh carries one. `vertex_color` (1) makes the mesh's
+color attribute that input on its own, the factor and the texture unread;
+`standard.frag` and `erhe_ray_hit.glsl` both branch on it. That is what lets
+an ordinary material take its base color from `primvars:displayColor`, which
+slot 1 above can only do because its own base color is white.

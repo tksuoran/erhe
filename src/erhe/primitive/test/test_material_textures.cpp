@@ -253,3 +253,40 @@ TEST(Material_textures, texture_channels_inherit_from_a_folder)
     EXPECT_EQ(material->get_metallic_channel(), erhe::primitive::Texture_channel::a);
     material->set_inheritance_container(nullptr);
 }
+
+// Where the base color and the fragment alpha come from. A `UsdPreviewSurface`
+// input a `UsdPrimvarReader` of `displayColor` / `displayOpacity` feeds is
+// what names the mesh's vertex colors; both are ordinary material properties
+// (a default, a local set, a folder to inherit from).
+TEST(Material_textures, input_sources_default_to_the_materials_own_value)
+{
+    std::shared_ptr<Material> material = std::make_shared<Material>("m");
+    EXPECT_EQ(material->get_base_color_source(), erhe::primitive::Material_input_source::value);
+    EXPECT_EQ(material->get_opacity_source(),    erhe::primitive::Material_input_source::value);
+    EXPECT_EQ(material->get_value_source(Material::base_color_source_property.get()), Value_source::default_value);
+
+    material->set_value(Material::base_color_source_property, erhe::primitive::Material_input_source::vertex_color);
+    EXPECT_EQ(material->get_base_color_source(), erhe::primitive::Material_input_source::vertex_color);
+    EXPECT_EQ(material->get_value_source(Material::base_color_source_property.get()), Value_source::local);
+
+    erhe::primitive::Material_values values = material->get_values();
+    EXPECT_EQ(values.base_color_source, erhe::primitive::Material_input_source::vertex_color);
+    values.base_color_source = erhe::primitive::Material_input_source::value;
+    values.opacity_source    = erhe::primitive::Material_input_source::vertex_color;
+    material->set_values(values);
+    EXPECT_EQ(material->get_value_source(Material::base_color_source_property.get()), Value_source::default_value);
+    EXPECT_EQ(material->get_opacity_source(), erhe::primitive::Material_input_source::vertex_color);
+}
+
+TEST(Material_textures, input_sources_inherit_from_a_folder)
+{
+    Folder folder;
+    std::shared_ptr<Material> material = std::make_shared<Material>("m");
+    folder.materials.push_back(material.get());
+    material->set_inheritance_container(&folder);
+
+    folder.set_value(Material::opacity_source_property, erhe::primitive::Material_input_source::vertex_color);
+    EXPECT_EQ(material->get_value_source(Material::opacity_source_property.get()), Value_source::inherited);
+    EXPECT_EQ(material->get_opacity_source(), erhe::primitive::Material_input_source::vertex_color);
+    material->set_inheritance_container(nullptr);
+}
