@@ -215,7 +215,15 @@ enum class Instance_level : unsigned int {
             if (!clone) {
                 continue;
             }
-            erhe::Hierarchy* target = find_below(*clone.get(), relative_path, Instance_level::ordinary);
+            // A clone is free to be a carrier itself - a target prim that
+            // authors arcs of its own, which is what a chain of files that
+            // each reference the next composes - so its own clones are the
+            // next transparent level.
+            erhe::Hierarchy* target = find_below(
+                *clone.get(),
+                relative_path,
+                is_instance_carrier(*clone.get()) ? Instance_level::carrier : Instance_level::ordinary
+            );
             if (target != nullptr) {
                 return target;
             }
@@ -241,15 +249,6 @@ enum class Instance_level : unsigned int {
         }
     }
     return nullptr;
-}
-
-// The item `relative_path` names below a carrier: an entry names the item at
-// its path below the first of the carrier's children that has one, with the
-// clone of every carrier the path crosses transparent. An empty path is that
-// child itself.
-[[nodiscard]] auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
-{
-    return find_below(carrier, std::string_view{relative_path}, Instance_level::carrier);
 }
 
 [[nodiscard]] auto to_material(erhe::Hierarchy* item) -> std::shared_ptr<erhe::primitive::Material>
@@ -424,6 +423,11 @@ void apply_material_binding(
 }
 
 } // anonymous namespace
+
+auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
+{
+    return find_below(carrier, std::string_view{relative_path}, Instance_level::carrier);
+}
 
 // The property one override value names. A collected override spells the name
 // the way the registry does (`Owner.name` only where the object holds the

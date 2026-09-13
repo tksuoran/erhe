@@ -7127,6 +7127,7 @@ private:
                 warn_unsupported_variant_opinions(set);
                 continue;
             }
+            defer_variant_entries_behind_arcs(set);
             capture_variant_base_values(set);
             warn_unsupported_variant_opinions(set);
             const Usd_variant* variant = nullptr;
@@ -7157,6 +7158,88 @@ private:
     [[nodiscard]] static auto find_variant_target(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*
     {
         return relative_path.empty() ? &carrier : erhe::find_by_path(carrier, relative_path);
+    }
+
+    // Whether a composition arc could supply the prim `relative_path` names
+    // below the prim carrying a variant set. erhe composes no arc: the caller
+    // instantiates each one after the load returns
+    // (doc/usd-compatibility-plan.md C6), so a path this tree cannot reach is
+    // a path an arc on it still owes. True when the carrying prim, or a prim
+    // the path crosses, authors arcs of its own.
+    [[nodiscard]] auto is_path_behind_composition_arc(const std::string& stage_path, const std::string& relative_path) -> bool
+    {
+        std::string path = stage_path;
+        if (!read_prim_references(path).empty()) {
+            return true;
+        }
+        std::size_t begin = 0;
+        while (begin < relative_path.size()) {
+            const std::size_t separator = relative_path.find('/', begin);
+            const std::size_t end       = (separator == std::string::npos) ? relative_path.size() : separator;
+            path += "/";
+            path += relative_path.substr(begin, end - begin);
+            if (find_prim(path) == nullptr) {
+                return false;
+            }
+            if (!read_prim_references(path).empty()) {
+                return true;
+            }
+            begin = (separator == std::string::npos) ? relative_path.size() : (separator + 1);
+        }
+        return false;
+    }
+
+    // The opinions and bindings of one set whose path an arc still owes, moved
+    // out of the entries this load applies and onto the variant's pending
+    // lists: the caller applies them once it has instantiated the arcs
+    // (doc/usd-compatibility-plan.md C6). Every variant of the set is
+    // triaged, not only the selected one, because the caller carries the
+    // pending entries into the scene's variant table for a later switch.
+    void defer_variant_entries_behind_arcs(Usd_variant_set& set)
+    {
+        erhe::Hierarchy* const carrier = dynamic_cast<erhe::Hierarchy*>(set.prim.get());
+        if (carrier == nullptr) {
+            // No item holds the set: capture_variant_base_values counts every
+            // opinion of it, and there is nothing for a caller to apply to.
+            return;
+        }
+        for (Usd_variant& variant : set.variants) {
+            std::vector<erhe::scene::Instance_override> kept_overrides;
+            for (erhe::scene::Instance_override& entry : variant.overrides) {
+                const bool resolved = find_variant_target(*carrier, entry.relative_path) != nullptr;
+                if (!resolved && is_path_behind_composition_arc(set.stage_path, entry.relative_path)) {
+                    variant.pending_overrides.push_back(std::move(entry));
+                    continue;
+                }
+                kept_overrides.push_back(std::move(entry));
+            }
+            variant.overrides = std::move(kept_overrides);
+
+            std::vector<Usd_variant_binding> kept_bindings;
+            for (Usd_variant_binding& binding : variant.bindings) {
+                const std::string absolute_path = binding_absolute_path(set.stage_path, binding.relative_path);
+                if (!is_binding_path_in_file(absolute_path) && is_path_behind_composition_arc(set.stage_path, binding.relative_path)) {
+                    variant.pending_bindings.push_back(std::move(binding));
+                    continue;
+                }
+                kept_bindings.push_back(std::move(binding));
+            }
+            variant.bindings = std::move(kept_bindings);
+        }
+    }
+
+    // Whether a binding path names a mesh of this load, or a group of facets
+    // of one: what apply_binding needs to reach a primitive.
+    [[nodiscard]] auto is_binding_path_in_file(const std::string& absolute_path) const -> bool
+    {
+        if (m_mesh_by_path.find(absolute_path) != m_mesh_by_path.end()) {
+            return true;
+        }
+        const std::size_t separator = absolute_path.rfind('/');
+        if (separator == std::string::npos) {
+            return false;
+        }
+        return m_mesh_by_path.find(absolute_path.substr(0, separator)) != m_mesh_by_path.end();
     }
 
     // What the prims of one set hold before any opinion of the selected

@@ -914,6 +914,29 @@ set: a property the value reader has no place for, and a `def` prim of a
 variant the hoist did not reach. An override whose path reaches no prim of the
 tree is dropped when the base values are captured, and counted the same way.
 
+An opinion or a binding whose path a composition arc still owes is the
+exception. erhe composes no arc: the caller instantiates each one after the
+load returns (doc/usd-compatibility-plan.md C6), so a path this tree cannot
+reach is not a path that names nothing. Such an entry is moved onto the
+variant's `pending_overrides` / `pending_bindings` instead of being applied,
+dropped or counted, and the caller applies it once the arcs are in the tree,
+resolving the path through the clone of every carrier it crosses and
+capturing the base value there. The test is the path itself: the prim
+carrying the set, or a prim the path crosses, authors arcs of its own. Every
+variant is triaged, not only the selected one, because the caller carries the
+pending entries into the scene's variant table for a later switch. A path
+that crosses no prim authoring arcs stays dropped and counted, which is what
+`test/data/variant_pending_opinions.usda` holds both of.
+
+A carried selection names a variant, and two blocks of one set are free to
+declare a nested set of the same name holding variants of their own, so
+`load_stage` validates the selection against every set of that name the prim
+declares - its own and the ones its blocks declare, at any depth - and keeps
+the selection when any of them holds the variant. Validating against the
+first set of the name alone dropped the `shadingVariant` selection of
+`full_assets/Teapot/DrawModes.usd`, whose `modelVariant` blocks each declare
+a `shadingVariant` with different variants.
+
 The reader then binds the selected variant's materials itself: a binding at a
 `Mesh` prim's path covers the mesh's primitives that the same variant does not
 bind by subset, and a binding at a `GeomSubset` path covers that subset's

@@ -519,28 +519,27 @@ void hoist_variant_prims(
     }
 }
 
-// The `variantSet` of that name a prim declares, whether the prim declares it
-// itself or one of its variant blocks does - a nested set is a set of the same
-// prim, so a carried selection names it the same way. Null when no set of the
-// prim carries the name.
-[[nodiscard]] auto find_variant_set_spec(
+// Every `variantSet` of that name a prim declares, whether the prim declares
+// it itself or one of its variant blocks does - a nested set is a set of the
+// same prim, so a carried selection names it the same way, and two blocks of
+// one set are free to declare a set of the same name with variants of their
+// own. The selection names one variant, so all of them are collected and the
+// variant is what says which one the selection meant.
+void collect_variant_set_specs(
     const std::map<std::string, lightusd::VariantSetSpec>& sets,
-    const std::string&                                     set_name
-) -> const lightusd::VariantSetSpec*
+    const std::string&                                     set_name,
+    std::vector<const lightusd::VariantSetSpec*>&          out_sets
+)
 {
     const std::map<std::string, lightusd::VariantSetSpec>::const_iterator i = sets.find(set_name);
     if (i != sets.end()) {
-        return &i->second;
+        out_sets.push_back(&i->second);
     }
     for (const std::pair<const std::string, lightusd::VariantSetSpec>& set : sets) {
         for (const std::pair<const std::string, lightusd::PrimSpec>& variant : set.second.variantSet) {
-            const lightusd::VariantSetSpec* const nested = find_variant_set_spec(variant.second.variantSets(), set_name);
-            if (nested != nullptr) {
-                return nested;
-            }
+            collect_variant_set_specs(variant.second.variantSets(), set_name, out_sets);
         }
     }
-    return nullptr;
 }
 
 // The entries of `variant_selections` the layer's prims answer for, with one
@@ -568,11 +567,21 @@ void hoist_variant_prims(
         if (!layer.find_primspec_at(lightusd::Path{absolute_path, ""}, &spec, &error) || (spec == nullptr)) {
             reason = "is no prim of the target";
         } else {
-            const lightusd::VariantSetSpec* const set = find_variant_set_spec(spec->variantSets(), entry.set_name);
-            if (set == nullptr) {
+            std::vector<const lightusd::VariantSetSpec*> sets;
+            collect_variant_set_specs(spec->variantSets(), entry.set_name, sets);
+            if (sets.empty()) {
                 reason = "declares no such variant set";
-            } else if (set->variantSet.find(entry.variant_name) == set->variantSet.end()) {
-                reason = "holds no such variant";
+            } else {
+                bool holds_variant = false;
+                for (const lightusd::VariantSetSpec* const set : sets) {
+                    if (set->variantSet.find(entry.variant_name) != set->variantSet.end()) {
+                        holds_variant = true;
+                        break;
+                    }
+                }
+                if (!holds_variant) {
+                    reason = "holds no such variant";
+                }
             }
         }
         if (!reason.empty()) {

@@ -434,6 +434,17 @@ public:
     // can write back. An unselected variant's arcs are counted in the set's
     // `unsupported_opinion_count`.
     std::vector<Usd_reference>                  references;
+    // The opinions and the bindings whose path names no prim of the load's
+    // own tree because a composition arc supplies that prim
+    // (doc/usd-compatibility-plan.md C6). erhe resolves arcs after the load
+    // returns - the caller instantiates each one - so a path the reader
+    // cannot reach yet is not a path that names nothing: the entry is kept
+    // here for the caller to apply once the arcs are in the tree, and no
+    // base value of it is captured here either, the prim it names being the
+    // caller's to find. A path that crosses no prim authoring arcs stays
+    // dropped and counted.
+    std::vector<erhe::scene::Instance_override> pending_overrides;
+    std::vector<Usd_variant_binding>            pending_bindings;
 };
 
 // One `variantSet` a prim of the stage authors, and the erhe item that prim

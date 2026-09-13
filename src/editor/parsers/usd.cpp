@@ -1961,6 +1961,231 @@ void apply_planned_paths_to_variant_selections(
     return dynamic_cast<const Graph_texture*>(sampler.texture_reference.get()) != nullptr;
 }
 
+// The base value one pending entry needs: what the prim holds for every
+// property name the entry authors that no earlier entry of the set already
+// recorded. A property with no local value is a `cleared` entry, so putting
+// it back clears rather than writes - the same record erhe::usd captures for
+// the entries it can resolve itself.
+void capture_pending_variant_base_value(
+    erhe::Hierarchy&                             target,
+    const erhe::scene::Instance_override&        entry,
+    std::vector<erhe::scene::Instance_override>& base_values
+)
+{
+    erhe::scene::Instance_override* base = nullptr;
+    for (erhe::scene::Instance_override& candidate : base_values) {
+        if (candidate.relative_path == entry.relative_path) {
+            base = &candidate;
+            break;
+        }
+    }
+    if (base == nullptr) {
+        erhe::scene::Instance_override new_base{};
+        new_base.relative_path = entry.relative_path;
+        base_values.push_back(std::move(new_base));
+        base = &base_values.back();
+    }
+    for (const erhe::scene::Instance_override_value& value : entry.values) {
+        bool already_recorded = false;
+        for (const erhe::scene::Instance_override_value& recorded : base->values) {
+            if (recorded.name == value.name) {
+                already_recorded = true;
+                break;
+            }
+        }
+        if (already_recorded) {
+            continue;
+        }
+        const erhe::property::Dependency_property* const property = erhe::scene::find_override_property(target, value.name);
+        if (property == nullptr) {
+            continue; // apply_property_values warns about the name once
+        }
+        if (target.has_local_value(*property)) {
+            base->values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name  = value.name,
+                    .text  = erhe::property::to_string(*property, target.get_value(*property)),
+                    .state = erhe::scene::Instance_override_value_state::supplied
+                }
+            );
+        } else {
+            base->values.push_back(
+                erhe::scene::Instance_override_value{
+                    .name  = value.name,
+                    .text  = std::string{},
+                    .state = erhe::scene::Instance_override_value_state::cleared
+                }
+            );
+        }
+    }
+    if (entry.transform_overridden && !base->transform_overridden) {
+        const erhe::scene::Xformable* const xformable = dynamic_cast<const erhe::scene::Xformable*>(&target);
+        if (xformable != nullptr) {
+            base->transform_overridden = true;
+            base->transform            = xformable->parent_from_node_transform().get_matrix();
+            base->xform_op_stack       = xformable->copy_xform_op_stack();
+        }
+    }
+}
+
+// One pending material binding, on the primitives it names: a binding at a
+// mesh path covers the primitives the same variant does not bind by the name
+// of their group of facets, and a binding at such a name covers that one
+// primitive. False when the path reached no primitive.
+[[nodiscard]] auto apply_pending_variant_binding(
+    erhe::Hierarchy&                                  carrier,
+    const erhe::usd::Usd_variant&                     variant,
+    const erhe::usd::Usd_variant_binding&             binding,
+    const std::shared_ptr<erhe::primitive::Material>& material
+) -> bool
+{
+    erhe::Hierarchy* const bound = erhe::scene::find_instance_item(carrier, binding.relative_path);
+    if ((bound != nullptr) && erhe::is<erhe::scene::Mesh>(bound)) {
+        erhe::scene::Mesh* const mesh    = static_cast<erhe::scene::Mesh*>(bound);
+        bool                     applied = false;
+        for (std::size_t index = 0, end = mesh->get_primitives().size(); index < end; ++index) {
+            const std::string subset_name = primitive_subset_name(*mesh, index);
+            const std::string subset_path = binding.relative_path.empty()
+                ? subset_name
+                : (binding.relative_path + "/" + subset_name);
+            const bool bound_by_subset = !subset_name.empty() && std::any_of(
+                variant.pending_bindings.begin(),
+                variant.pending_bindings.end(),
+                [&subset_path](const erhe::usd::Usd_variant_binding& other) { return other.relative_path == subset_path; }
+            );
+            if (bound_by_subset) {
+                continue;
+            }
+            mesh->set_primitive_material(index, material);
+            applied = true;
+        }
+        return applied;
+    }
+    // A group of facets below a mesh, which erhe holds as one primitive of
+    // that mesh rather than as an item of its own.
+    const std::size_t separator = binding.relative_path.rfind('/');
+    if (separator == std::string::npos) {
+        return false;
+    }
+    const std::string      parent_path = binding.relative_path.substr(0, separator);
+    const std::string      subset_name = binding.relative_path.substr(separator + 1);
+    erhe::Hierarchy* const parent      = erhe::scene::find_instance_item(carrier, parent_path);
+    if ((parent == nullptr) || !erhe::is<erhe::scene::Mesh>(parent)) {
+        return false;
+    }
+    erhe::scene::Mesh* const mesh = static_cast<erhe::scene::Mesh*>(parent);
+    for (std::size_t index = 0, end = mesh->get_primitives().size(); index < end; ++index) {
+        if (primitive_subset_name(*mesh, index) == subset_name) {
+            mesh->set_primitive_material(index, material);
+            return true;
+        }
+    }
+    return false;
+}
+
+// The opinions and bindings a variant authors for a prim a composition arc
+// supplies (doc/usd-compatibility-plan.md C6). erhe::usd cannot reach such a
+// prim: the arcs of a file are instantiated here, after the load returns, so
+// the reader hands those entries over as pending and this is what applies
+// them. The path is resolved the way an instance override's is - one segment
+// at a time, through the clone of every carrier it crosses
+// (erhe::scene::find_instance_item) - and every variant's entries are
+// resolved, not only the selected one's, so the base values a later switch
+// restores are what the prims held before that variant reached them. Run
+// after resolve_usd_references() and before fill_variant_table(), which then
+// carries the applied entries into the scene's table.
+void apply_pending_variant_opinions(
+    erhe::usd::Usd_data&                      usd_data,
+    const std::shared_ptr<erhe::scene::Node>& container_node
+)
+{
+    for (erhe::usd::Usd_variant_set& set : usd_data.variant_sets) {
+        erhe::Hierarchy* const carrier = dynamic_cast<erhe::Hierarchy*>(set.prim.get());
+        if (carrier == nullptr) {
+            continue;
+        }
+        bool any_pending = false;
+        for (const erhe::usd::Usd_variant& variant : set.variants) {
+            any_pending = any_pending || !variant.pending_overrides.empty() || !variant.pending_bindings.empty();
+        }
+        if (!any_pending) {
+            continue;
+        }
+        // Every variant's base values first, before any opinion of the
+        // selected variant reaches a prim.
+        for (const erhe::usd::Usd_variant& variant : set.variants) {
+            for (const erhe::scene::Instance_override& entry : variant.pending_overrides) {
+                erhe::Hierarchy* const target = erhe::scene::find_instance_item(*carrier, entry.relative_path);
+                if (target != nullptr) {
+                    capture_pending_variant_base_value(*target, entry, set.base_values);
+                }
+            }
+        }
+        for (erhe::usd::Usd_variant& variant : set.variants) {
+            const bool        selected = (variant.name == set.selected);
+            const std::string owner    = fmt::format(
+                "variant '{}' of set '{}' on '{}'", variant.name, set.set_name, set.stage_path
+            );
+            for (erhe::scene::Instance_override& entry : variant.pending_overrides) {
+                erhe::Hierarchy* const target = erhe::scene::find_instance_item(*carrier, entry.relative_path);
+                if (target == nullptr) {
+                    log_parsers->warn(
+                        "{} names '{}', which no composition arc of the prim supplied - the opinion is dropped",
+                        owner, entry.relative_path
+                    );
+                    ++set.unsupported_opinion_count;
+                    continue;
+                }
+                if (selected) {
+                    erhe::scene::apply_property_values(*target, entry.values, owner);
+                    if (entry.transform_overridden) {
+                        erhe::scene::Xformable* const xformable = dynamic_cast<erhe::scene::Xformable*>(target);
+                        if (xformable == nullptr) {
+                            log_parsers->warn("{}: '{}' carries no transform - the xformOps are dropped", owner, entry.relative_path);
+                        } else if (entry.xform_op_stack.has_value()) {
+                            xformable->set_xform_op_stack(entry.xform_op_stack.value());
+                        } else {
+                            xformable->set_parent_from_node(entry.transform);
+                        }
+                    }
+                }
+                variant.overrides.push_back(std::move(entry));
+            }
+            variant.pending_overrides.clear();
+
+            // The whole pending list stays readable while the bindings are
+            // applied - one binding asks the others whether a deeper path of
+            // the same variant binds a group of facets of the mesh it names -
+            // so the applied ones move onto the variant only once every one of
+            // them has been looked at.
+            std::vector<erhe::usd::Usd_variant_binding> applied_bindings;
+            for (const erhe::usd::Usd_variant_binding& binding : variant.pending_bindings) {
+                const std::shared_ptr<erhe::primitive::Material> material =
+                    find_material_by_stage_path(container_node, binding.material_path);
+                if (!material) {
+                    log_parsers->warn(
+                        "{} binds '{}' to material '{}', which the file has no prim for - the binding is dropped",
+                        owner, binding.relative_path, binding.material_path
+                    );
+                    continue;
+                }
+                if (selected && !apply_pending_variant_binding(*carrier, variant, binding, material)) {
+                    log_parsers->warn(
+                        "{} binds '{}', which is no mesh of the composed prim - the binding is dropped",
+                        owner, binding.relative_path
+                    );
+                    continue;
+                }
+                applied_bindings.push_back(binding);
+            }
+            variant.pending_bindings.clear();
+            for (erhe::usd::Usd_variant_binding& binding : applied_bindings) {
+                variant.bindings.push_back(std::move(binding));
+            }
+        }
+    }
+}
+
 // The variant sets the file authored, as the scene's own table
 // (doc/usd-compatibility-plan.md X4): the carrying prim and the bound
 // materials are the items the import made, so a later switch assigns them
@@ -2562,10 +2787,6 @@ auto make_import_usd_operation(
     // style assignment; both ride the import_root insert below.
     resolve_usd_classes(usd_data, root_node);
 
-    // The file's variant sets join the target scene's table. The selected
-    // variant is already bound by the reader, so an import needs no switch.
-    fill_variant_table(usd_data, path, root_node, scene_root->get_variant_table());
-
     // Composition arcs: each referencing prim gets one Prefab_instance per
     // arc, with the arc's target cloned below it. The instances ride the
     // import_root insert below, so an undo of the import removes them.
@@ -2580,6 +2801,15 @@ auto make_import_usd_operation(
             std::string{}
         );
     }
+
+    // What a variant authors for a prim one of those arcs supplies: the
+    // reader left those entries pending because the arcs were not in the tree
+    // when it ran (doc/usd-compatibility-plan.md C6).
+    apply_pending_variant_opinions(usd_data, root_node);
+
+    // The file's variant sets join the target scene's table. The selected
+    // variant is already bound, so an import needs no switch.
+    fill_variant_table(usd_data, path, root_node, scene_root->get_variant_table());
 
     const std::string                      path_string     = path.generic_string();
     const std::shared_ptr<Content_library> content_library = scene_root->get_content_library();
@@ -2712,6 +2942,12 @@ auto load_usd_prefab_template(
         context, prefab_library, usd_data, path, 0, nullptr, root_prim_path,
         root_prim_path, variant_selections
     );
+
+    // What a variant of this file authors for a prim one of those arcs
+    // supplies (doc/usd-compatibility-plan.md C6). A template carries no
+    // variant table, but the opinions are the template's own content: an
+    // instance of it reads them through the reference layer (X2).
+    apply_pending_variant_opinions(usd_data, container_node);
 
     if (root_prim_path.empty()) {
         container_node->set_parent({});
@@ -2893,10 +3129,6 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // style assignment, before the prims move under the scene root.
     resolve_usd_classes(usd_data, container_node);
 
-    // The file's variant sets, while the prims are still under the container
-    // the material paths address them from.
-    fill_variant_table(usd_data, path, container_node, scene_root->get_variant_table());
-
     // Composition arcs: one Prefab_instance per arc under its carrier prim,
     // before the prims move under the scene root.
     if (context.prefab_library != nullptr) {
@@ -2910,6 +3142,15 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
             std::string{}
         );
     }
+
+    // What a variant authors for a prim one of those arcs supplies: the
+    // reader left those entries pending because the arcs were not in the tree
+    // when it ran (doc/usd-compatibility-plan.md C6).
+    apply_pending_variant_opinions(usd_data, container_node);
+
+    // The file's variant sets, while the prims are still under the container
+    // the material paths address them from.
+    fill_variant_table(usd_data, path, container_node, scene_root->get_variant_table());
 
     // The file's own folder tree is the library's: a `Scope` named for a kind
     // is that kind's scope (doc/usd-compatibility-plan.md E4d). The library is

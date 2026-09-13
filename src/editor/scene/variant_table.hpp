@@ -108,6 +108,11 @@ public:
     [[nodiscard]] auto find_variant(const std::string& variant_name) const -> const Variant*;
 };
 
+// The name of the group of facets one primitive of a mesh is - the USD
+// `GeomSubset` a binding path names it by. A mesh whose primitive carries no
+// geometry of its own is named `<mesh name>_<index>`.
+[[nodiscard]] auto primitive_subset_name(const erhe::scene::Mesh& mesh, std::size_t primitive_index) -> std::string;
+
 // The prim one relative path of a variant set names: the carrying prim itself
 // for the empty path, and the item at that path below it otherwise. Null when
 // the carrying prim is gone or the path reaches no item.

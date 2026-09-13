@@ -156,4 +156,15 @@ void apply_property_values(
 // does not parse cost one warning each.
 void apply_instance_overrides(erhe::Hierarchy& carrier, const std::vector<Instance_override>& overrides);
 
+// The item `relative_path` names below a carrier - a prim a composition arc
+// was applied to (doc/usd-compatibility-plan.md C6). erhe keeps the arc's
+// target clone as one level of its own while USD composes the target's
+// content directly under the referencing prim, so the path is resolved one
+// segment at a time and the clone of every carrier the path crosses is
+// looked through first: the carrier the path starts at, a carrier the path
+// reaches below it, and a carrier that is itself the clone of an outer one.
+// An empty path is the carrier's first clone. Null when the path reaches no
+// item.
+[[nodiscard]] auto find_instance_item(erhe::Hierarchy& carrier, const std::string& relative_path) -> erhe::Hierarchy*;
+
 } // namespace erhe::scene

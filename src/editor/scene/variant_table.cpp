@@ -16,14 +16,12 @@
 
 namespace editor {
 
-namespace {
-
 // The GeomSubset name one primitive of a mesh has, in the spelling the USD
 // writer gives it: the primitive's geometry name with the mesh name prefix
 // dropped (the importer names a primitive "<mesh name>.<subset name>"), and
 // "<mesh name>_<index>" for a primitive built from a triangle soup, which
 // carries no geometry name.
-[[nodiscard]] auto primitive_subset_name(const erhe::scene::Mesh& mesh, const std::size_t primitive_index) -> std::string
+auto primitive_subset_name(const erhe::scene::Mesh& mesh, const std::size_t primitive_index) -> std::string
 {
     const std::vector<erhe::scene::Mesh_primitive>& primitives = mesh.get_primitives();
     if (primitive_index >= primitives.size()) {
@@ -44,6 +42,8 @@ namespace {
     }
     return geometry_name;
 }
+
+namespace {
 
 // The item one binding path names below the prim carrying the set: the prim
 // itself for an empty path, and the item find_by_path reaches otherwise.

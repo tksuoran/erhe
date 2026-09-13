@@ -484,6 +484,15 @@ void Mesh::handle_item_host_update(erhe::Item_host* const old_item_host, erhe::I
     }
     if (new_scene_host != nullptr) {
         new_scene_host->register_mesh(shared_this);
+        // A display color the mesh was given while no host could hear the
+        // write - a variant opinion applied to an unhosted template, and the
+        // reference layer handing that value to every clone of it - reaches
+        // the vertex data here, once, when the mesh enters the host. A mesh
+        // whose color is the metadata default has nothing to rebuild.
+        const erhe::property::Value_source source = get_value_source(display_color_property.get());
+        if (source != erhe::property::Value_source::default_value) {
+            new_scene_host->on_mesh_display_color_changed(shared_this);
+        }
     }
 }
 

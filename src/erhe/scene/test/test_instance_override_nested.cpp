@@ -81,6 +81,49 @@ public:
     std::shared_ptr<erhe::scene::Xform> body;
 };
 
+// The shape a chain of files that each reference the next composes: the
+// carrier holds the clone of its target, and that clone is a carrier itself -
+// the target prim authored an arc of its own - so the prim the file's path
+// names sits two clone levels down. The Teapot asset is this: DrawModes
+// references Teapot.usd, whose prim payloads Teapot_Payload.usd, whose prim
+// references Teapot_Geometry.usd, whose selected variant references
+// geo/UtahTeapot.usd, and the path `Geometry` names the mesh inside the last
+// of them.
+class Chained_carrier_scene final
+{
+public:
+    Chained_carrier_scene()
+    {
+        root = std::make_shared<erhe::scene::Xform>("root");
+
+        carrier = std::make_shared<erhe::scene::Xform>("Teapot");
+        carrier->set_parent(root);
+        carrier->attach(std::make_shared<Test_arc>());
+
+        outer_template = std::make_shared<erhe::scene::Xform>("Teapot");
+        outer_clone    = std::make_shared<erhe::scene::Xform>("Teapot");
+        outer_clone->set_reference(outer_template);
+        outer_clone->set_parent(carrier);
+        outer_clone->attach(std::make_shared<Test_arc>());
+
+        inner_template = std::make_shared<erhe::scene::Xform>("UtahTeapot");
+        inner_clone    = std::make_shared<erhe::scene::Xform>("UtahTeapot");
+        inner_clone->set_reference(inner_template);
+        inner_clone->set_parent(outer_clone);
+
+        geometry = std::make_shared<erhe::scene::Xform>("Geometry");
+        geometry->set_parent(inner_clone);
+    }
+
+    std::shared_ptr<erhe::scene::Xform> root;
+    std::shared_ptr<erhe::scene::Xform> carrier;
+    std::shared_ptr<erhe::scene::Xform> outer_template;
+    std::shared_ptr<erhe::scene::Xform> outer_clone;
+    std::shared_ptr<erhe::scene::Xform> inner_template;
+    std::shared_ptr<erhe::scene::Xform> inner_clone;
+    std::shared_ptr<erhe::scene::Xform> geometry;
+};
+
 [[nodiscard]] auto visibility_override(const std::string& relative_path) -> std::vector<erhe::scene::Instance_override>
 {
     return std::vector<erhe::scene::Instance_override>{
@@ -142,6 +185,33 @@ TEST(Instance_override_nested, a_path_that_spells_the_nested_clone_resolves)
 
     erhe::scene::apply_instance_overrides(*scene.carrier.get(), visibility_override("geo/default/UtahTeapot/Body"));
     EXPECT_FALSE(scene.body->is_visible());
+}
+
+TEST(Instance_override_nested, a_path_that_crosses_a_carrier_clone_resolves)
+{
+    const Chained_carrier_scene scene;
+    ASSERT_TRUE(scene.geometry->is_visible());
+
+    erhe::scene::apply_instance_overrides(*scene.carrier.get(), visibility_override("Geometry"));
+    EXPECT_FALSE(scene.geometry->is_visible());
+}
+
+TEST(Instance_override_nested, a_path_that_spells_both_clone_levels_resolves)
+{
+    const Chained_carrier_scene scene;
+    ASSERT_TRUE(scene.geometry->is_visible());
+
+    erhe::scene::apply_instance_overrides(*scene.carrier.get(), visibility_override("Teapot/UtahTeapot/Geometry"));
+    EXPECT_FALSE(scene.geometry->is_visible());
+}
+
+TEST(Instance_override_nested, a_path_naming_nothing_below_a_carrier_clone_reaches_no_item)
+{
+    const Chained_carrier_scene scene;
+    erhe::scene::apply_instance_overrides(*scene.carrier.get(), visibility_override("Missing"));
+    EXPECT_TRUE(scene.geometry->is_visible());
+    EXPECT_TRUE(scene.inner_clone->is_visible());
+    EXPECT_TRUE(scene.outer_clone->is_visible());
 }
 
 // An empty path is the carrier's own clone, unchanged.
