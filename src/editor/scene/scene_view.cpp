@@ -474,6 +474,29 @@ void Scene_view::update_hover_with_raytrace()
         return;
     }
 
+    // While a scene load is in flight the raytrace scene is mutated by every
+    // mesh that finalizes, so the commit below would rebuild the top level
+    // acceleration structure on nearly every frame and never get to reuse it.
+    // Nothing under the pointer is stable enough to hover during a load
+    // either: a hover entry names a mesh and a primitive index, and the load
+    // swaps primitives underneath both. So clear the slots and trace nothing
+    // until the scene has settled; the first hover after that commits once.
+    // The MCP raycast / pick_at tools keep their own commit, which is an
+    // explicit request made at a time of the caller's choosing.
+    const bool load_in_flight = m_context.is_scene_load_in_flight();
+    if (load_in_flight != m_hover_gated_by_load) {
+        m_hover_gated_by_load = load_in_flight;
+        if (load_in_flight) {
+            log_controller_ray->info("hover raytrace gated (scene load in flight)");
+        } else {
+            log_controller_ray->info("hover raytrace resumed (scene load settled)");
+        }
+    }
+    if (load_in_flight) {
+        reset_hover_slots();
+        return;
+    }
+
     auto& rt_scene = scene_root->get_raytrace_scene();
     rt_scene.commit();
 

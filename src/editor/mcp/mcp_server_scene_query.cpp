@@ -1964,13 +1964,17 @@ auto Mcp_server::query_async_status(const json& args) -> std::string
     // counts asset load tasks in flight, which change the scene when they
     // publish. Idle means all five are zero. An in-flight lightmap prepare
     // holds pending for its whole flight and is detailed in the
-    // lightmap_prepare sub-object.
+    // lightmap_prepare sub-object. The five terms are reported individually
+    // for diagnosis; "idle" is the verdict, and it comes from the single
+    // predicate App_context::is_scene_load_in_flight() that the editor itself
+    // gates on, so the tool and the editor cannot drift apart.
     json result = {
         {"pending",               m_context.pending_async_ops.load()},
         {"running",               m_context.running_async_ops.load()},
         {"queued_operations",     (m_context.operation_stack    != nullptr) ? m_context.operation_stack->get_queued_count()     : 0u},
         {"pending_scene_commits", (m_context.scene_commit_queue != nullptr) ? m_context.scene_commit_queue->get_pending_count() : 0u},
-        {"asset_loads",           (m_context.asset_manager      != nullptr) ? m_context.asset_manager->get_load_task_count()    : 0u}
+        {"asset_loads",           (m_context.asset_manager      != nullptr) ? m_context.asset_manager->get_load_task_count()    : 0u},
+        {"idle",                  !m_context.is_scene_load_in_flight()}
     };
     if (m_context.lightmap_partitioner != nullptr) {
         const Lightmap_partitioner::Prepare_progress progress    = m_context.lightmap_partitioner->get_prepare_progress();

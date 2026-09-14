@@ -748,9 +748,10 @@ ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
 1. Load performance (section 6 "Load performance"). The scenes holding
-   thousands of prims take minutes and trip the stall watchdog; the three
-   fixes are named in order and the first, a shape-to-meshes index at the
-   change sites, is the one the other scene loaders benefit from too.
+   thousands of prims take minutes and trip the stall watchdog; the
+   shape-to-meshes index at the change sites and the hover gate hold, and
+   the remaining fix is the serial per-shape BVH build of the deferred
+   path.
 2. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
@@ -842,15 +843,22 @@ ranks them. A USD scene loads, edits and saves without any of them.
   `raytrace: BVH commit`): a queued raytrace commit reads the scene's
   shape-to-meshes index (`Scene_root::collect_meshes_sharing_primitives`,
   maintained at the change sites), so it costs the sharers of the committed
-  shapes; the two remaining fixes are a hover that does not trace while a
-  load is in flight - today it traces the linear path every frame while the
-  TLAS cannot settle - and the per-shape BVH build of
+  shapes; and the hover holds still while a load is in flight
+  (`Scene_view::update_hover_with_raytrace()` asks
+  `App_context::is_scene_load_in_flight()` and clears its slots instead of
+  committing and tracing, `src/editor/scene/notes.md`), so a load no longer
+  pays for a top level acceleration structure that is rebuilt every frame and
+  reused by nothing. The one remaining fix is the per-shape BVH build of
   `finalize_imported_meshes` on the deferred path, which is serial on the
-  tick thread, in that order. Both scenes measured after the index alone are
-  unchanged (`DrawModes.usd` 13.9 s -> 14.0 s, `simpleAssetScene.usd`
-  303.6 s -> 304.6 s to settle, with the same stall lines): the scan the
-  index replaces is small beside the per-sharer refresh work and the serial
-  BVH build, so the load time is what the two remaining fixes address.
+  tick thread. Both scenes measured after the index and the hover gate are
+  unchanged in wall time (`DrawModes.usd` 12.9 s -> 14.0 s,
+  `simpleAssetScene.usd` 336.9 s -> 342.8 s to settle, run-to-run variation,
+  with the same stall lines and `tick: update_hover_info` at zero both
+  before and after): a headless viewport is hovered only for the single frame
+  an MCP `pick_at` arms, so the headless loads do not exercise the per-frame
+  hover at all and the gate shows there only as its edge log lines. The load
+  time these scenes spend is in the per-sharer refresh work and the serial
+  BVH build, which is what the remaining fix addresses.
 - Asynchronous load: `load_usd` runs on the calling thread and the editor's
   import and open are synchronous, where a glTF import goes through the
   asset manager's `Asset_load_request` and the droppable-payload import

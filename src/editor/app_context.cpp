@@ -56,5 +56,10 @@ auto App_context::get_async_in_flight_count() const -> std::size_t
         ((asset_manager      != nullptr) ? asset_manager->get_load_task_count()    : 0u);
 }
 
+auto App_context::is_scene_load_in_flight() const -> bool
+{
+    return get_async_in_flight_count() != 0;
+}
+
 }
 

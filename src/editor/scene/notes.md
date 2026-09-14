@@ -12,6 +12,19 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Scene_view`** -- Abstract base for anything that provides a camera view into a scene. Holds a weak reference to `Scene_root`, viewport configuration, control ray state (for pointing/picking), and hover entries (per-slot raytrace hit results). Subclasses: `Viewport_scene_view`, `Headset_view`.
 
+  `update_hover_with_raytrace()` is the only per-frame site that commits the
+  scene's raytrace top level acceleration structure (`IScene::commit()`); the
+  MCP `raycast` and `pick_at` tools commit on demand, at the moment their
+  caller asks for a trace. It hovers only while the editor is settled: it asks
+  `App_context::is_scene_load_in_flight()` first, and while that is true it
+  clears every hover slot and returns without committing or tracing. A load
+  attaches, detaches and rebuilds raytrace instances continuously, so a hover
+  that traced through it would rebuild the acceleration structure on nearly
+  every frame and never reuse it, and a hover entry it produced would name a
+  mesh and a primitive index the load is still swapping underneath. Both
+  subclasses inherit the rule, the XR view included. The gate is logged to
+  `editor.controller_ray` once at each edge, never per frame.
+
 - **`Viewport_scene_view`** -- Concrete `Scene_view` that is also a `Texture_rendergraph_node`. Renders scene content into a texture consumed by downstream rendergraph nodes (post-processing or direct display). Handles 2D pointer position, hover detection (via raytrace or ID renderer), and shader variant selection.
 
 - **`Scene_views`** (`viewport_scene_views.hpp`) -- Manages the collection of `Viewport_scene_view` instances. Tracks which view is hovered, creates new viewport views, and responds to graphics settings changes.

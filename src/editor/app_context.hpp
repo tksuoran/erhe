@@ -182,6 +182,17 @@ public:
     // "scene still changing".
     [[nodiscard]] auto get_async_in_flight_count() const -> std::size_t;
 
+    // True while any of the above is outstanding, i.e. exactly the condition
+    // under which the MCP get_async_status tool reports the editor as not
+    // idle. Every term can still change the content of a scene, and every
+    // such change attaches, detaches or rebuilds raytrace instances, so this
+    // is also the "the acceleration structure cannot settle" predicate: the
+    // hover path (Scene_view::update_hover_with_raytrace) consults it and
+    // skips the commit + trace entirely while it is true. Asset load tasks
+    // are part of it for the same reason - a load publishes its meshes into
+    // the scene while it runs, not only when it finishes.
+    [[nodiscard]] auto is_scene_load_in_flight() const -> bool;
+
     // The one place that maps a property's consequence flags
     // (erhe::property::Property_flags, doc/property-system.md D11) to
     // editor actions. Called after every property write made through

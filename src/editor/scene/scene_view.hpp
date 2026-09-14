@@ -262,6 +262,9 @@ protected:
     Viewport_config                    m_viewport_config;
     Debug_visualizations               m_debug_visualizations;
     bool                               m_hover_update_pending{true};
+    // Edge tracking for the raytrace hover gate in
+    // update_hover_with_raytrace(): logged when it flips, never per frame.
+    bool                               m_hover_gated_by_load {false};
     std::weak_ptr<Scene_root>          m_scene_root;
     std::weak_ptr<erhe::scene::Camera> m_shadow_fit_override_camera;
 
