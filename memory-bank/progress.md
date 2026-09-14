@@ -248,3 +248,10 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 [TASK::asset-browser-two-phase-scan]{DONE-2026-09-14;c5d81a1d9;via-harness;1-coder}
 ✓step-1{Asset_walk-worker+Asset_scan_entry{path,parent_path_key,Asset_node_kind}+apply_scan_progress;headless:7-publish-lines-~50ms-apart+save-refresh-node-added}
 ✓user-verified-2026-09-14
+
+[TASK::lightusd-fork-fixes]{DONE-2026-09-14;plan-section-3-item-1-removed;via-harness;4-coders+4-scouts}
+✓commit-1{00842c2d1;fork-896dc0559-tag-14a:Tydra-unresolved-connection=schema-fallback+warning;erhe-strip-pass-gone;usd-401}
+✓commit-2{4e65094fd;fork-c4d61a6ff-tag-14b:USDA-escape-pair;erhe-string/token-verbatim,single-quote-swap-gone;usd-401}
+✓commit-3{233688d69;fork-22181bf3a-tag-14c:ComposeRelationshipTargets;erhe-instancer-skip-warning+sublayer-fixtures;teapotScene-1235-lost-instances->0;usd-405}
+✓commit-4{3b211f211;fork-22af62ad7-tag-14d:inputs:st-float2;usdchecker-clean;roundtrip-413/416;usd-405}
+!left::tags-a..d-unpushed{user-pushes};ninja+headless-trees-carry-CPM_LightUSD_SOURCE-override->reconfigure-after-push
