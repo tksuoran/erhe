@@ -1614,7 +1614,7 @@ auto Mcp_server::query_material_details(const json& args) -> std::string
     for (const auto& mat : mat_list) {
         if (mat->get_name() == material_name) {
             const erhe::primitive::Material_values d = mat->get_values();
-            const erhe::primitive::Material_data&  samplers_data = mat->data;
+            const erhe::primitive::Material_data&  samplers_data = mat->get_data();
             auto sampler_to_json = [](const erhe::primitive::Material_texture_sampler& s) -> json {
                 json entry = {
                     {"texgen_mode", s.texgen_mode},

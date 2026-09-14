@@ -3146,9 +3146,9 @@ private:
     // three values map across unchanged apart from the degrees USD spells
     // the rotation in.
     static void apply_texture_sampling(
-        erhe::primitive::Material&                 material,
-        erhe::primitive::Material_texture_sampler& slot,
-        const lightusd::tydra::UVTexture&          uv_texture
+        erhe::primitive::Material&                       material,
+        const erhe::primitive::Material_texture_sampler& slot,
+        const lightusd::tydra::UVTexture&                uv_texture
     )
     {
         erhe::primitive::Material_sampler_state sampler_state = slot.sampler;
@@ -3311,13 +3311,13 @@ private:
     // plain value does nothing. The order the slots are applied in is the
     // order the bindings are recorded in.
     void apply_slot_texture(
-        const std::size_t                          material_index,
-        erhe::primitive::Material&                 material,
-        erhe::primitive::Material_texture_sampler& slot,
-        const Usd_material_texture_slot            slot_kind,
-        const std::int32_t                         texture_id,
-        const char*                                input_name,
-        const Texel_scale                          texel_scale
+        const std::size_t                                material_index,
+        erhe::primitive::Material&                       material,
+        const erhe::primitive::Material_texture_sampler& slot,
+        const Usd_material_texture_slot                  slot_kind,
+        const std::int32_t                               texture_id,
+        const char*                                      input_name,
+        const Texel_scale                                texel_scale
     )
     {
         const lightusd::tydra::UVTexture* uv_texture = uv_texture_of(texture_id);
@@ -3343,7 +3343,7 @@ private:
         if (uv_texture == nullptr) {
             return;
         }
-        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& slots = material.get_data().texture_samplers;
         bind_texture(material_index, Usd_material_texture_slot::normal, texture_id);
         apply_texture_sampling(material, slots.normal, *uv_texture);
         set_or_clear_value(
@@ -3387,7 +3387,7 @@ private:
             return;
         }
         const std::string&                          material_name = material.get_name();
-        erhe::primitive::Material_texture_samplers& slots         = material.data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& slots         = material.get_data().texture_samplers;
         bind_texture(material_index, Usd_material_texture_slot::metallic_roughness, slot_texture_id);
         apply_texture_sampling(material, slots.metallic_roughness, *slot_texture);
         if (metallic_texture != nullptr) {
@@ -3534,7 +3534,7 @@ private:
         // The textures the shader's inputs read, on the erhe slots they belong
         // to: the image, the wrap modes and the UsdTransform2d of each
         // UsdUVTexture, and the texel decode of the normal slot.
-        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& slots = material.get_data().texture_samplers;
         apply_slot_texture(
             material_index, material, slots.base_color, Usd_material_texture_slot::base_color,
             shader.diffuseColor.texture_id, "diffuseColor", Texel_scale::carried
@@ -3722,7 +3722,7 @@ private:
             }
         }
 
-        erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& slots = material.get_data().texture_samplers;
         apply_slot_texture(
             material_index, material, slots.base_color, Usd_material_texture_slot::base_color,
             shader.base_color.texture_id, "base_color", Texel_scale::carried

@@ -26,6 +26,8 @@
 
 namespace erhe::graphics {
 
+Texture_reference_user::~Texture_reference_user() noexcept = default;
+
 Texture_reference::~Texture_reference() noexcept = default;
 
 namespace {

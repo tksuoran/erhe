@@ -10,6 +10,7 @@
 #include "erhe_graphics/texture.hpp"
 
 #include <string_view>
+#include <vector>
 
 namespace editor {
 
@@ -50,6 +51,21 @@ public:
     // texture of this graph's output node, or nullptr when the graph has no
     // usable output (an unbound slot then renders as white).
     [[nodiscard]] auto get_referenced_texture() const -> const erhe::graphics::Texture* override;
+
+    // Overrides erhe::graphics::Texture_reference: the holders a bake must
+    // reach - the material slots bound to this graph. A holder registers
+    // while it holds the reference (erhe::primitive::Material does it from
+    // its slot texture property), so the pointers are those of live objects.
+    void add_user   (erhe::graphics::Texture_reference_user& user) override;
+    void remove_user(erhe::graphics::Texture_reference_user& user) override;
+
+    // The output node calls this when the texture get_referenced_texture()
+    // returns becomes a different object, which is what every holder's
+    // record was built from.
+    void notify_referenced_texture_changed();
+
+private:
+    std::vector<erhe::graphics::Texture_reference_user*> m_users;
 };
 
 } // namespace editor

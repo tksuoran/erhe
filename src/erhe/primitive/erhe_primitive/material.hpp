@@ -5,9 +5,13 @@
 #include "erhe_primitive/enums.hpp"
 #include "erhe_property/dependency_property.hpp"
 #include "erhe_property/property_set.hpp"
+// Complete types needed: Material is a Texture_reference_user (it registers
+// with the reference a slot holds) and holds Texture_reference by shared_ptr.
+#include "erhe_graphics/texture.hpp"
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,7 +19,6 @@
 
 namespace erhe::graphics {
     class Sampler_create_info;
-    class Texture_reference;
 }
 
 namespace erhe::primitive {
@@ -171,7 +174,9 @@ public:
     Material_data   data  {};
 };
 
-class Material : public erhe::Item<erhe::Item_base, erhe::Typed, Material>
+class Material
+    : public erhe::Item<erhe::Item_base, erhe::Typed, Material>
+    , public erhe::graphics::Texture_reference_user
 {
 public:
     Material();
@@ -295,11 +300,14 @@ public:
     // The sampler state of one of this material's own slots, written through
     // the slot's seven sampler properties in one change batch (a field at its
     // default clears the local value, as set_data does).
-    void set_slot_sampler(Material_texture_sampler& slot, const Material_sampler_state& state);
+    void set_slot_sampler(const Material_texture_sampler& slot, const Material_sampler_state& state);
     // The UV transform of one of this material's own slots, written through
     // the slot's rotation, offset and scale properties in one change batch
     // (a field at its default clears the local value, as set_data does).
-    void set_slot_uv_transform(Material_texture_sampler& slot, float rotation, const glm::vec2& offset, const glm::vec2& scale);
+    void set_slot_uv_transform(const Material_texture_sampler& slot, float rotation, const glm::vec2& offset, const glm::vec2& scale);
+    // The texgen source of one of this material's own slots, written through
+    // the slot's texgen mode property (uv0, the default, clears it).
+    void set_slot_texgen_mode(const Material_texture_sampler& slot, Texgen_mode texgen_mode);
 
     [[nodiscard]] auto get_base_color                        () const -> glm::vec3              { return get_value(base_color_property); }
     [[nodiscard]] auto get_opacity                           () const -> float                  { return get_value(opacity_property); }
@@ -327,11 +335,11 @@ public:
     [[nodiscard]] auto get_use_circular_brushed_metal        () const -> bool                   { return get_value(use_circular_brushed_metal_property); }
     [[nodiscard]] auto get_circular_brushed_metal_texgen_mode() const -> Texgen_mode            { return get_value(circular_brushed_metal_texgen_mode_property); }
     [[nodiscard]] auto get_use_aniso_control                 () const -> bool                   { return get_value(use_aniso_control_property); }
-    [[nodiscard]] auto get_base_color_texture                () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return data.texture_samplers.base_color.texture_reference; }
-    [[nodiscard]] auto get_metallic_roughness_texture        () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return data.texture_samplers.metallic_roughness.texture_reference; }
-    [[nodiscard]] auto get_normal_texture                    () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return data.texture_samplers.normal.texture_reference; }
-    [[nodiscard]] auto get_occlusion_texture                 () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return data.texture_samplers.occlusion.texture_reference; }
-    [[nodiscard]] auto get_emissive_texture                  () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return data.texture_samplers.emissive.texture_reference; }
+    [[nodiscard]] auto get_base_color_texture                () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.base_color.texture_reference; }
+    [[nodiscard]] auto get_metallic_roughness_texture        () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.metallic_roughness.texture_reference; }
+    [[nodiscard]] auto get_normal_texture                    () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.normal.texture_reference; }
+    [[nodiscard]] auto get_occlusion_texture                 () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.occlusion.texture_reference; }
+    [[nodiscard]] auto get_emissive_texture                  () const -> const std::shared_ptr<erhe::graphics::Texture_reference>& { return m_data.texture_samplers.emissive.texture_reference; }
 
     void set_base_color                        (const glm::vec3& value)      { set_value(base_color_property, value); }
     void set_opacity                           (float value)                 { set_value(opacity_property, value); }
@@ -363,10 +371,10 @@ public:
     // (one change batch; a field at its default clears the local value).
     // The way undo applies a Material_data snapshot.
     void set_data(const Material_data& new_data);
-    // The texture of one of this material's own slots (data.texture_samplers.*),
-    // for a caller holding the slot by pointer; a slot of another material
-    // is rejected with a logged error.
-    void set_slot_texture(Material_texture_sampler& slot, const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
+    // The texture of one of this material's own slots
+    // (get_data().texture_samplers.*), for a caller holding the slot by
+    // reference; a slot of another material is rejected with a logged error.
+    void set_slot_texture(const Material_texture_sampler& slot, const std::shared_ptr<erhe::graphics::Texture_reference>& texture);
     // The property of one of this material's own slots; nullptr for a slot
     // of another material.
     [[nodiscard]] auto get_slot_texture_property(const Material_texture_sampler& slot) const -> const erhe::property::Property<erhe::property::Object_reference>*;
@@ -382,20 +390,48 @@ public:
     // Property_set::diff() between two snapshots.
     [[nodiscard]] static auto to_property_set(const Material_values& values) -> erhe::property::Property_set;
 
+    // The texture slots, read-only: the mirror on_property_changed keeps of
+    // the slot properties. Every write goes through a Material member
+    // function - the slot setters above, the slot texture setters, set_data,
+    // or the slot properties themselves - so that every change to what a
+    // material's GPU record and shader variant are built from advances the
+    // change serial below.
+    //
     // No GPU slot here. A material's slot is a property of the Material_set
     // that issued it (doc/draw_list_material_set_plan.md D0), not of the
     // material: the same Material is normally at a different slot in every set
     // it belongs to, and a single mutable field here is what made "slot 7"
     // mean different materials in different passes.
-    Material_data           data;
+    [[nodiscard]] auto get_data() const -> const Material_data& { return m_data; }
+
+    // Advances on every change to a record input of this material: any
+    // property of it (a local, style, reference, inherited or default change,
+    // so the slot mirrors and the values alike) and a texture graph bake that
+    // lands a new texture behind a slot's Texture_reference. A reader that
+    // recorded a serial and finds the same one has nothing to re-derive.
+    [[nodiscard]] auto get_change_serial() const -> uint64_t { return m_change_serial; }
+
+    // Implements erhe::graphics::Texture_reference_user: a slot's reference
+    // resolves to a different texture now, so the record and the shader
+    // variant this material feeds are stale.
+    void on_referenced_texture_changed() override;
+    // The same signal, for a caller that knows a bake landed.
+    void notify_texture_rebaked();
 
 protected:
-    // Overrides Dependency_object: keeps the Material_data slot mirrors of
-    // the slot properties current (a local, inherited or default change).
+    // Overrides Dependency_object: advances the change serial and keeps the
+    // Material_data slot mirrors of the slot properties current (a local,
+    // inherited or default change).
     void on_property_changed(const erhe::property::Property_changed_args& args) override;
 
 private:
-    void seed_slot_values_from_data();
+    // Registers this material with every slot's Texture_reference, or drops
+    // those registrations; the pair maintains the bookkeeping of a copy.
+    void register_slot_texture_users  ();
+    void unregister_slot_texture_users();
+
+    Material_data m_data         {};
+    uint64_t      m_change_serial{0};
 };
 
 [[nodiscard]] auto operator==(const Material_data& lhs, const Material_data& rhs) -> bool;

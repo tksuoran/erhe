@@ -3596,9 +3596,9 @@ void finish_resident_image(
 }
 
 [[nodiscard]] auto get_material_texture_slot(
-    erhe::primitive::Material_texture_samplers& samplers,
-    const Gltf_material_texture_slot            slot
-) -> erhe::primitive::Material_texture_sampler&
+    const erhe::primitive::Material_texture_samplers& samplers,
+    const Gltf_material_texture_slot                  slot
+) -> const erhe::primitive::Material_texture_sampler&
 {
     switch (slot) {
         case Gltf_material_texture_slot::metallic_roughness: return samplers.metallic_roughness;
@@ -3730,7 +3730,7 @@ void Gltf_image_residency::bind_material_textures(Gltf_data& data) const
         if (!material) {
             continue;
         }
-        erhe::primitive::Material_texture_sampler& slot = get_material_texture_slot(material->data.texture_samplers, binding.slot);
+        const erhe::primitive::Material_texture_sampler& slot = get_material_texture_slot(material->get_data().texture_samplers, binding.slot);
         if (binding.image_index < data.images.size()) {
             material->set_slot_texture(slot, data.images[binding.image_index]);
         }
@@ -4344,19 +4344,19 @@ auto parse_gltf(const Gltf_parse_arguments& arguments) -> Gltf_data
                 // Per-slot texgen modes. uv0..uv2 ride the core texCoord
                 // index (already applied when the samplers were parsed);
                 // only non-UV modes are carried here, overriding it.
-                const auto read_sampler_texgen = [&extension_object](const char* key, erhe::primitive::Material_texture_sampler& sampler) {
+                const auto read_sampler_texgen = [&extension_object, &material](const char* key, const erhe::primitive::Material_texture_sampler& sampler) {
                     std::string_view texgen_value;
                     if (extension_object.at_key(key).get_string().get(texgen_value) == simdjson::SUCCESS) {
                         if (const auto parsed = texgen_mode_from_string(texgen_value); parsed.has_value()) {
-                            sampler.texgen_mode = parsed.value();
+                            material->set_slot_texgen_mode(sampler, parsed.value());
                         }
                     }
                 };
-                read_sampler_texgen("base_color_texgen_mode",         material->data.texture_samplers.base_color);
-                read_sampler_texgen("metallic_roughness_texgen_mode", material->data.texture_samplers.metallic_roughness);
-                read_sampler_texgen("normal_texgen_mode",             material->data.texture_samplers.normal);
-                read_sampler_texgen("occlusion_texgen_mode",          material->data.texture_samplers.occlusion);
-                read_sampler_texgen("emissive_texgen_mode",           material->data.texture_samplers.emissive);
+                read_sampler_texgen("base_color_texgen_mode",         material->get_data().texture_samplers.base_color);
+                read_sampler_texgen("metallic_roughness_texgen_mode", material->get_data().texture_samplers.metallic_roughness);
+                read_sampler_texgen("normal_texgen_mode",             material->get_data().texture_samplers.normal);
+                read_sampler_texgen("occlusion_texgen_mode",          material->get_data().texture_samplers.occlusion);
+                read_sampler_texgen("emissive_texgen_mode",           material->get_data().texture_samplers.emissive);
             }
         }
 
@@ -5186,7 +5186,7 @@ private:
             // source image stream; slots whose texture has no exportable
             // source (e.g. graph-texture bakes) stay empty.
             {
-                const erhe::primitive::Material_texture_samplers& slots = material->data.texture_samplers;
+                const erhe::primitive::Material_texture_samplers& slots = material->get_data().texture_samplers;
                 fastgltf::TextureInfo base_color_texture{};
                 if (fill_texture_info(slots.base_color, base_color_texture)) {
                     gltf_material.pbrData.baseColorTexture = std::move(base_color_texture);
@@ -5248,11 +5248,11 @@ private:
                 (sampler.texgen_mode != erhe::primitive::Texgen_mode::uv2);
         };
         const bool emit_sampler_texgen =
-            sampler_emits_texgen(material.data.texture_samplers.base_color) ||
-            sampler_emits_texgen(material.data.texture_samplers.metallic_roughness) ||
-            sampler_emits_texgen(material.data.texture_samplers.normal) ||
-            sampler_emits_texgen(material.data.texture_samplers.occlusion) ||
-            sampler_emits_texgen(material.data.texture_samplers.emissive);
+            sampler_emits_texgen(material.get_data().texture_samplers.base_color) ||
+            sampler_emits_texgen(material.get_data().texture_samplers.metallic_roughness) ||
+            sampler_emits_texgen(material.get_data().texture_samplers.normal) ||
+            sampler_emits_texgen(material.get_data().texture_samplers.occlusion) ||
+            sampler_emits_texgen(material.get_data().texture_samplers.emissive);
         const bool emit_normalmap_encoding =
             data.normalmap_encoding != erhe::primitive::Normalmap_encoding::right_handed_three_channel;
 
@@ -5287,11 +5287,11 @@ private:
             separator = ",";
         };
 
-        process_sampler("base_color",         material.data.texture_samplers.base_color);
-        process_sampler("metallic_roughness", material.data.texture_samplers.metallic_roughness);
-        process_sampler("normal",             material.data.texture_samplers.normal);
-        process_sampler("occlusion",          material.data.texture_samplers.occlusion);
-        process_sampler("emissive",           material.data.texture_samplers.emissive);
+        process_sampler("base_color",         material.get_data().texture_samplers.base_color);
+        process_sampler("metallic_roughness", material.get_data().texture_samplers.metallic_roughness);
+        process_sampler("normal",             material.get_data().texture_samplers.normal);
+        process_sampler("occlusion",          material.get_data().texture_samplers.occlusion);
+        process_sampler("emissive",           material.get_data().texture_samplers.emissive);
 
         if (emit_roughness_y) {
             fields += fmt::format("{}\"roughness_y\":{}", separator, data.roughness.y);

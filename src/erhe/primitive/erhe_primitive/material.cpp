@@ -239,7 +239,7 @@ auto slot_visible(const Slot_pointer slot, const Slot_lighting lighting) -> Prop
 {
     return [slot, lighting](const erhe::property::Dependency_object& object) -> bool {
         const Material& material = static_cast<const Material&>(object);
-        const bool bound = static_cast<bool>((material.data.texture_samplers.*slot).texture_reference);
+        const bool bound = static_cast<bool>((material.get_data().texture_samplers.*slot).texture_reference);
         return bound && ((lighting == Slot_lighting::any) || is_lit(object));
     };
 }
@@ -493,9 +493,9 @@ auto sampler_state_from(const erhe::graphics::Sampler_create_info& create_info) 
     };
 }
 
-void Material::set_slot_sampler(Material_texture_sampler& slot, const Material_sampler_state& state)
+void Material::set_slot_sampler(const Material_texture_sampler& slot, const Material_sampler_state& state)
 {
-    const Slot_sampler_properties* properties = sampler_properties_of(data.texture_samplers, slot);
+    const Slot_sampler_properties* properties = sampler_properties_of(m_data.texture_samplers, slot);
     if (properties == nullptr) {
         log_primitive->error("Material '{}': set_slot_sampler with a slot of another material", get_name());
         return;
@@ -510,18 +510,19 @@ namespace {
 class Slot_uv_transform_properties
 {
 public:
-    const Property<float>&     rotation;
-    const Property<glm::vec2>& offset;
-    const Property<glm::vec2>& scale;
+    const Property<Texgen_mode>& texgen_mode;
+    const Property<float>&       rotation;
+    const Property<glm::vec2>&   offset;
+    const Property<glm::vec2>&   scale;
 };
 
 auto uv_transform_properties_of(const Material_texture_samplers& samplers, const Material_texture_sampler& slot) -> const Slot_uv_transform_properties*
 {
-    static const Slot_uv_transform_properties c_base_color        {Material::base_color_texture_uv_rotation_property,         Material::base_color_texture_uv_offset_property,         Material::base_color_texture_uv_scale_property};
-    static const Slot_uv_transform_properties c_metallic_roughness{Material::metallic_roughness_texture_uv_rotation_property, Material::metallic_roughness_texture_uv_offset_property, Material::metallic_roughness_texture_uv_scale_property};
-    static const Slot_uv_transform_properties c_normal            {Material::normal_texture_uv_rotation_property,             Material::normal_texture_uv_offset_property,             Material::normal_texture_uv_scale_property};
-    static const Slot_uv_transform_properties c_occlusion         {Material::occlusion_texture_uv_rotation_property,          Material::occlusion_texture_uv_offset_property,          Material::occlusion_texture_uv_scale_property};
-    static const Slot_uv_transform_properties c_emissive          {Material::emissive_texture_uv_rotation_property,           Material::emissive_texture_uv_offset_property,           Material::emissive_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_base_color        {Material::base_color_texture_texgen_mode_property,         Material::base_color_texture_uv_rotation_property,         Material::base_color_texture_uv_offset_property,         Material::base_color_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_metallic_roughness{Material::metallic_roughness_texture_texgen_mode_property, Material::metallic_roughness_texture_uv_rotation_property, Material::metallic_roughness_texture_uv_offset_property, Material::metallic_roughness_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_normal            {Material::normal_texture_texgen_mode_property,             Material::normal_texture_uv_rotation_property,             Material::normal_texture_uv_offset_property,             Material::normal_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_occlusion         {Material::occlusion_texture_texgen_mode_property,          Material::occlusion_texture_uv_rotation_property,          Material::occlusion_texture_uv_offset_property,          Material::occlusion_texture_uv_scale_property};
+    static const Slot_uv_transform_properties c_emissive          {Material::emissive_texture_texgen_mode_property,           Material::emissive_texture_uv_rotation_property,           Material::emissive_texture_uv_offset_property,           Material::emissive_texture_uv_scale_property};
     if (&slot == &samplers.base_color)         { return &c_base_color; }
     if (&slot == &samplers.metallic_roughness) { return &c_metallic_roughness; }
     if (&slot == &samplers.normal)             { return &c_normal; }
@@ -532,9 +533,9 @@ auto uv_transform_properties_of(const Material_texture_samplers& samplers, const
 
 } // anonymous namespace
 
-void Material::set_slot_uv_transform(Material_texture_sampler& slot, const float rotation, const glm::vec2& offset, const glm::vec2& scale)
+void Material::set_slot_uv_transform(const Material_texture_sampler& slot, const float rotation, const glm::vec2& offset, const glm::vec2& scale)
 {
-    const Slot_uv_transform_properties* properties = uv_transform_properties_of(data.texture_samplers, slot);
+    const Slot_uv_transform_properties* properties = uv_transform_properties_of(m_data.texture_samplers, slot);
     if (properties == nullptr) {
         log_primitive->error("Material '{}': set_slot_uv_transform with a slot of another material", get_name());
         return;
@@ -545,51 +546,100 @@ void Material::set_slot_uv_transform(Material_texture_sampler& slot, const float
     if (scale  != glm::vec2{1.0f, 1.0f}) { set_value(properties->scale,    scale);    } else { clear_value(properties->scale);    }
 }
 
-Material::Material()                           = default;
-Material::Material(const Material&)            = default;
-Material& Material::operator=(const Material&) = default;
-Material::~Material() noexcept                 = default;
+void Material::set_slot_texgen_mode(const Material_texture_sampler& slot, const Texgen_mode texgen_mode)
+{
+    const Slot_uv_transform_properties* properties = uv_transform_properties_of(m_data.texture_samplers, slot);
+    if (properties == nullptr) {
+        log_primitive->error("Material '{}': set_slot_texgen_mode with a slot of another material", get_name());
+        return;
+    }
+    if (texgen_mode != Texgen_mode::uv0) {
+        set_value(properties->texgen_mode, texgen_mode);
+    } else {
+        clear_value(properties->texgen_mode);
+    }
+}
+
+// The registration a slot's Texture_reference needs to reach this material
+// when the texture it resolves to changes (a texture graph bake). A slot
+// binds and unbinds through on_property_changed, so these two are only for
+// the whole-object events the property store does not announce: a copy and
+// the destructor.
+void Material::register_slot_texture_users()
+{
+    const Material_texture_samplers& slots = m_data.texture_samplers;
+    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive}) {
+        if (slot->texture_reference) {
+            slot->texture_reference->add_user(*this);
+        }
+    }
+}
+
+void Material::unregister_slot_texture_users()
+{
+    const Material_texture_samplers& slots = m_data.texture_samplers;
+    for (const Material_texture_sampler* slot : {&slots.base_color, &slots.metallic_roughness, &slots.normal, &slots.occlusion, &slots.emissive}) {
+        if (slot->texture_reference) {
+            slot->texture_reference->remove_user(*this);
+        }
+    }
+}
+
+Material::Material() = default;
+
+Material::Material(const Material& other)
+    : Item{other}
+    , m_data{other.m_data}
+{
+    register_slot_texture_users();
+}
+
+Material& Material::operator=(const Material& other)
+{
+    if (this == &other) {
+        return *this;
+    }
+    unregister_slot_texture_users();
+    Item::operator=(other);
+    m_data = other.m_data;
+    register_slot_texture_users();
+    ++m_change_serial;
+    return *this;
+}
+
+Material::~Material() noexcept
+{
+    unregister_slot_texture_users();
+}
 
 Material::Material(const Material_create_info& create_info)
     : Item{create_info.name}
-    , data{create_info.data}
 {
     set_values(create_info.values);
-    seed_slot_values_from_data();
+    // The slot fields of the create info become local values through the
+    // property store, so the slot mirrors and the reference registrations are
+    // the ones on_property_changed made.
+    set_data(create_info.data);
     enable_flag_bits(erhe::Item_flags::show_in_ui);
 }
 
-// The slot fields of data (a Material_create_info fill) become local
-// values; a slot left at its default stays unset, so it can inherit.
-void Material::seed_slot_values_from_data()
+void Material::on_referenced_texture_changed()
 {
-    const erhe::property::Dependency_object::Change_batch batch{*this};
-    const auto seed_slot = [this](
-        const Material_texture_sampler&   slot,
-        const Property<Object_reference>& texture_property,
-        const Property<Texgen_mode>&      texgen_mode_property,
-        const Property<float>&            rotation_property,
-        const Property<glm::vec2>&        offset_property,
-        const Property<glm::vec2>&        scale_property
-    ) {
-        if (slot.texture_reference)                      { set_value(texture_property,     Slot_traits::to_value(slot.texture_reference)); }
-        if (slot.texgen_mode != Texgen_mode::uv0)        { set_value(texgen_mode_property, slot.texgen_mode); }
-        if (slot.rotation != 0.0f)                       { set_value(rotation_property,    slot.rotation); }
-        if (slot.offset != glm::vec2{0.0f, 0.0f})        { set_value(offset_property,      slot.offset); }
-        if (slot.scale  != glm::vec2{1.0f, 1.0f})        { set_value(scale_property,       slot.scale); }
-        apply_sampler_state(*this, *sampler_properties_of(data.texture_samplers, slot), slot.sampler); // the default fields clear an already unset value
-    };
-    seed_slot(data.texture_samplers.base_color,         base_color_texture_property,         base_color_texture_texgen_mode_property,         base_color_texture_uv_rotation_property,         base_color_texture_uv_offset_property,         base_color_texture_uv_scale_property);
-    seed_slot(data.texture_samplers.metallic_roughness, metallic_roughness_texture_property, metallic_roughness_texture_texgen_mode_property, metallic_roughness_texture_uv_rotation_property, metallic_roughness_texture_uv_offset_property, metallic_roughness_texture_uv_scale_property);
-    seed_slot(data.texture_samplers.normal,             normal_texture_property,             normal_texture_texgen_mode_property,             normal_texture_uv_rotation_property,             normal_texture_uv_offset_property,             normal_texture_uv_scale_property);
-    seed_slot(data.texture_samplers.occlusion,          occlusion_texture_property,          occlusion_texture_texgen_mode_property,          occlusion_texture_uv_rotation_property,          occlusion_texture_uv_offset_property,          occlusion_texture_uv_scale_property);
-    seed_slot(data.texture_samplers.emissive,           emissive_texture_property,           emissive_texture_texgen_mode_property,           emissive_texture_uv_rotation_property,           emissive_texture_uv_offset_property,           emissive_texture_uv_scale_property);
+    notify_texture_rebaked();
 }
 
-// Mirrors a changed slot property's effective value (local, inherited or
-// default) into the Material_data slot the per-frame readers use.
+void Material::notify_texture_rebaked()
+{
+    ++m_change_serial;
+}
+
+// Advances the change serial - every property of a material is a record or
+// shader variant input - and mirrors a changed slot property's effective
+// value (local, inherited or default) into the Material_data slot the
+// per-frame readers use.
 void Material::on_property_changed(const erhe::property::Property_changed_args& args)
 {
+    ++m_change_serial;
     const erhe::property::Dependency_property* const changed = &args.property;
     const auto mirror_slot = [this, changed](
         Material_texture_sampler&         slot,
@@ -599,18 +649,33 @@ void Material::on_property_changed(const erhe::property::Property_changed_args& 
         const Property<glm::vec2>&        offset_property,
         const Property<glm::vec2>&        scale_property
     ) -> bool {
-        if (changed == texture_property.get_ptr())     { slot.texture_reference = Slot_traits::from_value(get_value(texture_property)); return true; }
+        if (changed == texture_property.get_ptr()) {
+            // The reference this slot holds is what tells the material that a
+            // texture graph re-baked behind it, so the registration follows
+            // the binding.
+            const std::shared_ptr<erhe::graphics::Texture_reference> texture_reference = Slot_traits::from_value(get_value(texture_property));
+            if (texture_reference != slot.texture_reference) {
+                if (slot.texture_reference) {
+                    slot.texture_reference->remove_user(*this);
+                }
+                slot.texture_reference = texture_reference;
+                if (slot.texture_reference) {
+                    slot.texture_reference->add_user(*this);
+                }
+            }
+            return true;
+        }
         if (changed == texgen_mode_property.get_ptr()) { slot.texgen_mode       = get_value(texgen_mode_property); return true; }
         if (changed == rotation_property.get_ptr())    { slot.rotation          = get_value(rotation_property);    return true; }
         if (changed == offset_property.get_ptr())      { slot.offset            = get_value(offset_property);      return true; }
         if (changed == scale_property.get_ptr())       { slot.scale             = get_value(scale_property);       return true; }
-        return mirror_sampler_state(*this, *sampler_properties_of(data.texture_samplers, slot), changed, slot.sampler);
+        return mirror_sampler_state(*this, *sampler_properties_of(m_data.texture_samplers, slot), changed, slot.sampler);
     };
-    if (mirror_slot(data.texture_samplers.base_color,         base_color_texture_property,         base_color_texture_texgen_mode_property,         base_color_texture_uv_rotation_property,         base_color_texture_uv_offset_property,         base_color_texture_uv_scale_property)) { return; }
-    if (mirror_slot(data.texture_samplers.metallic_roughness, metallic_roughness_texture_property, metallic_roughness_texture_texgen_mode_property, metallic_roughness_texture_uv_rotation_property, metallic_roughness_texture_uv_offset_property, metallic_roughness_texture_uv_scale_property)) { return; }
-    if (mirror_slot(data.texture_samplers.normal,             normal_texture_property,             normal_texture_texgen_mode_property,             normal_texture_uv_rotation_property,             normal_texture_uv_offset_property,             normal_texture_uv_scale_property)) { return; }
-    if (mirror_slot(data.texture_samplers.occlusion,          occlusion_texture_property,          occlusion_texture_texgen_mode_property,          occlusion_texture_uv_rotation_property,          occlusion_texture_uv_offset_property,          occlusion_texture_uv_scale_property)) { return; }
-    if (mirror_slot(data.texture_samplers.emissive,           emissive_texture_property,           emissive_texture_texgen_mode_property,           emissive_texture_uv_rotation_property,           emissive_texture_uv_offset_property,           emissive_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.base_color,         base_color_texture_property,         base_color_texture_texgen_mode_property,         base_color_texture_uv_rotation_property,         base_color_texture_uv_offset_property,         base_color_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.metallic_roughness, metallic_roughness_texture_property, metallic_roughness_texture_texgen_mode_property, metallic_roughness_texture_uv_rotation_property, metallic_roughness_texture_uv_offset_property, metallic_roughness_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.normal,             normal_texture_property,             normal_texture_texgen_mode_property,             normal_texture_uv_rotation_property,             normal_texture_uv_offset_property,             normal_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.occlusion,          occlusion_texture_property,          occlusion_texture_texgen_mode_property,          occlusion_texture_uv_rotation_property,          occlusion_texture_uv_offset_property,          occlusion_texture_uv_scale_property)) { return; }
+    if (mirror_slot(m_data.texture_samplers.emissive,           emissive_texture_property,           emissive_texture_texgen_mode_property,           emissive_texture_uv_rotation_property,           emissive_texture_uv_offset_property,           emissive_texture_uv_scale_property)) { return; }
 }
 
 Material::Material(const std::string_view name)
@@ -636,7 +701,7 @@ void Material::set_emissive_texture          (const std::shared_ptr<erhe::graphi
 
 auto Material::get_slot_texture_property(const Material_texture_sampler& slot) const -> const Property<Object_reference>*
 {
-    const Material_texture_samplers& s = data.texture_samplers;
+    const Material_texture_samplers& s = m_data.texture_samplers;
     if (&slot == &s.base_color)         { return &base_color_texture_property;         }
     if (&slot == &s.metallic_roughness) { return &metallic_roughness_texture_property; }
     if (&slot == &s.normal)             { return &normal_texture_property;             }
@@ -645,7 +710,7 @@ auto Material::get_slot_texture_property(const Material_texture_sampler& slot) c
     return nullptr;
 }
 
-void Material::set_slot_texture(Material_texture_sampler& slot, const std::shared_ptr<erhe::graphics::Texture_reference>& texture)
+void Material::set_slot_texture(const Material_texture_sampler& slot, const std::shared_ptr<erhe::graphics::Texture_reference>& texture)
 {
     const Property<Object_reference>* property = get_slot_texture_property(slot);
     if (property == nullptr) {
@@ -659,7 +724,7 @@ void Material::set_data(const Material_data& new_data)
 {
     const erhe::property::Dependency_object::Change_batch batch{*this};
     const auto apply_slot = [this](
-        Material_texture_sampler&         slot,
+        const Material_texture_sampler&   slot,
         const Material_texture_sampler&   new_slot,
         const Property<Object_reference>& texture_property,
         const Property<Texgen_mode>&      texgen_mode_property,
@@ -680,13 +745,13 @@ void Material::set_data(const Material_data& new_data)
         if (new_slot.rotation != 0.0f)                { set_value(rotation_property,    new_slot.rotation);    } else { clear_value(rotation_property);    }
         if (new_slot.offset != glm::vec2{0.0f, 0.0f}) { set_value(offset_property,      new_slot.offset);      } else { clear_value(offset_property);      }
         if (new_slot.scale  != glm::vec2{1.0f, 1.0f}) { set_value(scale_property,       new_slot.scale);       } else { clear_value(scale_property);       }
-        apply_sampler_state(*this, *sampler_properties_of(data.texture_samplers, slot), new_slot.sampler);
+        apply_sampler_state(*this, *sampler_properties_of(m_data.texture_samplers, slot), new_slot.sampler);
     };
-    apply_slot(data.texture_samplers.base_color,           new_data.texture_samplers.base_color,               base_color_texture_property,            base_color_texture_texgen_mode_property,            base_color_texture_uv_rotation_property,           base_color_texture_uv_offset_property,           base_color_texture_uv_scale_property);
-    apply_slot(data.texture_samplers.metallic_roughness,   new_data.texture_samplers.metallic_roughness,       metallic_roughness_texture_property,    metallic_roughness_texture_texgen_mode_property,    metallic_roughness_texture_uv_rotation_property,   metallic_roughness_texture_uv_offset_property,   metallic_roughness_texture_uv_scale_property);
-    apply_slot(data.texture_samplers.normal,               new_data.texture_samplers.normal,                   normal_texture_property,                normal_texture_texgen_mode_property,                normal_texture_uv_rotation_property,               normal_texture_uv_offset_property,               normal_texture_uv_scale_property);
-    apply_slot(data.texture_samplers.occlusion,            new_data.texture_samplers.occlusion,                occlusion_texture_property,             occlusion_texture_texgen_mode_property,             occlusion_texture_uv_rotation_property,            occlusion_texture_uv_offset_property,            occlusion_texture_uv_scale_property);
-    apply_slot(data.texture_samplers.emissive,             new_data.texture_samplers.emissive,                 emissive_texture_property,              emissive_texture_texgen_mode_property,              emissive_texture_uv_rotation_property,             emissive_texture_uv_offset_property,             emissive_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.base_color,           new_data.texture_samplers.base_color,               base_color_texture_property,            base_color_texture_texgen_mode_property,            base_color_texture_uv_rotation_property,           base_color_texture_uv_offset_property,           base_color_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.metallic_roughness,   new_data.texture_samplers.metallic_roughness,       metallic_roughness_texture_property,    metallic_roughness_texture_texgen_mode_property,    metallic_roughness_texture_uv_rotation_property,   metallic_roughness_texture_uv_offset_property,   metallic_roughness_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.normal,               new_data.texture_samplers.normal,                   normal_texture_property,                normal_texture_texgen_mode_property,                normal_texture_uv_rotation_property,               normal_texture_uv_offset_property,               normal_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.occlusion,            new_data.texture_samplers.occlusion,                occlusion_texture_property,             occlusion_texture_texgen_mode_property,             occlusion_texture_uv_rotation_property,            occlusion_texture_uv_offset_property,            occlusion_texture_uv_scale_property);
+    apply_slot(m_data.texture_samplers.emissive,             new_data.texture_samplers.emissive,                 emissive_texture_property,              emissive_texture_texgen_mode_property,              emissive_texture_uv_rotation_property,             emissive_texture_uv_offset_property,             emissive_texture_uv_scale_property);
 }
 
 auto Material::get_values() const -> Material_values
@@ -886,7 +951,7 @@ auto Material::to_property_set(const Material_values& values) -> erhe::property:
 {
     return
         (lhs.get_name() == rhs.get_name()) &&
-        (lhs.data       == rhs.data      ) &&
+        (lhs.get_data() == rhs.get_data()) &&
         (lhs.get_style() == rhs.get_style()) && // D25: the same shared style, or none
         (erhe::property::Property_set::read_local_values(lhs) == erhe::property::Property_set::read_local_values(rhs));
 }

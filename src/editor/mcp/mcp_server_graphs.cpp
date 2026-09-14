@@ -1003,8 +1003,8 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
         return make_error_content("Material not found: " + material_name);
     }
 
-    erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
-    erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
+    const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
+    const erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
     if      (slot_name == "base_color")         sampler = &samplers.base_color;
     else if (slot_name == "metallic_roughness") sampler = &samplers.metallic_roughness;
     else if (slot_name == "normal")             sampler = &samplers.normal;
@@ -1015,7 +1015,7 @@ auto Mcp_server::action_set_material_texture_source(const json& args) -> std::st
     }
 
     if (graph_texture_name.empty()) {
-        sampler->texture_reference.reset();
+        material->set_slot_texture(*sampler, {});
         return make_json_content({
             {"cleared",  true},
             {"material", material_name},
@@ -1154,7 +1154,7 @@ auto Mcp_server::query_scene_node_graphs(const json& args) -> std::string
                 if (!material) {
                     continue;
                 }
-                const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+                const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
                 const std::pair<const char*, const erhe::primitive::Material_texture_sampler*> slots[] = {
                     {"base_color",         &samplers.base_color        },
                     {"metallic_roughness", &samplers.metallic_roughness},

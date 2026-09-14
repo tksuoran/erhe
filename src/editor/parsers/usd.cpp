@@ -223,9 +223,9 @@ namespace {
 }
 
 [[nodiscard]] auto get_material_texture_slot(
-    erhe::primitive::Material_texture_samplers&  texture_samplers,
-    const erhe::usd::Usd_material_texture_slot   slot
-) -> erhe::primitive::Material_texture_sampler&
+    const erhe::primitive::Material_texture_samplers& texture_samplers,
+    const erhe::usd::Usd_material_texture_slot        slot
+) -> const erhe::primitive::Material_texture_sampler&
 {
     switch (slot) {
         case erhe::usd::Usd_material_texture_slot::base_color:         return texture_samplers.base_color;
@@ -264,7 +264,7 @@ namespace {
         if (!material || !texture) {
             continue;
         }
-        material->set_slot_texture(get_material_texture_slot(material->data.texture_samplers, binding.slot), texture);
+        material->set_slot_texture(get_material_texture_slot(material->get_data().texture_samplers, binding.slot), texture);
     }
     return textures;
 }
@@ -1585,7 +1585,7 @@ void resolve_usd_node_graphs(
             if (slot.slot != binding.slot) {
                 continue;
             }
-            erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            const erhe::primitive::Material_texture_sampler& sampler = material->get_data().texture_samplers.*(slot.member);
             material->set_slot_texture(sampler, graph->second);
             break;
         }
@@ -1810,7 +1810,7 @@ void collect_usd_node_graphs(
             continue;
         }
         for (const Usd_save_slot& slot : c_usd_save_slots) {
-            const erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            const erhe::primitive::Material_texture_sampler& sampler = material->get_data().texture_samplers.*(slot.member);
             const std::map<const erhe::graphics::Texture_reference*, std::shared_ptr<const erhe::Item_base>>::const_iterator graph =
                 written_graphs.find(sampler.texture_reference.get());
             if (graph == written_graphs.end()) {
@@ -3688,7 +3688,7 @@ auto save_scene_usd(App_context& context, Scene_root& scene_root, const std::fil
             continue;
         }
         for (const Usd_save_slot& slot : c_usd_save_slots) {
-            const erhe::primitive::Material_texture_sampler& sampler = material->data.texture_samplers.*(slot.member);
+            const erhe::primitive::Material_texture_sampler& sampler = material->get_data().texture_samplers.*(slot.member);
             if (!sampler.texture_reference) {
                 continue;
             }

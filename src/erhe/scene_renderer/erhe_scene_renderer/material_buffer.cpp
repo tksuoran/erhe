@@ -165,7 +165,7 @@ auto gather_material_record_inputs(
         };
     };
 
-    const erhe::primitive::Material_texture_samplers& texture_samplers = material.data.texture_samplers;
+    const erhe::primitive::Material_texture_samplers& texture_samplers = material.get_data().texture_samplers;
     inputs.base_color_texture         = gather_texture(texture_samplers.base_color);
     inputs.metallic_roughness_texture = gather_texture(texture_samplers.metallic_roughness);
     inputs.normal_texture             = gather_texture(texture_samplers.normal);

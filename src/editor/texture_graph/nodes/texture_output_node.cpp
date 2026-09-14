@@ -82,7 +82,7 @@ void Texture_output_node::on_removed_from_graph()
     const std::shared_ptr<erhe::primitive::Material> material = get_material();
     if (m_assign_to_material && material) {
         material->clear_value(erhe::primitive::Material::base_color_texture_property);
-        material->set_slot_sampler(material->data.texture_samplers.base_color, {});
+        material->set_slot_sampler(material->get_data().texture_samplers.base_color, {});
     }
 }
 
@@ -166,6 +166,7 @@ void Texture_output_node::register_texture()
     }
     library->add(texture);
     m_registered_texture = texture;
+    notify_referenced_texture_changed();
 }
 
 void Texture_output_node::unregister_texture()
@@ -180,7 +181,21 @@ void Texture_output_node::unregister_texture()
             library->remove(m_registered_texture);
         }
     }
+    const bool had_texture = static_cast<bool>(m_registered_texture);
     m_registered_texture.reset();
+    if (had_texture) {
+        notify_referenced_texture_changed();
+    }
+}
+
+// The owning asset is the Texture_reference a material slot holds, so a bake
+// that changed the texture this node exposes is announced through it.
+void Texture_output_node::notify_referenced_texture_changed()
+{
+    const std::shared_ptr<Graph_texture> owning = get_owning_graph_texture();
+    if (owning) {
+        owning->notify_referenced_texture_changed();
+    }
 }
 
 auto Texture_output_node::resolve_scene_root() -> std::shared_ptr<Scene_root>
@@ -217,7 +232,7 @@ void Texture_output_node::assign_to_material()
     if (!texture) {
         return;
     }
-    erhe::primitive::Material_texture_sampler& base_color = material->data.texture_samplers.base_color;
+    const erhe::primitive::Material_texture_sampler& base_color = material->get_data().texture_samplers.base_color;
     material->set_slot_sampler(base_color, erhe::primitive::Material_sampler_state{.min_filter = erhe::graphics::Filter::linear, .mag_filter = erhe::graphics::Filter::linear, .mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped}); // one level, no mipmaps
     // Bind the material to the owning content-library asset as a live
     // texture reference (the material samples the asset's baked output every

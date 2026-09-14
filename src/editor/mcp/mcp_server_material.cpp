@@ -722,7 +722,7 @@ auto Mcp_server::action_edit_material(const json& args) -> std::string
 
     const erhe::primitive::Material_values before_values = material->get_values();
     erhe::primitive::Material_values       after_values  = before_values;
-    const erhe::primitive::Material_data   before        = material->data;
+    const erhe::primitive::Material_data   before        = material->get_data();
     erhe::primitive::Material_data         after         = before;
 
     json applied = json::object();

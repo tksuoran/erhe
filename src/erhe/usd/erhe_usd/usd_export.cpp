@@ -1395,7 +1395,7 @@ private:
         const Usd_material_texture_slot  slot
     ) -> const erhe::primitive::Material_texture_sampler&
     {
-        const erhe::primitive::Material_texture_samplers& slots = material.data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& slots = material.get_data().texture_samplers;
         switch (slot) {
             case Usd_material_texture_slot::base_color:         return slots.base_color;
             case Usd_material_texture_slot::metallic_roughness: return slots.metallic_roughness;

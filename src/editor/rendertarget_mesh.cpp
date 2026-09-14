@@ -180,7 +180,7 @@ void Rendertarget_mesh::resize_rendertarget(
     // Resize recreates the texture; the material identity is stable across
     // resizes, only its texture binding follows.
     m_material->set_base_color_texture(m_texture);
-    m_material->set_slot_sampler(m_material->data.texture_samplers.base_color, sampler_state());
+    m_material->set_slot_sampler(m_material->get_data().texture_samplers.base_color, sampler_state());
 
     m_local_width  = static_cast<float>(m_texture->get_width ()) / m_pixels_per_meter;
     m_local_height = static_cast<float>(m_texture->get_height()) / m_pixels_per_meter;
@@ -396,8 +396,8 @@ void Rendertarget_mesh::render_done(erhe::graphics::Command_buffer& command_buff
         encoder.generate_mipmaps(m_texture.get());
     }
 
-    if (s_rendertarget_mesh_lod_bias != m_material->data.texture_samplers.base_color.sampler.lod_bias) {
-        m_material->set_slot_sampler(m_material->data.texture_samplers.base_color, sampler_state());
+    if (s_rendertarget_mesh_lod_bias != m_material->get_data().texture_samplers.base_color.sampler.lod_bias) {
+        m_material->set_slot_sampler(m_material->get_data().texture_samplers.base_color, sampler_state());
     }
 }
 

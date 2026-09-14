@@ -609,8 +609,8 @@ void import_node_graphs(
                 log_parsers->warn("glTF editor state: texture source binding {}.{} -> '{}' not resolved", material_index, slot, graph_texture_name);
                 continue;
             }
-            erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
-            erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
+            const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
+            const erhe::primitive::Material_texture_sampler*  sampler  = nullptr;
             if      (slot == "base_color")         sampler = &samplers.base_color;
             else if (slot == "metallic_roughness") sampler = &samplers.metallic_roughness;
             else if (slot == "normal")             sampler = &samplers.normal;

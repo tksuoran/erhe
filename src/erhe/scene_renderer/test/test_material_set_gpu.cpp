@@ -381,7 +381,7 @@ TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
     // Texture is itself a Texture_reference that returns itself, which is the
     // plain case; a Graph_texture is the one that returns a different object
     // after a re-bake, and swapping the reference is that shape.
-    material->data.texture_samplers.base_color.texture_reference = texture_a;
+    material->set_base_color_texture(texture_a);
 
     Material_set set{make_create_info("set")};
     const Material_list library{material};
@@ -389,7 +389,7 @@ TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
     update(set);
     const std::size_t after_first = set.get_write_count();
 
-    material->data.texture_samplers.base_color.texture_reference = texture_b;
+    material->set_base_color_texture(texture_b);
 
     update(set);
     EXPECT_GT(set.get_write_count(), after_first);

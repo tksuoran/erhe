@@ -59,6 +59,7 @@ private:
     [[nodiscard]] auto connected_input_index() const -> int;
     void register_texture();
     void unregister_texture();
+    void notify_referenced_texture_changed();
     void assign_to_material();
     // The scene whose content library receives the baked texture: the stored
     // selection when set and still registered, else re-resolved through the

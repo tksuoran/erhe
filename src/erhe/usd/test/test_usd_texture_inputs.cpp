@@ -71,7 +71,7 @@ protected:
 
 TEST_F(Texture_inputs_import, wrap_modes_reach_the_slot_sampler)
 {
-    const erhe::primitive::Material_texture_samplers& slots = material->data.texture_samplers;
+    const erhe::primitive::Material_texture_samplers& slots = material->get_data().texture_samplers;
     EXPECT_EQ(slots.base_color.sampler.wrap_u, erhe::graphics::Sampler_address_mode::repeat);
     EXPECT_EQ(slots.base_color.sampler.wrap_v, erhe::graphics::Sampler_address_mode::mirrored_repeat);
     EXPECT_EQ(slots.emissive  .sampler.wrap_u, erhe::graphics::Sampler_address_mode::clamp_to_edge);
@@ -85,14 +85,14 @@ TEST_F(Texture_inputs_import, transform2d_reaches_the_slot_transform)
     // (0.25, 0.5)) is converted through `v' = 1 - v`: the rotation negates
     // and the offset becomes
     // (tx - sin(r) * sy, 1 - ty - cos(r) * sy) = (-2.75, 0.5).
-    const erhe::primitive::Material_texture_sampler& slot = material->data.texture_samplers.base_color;
+    const erhe::primitive::Material_texture_sampler& slot = material->get_data().texture_samplers.base_color;
     EXPECT_NEAR(slot.rotation, glm::radians(-90.0f), 1e-5f);
     EXPECT_NEAR(slot.scale.x,  2.0f,  1e-5f);
     EXPECT_NEAR(slot.scale.y,  3.0f,  1e-5f);
     EXPECT_NEAR(slot.offset.x, -2.75f, 1e-5f);
     EXPECT_NEAR(slot.offset.y,  0.5f,  1e-5f);
     // A texture with no UsdTransform2d leaves the slot at the identity.
-    const erhe::primitive::Material_texture_sampler& emissive = material->data.texture_samplers.emissive;
+    const erhe::primitive::Material_texture_sampler& emissive = material->get_data().texture_samplers.emissive;
     EXPECT_NEAR(emissive.rotation, 0.0f, 1e-5f);
     EXPECT_NEAR(emissive.scale.x,  1.0f, 1e-5f);
     EXPECT_NEAR(emissive.scale.y,  1.0f, 1e-5f);

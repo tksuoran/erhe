@@ -5,6 +5,8 @@
 #include "erhe_graph/link.hpp"
 #include "erhe_graph/node.hpp"
 
+#include <algorithm>
+
 namespace editor {
 
 Graph_texture::Graph_texture()
@@ -33,6 +35,28 @@ auto Graph_texture::get_referenced_texture() const -> const erhe::graphics::Text
         }
     }
     return nullptr;
+}
+
+void Graph_texture::add_user(erhe::graphics::Texture_reference_user& user)
+{
+    // A material that binds the same graph into two slots registers twice and
+    // unregisters twice, so the list holds one entry per binding.
+    m_users.push_back(&user);
+}
+
+void Graph_texture::remove_user(erhe::graphics::Texture_reference_user& user)
+{
+    const std::vector<erhe::graphics::Texture_reference_user*>::iterator i = std::find(m_users.begin(), m_users.end(), &user);
+    if (i != m_users.end()) {
+        m_users.erase(i);
+    }
+}
+
+void Graph_texture::notify_referenced_texture_changed()
+{
+    for (erhe::graphics::Texture_reference_user* user : m_users) {
+        user->on_referenced_texture_changed();
+    }
 }
 
 } // namespace editor

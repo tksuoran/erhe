@@ -780,7 +780,7 @@ void add_gltf_editor_state(
             }
         };
         for (const std::shared_ptr<erhe::primitive::Material>& material : content_library->get_all<erhe::primitive::Material>()) {
-            const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+            const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
             const std::size_t bindings_before = data->material_bindings.size();
             add_binding(*material, "base_color",         samplers.base_color);
             add_binding(*material, "metallic_roughness", samplers.metallic_roughness);

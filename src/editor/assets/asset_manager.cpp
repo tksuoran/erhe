@@ -1980,7 +1980,7 @@ auto Asset_manager::is_pinned(const erhe::Item_base* item) const -> bool
                 if (material == nullptr) {
                     return;
                 }
-                const erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+                const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
                 for (const erhe::primitive::Material_texture_sampler* sampler :
                      {&samplers.base_color, &samplers.metallic_roughness, &samplers.normal, &samplers.occlusion, &samplers.emissive})
                 {

@@ -50,14 +50,14 @@ TEST(Material_textures, property_is_the_value_and_the_member_mirrors_it)
     const Observer_token token = material->add_observer([&notifications](Dependency_object&, const Property_changed_args&) { ++notifications; });
     material->set_normal_texture(texture);
     EXPECT_EQ(material->get_value_source(Material::normal_texture_property.get()), Value_source::local);
-    EXPECT_EQ(material->data.texture_samplers.normal.texture_reference.get(), static_cast<erhe::graphics::Texture_reference*>(texture.get()));
+    EXPECT_EQ(material->get_data().texture_samplers.normal.texture_reference.get(), static_cast<erhe::graphics::Texture_reference*>(texture.get()));
     EXPECT_EQ(material->get_normal_texture().get(), static_cast<erhe::graphics::Texture_reference*>(texture.get()));
     EXPECT_EQ(to_string(Material::normal_texture_property.get(), material->get_value(Material::normal_texture_property)), "t");
     EXPECT_EQ(notifications, 1);
     material->set_normal_texture(texture); // unchanged: no notification
     EXPECT_EQ(notifications, 1);
     material->set_normal_texture({});
-    EXPECT_FALSE(material->data.texture_samplers.normal.texture_reference);
+    EXPECT_FALSE(material->get_data().texture_samplers.normal.texture_reference);
     EXPECT_EQ(notifications, 2);
 
     // A create-info slot fill seeds a local value; an unset slot stays default.
@@ -102,7 +102,7 @@ TEST(Material_textures, slot_inherits_from_a_folder_and_mirrors)
     EXPECT_EQ(material->get_value_source(Material::base_color_texture_property.get()), Value_source::inherited);
     EXPECT_EQ(material->get_base_color_texture().get(), static_cast<erhe::graphics::Texture_reference*>(texture.get()));
     folder.set_value(Material::base_color_texture_uv_scale_property, glm::vec2{2.0f, 2.0f});
-    EXPECT_EQ(material->data.texture_samplers.base_color.scale, (glm::vec2{2.0f, 2.0f}));
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.scale, (glm::vec2{2.0f, 2.0f}));
 
     // A local value shadows the folder; clearing it re-reads the folder.
     material->set_base_color_texture({});
@@ -119,7 +119,7 @@ TEST(Material_textures, traits_reject_a_material_as_a_texture)
     std::shared_ptr<Material> material = std::make_shared<Material>("m");
     std::shared_ptr<Material> other    = std::make_shared<Material>("other");
     material->set_value(Material::emissive_texture_property, Object_reference{other});
-    EXPECT_FALSE(material->data.texture_samplers.emissive.texture_reference);
+    EXPECT_FALSE(material->get_data().texture_samplers.emissive.texture_reference);
 }
 
 TEST(Material_textures, set_data_writes_slots_through_the_properties)
@@ -135,9 +135,9 @@ TEST(Material_textures, set_data_writes_slots_through_the_properties)
     after.texture_samplers.occlusion.scale             = glm::vec2{2.0f, 2.0f};
     material->set_data(after);
     EXPECT_EQ(material->get_occlusion_texture().get(), static_cast<erhe::graphics::Texture_reference*>(texture.get()));
-    EXPECT_EQ(material->data.texture_samplers.occlusion.scale, (glm::vec2{2.0f, 2.0f}));
+    EXPECT_EQ(material->get_data().texture_samplers.occlusion.scale, (glm::vec2{2.0f, 2.0f}));
     EXPECT_EQ(notifications, 2); // the texture and the UV scale, both properties; the other slot fields are unchanged
-    EXPECT_TRUE(material->data == after);
+    EXPECT_TRUE(material->get_data() == after);
 
     material->set_data(Material_data{});
     EXPECT_FALSE(material->get_occlusion_texture());
@@ -168,32 +168,32 @@ TEST(Material_textures, sampler_properties_mirror_into_the_slot_state)
 {
     std::shared_ptr<Material> material = std::make_shared<Material>("m");
     const erhe::primitive::Material_sampler_state defaults{};
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler, defaults);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler, defaults);
 
     material->set_value(Material::base_color_texture_wrap_u_property, erhe::graphics::Sampler_address_mode::clamp_to_edge);
     material->set_value(Material::base_color_texture_max_anisotropy_property, 8.0f);
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler.wrap_u, erhe::graphics::Sampler_address_mode::clamp_to_edge);
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler.max_anisotropy, 8.0f);
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler.wrap_v, defaults.wrap_v);
-    EXPECT_EQ(material->data.texture_samplers.normal.sampler, defaults);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler.wrap_u, erhe::graphics::Sampler_address_mode::clamp_to_edge);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler.max_anisotropy, 8.0f);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler.wrap_v, defaults.wrap_v);
+    EXPECT_EQ(material->get_data().texture_samplers.normal.sampler, defaults);
 
     // set_slot_sampler / set_data: local where the state differs from the
     // default, cleared where it does not.
     erhe::primitive::Material_sampler_state state{};
     state.min_filter  = erhe::graphics::Filter::nearest;
     state.mipmap_mode = erhe::graphics::Sampler_mipmap_mode::not_mipmapped;
-    material->set_slot_sampler(material->data.texture_samplers.base_color, state);
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler, state);
+    material->set_slot_sampler(material->get_data().texture_samplers.base_color, state);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler, state);
     EXPECT_EQ(material->get_value_source(Material::base_color_texture_wrap_u_property.get()),      Value_source::default_value);
     EXPECT_EQ(material->get_value_source(Material::base_color_texture_min_filter_property.get()),  Value_source::local);
     EXPECT_EQ(material->get_value_source(Material::base_color_texture_mipmap_mode_property.get()), Value_source::local);
 
-    Material_data snapshot = material->data;
+    Material_data snapshot = material->get_data();
     snapshot.texture_samplers.emissive.sampler.lod_bias = -1.5f;
     snapshot.texture_samplers.base_color.sampler        = defaults;
     material->set_data(snapshot);
-    EXPECT_EQ(material->data.texture_samplers.emissive.sampler.lod_bias, -1.5f);
-    EXPECT_EQ(material->data.texture_samplers.base_color.sampler, defaults);
+    EXPECT_EQ(material->get_data().texture_samplers.emissive.sampler.lod_bias, -1.5f);
+    EXPECT_EQ(material->get_data().texture_samplers.base_color.sampler, defaults);
     EXPECT_EQ(material->get_value_source(Material::base_color_texture_min_filter_property.get()), Value_source::default_value);
 
     // The create-info conversions round-trip the state.
@@ -209,7 +209,7 @@ TEST(Material_textures, sampler_state_inherits_from_a_folder)
 
     folder.set_value(Material::normal_texture_wrap_v_property, erhe::graphics::Sampler_address_mode::mirrored_repeat);
     EXPECT_EQ(material->get_value_source(Material::normal_texture_wrap_v_property.get()), Value_source::inherited);
-    EXPECT_EQ(material->data.texture_samplers.normal.sampler.wrap_v, erhe::graphics::Sampler_address_mode::mirrored_repeat);
+    EXPECT_EQ(material->get_data().texture_samplers.normal.sampler.wrap_v, erhe::graphics::Sampler_address_mode::mirrored_repeat);
     material->set_inheritance_container(nullptr);
 }
 

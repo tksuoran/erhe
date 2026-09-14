@@ -193,7 +193,7 @@ void Texture_material_output_node::on_removed_from_graph()
     // unresolved reference never assigned anything, so nothing to clear.
     const std::shared_ptr<erhe::primitive::Material> material = get_material();
     if (m_assign_to_material && material) {
-        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
         material->set_base_color_texture({});
         material->set_slot_sampler(samplers.base_color, {});
         material->set_normal_texture({});
@@ -341,10 +341,10 @@ void Texture_material_output_node::render_separate_channel(
     Baked_texture&    slot          = m_separate[channel_index];
 
     const std::shared_ptr<erhe::primitive::Material> material = get_material();
-    erhe::primitive::Material_texture_sampler* sampler_slot = nullptr;
-    const char*                                suffix       = "";
+    const erhe::primitive::Material_texture_sampler* sampler_slot = nullptr;
+    const char*                                      suffix       = "";
     if (material) {
-        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
         switch (channel) {
             case Separate_channel::albedo:   sampler_slot = &samplers.base_color; suffix = "Albedo";   break;
             case Separate_channel::normal:   sampler_slot = &samplers.normal;     suffix = "Normal";   break;
@@ -421,7 +421,7 @@ void Texture_material_output_node::render_orm(
         unregister_orm();
         m_orm_target.reset();
         if (m_assign_to_material && material) {
-            erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+            const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
             material->set_metallic_roughness_texture({});
             material->set_slot_sampler(samplers.metallic_roughness, {});
             material->set_occlusion_texture({});
@@ -455,7 +455,7 @@ void Texture_material_output_node::render_orm(
     }
 
     if (m_assign_to_material && material && m_orm_target) {
-        erhe::primitive::Material_texture_samplers& samplers = material->data.texture_samplers;
+        const erhe::primitive::Material_texture_samplers& samplers = material->get_data().texture_samplers;
         // Packed texture drives roughness (.g) and metallic (.b); the scalar
         // multipliers pass the baked values through unchanged.
         material->set_metallic_roughness_texture(m_orm_target);
