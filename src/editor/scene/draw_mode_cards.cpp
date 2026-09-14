@@ -65,17 +65,29 @@ public:
     std::array<glm::vec2, 4> uv    {};
 };
 
-// The imaging adapter's unflipped UV quad
-// (UsdImagingDrawModeAdapter::_GetUVsForQuad(false, false)) in USD's `st`
-// space, converted to erhe's texture coordinates by the one involution
-// `v' = 1 - v` (src/erhe/usd/notes.md, "Texture coordinates").
-[[nodiscard]] auto card_uvs() -> std::array<glm::vec2, 4>
+// The imaging adapter's UV quad for one face
+// (UsdImagingDrawModeAdapter::_GetUVsForQuad and
+// _GenerateTextureCoordinates) in USD's `st` space, converted to erhe's
+// texture coordinates by the one involution `v' = 1 - v`
+// (src/erhe/usd/notes.md, "Texture coordinates"). A face showing its own
+// image takes the unflipped quad, except Z-, whose image the adapter maps
+// with both s and t flipped. (The adapter's other flips are for a face
+// borrowing the opposite face's image; erhe draws such a face flat in the
+// draw-mode color, so they do not arise.)
+[[nodiscard]] auto card_uvs(const Draw_mode_card_face face) -> std::array<glm::vec2, 4>
 {
+    const bool flip_s = (face == Draw_mode_card_face::z_neg);
+    const bool flip_t = (face == Draw_mode_card_face::z_neg);
+    const float u0 = flip_s ? 0.0f : 1.0f;
+    const float u1 = flip_s ? 1.0f : 0.0f;
+    // USD t, before erhe's v' = 1 - t.
+    const float t0 = flip_t ? 0.0f : 1.0f;
+    const float t1 = flip_t ? 1.0f : 0.0f;
     return std::array<glm::vec2, 4>{
-        glm::vec2{1.0f, 0.0f},
-        glm::vec2{0.0f, 0.0f},
-        glm::vec2{0.0f, 1.0f},
-        glm::vec2{1.0f, 1.0f}
+        glm::vec2{u0, 1.0f - t0},
+        glm::vec2{u1, 1.0f - t0},
+        glm::vec2{u1, 1.0f - t1},
+        glm::vec2{u0, 1.0f - t1}
     };
 }
 
@@ -92,7 +104,7 @@ public:
 {
     const glm::vec3 mid = 0.5f * (min + max);
     Card_quad quad{};
-    quad.uv = card_uvs();
+    quad.uv = card_uvs(face);
     switch (face) {
         case Draw_mode_card_face::x_pos: {
             const float x = cross ? mid.x : max.x;
