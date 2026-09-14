@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <functional>
 #include <optional>
@@ -197,16 +198,48 @@ public:
     std::map<std::string, std::weak_ptr<Asset_node>> nodes_by_path;
 };
 
+// The node class one directory entry gets, decided by the walk from the entry's
+// kind and extension (doc/asset-browser-two-phase-scan.md D1). It travels with
+// the entry so the main thread constructs the node without a filesystem call.
+enum class Asset_node_kind
+{
+    folder,
+    gltf,
+    geogram,
+    usd,
+    texture,
+    other
+};
+
+// One entry the walk found: where it is, which node it hangs under, and what
+// node class it gets. The parent path key is empty for the synthetic root.
+class Asset_scan_entry
+{
+public:
+    std::filesystem::path path;
+    std::string           parent_path_key;
+    Asset_node_kind       kind{Asset_node_kind::other};
+};
+
 // A directory walk in flight (R6 of doc/frame-time-after-usd-import-plan.md).
 // Walking res/editor/assets is thousands of stat() calls - 8.1 s in the
-// startup Tracy capture - so it runs on an executor worker: the walk touches
-// nothing but its own detached Asset_node objects, and the main thread moves
-// `tree` into the browser once `finished` is set.
+// startup Tracy capture - so it runs on an executor worker. The worker holds no
+// node: it publishes ordered entry batches every 50 ms and once more at the end
+// (R2), and the main thread builds the tree from them as they land (R3), so the
+// window shows the tree growing while the walk runs.
 class Asset_scan_request
 {
 public:
-    std::atomic<bool> finished{false};
-    Asset_tree        tree;
+    // Guards working_directory and published_entries.
+    std::mutex                    mutex;
+    // The working directory the walk sampled, published with the first batch so
+    // the main thread builds the same path keys the walk did.
+    std::filesystem::path         working_directory;
+    // Published but not yet applied entries, in walk order: a parent always
+    // precedes its children.
+    std::vector<Asset_scan_entry> published_entries;
+    // Set after the last batch is published.
+    std::atomic<bool>             finished{false};
 };
 
 class Asset_browser;
@@ -241,15 +274,17 @@ public:
     );
 
     // Submits a directory walk to the executor and returns; the tree the walk
-    // builds replaces the shown one at the next apply_finished_scan(). A walk
-    // already in flight is left to finish and this call does nothing.
+    // builds replaces the shown one at the first apply_scan_progress() that
+    // picks a batch of it up. A walk already in flight is left to finish and
+    // this call does nothing.
     void scan();
 
-    // Moves a finished walk's tree in and refreshes the window's root. Called
-    // from the window's imgui() and from the scene-save refresh, so a save
-    // reaches the fresh tree even while the window is hidden. No-op when no
-    // walk is in flight or the one in flight has not landed.
-    void apply_finished_scan();
+    // Applies every walk publication available now, building the new tree as it
+    // grows, and drops the request once its last batch is in. Called from the
+    // window's imgui() and from the scene-save refresh, so a save reaches the
+    // fresh tree even while the window is hidden. No-op when no walk is in
+    // flight or the one in flight has published nothing new.
+    void apply_scan_progress();
 
     [[nodiscard]] auto is_scan_in_flight() const -> bool { return static_cast<bool>(m_scan_request); }
 
@@ -274,8 +309,10 @@ private:
 
     // Creates the node for one directory entry, registers it in
     // m_tree.nodes_by_path and attaches it to parent. position selects the sibling
-    // slot; an empty position appends, which is what a scan does.
-    auto make_node    (const std::filesystem::path& path, Asset_node* parent, std::optional<std::size_t> position = {}) -> std::shared_ptr<Asset_node>;
+    // slot; an empty position appends, which is what a scan does. The kind is the
+    // classification the walk made, or the one the refresh makes on the main
+    // thread from a single is_directory() call.
+    auto make_node    (const std::filesystem::path& path, Asset_node_kind kind, Asset_node* parent, std::optional<std::size_t> position = {}) -> std::shared_ptr<Asset_node>;
     auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
 
     // Scene that imports go into: the last hovered viewport's scene, falling
@@ -331,6 +368,10 @@ private:
 
     // Non-null while a directory walk is in flight.
     std::shared_ptr<Asset_scan_request> m_scan_request;
+
+    // Entries swapped out from under the request's mutex and applied outside the
+    // lock. A member so its capacity survives the walk's publications.
+    std::vector<Asset_scan_entry> m_scan_entry_scratch;
 
     // Files saved while a walk was in flight: refreshed against the tree the
     // walk lands, since that tree replaces whatever a refresh would touch now.

@@ -84,47 +84,72 @@ Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{pat
 
 namespace {
 
-// The node construction a walk and a single-file refresh share. Written
-// against an Asset_tree rather than the browser's members, so the walk can run
-// on a worker against a tree nothing else can see.
-[[nodiscard]] auto make_path_key(const Asset_tree& tree, const std::filesystem::path& path) -> std::string
+// The path key one node is registered under: the path made absolute against
+// the working directory the scan roots are relative to, lexically normalized,
+// with forward slashes.
+[[nodiscard]] auto make_path_key(const std::filesystem::path& working_directory, const std::filesystem::path& path) -> std::string
 {
-    return (tree.working_directory / path).lexically_normal().generic_string();
+    return (working_directory / path).lexically_normal().generic_string();
 }
 
+[[nodiscard]] auto make_path_key(const Asset_tree& tree, const std::filesystem::path& path) -> std::string
+{
+    return make_path_key(tree.working_directory, path);
+}
+
+// Classification of a non-directory entry, by extension alone.
+[[nodiscard]] auto classify_file(const std::filesystem::path& path) -> Asset_node_kind
+{
+    const bool is_gltf =
+        path.extension() == std::filesystem::path{".gltf"} ||
+        path.extension() == std::filesystem::path{".glb"};
+    if (is_gltf) {
+        return Asset_node_kind::gltf;
+    }
+    if (path.extension() == std::filesystem::path{".geogram"}) {
+        return Asset_node_kind::geogram;
+    }
+    if (is_usd_file_extension(path)) {
+        return Asset_node_kind::usd;
+    }
+    if (is_texture_file_extension(path)) {
+        return Asset_node_kind::texture;
+    }
+    return Asset_node_kind::other;
+}
+
+// Classification with one filesystem call, for the single-file refresh: the
+// walk knows already which entries are directories and pays no second stat.
+[[nodiscard]] auto classify_path(const std::filesystem::path& path) -> Asset_node_kind
+{
+    std::error_code error_code;
+    const bool is_directory_test = std::filesystem::is_directory(path, error_code);
+    if (!error_code && is_directory_test) {
+        return Asset_node_kind::folder;
+    }
+    return classify_file(path);
+}
+
+// The node construction a walk publication and a single-file refresh share.
+// Written against an Asset_tree rather than the browser's members, and it makes
+// no filesystem call: the kind is decided before it is reached (R4).
 auto make_node(
     Asset_tree&                      tree,
     const std::filesystem::path&     path,
+    const Asset_node_kind            kind,
     Asset_node* const                parent,
     const std::optional<std::size_t> position
 ) -> std::shared_ptr<Asset_node>
 {
-    std::error_code error_code;
-    bool is_directory{false};
-    const bool is_directory_test = std::filesystem::is_directory(path, error_code);
-    if (!error_code) {
-        is_directory = is_directory_test;
-    }
-
-    const bool is_gltf =
-        path.extension() == std::filesystem::path{".gltf"} ||
-        path.extension() == std::filesystem::path{".glb"};
-
-    const bool is_geogram = path.extension() == std::filesystem::path{".geogram"};
-
     std::shared_ptr<Asset_node> new_node;
-    if (is_directory) {
-        new_node = std::make_shared<Asset_folder>(path);
-    } else if (is_gltf) {
-        new_node = std::make_shared<Asset_file_gltf>(path);
-    } else if (is_geogram) {
-        new_node = std::make_shared<Asset_file_geogram>(path);
-    } else if (is_usd_file_extension(path)) {
-        new_node = std::make_shared<Asset_file_usd>(path);
-    } else if (is_texture_file_extension(path)) {
-        new_node = std::make_shared<Asset_file_texture>(path);
-    } else {
-        new_node = std::make_shared<Asset_file_other>(path);
+    switch (kind) {
+        case Asset_node_kind::folder:  new_node = std::make_shared<Asset_folder>      (path); break;
+        case Asset_node_kind::gltf:    new_node = std::make_shared<Asset_file_gltf>   (path); break;
+        case Asset_node_kind::geogram: new_node = std::make_shared<Asset_file_geogram>(path); break;
+        case Asset_node_kind::usd:     new_node = std::make_shared<Asset_file_usd>    (path); break;
+        case Asset_node_kind::texture: new_node = std::make_shared<Asset_file_texture>(path); break;
+        case Asset_node_kind::other:
+        default:                       new_node = std::make_shared<Asset_file_other>  (path); break;
     }
     new_node->show();
     tree.nodes_by_path[make_path_key(tree, path)] = new_node;
@@ -138,12 +163,80 @@ auto make_node(
     return new_node;
 }
 
-void scan_directory(Asset_tree& tree, const std::filesystem::path& path, Asset_node* parent)
+// The whole walk of both asset roots. Runs on an executor worker: it reads the
+// filesystem, classifies what it finds and publishes ordered entry batches; it
+// holds no node and touches nothing the main thread reads (R1).
+class Asset_walk
+{
+public:
+    explicit Asset_walk(Asset_scan_request& request)
+        : m_request{request}
+    {
+    }
+
+    void run();
+
+private:
+    void walk_directory(const std::filesystem::path& path, const std::string& parent_path_key);
+
+    // Records one found entry and publishes the batch when the interval is up.
+    // Returns the entry's path key, which is the parent key of its children.
+    auto add_entry(const std::filesystem::path& path, const std::string& parent_path_key, Asset_node_kind kind) -> std::string;
+
+    void publish();
+
+    static constexpr std::chrono::milliseconds c_publish_interval{50};
+
+    Asset_scan_request&                         m_request;
+    std::filesystem::path                       m_working_directory;
+    std::vector<Asset_scan_entry>               m_batch;
+    std::size_t                                 m_published_entry_count{0};
+    std::chrono::steady_clock::time_point       m_start_time{std::chrono::steady_clock::now()};
+    std::chrono::steady_clock::time_point       m_last_publish_time{m_start_time};
+};
+
+auto Asset_walk::add_entry(
+    const std::filesystem::path& path,
+    const std::string&           parent_path_key,
+    const Asset_node_kind        kind
+) -> std::string
+{
+    std::string path_key = make_path_key(m_working_directory, path);
+    m_batch.push_back(Asset_scan_entry{.path = path, .parent_path_key = parent_path_key, .kind = kind});
+    const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    if (now - m_last_publish_time >= c_publish_interval) {
+        publish();
+    }
+    return path_key;
+}
+
+void Asset_walk::publish()
+{
+    const std::size_t batch_size = m_batch.size();
+    {
+        std::lock_guard<std::mutex> lock{m_request.mutex};
+        m_request.published_entries.insert(
+            m_request.published_entries.end(),
+            std::make_move_iterator(m_batch.begin()),
+            std::make_move_iterator(m_batch.end())
+        );
+    }
+    m_batch.clear(); // capacity kept
+    m_published_entry_count += batch_size;
+    m_last_publish_time = std::chrono::steady_clock::now();
+    const std::chrono::duration<float, std::milli> elapsed = m_last_publish_time - m_start_time;
+    log_asset_browser->info(
+        "Asset browser: walk published {} entries ({} total, {:.2f} ms)",
+        batch_size, m_published_entry_count, elapsed.count()
+    );
+}
+
+void Asset_walk::walk_directory(const std::filesystem::path& path, const std::string& parent_path_key)
 {
     log_asset_browser->trace("Scanning {}", erhe::file::to_string(path));
 
     std::error_code error_code;
-    auto directory_iterator = std::filesystem::directory_iterator{path, error_code};
+    std::filesystem::directory_iterator directory_iterator{path, error_code};
     if (error_code) {
         log_asset_browser->warn(
             "Scanning {}: directory_iterator() failed with error {} - {}",
@@ -151,7 +244,7 @@ void scan_directory(Asset_tree& tree, const std::filesystem::path& path, Asset_n
         );
         return;
     }
-    for (const auto& entry : directory_iterator) {
+    for (const std::filesystem::directory_entry& entry : directory_iterator) {
         const bool is_directory = std::filesystem::is_directory(entry, error_code);
         if (error_code) {
             log_asset_browser->warn(
@@ -177,22 +270,28 @@ void scan_directory(Asset_tree& tree, const std::filesystem::path& path, Asset_n
             continue;
         }
 
-        std::shared_ptr<Asset_node> asset_node = make_node(tree, entry, parent, {});
+        const std::filesystem::path& entry_path = entry.path();
+        const Asset_node_kind kind = is_directory ? Asset_node_kind::folder : classify_file(entry_path);
+        const std::string entry_path_key = add_entry(entry_path, parent_path_key, kind);
         if (is_directory) {
-            scan_directory(tree, entry, asset_node.get());
+            walk_directory(entry_path, entry_path_key);
         }
     }
 }
 
-// The whole walk of both asset roots. Runs on an executor worker: it reads the
-// filesystem and builds detached Asset_node objects, and touches nothing else.
-void scan_asset_tree(Asset_tree& tree)
+void Asset_walk::run()
 {
     ERHE_PROFILE_SCOPE("editor::Asset_browser scan walk");
 
     std::error_code working_directory_error_code;
     const std::filesystem::path working_directory = std::filesystem::current_path(working_directory_error_code);
-    tree.working_directory = working_directory_error_code ? std::filesystem::path{} : working_directory;
+    m_working_directory = working_directory_error_code ? std::filesystem::path{} : working_directory;
+    {
+        // Published before the first batch, so the main thread builds the new
+        // tree's path keys the way the walk built the parent keys it carries.
+        std::lock_guard<std::mutex> lock{m_request.mutex};
+        m_request.working_directory = m_working_directory;
+    }
 
     const std::filesystem::path editor_root = std::filesystem::path{"res"} / std::filesystem::path{"editor"};
     const std::filesystem::path assets_root = editor_root / std::filesystem::path{"assets"};
@@ -203,15 +302,21 @@ void scan_asset_tree(Asset_tree& tree)
     static_cast<void>(erhe::file::ensure_directory_exists(scenes_root));
 
     // Synthetic root under which both the read-only glTF/geogram assets and the
-    // saved scene files are shown.
-    tree.root          = make_node(tree, editor_root, nullptr, {});
-    tree.root_path_key = make_path_key(tree, editor_root);
+    // saved scene files are shown. Its empty parent key names it as the root.
+    const std::string root_path_key = add_entry(editor_root, std::string{}, Asset_node_kind::folder);
 
-    std::shared_ptr<Asset_node> assets_node = make_node(tree, assets_root, tree.root.get(), {});
-    scan_directory(tree, assets_root, assets_node.get());
+    const std::string assets_path_key = add_entry(assets_root, root_path_key, Asset_node_kind::folder);
+    walk_directory(assets_root, assets_path_key);
 
-    std::shared_ptr<Asset_node> scenes_node = make_node(tree, scenes_root, tree.root.get(), {});
-    scan_directory(tree, scenes_root, scenes_node.get());
+    const std::string scenes_path_key = add_entry(scenes_root, root_path_key, Asset_node_kind::folder);
+    walk_directory(scenes_root, scenes_path_key);
+
+    publish();
+    const std::chrono::duration<float, std::milli> elapsed = std::chrono::steady_clock::now() - m_start_time;
+    log_asset_browser->info(
+        "Asset browser: walk finished, {} entries, {:.2f} ms",
+        m_published_entry_count, elapsed.count()
+    );
 }
 
 } // anonymous namespace
@@ -232,11 +337,12 @@ auto Asset_browser::find_node(const std::string& path_key) const -> std::shared_
 
 auto Asset_browser::make_node(
     const std::filesystem::path&     path,
+    const Asset_node_kind            kind,
     Asset_node* const                parent,
     const std::optional<std::size_t> position
 ) -> std::shared_ptr<Asset_node>
 {
-    return editor::make_node(m_tree, path, parent, position);
+    return editor::make_node(m_tree, path, kind, parent, position);
 }
 
 Asset_browser_window::Asset_browser_window(
@@ -254,7 +360,7 @@ Asset_browser_window::Asset_browser_window(
 
 void Asset_browser_window::imgui()
 {
-    m_asset_browser.apply_finished_scan();
+    m_asset_browser.apply_scan_progress();
     if (ImGui::Button("Scan")) {
         m_asset_browser.scan();
     }
@@ -378,23 +484,66 @@ void Asset_browser::scan()
     erhe::task::spawn(
         m_executor,
         [request]() {
-            scan_asset_tree(request->tree);
+            Asset_walk walk{*request};
+            walk.run();
             request->finished.store(true, std::memory_order_release);
         }
     );
 }
 
-void Asset_browser::apply_finished_scan()
+void Asset_browser::apply_scan_progress()
 {
-    if (!m_scan_request || !m_scan_request->finished.load(std::memory_order_acquire)) {
+    if (!m_scan_request) {
         return;
     }
-    // The worker is done with the tree and the release/acquire pair publishes
-    // everything it built, so the move and everything after it is main-thread
-    // only.
-    m_tree = std::move(m_scan_request->tree);
+    Asset_scan_request& request = *m_scan_request;
+
+    // Read before draining: the worker sets the flag after its last batch is
+    // in, so a flag seen set means everything the walk found is now published.
+    const bool finished = request.finished.load(std::memory_order_acquire);
+
+    std::filesystem::path working_directory;
+    {
+        std::lock_guard<std::mutex> lock{request.mutex};
+        working_directory = request.working_directory;
+        m_scan_entry_scratch.clear(); // capacity kept
+        m_scan_entry_scratch.insert(
+            m_scan_entry_scratch.end(),
+            std::make_move_iterator(request.published_entries.begin()),
+            std::make_move_iterator(request.published_entries.end())
+        );
+        request.published_entries.clear();
+    }
+
+    for (const Asset_scan_entry& entry : m_scan_entry_scratch) {
+        if (entry.parent_path_key.empty()) {
+            // The walk's synthetic root: the new tree replaces the shown one
+            // here and grows in place from now on (D3).
+            m_tree = Asset_tree{};
+            m_tree.working_directory = working_directory;
+            m_tree.root_path_key     = editor::make_path_key(m_tree, entry.path);
+            m_tree.root              = editor::make_node(m_tree, entry.path, entry.kind, nullptr, {});
+            m_node_tree_window->set_root(m_tree.root);
+            continue;
+        }
+        const std::shared_ptr<Asset_node> parent_node = find_node(entry.parent_path_key);
+        if (!parent_node) {
+            // A parent always precedes its children in the walk's order (R2),
+            // so this is a defect rather than a state to tolerate.
+            log_asset_browser->warn(
+                "Asset browser: scan entry '{}' has no node for its parent '{}'",
+                erhe::file::to_string(entry.path), entry.parent_path_key
+            );
+            continue;
+        }
+        editor::make_node(m_tree, entry.path, entry.kind, parent_node.get(), {});
+    }
+    m_scan_entry_scratch.clear(); // capacity kept
+
+    if (!finished) {
+        return;
+    }
     m_scan_request.reset();
-    m_node_tree_window->set_root(m_tree.root);
 
     std::vector<std::filesystem::path> pending_refresh_paths = std::move(m_pending_refresh_paths);
     m_pending_refresh_paths.clear();
@@ -407,7 +556,7 @@ void Asset_browser::apply_finished_scan()
 
 void Asset_browser::refresh_file(const std::filesystem::path& path)
 {
-    apply_finished_scan();
+    apply_scan_progress();
     if (m_scan_request) {
         // A walk in flight replaces the whole tree, including anything a
         // refresh would add to the current one; refresh against the tree that
@@ -450,10 +599,10 @@ void Asset_browser::refresh_file_now(const std::filesystem::path& path)
             // predecessor's.
             const std::optional<std::size_t> position = parent_node->get_index_of_child(existing_node.get());
             existing_node->set_parent(std::shared_ptr<erhe::Hierarchy>{});
-            make_node(path, parent_node.get(), position);
+            make_node(path, classify_path(path), parent_node.get(), position);
             outcome = "node replaced";
         } else {
-            make_node(path, parent_node.get());
+            make_node(path, classify_path(path), parent_node.get());
             outcome = "node added";
         }
     }
