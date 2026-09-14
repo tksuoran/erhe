@@ -739,11 +739,9 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The LightUSD fork fixes (section 6 "Relationship targets a weaker sublayer
-   contributes as a single path", the `texCoord2f` finding of "Writer findings
-   of usdchecker"). Two defects in one dependency, each already diagnosed to
-   the function; a fork branch carrying them removes 2816 skipped instances
-   and a validator finding.
+1. The LightUSD fork fix (the `texCoord2f` finding of "Writer findings of
+   usdchecker"). One defect in the dependency, already diagnosed to the
+   function; a fork branch carrying it removes a validator finding.
 2. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
@@ -825,21 +823,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     while the same file with the limits stripped parses (bisected on the
     written file; colliders and motions are fine). glTF-side; the limit
     spelling the export uses is the suspect.
-- Relationship targets a weaker sublayer contributes as a single path:
-  LightUSD's `CombinePrimSpecRec` (`src/composition.cc`) merges two layers'
-  `prepend` / `append` relationship opinions only when both are stored as a
-  path vector, and a single-target `prepend rel foo = </path>` is stored as a
-  path, so the weaker layer's target is dropped and the stronger layer's list
-  stands alone. The intent-vfx `scenes/teapotScene.usd` composes each
-  instancer's `prototypes` from two of its sublayers -
-  `teapotScene_layoutOverrides.usd` prepends the three coloured prototypes and
-  `teapotScene_layout.usd` prepends the single plain one - so pxr reads four
-  targets where erhe reads three, and every instance whose `protoIndices`
-  entry names the fourth is skipped, 2816 of them over the file's 23
-  instancers. The same merge puts the weaker layer's prepended targets before
-  the stronger's where USD puts the stronger's first, which would misname a
-  prototype even once the single-path opinion is admitted. Both go with a fork
-  fix, next to the two LightUSD limits above.
 - Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
   the `texCoord2f` typing of `UsdUVTexture` `inputs:st` (LightUSD's own
   member type, a fork fix), and a texture packed in a `.usdz` written as a

@@ -1,0 +1,30 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def PointInstancer "Scatter"
+    {
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+        int[] protoIndices = [0, 1, 0]
+        rel prototypes = [
+            </World/Scatter/Prototypes/BoxProto>,
+            </World/Scatter/Prototypes/Missing>,
+        ]
+
+        def "Prototypes"
+        {
+            def Xform "BoxProto"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+        }
+    }
+}

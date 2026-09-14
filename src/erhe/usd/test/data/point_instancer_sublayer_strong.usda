@@ -1,0 +1,13 @@
+#usda 1.0
+
+over "World"
+{
+    over "Scatter"
+    {
+        prepend rel prototypes = [
+            </World/Scatter/Prototypes/Red>,
+            </World/Scatter/Prototypes/Green>,
+            </World/Scatter/Prototypes/Blue>,
+        ]
+    }
+}

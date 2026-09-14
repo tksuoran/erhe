@@ -1,0 +1,54 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    subLayers = [
+        @point_instancer_sublayer_strong.usda@,
+        @point_instancer_sublayer_weak.usda@
+    ]
+    upAxis = "Y"
+)
+
+def Xform "World"
+{
+    def PointInstancer "Scatter"
+    {
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0), (6, 0, 0)]
+        int[] protoIndices = [0, 1, 2, 3]
+
+        def "Prototypes"
+        {
+            def Xform "Red"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+
+            def Xform "Green"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+
+            def Xform "Blue"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+
+            def Xform "Plain"
+            {
+                def Cube "box"
+                {
+                    double size = 1
+                }
+            }
+        }
+    }
+}

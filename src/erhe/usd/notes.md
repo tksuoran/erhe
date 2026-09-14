@@ -458,6 +458,17 @@ same function - sees that one composed stage.
 - Strength is local-first: the root layer's own opinions beat every sublayer,
   and within the `subLayers` array the earlier entry is the stronger one. A
   prim absent from the stronger layers is added whole.
+- A relationship (`rel foo = ...`) is composed across the stack as a list op:
+  the weaker layer's composed target list stands, and the stronger layer's
+  qualifier edits it - a stronger `prepend` puts its targets in front of the
+  weaker ones, a stronger `append` after them, a stronger `delete` removes
+  them, and an unqualified opinion replaces the list outright. A single-target
+  opinion (`prepend rel foo = </path>`) is an operand of the same kind as a
+  multi-target one and contributes its target the same way. A stronger opinion
+  that only declares the relationship (`rel foo`) is not an authored empty list
+  and lets the weaker one stand; a blocked opinion (`rel foo = None`) clears
+  what is below it. This is LightUSD's `ComposeRelationshipTargets`
+  (`src/composition.cc`), a fork fix.
 - Stage metadata (`defaultPrim`, `upAxis`, `metersPerUnit`,
   `timeCodesPerSecond`, `framesPerSecond`, `startTimeCode` / `endTimeCode`,
   `kilogramsPerUnit`, `customLayerData`) takes the root layer's value where it
@@ -701,6 +712,14 @@ onto the tree order rather than keeping the relationship's. A prototype the
 stage does not answer for is one warning and its instances are left out; a
 prototype the instancer does not hold is one warning saying that a save
 relocates it under the instancer.
+
+An instance whose `protoIndices` entry names no usable prototype - an index
+past the composed `prototypes` list, or a prototype the stage does not answer
+for - instances nothing, and the instancer reports how many of its instances
+that was in one warning naming the prim. The count is what makes a composition
+defect legible: an instancer whose `prototypes` is composed from several
+layers loses instances silently when a target is dropped, one per authored
+index rather than one per file, and the whole loss reads as a smaller scene.
 
 The prototype's own arcs are instantiated where the prototype sits, so the
 prim keeps them and a save writes them back, but the content they bring in is

@@ -5480,6 +5480,12 @@ private:
             prototype_ok.push_back(resolved);
         }
 
+        // An instance whose `protoIndices` entry names no usable prototype -
+        // an index past the composed `prototypes` list, or a prototype the
+        // stage does not answer for - instances nothing. The count is reported
+        // once for the instancer below, so a composition defect that silently
+        // drops instances is legible in the log.
+        std::size_t skipped_instance_count = 0;
         for (std::size_t instance = 0, end = matrices.size(); instance < end; ++instance) {
             if ((instance < mask.size()) && !mask[instance]) {
                 continue; // `invisibleIds` / `inactiveIds`
@@ -5488,6 +5494,7 @@ private:
                 ? static_cast<std::size_t>(std::max(proto_indices[instance], 0))
                 : 0;
             if ((proto_index >= prototype_ok.size()) || !prototype_ok[proto_index]) {
+                ++skipped_instance_count;
                 continue;
             }
             const std::string& prototype_path = record.prototype_paths[proto_index];
@@ -5527,6 +5534,17 @@ private:
             );
             record.instances.push_back(Usd_point_instance{.proto_index = proto_index, .transform = transform});
             record.instance_items.push_back(instance_node);
+        }
+        if (skipped_instance_count > 0) {
+            add_warning(
+                fmt::format(
+                    "USD prim '{}': {} of {} instances name no usable prototype of the {} the relationship supplies - they are left out",
+                    usd_node.abs_path,
+                    skipped_instance_count,
+                    matrices.size(),
+                    record.prototype_paths.size()
+                )
+            );
         }
         m_result.data.point_instancers.push_back(std::move(record));
     }

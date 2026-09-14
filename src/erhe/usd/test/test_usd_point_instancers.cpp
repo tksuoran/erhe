@@ -373,4 +373,80 @@ TEST_F(Point_instancer_export, saving_the_reloaded_file_again_is_byte_identical)
     EXPECT_EQ(save_again(third, third_root, "point_instancer_third.usda"), second_text);
 }
 
+// A relationship list op is composed across sublayers by the USD rule: the
+// stronger layer's prepended targets come first, and a single-target opinion
+// (`prepend rel prototypes = </path>`) is an operand of the same kind as a
+// multi-target one. The fixture's weaker sublayer prepends one prototype and
+// its stronger sublayer prepends three; the prototype prims sit in the tree in
+// the composed order, so the record's tree order is the composed order too.
+class Point_instancer_sublayer_import : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        root = std::make_shared<erhe::scene::Xform>("import_root");
+        const erhe::usd::Usd_load_arguments arguments{
+            .path          = instancer_test_data_path("point_instancer_sublayers.usda"),
+            .root_node     = root,
+            .mesh_layer_id = 0
+        };
+        result = erhe::usd::load_usd(arguments);
+    }
+
+    std::shared_ptr<erhe::scene::Node> root;
+    erhe::usd::Usd_load_result         result;
+};
+
+TEST_F(Point_instancer_sublayer_import, load_succeeds)
+{
+    EXPECT_TRUE(result.error.empty()) << result.error;
+}
+
+TEST_F(Point_instancer_sublayer_import, the_weaker_single_target_opinion_composes_after_the_stronger_list)
+{
+    ASSERT_EQ(result.data.point_instancers.size(), 1u);
+    const erhe::usd::Usd_point_instancer& record = result.data.point_instancers[0];
+    ASSERT_EQ(record.prototype_paths.size(), 4u);
+    EXPECT_EQ(record.prototype_paths[0], "/World/Scatter/Prototypes/Red");
+    EXPECT_EQ(record.prototype_paths[1], "/World/Scatter/Prototypes/Green");
+    EXPECT_EQ(record.prototype_paths[2], "/World/Scatter/Prototypes/Blue");
+    EXPECT_EQ(record.prototype_paths[3], "/World/Scatter/Prototypes/Plain");
+}
+
+// Every `protoIndices` entry names a prototype the composed relationship
+// supplies, so no instance is left out.
+TEST_F(Point_instancer_sublayer_import, every_instance_resolves)
+{
+    ASSERT_EQ(result.data.point_instancers.size(), 1u);
+    const erhe::usd::Usd_point_instancer& record = result.data.point_instancers[0];
+    ASSERT_EQ(record.instances.size(), 4u);
+    ASSERT_EQ(record.instance_items.size(), 4u);
+    for (std::size_t instance = 0; instance < 4u; ++instance) {
+        EXPECT_EQ(record.instances[instance].proto_index, instance);
+        ASSERT_TRUE(record.instance_items[instance]);
+    }
+    EXPECT_TRUE(find_node(result.data, "Red_0"));
+    EXPECT_TRUE(find_node(result.data, "Green_1"));
+    EXPECT_TRUE(find_node(result.data, "Blue_2"));
+    EXPECT_TRUE(find_node(result.data, "Plain_3"));
+}
+
+// An instance that names no usable prototype is counted and reported once for
+// the instancer, so a composition defect that drops a target does not shrink a
+// scene in silence.
+TEST(Point_instancer_missing_prototype, the_skipped_instances_are_counted_in_one_warning)
+{
+    const std::shared_ptr<erhe::scene::Node> root = std::make_shared<erhe::scene::Xform>("import_root");
+    const erhe::usd::Usd_load_arguments arguments{
+        .path          = instancer_test_data_path("point_instancer_missing_prototype.usda"),
+        .root_node     = root,
+        .mesh_layer_id = 0
+    };
+    const erhe::usd::Usd_load_result result = erhe::usd::load_usd(arguments);
+    ASSERT_TRUE(result.error.empty()) << result.error;
+    ASSERT_EQ(result.data.point_instancers.size(), 1u);
+    EXPECT_EQ(result.data.point_instancers[0].instances.size(), 2u);
+    EXPECT_NE(result.warning.find("1 of 3 instances name no usable prototype"), std::string::npos) << result.warning;
+}
+
 } // anonymous namespace
