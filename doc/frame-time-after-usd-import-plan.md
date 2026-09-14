@@ -137,13 +137,21 @@ window) rebuilds on the main thread. Measured on DrawModes:
 70791; the 35 teapots are 7 builds, all on executor workers; post-import
 median tick 6.0 ms. R5 holds.
 
-### Step 5: asset browser walk on a worker
+### Step 5: asset browser walk on a worker (landed, see below)
 
-`Asset_browser::scan()` runs on `context.executor` (the `Gltf_scan_request`
-pattern already in the file): the walk builds the node tree off the main
-thread and the window swaps it in when the request reports finished; the
-constructor only submits the request. The manual "Scan" button and
-`refresh_file` keep their behavior. R6 holds.
+`Asset_browser::scan()` submits an `Asset_scan_request` to the executor the
+constructor is given (the `Gltf_scan_request` pattern already in the file):
+the walk builds a detached `Asset_tree` - the node tree plus the path-key
+index into it - off the main thread, and `apply_finished_scan()` moves it in
+on the main thread when the request reports finished. The constructor only
+submits. A `scan()` while a walk is in flight is ignored, since the walk in
+flight reads the same directories. `apply_finished_scan()` runs from the
+window's `imgui()` and from the scene-save refresh, so a save reaches the
+fresh tree even while the window is hidden; a save arriving before the walk
+lands is queued and refreshed against the tree that lands. Measured:
+`Asset_browser::Asset_browser` 8.1 s to 0.12 ms, the walk 7.7 s on an
+executor worker, worst `Editor::tick` over the 200 frames after frame 12
+6.2 ms. R6 holds.
 
 ## 4. Verification
 

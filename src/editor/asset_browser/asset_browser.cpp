@@ -82,21 +82,18 @@ Asset_file_other& Asset_file_other::operator=(const Asset_file_other&) = default
 Asset_file_other::~Asset_file_other() noexcept                         = default;
 Asset_file_other::Asset_file_other(const std::filesystem::path& path) : Item{path} {}
 
-auto Asset_browser::make_path_key(const std::filesystem::path& path) const -> std::string
+namespace {
+
+// The node construction a walk and a single-file refresh share. Written
+// against an Asset_tree rather than the browser's members, so the walk can run
+// on a worker against a tree nothing else can see.
+[[nodiscard]] auto make_path_key(const Asset_tree& tree, const std::filesystem::path& path) -> std::string
 {
-    return (m_working_directory / path).lexically_normal().generic_string();
+    return (tree.working_directory / path).lexically_normal().generic_string();
 }
 
-auto Asset_browser::find_node(const std::string& path_key) const -> std::shared_ptr<Asset_node>
-{
-    const std::map<std::string, std::weak_ptr<Asset_node>>::const_iterator i = m_nodes_by_path.find(path_key);
-    if (i == m_nodes_by_path.end()) {
-        return {};
-    }
-    return i->second.lock();
-}
-
-auto Asset_browser::make_node(
+auto make_node(
+    Asset_tree&                      tree,
     const std::filesystem::path&     path,
     Asset_node* const                parent,
     const std::optional<std::size_t> position
@@ -130,7 +127,7 @@ auto Asset_browser::make_node(
         new_node = std::make_shared<Asset_file_other>(path);
     }
     new_node->show();
-    m_nodes_by_path[make_path_key(path)] = new_node;
+    tree.nodes_by_path[make_path_key(tree, path)] = new_node;
     if (parent) {
         if (position.has_value()) {
             new_node->set_parent(parent, position.value());
@@ -139,6 +136,107 @@ auto Asset_browser::make_node(
         }
     }
     return new_node;
+}
+
+void scan_directory(Asset_tree& tree, const std::filesystem::path& path, Asset_node* parent)
+{
+    log_asset_browser->trace("Scanning {}", erhe::file::to_string(path));
+
+    std::error_code error_code;
+    auto directory_iterator = std::filesystem::directory_iterator{path, error_code};
+    if (error_code) {
+        log_asset_browser->warn(
+            "Scanning {}: directory_iterator() failed with error {} - {}",
+            erhe::file::to_string(path), error_code.value(), error_code.message()
+        );
+        return;
+    }
+    for (const auto& entry : directory_iterator) {
+        const bool is_directory = std::filesystem::is_directory(entry, error_code);
+        if (error_code) {
+            log_asset_browser->warn(
+                "Scanning {}: is_directory() failed with error {} - {}",
+                erhe::file::to_string(path), error_code.value(), error_code.message()
+            );
+            continue;
+        }
+
+        const bool is_regular_file = std::filesystem::is_regular_file(entry, error_code);
+        if (error_code) {
+            log_asset_browser->warn(
+                "Scanning {}: is_regular_file() failed with error {} - {}",
+                erhe::file::to_string(path), error_code.value(), error_code.message()
+            );
+            continue;
+        }
+        if (!is_directory && !is_regular_file) {
+            log_asset_browser->warn(
+                "Scanning {}: is neither regular file nor directory",
+                erhe::file::to_string(path)
+            );
+            continue;
+        }
+
+        std::shared_ptr<Asset_node> asset_node = make_node(tree, entry, parent, {});
+        if (is_directory) {
+            scan_directory(tree, entry, asset_node.get());
+        }
+    }
+}
+
+// The whole walk of both asset roots. Runs on an executor worker: it reads the
+// filesystem and builds detached Asset_node objects, and touches nothing else.
+void scan_asset_tree(Asset_tree& tree)
+{
+    ERHE_PROFILE_SCOPE("editor::Asset_browser scan walk");
+
+    std::error_code working_directory_error_code;
+    const std::filesystem::path working_directory = std::filesystem::current_path(working_directory_error_code);
+    tree.working_directory = working_directory_error_code ? std::filesystem::path{} : working_directory;
+
+    const std::filesystem::path editor_root = std::filesystem::path{"res"} / std::filesystem::path{"editor"};
+    const std::filesystem::path assets_root = editor_root / std::filesystem::path{"assets"};
+    const std::filesystem::path scenes_root = editor_root / std::filesystem::path{"scenes"};
+
+    // Ensure the scenes directory exists so a fresh checkout does not log a scan
+    // warning and so saved scene files have a home (#241).
+    static_cast<void>(erhe::file::ensure_directory_exists(scenes_root));
+
+    // Synthetic root under which both the read-only glTF/geogram assets and the
+    // saved scene files are shown.
+    tree.root          = make_node(tree, editor_root, nullptr, {});
+    tree.root_path_key = make_path_key(tree, editor_root);
+
+    std::shared_ptr<Asset_node> assets_node = make_node(tree, assets_root, tree.root.get(), {});
+    scan_directory(tree, assets_root, assets_node.get());
+
+    std::shared_ptr<Asset_node> scenes_node = make_node(tree, scenes_root, tree.root.get(), {});
+    scan_directory(tree, scenes_root, scenes_node.get());
+}
+
+} // anonymous namespace
+
+auto Asset_browser::make_path_key(const std::filesystem::path& path) const -> std::string
+{
+    return editor::make_path_key(m_tree, path);
+}
+
+auto Asset_browser::find_node(const std::string& path_key) const -> std::shared_ptr<Asset_node>
+{
+    const std::map<std::string, std::weak_ptr<Asset_node>>::const_iterator i = m_tree.nodes_by_path.find(path_key);
+    if (i == m_tree.nodes_by_path.end()) {
+        return {};
+    }
+    return i->second.lock();
+}
+
+auto Asset_browser::make_node(
+    const std::filesystem::path&     path,
+    Asset_node* const                parent,
+    const std::optional<std::size_t> position
+) -> std::shared_ptr<Asset_node>
+{
+    return editor::make_node(m_tree, path, parent, position);
 }
 
 Asset_browser_window::Asset_browser_window(
@@ -156,8 +254,13 @@ Asset_browser_window::Asset_browser_window(
 
 void Asset_browser_window::imgui()
 {
+    m_asset_browser.apply_finished_scan();
     if (ImGui::Button("Scan")) {
         m_asset_browser.scan();
+    }
+    if (m_asset_browser.is_scan_in_flight()) {
+        ImGui::SameLine();
+        ImGui::TextUnformatted("Scanning...");
     }
     Item_tree_window::imgui();
 }
@@ -166,9 +269,11 @@ Asset_browser::Asset_browser(
     erhe::imgui::Imgui_renderer& imgui_renderer,
     erhe::imgui::Imgui_windows&  imgui_windows,
     App_context&                 context,
-    App_message_bus&             app_message_bus
+    App_message_bus&             app_message_bus,
+    tf::Executor&                executor
 )
-    : m_context{context}
+    : m_context {context}
+    , m_executor{executor}
 {
     ERHE_PROFILE_FUNCTION();
 
@@ -260,82 +365,60 @@ Asset_browser::Asset_browser(
     scan();
 }
 
-void Asset_browser::scan(const std::filesystem::path& path, Asset_node* parent)
-{
-    log_asset_browser->trace("Scanning {}", erhe::file::to_string(path));
-
-    std::error_code error_code;
-    auto directory_iterator = std::filesystem::directory_iterator{path, error_code};
-    if (error_code) {
-        log_asset_browser->warn(
-            "Scanning {}: directory_iterator() failed with error {} - {}",
-            erhe::file::to_string(path), error_code.value(), error_code.message()
-        );
-        return;
-    }
-    for (const auto& entry : directory_iterator) {
-        const bool is_directory = std::filesystem::is_directory(entry, error_code);
-        if (error_code) {
-            log_asset_browser->warn(
-                "Scanning {}: is_directory() failed with error {} - {}",
-                erhe::file::to_string(path), error_code.value(), error_code.message()
-            );
-            continue;
-        }
-
-        const bool is_regular_file = std::filesystem::is_regular_file(entry, error_code);
-        if (error_code) {
-            log_asset_browser->warn(
-                "Scanning {}: is_regular_file() failed with error {} - {}",
-                erhe::file::to_string(path), error_code.value(), error_code.message()
-            );
-            continue;
-        }
-        if (!is_directory && !is_regular_file) {
-            log_asset_browser->warn(
-                "Scanning {}: is neither regular file nor directory",
-                erhe::file::to_string(path)
-            );
-            continue;
-        }
-
-        auto asset_node = make_node(entry, parent);
-        if (is_directory) {
-            scan(entry, asset_node.get());
-        }
-    }
-}
-
 void Asset_browser::scan()
 {
-    std::error_code working_directory_error_code;
-    const std::filesystem::path working_directory = std::filesystem::current_path(working_directory_error_code);
-    m_working_directory = working_directory_error_code ? std::filesystem::path{} : working_directory;
-    m_nodes_by_path.clear();
+    if (m_scan_request) {
+        // A walk started moments ago reads the same directories this one would,
+        // so it is left to finish and its tree is the one that lands.
+        log_asset_browser->info("Asset browser: a scan is already in flight");
+        return;
+    }
+    std::shared_ptr<Asset_scan_request> request = std::make_shared<Asset_scan_request>();
+    m_scan_request = request;
+    erhe::task::spawn(
+        m_executor,
+        [request]() {
+            scan_asset_tree(request->tree);
+            request->finished.store(true, std::memory_order_release);
+        }
+    );
+}
 
-    const std::filesystem::path editor_root = std::filesystem::path{"res"} / std::filesystem::path{"editor"};
-    const std::filesystem::path assets_root = editor_root / std::filesystem::path{"assets"};
-    const std::filesystem::path scenes_root = editor_root / std::filesystem::path{"scenes"};
+void Asset_browser::apply_finished_scan()
+{
+    if (!m_scan_request || !m_scan_request->finished.load(std::memory_order_acquire)) {
+        return;
+    }
+    // The worker is done with the tree and the release/acquire pair publishes
+    // everything it built, so the move and everything after it is main-thread
+    // only.
+    m_tree = std::move(m_scan_request->tree);
+    m_scan_request.reset();
+    m_node_tree_window->set_root(m_tree.root);
 
-    // Ensure the scenes directory exists so a fresh checkout does not log a scan
-    // warning and so saved scene files have a home (#241).
-    static_cast<void>(erhe::file::ensure_directory_exists(scenes_root));
-
-    // Synthetic root under which both the read-only glTF/geogram assets and the
-    // saved scene files are shown.
-    m_root          = make_node(editor_root, nullptr);
-    m_root_path_key = make_path_key(editor_root);
-
-    std::shared_ptr<Asset_node> assets_node = make_node(assets_root, m_root.get());
-    scan(assets_root, assets_node.get());
-
-    std::shared_ptr<Asset_node> scenes_node = make_node(scenes_root, m_root.get());
-    scan(scenes_root, scenes_node.get());
-
-    m_node_tree_window->set_root(m_root);
+    std::vector<std::filesystem::path> pending_refresh_paths = std::move(m_pending_refresh_paths);
+    m_pending_refresh_paths.clear();
+    for (const std::filesystem::path& path : pending_refresh_paths) {
+        // Through refresh_file(), so a path is re-queued when one of these
+        // refreshes starts a new walk.
+        refresh_file(path);
+    }
 }
 
 void Asset_browser::refresh_file(const std::filesystem::path& path)
+{
+    apply_finished_scan();
+    if (m_scan_request) {
+        // A walk in flight replaces the whole tree, including anything a
+        // refresh would add to the current one; refresh against the tree that
+        // lands instead.
+        m_pending_refresh_paths.push_back(path);
+        return;
+    }
+    refresh_file_now(path);
+}
+
+void Asset_browser::refresh_file_now(const std::filesystem::path& path)
 {
     const std::chrono::steady_clock::time_point start_time = std::chrono::steady_clock::now();
 
@@ -343,7 +426,7 @@ void Asset_browser::refresh_file(const std::filesystem::path& path)
     const std::string   parent_key = make_path_key(path.parent_path());
     std::string_view    outcome{};
 
-    if (!m_root || m_root_path_key.empty() || !path_key.starts_with(m_root_path_key + "/")) {
+    if (!m_tree.root || m_tree.root_path_key.empty() || !path_key.starts_with(m_tree.root_path_key + "/")) {
         // The browser shows res/editor only; a scene saved elsewhere has no
         // node to add or refresh.
         outcome = "outside the asset browser roots, nothing to refresh";
@@ -358,7 +441,7 @@ void Asset_browser::refresh_file(const std::filesystem::path& path)
                 erhe::file::to_string(path), erhe::file::to_string(path.parent_path())
             );
             scan();
-            outcome = "full scan";
+            outcome = "full scan submitted";
         } else if (existing_node) {
             // Replaced rather than mutated: the node caches the file's scanned
             // glTF contents, which this write invalidates, and the replacement

@@ -39,6 +39,7 @@ Converted entry points:
 | Asset browser Import, MCP `import_gltf` | import into an existing scene |
 | Viewport drop, hierarchy drop, asset browser Instantiate, MCP `instantiate_prefab` | prefab template load |
 | Asset browser tooltip / context menu | `scan_gltf` on a worker |
+| Asset browser directory walk (startup and the Scan button) | the walk of `res/editor/assets` and `res/editor/scenes` builds a detached `Asset_tree` on a worker; the window moves it in on the main thread when the `Asset_scan_request` reports finished, and a scene save arriving before that is refreshed against the tree that lands |
 
 Still synchronous, deliberately: `Asset_manager::get_or_load_container`,
 `Prefab_library`'s nested external-asset resolution, MCP `reload_prefab` and

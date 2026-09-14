@@ -20,6 +20,7 @@
 #include <vector>
 
 namespace erhe::imgui { class Imgui_windows; }
+namespace tf { class Executor; }
 
 namespace editor {
 
@@ -179,6 +180,35 @@ public:
     [[nodiscard]] static constexpr auto get_static_type() -> uint64_t { return erhe::Item_type::asset_file_other; }
 };
 
+// One directory walk's result: the node tree the walk built and the path-key
+// index into it. Built by a worker, moved into the browser on the main thread.
+class Asset_tree
+{
+public:
+    // Working directory the (repo-relative) scan roots are resolved against,
+    // sampled once per walk so the path keys of one tree are all built alike.
+    std::filesystem::path                            working_directory;
+    // Path key of the synthetic root (res/editor): a saved file outside it is
+    // not shown by the browser and needs no refresh.
+    std::string                                      root_path_key;
+    std::shared_ptr<Asset_node>                      root;
+    // Every node of the tree by path key, so one saved file is found without
+    // walking the tree. Weak, so a replaced or removed node dies.
+    std::map<std::string, std::weak_ptr<Asset_node>> nodes_by_path;
+};
+
+// A directory walk in flight (R6 of doc/frame-time-after-usd-import-plan.md).
+// Walking res/editor/assets is thousands of stat() calls - 8.1 s in the
+// startup Tracy capture - so it runs on an executor worker: the walk touches
+// nothing but its own detached Asset_node objects, and the main thread moves
+// `tree` into the browser once `finished` is set.
+class Asset_scan_request
+{
+public:
+    std::atomic<bool> finished{false};
+    Asset_tree        tree;
+};
+
 class Asset_browser;
 
 class Asset_browser_window : public Item_tree_window
@@ -206,24 +236,36 @@ public:
         erhe::imgui::Imgui_renderer& imgui_renderer,
         erhe::imgui::Imgui_windows&  imgui_windows,
         App_context&                 context,
-        App_message_bus&             app_message_bus
+        App_message_bus&             app_message_bus,
+        tf::Executor&                executor
     );
 
+    // Submits a directory walk to the executor and returns; the tree the walk
+    // builds replaces the shown one at the next apply_finished_scan(). A walk
+    // already in flight is left to finish and this call does nothing.
     void scan();
 
-private:
-    void scan(const std::filesystem::path& path, Asset_node* parent);
+    // Moves a finished walk's tree in and refreshes the window's root. Called
+    // from the window's imgui() and from the scene-save refresh, so a save
+    // reaches the fresh tree even while the window is hidden. No-op when no
+    // walk is in flight or the one in flight has not landed.
+    void apply_finished_scan();
 
+    [[nodiscard]] auto is_scan_in_flight() const -> bool { return static_cast<bool>(m_scan_request); }
+
+private:
     // Change-driven refresh for one written file (#256): the freshly saved
     // scene file must appear in the browser without a manual Scan, and a full
     // scan() of both asset roots is far too slow to do on every save. Adds the
     // one node when the file is new, replaces it when it already had one (the
     // node caches scanned glTF contents, which the write invalidates), and
     // falls back to scan() only when the containing directory has no node yet.
-    // A path outside the browser's roots refreshes nothing.
+    // A path outside the browser's roots refreshes nothing. While a walk is in
+    // flight the path is queued and refreshed against the tree that lands.
     void refresh_file(const std::filesystem::path& path);
+    void refresh_file_now(const std::filesystem::path& path);
 
-    // Key under which a node is registered in m_nodes_by_path: the path made
+    // Key under which a node is registered in m_tree.nodes_by_path: the path made
     // absolute against the working directory the scan roots are relative to,
     // lexically normalized, with forward slashes. Both a repo-relative and an
     // absolute saved path map onto the same key.
@@ -231,7 +273,7 @@ private:
     [[nodiscard]] auto find_node    (const std::string& path_key) const -> std::shared_ptr<Asset_node>;
 
     // Creates the node for one directory entry, registers it in
-    // m_nodes_by_path and attaches it to parent. position selects the sibling
+    // m_tree.nodes_by_path and attaches it to parent. position selects the sibling
     // slot; an empty position appends, which is what a scan does.
     auto make_node    (const std::filesystem::path& path, Asset_node* parent, std::optional<std::size_t> position = {}) -> std::shared_ptr<Asset_node>;
     auto item_callback(const std::shared_ptr<erhe::Item_base>& item) -> bool;
@@ -279,20 +321,20 @@ private:
         bool&                               close
     );
 
-    App_context& m_context;
+    App_context&  m_context;
+    tf::Executor& m_executor;
 
-    std::shared_ptr<Asset_node>           m_root;
     std::shared_ptr<Asset_browser_window> m_node_tree_window;
 
-    // Working directory the (repo-relative) scan roots are resolved against,
-    // sampled once per scan() so the path keys of one tree are all built alike.
-    std::filesystem::path m_working_directory;
-    // Path key of the synthetic root (res/editor): a saved file outside it is
-    // not shown by the browser and needs no refresh.
-    std::string           m_root_path_key;
-    // Every node of the current tree by path key, so one saved file is found
-    // without walking the tree. Weak, so a replaced or removed node dies.
-    std::map<std::string, std::weak_ptr<Asset_node>> m_nodes_by_path;
+    // The tree the browser shows. Empty until the first walk lands.
+    Asset_tree m_tree;
+
+    // Non-null while a directory walk is in flight.
+    std::shared_ptr<Asset_scan_request> m_scan_request;
+
+    // Files saved while a walk was in flight: refreshed against the tree the
+    // walk lands, since that tree replaces whatever a refresh would touch now.
+    std::vector<std::filesystem::path> m_pending_refresh_paths;
 
     erhe::message_bus::Subscription<Scene_saved_message> m_scene_saved_subscription;
 };
