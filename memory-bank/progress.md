@@ -255,3 +255,9 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-3{233688d69;fork-22181bf3a-tag-14c:ComposeRelationshipTargets;erhe-instancer-skip-warning+sublayer-fixtures;teapotScene-1235-lost-instances->0;usd-405}
 ✓commit-4{3b211f211;fork-22af62ad7-tag-14d:inputs:st-float2;usdchecker-clean;roundtrip-413/416;usd-405}
 !left::tags-a..d-unpushed{user-pushes};ninja+headless-trees-carry-CPM_LightUSD_SOURCE-override->reconfigure-after-push
+
+[TASK::load-performance]{DONE-2026-09-14;plan-section-2;via-harness;3-coders+2-scouts}
+✓commit-1{004bc4fd8:Scene_root-shape-to-meshes-index;measured-null-alone}
+✓commit-2{18d269042:hover-gate=App_context::is_scene_load_in_flight;get_async_status.idle;headless-cannot-exercise-per-frame-hover}
+✓commit-3{721be3dca:deferred-finalize-commit-collects-sharers-only-on-swap{quadratic-refresh-was-the-cost};USD-phase-breadcrumbs;simpleAssetScene-340->203s,stalls-BVH-commit-39->0}
+?left::synchronous-load-on-tick-thread{plan-section-3-item-1-Asynchronous-load;simpleAssetScene-203s='usd: attach to scene'}
