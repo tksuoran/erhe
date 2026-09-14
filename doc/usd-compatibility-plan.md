@@ -813,6 +813,12 @@ at a time (C2).
 Each item is independent of the others except where named; section 3
 ranks them. A USD scene loads, edits and saves without any of them.
 
+- A card face with no image of its own borrows the opposite face's image
+  in `UsdImagingDrawModeAdapter` (`_GenerateTextureCoordinates`, the
+  `uv_flipped_s` / `uv_flipped_t` quads); erhe draws such a face flat in
+  the draw-mode color (C10). The borrowing is the per-face UV selection in
+  `draw_mode_cards.cpp` `card_uvs` plus the texture lookup falling back to
+  the opposite face.
 - Physics residue of P1:
   - A glTF export of `physics.usda`'s scene does not re-import: fastgltf
     rejects the file ("missing something or has invalid data") on the
