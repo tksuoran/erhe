@@ -38,6 +38,36 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 - All GPU buffers use the ring buffer pattern for lock-free multi-frame usage, except `Cube_instance_buffer` and `Glyph_buffer` which are static (uploaded once at init).
 - `Primitive_buffer` supports ID-based GPU picking by assigning unique ID offsets to each primitive.
 
+### When `Material_set::update()` writes
+
+`update()` writes a fresh copy of the whole record payload, and resets and
+repopulates the texture heap from it, when membership changed, when
+`invalidate()` was called (device-level events the materials know nothing
+about), or when any live slot's material reports a change serial other than
+the one recorded at that slot's last record write. Otherwise it returns and
+the copy bound this frame is the one already there.
+
+Every input a record is built from is a property of
+`erhe::primitive::Material`, and `Material::get_change_serial()` advances on
+every one of them, plus on a texture graph bake that lands a different texture
+behind a slot's `Texture_reference` (`Material` registers as a
+`Texture_reference_user` of the slots it holds). So the per-frame cost of a
+frame in which nothing was edited is one integer compare per live slot, and a
+material that was edited is detected without re-reading its 26 layered
+properties and five texture slots.
+
+`Material_slot::recorded_serial` is empty while the slot has never been
+written. A material's serial starts at zero, so "not yet written" cannot be
+spelled as a serial value; `allocate_slot()` clears it, which is what makes a
+slot handed to a new material gather on the next update.
+
+`Draw_list_scene::check_material_changes()` gates the same way on the same
+serial: it re-derives a watched material's shader-variant identity hash only
+when the serial moved, and re-registers the objects using a material whose
+hash then changed. The two are separate because they answer different
+questions - a record input change dirties the material buffer, while a
+shader-variant axis change moves an object between draw lists.
+
 ### The default material slot
 
 Slot `Material_set::default_material_slot_index` (0) is reserved: it is alive

@@ -60,11 +60,14 @@ public:
     bool     in_library {false};
     uint32_t use_count  {0};
 
-    // Hash of everything the GPU record is written from
-    // (doc/draw_list_material_set_plan.md D10). A change dirties the buffer.
-    // This is the material layer's own concern; shader-variant identity is the
-    // draw list's, and lives there.
-    uint64_t content_hash{0};
+    // The material's change serial as of the record write that last covered
+    // this slot. Empty while the slot has never been written - a freshly
+    // allocated or reused slot must be gathered whatever the material's serial
+    // happens to be, and a material's serial starts at zero, so "not yet
+    // written" cannot be spelled as a serial value. A serial that moved
+    // dirties the buffer. This is the material layer's own concern;
+    // shader-variant identity is the draw list's, and lives there.
+    std::optional<uint64_t> recorded_serial{};
 
     uint32_t generation {0};
     bool     alive      {false};
@@ -169,10 +172,12 @@ public:
     void sync_object_materials   (uint64_t object_key, std::span<const std::shared_ptr<erhe::primitive::Material>> materials);
     void release_object_materials(uint64_t object_key);
 
-    // Rehashes the live members and, if anything changed, writes a fresh copy
-    // of the whole record payload and repopulates the texture heap from it.
-    // Otherwise it returns after the hashing and the copy bound on every later
-    // frame is the one already there.
+    // Compares each live member's change serial with the one recorded at its
+    // last record write and, if any of them moved, writes a fresh copy of the
+    // whole record payload and repopulates the texture heap from it. Otherwise
+    // it returns after the compares and the copy bound on every later frame is
+    // the one already there: a frame in which no material changed costs one
+    // integer compare per live slot and nothing else.
     //
     // Call once per frame, after sync_library() and flush_pending() have
     // settled membership: the slots a record can name this frame must all be
@@ -186,8 +191,8 @@ public:
     auto bind  (erhe::graphics::Compute_command_encoder& encoder) -> bool;
     void unbind(erhe::graphics::Command_buffer& command_buffer);
 
-    // Forces the next update() to rewrite, for changes no content hash can
-    // see (device loss, an externally rebuilt heap).
+    // Forces the next update() to rewrite, for changes no material's change
+    // serial can see (device loss, an externally rebuilt heap).
     void invalidate();
 
     [[nodiscard]] auto has_gpu() const -> bool;

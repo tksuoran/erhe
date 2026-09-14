@@ -117,19 +117,23 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     ERHE_PROFILE_FUNCTION();
     ERHE_VERIFY(m_gpu);
 
-    // Hash every live member, always. This is what catches a Material_data
-    // field written straight through the object - the colour picker drag, the
-    // MCP edit_material tool - with no notification of any kind, which is the
-    // failure a version counter cannot see.
+    // One integer compare per live member. Every write to what a record is
+    // built from advances the material's change serial - the colour picker
+    // drag and the MCP edit_material tool go through Material's setters and so
+    // through on_property_changed, and a texture graph bake that lands a
+    // different texture behind a slot's reference notifies the material - so a
+    // serial that did not move means the record this slot already carries is
+    // still the record write_records() would produce.
     bool dirty = m_gpu->force_dirty || m_membership_dirty;
-    for (Material_slot& slot : m_materials) {
-        if (!slot.alive || (slot.material == nullptr)) {
-            continue;
-        }
-        const uint64_t content_hash = m_gpu->material_buffer.get_content_hash(slot.material.get());
-        if (content_hash != slot.content_hash) {
-            slot.content_hash = content_hash;
-            dirty = true;
+    if (!dirty) {
+        for (const Material_slot& slot : m_materials) {
+            if (!slot.alive || (slot.material == nullptr)) {
+                continue;
+            }
+            if (slot.recorded_serial != slot.material->get_change_serial()) {
+                dirty = true;
+                break;
+            }
         }
     }
     if (!dirty) {
@@ -143,10 +147,17 @@ void Material_set::update(erhe::graphics::Command_buffer& command_buffer)
     ERHE_VERIFY(slot_count >= first_material_slot_index); // the reserved default slots are always live
     m_gpu->slot_materials.clear();
     m_gpu->slot_materials.resize(slot_count, nullptr);
+    // The write below covers every slot, so every live slot's serial is
+    // recorded here - including the ones whose material did not change and the
+    // ones allocated since the previous write.
     for (std::size_t i = 0; i < slot_count; ++i) {
-        const Material_slot& slot = m_materials[i];
-        if (slot.alive) {
-            m_gpu->slot_materials[i] = slot.material.get();
+        Material_slot& slot = m_materials[i];
+        if (!slot.alive) {
+            continue;
+        }
+        m_gpu->slot_materials[i] = slot.material.get();
+        if (slot.material != nullptr) {
+            slot.recorded_serial = slot.material->get_change_serial();
         }
     }
 
@@ -210,9 +221,10 @@ auto Material_set::allocate_slot(const std::shared_ptr<erhe::primitive::Material
     slot.in_library = false;
     slot.use_count  = 0;
     slot.alive        = true;
-    // A reused slot must not carry the previous occupant's hash into the
-    // first update after the reuse.
-    slot.content_hash = 0;
+    // A reused slot must not carry the previous occupant's recorded serial
+    // into the first update after the reuse, and a slot that has never been
+    // written must be gathered whatever serial its material carries.
+    slot.recorded_serial.reset();
     m_index_by_material.emplace(material.get(), index);
     m_membership_dirty = true;
     return index;

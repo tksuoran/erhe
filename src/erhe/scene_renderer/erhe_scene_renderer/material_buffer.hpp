@@ -102,17 +102,13 @@ public:
 
 // Everything one material record is written from, and nothing else.
 //
-// The record writer and the content hash (doc/draw_list_material_set_plan.md
-// D10) both read this struct and only this struct, so the hash covers exactly
-// the bytes the writer reads by construction rather than by a comment asking
-// two lists to be kept in step. A field that dirties the buffer is a field
-// that appears here; a material field that does not - the shader-variant axes
-// (blending mode, double_sided, normalmap encoding, the texgen modes,
-// use_aniso_control) - reaches the shader by another route and is the draw
-// list's identity hash to notice.
-//
-// Value-initialization zeroes padding as well as members, which is what makes
-// hashing the whole object well defined.
+// The record writer reads this struct and only this struct. A field that
+// dirties the buffer is a field that appears here; a material field that does
+// not - the shader-variant axes (blending mode, double_sided, normalmap
+// encoding, the texgen modes, use_aniso_control) - reaches the shader by
+// another route and is the draw list's identity hash to notice. Which of the
+// two a change belongs to is decided by that split; that a change happened at
+// all is what erhe::primitive::Material's change serial reports.
 class Material_record_inputs
 {
 public:
@@ -158,8 +154,8 @@ private:
 
 // Resolves a material to its record inputs. Texture references are resolved
 // here, so a re-baked editor Graph_texture yields a different Texture pointer
-// and therefore both a different record and a different content hash; the
-// slot sampler states resolve through the cache the same way.
+// and therefore a different record; the slot sampler states resolve through
+// the cache the same way.
 [[nodiscard]] auto gather_material_record_inputs(
     const erhe::primitive::Material& material,
     Material_sampler_cache&          sampler_cache
@@ -212,10 +208,6 @@ public:
         std::span<const erhe::primitive::Material* const> slot_materials
     );
 
-    // Hash of everything write_records() reads for this material (D10). Both
-    // go through gather_material_record_inputs(), so neither can drift from
-    // the other.
-    [[nodiscard]] auto get_content_hash    (const erhe::primitive::Material* material) const -> uint64_t;
     [[nodiscard]] auto get_record_byte_count() const -> std::size_t;
 
 private:
@@ -229,9 +221,7 @@ private:
     erhe::graphics::Device& m_graphics_device;
     Material_interface&     m_material_interface;
 
-    // Mutable: get_content_hash is a read of the material, and a state seen
-    // for the first time there creates its sampler like write_records would.
-    mutable Material_sampler_cache m_sampler_cache;
+    Material_sampler_cache m_sampler_cache;
 };
 
 } // namespace erhe::scene_renderer

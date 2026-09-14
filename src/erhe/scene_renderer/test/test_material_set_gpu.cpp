@@ -35,6 +35,7 @@
 
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -338,11 +339,10 @@ TEST_F(Material_set_gpu_test, clean_update_writes_nothing)
     EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
 }
 
-// V2.8. R5, and the reason invalidation is a content hash rather than a
-// version counter: this edit goes straight through the Material object with no
-// notification of any kind, exactly as a colour-picker drag and the MCP
-// edit_material tool do. A version-counter implementation passes every other
-// test here and fails this one.
+// V2.8. R5: an edit through the Material object, exactly as a colour-picker
+// drag and the MCP edit_material tool do it. Every such write is a property
+// write and so advances the material's change serial, which is what the next
+// update() compares against.
 TEST_F(Material_set_gpu_test, material_data_edit_dirties_the_set)
 {
     const std::shared_ptr<Material> material = make_material("Material", glm::vec3{1.0f, 0.0f, 0.0f});
@@ -362,11 +362,8 @@ TEST_F(Material_set_gpu_test, material_data_edit_dirties_the_set)
     EXPECT_EQ(base_color.b, 1.0f);
 }
 
-// V2.9. The Graph_texture re-bake shape: the material is untouched, but the
-// texture its reference resolves to is a different object. The hash reads the
-// resolved texture pointer, so the set dirties without the texture graph
-// knowing material state exists.
-TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
+// V2.9. Swapping the texture a slot holds is a property write like any other.
+TEST_F(Material_set_gpu_test, texture_slot_write_dirties_the_set)
 {
     const std::shared_ptr<Material> material = make_material("Material", glm::vec3{1.0f, 0.0f, 0.0f});
 
@@ -380,7 +377,7 @@ TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
     );
     // Texture is itself a Texture_reference that returns itself, which is the
     // plain case; a Graph_texture is the one that returns a different object
-    // after a re-bake, and swapping the reference is that shape.
+    // after a re-bake, which V2.9b covers.
     material->set_base_color_texture(texture_a);
 
     Material_set set{make_create_info("set")};
@@ -393,6 +390,89 @@ TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
 
     update(set);
     EXPECT_GT(set.get_write_count(), after_first);
+}
+
+// V2.9b. The Graph_texture re-bake shape: no property of the material is
+// written, but the texture its reference resolves to is a different object.
+// The material is told (erhe::graphics::Texture_reference_user, which
+// Graph_texture calls when a bake lands) and advances its change serial, so
+// the set dirties without the texture graph knowing material state exists.
+TEST_F(Material_set_gpu_test, texture_rebake_dirties_the_set)
+{
+    const std::shared_ptr<Material> material = make_material("Material", glm::vec3{1.0f, 0.0f, 0.0f});
+
+    Material_set set{make_create_info("set")};
+    const Material_list library{material};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{library});
+    update(set);
+    const std::size_t after_first = set.get_write_count();
+
+    update(set);
+    ASSERT_EQ(set.get_write_count(), after_first);
+
+    material->notify_texture_rebaked();
+
+    update(set);
+    EXPECT_GT(set.get_write_count(), after_first);
+}
+
+// V2.9c. The steady state the change serial exists for: one write for the
+// edit, and then nothing for as long as nothing is edited. A set that
+// re-derived per frame would keep this at one write per edit too; what it
+// would not do is leave the per-frame cost at one compare per slot.
+TEST_F(Material_set_gpu_test, only_a_change_writes)
+{
+    const std::shared_ptr<Material> first  = make_material("First",  glm::vec3{1.0f, 0.0f, 0.0f});
+    const std::shared_ptr<Material> second = make_material("Second", glm::vec3{0.0f, 1.0f, 0.0f});
+
+    Material_set set{make_create_info("set")};
+    const Material_list library{first, second};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{library});
+    update(set);
+    const std::size_t after_first = set.get_write_count();
+
+    for (int i = 0; i < 4; ++i) {
+        update(set);
+    }
+    ASSERT_EQ(set.get_write_count(), after_first);
+
+    second->set_roughness(glm::vec2{0.25f, 0.25f});
+    update(set);
+    const std::size_t after_edit = set.get_write_count();
+    EXPECT_EQ(after_edit, after_first + 1);
+
+    for (int i = 0; i < 4; ++i) {
+        update(set);
+    }
+    EXPECT_EQ(set.get_write_count(), after_edit);
+    EXPECT_EQ(read_base_color(set, 2u).r, 1.0f);
+}
+
+// A slot handed to a new material must be gathered on the next update whatever
+// change serial that material carries - a material's serial starts at zero, so
+// "this slot has never been written" is not a serial value.
+TEST_F(Material_set_gpu_test, reused_slot_is_written_for_its_new_material)
+{
+    const std::shared_ptr<Material> first  = make_material("First",  glm::vec3{1.0f, 0.0f, 0.0f});
+    const std::shared_ptr<Material> second = make_material("Second", glm::vec3{0.0f, 1.0f, 0.0f});
+
+    Material_set set{make_create_info("set")};
+    const Material_list list_1{first};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{list_1});
+    update(set);
+    const std::optional<uint32_t> slot = set.get_slot(first.get());
+    ASSERT_TRUE(slot.has_value());
+
+    // First leaves the set; second takes the slot it freed, with an untouched
+    // change serial of its own.
+    const Material_list empty{};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{empty});
+    const Material_list list_2{second};
+    set.sync_library(std::span<const std::shared_ptr<Material>>{list_2});
+    ASSERT_EQ(set.get_slot(second.get()), slot);
+
+    update(set);
+    EXPECT_EQ(read_base_color(set, slot.value()).g, 1.0f);
 }
 
 // V2.10. The membership dirty edge reaches the GPU write in both directions.
@@ -439,7 +519,7 @@ TEST_F(Material_set_gpu_test, material_set_alone_updates_and_binds)
     EXPECT_FLOAT_EQ(base_color.b, 0.75f);
 }
 
-// invalidate() forces a rewrite for the changes no content hash can see.
+// invalidate() forces a rewrite for the changes no change serial can see.
 TEST_F(Material_set_gpu_test, invalidate_forces_a_rewrite)
 {
     const std::shared_ptr<Material> material = make_material("Material", glm::vec3{1.0f, 0.0f, 0.0f});

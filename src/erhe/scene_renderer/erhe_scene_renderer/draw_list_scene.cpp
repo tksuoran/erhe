@@ -770,9 +770,16 @@ void Draw_list_scene::sync_object_materials(const uint32_t object_index)
     }
 
     // Identity hashes for check_material_changes(); a material this object is
-    // the first to use gets its baseline here.
+    // the first to use gets its baseline here, at the serial it was derived
+    // at.
     for (const std::shared_ptr<erhe::primitive::Material>& material : materials) {
-        m_material_identity_hashes.try_emplace(material.get(), material_identity_hash(material.get()));
+        m_material_identity_hashes.try_emplace(
+            material.get(),
+            Material_identity{
+                .hash   = material_identity_hash(material.get()),
+                .serial = material->get_change_serial()
+            }
+        );
     }
 }
 
@@ -793,17 +800,26 @@ void Draw_list_scene::check_material_changes()
     // and dereferences nothing, which is what makes this safe to do here
     // rather than at the moment the reference was dropped.
     for (
-        std::unordered_map<const erhe::primitive::Material*, uint64_t>::iterator i = m_material_identity_hashes.begin();
+        std::unordered_map<const erhe::primitive::Material*, Material_identity>::iterator i = m_material_identity_hashes.begin();
         i != m_material_identity_hashes.end();
     ) {
         i = m_material_set.find(i->first).is_valid() ? std::next(i) : m_material_identity_hashes.erase(i);
     }
 
+    // A Shader_key derivation per watched material per frame is what this used
+    // to cost. Every input the derivation reads is a property of the material,
+    // and every write to one advances its change serial, so an entry whose
+    // serial did not move still carries the hash the derivation would produce.
     std::vector<const erhe::primitive::Material*> changed;
-    for (std::unordered_map<const erhe::primitive::Material*, uint64_t>::value_type& entry : m_material_identity_hashes) {
+    for (std::unordered_map<const erhe::primitive::Material*, Material_identity>::value_type& entry : m_material_identity_hashes) {
+        const uint64_t serial = entry.first->get_change_serial();
+        if (serial == entry.second.serial) {
+            continue;
+        }
+        entry.second.serial = serial;
         const uint64_t hash = material_identity_hash(entry.first);
-        if (hash != entry.second) {
-            entry.second = hash;
+        if (hash != entry.second.hash) {
+            entry.second.hash = hash;
             changed.push_back(entry.first);
         }
     }

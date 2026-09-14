@@ -65,7 +65,7 @@ Reproduction: the capture recipe of section 4.
 
 Each step is one commit. The verification of every step is section 4.
 
-### Step 1: material change serial and a closed `Material::data`
+### Step 1: material change serial and a closed `Material::data` (landed, 350943536)
 
 `erhe::primitive::Material` gains `get_change_serial() -> uint64_t`, a
 counter that `on_property_changed` advances for every property of the

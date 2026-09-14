@@ -260,6 +260,17 @@ private:
         uint64_t                           flag_bits {0};
     };
 
+    // One watched material's shader-variant identity and the change serial it
+    // was derived at. check_material_changes() re-derives only where the
+    // serial moved, so a frame in which no material changed costs one integer
+    // compare per watched material.
+    class Material_identity
+    {
+    public:
+        uint64_t hash  {0};
+        uint64_t serial{0};
+    };
+
     // D1d: set_exclude_unlit_from_shadows() is reached from inside the
     // rendergraph, after this frame's Material_set::update(), so its rebuild
     // is deferred to the next flush.
@@ -295,8 +306,9 @@ private:
     // R12 material-content edits: identity hash = Shader_key{}.derive(material,
     // nullptr, false).get_hash(), i.e. exactly the material-derived key
     // components. Watched per distinct registered material (use-counted);
-    // check_material_changes() runs in flush_pending() and re-registers every
-    // object using a material whose hash changed.
+    // check_material_changes() runs in flush_pending(), re-derives the hash of
+    // a watched material only when its change serial moved, and re-registers
+    // every object using a material whose hash changed.
     // Membership of this object's materials in this draw list's Material_set,
     // taken BEFORE any record write (R3, D1a). sync_object_materials applies
     // the DIFFERENCE between the object's previous and current material lists,
@@ -361,12 +373,13 @@ private:
     // Material reassignments that took the cheap path (D11).
     std::size_t                                                      m_material_slot_update_count{0};
 
-    // Shader-variant identity of each material any registered object uses.
+    // Shader-variant identity of each material any registered object uses,
+    // with the material's change serial as of the derivation that produced it.
     // NOT the material set's concern: a change here re-registers objects
     // (their draw list identity may have moved), while a change to what a
     // record is written from only dirties the material buffer. Conflating the
     // two would re-register the world on every colour tweak.
-    std::unordered_map<const erhe::primitive::Material*, uint64_t>   m_material_identity_hashes;
+    std::unordered_map<const erhe::primitive::Material*, Material_identity> m_material_identity_hashes;
 
     std::size_t                                                      m_material_change_count{0};
 

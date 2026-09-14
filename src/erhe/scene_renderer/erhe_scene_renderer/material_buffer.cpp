@@ -10,7 +10,6 @@
 #include "erhe_graphics/span.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_graphics/texture_heap.hpp"
-#include "erhe_hash/hash.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene_renderer/scene_renderer_log.hpp"
 #include "erhe_profile/profile.hpp"
@@ -227,15 +226,6 @@ Material_buffer::Material_buffer(erhe::graphics::Device& graphics_device, Materi
 auto Material_buffer::get_record_byte_count() const -> std::size_t
 {
     return m_material_interface.material_struct.get_size_bytes();
-}
-
-auto Material_buffer::get_content_hash(const erhe::primitive::Material* material) const -> uint64_t
-{
-    if (material == nullptr) {
-        return 0;
-    }
-    const Material_record_inputs inputs = gather_material_record_inputs(*material, m_sampler_cache);
-    return erhe::hash::hash(&inputs, sizeof(inputs));
 }
 
 void Material_buffer::write_record(
