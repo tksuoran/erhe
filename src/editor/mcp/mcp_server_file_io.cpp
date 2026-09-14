@@ -128,14 +128,14 @@ auto Mcp_server::action_close_scene(const json& args) -> std::string
         r["isError"] = true;
         return r.dump();
     }
-    // Queue the close (same path as the Scene row's Close context menu entry):
-    // the teardown destroys ImGui windows, so it runs from the message bus pump
-    // on a following frame, outside ImGui iteration.
-    m_context.app_message_bus->close_scene.queue_message(
-        Close_scene_message{
-            .scene_root = std::dynamic_pointer_cast<Scene_root>(sr->shared_from_this())
-        }
-    );
+    // Same path as the Scene row's Close context menu entry: the close is
+    // queued to the message bus and runs on a following frame. A scene whose
+    // close is already pending is refused here, at the request.
+    if (!sr->request_close(*m_context.app_message_bus)) {
+        json r = make_text_content("Scene close already pending: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
     return make_json_content({
         {"queued",     true},
         {"scene_name", sr->get_name()}
@@ -222,13 +222,16 @@ auto Mcp_server::action_reset_editor_state(const json& args) -> std::string
         }
     }
 
-    // Scenes: queue the close of every one (the Close context menu path, see
-    // action_close_scene) and defer this request until they are gone.
+    // Scenes: request the close of every one (the Close context menu path,
+    // see action_close_scene) and defer this request until they are gone. A
+    // scene whose close is already pending (an earlier close_scene call)
+    // closes from that request; it is still waited for below.
     int scenes_closing = 0;
     if ((m_context.app_scenes != nullptr) && (m_context.app_message_bus != nullptr)) {
         for (const std::shared_ptr<Scene_root>& scene_root : m_context.app_scenes->get_scene_roots()) {
-            m_context.app_message_bus->close_scene.queue_message(Close_scene_message{.scene_root = scene_root});
-            ++scenes_closing;
+            if (scene_root->is_close_requested() || scene_root->request_close(*m_context.app_message_bus)) {
+                ++scenes_closing;
+            }
         }
     }
     log_mcp->info(

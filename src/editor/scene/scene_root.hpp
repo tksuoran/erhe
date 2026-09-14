@@ -216,6 +216,15 @@ public:
 
     void register_to_editor_scenes    (App_scenes& app_scenes);
     void unregister_from_editor_scenes(App_scenes& app_scenes);
+    // The one way to close a scene: queues the Close_scene_message that
+    // Editor::on_close_scene tears the scene down from (the teardown destroys
+    // ImGui windows, so it runs from the message bus pump on a following
+    // frame, outside ImGui iteration). Returns false, queuing nothing, when a
+    // close is already pending or the scene is not registered - a second
+    // request would otherwise reach the teardown a second time after the
+    // scene has already been unregistered.
+    [[nodiscard]] auto request_close(App_message_bus& app_message_bus) -> bool;
+    [[nodiscard]] auto is_close_requested() const -> bool { return m_close_requested; }
     // Clears this scene_root's registration state without touching the
     // App_scenes registry. Called by ~App_scenes while it tears down its
     // own list, so that the later ~Scene_root does not try to unregister
@@ -484,6 +493,7 @@ private:
     std::vector<std::string>                        m_usd_sublayers;
     Usd_time_code_record                            m_usd_time_codes;
     bool                                            m_is_registered{false};
+    bool                                            m_close_requested{false};
 
     // Applies wind forces to wind-receptive dynamic bodies; called once per
     // fixed step from update_physics_simulation_fixed_step() before the world

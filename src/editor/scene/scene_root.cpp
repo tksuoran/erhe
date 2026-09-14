@@ -1166,11 +1166,7 @@ auto Scene_root::make_browser_window(
                 return;
             }
             if (ImGui::MenuItem("Close")) {
-                context.app_message_bus->close_scene.queue_message(
-                    Close_scene_message{
-                        .scene_root = std::dynamic_pointer_cast<Scene_root>(shared_from_this())
-                    }
-                );
+                static_cast<void>(request_close(*context.app_message_bus));
                 close = true;
             }
         }
@@ -1250,6 +1246,25 @@ void Scene_root::register_to_editor_scenes(App_scenes& app_scenes)
     m_app_scenes = &app_scenes;
     app_scenes.register_scene_root(shared_from_this());
     m_is_registered = true;
+}
+
+auto Scene_root::request_close(App_message_bus& app_message_bus) -> bool
+{
+    if (!m_is_registered) {
+        log_scene->warn("Close of scene '{}' refused: the scene is not registered", get_name());
+        return false;
+    }
+    if (m_close_requested) {
+        log_scene->warn("Close of scene '{}' refused: a close is already pending", get_name());
+        return false;
+    }
+    m_close_requested = true;
+    app_message_bus.close_scene.queue_message(
+        Close_scene_message{
+            .scene_root = std::dynamic_pointer_cast<Scene_root>(shared_from_this())
+        }
+    );
+    return true;
 }
 
 void Scene_root::unregister_from_editor_scenes(App_scenes& app_scenes)
