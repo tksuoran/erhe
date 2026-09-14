@@ -243,3 +243,7 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓step-4d-values-through-variants+arcs{192d5a22b:erhe::scene::register_applied_schema_attachment{class,owner-type,factory}->find_override_property_target-materializes-Draw_mode-on-opinion;link_carrier_attachments_to_target{carrier-attachment-set_reference(target's);no-local-clearing};card-texture-relative-text-resolved-vs-authoring-file;DrawModes:colored-bounds/origin+textured-cards;survey-row=works,storm_match-0.16}
 ✓step-4e{3bc9c275d:card-face-alpha_test-cutoff-0.1{adapter-opacityThreshold};inactive-prim-owns-no-proxy{handle_flag_bits_update};survey-row-works-storm_match-0.18;residual=Storm/usdrecord-draws-bounds/origin-as-filled-slabs-vs-usdview-lines}
   ITEM-DONE-2026-09-13{plan-section-2-C7+C8+C9+C10;section-3-item-removed;queue-item-removed}|?user-interactive{open-DrawModes.usd-windowed:5-rows-match-reference;Properties-Draw_mode-rows;variant-combo-nested-sets;pick-a-card->selects-model-prim}
+
+[TASK::asset-browser-two-phase-scan]{DONE-2026-09-14;c5d81a1d9;via-harness;1-coder}
+✓step-1{Asset_walk-worker+Asset_scan_entry{path,parent_path_key,Asset_node_kind}+apply_scan_progress;headless:7-publish-lines-~50ms-apart+save-refresh-node-added}
+?user-interactive{tree-visible-while-Scanning...;hover-peek}
