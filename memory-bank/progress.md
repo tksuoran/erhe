@@ -215,6 +215,16 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-3{fbd21f60c:Ts-splines-on-intensity/roughness/metallic/opacity<->CUBICSPLINE;hermite-write-back;attribute_splines.usda;usd-tests-351->358;headless+usdchecker-verified}
   plan-section-2-statement+section-6-entry-dropped;prompt_queue.txt-deleted|?user-interactive
 
+[TASK::frame-time-after-usd-import]{doc/frame-time-after-usd-import-plan.md;via-harness;started-2026-09-14}
+!cause::tracy-D:\erhe.tracy{post-DrawModes-import-tick-128-150ms:update_material_sets-104-124ms{Material_set::update-hashed-every-material-every-frame-x3-sets;Material::get_values=26-layered-property-reads}+check_material_changes-12-15ms{Shader_key-derive-per-material-per-frame};import-tick-30.5s{load_usd_prefab_template-35x-16s+rebuild_display_colors-13s-main-thread};Asset_browser-ctor-8.1s-walks-res/editor/assets}
+✓step-1{350943536:Material::get_change_serial+data-private-get_data()+Texture_reference_user{Graph_texture-notifies-on-rebake};all-direct-data-writers-moved-to-setters}
+✓step-2{005dd0756:Material_slot::recorded_serial-optional;update()-gates-on-serial;check_material_changes-re-derives-only-on-serial-move;get_content_hash-gone;MEASURED:tick-6.1ms-median,update_material_sets-0.47ms,check_material_changes-0.04ms}
+✓step-3{372309b97:Prefab_key=consumed-variant-sets-only{Prefab::consumed_variant_sets;reduce_variant_selections;self-correcting-reload};Prefab_instance-keeps-full-arc-selection;35->25-templates,16s->10.4s;internal-arc-premise-was-false{siblings-already-share-key};roundtrip-413/416-baseline}
+✓step-4{c46021a4e:rebuild_display_colors=kickoff;Display_color_build-grouped-by(geometry|soup,color,normal_style,skinned)->one-task-per-group-via-async_for_nodes_with_mesh;worker-builds+Scene_commit_queue-swap;host-check-at-commit;sync-path-kept-for-no-worker-contexts;MEASURED:13.1s->0.42ms-worst-call,7-builds-on-workers;FOUND-preexisting:second-close_scene-of-closed-scene-aborts-at-Scene_root::unregister_from_editor_scenes-VERIFY}
+✓step-5{8ae7796d6:Asset_tree+Asset_scan_request{Gltf_scan_request-shape};scan()-submits-to-tf::Executor{explicit-ctor-arg};apply_finished_scan-on-main{imgui()+refresh_file};pending-refresh-paths-queued;MEASURED:ctor-8.1s->0.12ms,walk-7.7s-on-worker}
+  PLAN-DONE-2026-09-14{5-commits;post-import-tick-128-150ms->6ms;import-tick-30.5s->12.5s;left=per-file-USD-stage-cache{25-parses->1-per-file,plan-step-3-note}+preexisting-double-close_scene-abort}|?user-interactive{DrawModes-import-windowed;material-edit-live;texture-graph-bake-updates-material;Asset-Browser-populates-after-startup}
+!trap::erhe_scene_renderer_gpu_tests-needs-live-display{aborts-exit-3-after-env-set-up-when-display-asleep;not-a-code-failure}
+
 [TASK::drawmodes-fidelity]{plan-section-3-item-1;via-harness;started-2026-09-13}
 ✓camera-exposure-stop{3f93df1e3:import-2^stop,export-log2;capture-no-longer-black;usd-tests-360}
 ✓step-1-arc-carried-variant-selection{daa4f7fc9-erhe::usd+30c2fba97-editor;C7;usd-tests-366;headless:references_variants.usda+DrawModes.usd-7-templates;roundtrip-411/414}
