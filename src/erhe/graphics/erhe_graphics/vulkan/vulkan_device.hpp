@@ -250,6 +250,7 @@ public:
     [[nodiscard]] auto get_shader_monitor                 () -> Shader_monitor&;
     [[nodiscard]] auto get_info                           () const -> const Device_info&;
     [[nodiscard]] auto get_graphics_config                () const -> const Graphics_config&;
+    [[nodiscard]] auto is_validation_layer_enabled        () const -> bool;
     [[nodiscard]] auto get_memory_budget                  () const -> Memory_budget;
     [[nodiscard]] auto get_allocator                      () -> VmaAllocator&;
     // Allocator to use for a buffer with the given usage. Buffers that carry

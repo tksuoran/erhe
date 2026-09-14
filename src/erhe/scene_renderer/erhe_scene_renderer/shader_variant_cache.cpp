@@ -46,12 +46,12 @@ auto Shader_variant_cache::get(
     // check ("no Shader_variant_cache::get() compile-on-miss in the first
     // 5 frames") can be verified by grepping logs/log.txt for this line.
     // The key description shows which variant axes drove the miss, so
-    // gaps in the prewarm walk can be identified without re-instrumenting.
-    log_startup->info(
-        "Shader_variant_cache miss: compiling new variant (entries now {}). Key:\n{}",
-        m_entries.size() + 1,
-        shader_key.describe()
-    );
+    // gaps in the prewarm walk can be identified without re-instrumenting;
+    // it is a multi-line dump, so it is emitted at trace level only.
+    log_startup->info("Shader_variant_cache miss: compiling new variant (entries now {})", m_entries.size() + 1);
+    if (log_startup->should_log(spdlog::level::trace)) {
+        log_startup->trace("Shader_variant_cache miss key:\n{}", shader_key.describe());
+    }
 
     erhe::graphics::Shader_stages_create_info create_info{
         .name          = "standard",

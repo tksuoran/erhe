@@ -36,11 +36,17 @@ auto create_shader_module(
         .pCode    = spirv.data()
     };
 
-    // Logged at info level (rather than debug) so that when the
-    // validation layer rejects a shader inside vkCreateShaderModule
-    // and we abort, this line is the immediately-preceding entry in
-    // logcat and identifies which shader / stage tripped the validator.
-    log_program->info("Creating shader module: {} {}", shader_name, stage_name);
+    // With the validation layer enabled, a shader it rejects aborts inside
+    // vkCreateShaderModule, before the error path below can name it. This
+    // line is then the immediately-preceding log entry and identifies which
+    // shader / stage tripped the validator, so it is logged at info level
+    // whenever the layer is on. Without the layer, a failure returns and is
+    // named by the error below, so the line is trace-only.
+    if (device.get_impl().is_validation_layer_enabled()) {
+        log_program->info("Creating shader module: {} {}", shader_name, stage_name);
+    } else {
+        log_program->trace("Creating shader module: {} {}", shader_name, stage_name);
+    }
 
     VkShaderModule shader_module = VK_NULL_HANDLE;
     VkResult result = vkCreateShaderModule(vulkan_device, &create_info, nullptr, &shader_module);

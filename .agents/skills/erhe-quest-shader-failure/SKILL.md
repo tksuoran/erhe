@@ -14,7 +14,7 @@ $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe logcat -d -v time \
   | grep -E "Creating shader module|VALIDATION ERROR|Abort message|spirv-val produced"
 ```
 
-`erhe::graphics::Shader_stages_impl::create_shader_module` logs `Creating shader module: <name> <stage>` at info level immediately before each `vkCreateShaderModule` call (see `vulkan_shader_stages.cpp`). The **last** such log line preceding the `VALIDATION ERROR` is the shader+stage that tripped the validator. Example:
+`erhe::graphics::Shader_stages_impl::create_shader_module` logs `Creating shader module: <name> <stage>` immediately before each `vkCreateShaderModule` call - at info level while the validation layer is enabled (the case this skill triages), at trace level otherwise (see `vulkan_shader_stages.cpp`). The **last** such log line preceding the `VALIDATION ERROR` is the shader+stage that tripped the validator. Example:
 
 ```
 [I] Creating shader module: visualize_depth fragment

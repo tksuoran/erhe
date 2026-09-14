@@ -1393,6 +1393,11 @@ auto Device_impl::get_graphics_config() const -> const Graphics_config&
     return m_graphics_config;
 }
 
+auto Device_impl::is_validation_layer_enabled() const -> bool
+{
+    return m_instance_layers.m_VK_LAYER_KHRONOS_validation;
+}
+
 auto Device_impl::get_allocator() -> VmaAllocator&
 {
     return m_vma_allocator;
