@@ -601,8 +601,11 @@ public:
 // One parameter of a graph node: an `inputs:<name>` attribute carrying a
 // value. `usd_type` is one of `float`, `int`, `bool`, `token`,
 // `string`, `float2`, `color3f`, `color4f`, and `value` is the USD literal
-// spelling of the value in that type (`1.5`, `3`, `true`, `"name"`,
-// `(1, 2)`, `(0.1, 0.2, 0.3)`). A type with no USD form - a gradient, a
+// spelling of the value in that type (`1.5`, `3`, `true`, `(1, 2)`,
+// `(0.1, 0.2, 0.3)`) - except a `string` and a `token`, which carry their own
+// text with no quotes around it, so a text of any content crosses verbatim and
+// the USDA quoting and escaping stays inside erhe::usd. A type with no USD
+// form - a gradient, a
 // curve - travels as its D16 text in a `string`, which is one rule for both:
 // erhe::usd needs no node vocabulary (R6), so the caller decides the mapping
 // and the writer authors exactly the (type, text) pair it is given.

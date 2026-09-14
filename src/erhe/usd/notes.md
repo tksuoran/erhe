@@ -773,18 +773,21 @@ The format is read before the children for that reason. The tokens are
   `outputs:` attribute is an output pin. So a pin without a link is still in
   the file, as the typed attribute alone.
 - A parameter travels as its USD type and the USD literal spelling of its
-  value (`float` `1.5`, `int` `3`, `bool` `true`, `token` / `string`
-  `"name"`, `float2` `(1, 2)`, `color3f` / `color4f`, `float3` / `float4`
-  for a tuple that is a quantity rather than a color). `erhe::usd` knows no
-  node vocabulary: the caller decides which USD type a parameter takes, and
-  the writer authors exactly the (type, text) pair it is handed. A value with
-  no USD form - a gradient, a curve - travels as its text in a `string`, one
-  rule for both. A text with a double quote of its own does not survive a
-  round trip: LightUSD's USDA parser hands an escaped quote back with its
-  backslash, so the value grows a level of escaping on every save. Callers
-  therefore hand over a quote-free spelling - the editor writes a nested JSON
-  value with a single quote in place of the double quote - until the parser
-  round-trips an escaped quote (future work).
+  value (`float` `1.5`, `int` `3`, `bool` `true`, `float2` `(1, 2)`,
+  `color3f` / `color4f`, `float3` / `float4` for a tuple that is a quantity
+  rather than a color). A `token` and a `string` are the exception: they
+  carry their own text, with no quotes around it, so a text of any content
+  crosses verbatim in both directions and the USDA quoting and escaping stays
+  inside `erhe::usd`. `erhe::usd` knows no node vocabulary: the caller decides
+  which USD type a parameter takes, and the writer authors exactly the
+  (type, text) pair it is handed. A value with no USD form - a gradient, a
+  curve - travels as its text in a `string`, one rule for both: the editor
+  hands over the nested value's JSON text as it stands, quotes included, and
+  the writer escapes what the file format asks for. A file written before that
+  rule spells a nested value with single quotes in place of its own double
+  quotes, which is not valid JSON, so the editor's read side parses the text
+  strictly first and only a text that parse rejects is read in the old
+  spelling.
 - The graph's own `outputs:<pin>` connections are its interface outputs: the
   value a material can name. A `UsdPreviewSurface` input connected to one is
   recorded in `Usd_data::material_graph_bindings` as (material, slot, graph

@@ -798,18 +798,6 @@ public:
     return attribute;
 }
 
-// A node parameter travels as a (USD type, literal text) pair
-// (doc/usd-texture-graphs-plan.md 2.2), so the writer parses the text back
-// into the value the type names. `text` is USD's own spelling, quotes of a
-// string or a token included.
-[[nodiscard]] auto strip_usd_quotes(const std::string& text) -> std::string
-{
-    if ((text.size() >= 2) && (text.front() == '"') && (text.back() == '"')) {
-        return text.substr(1, text.size() - 2);
-    }
-    return text;
-}
-
 // The components of a USD tuple literal `(a, b, c)`, zero-filled to `count`.
 [[nodiscard]] auto parse_usd_float_tuple(const std::string& text, const std::size_t count) -> std::vector<float>
 {
@@ -3681,7 +3669,9 @@ private:
     // One node parameter as the attribute its recorded USD type names
     // (doc/usd-texture-graphs-plan.md 2.2). A type the writer has no USD form
     // for is one warning and a `string` carrying the text as it stands, which
-    // is the same rule a gradient or a curve travels by.
+    // is the same rule a gradient or a curve travels by. A `string` and a
+    // `token` carry their own text, so the value reaches the file exactly as
+    // given: quoting and escaping it is the USDA writer's business.
     [[nodiscard]] auto make_node_graph_attribute(
         const std::string& usd_type,
         const std::string& text,
@@ -3696,7 +3686,7 @@ private:
         } else if (usd_type == "bool") {
             attribute.set_value((text == "true") || (text == "1"));
         } else if (usd_type == "token") {
-            attribute.set_value(lightusd::value::token{strip_usd_quotes(text)});
+            attribute.set_value(lightusd::value::token{text});
         } else if (usd_type == "float2") {
             const std::vector<float> v = parse_usd_float_tuple(text, 2);
             attribute.set_value(lightusd::value::float2{v[0], v[1]});
@@ -3722,7 +3712,7 @@ private:
                     fmt::format("'{}' has no USD form for type '{}' - it is written as a string", owner, usd_type)
                 );
             }
-            attribute.set_value(strip_usd_quotes(text));
+            attribute.set_value(text);
         }
         return attribute;
     }

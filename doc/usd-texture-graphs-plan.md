@@ -161,9 +161,9 @@ editor, since the editor's nodes serialize parameters as JSON rather than
 through the property system, and a `UsdPreviewSurface` input wired to a graph
 output is an input the fork's Tydra leaves at its schema fallback with a
 warning, so the stage it converts is the composed layer as it stands. Phase 2
-settled a third: a parameter whose text carries a double quote of its own does
-not survive a round trip through LightUSD's USDA parser, so a nested value
-travels as its JSON text with a single quote in place of the double quote
+settled a third: a `string` parameter carries the text itself rather than a
+quoted literal, so a nested value travels as its JSON text as it stands and
+`erhe::usd` does the quoting and escaping the file format asks for
 (`doc/usd_compatibility.md`, "Texture node graphs").
 
 1. `erhe::usd`: the record types, the reader (marked `NodeGraph` prims,

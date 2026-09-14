@@ -6623,22 +6623,28 @@ private:
         return (i != spec.props().end()) && i->second.is_attribute();
     }
 
-    // The scalar text of an attribute exactly as USD spells it, the quotes of
-    // a string or a token kept: what a node parameter travels as
-    // (doc/usd-texture-graphs-plan.md 2.2).
+    // The scalar text of an attribute: the text a string or a token carries,
+    // and otherwise the spelling USD gives the value - a number, a tuple.
+    // What a node parameter travels as (doc/usd-texture-graphs-plan.md 2.2):
+    // a string value crosses verbatim, so the quoting and escaping the file
+    // format asks for stays inside erhe::usd.
     [[nodiscard]] static auto attribute_literal(const lightusd::Attribute& attribute) -> std::string
     {
-        return lightusd::value::pprint_value(attribute.get_var().value_raw());
-    }
-
-    // The same text with a leading and trailing quote removed: the token of
-    // the graph marker and of a node's `info:id`.
-    [[nodiscard]] static auto unquote(const std::string& text) -> std::string
-    {
-        if ((text.size() >= 2) && (text.front() == '"') && (text.back() == '"')) {
-            return text.substr(1, text.size() - 2);
+        std::string string_value;
+        if (attribute.get_value<std::string>(&string_value)) {
+            return string_value;
         }
-        return text;
+        // A `string` read from a USDA file arrives as the parser's record of
+        // the literal, which carries the text and how it was quoted.
+        lightusd::value::StringData string_data;
+        if (attribute.get_value<lightusd::value::StringData>(&string_data)) {
+            return string_data.value;
+        }
+        lightusd::value::token token_value;
+        if (attribute.get_value<lightusd::value::token>(&token_value)) {
+            return token_value.str();
+        }
+        return lightusd::value::pprint_value(attribute.get_var().value_raw());
     }
 
     // The node name and output pin one connection names, given the path of
@@ -6699,7 +6705,7 @@ private:
         const std::map<std::string, lightusd::Property>::const_iterator info_id =
             props.find(std::string{c_node_graph_info_id_attribute});
         const std::string type_id = ((info_id != props.end()) && info_id->second.is_attribute())
-            ? unquote(attribute_literal(info_id->second.get_attribute()))
+            ? attribute_literal(info_id->second.get_attribute())
             : std::string{};
         if (
             node_id_prefix.empty()                    ||
@@ -6799,7 +6805,7 @@ private:
         const std::map<std::string, lightusd::Property>::const_iterator format_property =
             spec.props().find(std::string{c_node_graph_format_attribute});
         if ((format_property != spec.props().end()) && format_property->second.is_attribute()) {
-            record.format = unquote(attribute_literal(format_property->second.get_attribute()));
+            record.format = attribute_literal(format_property->second.get_attribute());
         }
         const std::string_view node_id_prefix = node_graph_node_id_prefix(record.format);
         for (const lightusd::PrimSpec& child : spec.children()) {

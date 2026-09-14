@@ -762,7 +762,7 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
         # have yet (branch erhe-fixes). Pinned to a tag on that branch rather
         # than to the branch name, so the build does not move when the branch
         # does. Drop the fork once an upstream release carries the same fixes.
-        GIT_TAG           erhe-2026-09-14a
+        GIT_TAG           erhe-2026-09-14b
         GIT_SHALLOW       FALSE
         #GITHUB_REPOSITORY lighttransport/LightUSD
         GITHUB_REPOSITORY tksuoran/LightUSD

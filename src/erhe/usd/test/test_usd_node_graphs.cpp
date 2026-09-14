@@ -266,9 +266,16 @@ TEST_F(Node_graphs_import, an_input_with_a_value_is_a_parameter_of_its_authored_
     EXPECT_EQ(gradient->usd_type, "string");
     EXPECT_EQ(
         gradient->value,
-        "\"{'interpolation':0,'stops':[{'color':[0.0,0.0,0.0,1.0],'pos':0.0},"
-        "{'color':[1.0,0.5,0.2,1.0],'pos':1.0}]}\""
+        "{\"interpolation\":0,\"stops\":[{\"color\":[0.0,0.0,0.0,1.0],\"pos\":0.0},"
+        "{\"color\":[1.0,0.5,0.2,1.0],\"pos\":1.0}]}"
     );
+
+    // The text of a `string` crosses verbatim, whatever quotes and backslashes
+    // it carries: the USDA escaping is erhe::usd's own business (R6).
+    const erhe::usd::Usd_node_graph_parameter* label = find_parameter(*colorize, "label");
+    ASSERT_NE(label, nullptr);
+    EXPECT_EQ(label->usd_type, "string");
+    EXPECT_EQ(label->value, "a \"quoted\" word, a ' tick and a trailing backslash \\");
 }
 
 TEST_F(Node_graphs_import, a_connected_input_records_the_source_node_and_pin)
@@ -451,6 +458,21 @@ TEST_F(Node_graphs_export, a_second_save_of_the_reloaded_graphs_is_byte_identica
     EXPECT_EQ(graph->format, "erhe_texture_graph");
     ASSERT_EQ(reloaded.data.material_graph_bindings.size(), 1u);
     EXPECT_EQ(reloaded.data.material_graph_bindings[0].graph_path, "/World/Graph_Textures/Rust");
+
+    // A string parameter comes back as the text it was, quotes and backslashes
+    // included: the writer escapes them and the parser decodes them.
+    const erhe::usd::Usd_node_graph_node* colorize = find_node(*graph, "Colorize");
+    ASSERT_NE(colorize, nullptr);
+    const erhe::usd::Usd_node_graph_parameter* gradient = find_parameter(*colorize, "gradient");
+    ASSERT_NE(gradient, nullptr);
+    EXPECT_EQ(
+        gradient->value,
+        "{\"interpolation\":0,\"stops\":[{\"color\":[0.0,0.0,0.0,1.0],\"pos\":0.0},"
+        "{\"color\":[1.0,0.5,0.2,1.0],\"pos\":1.0}]}"
+    );
+    const erhe::usd::Usd_node_graph_parameter* label = find_parameter(*colorize, "label");
+    ASSERT_NE(label, nullptr);
+    EXPECT_EQ(label->value, "a \"quoted\" word, a ' tick and a trailing backslash \\");
 
     const std::filesystem::path second_path = temporary_path("texture_graph_2.usda");
     Save_scene                  second_scene;

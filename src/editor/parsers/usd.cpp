@@ -1160,25 +1160,12 @@ enum class Usd_tuple_form
 }
 
 // A nested parameter value - a gradient object, a curve array - travels as its
-// JSON text with a single quote in place of the double quote. LightUSD's USDA
-// parser does not carry an escaped double quote through a string literal, so a
-// JSON text keeping its own quotes grows a level of escaping on every save;
-// the read side puts the double quotes back before parsing. The rule goes once
-// the parser round-trips an escaped quote (src/erhe/usd/notes.md future work).
+// JSON text as it stands: a string parameter crosses erhe::usd verbatim and
+// the USDA writer escapes whatever quotes and backslashes the text carries
+// (src/erhe/usd/notes.md, "Node graphs").
 [[nodiscard]] auto usd_nested_json_text(const nlohmann::json& value) -> std::string
 {
-    std::string text = value.dump();
-    std::replace(text.begin(), text.end(), '\"', '\'');
-    return text;
-}
-
-// The scalar text of a USD string literal: the outer quotes removed.
-[[nodiscard]] auto usd_string_literal_text(const std::string& literal) -> std::string
-{
-    if ((literal.size() >= 2) && (literal.front() == '\"') && (literal.back() == '\"')) {
-        return literal.substr(1, literal.size() - 2);
-    }
-    return literal;
+    return value.dump();
 }
 
 // The components of a USD tuple literal `(a, b, c)` as a JSON array of that
@@ -1294,11 +1281,18 @@ void insert_usd_node_graph_parameter(
         out_parameters[parameter.name] = usd_float_tuple_json(parameter.value, 4);
         return;
     }
-    const std::string text = usd_string_literal_text(parameter.value);
+    const std::string& text = parameter.value;
     if (!text.empty() && ((text.front() == '{') || (text.front() == '['))) {
-        std::string json_text = text;
-        std::replace(json_text.begin(), json_text.end(), '\'', '\"');
-        const nlohmann::json parsed = nlohmann::json::parse(json_text, nullptr, false);
+        nlohmann::json parsed = nlohmann::json::parse(text, nullptr, false);
+        if (parsed.is_discarded()) {
+            // A file written before a nested value traveled verbatim spells it
+            // with single quotes in place of its own double quotes, which is
+            // not valid JSON - so the strict parse above decides, and only a
+            // text it rejects is read in the old spelling.
+            std::string json_text = text;
+            std::replace(json_text.begin(), json_text.end(), '\'', '\"');
+            parsed = nlohmann::json::parse(json_text, nullptr, false);
+        }
         if (!parsed.is_discarded()) {
             out_parameters[parameter.name] = parsed;
             return;

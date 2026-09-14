@@ -739,12 +739,11 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The LightUSD fork fixes (section 6 "One LightUSD limit worked around
-   downstream", "Relationship targets a weaker sublayer contributes as a
-   single path", the `texCoord2f` finding of "Writer findings of
-   usdchecker"). Three defects in one dependency, each already diagnosed to
-   the function; a fork branch carrying them removes a quoting workaround,
-   2816 skipped instances and a validator finding.
+1. The LightUSD fork fixes (section 6 "Relationship targets a weaker sublayer
+   contributes as a single path", the `texCoord2f` finding of "Writer findings
+   of usdchecker"). Two defects in one dependency, each already diagnosed to
+   the function; a fork branch carrying them removes 2816 skipped instances
+   and a validator finding.
 2. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
@@ -826,9 +825,6 @@ ranks them. A USD scene loads, edits and saves without any of them.
     while the same file with the limits stripped parses (bisected on the
     written file; colliders and motions are fine). glTF-side; the limit
     spelling the export uses is the suspect.
-- One LightUSD limit worked around downstream (`src/erhe/usd/notes.md`,
-  "Node graphs"): the USDA parser does not round-trip an escaped double quote,
-  so nested parameter text travels with single quotes. It goes with a fork fix.
 - Relationship targets a weaker sublayer contributes as a single path:
   LightUSD's `CombinePrimSpecRec` (`src/composition.cc`) merges two layers'
   `prepend` / `append` relationship opinions only when both are stored as a

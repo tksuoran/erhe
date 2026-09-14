@@ -27,7 +27,8 @@ def Xform "World"
             {
                 uniform token info:id = "erhe:texture:colorize"
                 custom float2 erhe:ui:position = (320, 40)
-                string inputs:gradient = "{'interpolation':0,'stops':[{'color':[0.0,0.0,0.0,1.0],'pos':0.0},{'color':[1.0,0.5,0.2,1.0],'pos':1.0}]}"
+                string inputs:gradient = '{"interpolation":0,"stops":[{"color":[0.0,0.0,0.0,1.0],"pos":0.0},{"color":[1.0,0.5,0.2,1.0],"pos":1.0}]}'
+                string inputs:label = "a \"quoted\" word, a ' tick and a trailing backslash \\"
                 float inputs:input.connect = </World/Graph_Textures/Rust/Noise.outputs:f>
                 color4f outputs:rgba
             }
