@@ -246,4 +246,4 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 
 [TASK::asset-browser-two-phase-scan]{DONE-2026-09-14;c5d81a1d9;via-harness;1-coder}
 ✓step-1{Asset_walk-worker+Asset_scan_entry{path,parent_path_key,Asset_node_kind}+apply_scan_progress;headless:7-publish-lines-~50ms-apart+save-refresh-node-added}
-?user-interactive{tree-visible-while-Scanning...;hover-peek}
+✓user-verified-2026-09-14
