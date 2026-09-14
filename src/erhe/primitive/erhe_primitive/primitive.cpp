@@ -508,7 +508,11 @@ void Primitive_raytrace::make_raytrace_geometry()
 
     {
         ERHE_PROFILE_SCOPE("geometry commit");
-        erhe::log::set_breadcrumb("raytrace: BVH commit");
+        // Distinct breadcrumb for an AABB proxy, for the reason the distinct
+        // debug label above gives: a 12-triangle proxy build is not BVH work,
+        // and a stall watchdog line naming it as such sends the reader after
+        // a cost that is not there.
+        erhe::log::set_breadcrumb(m_is_proxy ? "raytrace: proxy BVH commit" : "raytrace: BVH commit");
         m_rt_geometry->commit();
     }
 }

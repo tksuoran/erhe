@@ -78,6 +78,7 @@ auto is_usd_file_extension(const std::filesystem::path& path) -> bool
 #include "erhe_graphics/image_loader.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_item/typed.hpp"
+#include "erhe_log/log.hpp"
 #include "erhe_physics/collision_filter.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
@@ -720,6 +721,9 @@ void resolve_usd_references(
     // that carrier has its content.
     std::vector<std::pair<std::shared_ptr<erhe::scene::Node>, const std::vector<erhe::scene::Instance_override>*>> pending_overrides;
     for (const erhe::usd::Usd_prim_references& entry : usd_data.references) {
+        // Re-set per arc: loading an arc's template sets breadcrumbs of its
+        // own, and the phase between two arcs is this one.
+        erhe::log::set_breadcrumb("usd: composition arcs");
         if (!is_under_prim_path(entry.stage_path, prim_path_prefix)) {
             continue;
         }
@@ -2798,6 +2802,9 @@ auto make_import_usd_operation(
     );
     root_node->set_parent(temp_scene.get_root_node());
 
+    // The whole import runs inside one tick, so its phases carry breadcrumbs
+    // of their own, the way the open path does.
+    erhe::log::set_breadcrumb("usd: load stage");
     const std::chrono::steady_clock::time_point load_start_time = std::chrono::steady_clock::now();
     erhe::usd::Usd_load_result result = erhe::usd::load_usd(
         erhe::usd::Usd_load_arguments{
@@ -2824,6 +2831,7 @@ auto make_import_usd_operation(
     // Textures. erhe::usd names image FILES (it creates no GPU object at
     // all), so this is where they become erhe::graphics::Texture objects and
     // where the material slots the loader recorded are filled.
+    erhe::log::set_breadcrumb("usd: textures");
     const std::vector<std::shared_ptr<erhe::graphics::Texture>> textures = create_usd_textures(context, usd_data);
 
     log_parsers->info(
@@ -2836,6 +2844,7 @@ auto make_import_usd_operation(
     );
 
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
+    erhe::log::set_breadcrumb("usd: finalize meshes");
     finalize_imported_meshes(
         context,
         build_info,
@@ -2959,6 +2968,7 @@ auto load_usd_prefab_template(
     container_node->enable_flag_bits(erhe::Item_flags::content | erhe::Item_flags::show_in_ui);
     container_node->set_parent(temp_scene.get_root_node());
 
+    erhe::log::set_breadcrumb("usd: prefab template stage");
     erhe::usd::Usd_load_result result = erhe::usd::load_usd(
         erhe::usd::Usd_load_arguments{
             .path          = path,
@@ -2989,6 +2999,7 @@ auto load_usd_prefab_template(
     }
     erhe::usd::Usd_data& usd_data = result.data;
 
+    erhe::log::set_breadcrumb("usd: prefab template finalize");
     static_cast<void>(create_usd_textures(context, usd_data));
     finalize_imported_meshes(
         context,
@@ -3124,6 +3135,11 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     );
     container_node->set_parent(temp_scene.get_root_node());
 
+    // The whole open runs inside one tick, so its phases carry breadcrumbs of
+    // their own: the stall watchdog reports the newest breadcrumb the tick
+    // thread set, and a phase that sets none is reported under whatever the
+    // tick passed through last.
+    erhe::log::set_breadcrumb("usd: load stage");
     erhe::usd::Usd_load_result result = erhe::usd::load_usd(
         erhe::usd::Usd_load_arguments{
             .path          = path,
@@ -3218,6 +3234,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     const std::vector<std::shared_ptr<erhe::graphics::Texture>> textures = create_usd_textures(context, usd_data);
 
     std::vector<std::shared_ptr<erhe::Item_base>> mesh_node_items;
+    erhe::log::set_breadcrumb("usd: finalize meshes");
     finalize_imported_meshes(
         context,
         make_import_build_info(context),
@@ -3280,6 +3297,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
         context, content_library, usd_data, scene_state.graph_meshes,
         container_node, path.generic_string(), operations
     );
+    erhe::log::set_breadcrumb("usd: content library");
     for (const std::shared_ptr<Operation>& operation : operations) {
         operation->execute(context);
     }
@@ -3287,6 +3305,7 @@ auto open_scene_usd(App_context& context, const std::filesystem::path& path) -> 
     // The file's top-level prims become the scene's top-level nodes: no
     // wrapper is added, so a save writes back exactly the shape that was
     // read. Copy the child list - reparenting mutates it.
+    erhe::log::set_breadcrumb("usd: attach to scene");
     const std::shared_ptr<erhe::scene::Node> scene_root_node = scene.get_root_node();
     const std::vector<std::shared_ptr<erhe::Hierarchy>> children = container_node->get_children();
     for (const std::shared_ptr<erhe::Hierarchy>& child : children) {

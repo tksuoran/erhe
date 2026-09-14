@@ -732,6 +732,32 @@ now owns its behavior; `git log` on that record has the history.
   playback, the save, the fixed point and an edited key of both fixtures,
   and cross-checks the tangent conversion against LightUSD's own spline
   evaluator.
+- A load of a stage holding thousands of prims costs the content it
+  brings in, not the square of it. Three things make that so. A queued
+  raytrace commit reads the scene's shape-to-meshes index
+  (`Scene_root::collect_meshes_sharing_primitives`, maintained at the
+  change sites), so finding the sharers of a committed shape costs the
+  sharers and not the scene. The hover holds still while a load is in
+  flight (`Scene_view::update_hover_with_raytrace()` asks
+  `App_context::is_scene_load_in_flight()`, `src/editor/scene/notes.md`),
+  so a load pays for no top level acceleration structure that is rebuilt
+  every frame and reused by nothing. And a deferred finalize commit
+  collects those sharers only when it swapped a shape
+  (`commit_real_raytrace()` and `commit_geometry_buffer_mesh()` report
+  whether they did): a shape is committed once however many meshes share
+  it, so an asset instanced N times has one commit that changes a shape
+  and N-1 that refresh their own mesh alone (`doc/gltf-load-speedup-plan.md`, "commit phase moved to the
+  main thread"). `full_assets/Teapot/DrawModes.usd` settles in 14.6 s and
+  `intent-vfx/scenes/simpleAssetScene.usd`, 2000 instanced copies of one
+  asset arriving as 6686 prims, in 202 s, measured headless from the
+  request to the second consecutive idle `get_async_status`. The per-shape
+  BVH build is not part of that cost: it runs on executor workers, and the
+  17 ms the tick thread of a `DrawModes.usd` import spends in BVH commits
+  is 84 two-triangle draw-mode cards and 2 AABB proxies. What is left is
+  the load itself, which runs on the tick thread ("Asynchronous load").
+  The phases of the import and the open set breadcrumbs of their own, so
+  the stall watchdog names the phase a long load is in rather than the
+  last breadcrumb the tick happened to pass (`src/editor/parsers/notes.md`).
 
 Verification of all of the above: `erhe_usd_tests` (358 cases, built in
 `build_vs2026_vulkan` since `ERHE_BUILD_TESTS=ON` is passed by the main
@@ -747,29 +773,24 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. Load performance (section 6 "Load performance"). The scenes holding
-   thousands of prims take minutes and trip the stall watchdog; the
-   shape-to-meshes index at the change sites and the hover gate hold, and
-   the remaining fix is the serial per-shape BVH build of the deferred
-   path.
-2. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+1. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-3. The round-trip residue (section 6 "Node-held secondary values",
+2. The round-trip residue (section 6 "Node-held secondary values",
    "Camera infinite_z_far", "A writer finding of usdchecker", and the
    glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
-4. Shading and imaging the survey names (section 6 "A material slot that
+3. Shading and imaging the survey names (section 6 "A material slot that
    a texture graph feeds AND that carries an authored factor", "Image
    formats", "An environment map from a DomeLight texture", "MaterialX").
    The slot factor is importer work; the rest need a renderer or decoder
    erhe does not have, MaterialX documents a LightUSD option erhe's build
    leaves off.
-5. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+4. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-6. Composition beyond what erhe resolves (section 6 "Layer-stack
+5. Composition beyond what erhe resolves (section 6 "Layer-stack
    editing", "inherits and specializes arcs whose target is not a class
    prim", the `over`-child and `.usdz` forms of "Variant opinions a
    variant set does not carry", "Overrides on applied API schemas inside
@@ -831,40 +852,17 @@ ranks them. A USD scene loads, edits and saves without any of them.
   a texture packed in a `.usdz` is written as a path that names no file (the
   packed bytes extracted next to the file, or the `archive.usdz[entry]`
   form).
-- Load performance of a scene holding thousands of prims (the intent-vfx
-  scenes, several minutes with the stall watchdog firing - the teapot ones,
-  and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset
-  arrive as 9862 prims and take 92 s to settle, and
-  `full_assets/Teapot/DrawModes.usd`, whose 35 teapots trip the watchdog in
-  `raytrace: BVH commit` - and the
-  usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
-  hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
-  prims and 146 meshes and the watchdog reports the tick stuck in
-  `raytrace: BVH commit`): a queued raytrace commit reads the scene's
-  shape-to-meshes index (`Scene_root::collect_meshes_sharing_primitives`,
-  maintained at the change sites), so it costs the sharers of the committed
-  shapes; and the hover holds still while a load is in flight
-  (`Scene_view::update_hover_with_raytrace()` asks
-  `App_context::is_scene_load_in_flight()` and clears its slots instead of
-  committing and tracing, `src/editor/scene/notes.md`), so a load no longer
-  pays for a top level acceleration structure that is rebuilt every frame and
-  reused by nothing. The one remaining fix is the per-shape BVH build of
-  `finalize_imported_meshes` on the deferred path, which is serial on the
-  tick thread. Both scenes measured after the index and the hover gate are
-  unchanged in wall time (`DrawModes.usd` 12.9 s -> 14.0 s,
-  `simpleAssetScene.usd` 336.9 s -> 342.8 s to settle, run-to-run variation,
-  with the same stall lines and `tick: update_hover_info` at zero both
-  before and after): a headless viewport is hovered only for the single frame
-  an MCP `pick_at` arms, so the headless loads do not exercise the per-frame
-  hover at all and the gate shows there only as its edge log lines. The load
-  time these scenes spend is in the per-sharer refresh work and the serial
-  BVH build, which is what the remaining fix addresses.
 - Asynchronous load: `load_usd` runs on the calling thread and the editor's
   import and open are synchronous, where a glTF import goes through the
   asset manager's `Asset_load_request` and the droppable-payload import
   operation (`doc/reloadable-asset-loads.md`). The conversion creates no
   GPU object, so it moves onto a worker once the asset manager learns a
-  second format.
+  second format. This is what a large stage's settle time is now spent on
+  and the only thing left that trips the stall watchdog there: of
+  `simpleAssetScene.usd`'s 202 s (section 2, "A load of a stage holding
+  thousands of prims"), the composition, the prefab templates and the
+  attach of 6686 prims to the scene run inside one tick, which the
+  watchdog reports as `usd: attach to scene`.
 - Binary and packaged output: the writer emits `.usda` only; a scene opened
   from `.usdc` or `.usdz` saves back as `.usda` beside it. LightUSD writes
   both formats; the `.usdz` case also needs the packed-texture answer of the

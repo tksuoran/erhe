@@ -306,10 +306,24 @@ queue as its first step, so all scene mutation happens on the main thread in
 one place, isolated from the rest of the tick. `get_async_status` reports the
 not-yet-flushed commits as `pending_scene_commits`.
 
-The commit rebuilds EVERY mesh in the scene that shares a committed
-primitive (glTF instances share the `Primitive`; `collect_meshes_sharing_primitives`),
-not only the task's own mesh: the swap is shape-level, and a sharer's draw
-list records / raytrace instances would otherwise keep referencing the
-proxy buffer mesh (freed and reused) / proxy raytrace until its own task
-committed - visible as displaced / garbage instanced objects during a large
-load with `use_draw_lists` on. See doc/mesh-memory-deferred-free-plan.md.
+A commit that swaps a shape rebuilds EVERY mesh in the scene that shares a
+committed primitive (glTF instances share the `Primitive`;
+`collect_meshes_sharing_primitives`), not only the task's own mesh: the swap
+is shape-level, and a sharer's draw list records / raytrace instances would
+otherwise keep referencing the proxy buffer mesh (freed and reused) / proxy
+raytrace until its own task committed - visible as displaced / garbage
+instanced objects during a large load with `use_draw_lists` on. See
+doc/mesh-memory-deferred-free-plan.md.
+
+A commit that swaps NOTHING refreshes its own mesh alone. A shape is
+committed once however many meshes share it (the swaps run first and
+`commit_real_raytrace()` / `commit_geometry_buffer_mesh()` return whether
+they swapped), so
+for an asset instanced N times exactly one of the N commits changes a shape
+and the other N-1 leave every sharer with the shapes it already reads.
+Collecting the sharers unconditionally made each of the N commits
+re-register all N sharers with the draw list, which is quadratic in the
+instance count: a 2000-instance stage queued 4.1 million draw list
+operations and spent 99 s in one `flush_pending()` and 39 s in one
+`Scene_commit_queue::flush()`, against 8.1 thousand operations and under a
+second for both when the collect is conditional.

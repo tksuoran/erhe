@@ -151,10 +151,10 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
             }
         }
 
-        // Phase B - commit, queued for the main thread: detach the raytrace
-        // instances (they may reference a proxy raytrace being replaced),
-        // swap in the prepared results, rebuild the raytrace primitives and
-        // re-attach with fresh transforms. Runs from Editor::tick() ->
+        // Phase B - commit, queued for the main thread: swap in the prepared
+        // results, then detach the raytrace instances of every mesh the swap
+        // reaches, rebuild their raytrace primitives and re-attach with fresh
+        // transforms. Runs from Editor::tick() ->
         // Scene_commit_queue::flush(), before the frame's hover raytrace,
         // physics, operations and rendering. The mesh's item host is
         // re-read at commit time: the mesh may have been detached (scene
@@ -164,19 +164,30 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
         //
         // The swaps are SHAPE-level and shapes are shared: glTF instances
         // (the importer clones the template mesh per referencing node) and
-        // brush instances hold the same Primitive. Every mesh in the scene
-        // that shares one of the committed primitives is rebuilt here, not
-        // just this task's mesh - their Raytrace_primitives reference the
-        // proxy raytrace being replaced, and their draw list records cache
-        // the proxy buffer mesh's vertex / index ranges, which the swap
-        // frees. Refreshing only this mesh left the sharers drawing from
-        // freed (reused) mesh memory until their own task committed,
+        // brush instances hold the same Primitive. When a swap happens, every
+        // mesh in the scene that shares one of the committed primitives is
+        // rebuilt here, not just this task's mesh - their Raytrace_primitives
+        // reference the proxy raytrace being replaced, and their draw list
+        // records cache the proxy buffer mesh's vertex / index ranges, which
+        // the swap frees. Refreshing only this mesh left the sharers drawing
+        // from freed (reused) mesh memory until their own task committed,
         // seconds later on a large scene.
         //
         // The sharers come from the scene root's shape-to-meshes index, which
         // the change sites maintain: a load queues one commit per mesh, and
         // reading the index keeps each commit proportional to the sharers of
         // the committed shapes instead of to the whole scene.
+        //
+        // And they are collected only when this commit actually swapped a
+        // shape, which is why the swaps run first and the collect reads what
+        // they returned. A shape is committed ONCE however many meshes share
+        // it, so for an asset instanced N times exactly one of the N commits
+        // swaps anything and the other N-1 leave every sharer reading the
+        // shapes it already read: collecting unconditionally made every one
+        // of the N commits refresh all N sharers, which is N draw list
+        // re-registrations per commit and N * N over the load (measured on a
+        // 2000-instance stage: 4.1 million queued draw list operations and
+        // 99 s in one flush).
         context.scene_commit_queue->enqueue(
             [scene_mesh, mesh_primitives = std::move(mesh_primitives)]()
             {
@@ -193,16 +204,20 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                 affected_meshes.clear();
                 if (scene_root != nullptr) {
                     scene_lock = std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)>{scene_root->item_host_mutex};
-                    scene_root->collect_meshes_sharing_primitives(scene_mesh, mesh_primitives, affected_meshes);
-                    for (const std::shared_ptr<erhe::scene::Mesh>& affected_mesh : affected_meshes) {
-                        scene_root->begin_mesh_rt_update(affected_mesh);
-                    }
                 }
+                // The swaps run before the raytrace instances are detached,
+                // which a replaced proxy raytrace survives by construction:
+                // commit_real_raytrace() retires the proxy instead of freeing
+                // it, precisely so instances that have not refreshed yet stay
+                // valid - the sharers a later task refreshes rely on the same
+                // thing, for frames rather than for the rest of this locked
+                // region.
+                bool swapped_a_shape = false;
                 for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
                     erhe::primitive::Primitive& primitive = *mesh_primitive.primitive.get();
                     const std::shared_ptr<erhe::primitive::Primitive_shape> raytrace_shape = primitive.get_shape_for_raytrace();
-                    if (raytrace_shape) {
-                        static_cast<void>(raytrace_shape->commit_real_raytrace());
+                    if (raytrace_shape && raytrace_shape->commit_real_raytrace()) {
+                        swapped_a_shape = true;
                     }
                     if (primitive.render_shape) {
                         // The optimized variant rides the same swap and is
@@ -219,6 +234,7 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                         // normals and tangents the soup build never had.
                         std::shared_ptr<erhe::primitive::Primitive_render_shape> optimized;
                         if (primitive.render_shape->commit_geometry_buffer_mesh(optimized)) {
+                            swapped_a_shape = true;
                             // publish refuses under a live-edit optimization
                             // hold, so a variant built from pre-edit data can
                             // never appear beside an in-progress edit.
@@ -229,6 +245,18 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                 if (scene_root == nullptr) {
                     scene_mesh->update_rt_primitives();
                     return; // affected_meshes is empty on this path
+                }
+                if (swapped_a_shape) {
+                    scene_root->collect_meshes_sharing_primitives(scene_mesh, mesh_primitives, affected_meshes);
+                } else {
+                    // Nothing changed at shape level, so this mesh alone is
+                    // refreshed - the task's own statement that its mesh's
+                    // raytrace primitives are built from the shapes as they
+                    // now stand.
+                    affected_meshes.push_back(scene_mesh);
+                }
+                for (const std::shared_ptr<erhe::scene::Mesh>& affected_mesh : affected_meshes) {
+                    scene_root->begin_mesh_rt_update(affected_mesh);
                 }
                 for (const std::shared_ptr<erhe::scene::Mesh>& affected_mesh : affected_meshes) {
                     // Rebuilds the raytrace primitives from the committed
