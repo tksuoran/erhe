@@ -84,7 +84,7 @@ public:
     void imgui();
 
 private:
-    void rebuild_display_color(erhe::scene::Mesh& mesh);
+    void rebuild_display_color(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Mesh>& mesh);
 
     App_context&                                m_context;
     ERHE_PROFILE_MUTEX(std::mutex,              m_mutex);

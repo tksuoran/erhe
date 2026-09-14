@@ -208,7 +208,7 @@ void App_scenes::rebuild_display_colors()
         scene_root->take_display_color_meshes(m_display_color_meshes);
         for (const std::shared_ptr<erhe::scene::Mesh>& mesh : m_display_color_meshes) {
             if (mesh) {
-                rebuild_display_color(*mesh.get());
+                rebuild_display_color(*scene_root.get(), mesh);
             }
         }
         m_display_color_meshes.clear();
@@ -245,12 +245,13 @@ void App_scenes::rebuild_draw_mode_proxies()
 // a geometry build takes the color as Build_info::constant_color (the value the
 // builder writes wherever the geometry authors no color of its own), and a soup
 // build gets a recolored copy of the soup.
-void App_scenes::rebuild_display_color(erhe::scene::Mesh& mesh)
+void App_scenes::rebuild_display_color(Scene_root& scene_root, const std::shared_ptr<erhe::scene::Mesh>& mesh_shared)
 {
     if (m_context.mesh_memory == nullptr) {
         return;
     }
-    const glm::vec3 display_color = mesh.get_display_color();
+    erhe::scene::Mesh& mesh          = *mesh_shared.get();
+    const glm::vec3    display_color = mesh.get_display_color();
     const glm::vec4 color{display_color.x, display_color.y, display_color.z, 1.0f};
 
     erhe::primitive::Build_info build_info{
@@ -310,11 +311,14 @@ void App_scenes::rebuild_display_color(erhe::scene::Mesh& mesh)
         return;
     }
 
-    // Re-attach raytrace the way an edit that swaps primitives does.
-    const std::shared_ptr<erhe::Hierarchy> parent = mesh.get_parent().lock();
-    mesh.set_parent(std::shared_ptr<erhe::Hierarchy>{});
+    // The raytrace instances follow the primitives, so the swap happens
+    // between the root's rt update brackets. The mesh stays in its host
+    // throughout: entering a host is itself one of the writes that queue
+    // this rebuild (Mesh::handle_item_host_update), so a rebuild that left
+    // and re-entered the host would queue itself again every frame.
+    scene_root.begin_mesh_rt_update(mesh_shared);
     mesh.set_primitives(new_primitives);
-    mesh.set_parent(parent);
+    scene_root.end_mesh_rt_update(mesh_shared);
 }
 
 void App_scenes::update_material_sets(erhe::graphics::Command_buffer& command_buffer)
