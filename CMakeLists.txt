@@ -945,7 +945,7 @@ if (${ERHE_PROFILE_LIBRARY} STREQUAL "nvtx")
 elseif (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
     CPMAddPackage(
         NAME              tracy
-        VERSION           0.14.0
+        VERSION           0.14.1
         GITHUB_REPOSITORY wolfpld/tracy
         OPTIONS
             # Tracy master defaults TRACY_ENABLE OFF; v0.13.1 defaulted it ON.
