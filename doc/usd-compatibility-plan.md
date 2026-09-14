@@ -498,8 +498,10 @@ now owns its behavior; `git log` on that record has the history.
   `extentsHint`, else the measured bounds of the meshes below), `cards` as
   a session-only child `Mesh` flagged `Item_flags::draw_mode_proxy`
   (exempt from the pruning, pick redirected to the model prim, never
-  written), one unlit double-sided face per card cut the way
-  `UsdImagingDrawModeAdapter` cuts it, its image alpha-tested at the
+  written), one unlit single-sided face per card cut the way
+  `UsdImagingDrawModeAdapter` cuts it (the `cross` pair of an axis shares
+  the mid plane and faces opposite ways; back-face culling resolves the
+  pair, where the adapter's 2^-23 offset z-fights), its image alpha-tested at the
   adapter's 0.1 threshold, in `drawModeColor` when the face has no image;
   an inactive prim owns no proxy. `resolved_draw_mode()` walks `inherited`
   up to the nearest authored ancestor. DrawModes.usd renders as usdview

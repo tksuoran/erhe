@@ -51,13 +51,13 @@ namespace {
 // 4x4 matrix, row major.
 constexpr std::string_view c_worldtoscreen_key{"worldtoscreen"};
 
-// The gap `cross` puts between the two coplanar cards of one axis, so that
-// the front card of the pair wins the depth test everywhere. The imaging
-// adapter uses exactly this value.
-constexpr float c_cross_epsilon = 0x1.0p-23f;
-
 // One card face: its four corners in the prim's own space, in the order the
-// imaging adapter emits them, so the quad's winding faces outward.
+// imaging adapter emits them, so the quad's winding faces outward. The two
+// cards of one axis are single-sided and face away from each other: the
+// `cross` pair shares the extent's mid plane and back-face culling picks the
+// one facing the camera, so the pair never depth-tests against itself. (The
+// imaging adapter instead offsets the pair by an epsilon of 2^-23, which at
+// scene scale is below the depth resolution and z-fights.)
 class Card_quad
 {
 public:
@@ -81,8 +81,8 @@ public:
 
 // The corners of one axis-aligned card, from UsdImagingDrawModeAdapter's
 // _GenerateCardsGeometry: `box` puts the face on the extent's own plane,
-// `cross` on the extent's mid plane, the two faces of an axis separated by an
-// epsilon.
+// `cross` on the extent's mid plane, the two faces of an axis coincident and
+// facing opposite ways.
 [[nodiscard]] auto axis_aligned_card(
     const Draw_mode_card_face face,
     const glm::vec3&          min,
@@ -95,7 +95,7 @@ public:
     quad.uv = card_uvs();
     switch (face) {
         case Draw_mode_card_face::x_pos: {
-            const float x = cross ? (mid.x + c_cross_epsilon) : max.x;
+            const float x = cross ? mid.x : max.x;
             quad.corner = {
                 glm::vec3{x, max.y, max.z}, glm::vec3{x, min.y, max.z},
                 glm::vec3{x, min.y, min.z}, glm::vec3{x, max.y, min.z}
@@ -103,7 +103,7 @@ public:
             break;
         }
         case Draw_mode_card_face::x_neg: {
-            const float x = cross ? (mid.x - c_cross_epsilon) : min.x;
+            const float x = cross ? mid.x : min.x;
             quad.corner = {
                 glm::vec3{x, min.y, max.z}, glm::vec3{x, max.y, max.z},
                 glm::vec3{x, max.y, min.z}, glm::vec3{x, min.y, min.z}
@@ -111,7 +111,7 @@ public:
             break;
         }
         case Draw_mode_card_face::y_pos: {
-            const float y = cross ? (mid.y + c_cross_epsilon) : max.y;
+            const float y = cross ? mid.y : max.y;
             quad.corner = {
                 glm::vec3{min.x, y, max.z}, glm::vec3{max.x, y, max.z},
                 glm::vec3{max.x, y, min.z}, glm::vec3{min.x, y, min.z}
@@ -119,7 +119,7 @@ public:
             break;
         }
         case Draw_mode_card_face::y_neg: {
-            const float y = cross ? (mid.y - c_cross_epsilon) : min.y;
+            const float y = cross ? mid.y : min.y;
             quad.corner = {
                 glm::vec3{max.x, y, max.z}, glm::vec3{min.x, y, max.z},
                 glm::vec3{min.x, y, min.z}, glm::vec3{max.x, y, min.z}
@@ -127,7 +127,7 @@ public:
             break;
         }
         case Draw_mode_card_face::z_pos: {
-            const float z = cross ? (mid.z + c_cross_epsilon) : max.z;
+            const float z = cross ? mid.z : max.z;
             quad.corner = {
                 glm::vec3{max.x, max.y, z}, glm::vec3{min.x, max.y, z},
                 glm::vec3{min.x, min.y, z}, glm::vec3{max.x, min.y, z}
@@ -135,7 +135,7 @@ public:
             break;
         }
         default: {
-            const float z = cross ? (mid.z - c_cross_epsilon) : min.z;
+            const float z = cross ? mid.z : min.z;
             quad.corner = {
                 glm::vec3{min.x, max.y, z}, glm::vec3{max.x, max.y, z},
                 glm::vec3{max.x, min.y, z}, glm::vec3{min.x, min.y, z}
@@ -414,7 +414,10 @@ constexpr float c_card_opacity_threshold = 0.1f;
                 .blending_mode = texture
                     ? erhe::primitive::Material_blending_mode::alpha_test
                     : erhe::primitive::Material_blending_mode::opaque,
-                .double_sided  = true,
+                // Single-sided: the two cards of an axis face away from
+                // each other, and back-face culling is what keeps the
+                // coincident `cross` pair from depth-testing against itself.
+                .double_sided  = false,
                 .alpha_cutoff  = c_card_opacity_threshold
             }
         }
@@ -541,7 +544,9 @@ auto build_draw_mode_card_proxy(App_context& context, Draw_mode& draw_mode) -> s
         return {};
     }
     proxy->layer_id = scene_root.layers().content()->id;
-    proxy->set_double_sided(true);
+    // Single-sided, see make_card_material: culling is what resolves the
+    // coincident card pairs.
+    proxy->set_double_sided(false);
     // `visible` is a derived bit of the visible property, which is already
     // true by default; enable_flag_bits refuses the derived bits.
     proxy->enable_flag_bits(
