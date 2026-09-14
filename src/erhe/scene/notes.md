@@ -75,6 +75,20 @@ owns the rest:
   `Triangle_soup`: a geometry build takes the color as
   `Build_info::constant_color`, a soup build gets a recolored copy of the soup
   (`erhe::primitive::make_triangle_soup_with_constant_color`).
+  The frame's queued meshes are grouped by what decides the built bytes - the
+  source geometry or triangle soup, the color, the normal style and whether
+  the vertex format is the skinned one - and each group is one build: the
+  `Primitive` it produces is the one every mesh of the group gets, so a file
+  that places the same recolored geometry many times builds it once. Each
+  build runs on an executor worker (a narrow `Scoped_worker_context` around
+  the GPU buffer build) and swaps into the meshes on the main thread through
+  `Scene_commit_queue`, between the scene root's `begin_mesh_rt_update` /
+  `end_mesh_rt_update` brackets; a mesh that left the scene by then keeps the
+  primitives it has and the build is dropped. The dispatch goes through
+  `async_for_nodes_with_mesh`, which chains each task after any task still
+  pending for the same mesh, so a mesh recolored again while a build is in
+  flight ends up with the later color. A backend without worker contexts
+  (GL, the null window) rebuilds on the main thread instead.
 
 Any prim may parent any other prim, so the rules that walk the tree take it as
 the tree of prims it is:

@@ -101,33 +101,41 @@ stays for device-level events. R1 holds: the per-frame cost is one integer
 compare per slot. The three-sets-per-frame reconcile stays as it is; its
 cost is the membership diff, which is proportional to library changes.
 
-### Step 3: one parse per referenced prefab chain
+### Step 3: one parse per referenced prefab chain (landed, see below)
 
-`resolve_usd_references` (`src/editor/parsers/usd.cpp`) treats an internal
-arc (`references = </World/X_0>`, empty asset path) as the same file, so
-each `_1..._4` sibling of DrawModes is its own `Prefab_key` and re-parses
-the chain; and `propagate_variant_selections` bakes the carrier's whole
-selection set into every nested key even where the nested file authors no
-variant set of that name. The fix: the nested key carries only the
-selections of variant sets the nested file (or a file below it) authors,
-computed from the loaded `Usd_data` variant tables, so
-`Teapot_Payload.usd`, `Teapot_Geometry.usd` and `geo/*.usd` load once per
-model variant; and an internal arc whose target is a carrier of the same
-file resolves to that carrier's already loaded template. R4 holds when
-DrawModes loads with one `load_usd_prefab_template` per distinct chain
-(section 4 counts them).
+A `Prefab_key` carries only the selections of variant sets the target
+consumes (`Prefab::consumed_variant_sets`, the sets the file declares below
+the template root plus the nested templates' lists re-rooted at their
+carrier); `Prefab_library::reduce_variant_selections` drops the rest before
+the lookup, and `Prefab_instance` records the arc's full selection for the
+save. The internal arcs (`references = </World/X_0>`) already share one key
+per target carrier. DrawModes loads 25 templates (was 35): seven
+`Teapot.usd`, seven internal targets, seven `Teapot_Payload.usd` (the
+shading variant is consumed there), two `Teapot_Geometry.usd`, two `geo/`.
+Measured: `load_usd_prefab_template` 16 s to 10.4 s,
+`make_import_usd_operation` 12.5 s to 9.1 s. The remaining cost is one
+`erhe::usd::load_usd` parse per key of the same files; a per-file stage
+cache in front of `load_usd_prefab_template` would take the 25 parses to
+one per file and is the next step if the import time still matters.
 
-### Step 4: display-color rebuild on the deferred path
+### Step 4: display-color rebuild on the deferred path (landed, see below)
 
-`App_scenes::rebuild_display_color` becomes the kickoff of a per-mesh task
-dispatched through `async_for_nodes_with_mesh` with the contract of
-`deferred_finalize_mesh_items`: the worker builds the recolored
-`Primitive` (renderable mesh with a narrow `Scoped_worker_context` around
-the GPU build, raytrace), the commit lambda swaps `set_primitives` between
-`begin_mesh_rt_update` / `end_mesh_rt_update` on the main thread. Meshes
-queued in the same flush whose (geometry pointer, color, normal style) match
-receive the same built `Primitive`. R5 holds; the import tick no longer
-carries the 13 s.
+`App_scenes::rebuild_display_colors` is a kickoff: it groups the frame's
+queued meshes by what decides the built bytes - source geometry or triangle
+soup, color, normal style, skinned vertex format - and dispatches one task
+per group through `async_for_nodes_with_mesh`, with the contract of
+`deferred_finalize_mesh_items`. The worker builds the one recolored
+`Primitive` of the group (renderable mesh with a narrow
+`Scoped_worker_context` around the GPU build, then the raytrace) and
+enqueues a commit that swaps it into every mesh of the group between
+`begin_mesh_rt_update` / `end_mesh_rt_update` on the main thread; a mesh
+that left the scene by then keeps what it has. Chaining through
+`async_for_nodes_with_mesh` gives the later color of a mesh recolored while
+a build is in flight. A backend without worker contexts (GL, the null
+window) rebuilds on the main thread. Measured on DrawModes:
+`rebuild_display_colors` 13.1 s in one call to 0.42 ms as its worst call of
+70791; the 35 teapots are 7 builds, all on executor workers; post-import
+median tick 6.0 ms. R5 holds.
 
 ### Step 5: asset browser walk on a worker
 
