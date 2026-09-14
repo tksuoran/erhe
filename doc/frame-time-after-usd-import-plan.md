@@ -90,7 +90,7 @@ property takes or drops the value) and calls `Material::notify_texture_rebaked()
 on each at the bake landing site. R2 is then complete: there is no
 change to a record input outside `on_property_changed`.
 
-### Step 2: change-driven material sets
+### Step 2: change-driven material sets (landed, 005dd0756: post-import tick 6.1 ms median, update_material_sets 0.47 ms, check_material_changes 0.04 ms)
 
 `Material_set::update` compares each slot's recorded serial with the
 material's `get_change_serial()` and re-gathers only changed slots; the

@@ -22,6 +22,16 @@ auto Prefab_variant_selection::operator==(const Prefab_variant_selection& rhs) c
     return std::tie(relative_path, set_name, variant_name) == std::tie(rhs.relative_path, rhs.set_name, rhs.variant_name);
 }
 
+auto Prefab_variant_set_key::operator<(const Prefab_variant_set_key& rhs) const -> bool
+{
+    return std::tie(relative_path, set_name) < std::tie(rhs.relative_path, rhs.set_name);
+}
+
+auto Prefab_variant_set_key::operator==(const Prefab_variant_set_key& rhs) const -> bool
+{
+    return std::tie(relative_path, set_name) == std::tie(rhs.relative_path, rhs.set_name);
+}
+
 auto to_string(const std::vector<Prefab_variant_selection>& variant_selections) -> std::string
 {
     std::string result;

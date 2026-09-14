@@ -41,6 +41,27 @@ public:
     [[nodiscard]] auto operator==(const Prefab_variant_selection& rhs) const -> bool;
 };
 
+// One variant set a prefab template's tree declares: the set `set_name` of
+// the prim `relative_path` names below the template's root prim, an empty
+// path being the root prim itself. The same coordinates
+// Prefab_variant_selection uses, so a selection entry names the set it
+// selects in exactly when its two path/name fields match one of these.
+//
+// A template reports the sets it CONSUMES - the ones its own file declares
+// plus the ones the files its arcs bring in declare, re-rooted at this
+// template's root - and a selection entry naming a set outside that list
+// selects nothing anywhere in the template, so it is not part of the
+// template's identity (doc/frame-time-after-usd-import-plan.md R4).
+class Prefab_variant_set_key final
+{
+public:
+    std::string relative_path;
+    std::string set_name;
+
+    [[nodiscard]] auto operator< (const Prefab_variant_set_key& rhs) const -> bool;
+    [[nodiscard]] auto operator==(const Prefab_variant_set_key& rhs) const -> bool;
+};
+
 // The selection as one line of text: "<path> <set> = <variant>" per entry,
 // separated by "; ", the target prim itself spelled "."; empty for an empty
 // selection. What the read-only Properties row and the logs show.

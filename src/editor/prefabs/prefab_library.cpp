@@ -270,56 +270,168 @@ namespace {
 
 } // namespace
 
+auto Prefab_library::reduce_variant_selections(
+    const std::filesystem::path&                 path,
+    const std::string&                           prim_path,
+    const std::vector<Prefab_variant_selection>& variant_selections
+) const -> std::vector<Prefab_variant_selection>
+{
+    if (variant_selections.empty()) {
+        return variant_selections;
+    }
+    const auto known = m_consumed_variant_sets.find(std::pair<std::filesystem::path, std::string>{path, prim_path});
+    if (known == m_consumed_variant_sets.end()) {
+        // Nothing is loaded from this file and prim yet, so which sets it
+        // declares is not known: the whole selection stands, and the load
+        // below reports what it consumed.
+        return variant_selections;
+    }
+    std::vector<Prefab_variant_selection> result;
+    result.reserve(variant_selections.size());
+    for (const Prefab_variant_selection& entry : variant_selections) {
+        if (known->second.count(Prefab_variant_set_key{entry.relative_path, entry.set_name}) != 0) {
+            result.push_back(entry);
+        }
+    }
+    return result;
+}
+
+void Prefab_library::remember_consumed_variant_sets(
+    const std::filesystem::path&               path,
+    const std::string&                         prim_path,
+    const std::vector<Prefab_variant_set_key>& consumed_variant_sets
+)
+{
+    std::set<Prefab_variant_set_key>& known =
+        m_consumed_variant_sets[std::pair<std::filesystem::path, std::string>{path, prim_path}];
+    for (const Prefab_variant_set_key& entry : consumed_variant_sets) {
+        known.insert(entry);
+    }
+}
+
+auto Prefab_library::make_key(
+    const std::filesystem::path&                 path,
+    const std::string&                           prim_path,
+    const std::vector<Prefab_variant_selection>& variant_selections
+) const -> Prefab_key
+{
+    const std::filesystem::path canonical_path = canonical_prefab_path(path);
+    return Prefab_key{
+        canonical_path,
+        prim_path,
+        reduce_variant_selections(canonical_path, prim_path, variant_selections)
+    };
+}
+
 auto Prefab_library::get_or_load(
     const std::filesystem::path&                 path,
     const std::string&                           prim_path,
     const std::vector<Prefab_variant_selection>& variant_selections
 ) -> std::shared_ptr<Prefab>
 {
-    const Prefab_key key{canonical_prefab_path(path), prim_path, variant_selections};
-
-    const auto existing = m_prefabs.find(key);
-    if (existing != m_prefabs.end()) {
-        record_reference(key);
-        return existing->second;
-    }
-
-    // glTF 2.1 strictly prohibits cyclical references between assets, and a
-    // USD reference cycle is prohibited the same way; a cycle here would
-    // otherwise recurse forever through reference resolution.
-    const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), key);
-    if (cycle != m_active_load_stack.end()) {
-        std::string cycle_description;
-        for (auto i = cycle; i != m_active_load_stack.end(); ++i) {
-            cycle_description += to_string(*i);
-            cycle_description += " -> ";
-        }
-        cycle_description += to_string(key);
-        log_parsers->error("Prefab reference cycle detected: {}", cycle_description);
-        return {};
-    }
+    const std::filesystem::path canonical_path = canonical_prefab_path(path);
 
     std::error_code error_code;
-    const bool exists = std::filesystem::exists(key.source_path, error_code);
+    const bool exists = std::filesystem::exists(canonical_path, error_code);
     if (!exists || error_code) {
-        log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(key.source_path));
+        log_parsers->error("Prefab source file not found: {}", erhe::file::to_string(canonical_path));
         return {};
     }
 
-    std::shared_ptr<Prefab> prefab = std::make_shared<Prefab>();
-    prefab->source_path        = key.source_path;
-    prefab->prim_path          = key.prim_path;
-    prefab->variant_selections = key.variant_selections;
-    prefab->name               = make_prefab_name(key);
-    if (!load_template(*prefab)) {
-        log_parsers->error("Prefab '{}' produced no nodes - not caching", to_string(key));
-        return {};
-    }
+    // The selection the template is keyed on is the part of the arc's
+    // selection the target consumes, which is known once one template of this
+    // file and prim has been loaded. Until then the whole selection is used
+    // and the load reports what it consumed: entries it turns out not to
+    // consume leave the key (the template composed the same without them), and
+    // a set this reduction dropped that the load turns out to consume is put
+    // back and the load redone. Each redo puts back at least one entry, so
+    // this runs at most variant_selections.size() + 1 times, and a redo at all
+    // needs a file whose variant branches declare different variant sets.
+    std::vector<Prefab_variant_selection> load_selections =
+        reduce_variant_selections(canonical_path, prim_path, variant_selections);
+    for (;;) {
+        Prefab_key key{canonical_path, prim_path, load_selections};
 
-    m_prefabs.emplace(key, prefab);
-    record_reference(key);
-    log_parsers->info("Prefab loaded: {}", to_string(key));
-    return prefab;
+        const auto existing = m_prefabs.find(key);
+        if (existing != m_prefabs.end()) {
+            record_reference(key);
+            return existing->second;
+        }
+
+        // glTF 2.1 strictly prohibits cyclical references between assets, and a
+        // USD reference cycle is prohibited the same way; a cycle here would
+        // otherwise recurse forever through reference resolution.
+        const auto cycle = std::find(m_active_load_stack.begin(), m_active_load_stack.end(), key);
+        if (cycle != m_active_load_stack.end()) {
+            std::string cycle_description;
+            for (auto i = cycle; i != m_active_load_stack.end(); ++i) {
+                cycle_description += to_string(*i);
+                cycle_description += " -> ";
+            }
+            cycle_description += to_string(key);
+            log_parsers->error("Prefab reference cycle detected: {}", cycle_description);
+            return {};
+        }
+
+        std::shared_ptr<Prefab> prefab = std::make_shared<Prefab>();
+        prefab->source_path        = key.source_path;
+        prefab->prim_path          = key.prim_path;
+        prefab->variant_selections = key.variant_selections;
+        prefab->name               = make_prefab_name(key);
+        if (!load_template(*prefab)) {
+            log_parsers->error("Prefab '{}' produced no nodes - not caching", to_string(key));
+            return {};
+        }
+
+        remember_consumed_variant_sets(canonical_path, prim_path, prefab->consumed_variant_sets);
+        const std::vector<Prefab_variant_selection> corrected =
+            reduce_variant_selections(canonical_path, prim_path, variant_selections);
+        if (corrected != load_selections) {
+            const bool selects_more = std::any_of(
+                corrected.cbegin(), corrected.cend(),
+                [&load_selections](const Prefab_variant_selection& entry) {
+                    return std::find(load_selections.cbegin(), load_selections.cend(), entry) == load_selections.cend();
+                }
+            );
+            if (selects_more) {
+                // A set this load selected nothing for turned out to be one
+                // the template consumes: what was loaded is not what the arc
+                // asked for.
+                log_parsers->info(
+                    "Prefab '{}' consumes variant sets this load left unselected - reloading with {{{}}}",
+                    to_string(key),
+                    to_string(corrected)
+                );
+                m_references.erase(key); // what the abandoned load instantiated
+                load_selections = corrected;
+                continue;
+            }
+            // The load consumed less than it was given: the entries it did not
+            // consume select nothing in it, so what was loaded IS the template
+            // of the smaller key.
+            key = Prefab_key{canonical_path, prim_path, corrected};
+            const auto same = m_prefabs.find(key);
+            if (same != m_prefabs.end()) {
+                record_reference(key);
+                return same->second;
+            }
+            // What this template instantiated was recorded against the key it
+            // was loaded under; reload walks the reference graph by key, so
+            // the record moves with it.
+            const auto references = m_references.find(Prefab_key{canonical_path, prim_path, load_selections});
+            if (references != m_references.end()) {
+                std::set<Prefab_key>& moved = m_references[key];
+                moved.insert(references->second.cbegin(), references->second.cend());
+                m_references.erase(references);
+            }
+            prefab->variant_selections = corrected;
+        }
+
+        m_prefabs.emplace(key, prefab);
+        record_reference(key);
+        log_parsers->info("Prefab loaded: {}", to_string(key));
+        return prefab;
+    }
 }
 
 void Prefab_library::get_or_load_async(
@@ -338,7 +450,7 @@ void Prefab_library::get_or_load_async(
 )
 {
     const std::filesystem::path canonical_path = canonical_prefab_path(path);
-    const Prefab_key            key{canonical_path, prim_path, variant_selections};
+    const Prefab_key            key = make_key(canonical_path, prim_path, variant_selections);
 
     // Already loaded: no task, no frame of latency.
     const auto existing = m_prefabs.find(key);
@@ -481,6 +593,7 @@ auto Prefab_library::load_usd_template(Prefab& prefab) -> bool
     prefab.template_root->set_parent(prefab.holding_scene->get_root_node());
     prefab.gltf_data     = erhe::gltf::Gltf_data{};
     prefab.materials     = std::move(usd_template.materials);
+    prefab.consumed_variant_sets = std::move(usd_template.consumed_variant_sets);
     return true;
 }
 
@@ -901,14 +1014,22 @@ void attach_prefab_instance(
     const erhe::scene::Layer_id                        content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>*     out_mesh_node_items,
     const Prefab_arc_kind                              arc_kind,
-    const std::vector<erhe::scene::Instance_override>* overrides
+    const std::vector<erhe::scene::Instance_override>* overrides,
+    const std::vector<Prefab_variant_selection>*       authored_variant_selections
 )
 {
-    // The selection is the template's, not the caller's: the template was
-    // loaded for exactly this selection (it is part of its key), so an
-    // instance of it carries what it was composed with.
+    // The selection the instance records is the arc's, as the file spells it:
+    // that is what a USD save writes back on the carrier. The template's own
+    // selection is the part of it the template consumes - the rest selects
+    // nothing in the template and is left out of its key - so it stands only
+    // where the caller has no authored selection to give (an instantiation
+    // made in the editor, a glTF prefab).
     std::shared_ptr<Prefab_instance> prefab_instance = std::make_shared<Prefab_instance>(
-        prefab->source_path, prefab->name, prefab->prim_path, arc_kind, prefab->variant_selections
+        prefab->source_path,
+        prefab->name,
+        prefab->prim_path,
+        arc_kind,
+        (authored_variant_selections != nullptr) ? *authored_variant_selections : prefab->variant_selections
     );
     prefab_instance->enable_flag_bits(erhe::Item_flags::no_message | erhe::Item_flags::show_in_ui);
     node->attach(prefab_instance);
@@ -990,6 +1111,7 @@ void attach_prefab_instance(
 namespace {
 
 void refresh_instance_subtrees(
+    const Prefab_library&                                prefab_library,
     const std::shared_ptr<erhe::scene::Node>&            node,
     const std::map<Prefab_key, std::shared_ptr<Prefab>>& prefabs,
     const std::set<Prefab_key>&                          rebuilt_keys,
@@ -1000,11 +1122,15 @@ void refresh_instance_subtrees(
 {
     const std::shared_ptr<Prefab_instance> prefab_instance = erhe::scene::get_attachment<Prefab_instance>(node.get());
     if (prefab_instance) {
-        const Prefab_key key{
+        // The instance records the arc's full selection; the template it came
+        // from is keyed on the part of it the target consumes.
+        const std::vector<Prefab_variant_selection> authored_variant_selections =
+            prefab_instance->get_prefab_variant_selections();
+        const Prefab_key key = prefab_library.make_key(
             prefab_instance->get_prefab_source_path(),
             prefab_instance->get_prefab_prim_path(),
-            prefab_instance->get_prefab_variant_selections()
-        };
+            authored_variant_selections
+        );
         if (rebuilt_keys.contains(key)) {
             const auto it = prefabs.find(key);
             if (it != prefabs.end()) {
@@ -1031,7 +1157,8 @@ void refresh_instance_subtrees(
                     content_layer_id,
                     &mesh_node_items,
                     prefab_instance->get_prefab_arc_kind(),
-                    &overrides
+                    &overrides,
+                    &authored_variant_selections
                 );
                 refreshed_keys.insert(key);
             }
@@ -1044,7 +1171,9 @@ void refresh_instance_subtrees(
     for (const std::shared_ptr<erhe::Hierarchy>& child : node->get_children()) {
         const std::shared_ptr<erhe::scene::Node> child_node = std::dynamic_pointer_cast<erhe::scene::Node>(child);
         if (child_node) {
-            refresh_instance_subtrees(child_node, prefabs, rebuilt_keys, content_layer_id, mesh_node_items, refreshed_keys);
+            refresh_instance_subtrees(
+                prefab_library, child_node, prefabs, rebuilt_keys, content_layer_id, mesh_node_items, refreshed_keys
+            );
         }
     }
 }
@@ -1072,7 +1201,9 @@ void Prefab_library::refresh_instances(const std::vector<Prefab_key>& rebuilt_ke
         std::set<Prefab_key>                          refreshed_keys;
         {
             erhe::Item_host_lock_guard scene_lock{root_node.get()};
-            refresh_instance_subtrees(root_node, m_prefabs, rebuilt, scene_root->layers().content()->id, mesh_node_items, refreshed_keys);
+            refresh_instance_subtrees(
+                *this, root_node, m_prefabs, rebuilt, scene_root->layers().content()->id, mesh_node_items, refreshed_keys
+            );
         }
         if (refreshed_keys.empty()) {
             continue;

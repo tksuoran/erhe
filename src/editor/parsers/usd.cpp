@@ -656,6 +656,36 @@ void disable_prim_content(const std::shared_ptr<erhe::Hierarchy>& item)
     return result;
 }
 
+// The path of the prim at `stage_path` measured from `root_prim_path`, which
+// is how a selection entry and a consumed variant set spell a prim below a
+// template's root: empty for the root prim itself, and the path without the
+// holding root and its separator below it. An empty root makes every path
+// relative to the stage's pseudo-root, which is how a load of a whole file
+// measures them.
+[[nodiscard]] auto relative_prim_path(const std::string& stage_path, const std::string& root_prim_path) -> std::string
+{
+    if (stage_path == root_prim_path) {
+        return std::string{};
+    }
+    if (root_prim_path.empty()) {
+        return (!stage_path.empty() && (stage_path[0] == '/')) ? stage_path.substr(1) : stage_path;
+    }
+    return stage_path.substr(root_prim_path.size() + 1);
+}
+
+// One prim of a nested template named from the template holding it: the
+// nested prim's own relative path below the carrier that brought it in.
+[[nodiscard]] auto join_relative_prim_paths(const std::string& carrier_relative, const std::string& nested_relative) -> std::string
+{
+    if (carrier_relative.empty()) {
+        return nested_relative;
+    }
+    if (nested_relative.empty()) {
+        return carrier_relative;
+    }
+    return carrier_relative + "/" + nested_relative;
+}
+
 // Instantiate every composition arc the file's prims author
 // (doc/usd-compatibility-plan.md X1): one Prefab_instance attachment per arc,
 // in the order the arcs resolved to, each with a clone of the template the arc
@@ -675,7 +705,11 @@ void resolve_usd_references(
     // prims it names (propagate_variant_selections). A scene opened or
     // imported as itself has none.
     const std::string&                             incoming_selection_root = {},
-    const std::vector<Prefab_variant_selection>&   incoming_selections = {}
+    const std::vector<Prefab_variant_selection>&   incoming_selections = {},
+    // Filled, when non-null, with the variant sets the templates these arcs
+    // bring in declare, re-rooted at `prim_path_prefix`: part of what the
+    // template being loaded consumes (Prefab::consumed_variant_sets).
+    std::vector<Prefab_variant_set_key>*           out_consumed_variant_sets = nullptr
 )
 {
     static_cast<void>(context);
@@ -718,13 +752,14 @@ void resolve_usd_references(
                 continue;
             }
             const std::size_t children_before = carrier->get_children().size();
+            const std::vector<Prefab_variant_selection> arc_selections = merge_variant_selections(
+                propagated_selections,
+                to_prefab_variant_selections(reference.variant_selections)
+            );
             const std::shared_ptr<Prefab> prefab = prefab_library.get_or_load(
                 target_path,
                 reference.prim_path,
-                merge_variant_selections(
-                    propagated_selections,
-                    to_prefab_variant_selections(reference.variant_selections)
-                )
+                arc_selections
             );
             if (!prefab) {
                 log_parsers->error(
@@ -735,6 +770,17 @@ void resolve_usd_references(
                 );
                 continue;
             }
+            if (out_consumed_variant_sets != nullptr) {
+                const std::string carrier_relative = relative_prim_path(entry.stage_path, prim_path_prefix);
+                for (const Prefab_variant_set_key& consumed : prefab->consumed_variant_sets) {
+                    out_consumed_variant_sets->push_back(
+                        Prefab_variant_set_key{
+                            join_relative_prim_paths(carrier_relative, consumed.relative_path),
+                            consumed.set_name
+                        }
+                    );
+                }
+            }
             attach_prefab_instance(
                 prefab,
                 carrier,
@@ -742,7 +788,9 @@ void resolve_usd_references(
                 abstract_arc ? nullptr : out_mesh_node_items,
                 (reference.kind == erhe::usd::Usd_reference_kind::payload)
                     ? Prefab_arc_kind::payload
-                    : Prefab_arc_kind::reference
+                    : Prefab_arc_kind::reference,
+                nullptr,
+                &arc_selections
             );
             if (abstract_arc) {
                 const std::vector<std::shared_ptr<erhe::Hierarchy>>& children = carrier->get_children();
@@ -2970,10 +3018,35 @@ auto load_usd_prefab_template(
 
     // Arcs authored inside the template subtree are instantiated the same way
     // the scene paths do it, so nested references reproduce.
+    std::vector<Prefab_variant_set_key> consumed_variant_sets;
     resolve_usd_references(
         context, prefab_library, usd_data, path, 0, nullptr, root_prim_path,
-        root_prim_path, variant_selections
+        root_prim_path, variant_selections, &consumed_variant_sets
     );
+
+    // What this template consumes of the selection an arc carries into it: the
+    // variant sets the file's own prims declare below the template's root -
+    // nested sets included, the reader tables them beside their enclosing set -
+    // plus the ones the arcs above reported. A selection entry naming none of
+    // these selects nothing here, so the template is the same one with or
+    // without it (doc/frame-time-after-usd-import-plan.md R4).
+    for (const erhe::usd::Usd_variant_set& variant_set : usd_data.variant_sets) {
+        if (!is_under_prim_path(variant_set.stage_path, root_prim_path)) {
+            continue;
+        }
+        consumed_variant_sets.push_back(
+            Prefab_variant_set_key{
+                relative_prim_path(variant_set.stage_path, root_prim_path),
+                variant_set.set_name
+            }
+        );
+    }
+    std::sort(consumed_variant_sets.begin(), consumed_variant_sets.end());
+    consumed_variant_sets.erase(
+        std::unique(consumed_variant_sets.begin(), consumed_variant_sets.end()),
+        consumed_variant_sets.end()
+    );
+    usd_template.consumed_variant_sets = std::move(consumed_variant_sets);
 
     // What a variant of this file authors for a prim one of those arcs
     // supplies (doc/usd-compatibility-plan.md C6). A template carries no

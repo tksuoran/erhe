@@ -405,7 +405,14 @@ now owns its behavior; `git log` on that record has the history.
   selecting different variants of one target load two templates, which is
   what USD composes; a selection also reaches the arcs of the prims it
   names, because a variant set is composed once out of the prim's whole
-  index. `Prefab_instance` records the selection, a read-only Properties
+  index. The key carries only the entries the target CONSUMES - the ones
+  naming a variant set the target's own file declares, or a file below it
+  does (`Prefab::consumed_variant_sets`, reported by
+  `load_usd_prefab_template` from `Usd_data::variant_sets` and the nested
+  templates' own lists) - so a selection travelling down an arc to a file
+  that declares no set of that name parses that chain once
+  (doc/frame-time-after-usd-import-plan.md R4). `Prefab_instance` records
+  the arc's FULL selection, a read-only Properties
   row and `get_node_details` show it, and the writer authors it back on the
   carrier - merged into the carrier's own `variants` metadatum, a deeper
   entry inside the `over` prim of its path. A template's own variant sets
@@ -413,7 +420,10 @@ now owns its behavior; `git log` on that record has the history.
   of it means re-targeting the instance to the template of the other
   selection, which is taken when a file needs it. Fixtures
   `references_variants.usda` / `references_variants_target.usda`;
-  DrawModes.usd loads seven distinct templates and its Fancy column holds
+  DrawModes.usd loads 25 distinct templates - seven `Teapot.usd` prim
+  indexes, seven internal-arc targets, seven `Teapot_Payload.usd` ones and
+  two each of `Teapot_Geometry.usd` and `geo/*.usd`, which consume the
+  model variant alone - and its Fancy column holds
   the Fancy geometry (`src/erhe/usd/notes.md` "Variant sets", "Composition
   arcs"; `src/editor/parsers/notes.md`).
 - C8 A `UsdPreviewSurface` input fed by a `UsdPrimvarReader`. Tydra

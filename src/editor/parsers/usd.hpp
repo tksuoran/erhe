@@ -97,6 +97,12 @@ class Usd_prefab_template
 public:
     std::shared_ptr<erhe::scene::Node>                      root;
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
+    // The variant sets the template's tree declares - the file's own plus the
+    // ones the files its arcs bring in declare - in the template root's
+    // coordinates. Prefab_library keys the template on the selection entries
+    // naming one of these; the rest select nothing here
+    // (doc/frame-time-after-usd-import-plan.md R4).
+    std::vector<Prefab_variant_set_key>                     consumed_variant_sets;
     std::string                                             error;
 };
 

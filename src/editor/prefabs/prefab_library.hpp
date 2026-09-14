@@ -13,6 +13,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace erhe {
@@ -41,6 +42,15 @@ class Scene_root;
 // carriers of one prim with different selections are two templates
 // (doc/usd-compatibility-plan.md section 6, "Variant selection through a
 // composition arc").
+//
+// The selection here is the part of the arc's selection the target CONSUMES:
+// the entries naming a variant set the target's own file declares, or one a
+// file below it declares (Prefab::consumed_variant_sets). An entry outside
+// that list selects nothing anywhere in the template, so two arcs differing
+// only in such entries name one and the same template and parse the chain
+// once (doc/frame-time-after-usd-import-plan.md R4). The arc's full
+// selection - what a USD save writes back on the carrier - is the
+// Prefab_instance's, not the key's.
 class Prefab_key
 {
 public:
@@ -78,7 +88,11 @@ class Prefab
 public:
     std::filesystem::path                                   source_path;   // canonical
     std::string                                             prim_path;     // USD source prim, empty for glTF
-    std::vector<Prefab_variant_selection>                   variant_selections; // the arc's `variants`, empty for glTF
+    std::vector<Prefab_variant_selection>                   variant_selections; // the consumed part of the arc's `variants`, empty for glTF
+    // The variant sets this template's tree declares, its arcs' targets
+    // included, in this template's own coordinates. Empty for glTF, which has
+    // no variant sets. What Prefab_library reduces an arc's selection against.
+    std::vector<Prefab_variant_set_key>                     consumed_variant_sets;
     std::string                                             name;          // display name
     erhe::gltf::Gltf_data                                   gltf_data;     // empty for a USD source
     std::vector<std::shared_ptr<erhe::primitive::Material>> materials;
@@ -105,7 +119,9 @@ public:
     // rejected for USD the same way). `variant_selections` is the `variants`
     // selection the arc carries into the target, which selects among the
     // target's variant sets before the target's own selection does; a glTF
-    // source has none.
+    // source has none. Only the entries the target consumes take part in the
+    // cache key, so two arcs whose selections differ only in entries the
+    // target declares no variant set for share one template.
     auto get_or_load(
         const std::filesystem::path&                 path,
         const std::string&                           prim_path = {},
@@ -159,7 +175,36 @@ public:
     // take if it ever becomes hot.
     [[nodiscard]] auto owns_material(const erhe::primitive::Material& material) const -> bool;
 
+    // The key a source file, prim path and arc selection name: the selection
+    // reduced to the entries the already loaded template of that file and prim
+    // consumes. Identity for a file no template of which is loaded yet, and
+    // for glTF. Public because a Prefab_instance records the arc's FULL
+    // selection, so finding the template an instance came from goes through
+    // this.
+    [[nodiscard]] auto make_key(
+        const std::filesystem::path&                 path,
+        const std::string&                           prim_path,
+        const std::vector<Prefab_variant_selection>& variant_selections
+    ) const -> Prefab_key;
+
 private:
+    // The selection entries of `variant_selections` that name a variant set
+    // the loaded templates of (path, prim_path) declare. Everything when
+    // nothing is known about that file and prim yet.
+    [[nodiscard]] auto reduce_variant_selections(
+        const std::filesystem::path&                 path,
+        const std::string&                           prim_path,
+        const std::vector<Prefab_variant_selection>& variant_selections
+    ) const -> std::vector<Prefab_variant_selection>;
+
+    // Merge one loaded template's consumed variant sets into what is known
+    // about its file and prim.
+    void remember_consumed_variant_sets(
+        const std::filesystem::path&               path,
+        const std::string&                         prim_path,
+        const std::vector<Prefab_variant_set_key>& consumed_variant_sets
+    );
+
     // Parse the prefab's source file into a fresh holding scene / template
     // root inside the (already constructed) Prefab, finalize meshes and
     // resolve nested external assets. Shared by get_or_load and reload.
@@ -207,6 +252,10 @@ private:
     std::map<Prefab_key, std::shared_ptr<Prefab>>     m_prefabs;
     std::vector<Prefab_key>                           m_active_load_stack; // cycle detection
     std::map<Prefab_key, std::set<Prefab_key>>        m_references;        // template -> prefabs it directly instantiates
+    // The variant sets each loaded (file, prim path) is known to consume, the
+    // union over the templates of it loaded so far. What an arc's selection is
+    // reduced against before it becomes a key.
+    std::map<std::pair<std::filesystem::path, std::string>, std::set<Prefab_variant_set_key>> m_consumed_variant_sets;
 };
 
 // Instantiate a prefab into a scene: clone the template subtree under a new
@@ -234,13 +283,18 @@ auto instantiate_prefab(
 // `overrides`, when non-null, are the sparse overrides the instance holds
 // (doc/usd-compatibility-plan.md X2): they are applied to the fresh clones
 // before a glTF instance is sealed, so a sealed item still receives them.
+// `authored_variant_selections`, when non-null, is the `variants` selection
+// the arc carries as the file spells it; the instance records that, which is
+// what a USD save writes back, while the template is keyed on the part of it
+// the target consumes. The template's own selection stands when it is null.
 void attach_prefab_instance(
     const std::shared_ptr<Prefab>&                        prefab,
     const std::shared_ptr<erhe::scene::Node>&             node,
     erhe::scene::Layer_id                                 content_layer_id,
     std::vector<std::shared_ptr<erhe::Item_base>>*        out_mesh_node_items,
     Prefab_arc_kind                                       arc_kind = Prefab_arc_kind::reference,
-    const std::vector<erhe::scene::Instance_override>*    overrides = nullptr
+    const std::vector<erhe::scene::Instance_override>*    overrides = nullptr,
+    const std::vector<Prefab_variant_selection>*          authored_variant_selections = nullptr
 );
 
 // Collect glTF 2.1 external-asset references for export: walks the subtree
