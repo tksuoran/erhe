@@ -101,6 +101,14 @@ now owns its behavior; `git log` on that record has the history.
   LightUSD headers, `describe_usd_file` over MCP; the Windows wrappers
   and the Android build pass `lightusd` (`src/erhe/usd/notes.md`,
   "Configurations" and "Duplicate symbols").
+- The `tksuoran/LightUSD` fork carries the behavior erhe needs beyond the
+  build fixes the pin's comment names: the Tydra fallback for a shading
+  connection it does not model (`src/erhe/usd/notes.md` "Node graphs"),
+  the USDA parse of an escape pair in a string literal (same section),
+  the composition of a relationship's targets as a list op across the
+  layer stack ("Sublayers") and the `float2` typing of a `UsdUVTexture`
+  `inputs:st` ("Export", the textures bullet). Each is described where the
+  behavior it produces is described.
 - I1 Import a USD file as an asset: `load_usd` -> `Usd_data` through
   Tydra, the asset browser's Import, viewport drop and MCP `import_usd`,
   undoable through the glTF import's operation path
@@ -739,31 +747,28 @@ future-work lists of `src/erhe/usd/notes.md` and `doc/usd_compatibility.md`,
 ranked by what each buys the editor; every item's substance is the
 section 6 entry it names, and nothing here restates one.
 
-1. The LightUSD fork fix (the `texCoord2f` finding of "Writer findings of
-   usdchecker"). One defect in the dependency, already diagnosed to the
-   function; a fork branch carrying it removes a validator finding.
-2. Load performance (section 6 "Load performance"). The scenes holding
+1. Load performance (section 6 "Load performance"). The scenes holding
    thousands of prims take minutes and trip the stall watchdog; the three
    fixes are named in order and the first, a shape-to-meshes index at the
    change sites, is the one the other scene loaders benefit from too.
-3. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
+2. Load and save on a worker, and `.usdc` / `.usdz` output (section 6
    "Asynchronous load" and "Binary and packaged output"). The load moves
    onto the asset manager's request path once the manager learns a second
    format; the output formats are what LightUSD's writer already offers.
-4. The round-trip residue (section 6 "Node-held secondary values",
-   "Camera infinite_z_far", the `.usdz` path finding of "Writer findings
-   of usdchecker", and the glTF finding of "Physics residue of P1").
+3. The round-trip residue (section 6 "Node-held secondary values",
+   "Camera infinite_z_far", "A writer finding of usdchecker", and the
+   glTF finding of "Physics residue of P1").
    Small, each one a value that leaves through a save and does not come
    back, or a physics fixture case the import still drops.
-5. Shading and imaging the survey names (section 6 "A material slot that
+4. Shading and imaging the survey names (section 6 "A material slot that
    a texture graph feeds AND that carries an authored factor", "Image
    formats", "An environment map from a DomeLight texture", "MaterialX").
    The slot factor is importer work; the rest need a renderer or decoder
    erhe does not have, MaterialX documents a LightUSD option erhe's build
    leaves off.
-6. Platform coverage (section 6 "macOS and Linux wrappers"): the option
+5. Platform coverage (section 6 "macOS and Linux wrappers"): the option
    is on for Windows and Android only.
-7. Composition beyond what erhe resolves (section 6 "Layer-stack
+6. Composition beyond what erhe resolves (section 6 "Layer-stack
    editing", "inherits and specializes arcs whose target is not a class
    prim", the `over`-child and `.usdz` forms of "Variant opinions a
    variant set does not carry", "Overrides on applied API schemas inside
@@ -772,11 +777,9 @@ section 6 entry it names, and nothing here restates one.
 
 ## 4. Order
 
-Item 1 of section 3 goes with a fork tag bump and is best taken when a
-fork clone is at hand (`memory-bank/local/context.md` records it). The
-remaining items have no ordering constraint among them; each is taken
-through the harness of `doc/agent-orchestration-harness.md`, one commit
-at a time (C2).
+The items of section 3 have no ordering constraint among them; each is
+taken through the harness of `doc/agent-orchestration-harness.md`, one
+commit at a time (C2).
 
 ## 5. Out of scope
 
@@ -823,11 +826,10 @@ ranks them. A USD scene loads, edits and saves without any of them.
     while the same file with the limits stripped parses (bisected on the
     written file; colliders and motions are fine). glTF-side; the limit
     spelling the export uses is the suspect.
-- Writer findings of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
-  the `texCoord2f` typing of `UsdUVTexture` `inputs:st` (LightUSD's own
-  member type, a fork fix), and a texture packed in a `.usdz` written as a
-  path that names no file (the packed bytes extracted next to the file, or
-  the `archive.usdz[entry]` form).
+- A writer finding of `usdchecker` (`src/erhe/usd/notes.md`, "Future work"):
+  a texture packed in a `.usdz` is written as a path that names no file (the
+  packed bytes extracted next to the file, or the `archive.usdz[entry]`
+  form).
 - Load performance of a scene holding thousands of prims (the intent-vfx
   scenes, several minutes with the stall watchdog firing - the teapot ones,
   and `simpleAssetScene.usd`, whose 2000 instanced copies of one asset

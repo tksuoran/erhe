@@ -758,11 +758,13 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
     CPMAddPackage(
         NAME              LightUSD
         # erhe fork of lighttransport/LightUSD, carrying MSVC / Visual Studio
-        # 2026 build fixes and Tydra behavior fixes that upstream does not
-        # have yet (branch erhe-fixes). Pinned to a tag on that branch rather
-        # than to the branch name, so the build does not move when the branch
-        # does. Drop the fork once an upstream release carries the same fixes.
-        GIT_TAG           erhe-2026-09-14c
+        # 2026 build fixes, Tydra behavior fixes, USDA parse fixes and writer
+        # type conformance that upstream does not have yet (branch erhe-fixes;
+        # src/erhe/usd/notes.md names what each one is). Pinned to a tag on
+        # that branch rather than to the branch name, so the build does not
+        # move when the branch does. Drop the fork once an upstream release
+        # carries the same fixes.
+        GIT_TAG           erhe-2026-09-14d
         GIT_SHALLOW       FALSE
         #GITHUB_REPOSITORY lighttransport/LightUSD
         GITHUB_REPOSITORY tksuoran/LightUSD

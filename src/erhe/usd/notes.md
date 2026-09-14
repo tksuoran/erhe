@@ -1739,7 +1739,12 @@ over the tree with no file work in it.
   written with `inputs:bias`. All of them are written whatever the erhe value
   is, because USD's fallbacks are not erhe's and an unwritten value would not
   read back. A wrap value on a slot with no texture has no `UsdUVTexture` to
-  ride on and is not written.
+  ride on and is not written. The texture coordinate a `UsdUVTexture` reads
+  is written as the schema's `float2 inputs:st` - the `tksuoran/LightUSD`
+  fork types the member that holds it `float2` rather than the role type
+  `texCoord2f`, which usdchecker's `ShaderPropertyTypeConformanceChecker`
+  rejects; a file that authors the role type keeps that spelling, since the
+  parse records the authored type name.
 
 ### Physics
 
@@ -2175,14 +2180,11 @@ and the entry points (asset browser, viewport drag-and-drop, MCP `import_usd`)
   bare name against a node, so such a value does not come back.
 - A camera's `infinite_z_far` has no USD form; the finite `clippingRange` is
   written and one warning says so.
-- usdchecker on a written file reports two things the writer still does:
-  `UsdUVTexture` `inputs:st` is typed `texCoord2f` where the schema says
-  `float2` (LightUSD's `UsdUVTexture::st` member is a `texcoord2f`
-  attribute, so the spelling is the dependency's and a fork change fixes it),
-  and a texture that came out of a `.usdz` archive is written with the path
-  the archive authored, resolved against the written file's directory,
-  which names no file on disk (`MissingReferenceChecker`); writing such a
-  scene needs the packed bytes extracted next to the file, or the
+- usdchecker on a written file reports one thing the writer still does: a
+  texture that came out of a `.usdz` archive is written with the path the
+  archive authored, resolved against the written file's directory, which
+  names no file on disk (`MissingReferenceChecker`); writing such a scene
+  needs the packed bytes extracted next to the file, or the
   `archive.usdz[entry]` form.
 - The macOS and Linux configure wrappers still default to `none`; turning the
   option on there is part of the step that first needs USD on those platforms.

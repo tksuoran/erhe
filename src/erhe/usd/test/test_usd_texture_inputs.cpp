@@ -189,6 +189,10 @@ TEST_F(Texture_inputs_import, the_writer_writes_the_wrap_modes_and_the_normal_de
     EXPECT_NE(written.find("inputs:wrapT = \"mirror\""), std::string::npos) << written;
     EXPECT_NE(written.find("inputs:bias = (1, -1, 0, -1)"), std::string::npos) << written;
     EXPECT_NE(written.find("inputs:scale = (-2, 2, 1, 2)"), std::string::npos) << written;
+    // The UsdUVTexture schema declares `float2 inputs:st`, and usdchecker's
+    // ShaderPropertyTypeConformanceChecker holds a written file to it.
+    EXPECT_NE(written.find("float2 inputs:st.connect"), std::string::npos) << written;
+    EXPECT_EQ(written.find("texCoord2f inputs:st"), std::string::npos) << written;
 }
 
 // A texture packed inside a `.usdz` has no file of its own: the reader hands
