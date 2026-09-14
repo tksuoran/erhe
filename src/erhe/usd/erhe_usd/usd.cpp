@@ -743,83 +743,11 @@ void compose_variant_prims(
     layer = std::move(hoisted_layer);
 }
 
-// The absolute paths of the marked `NodeGraph` prims one layer authors
-// (doc/usd-texture-graphs-plan.md 2.1): an erhe texture graph, as opposed to a
-// foreign shading network (R5).
-void collect_node_graph_paths(
-    const std::string&         path,
-    const lightusd::PrimSpec&  spec,
-    std::set<std::string>&     out_paths
-)
-{
-    if (
-        (spec.typeName() == c_node_graph_prim_type_name) &&
-        (spec.props().find(std::string{c_node_graph_format_attribute}) != spec.props().end())
-    ) {
-        out_paths.insert(path);
-        return;
-    }
-    for (const lightusd::PrimSpec& child : spec.children()) {
-        collect_node_graph_paths(path + "/" + child.name(), child, out_paths);
-    }
-}
-
-void collect_node_graph_paths(const lightusd::Layer& layer, std::set<std::string>& out_paths)
-{
-    for (const std::pair<const std::string, lightusd::PrimSpec>& entry : layer.primspecs()) {
-        collect_node_graph_paths("/" + entry.first, entry.second, out_paths);
-    }
-}
-
-// Whether a connection target lies inside one of the graphs.
-[[nodiscard]] auto targets_node_graph(
-    const lightusd::Attribute&   attribute,
-    const std::set<std::string>& graph_paths
-) -> bool
-{
-    for (const lightusd::Path& connection : attribute.connections()) {
-        const lightusd::tstring_view prim_part = connection.prim_part();
-        const std::string            target{prim_part.data(), prim_part.size()};
-        for (const std::string& graph_path : graph_paths) {
-            if ((target == graph_path) || (target.compare(0, graph_path.size() + 1, graph_path + "/") == 0)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-// Take every connection into one of the graphs out of `spec` and its subtree.
-// A `UsdPreviewSurface` input wired to a `NodeGraph` output is what R2 spells,
-// and Tydra's render-scene conversion fails the whole material over it: the
-// connection resolves to no `UsdUVTexture`, which is a hard error there. erhe
-// resolves the graph itself, off the layer this strips a copy of, so the stage
-// Tydra sees carries the graph prims without the wiring and the material takes
-// its schema fallback for that input - which is what the caller then rebinds
-// to the rebuilt graph asset.
-void strip_node_graph_connections(lightusd::PrimSpec& spec, const std::set<std::string>& graph_paths)
-{
-    std::vector<std::string> removed;
-    for (const std::pair<const std::string, lightusd::Property>& property : spec.props()) {
-        if (property.second.is_attribute() && targets_node_graph(property.second.get_attribute(), graph_paths)) {
-            removed.push_back(property.first);
-        }
-    }
-    for (const std::string& name : removed) {
-        spec.props().erase(name);
-    }
-    for (lightusd::PrimSpec& child : spec.children()) {
-        strip_node_graph_connections(child, graph_paths);
-    }
-}
-
 // A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds, and the erhe input
-// name it belongs to. Tydra resolves a shading input to a `UsdUVTexture` or
-// fails the whole material over it (an authored plain value beside the
-// connection is the one case it falls back to), so these two connections are
-// taken out of the layer copy the stage is built from and recorded for the
-// importer, which maps `displayColor` / `displayOpacity` onto the mesh's
-// vertex colors (doc/usd_compatibility.md, "Materials").
+// name it belongs to. Tydra leaves such an input at its schema fallback and
+// warns, so the connection is recorded here for the importer, which maps
+// `displayColor` / `displayOpacity` onto the mesh's vertex colors
+// (doc/usd_compatibility.md, "Materials").
 constexpr std::string_view c_preview_surface_info_id      {"UsdPreviewSurface"};
 constexpr std::string_view c_primvar_reader_info_id_prefix{"UsdPrimvarReader_"};
 constexpr std::string_view c_shader_prim_type_name        {"Shader"};
@@ -886,23 +814,11 @@ void collect_shader_specs(
     }
 }
 
-// One connection to take out of the layer copy the stage is built from: the
-// absolute path of the `UsdPreviewSurface` prim spec and the name of the
-// property carrying it.
-class Primvar_input_connection final
-{
-public:
-    std::string shader_path;
-    std::string property_name;
-};
-
-// Every `UsdPreviewSurface` input of `layer` a `UsdPrimvarReader` feeds: what
-// the importer applies (`out_records`) and what the stage is built without
-// (`out_connections`).
+// Every `UsdPreviewSurface` input of `layer` a `UsdPrimvarReader` feeds, for
+// the importer to apply.
 void collect_primvar_reader_inputs(
-    const lightusd::Layer&                 layer,
-    std::vector<Primvar_input_record>&     out_records,
-    std::vector<Primvar_input_connection>& out_connections
+    const lightusd::Layer&             layer,
+    std::vector<Primvar_input_record>& out_records
 )
 {
     std::map<std::string, Shader_spec_entry> shaders;
@@ -940,123 +856,8 @@ void collect_primvar_reader_inputs(
                     .primvar_name  = read_spec_text(*reader->second.spec, "inputs:varname")
                 }
             );
-            out_connections.push_back(
-                Primvar_input_connection{
-                    .shader_path   = shader.first,
-                    .property_name = std::string{input_name}
-                }
-            );
         }
     }
-}
-
-// The prim spec of `layer` at an absolute path, or null.
-[[nodiscard]] auto find_mutable_primspec(lightusd::Layer& layer, const std::string& absolute_path) -> lightusd::PrimSpec*
-{
-    lightusd::PrimSpec* current = nullptr;
-    std::size_t         start   = 1; // the leading '/'
-    while (start <= absolute_path.size()) {
-        const std::size_t separator = absolute_path.find('/', start);
-        const std::string name = (separator == std::string::npos)
-            ? absolute_path.substr(start)
-            : absolute_path.substr(start, separator - start);
-        if (name.empty()) {
-            return nullptr;
-        }
-        if (current == nullptr) {
-            const std::unordered_map<std::string, lightusd::PrimSpec>::iterator root = layer.primspecs().find(name);
-            if (root == layer.primspecs().end()) {
-                return nullptr;
-            }
-            current = &root->second;
-        } else {
-            lightusd::PrimSpec* child_spec = nullptr;
-            for (lightusd::PrimSpec& child : current->children()) {
-                if (child.name() == name) {
-                    child_spec = &child;
-                    break;
-                }
-            }
-            if (child_spec == nullptr) {
-                return nullptr;
-            }
-            current = child_spec;
-        }
-        if (separator == std::string::npos) {
-            break;
-        }
-        start = separator + 1;
-    }
-    return current;
-}
-
-// Take the recorded connections out of `layer`. A connection beside an
-// authored value loses the connection alone, so the value Tydra then reads is
-// the one the file spells.
-void strip_primvar_reader_connections(
-    lightusd::Layer&                             layer,
-    const std::vector<Primvar_input_connection>& connections
-)
-{
-    for (const Primvar_input_connection& connection : connections) {
-        lightusd::PrimSpec* spec = find_mutable_primspec(layer, connection.shader_path);
-        if (spec == nullptr) {
-            continue;
-        }
-        const std::map<std::string, lightusd::Property>::iterator i = spec->props().find(connection.property_name);
-        if (i == spec->props().end()) {
-            continue;
-        }
-        lightusd::Attribute* attribute = i->second.get_attribute_or_null();
-        if (attribute == nullptr) {
-            continue;
-        }
-        if (attribute->has_value()) {
-            attribute->set_connections(std::vector<lightusd::Path>{});
-        } else {
-            spec->props().erase(i);
-        }
-    }
-}
-
-// Replace `stage` with `layer` stripped of the wiring Tydra cannot follow -
-// the erhe texture graphs and the `UsdPrimvarReader` shading inputs - built
-// into a stage, the way compose_variant_prims replaces it with the hoisted
-// layer. `layer` itself keeps the wiring: it is what the importer reads the
-// graphs and the material slot bindings off, and the connections of
-// `primvar_connections` are taken out of the copy alone. A stage that cannot
-// be built leaves `stage` as it was and is reported.
-void compose_node_graph_stage(
-    const std::filesystem::path&       path,
-    const lightusd::Layer&             layer,
-    lightusd::Stage&                   stage,
-    const std::set<std::string>&       graph_paths,
-    const std::vector<Primvar_input_connection>& primvar_connections,
-    std::string&                       warning
-)
-{
-    ERHE_PROFILE_FUNCTION();
-
-    const std::string filename = path.generic_string();
-    lightusd::Layer   stripped = layer;
-    for (std::pair<const std::string, lightusd::PrimSpec>& entry : stripped.primspecs()) {
-        strip_node_graph_connections(entry.second, graph_paths);
-    }
-    strip_primvar_reader_connections(stripped, primvar_connections);
-
-    std::string     load_warning;
-    std::string     load_error;
-    lightusd::Stage composed_stage;
-    if (!lightusd::LayerToStage(std::move(stripped), &composed_stage, &load_warning, &load_error)) {
-        log_usd->warn("USD '{}': the texture graph wiring could not be resolved: {}", filename, load_error);
-        warning += load_error;
-        return;
-    }
-    if (!load_warning.empty()) {
-        warning += load_warning;
-        log_usd->warn("USD '{}': texture graphs: {}", filename, load_warning);
-    }
-    stage = std::move(composed_stage);
 }
 
 } // anonymous namespace
@@ -1173,31 +974,16 @@ auto load_stage(const std::filesystem::path& path, const Usd_variant_selections&
         if (!impl->variant_prims.empty()) {
             log_usd->info("USD '{}': {} prim(s) of variant blocks are in the tree", filename, impl->variant_prims.size());
         }
-        // An erhe texture graph is wiring Tydra cannot follow, so the stage it
-        // converts is built without it (doc/usd-texture-graphs-plan.md 2.3).
-        std::set<std::string> node_graph_paths;
-        collect_node_graph_paths(impl->layer, node_graph_paths);
-        std::vector<Primvar_input_connection> primvar_connections;
-        collect_primvar_reader_inputs(impl->layer, impl->primvar_inputs, primvar_connections);
-        if (!node_graph_paths.empty() || !primvar_connections.empty()) {
-            if (path.extension() == ".usdz") {
-                log_usd->warn(
-                    "USD '{}': {} texture graph(s) inside a .usdz archive are not resolved",
-                    filename, node_graph_paths.size()
-                );
-                impl->primvar_inputs.clear();
-            } else {
-                compose_node_graph_stage(path, impl->layer, impl->stage, node_graph_paths, primvar_connections, result.warning);
-                if (!node_graph_paths.empty()) {
-                    log_usd->info("USD '{}': resolved {} texture graph(s)", filename, node_graph_paths.size());
-                }
-                if (!impl->primvar_inputs.empty()) {
-                    log_usd->info(
-                        "USD '{}': {} UsdPreviewSurface input(s) are fed by a UsdPrimvarReader",
-                        filename, impl->primvar_inputs.size()
-                    );
-                }
-            }
+        // A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds is an input
+        // Tydra leaves at its schema fallback, so what the material carries for
+        // it is recorded off the layer and the importer applies it
+        // (doc/usd_compatibility.md, "Materials").
+        collect_primvar_reader_inputs(impl->layer, impl->primvar_inputs);
+        if (!impl->primvar_inputs.empty()) {
+            log_usd->info(
+                "USD '{}': {} UsdPreviewSurface input(s) are fed by a UsdPrimvarReader",
+                filename, impl->primvar_inputs.size()
+            );
         }
     }
 

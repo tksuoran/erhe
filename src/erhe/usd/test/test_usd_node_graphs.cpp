@@ -318,6 +318,26 @@ TEST_F(Node_graphs_import, a_material_input_connected_to_a_graph_is_a_slot_bindi
     EXPECT_EQ(loaded.data.material_graph_bindings[0].graph_path,     "/World/Graph_Textures/Rust");
 }
 
+TEST_F(Node_graphs_import, a_material_whose_input_reads_a_graph_converts_with_the_schema_fallback)
+{
+    // `Iron` wires `inputs:diffuseColor` to the graph and authors no value for
+    // it, which resolves to no `UsdUVTexture`: the conversion leaves that one
+    // input at its schema fallback - the 0.18 grey - and converts the material
+    // with the rest of its inputs, rather than failing the material. The slot
+    // binding is what then supplies the input's value.
+    EXPECT_TRUE(loaded.error.empty()) << loaded.error;
+    const std::size_t iron = material_index_of(loaded.data, "Iron");
+    ASSERT_LT(iron, loaded.data.materials.size());
+    const std::shared_ptr<erhe::primitive::Material>& material = loaded.data.materials[iron];
+    ASSERT_TRUE(material);
+    const glm::vec3 base_color = material->get_value(erhe::primitive::Material::base_color_property);
+    EXPECT_NEAR(base_color.x, 0.18f, 1e-5f);
+    EXPECT_NEAR(base_color.y, 0.18f, 1e-5f);
+    EXPECT_NEAR(base_color.z, 0.18f, 1e-5f);
+    ASSERT_EQ(loaded.data.material_graph_bindings.size(), 1u);
+    EXPECT_EQ(loaded.data.material_graph_bindings[0].material_index, iron);
+}
+
 TEST_F(Node_graphs_import, an_unmarked_node_graph_is_no_erhe_graph)
 {
     EXPECT_EQ(find_graph(loaded.data, "/World/Graph_Textures/Foreign"), nullptr);

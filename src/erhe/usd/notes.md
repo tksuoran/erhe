@@ -338,14 +338,11 @@ image holds in the channel the glTF default names - which is what
 `test_assets/RoughnessTest` authors.
 
 A `UsdPreviewSurface` input a `UsdPrimvarReader` feeds reads the mesh's own
-data rather than a texture, and Tydra resolves a connected shading input to a
-`UsdUVTexture` or fails the whole material over it (it falls back to the
-input's plain value only when the file also authors one, which a
-connection-only input does not). So `load_stage` takes those connections out
-of the layer copy the stage is built from - the way it takes the erhe
-texture-graph wiring out - and records the material prim, the input and the
-primvar name for the importer; the kept layer still holds them, and the rest
-of the material converts.
+data rather than a texture, which Tydra models no more than it models a graph
+output: it leaves the input at its schema fallback and warns. So `load_stage`
+records the material prim, the input and the primvar name off the composed
+layer for the importer, which is what applies them; the rest of the material
+converts with Tydra.
 
 `inputs:diffuseColor` and `inputs:opacity` are the two inputs erhe reads that
 way. A reader of `displayColor` (or `displayOpacity` for `opacity`) sets the
@@ -802,22 +799,14 @@ The format is read before the children for that reason. The tokens are
   A `Shader` child whose `info:id` is not under the prefix its graph's format
   names is one warning and no node, and the links into it are dropped with it,
   as is a connection that leaves the graph.
-- Tydra's render-scene conversion fails a whole material over a
-  `UsdPreviewSurface` input whose connection resolves to no `UsdUVTexture`, so
-  the stage it converts is built without that wiring: `load_stage` strips every
-  connection into a marked graph from a copy of the composed layer and builds
-  the stage from that copy (`compose_node_graph_stage`) - the marker attribute
-  is what a graph is recognized by there, so a graph of any format is stripped
-  - while the kept layer
-  - which is what the graphs and the slot bindings are read off - keeps it.
-  The material then takes its schema fallback for the stripped input, and the
-  caller binds the slot to the rebuilt graph asset. A graph inside a `.usdz`
-  archive is not resolved that way, for the reason a sublayer inside one is
-  not composed, and is named in one warning. The strip is a downstream
-  answer to a LightUSD limit: once the `tksuoran/LightUSD` fork's Tydra
-  leaves an input whose connection is no `UsdUVTexture` unset instead of
-  failing the material, `compose_node_graph_stage` goes and the stage is
-  built from the composed layer as it stands (future work).
+- A `UsdPreviewSurface` input wired to a graph output is an input Tydra
+  resolves to no `UsdUVTexture`: the `tksuoran/LightUSD` fork leaves such an
+  input at its schema fallback and warns, naming the input and the connection
+  target, so the stage is built from the composed layer as it stands and the
+  material converts with the rest of its inputs. The caller binds the slot to
+  the rebuilt graph asset, which is what supplies the input's value. This holds
+  for a graph in a `.usdz` archive too - the conversion reads the wiring the
+  same way there.
 - `erhe::usd` creates no graph asset: the caller rebuilds it from the record,
   and hands the writer one `Usd_save_node_graph` per graph prim. Being named
   in that list is what makes an item a graph prim to the writer - a graph

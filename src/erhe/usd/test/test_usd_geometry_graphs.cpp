@@ -306,12 +306,10 @@ TEST_F(Geometry_graphs_import, the_result_child_is_no_mesh_of_the_scene)
     }
 }
 
-// `load_stage` strips the wiring of every marked `NodeGraph` from the stage
-// Tydra converts, and the marker is the attribute rather than any one format
-// token, so a geometry graph is stripped the way a texture graph is: the
-// stage composes, the meshes convert - the `result` child among them - and
-// the graph is still read whole off the kept layer.
-TEST_F(Geometry_graphs_import, the_stage_composes_with_the_graph_wiring_stripped)
+// The stage Tydra converts is the composed layer as it stands, graph wiring
+// and all: the stage composes without a warning, the meshes convert - the
+// `result` child among them - and the graph is read whole off the layer.
+TEST_F(Geometry_graphs_import, the_stage_composes_with_the_graph_wiring_in_place)
 {
     EXPECT_TRUE(loaded.warning.empty()) << loaded.warning;
     const erhe::usd::Usd_node_graph* graph = find_graph(loaded.data, "/World/Graph_Meshes/Terrain");
