@@ -224,7 +224,8 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓step-5{8ae7796d6:Asset_tree+Asset_scan_request{Gltf_scan_request-shape};scan()-submits-to-tf::Executor{explicit-ctor-arg};apply_finished_scan-on-main{imgui()+refresh_file};pending-refresh-paths-queued;MEASURED:ctor-8.1s->0.12ms,walk-7.7s-on-worker}
 ✓cards-interactive-fixes{c5ea88930:cross-pair-coincident+single-sided{culling-resolves-pair;adapter-2^-23-epsilon-z-fights}|78c390969:Z--card-UV=adapter-uv_flipped_st{other-faces-unflipped};ref=<OpenUSD>/pxr/usdImaging/usdImaging/drawModeAdapter.cpp-_GenerateCardsGeometry+_GenerateTextureCoordinates;edit-only-user-tests;LEFT:card-image-borrowing-from-opposite-face{adapter-does,erhe-draws-flat-color;plan-section-6}};USER-VERIFIED-2026-09-14{z-fight-gone}|?user-interactive{Z--card-upright}
   PLAN-DONE-2026-09-14{5-commits;post-import-tick-128-150ms->6ms;import-tick-30.5s->12.5s;left=per-file-USD-stage-cache{25-parses->1-per-file,plan-step-3-note}+preexisting-double-close_scene-abort}|?user-interactive{DrawModes-import-windowed;material-edit-live;texture-graph-bake-updates-material;Asset-Browser-populates-after-startup}
-!trap::erhe_scene_renderer_gpu_tests-needs-live-display{aborts-exit-3-after-env-set-up-when-display-asleep;not-a-code-failure}
+!trap::erhe_scene_renderer_gpu_tests-needs-live-display{aborts-exit-3-after-env-set-up-when-display-asleep;not-a-code-failure;16/16-pass-2026-09-14-with-display}
+✓follow-ups-2026-09-14{058503b8d:Scene_root::request_close-single-producer{refuses-pending/unregistered;MCP-batch-same-frame-double-close-verified};headlight-on-imported-scene=not-a-defect{create_scene-default-camera-sees-CeramicBlack-row,displayColor-0.025;headlight-measured-working}}
 
 [TASK::drawmodes-fidelity]{plan-section-3-item-1;via-harness;started-2026-09-13}
 ✓camera-exposure-stop{3f93df1e3:import-2^stop,export-log2;capture-no-longer-black;usd-tests-360}
