@@ -39,39 +39,6 @@ Async_raytrace_kickoff_operation::~Async_raytrace_kickoff_operation() noexcept =
 
 namespace {
 
-// Every mesh hosted by scene_root whose primitive list contains one of
-// mesh_primitives' Primitive objects - scene_mesh itself first (when it is
-// hosted there), then the sharers. Caller holds scene_root->item_host_mutex.
-auto collect_meshes_sharing_primitives(
-    Scene_root&                                          scene_root,
-    const std::shared_ptr<erhe::scene::Mesh>&            scene_mesh,
-    const std::vector<erhe::scene::Mesh_primitive>&      mesh_primitives
-) -> std::vector<std::shared_ptr<erhe::scene::Mesh>>
-{
-    std::vector<std::shared_ptr<erhe::scene::Mesh>> result;
-    result.push_back(scene_mesh);
-    const auto shares_primitive = [&mesh_primitives](const erhe::scene::Mesh& mesh) -> bool
-    {
-        for (const erhe::scene::Mesh_primitive& candidate : mesh.get_primitives()) {
-            for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
-                if (candidate.primitive.get() == mesh_primitive.primitive.get()) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    };
-    for (const std::shared_ptr<erhe::scene::Mesh_layer>& mesh_layer : scene_root.get_scene().get_mesh_layers()) {
-        for (const std::shared_ptr<erhe::scene::Mesh>& mesh : mesh_layer->meshes) {
-            if ((mesh == scene_mesh) || !mesh || !shares_primitive(*mesh)) {
-                continue;
-            }
-            result.push_back(mesh);
-        }
-    }
-    return result;
-}
-
 // Deferred per-mesh finalize, running on a tf::Executor worker
 // (doc/gltf-load-speedup-plan.md): builds the Geometry (edges, smooth
 // normals), the real triangle raytrace and - when the load path deferred it -
@@ -205,16 +172,28 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
         // frees. Refreshing only this mesh left the sharers drawing from
         // freed (reused) mesh memory until their own task committed,
         // seconds later on a large scene.
+        //
+        // The sharers come from the scene root's shape-to-meshes index, which
+        // the change sites maintain: a load queues one commit per mesh, and
+        // reading the index keeps each commit proportional to the sharers of
+        // the committed shapes instead of to the whole scene.
         context.scene_commit_queue->enqueue(
             [scene_mesh, mesh_primitives = std::move(mesh_primitives)]()
             {
                 ERHE_PROFILE_SCOPE("deferred finalize commit");
                 Scene_root* const scene_root = static_cast<Scene_root*>(scene_mesh->get_item_host());
                 std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> scene_lock;
-                std::vector<std::shared_ptr<erhe::scene::Mesh>> affected_meshes;
+                // Main-thread scratch (Scene_commit_queue::flush): the commit
+                // runs once per finalized mesh, so the buffer reaches its
+                // high-water mark and stops allocating. Nothing this commit
+                // calls collects sharers again, so the buffer is never live
+                // across a nested use; it is cleared after use as well, so it
+                // holds no mesh between commits.
+                static thread_local std::vector<std::shared_ptr<erhe::scene::Mesh>> affected_meshes;
+                affected_meshes.clear();
                 if (scene_root != nullptr) {
                     scene_lock = std::unique_lock<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)>{scene_root->item_host_mutex};
-                    affected_meshes = collect_meshes_sharing_primitives(*scene_root, scene_mesh, mesh_primitives);
+                    scene_root->collect_meshes_sharing_primitives(scene_mesh, mesh_primitives, affected_meshes);
                     for (const std::shared_ptr<erhe::scene::Mesh>& affected_mesh : affected_meshes) {
                         scene_root->begin_mesh_rt_update(affected_mesh);
                     }
@@ -249,7 +228,7 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                 }
                 if (scene_root == nullptr) {
                     scene_mesh->update_rt_primitives();
-                    return;
+                    return; // affected_meshes is empty on this path
                 }
                 for (const std::shared_ptr<erhe::scene::Mesh>& affected_mesh : affected_meshes) {
                     // Rebuilds the raytrace primitives from the committed
@@ -261,6 +240,10 @@ void deferred_finalize_mesh_items(Mesh_operation_parameters&& parameters, const 
                     affected_mesh->update_rt_primitives();
                     scene_root->end_mesh_rt_update(affected_mesh);
                 }
+                // Released here, not only at the next commit's clear(): the
+                // scratch holds mesh references and must not pin them between
+                // commits. Capacity stays.
+                affected_meshes.clear();
             }
         );
     }

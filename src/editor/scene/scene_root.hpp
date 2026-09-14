@@ -62,6 +62,7 @@ namespace erhe::scene {
     class Light_layer;
     class Mesh;
     class Mesh_layer;
+    class Mesh_primitive;
     class Mesh_raytrace;
     class Message_bus;
     class Xformable; using Node = Xformable;
@@ -172,6 +173,18 @@ private:
     std::shared_ptr<erhe::scene::Light_layer> m_light;
 };
 
+// One entry of the shape-to-meshes index (Scene_root::m_meshes_by_primitive):
+// a mesh that names the entry's Primitive. The raw pointer is the identity the
+// index removes by, so removal and expiry scans compare pointers instead of
+// locking every weak reference; the weak reference is what the query hands
+// out, and it keeps the index from holding a mesh of a closed scene alive.
+class Mesh_sharer
+{
+public:
+    const erhe::scene::Mesh*        mesh{nullptr};
+    std::weak_ptr<erhe::scene::Mesh> weak_mesh;
+};
+
 class Scene_root
     : public std::enable_shared_from_this<Scene_root>
     , public erhe::scene::Scene_host
@@ -256,6 +269,22 @@ public:
     void on_mesh_primitive_data_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_mesh_display_color_changed (const std::shared_ptr<erhe::scene::Mesh>& mesh) override;
     void on_light_changed          (const std::shared_ptr<erhe::scene::Light>& light) override;
+
+    // The registered meshes of this scene that reference any Primitive of
+    // mesh_primitives, read from the shape-to-meshes index: out_meshes is
+    // cleared and filled with `mesh` first (whether or not it is registered
+    // here), then every other registered mesh naming one of those
+    // primitives, each mesh once. The caller owns out_meshes and keeps its
+    // capacity between calls. Callers hold item_host_mutex.
+    //
+    // Shapes are shared - glTF instances, brush instances and prefab clones
+    // hold the same Primitive - so a shape-level swap has to refresh every
+    // mesh naming the swapped primitive, not only the one that built it.
+    void collect_meshes_sharing_primitives(
+        const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+        const std::vector<erhe::scene::Mesh_primitive>&  mesh_primitives,
+        std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes
+    );
 
     // The meshes whose Gprim.display_color changed since the last call, moved
     // out of this scene root. App_scenes::rebuild_display_colors() is what
@@ -471,6 +500,41 @@ private:
     // picking-tool rays (which use role bits) skip them and the ID renderer
     // handles them instead. See Raytrace_node_mask::skinned.
     [[nodiscard]] auto get_mesh_rt_mask(erhe::scene::Mesh* mesh) -> uint32_t;
+
+    // Shape-to-meshes index (doc/usd-compatibility-plan.md section 6, "Load
+    // performance of a scene holding thousands of prims"). For every
+    // Primitive a registered mesh of this scene names, the meshes that name
+    // it; m_primitives_by_mesh is the reverse list that makes removal exact,
+    // so a mesh whose primitive list was replaced leaves the entries of the
+    // primitives it USED to name. Maintained only at the three change sites -
+    // register_mesh, unregister_mesh and on_mesh_primitives_changed - and
+    // never scanned or refreshed per frame.
+    //
+    // Own mutex rather than item_host_mutex: register_mesh and the
+    // primitives-changed hook run on tf::Executor workers during an async
+    // load, which item_host_mutex does not cover at every one of those call
+    // sites. It is only ever taken as the inner lock (the raytrace commit
+    // queries while holding item_host_mutex), never the other way around.
+    //
+    // The sharer entries are weak so the index never keeps a mesh of a closed
+    // scene alive; an expired entry is dropped whenever it is met.
+    void index_mesh_primitives   (const std::shared_ptr<erhe::scene::Mesh>& mesh);
+    void unindex_mesh_primitives (const erhe::scene::Mesh* mesh);
+    void remove_mesh_from_primitive_index(const erhe::scene::Mesh* mesh); // m_mesh_primitive_index_mutex held
+    ERHE_PROFILE_MUTEX(std::mutex, m_mesh_primitive_index_mutex);
+    std::unordered_map<
+        const erhe::primitive::Primitive*,
+        std::vector<Mesh_sharer>
+    > m_meshes_by_primitive;
+    std::unordered_map<
+        const erhe::scene::Mesh*,
+        std::vector<const erhe::primitive::Primitive*>
+    > m_primitives_by_mesh;
+    // The primitive list being indexed, cleared at point of use and after
+    // use; guarded by m_mesh_primitive_index_mutex like the two maps. A
+    // member rather than a local because index_mesh_primitives runs once per
+    // mesh refresh of every raytrace commit of a load.
+    std::vector<const erhe::primitive::Primitive*> m_index_scratch;
 
     erhe::message_bus::Subscription<Selection_message>     m_selection_subscription;
     erhe::message_bus::Subscription<Items_removed_message> m_items_removed_subscription;

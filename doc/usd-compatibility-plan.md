@@ -839,14 +839,18 @@ ranks them. A USD scene loads, edits and saves without any of them.
   usd-wg `Vehicles/USD_Mini_Car_Kit` vehicle and wheel variant sets, where
   hoisting every variant turns a 91-prim, 6-mesh composed stage into 2373
   prims and 146 meshes and the watchdog reports the tick stuck in
-  `raytrace: BVH commit`): each queued
-  raytrace commit scans every mesh of every layer
-  (`collect_meshes_sharing_primitives`, O(N) per commit, N commits per
-  load), hover traces the linear path every frame while the TLAS cannot
-  settle, and `finalize_imported_meshes` builds the per-shape BVHs serially
-  on the tick thread. A shape-to-meshes index maintained at the change
-  sites, a hover that does not trace while a load is in flight, and the
-  proxy build on the deferred path are the fixes, in that order.
+  `raytrace: BVH commit`): a queued raytrace commit reads the scene's
+  shape-to-meshes index (`Scene_root::collect_meshes_sharing_primitives`,
+  maintained at the change sites), so it costs the sharers of the committed
+  shapes; the two remaining fixes are a hover that does not trace while a
+  load is in flight - today it traces the linear path every frame while the
+  TLAS cannot settle - and the per-shape BVH build of
+  `finalize_imported_meshes` on the deferred path, which is serial on the
+  tick thread, in that order. Both scenes measured after the index alone are
+  unchanged (`DrawModes.usd` 13.9 s -> 14.0 s, `simpleAssetScene.usd`
+  303.6 s -> 304.6 s to settle, with the same stall lines): the scan the
+  index replaces is small beside the per-sharer refresh work and the serial
+  BVH build, so the load time is what the two remaining fixes address.
 - Asynchronous load: `load_usd` runs on the calling thread and the editor's
   import and open are synchronous, where a glTF import goes through the
   asset manager's `Asset_load_request` and the droppable-payload import

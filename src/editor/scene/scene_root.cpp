@@ -1363,11 +1363,132 @@ void Scene_root::end_mesh_rt_update(const std::shared_ptr<erhe::scene::Mesh>& me
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
 }
 
+void Scene_root::remove_mesh_from_primitive_index(const erhe::scene::Mesh* mesh)
+{
+    const auto i = m_primitives_by_mesh.find(mesh);
+    if (i == m_primitives_by_mesh.end()) {
+        return;
+    }
+    for (const erhe::primitive::Primitive* const primitive : i->second) {
+        const auto j = m_meshes_by_primitive.find(primitive);
+        if (j == m_meshes_by_primitive.end()) {
+            continue;
+        }
+        std::vector<Mesh_sharer>& sharers = j->second;
+        const auto dead = std::remove_if(
+            sharers.begin(),
+            sharers.end(),
+            [mesh](const Mesh_sharer& sharer) -> bool
+            {
+                return (sharer.mesh == mesh) || sharer.weak_mesh.expired();
+            }
+        );
+        sharers.erase(dead, sharers.end());
+        if (sharers.empty()) {
+            m_meshes_by_primitive.erase(j);
+        }
+    }
+    m_primitives_by_mesh.erase(i);
+}
+
+void Scene_root::index_mesh_primitives(const std::shared_ptr<erhe::scene::Mesh>& mesh)
+{
+    if (!mesh) {
+        return;
+    }
+    const erhe::scene::Mesh* const key = mesh.get();
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mesh_primitive_index_mutex};
+    m_index_scratch.clear();
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh->get_primitives()) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if (primitive == nullptr) {
+            continue;
+        }
+        // A mesh naming the same Primitive twice is one sharer of it.
+        if (std::find(m_index_scratch.begin(), m_index_scratch.end(), primitive) != m_index_scratch.end()) {
+            continue;
+        }
+        m_index_scratch.push_back(primitive);
+    }
+    // The primitives-changed hook also fires for a swap that leaves the list
+    // alone - the raytrace commit refreshes every sharer of a swapped shape,
+    // and each refresh reports its mesh - so the list the mesh already
+    // contributes is compared first: an unchanged list costs one pass over
+    // the mesh's own primitives, never a walk of the sharer entries.
+    const auto i = m_primitives_by_mesh.find(key);
+    const bool unchanged = (i != m_primitives_by_mesh.end())
+        ? (i->second == m_index_scratch)
+        : m_index_scratch.empty();
+    if (unchanged) {
+        m_index_scratch.clear();
+        return;
+    }
+    remove_mesh_from_primitive_index(key);
+    if (!m_index_scratch.empty()) {
+        for (const erhe::primitive::Primitive* const primitive : m_index_scratch) {
+            m_meshes_by_primitive[primitive].push_back(Mesh_sharer{key, mesh});
+        }
+        m_primitives_by_mesh[key] = m_index_scratch;
+    }
+    m_index_scratch.clear();
+}
+
+void Scene_root::unindex_mesh_primitives(const erhe::scene::Mesh* mesh)
+{
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mesh_primitive_index_mutex};
+    remove_mesh_from_primitive_index(mesh);
+}
+
+void Scene_root::collect_meshes_sharing_primitives(
+    const std::shared_ptr<erhe::scene::Mesh>&        mesh,
+    const std::vector<erhe::scene::Mesh_primitive>&  mesh_primitives,
+    std::vector<std::shared_ptr<erhe::scene::Mesh>>& out_meshes
+)
+{
+    ERHE_PROFILE_FUNCTION();
+
+    out_meshes.clear();
+    if (mesh) {
+        out_meshes.push_back(mesh);
+    }
+    const std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{m_mesh_primitive_index_mutex};
+    // Sharers of one primitive are unique by construction, so only a mesh
+    // naming more than one primitive of this snapshot can arrive twice: the
+    // linear check is needed from the second primitive on.
+    bool check_duplicates = false;
+    for (const erhe::scene::Mesh_primitive& mesh_primitive : mesh_primitives) {
+        const erhe::primitive::Primitive* const primitive = mesh_primitive.primitive.get();
+        if (primitive == nullptr) {
+            continue;
+        }
+        const auto i = m_meshes_by_primitive.find(primitive);
+        if (i == m_meshes_by_primitive.end()) {
+            continue;
+        }
+        for (const Mesh_sharer& entry : i->second) {
+            if (entry.mesh == mesh.get()) {
+                continue;
+            }
+            std::shared_ptr<erhe::scene::Mesh> sharer = entry.weak_mesh.lock();
+            if (!sharer) {
+                continue;
+            }
+            if (check_duplicates && (std::find(out_meshes.begin(), out_meshes.end(), sharer) != out_meshes.end())) {
+                continue;
+            }
+            out_meshes.push_back(std::move(sharer));
+        }
+        check_duplicates = true;
+    }
+}
+
 void Scene_root::register_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
     ERHE_VERIFY(mesh);
 
     log_scene->debug("Registering Mesh '{}' into scene", mesh->get_name());
+
+    index_mesh_primitives(mesh);
 
     mesh->attach_rt_to_scene(m_raytrace_scene.get());
     mesh->set_rt_mask(get_mesh_rt_mask(mesh.get())); // TODO If scene changes, the mesh/node masks need to be updated somehow
@@ -1474,6 +1595,8 @@ void Scene_root::unregister_mesh(const std::shared_ptr<erhe::scene::Mesh>& mesh)
     ERHE_VERIFY(mesh);
 
     log_scene->debug("Unregistering Mesh '{}' from scene", mesh->get_name());
+
+    unindex_mesh_primitives(mesh.get());
 
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_unregister(mesh);
@@ -1647,6 +1770,9 @@ void Scene_root::enqueue_release_mesh_materials(const std::shared_ptr<erhe::scen
 // Draw list hooks: any thread, enqueue only (Scene_host contract).
 void Scene_root::on_mesh_primitives_changed(const std::shared_ptr<erhe::scene::Mesh>& mesh)
 {
+    // The shape-to-meshes index follows the mesh's primitive list, so it is
+    // rebuilt for this one mesh here - the third and last change site.
+    index_mesh_primitives(mesh);
     enqueue_mesh_materials(mesh);
     if (m_draw_list_scene) {
         m_draw_list_scene->enqueue_reregister(mesh);
