@@ -181,10 +181,14 @@ void Primitive_buffer::write_primitive(
     const erhe::primitive::Texcoord_quantization texcoord_quantization = erhe::primitive::get_texcoord_quantization(*buffer_mesh);
 
     using erhe::graphics::as_span;
+    // The active item of the selection draws in its own color
+    // (doc/active-item-plan.md D5); every other selected entry in
+    // constant_color0.
+    const glm::vec4 selected_color = settings.get_selected_color(mesh->get_flag_bits());
     const auto color_span =
         (settings.color_source == Primitive_color_source::id_offset           ) ? as_span(id_offset_vec4 ) :
         (settings.color_source == Primitive_color_source::mesh_wireframe_color) ? as_span(wireframe_color) :
-        use_primary_color                                                       ? as_span(settings.constant_color0) :
+        use_primary_color                                                       ? as_span(selected_color) :
                                                                                   as_span(settings.constant_color1);
     const auto size_span =
         (settings.size_source == Primitive_size_source::mesh_point_size) ? as_span(mesh->point_size      ) :
@@ -303,10 +307,11 @@ auto Primitive_buffer::update(
             // is_hovered() on the mirrored flag word.
             const bool selected = (entry.flag_bits & erhe::Item_flags::selected) != 0u;
             const bool hovered  = (entry.flag_bits & (erhe::Item_flags::hovered_in_viewport | erhe::Item_flags::hovered_in_item_tree)) != 0u;
+            const glm::vec4& selected_color = settings.get_selected_color(entry.flag_bits);
             const glm::vec4& color = wireframe
                 ? wireframe_color
                 : (selected || !hovered)
-                    ? settings.constant_color0
+                    ? selected_color
                     : settings.constant_color1;
             std::memcpy(dst + write_offset + offsets.color, &color, sizeof(glm::vec4));
             std::memcpy(dst + write_offset + offsets.size,  &size,  sizeof(float));

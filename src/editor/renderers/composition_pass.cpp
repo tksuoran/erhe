@@ -132,6 +132,13 @@ void Composition_pass::render(const Render_context& context)
                 t2
             ),
             .constant_color1 = glm::vec4{0.2f, 0.5, 1.0f, 1.0f},
+            // The active item of the selection pulses in its own color
+            // (doc/active-item-plan.md D5), on the same phase.
+            .constant_color_active = glm::mix(
+                outline.active_highlight_low,
+                outline.active_highlight_high,
+                t2
+            ),
             .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
             .constant_size   = mix(
                 outline.selection_highlight_width_low,

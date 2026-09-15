@@ -1610,6 +1610,22 @@ namespace {
     return item;
 }
 
+// The hierarchy accent of the active item: the pale yellow the viewport
+// outline uses for it (Selection_outline_style::active_highlight_*, tone
+// mapped), so the two presentations name the same item in the same color.
+constexpr ImVec4 c_active_item_accent{1.0f, 0.94f, 0.5f, 1.0f};
+
+// RGB interpolation towards accent, keeping the alpha of color.
+[[nodiscard]] auto tint_color(const ImVec4& color, const ImVec4& accent, const float t) -> ImVec4
+{
+    return ImVec4{
+        color.x + (accent.x - color.x) * t,
+        color.y + (accent.y - color.y) * t,
+        color.z + (accent.z - color.z) * t,
+        color.w
+    };
+}
+
 }
 
 void Item_tree::imgui_row(const Flat_row& row)
@@ -1628,16 +1644,32 @@ void Item_tree::imgui_row(const Flat_row& row)
     const ImVec2 row_pos   = ImGui::GetCursorScreenPos();
     const float  row_right = row_pos.x + ImGui::GetContentRegionAvail().x;
 
+    const bool is_selected = row.item->is_selected();
+    // The active item of the selection (doc/active-item-plan.md D5) accents
+    // its row: a brighter header while it is selected, a tinted label while it
+    // is not. The bit is read off the item, so no Selection lookup per row.
+    const bool is_active_item = erhe::utility::test_bit_set(row.item->get_flag_bits(), erhe::Item_flags::active_item);
+
     const ImGuiTreeNodeFlags flags =
         row.tree_node_flags |
-        (row.item->is_selected() ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
+        (is_selected ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None);
 
     // Tree node with an empty visible label; the icon and the label text are drawn manually
     // below, after the interaction handlers - those must see the tree node as the last item.
     bool is_open = false;
     {
         ERHE_PROFILE_SCOPE("tree_node");
+        const bool accent_header = is_active_item && is_selected;
+        if (accent_header) {
+            ImGui::PushStyleColor(
+                ImGuiCol_Header,
+                tint_color(ImGui::GetStyleColorVec4(ImGuiCol_Header), ImVec4{1.0f, 1.0f, 1.0f, 1.0f}, 0.35f)
+            );
+        }
         is_open = ImGui::TreeNodeEx(row.debug_label.data(), flags, "%s", "");
+        if (accent_header) {
+            ImGui::PopStyleColor();
+        }
     }
 
     bool consumed = false;
@@ -1688,6 +1720,11 @@ void Item_tree::imgui_row(const Flat_row& row)
         // (doc/usd-compatibility-plan.md X2): the row stays, drawn dim.
         const bool     dimmed     = !row.item->is_active();
         const ImGuiCol text_color = dimmed ? ImGuiCol_TextDisabled : ImGuiCol_Text;
+        // An unselected active item has no header to brighten, so its label
+        // carries the accent instead - this is the one place it is visible.
+        const ImU32 label_color = (is_active_item && !is_selected)
+            ? ImGui::GetColorU32(tint_color(ImGui::GetStyleColorVec4(text_color), c_active_item_accent, 0.8f))
+            : ImGui::GetColorU32(text_color);
 
         bool thumbnail_drawn = false;
         if (row.brush && m_context.thumbnails) {
@@ -1734,7 +1771,7 @@ void Item_tree::imgui_row(const Flat_row& row)
             ImGui::GetFont(),
             ImGui::GetFontSize(),
             ImVec2{row_pos.x + row.label_x_offset, row_pos.y + m_label_y_offset},
-            ImGui::GetColorU32(text_color),
+            label_color,
             row.label_text.data(),
             row.label_text.data() + row.label_text.size(),
             0.0f,
@@ -1998,13 +2035,6 @@ void Item_tree::imgui_tree(float ui_scale)
     if (!m_root) {
         return;
     }
-
-    ///ImGuiStyle& style = ImGui::GetCurrentContext()->Style;
-    ///ImVec4 not_selected_color     = style.Colors[ImGuiCol_WindowBg];
-    ///ImVec4 selected_color         = style.Colors[ImGuiCol_Selected];
-    ///ImVec4 selected_hovered_color = style.Colors[ImGuiCol_SelectedHovered];
-    ///ImVec4 selected_active_color  = style.Colors[ImGuiCol_SelectedActive];
-    ///ImGui::PushStyleColor(ImGuiCol_Header, last_selected_color);
 
     m_ui_scale = ui_scale;
 

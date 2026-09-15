@@ -322,7 +322,6 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         } else if (data.get_appearance) {
                             settings = get_primitive_settings(data.get_appearance(context), data.primitive_mode);
                         }
-                        const glm::vec4 color      = settings.constant_color0;
                         const float     line_width = settings.constant_size;
                         const auto&     filter     = data.filter;
                         const uint32_t  group      = data.content_wide_line_group;
@@ -332,10 +331,13 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                             if (mesh_layer) {
                                 for (const auto& mesh : mesh_layer->meshes) {
                                     if (filter(mesh->get_flag_bits())) {
+                                        // The active item of the selection gets
+                                        // its own outline color when the pass
+                                        // supplies one (doc/active-item-plan.md D5).
                                         m_context.content_wide_line_renderer->add_mesh(
                                             *m_context.mesh_memory,
                                             *mesh,
-                                            color,
+                                            settings.get_selected_color(mesh->get_flag_bits()),
                                             line_width,
                                             group
                                         );
@@ -357,14 +359,16 @@ void Viewport_scene_view::execute_rendergraph_node(erhe::graphics::Command_buffe
                         const float     t1            = static_cast<float>(::fmod(t0, period));
                         const float     t2            = static_cast<float>(0.5f + (2.0f * std::abs(2.0f * (t1 / period - std::floor(t1 / period + 0.5f))) - 1.0f) * 0.5f);
                         const glm::vec4 outline_color = glm::mix(sel_outline.selection_highlight_low, sel_outline.selection_highlight_high, t2);
+                        const glm::vec4 active_color  = glm::mix(sel_outline.active_highlight_low, sel_outline.active_highlight_high, t2);
                         const float     outline_width = sel_outline.selection_highlight_width_low * (1.0f - t2) + sel_outline.selection_highlight_width_high * t2;
 
                         // Temporarily override primitive_settings for the animated outline
                         m_context.app_rendering->selection_outline->data.primitive_settings = erhe::scene_renderer::Primitive_interface_settings{
-                            .color_source    = erhe::scene_renderer::Primitive_color_source::constant_color,
-                            .constant_color0 = outline_color,
-                            .size_source     = erhe::scene_renderer::Primitive_size_source::constant_size,
-                            .constant_size   = outline_width
+                            .color_source          = erhe::scene_renderer::Primitive_color_source::constant_color,
+                            .constant_color0       = outline_color,
+                            .constant_color_active = active_color,
+                            .size_source           = erhe::scene_renderer::Primitive_size_source::constant_size,
+                            .constant_size         = outline_width
                         };
                         erhe::graphics::Scoped_debug_group feed_debug_group{command_buffer, "selection_outline"};
                         feed_pass(m_context.app_rendering->selection_outline.get());

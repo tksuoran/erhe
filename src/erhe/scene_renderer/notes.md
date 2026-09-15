@@ -37,6 +37,7 @@ Renders `erhe::scene` content (meshes, lights, shadows, skinning) to the GPU. Pr
 - Buffer binding points are defined as macros in `buffer_binding_points.hpp` (0-8).
 - All GPU buffers use the ring buffer pattern for lock-free multi-frame usage, except `Cube_instance_buffer` and `Glyph_buffer` which are static (uploaded once at init).
 - `Primitive_buffer` supports ID-based GPU picking by assigning unique ID offsets to each primitive.
+- `Primitive_interface_settings` picks one of three constant colors per primitive: `constant_color_active` for a selected entry that also carries `Item_flags::active_item` (the selection outline pass sets it, see `doc/active-item-plan.md` D5), `constant_color1` for an entry that is hovered without being selected, and `constant_color0` otherwise. `constant_color_active` is optional; when it is unset the writers substitute `constant_color0`, so a pass that does not distinguish the active item needs no change.
 
 ### When `Material_set::update()` writes
 

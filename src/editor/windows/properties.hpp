@@ -158,6 +158,11 @@ private:
     std::weak_ptr<erhe::Item_base>                m_target;
     std::vector<std::shared_ptr<erhe::Item_base>> m_target_items;
 
+    // Individual mode: the selection with the active item moved to the front
+    // (doc/active-item-plan.md D5). Scratch, filled in effective_items() and
+    // cleared at the end of imgui() so it pins no item between frames.
+    std::vector<std::shared_ptr<erhe::Item_base>> m_ordered_items;
+
     // Multi-selection: the selected items partitioned by property owner
     // type, one row set per group (scratch, cleared each frame with the
     // capacity kept).

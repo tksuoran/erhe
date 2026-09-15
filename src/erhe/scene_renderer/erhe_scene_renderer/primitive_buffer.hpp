@@ -3,6 +3,7 @@
 #include "erhe_graphics/device.hpp"
 #include "erhe_graphics/ring_buffer_client.hpp"
 #include "erhe_graphics/shader_resource.hpp"
+#include "erhe_item/item.hpp"
 #include "erhe_math/aabb.hpp"
 #include "erhe_primitive/enums.hpp"
 #include "erhe_scene_renderer/generated/primitive_color_source.hpp"
@@ -10,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -130,10 +132,31 @@ public:
     };
 
     Primitive_color_source color_source   {Primitive_color_source::constant_color};
-    glm::vec4              constant_color0{1.0f, 1.0f, 1.0f, 1.0f};
-    glm::vec4              constant_color1{1.0f, 0.0f, 0.0f, 1.0f};
-    Primitive_size_source  size_source    {Primitive_size_source::constant_size};
-    float                  constant_size  {1.0f};
+    // Constant color choice, in the order the writers test it:
+    // constant_color_active for a selected entry that is also the active item
+    // (doc/active-item-plan.md D5), constant_color1 for an entry that is
+    // hovered but not selected, constant_color0 otherwise. Only the selection
+    // outline pass distinguishes the active item; every other pass leaves
+    // constant_color_active unset and the writers substitute constant_color0,
+    // so the active item renders exactly like any other selected entry there.
+    glm::vec4                constant_color0       {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec4                constant_color1       {1.0f, 0.0f, 0.0f, 1.0f};
+    std::optional<glm::vec4> constant_color_active {};
+    Primitive_size_source    size_source           {Primitive_size_source::constant_size};
+    float                    constant_size         {1.0f};
+
+    // The color an entry with these item flag bits draws in when it is drawn
+    // as selected: the active item's own color when this pass supplies one,
+    // the plain selected color otherwise. Every writer of a selected color
+    // goes through this, so the active item looks the same in the forward
+    // renderer, in the draw lists and in the wide-line renderer.
+    [[nodiscard]] auto get_selected_color(const uint64_t item_flag_bits) const -> const glm::vec4&
+    {
+        const uint64_t both = erhe::Item_flags::selected | erhe::Item_flags::active_item;
+        return (((item_flag_bits & both) == both) && constant_color_active.has_value())
+            ? constant_color_active.value()
+            : constant_color0;
+    }
 };
 
 class Primitive_buffer : public erhe::graphics::Ring_buffer_client

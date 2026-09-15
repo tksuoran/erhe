@@ -78,6 +78,7 @@
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -1187,7 +1188,32 @@ auto Properties::effective_items() -> const std::vector<std::shared_ptr<erhe::It
         m_target_items.push_back(target);
         return m_target_items;
     }
-    return m_context.selection->get_selected_items();
+
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
+
+    // Individual mode shows one section per item: the active item
+    // (doc/active-item-plan.md D5) comes first, the rest keep selection order.
+    // Combined mode groups by owner type, where the order does not show.
+    if (m_selection_mode != Selection_mode::individual) {
+        return selected_items;
+    }
+    const std::shared_ptr<erhe::Item_base> active_item = m_context.selection->get_active_item();
+    if (!active_item) {
+        return selected_items;
+    }
+    const std::vector<std::shared_ptr<erhe::Item_base>>::const_iterator i = std::find(selected_items.begin(), selected_items.end(), active_item);
+    if (i == selected_items.end()) {
+        return selected_items;
+    }
+    m_ordered_items.clear();
+    m_ordered_items.reserve(selected_items.size());
+    m_ordered_items.push_back(active_item);
+    for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {
+        if (item != active_item) {
+            m_ordered_items.push_back(item);
+        }
+    }
+    return m_ordered_items;
 }
 
 void Properties::set_target(const std::shared_ptr<erhe::Item_base>& item)
@@ -1314,6 +1340,9 @@ void Properties::imgui()
 
     material_properties(items);
 
+    // The active-item-first scratch must not pin the selection between frames
+    // (scene-close leak class); the capacity is kept.
+    m_ordered_items.clear();
 }
 
 }

@@ -8,7 +8,7 @@ from erhe_codegen import *
 # pixel widths.
 struct("Selection_outline_style",
     reflect=True,
-    version=1,
+    version=2,
     short_desc="Selection Outline",
     long_desc="Editor-global appearance of the selection outline highlight",
     developer=False,
@@ -18,5 +18,7 @@ struct("Selection_outline_style",
         field("selection_highlight_width_low",  Float, added_in=1, default="-3.0f", short_desc="Width Low",  long_desc="Outline width at the low end of the pulse. Negative is a constant screen-space pixel width."),
         field("selection_highlight_width_high", Float, added_in=1, default="-3.0f", short_desc="Width High", long_desc="Outline width at the high end of the pulse. Negative is a constant screen-space pixel width."),
         field("selection_highlight_frequency",  Float, added_in=1, default="1.0f",  short_desc="Frequency",  long_desc="Pulse frequency (cycles per second) between the Low and High color / width."),
+        field("active_highlight_low",          Vec4,  added_in=2, default="2.0f, 1.8f, 0.3f, 0.8f", short_desc="Active Color Low",  long_desc="Outline color of the active item at the low end of the pulse. Drawn only when the active item is also selected."),
+        field("active_highlight_high",         Vec4,  added_in=2, default="2.0f, 1.8f, 0.3f, 0.8f", short_desc="Active Color High", long_desc="Outline color of the active item at the high end of the pulse. Drawn only when the active item is also selected."),
     ],
 )
