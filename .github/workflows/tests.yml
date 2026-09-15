@@ -25,7 +25,7 @@ jobs:
     if: github.event.workflow_run.conclusion != 'cancelled'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Require a successful build run
         if: github.event.workflow_run.conclusion != 'success'
@@ -34,7 +34,7 @@ jobs:
           exit 1
 
       - name: Download test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: test-results-*
           path: test-results
