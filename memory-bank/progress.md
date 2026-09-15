@@ -266,4 +266,5 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓plan{7f0409f36}+phase-1{41c535c30:state+rules+message+undo-snapshot+MCP+Mcp_test;item-tests-188;Mcp_-52/53(first-case-flake-pre-existing);smoke-55/55;scene-close-clean}
 ✓phase-2{outline-3rd-color-via-Primitive_interface_settings::constant_color_active+get_selected_color;TRAP:selection-outline-is-drawn-by-Content_wide_line_renderer-fed-in-viewport_scene_view/headset_view-not-primitive_buffer;hierarchy-accent+Properties-order;headless-pixel-verified}|?user-interactive{accent-tint,Settings-fields}
 ✓3a{05646d4e7:get_active_item_as<T>+is_command_reference_host;Tool::get_node/Brush_tool-Parent-to-Active/flip_joint/create_brush/rigid_body/joint/paste/Create::find_parent;D7-map=Material+Brush-only;MCP-cannot-reach-5-of-7-rows-bare->user-interactive}
-?3b-resolve_operation_items+merge/CSG-target+Attach->3c-transform-frame->phase-4-docs
+✓3b{8482a6c92:resolve_operation_items(Operation_reference{operands_only|active_is_target})-active-mesh-first,inserted-when-unselected-for-merge/CSG-only;Merge_operation-items-from-resolver,depth-sort-gone;Attach=attach_selection_to_active-compound+MCP-tool;MCP-csg/retarget-name-active-explicitly;headless:merge-survivor=unselected-active,CSG-target=active,Attach-children,CatmullClark-leaves-unselected-active-alone}
+?3c-transform-frame->phase-4-docs
