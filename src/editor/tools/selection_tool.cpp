@@ -160,7 +160,9 @@ void Range_selection::end()
     }
     final_selection.insert(final_selection.end(), selection.begin(), selection.end());
 
-    m_selection.set_selection(final_selection);
+    // The secondary terminator is the item the user clicked last, so it is
+    // the active item of the range (doc/active-item-plan.md D3.2).
+    m_selection.set_selection(final_selection, m_secondary_terminator);
     m_entries.clear();
 }
 
@@ -411,9 +413,18 @@ auto Selection::get_hosted_selection(erhe::Item_host* host) -> const std::vector
     return bucket;
 }
 
-auto Selection::clear_selection(erhe::Item_host* host) -> bool
+auto Selection::clear_selection(erhe::Item_host* host, const Active_item active_item) -> bool
 {
     Scoped_selection_change selection_change{*this};
+
+    // A closing scene must not leave its item active; every other caller
+    // (a plain click, a scoped re-selection) keeps it (doc/active-item-plan.md D2).
+    if (active_item == Active_item::forget_hosted) {
+        const std::shared_ptr<erhe::Item_base> current_active = m_active_item.lock();
+        if (current_active && is_hosted_or_defined_by(*current_active, host)) {
+            write_active_item({});
+        }
+    }
 
     bool removed_any{false};
     auto i = m_selection.begin();
@@ -763,6 +774,16 @@ auto item_set_sort_predicate(const std::shared_ptr<erhe::Item_base>& lhs, const 
 
 void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>>& selection)
 {
+    // The last listed item is the active item (doc/active-item-plan.md D3.2);
+    // an empty selection names none, which keeps the current active item.
+    set_selection(selection, selection.empty() ? std::shared_ptr<erhe::Item_base>{} : selection.back());
+}
+
+void Selection::set_selection(
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selection,
+    const std::shared_ptr<erhe::Item_base>&              active
+)
+{
     Scoped_selection_change selection_change{*this};
 
     for (auto& item : m_selection) {
@@ -776,6 +797,67 @@ void Selection::set_selection(const std::vector<std::shared_ptr<erhe::Item_base>
     }
 
     m_selection = selection;
+
+    if (active) {
+        set_active_item(active);
+    }
+}
+
+auto Selection::get_active_item() const -> std::shared_ptr<erhe::Item_base>
+{
+    return m_active_item.lock();
+}
+
+void Selection::write_active_item(const std::shared_ptr<erhe::Item_base>& item)
+{
+    const std::shared_ptr<erhe::Item_base> old_item = m_active_item.lock();
+    if (old_item == item) {
+        return;
+    }
+    if (old_item) {
+        old_item->set_flag_bits(erhe::Item_flags::active_item, false);
+    }
+    if (item) {
+        item->set_flag_bits(erhe::Item_flags::active_item, true);
+    }
+    m_active_item = item;
+}
+
+void Selection::send_active_item_message(
+    const std::shared_ptr<erhe::Item_base>& old_item,
+    const std::shared_ptr<erhe::Item_base>& new_item
+)
+{
+    if (old_item == new_item) {
+        return;
+    }
+    log_selection->trace(
+        "Active item changed from '{}' to '{}'",
+        old_item ? old_item->get_name() : "(none)",
+        new_item ? new_item->get_name() : "(none)"
+    );
+    m_context.app_message_bus->active_item.send_message(
+        Active_item_changed_message{
+            .old_item = old_item,
+            .new_item = new_item
+        }
+    );
+}
+
+void Selection::set_active_item(const std::shared_ptr<erhe::Item_base>& item)
+{
+    const std::shared_ptr<erhe::Item_base> old_item = m_active_item.lock();
+    if (old_item == item) {
+        return;
+    }
+    write_active_item(item);
+
+    // While a selection change is open, end_selection_change sends the
+    // message, so subscribers observe the selection and the active item in
+    // their final state (doc/active-item-plan.md D4).
+    if (m_selection_change_depth == 0) {
+        send_active_item_message(old_item, item);
+    }
 }
 
 Scoped_selection_change::Scoped_selection_change(Selection& selection)
@@ -794,6 +876,7 @@ void Selection::begin_selection_change()
     ++m_selection_change_depth;
     if (m_selection_change_depth == 1) {
         m_begin_selection_change_state = m_selection;
+        m_active_item_before = m_active_item;
     }
 }
 
@@ -804,6 +887,10 @@ void Selection::end_selection_change()
     if (m_selection_change_depth > 0) {
         return;
     }
+    const std::shared_ptr<erhe::Item_base> old_active_item = m_active_item_before.lock();
+    const std::shared_ptr<erhe::Item_base> new_active_item = m_active_item.lock();
+    m_active_item_before.reset();
+
     const auto sorted_old = get_sorted(m_begin_selection_change_state);
     const auto sorted_new = get_sorted(m_selection);
 
@@ -832,6 +919,7 @@ void Selection::end_selection_change()
     if (selection_change.no_longer_selected.empty() && selection_change.newly_selected.empty()) {
         m_begin_selection_change_state.clear();
         m_command_target_selection.clear();
+        send_active_item_message(old_active_item, new_active_item);
         return;
     }
 
@@ -866,6 +954,10 @@ void Selection::end_selection_change()
     // next selection change / command-target query, which may never come.
     m_begin_selection_change_state.clear();
     m_command_target_selection.clear();
+
+    // After the Selection_message, so subscribers of either message observe
+    // both in their final state (doc/active-item-plan.md D4).
+    send_active_item_message(old_active_item, new_active_item);
 }
 
 void Selection::on_items_removed(const Removed_items& removed)
@@ -880,15 +972,30 @@ void Selection::on_items_removed(const Removed_items& removed)
             return item && removed.lookup.contains(item.get());
         }
     );
-    if (selection_hit) {
-        std::vector<std::shared_ptr<erhe::Item_base>> kept;
-        kept.reserve(m_selection.size());
-        for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
-            if (item && !removed.lookup.contains(item.get())) {
-                kept.push_back(item);
-            }
+    // The active item lives beside the selection and can be outside it, so
+    // it is tested on its own (doc/active-item-plan.md D2). It is weak, but a
+    // removed item stays alive in the undo history for redo, so the reference
+    // would otherwise survive the removal.
+    const std::shared_ptr<erhe::Item_base> active_item = m_active_item.lock();
+    const bool active_item_removed = active_item && removed.lookup.contains(active_item.get());
+
+    if (selection_hit || active_item_removed) {
+        Scoped_selection_change selection_change{*this};
+        if (active_item_removed) {
+            write_active_item({});
         }
-        set_selection(kept);
+        if (selection_hit) {
+            std::vector<std::shared_ptr<erhe::Item_base>> kept;
+            kept.reserve(m_selection.size());
+            for (const std::shared_ptr<erhe::Item_base>& item : m_selection) {
+                if (item && !removed.lookup.contains(item.get())) {
+                    kept.push_back(item);
+                }
+            }
+            // The surviving active item, not the last kept item: a removal is
+            // not a selection the user made.
+            set_selection(kept, m_active_item.lock());
+        }
     }
 
     // The last-selected entries are weak, but a removed item stays alive in
@@ -996,7 +1103,12 @@ auto Selection::on_viewport_select_bone(const bool toggle) -> bool
     const bool was_selected = is_in_selection(item);
     if (toggle) {
         if (was_selected) {
-            remove_from_selection(item);
+            // Same Ctrl-click rule as the object path (doc/active-item-plan.md D3.4).
+            if (m_active_item.lock() != item) {
+                set_active_item(item);
+            } else {
+                remove_from_selection(item);
+            }
         } else {
             add_to_selection(item);
         }
@@ -1144,6 +1256,13 @@ void Selection::toggle_mesh_selection(const std::shared_ptr<erhe::scene::Mesh>& 
         }
     } else if (mesh) {
         if (effective_was_selected) {
+            // Ctrl-click on a selected item that is not the active one makes
+            // it active and leaves the selection alone; on the active one it
+            // deselects, and it stays active (doc/active-item-plan.md D3.4).
+            if (m_active_item.lock() != item) {
+                set_active_item(item);
+                return;
+            }
             remove = true;
         } else {
             add = true;
@@ -1179,6 +1298,10 @@ auto Selection::add_to_selection(const std::shared_ptr<erhe::Item_base>& item) -
     }
 
     update_last_selected(item);
+
+    // Every add makes the item active (doc/active-item-plan.md D3.1): the
+    // viewport and hierarchy clicks and MCP select_items all come through here.
+    set_active_item(item);
 
     item->set_selected(true);
 
@@ -1254,6 +1377,25 @@ void Selection::sanity_check()
                 is_in(item, m_selection)
             ) {
                 log_selection->error("Node does not have selection flag set while being in selection");
+                ++error_count;
+            }
+            return true;
+        });
+    }
+
+    // Exactly the active item carries Item_flags::active_item
+    // (doc/active-item-plan.md D2).
+    const std::shared_ptr<erhe::Item_base> active_item = m_active_item.lock();
+    if (active_item && !erhe::utility::test_bit_set(active_item->get_flag_bits(), erhe::Item_flags::active_item)) {
+        log_selection->error("Active item '{}' does not carry the active_item flag", active_item->get_name());
+        ++error_count;
+    }
+    for (const auto& scene_root : scene_roots) {
+        const auto& scene = scene_root->get_scene();
+        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
+            const bool has_bit = erhe::utility::test_bit_set(node->get_flag_bits(), erhe::Item_flags::active_item);
+            if (has_bit && (std::static_pointer_cast<erhe::Item_base>(node) != active_item)) {
+                log_selection->error("Node '{}' carries the active_item flag without being the active item", node->get_name());
                 ++error_count;
             }
             return true;

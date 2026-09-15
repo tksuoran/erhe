@@ -154,7 +154,13 @@ public:
     // writes it (it is session_only as well), and a viewport pick of it
     // selects the model prim.
     static constexpr uint64_t draw_mode_proxy           = (uint64_t{1} << 40);
-    static constexpr uint64_t count                     = 41;
+    // The one item of the editor-wide selection that is the reference item
+    // for commands and the one the UI highlights (doc/active-item-plan.md).
+    // Written only by editor::Selection; at most one item carries it, and it
+    // is independent of the selected bit - an item can be active while
+    // unselected. Transient session state, never serialized.
+    static constexpr uint64_t active_item               = (uint64_t{1} << 41);
+    static constexpr uint64_t count                     = 42;
 
     // High-frequency presentation-state bits (selection, hover, per-frame debug
     // visualization, transform-derived state) that never affect item tree row
@@ -163,7 +169,7 @@ public:
     static constexpr uint64_t transient =
         selected | hovered_in_viewport | hovered_in_item_tree | descendant_hovered_in_viewport |
         hovered_in_graph | child_hovered_in_graph | ancestor_hovered_in_graph |
-        negative_determinant | affects_shadow;
+        negative_determinant | affects_shadow | active_item;
 
     // Derived bits (D23 in doc/property-system.md): the effective value
     // of the visible and active properties (Item_base) and of the
@@ -225,6 +231,7 @@ public:
         "Active",
         "Session Only",
         "Draw Mode Proxy",
+        "Active Item",
     };
 
     [[nodiscard]] static auto to_string(uint64_t mask) -> std::string;

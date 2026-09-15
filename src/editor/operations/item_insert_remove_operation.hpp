@@ -63,6 +63,11 @@ private:
     erhe::Item_host*                              m_scene_host{nullptr};
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_before;
     std::vector<std::shared_ptr<erhe::Item_base>> m_selection_after;
+    // Restoring the selection vector no longer implies the active item, so
+    // it is snapshotted beside it (doc/active-item-plan.md D2). Weak, so a
+    // recorded operation never keeps an item alive on its own.
+    std::weak_ptr<erhe::Item_base>                m_active_item_before;
+    std::weak_ptr<erhe::Item_base>                m_active_item_after;
 };
 
 }

@@ -60,10 +60,12 @@ Item_insert_remove_operation::Item_insert_remove_operation(const Parameters& par
     auto& selection = *parameters.context.selection;
     m_item                   = parameters.item,
     m_selection_before       = selection.get_selected_items();
+    m_active_item_before     = selection.get_active_item();
     m_index_in_parent_insert = parameters.index_in_parent;
 
     if (parameters.mode == Mode::insert) {
-        m_selection_after = selection.get_selected_items();
+        m_selection_after   = selection.get_selected_items();
+        m_active_item_after = selection.get_active_item();
         m_after_parent    = parameters.parent;
     }
 
@@ -166,7 +168,7 @@ void Item_insert_remove_operation::execute(App_context& context)
 
     m_item->set_parent(m_after_parent, m_index_in_parent);
 
-    context.selection->set_selection(m_selection_after);
+    context.selection->set_selection(m_selection_after, m_active_item_after.lock());
 }
 
 void Item_insert_remove_operation::undo(App_context& context)
@@ -192,7 +194,7 @@ void Item_insert_remove_operation::undo(App_context& context)
         child_parent_change->undo(context);
     }
 
-    context.selection->set_selection(m_selection_before);
+    context.selection->set_selection(m_selection_before, m_active_item_before.lock());
 }
 
 namespace {

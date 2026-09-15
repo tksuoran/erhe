@@ -1245,7 +1245,15 @@ void Item_tree::item_update_selection(const std::shared_ptr<erhe::Item_base>& it
         if (ctrl_down) {
             range_selection.reset(item->get_item_host());
             if (item->is_selected()) {
-                set_item_selection(item, false);
+                // Ctrl-click on a selected row that is not the active item
+                // makes it active and leaves the selection alone; on the
+                // active row it deselects, and it stays active
+                // (doc/active-item-plan.md D3.4).
+                if (m_context.selection->get_active_item() != item) {
+                    m_context.selection->set_active_item(item);
+                } else {
+                    set_item_selection(item, false);
+                }
             } else {
                 set_item_selection(item, true);
                 set_item_selection_terminator(item);

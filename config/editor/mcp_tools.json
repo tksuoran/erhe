@@ -345,7 +345,7 @@
     "name": "set_frame_pacing_capture"
   },
   {
-    "description": "Get currently selected items",
+    "description": "Get currently selected items, plus active_item {name,type,id,scene_name,selected}: the one reference item of the selection, which can be an item that is no longer selected.",
     "inputSchema": {
       "properties": {},
       "type": "object"
@@ -536,9 +536,12 @@
     "name": "geometry_query"
   },
   {
-    "description": "Select items by ID or by name / path (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] with no paths clears the target scene only) and makes the target scene the active scene.",
+    "description": "Select items by ID or by name / path (scene nodes, materials, etc.). Mirrors UI selection semantics: replaces the selection within the target scene only (other scenes' selections persist; ids=[] with no paths clears the target scene only) and makes the target scene the active scene. The last listed item becomes the active item unless 'active' names another one of them.",
     "inputSchema": {
       "properties": {
+        "active": {
+          "description": "Item id (integer) or name / path (string) of one of the listed items, which becomes the active item instead of the last listed one"
+        },
         "ids": {
           "description": "Array of item IDs to select",
           "items": {
@@ -564,6 +567,30 @@
       "type": "object"
     },
     "name": "select_items"
+  },
+  {
+    "description": "Make one item the active item: the single reference item commands act on. The item does not have to be selected, and the selection is left unchanged.",
+    "inputSchema": {
+      "properties": {
+        "id": {
+          "description": "Id of the item to make active",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Name or item path of the item to make active, instead of id",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene to search for the item",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scene_name"
+      ],
+      "type": "object"
+    },
+    "name": "set_active_item"
   },
   {
     "description": "Delete nodes (whole SUBTREES) by id and/or name - the MCP counterpart of Edit > Delete, undoable through the same recursive-delete path, without touching the user's selection. lock_edit items and their subtrees survive (prefab instances always delete whole). Queued; settle before rebuilding into the freed names. Built for partial-rebuild iteration: delete one object's root group and rebuild only that object.",

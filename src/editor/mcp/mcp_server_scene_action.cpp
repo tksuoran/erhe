@@ -314,11 +314,42 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
             items_to_select.push_back(item);
         }
     }
+    // The last listed item is the active item by construction (every
+    // add_to_selection activates); an explicit `active` argument names
+    // another one of the listed items (doc/active-item-plan.md D8).
+    std::shared_ptr<erhe::Item_base> active_item;
+    if (args.contains("active")) {
+        const json& active_value = args.at("active");
+        if (active_value.is_number_unsigned() || active_value.is_number_integer()) {
+            const std::size_t active_id = active_value.get<std::size_t>();
+            for (const std::shared_ptr<erhe::Item_base>& item : items_to_select) {
+                if (item->get_id() == active_id) {
+                    active_item = item;
+                    break;
+                }
+            }
+        } else if (active_value.is_string()) {
+            const std::shared_ptr<erhe::Item_base> item = find_item_in_scene_by_reference(*sr, active_value.get<std::string>());
+            const bool listed = item && (std::find(items_to_select.begin(), items_to_select.end(), item) != items_to_select.end());
+            if (listed) {
+                active_item = item;
+            }
+        }
+        if (!active_item) {
+            json r = make_text_content("active must name one of the listed items: " + active_value.dump());
+            r["isError"] = true;
+            return r.dump();
+        }
+    }
+
     {
         Scoped_selection_change selection_change{*m_context.selection};
         m_context.selection->clear_selection(static_cast<erhe::Item_host*>(sr));
         for (const std::shared_ptr<erhe::Item_base>& item : items_to_select) {
             m_context.selection->add_to_selection(item);
+        }
+        if (active_item) {
+            m_context.selection->set_active_item(active_item);
         }
     }
     // A UI click both selects and focuses the scene's window; the focus part
@@ -336,9 +367,71 @@ auto Mcp_server::action_select_items(const json& args) -> std::string
         });
     }
 
-    return make_json_content({
+    json result = {
         {"selected_count", static_cast<int>(items_to_select.size())},
         {"items",          selected}
+    };
+    const std::shared_ptr<erhe::Item_base> resulting_active = m_context.selection->get_active_item();
+    if (resulting_active) {
+        result["active_item"] = {
+            {"name", resulting_active->get_name()},
+            {"type", std::string{resulting_active->get_type_name()}},
+            {"id",   resulting_active->get_id()}
+        };
+    }
+    return make_json_content(result).dump();
+}
+
+// Make one item the active item (doc/active-item-plan.md D8): the reference
+// item commands act on. The item need not be selected, and this does not
+// change the selection.
+auto Mcp_server::action_set_active_item(const json& args) -> std::string
+{
+    if (!m_context.selection) {
+        json r = make_text_content("Selection system not available");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    const std::string scene_name = args.value("scene_name", "");
+    auto* sr = find_scene(scene_name);
+    if (!sr) {
+        json r = make_text_content("Scene not found: " + scene_name);
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    std::shared_ptr<erhe::Item_base> item;
+    if (args.contains("id") && (args.at("id").is_number_unsigned() || args.at("id").is_number_integer())) {
+        std::set<std::size_t> target_ids;
+        target_ids.insert(args.at("id").get<std::size_t>());
+        const std::vector<std::shared_ptr<erhe::Item_base>> found = find_items_by_ids(*sr, target_ids);
+        if (!found.empty()) {
+            item = found.front();
+        }
+    } else if (args.contains("path") && args.at("path").is_string()) {
+        item = find_item_in_scene_by_reference(*sr, args.at("path").get<std::string>());
+    } else {
+        json r = make_text_content("set_active_item needs id or path");
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    if (!item) {
+        json r = make_text_content("Item not found in scene: " + sr->get_name());
+        r["isError"] = true;
+        return r.dump();
+    }
+
+    m_context.selection->set_active_item(item);
+
+    return make_json_content({
+        {"active_item", {
+            {"name",     item->get_name()},
+            {"type",     std::string{item->get_type_name()}},
+            {"id",       item->get_id()},
+            {"selected", m_context.selection->is_in_selection(item)}
+        }}
     }).dump();
 }
 

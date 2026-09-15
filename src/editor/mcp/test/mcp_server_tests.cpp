@@ -461,6 +461,81 @@ TEST_F(Mcp_test, reset_editor_state_clears_scenes_selection_and_history)
     EXPECT_FALSE(history_after.payload.value("can_redo", true));
 }
 
+// The active item (doc/active-item-plan.md): the last item a select_items
+// call lists becomes it, it survives the selection being cleared (reported
+// with selected: false), set_active_item names an unselected item, and
+// reset_editor_state forgets it.
+TEST_F(Mcp_test, active_item_follows_selection_and_survives_clearing)
+{
+    Mcp_env&    env    = Mcp_env::get();
+    Mcp_client& client = env.client();
+
+    const char* const names[] = {"active item a", "active item b", "active item c"};
+    for (const char* const name : names) {
+        Mcp_client::Tool_result shape = client.call_tool("create_shape", json{
+            {"scene_name",  env.scene_name()},
+            {"shape",       "box"},
+            {"name",        name},
+            {"motion_mode", "none"}
+        });
+        ASSERT_FALSE(shape.is_error) << shape.text;
+    }
+    advance_frames(client, 2);
+
+    // Selecting by path keeps the listed order, so the last one is "c".
+    Mcp_client::Tool_result select = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"paths",      json::array({names[0], names[1], names[2]})}
+    });
+    ASSERT_FALSE(select.is_error) << select.text;
+
+    Mcp_client::Tool_result selection = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(selection.is_error) << selection.text;
+    ASSERT_EQ(selection.payload["items"].size(), 3u) << selection.text;
+    ASSERT_TRUE(selection.payload.contains("active_item")) << selection.text;
+    const json active = selection.payload["active_item"];
+    EXPECT_EQ(active.value("name", std::string{}), std::string{names[2]});
+    EXPECT_TRUE(active.value("selected", false));
+    const std::size_t active_id = active.value("id", std::size_t{0});
+    EXPECT_NE(active_id, 0u);
+
+    // An empty list clears the selection in the scene but keeps the active
+    // item, which is then reported as not selected.
+    Mcp_client::Tool_result clear = client.call_tool("select_items", json{
+        {"scene_name", env.scene_name()},
+        {"ids",        json::array()}
+    });
+    ASSERT_FALSE(clear.is_error) << clear.text;
+
+    Mcp_client::Tool_result after_clear = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(after_clear.is_error) << after_clear.text;
+    EXPECT_TRUE(after_clear.payload["items"].empty()) << after_clear.text;
+    ASSERT_TRUE(after_clear.payload.contains("active_item")) << after_clear.text;
+    EXPECT_EQ(after_clear.payload["active_item"].value("id", std::size_t{0}), active_id);
+    EXPECT_FALSE(after_clear.payload["active_item"].value("selected", true));
+
+    // set_active_item names an item that is not selected either.
+    Mcp_client::Tool_result set_active = client.call_tool("set_active_item", json{
+        {"scene_name", env.scene_name()},
+        {"path",       names[0]}
+    });
+    ASSERT_FALSE(set_active.is_error) << set_active.text;
+    ASSERT_TRUE(set_active.payload.contains("active_item")) << set_active.text;
+    EXPECT_EQ(set_active.payload["active_item"].value("name", std::string{}), std::string{names[0]});
+    EXPECT_FALSE(set_active.payload["active_item"].value("selected", true));
+
+    Mcp_client::Tool_result after_set = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(after_set.is_error) << after_set.text;
+    ASSERT_TRUE(after_set.payload.contains("active_item")) << after_set.text;
+    EXPECT_EQ(after_set.payload["active_item"].value("name", std::string{}), std::string{names[0]});
+
+    Mcp_client::Tool_result reset = client.call_tool("reset_editor_state", json::object());
+    ASSERT_FALSE(reset.is_error) << reset.text;
+    Mcp_client::Tool_result after_reset = client.call_tool("get_selection", json::object());
+    ASSERT_FALSE(after_reset.is_error) << after_reset.text;
+    EXPECT_FALSE(after_reset.payload.contains("active_item")) << after_reset.text;
+}
+
 TEST_F(Mcp_test, get_scene_materials_returns_array_with_basic_fields)
 {
     Mcp_env& env = Mcp_env::get();

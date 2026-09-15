@@ -3232,7 +3232,10 @@ public:
         // whose host is also this scene_root) so the selection does not keep
         // dead-scene items alive or feed them to tools. Other scenes'
         // selections are untouched.
-        m_selection->clear_selection(static_cast<erhe::Item_host*>(scene_root.get()));
+        // The active item is tracked beside the selection and can be outside
+        // it, so the close forgets it explicitly when this scene hosts it
+        // (doc/active-item-plan.md D2).
+        m_selection->clear_selection(static_cast<erhe::Item_host*>(scene_root.get()), Active_item::forget_hosted);
 
         // The lightmap partitioner stores shared_ptrs to this scene's meshes
         // and piece nodes; drop them so the closed scene's content is released.

@@ -171,6 +171,9 @@ auto Mcp_server::action_reset_editor_state(const json& args) -> std::string
     // closing scenes alive (the scene-close leak watchdog would report it).
     if (m_context.selection != nullptr) {
         m_context.selection->clear_selection();
+        // The active item lives beside the selection and survives a plain
+        // clear, so it is forgotten explicitly (doc/active-item-plan.md D2).
+        m_context.selection->set_active_item({});
     }
     if (m_context.mesh_component_selection != nullptr) {
         m_context.mesh_component_selection->clear_all();

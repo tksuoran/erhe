@@ -221,7 +221,9 @@ empty, for a scene opened from a file; the import root for an imported
 asset).
 
 ```bash
-curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_variants","arguments":{"scene_name":"variants"}}}'
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_scene_variants","arguments":{"scene_name":"variants"}}}'
 ```
 
 Returns: `{scene_name, variant_sets: [{prim_path, set_name, selected,
@@ -258,7 +260,10 @@ Returns: `{x, y, slots: [{slot, valid, mesh?, node?, joint?, grid?, position?, n
 
 ### get_selection
 
-Get currently selected items.
+Get currently selected items, and the active item: the one reference item of
+the selection (doc/active-item-plan.md). The active item can be an item that
+is no longer selected, which is why it is reported with its own `selected`
+flag.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -266,11 +271,13 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"get_selection","arguments":{}}}'
 ```
 
-Returns: `{items: [{name, type, id}]}`
+Returns: `{items: [{name, type, id, scene_name?}], active_item?: {name, type, id, scene_name?, selected}, active_scene?, ...}`
 
 ### select_items
 
 Select items by unique ID. Searches scene nodes, cameras, lights, materials, and brushes.
+The last listed item becomes the active item; the optional `active` argument
+(an id or a name / path) names another one of the listed items instead.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \
@@ -278,9 +285,24 @@ curl -X POST http://127.0.0.1:3743/mcp \
   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"select_items","arguments":{"scene_name":"Default Scene","ids":[716,720]}}}'
 ```
 
-Returns: `{selected_count, items: [{name, type, id}]}`
+Returns: `{selected_count, items: [{name, type, id}], active_item?: {name, type, id}}`
 
-Pass an empty `ids` array to clear selection. All query responses include `id` fields for use with this tool.
+Pass an empty `ids` array to clear selection. Clearing the selection leaves the
+active item as it is. All query responses include `id` fields for use with this tool.
+
+### set_active_item
+
+Make one item the active item: the single reference item commands act on. The
+item does not have to be selected, and the selection is left unchanged. Takes
+`scene_name` plus `id` or `path`.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"set_active_item","arguments":{"scene_name":"Default Scene","path":"Cube"}}}'
+```
+
+Returns: `{active_item: {name, type, id, selected}}`
 
 ## Action Tools
 
@@ -292,7 +314,9 @@ Create an empty prim (undoable, inserted on the next editor frame).
 `Scope` accepts no `position`.
 
 ```bash
-curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_node","arguments":{"scene_name":"Default Scene","name":"Materials","prim_type":"Scope"}}}'
+curl -X POST http://127.0.0.1:3743/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"create_node","arguments":{"scene_name":"Default Scene","name":"Materials","prim_type":"Scope"}}}'
 ```
 
 Returns: `{node_name, node_id, prim_type, parent, queued}` (plus `position` for

@@ -69,6 +69,17 @@ struct Active_scene_changed_message
     std::shared_ptr<Scene_root> scene_root{};
 };
 
+// Published when the active item changes (doc/active-item-plan.md D4). The
+// active item is the one item of the selection that is the reference item
+// for commands; it can be outside the selection, and either pointer is
+// empty when there was / is none.
+class Active_item_changed_message
+{
+public:
+    std::weak_ptr<erhe::Item_base> old_item{};
+    std::weak_ptr<erhe::Item_base> new_item{};
+};
+
 struct Graphics_settings_message
 {
     Graphics_preset_entry* graphics_preset{nullptr};

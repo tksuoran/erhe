@@ -160,6 +160,12 @@ private:
     Selection& selection;
 };
 
+// What Selection::clear_selection(Item_host*) does to the active item.
+enum class Active_item : unsigned int {
+    keep = 0,      // a plain click / a scoped re-selection: the active item stays
+    forget_hosted  // a closing scene: an active item hosted by it is forgotten
+};
+
 class Selection : public erhe::commands::Command_host
 {
 public:
@@ -199,7 +205,21 @@ public:
     // Remove from the selection all items hosted by `host` (nullptr = items
     // with no Item_host). Other hosts' selections are left untouched.
     // Returns true when anything was removed.
-    auto clear_selection(erhe::Item_host* host) -> bool;
+    //
+    // Active_item says what happens to the active item (doc/active-item-plan.md
+    // D2): keep leaves it as it is (a plain click, an MCP select_items reset -
+    // the active item survives a cleared selection), forget_hosted drops it
+    // when this host hosts it, which is what a closing scene needs.
+    auto clear_selection(erhe::Item_host* host, Active_item active_item = Active_item::keep) -> bool;
+
+    // The active item: the one reference item of the selection
+    // (doc/active-item-plan.md D1). It may be empty, and it may be an item
+    // that is not selected.
+    [[nodiscard]] auto get_active_item() const -> std::shared_ptr<erhe::Item_base>;
+
+    // Make `item` the active item; an empty `item` forgets the active item.
+    // The item need not be in the selection (D3.3).
+    void set_active_item(const std::shared_ptr<erhe::Item_base>& item);
 
     // "Belongs to host" for selection scoping: prim hosting, extended (R5.6)
     // with the asset manager's defining-container lookup - a selected
@@ -229,6 +249,9 @@ public:
     [[nodiscard]] auto get(erhe::Item_filter filter, std::size_t index = 0) -> std::shared_ptr<erhe::Item_base>;
 
     void set_selection                   (const std::vector<std::shared_ptr<erhe::Item_base>>& selection);
+    // Selection plus an explicit active item (D3.2). The active item need not
+    // be one of `selection`; an empty `active` keeps the current active item.
+    void set_selection                   (const std::vector<std::shared_ptr<erhe::Item_base>>& selection, const std::shared_ptr<erhe::Item_base>& active);
     auto add_to_selection                (const std::shared_ptr<erhe::Item_base>& item) -> bool;
     auto clear_selection                 () -> bool;
     auto remove_from_selection           (const std::shared_ptr<erhe::Item_base>& item) -> bool;
@@ -289,6 +312,16 @@ private:
     std::weak_ptr<erhe::scene::Node>              m_hover_bone_joint{};
     bool                                          m_hover_content{false};
     bool                                          m_hover_tool   {false};
+
+    // Applied by end_selection_change / set_active_item, never written
+    // directly: write_active_item maintains the Item_flags::active_item bit
+    // and m_active_item_before records the state a pending change started
+    // from, so exactly one message is sent per change.
+    void write_active_item(const std::shared_ptr<erhe::Item_base>& item);
+    void send_active_item_message(const std::shared_ptr<erhe::Item_base>& old_item, const std::shared_ptr<erhe::Item_base>& new_item);
+
+    std::weak_ptr<erhe::Item_base>                m_active_item{};
+    std::weak_ptr<erhe::Item_base>                m_active_item_before{};
 
     int                                           m_selection_change_depth{0};
     std::size_t                                   m_selection_change_count{0};

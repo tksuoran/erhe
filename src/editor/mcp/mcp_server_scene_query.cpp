@@ -1846,6 +1846,28 @@ auto Mcp_server::query_selection(const json& args) -> std::string
     }
 
     json result = {{"items", items}};
+
+    // The active item is the reference item of the selection and can be
+    // outside it, so it is reported separately with its own selected flag
+    // (doc/active-item-plan.md D8).
+    const std::shared_ptr<erhe::Item_base> active_item = m_context.selection->get_active_item();
+    if (active_item) {
+        json entry = {
+            {"name",     active_item->get_name()},
+            {"type",     std::string{active_item->get_type_name()}},
+            {"id",       active_item->get_id()},
+            {"selected", m_context.selection->is_in_selection(active_item)}
+        };
+        Scene_root* active_item_scene_root = dynamic_cast<Scene_root*>(active_item->get_item_host());
+        if ((active_item_scene_root == nullptr) && (m_context.asset_manager != nullptr)) {
+            active_item_scene_root = m_context.asset_manager->get_defining_scene_root(*active_item).get();
+        }
+        if (active_item_scene_root != nullptr) {
+            entry["scene_name"] = active_item_scene_root->get_name();
+        }
+        result["active_item"] = entry;
+    }
+
     const std::shared_ptr<Scene_root> active_scene_root = m_context.selection->get_active_scene_root();
     if (active_scene_root) {
         result["active_scene"] = active_scene_root->get_name();

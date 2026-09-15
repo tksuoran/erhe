@@ -199,6 +199,7 @@ private:
     auto query_raycast          (const nlohmann::json& args) -> std::string;
     auto query_geometry_batch   (const nlohmann::json& args) -> std::string;
     auto action_select_items    (const nlohmann::json& args) -> std::string;
+    auto action_set_active_item (const nlohmann::json& args) -> std::string;
     auto action_delete_nodes    (const nlohmann::json& args) -> std::string;
     auto action_set_item_flags  (const nlohmann::json& args) -> std::string;
     auto action_lightmap_bake_gbuffer(const nlohmann::json& args) -> std::string;

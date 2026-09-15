@@ -215,6 +215,12 @@ auto Mcp_server::query_editor_references(const json& args) -> std::string
     }
     result["selection"] = selection;
 
+    // The active item is a reference of its own: it can outlive the selection
+    // (doc/active-item-plan.md D2).
+    if (m_context.selection != nullptr) {
+        result["active_item"] = reference_json(m_context.selection->get_active_item());
+    }
+
     // Counters, so a test can assert that an announcement happened, or that no
     // further one followed - an absence is otherwise indistinguishable from a
     // subscriber that was never wired.
