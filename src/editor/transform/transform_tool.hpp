@@ -54,6 +54,7 @@ namespace editor {
 class Compound_operation;
 class App_message_bus;
 struct Active_scene_changed_message;
+class  Active_item_changed_message;
 struct Hover_scene_view_message;
 struct Hover_mesh_message;
 struct Selection_message;
@@ -293,6 +294,7 @@ private:
     void on_hover_mesh      (Hover_mesh_message& message);
     void on_selection       (Selection_message& message);
     void on_active_scene    (Active_scene_changed_message& message);
+    void on_active_item     (Active_item_changed_message& message);
     void on_animation_update(Animation_update_message& message);
     void on_node_touched    (Node_touched_message& message);
     void on_render_scene_view(Render_scene_view_message& message);
@@ -335,6 +337,7 @@ private:
     erhe::message_bus::Subscription<Hover_mesh_message>        m_hover_mesh_subscription;
     erhe::message_bus::Subscription<Selection_message>         m_selection_subscription;
     erhe::message_bus::Subscription<Active_scene_changed_message> m_active_scene_subscription;
+    erhe::message_bus::Subscription<Active_item_changed_message>  m_active_item_subscription;
     erhe::message_bus::Subscription<Animation_update_message>  m_animation_update_subscription;
     erhe::message_bus::Subscription<Node_touched_message>      m_node_touched_subscription;
     erhe::message_bus::Subscription<Render_scene_view_message> m_render_scene_view_subscription;

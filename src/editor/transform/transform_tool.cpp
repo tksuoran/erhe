@@ -235,6 +235,11 @@ Transform_tool::Transform_tool(
             on_active_scene(message);
         }
     );
+    m_active_item_subscription = app_message_bus.active_item.subscribe(
+        [&](Active_item_changed_message& message) {
+            on_active_item(message);
+        }
+    );
     m_animation_update_subscription = app_message_bus.animation_update.subscribe(
         [&](Animation_update_message& message) {
             on_animation_update(message);
@@ -288,6 +293,24 @@ void Transform_tool::on_active_scene(Active_scene_changed_message&)
     }
     update_target_nodes(nullptr);
     update_visibility();
+}
+
+void Transform_tool::on_active_item(Active_item_changed_message&)
+{
+    // The active node is the gizmo's local reference frame (see
+    // update_target_nodes), so a Ctrl-click that only changes the active item
+    // must re-anchor the gizmo. Same guard as on_selection(): in component mode
+    // the gizmo tracks the mesh component selection instead.
+    if (shared.component_mode) {
+        return;
+    }
+    // Entries are captured at drag start (world_from_node_before) and consumed
+    // by adjust(); reordering them mid-drag would apply the delta against the
+    // wrong baselines.
+    if (m_active_handle != Handle::e_handle_none) {
+        return;
+    }
+    update_target_nodes(nullptr);
 }
 
 void Transform_tool::on_animation_update(Animation_update_message&)
@@ -583,6 +606,26 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         m_transform_target_note += fmt::format(" (+{} more)", redirect_count - 1);
     }
 
+    // D6 of doc/active-item-plan.md: the representative target - the local
+    // reference frame (Edit_state::m_first_node), the single-entry numeric edit
+    // and the IK effector - is the active node when the active node is one of
+    // the targets. Rotating that target to the front of m_target_nodes gives
+    // every shared.entries.front() site the active node without introducing a
+    // second notion of "first". Both build paths run this, so the rebuild and
+    // the node_filter refresh stay index-aligned.
+    const std::shared_ptr<erhe::scene::Node> active_node = m_context.selection->get_active_item_as<erhe::scene::Node>();
+    if (active_node) {
+        const std::shared_ptr<erhe::scene::Node> active_target = resolve_transform_target(active_node);
+        if (active_target) {
+            const std::vector<std::shared_ptr<erhe::scene::Node>>::iterator i = std::find(
+                m_target_nodes.begin(), m_target_nodes.end(), active_target
+            );
+            if ((i != m_target_nodes.end()) && (i != m_target_nodes.begin())) {
+                std::rotate(m_target_nodes.begin(), i, i + 1);
+            }
+        }
+    }
+
     if (node_filter == nullptr) {
         shared.entries.clear();
     }
@@ -592,8 +635,15 @@ void Transform_tool::update_target_nodes(erhe::scene::Node* node_filter)
         const Trs_transform& world_from_node = node->world_from_node_transform();
 
         cumulative_world_translation += world_from_node.get_translation();
-        cumulative_world_rotation     = world_from_node.get_rotation();
         cumulative_world_scale       += world_from_node.get_scale();
+        // Rotations do not average: the anchor orientation is one target's
+        // orientation, and that target is the representative one (the active
+        // node when it is among the targets, see the rotate above), so the
+        // local-mode gizmo axes and the local-mode numeric edits agree on
+        // which node they belong to.
+        if (node_count == 0) {
+            cumulative_world_rotation = world_from_node.get_rotation();
+        }
 
         ++node_count;
         if (node_filter == nullptr) {
