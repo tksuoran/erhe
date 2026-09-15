@@ -537,6 +537,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "geometry_query",                 &Mcp_server::query_geometry_batch                 },
         { "select_items",                   &Mcp_server::action_select_items                  },
         { "set_active_item",                &Mcp_server::action_set_active_item                },
+        { "attach_selection_to_active",     &Mcp_server::action_attach_selection_to_active    },
         { "delete_nodes",                   &Mcp_server::action_delete_nodes                  },
         { "set_item_flags",                 &Mcp_server::action_set_item_flags                },
         { "lightmap_bake_gbuffer",          &Mcp_server::action_lightmap_bake_gbuffer         },

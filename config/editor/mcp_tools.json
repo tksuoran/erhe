@@ -1472,6 +1472,14 @@
     "name": "reparent_node"
   },
   {
+    "description": "Operations window 'Attach' (Blender Ctrl-P): parent every node of the command target selection other than the active node under the active node, as one undoable compound operation. Set the parent with set_active_item (or make it the last item of select_items); nodes that are ancestors of the active node are skipped. Takes no arguments.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "attach_selection_to_active"
+  },
+  {
     "description": "Copy scene nodes (by ID) into the editor clipboard. Same semantics as the interactive Copy: the clipboard holds ownerless clones of the node subtrees, so the content survives closing the source scene and can be pasted into another scene with clipboard_paste.",
     "inputSchema": {
       "properties": {

@@ -603,6 +603,7 @@ void Operations::shrink_component_selection()
 
 auto Operations::resolve_operation_items(
     const bool                                     selection_aware,
+    const Operation_reference                      reference,
     std::vector<std::shared_ptr<erhe::Item_base>>& out_items
 ) const -> bool
 {
@@ -649,14 +650,37 @@ auto Operations::resolve_operation_items(
         return false;
     }
     out_items = m_context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
+
+    // The active item is the operation's reference (doc/active-item-plan.md D6):
+    // when it is a node carrying a mesh it becomes the FIRST item, which is the
+    // target of Merge_operation and of the CSG booleans. This is the one place
+    // the target rule is implemented; every consumer reads out_items.front().
+    // An active mesh that is NOT selected joins the items only for an operation
+    // that has a target (Blender join); an operation with operands only acts on
+    // what the user selected.
+    const std::shared_ptr<erhe::scene::Node> active_node = m_context.selection->get_active_item_as<erhe::scene::Node>();
+    if (active_node && erhe::scene::get_mesh(active_node.get())) {
+        const auto i = std::find_if(
+            out_items.begin(),
+            out_items.end(),
+            [&active_node](const std::shared_ptr<erhe::Item_base>& item) {
+                return item.get() == static_cast<erhe::Item_base*>(active_node.get());
+            }
+        );
+        if (i != out_items.end()) {
+            std::rotate(out_items.begin(), i, i + 1);
+        } else if (reference == Operation_reference::active_is_target) {
+            out_items.insert(out_items.begin(), active_node);
+        }
+    }
     return true;
 }
 
 template<typename T>
-void Operations::async_mesh_operation(const bool selection_aware)
+void Operations::async_mesh_operation(const bool selection_aware, const Operation_reference reference)
 {
     std::vector<std::shared_ptr<erhe::Item_base>> items;
-    if (!resolve_operation_items(selection_aware, items)) {
+    if (!resolve_operation_items(selection_aware, reference, items)) {
         return;
     }
     async_for_nodes_with_mesh(
@@ -708,7 +732,7 @@ void Operations::on_scene_opened(const std::shared_ptr<Scene_root>& scene_root)
 void Operations::async_for_selected_nodes_with_mesh(std::function<void(Mesh_operation_parameters&&)> op, const bool selection_aware)
 {
     std::vector<std::shared_ptr<erhe::Item_base>> items;
-    if (!resolve_operation_items(selection_aware, items)) {
+    if (!resolve_operation_items(selection_aware, Operation_reference::operands_only, items)) {
         return;
     }
     async_for_nodes_with_mesh(m_context, items, op);
@@ -1157,7 +1181,6 @@ void Operations::imgui()
     const auto selected_mesh_count = count_selected_meshes();
     const auto selected_node_count = count<erhe::scene::Node>(selected_items);
     const auto multi_select_meshes = (selected_mesh_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
-    const auto multi_select_nodes  = (selected_node_count >= 2) ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto delete_mode         = (selected_mesh_count + selected_node_count) > 0 ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
     // While a mesh-component selection is active, only selection-aware geometry
@@ -1183,6 +1206,7 @@ void Operations::imgui()
         !m_context.mesh_component_selection->is_empty();
     const auto face_component_mode = face_component_active ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
+    const auto attach_mode     = can_attach_to_active() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto align_mode      = can_align()      ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
     const auto flip_joint_mode = can_flip_joint() ? erhe::imgui::Item_mode::normal : erhe::imgui::Item_mode::disabled;
 
@@ -1211,19 +1235,8 @@ void Operations::imgui()
     }
 
     if (section("Selection")) {
-        if (visible("Attach") && make_button("Attach", multi_select_nodes, button_size)) {
-            const auto& node0 = get<erhe::scene::Node>(selected_items, 0);
-            const auto& node1 = get<erhe::scene::Node>(selected_items, 1);
-            if (node0 && node1) {
-                operation_stack.queue(
-                    std::make_shared<Item_parent_change_operation>(
-                        node1,
-                        node0,
-                        std::shared_ptr<erhe::scene::Node>{},
-                        std::shared_ptr<erhe::scene::Node>{}
-                    )
-                );
-            }
+        if (visible("Attach") && make_button("Attach", attach_mode, button_size)) {
+            attach_selection_to_active();
         }
         if (visible("Grow Selection") && make_button("Grow Selection", component_select_mode, button_size)) {
             grow_component_selection();
@@ -1535,10 +1548,18 @@ auto Operations::operation_button(const char* label, erhe::commands::Command* co
 
 void Operations::merge()
 {
+    // Items (and with them the merge target, out_items.front()) come from the
+    // one resolver, so merge follows the same active-item target rule as the
+    // CSG booleans (doc/active-item-plan.md D6).
+    std::vector<std::shared_ptr<erhe::Item_base>> items;
+    if (!resolve_operation_items(false, Operation_reference::active_is_target, items)) {
+        return;
+    }
     m_context.operation_stack->queue(
         std::make_shared<Merge_operation>(
             Merge_operation::Parameters{
                 .context = m_context,
+                .items   = std::move(items),
                 .build_info{
                     .primitive_types{
                         .fill_triangles  = true,
@@ -1551,6 +1572,78 @@ void Operations::merge()
                 }
             }
         )
+    );
+}
+
+auto Operations::can_attach_to_active() const -> bool
+{
+    Selection* selection = m_context.selection;
+    if (selection == nullptr) {
+        return false;
+    }
+    const std::shared_ptr<erhe::scene::Node> active_node = selection->get_active_item_as<erhe::scene::Node>();
+    if (!active_node) {
+        return false;
+    }
+    const erhe::Item_base* active_item = static_cast<const erhe::Item_base*>(active_node.get());
+    for (const std::shared_ptr<erhe::Item_base>& item : selection->get_command_target_selection()) {
+        if (item.get() == active_item) {
+            continue;
+        }
+        if (erhe::utility::test_all_rhs_bits_set(item->get_type(), erhe::scene::Node::get_static_type())) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Operations::attach_selection_to_active()
+{
+    Selection* selection = m_context.selection;
+    if (selection == nullptr) {
+        return;
+    }
+    const std::shared_ptr<erhe::scene::Node> active_node = selection->get_active_item_as<erhe::scene::Node>();
+    if (!active_node) {
+        log_operations->warn("Attach: no active node to attach to");
+        return;
+    }
+    const erhe::Item_base* active_item = static_cast<const erhe::Item_base*>(active_node.get());
+    Compound_operation::Parameters compound_operation_parameters;
+    std::size_t ancestor_count = 0;
+    for (const std::shared_ptr<erhe::Item_base>& item : selection->get_command_target_selection()) {
+        if (item.get() == active_item) {
+            continue;
+        }
+        const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+        if (!node) {
+            continue;
+        }
+        if (active_node->is_ancestor(node.get())) {
+            ++ancestor_count;
+            continue;
+        }
+        compound_operation_parameters.operations.push_back(
+            std::make_shared<Item_parent_change_operation>(
+                active_node,
+                node,
+                std::shared_ptr<erhe::Hierarchy>{},
+                std::shared_ptr<erhe::Hierarchy>{}
+            )
+        );
+    }
+    if (ancestor_count > 0) {
+        log_operations->warn(
+            "Attach: skipped {} node(s) that are ancestors of the active node '{}'",
+            ancestor_count,
+            active_node->get_name()
+        );
+    }
+    if (compound_operation_parameters.operations.empty()) {
+        return;
+    }
+    m_context.operation_stack->queue(
+        std::make_shared<Compound_operation>(std::move(compound_operation_parameters))
     );
 }
 
@@ -1939,7 +2032,7 @@ void Operations::bake_transform()
     // items empty, so make_entries produced no entries and only the node
     // transform reset half ever ran.
     std::vector<std::shared_ptr<erhe::Item_base>> items;
-    if (!resolve_operation_items(false, items)) {
+    if (!resolve_operation_items(false, Operation_reference::operands_only, items)) {
         return;
     }
     Compound_operation::Parameters compound_operation_parameters;
@@ -1973,7 +2066,7 @@ void Operations::center_transform()
     // Active-scene selection (operation scoping policy); also fills the bake
     // operation's items, see bake_transform().
     std::vector<std::shared_ptr<erhe::Item_base>> items;
-    if (!resolve_operation_items(false, items)) {
+    if (!resolve_operation_items(false, Operation_reference::operands_only, items)) {
         return;
     }
     Compound_operation::Parameters compound_operation_parameters;
@@ -2253,17 +2346,17 @@ void Operations::make_raytrace()
 
 void Operations::difference()
 {
-    async_mesh_operation<Difference_operation>();
+    async_mesh_operation<Difference_operation>(false, Operation_reference::active_is_target);
 }
 
 void Operations::intersection()
 {
-    async_mesh_operation<Intersection_operation>();
+    async_mesh_operation<Intersection_operation>(false, Operation_reference::active_is_target);
 }
 
 void Operations::union_()
 {
-    async_mesh_operation<Union_operation>();
+    async_mesh_operation<Union_operation>(false, Operation_reference::active_is_target);
 }
 
 void Operations::lattice_deform(erhe::geometry::operation::Lattice_deform_parameters&& parameters, const bool auto_fit_cage)

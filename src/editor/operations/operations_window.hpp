@@ -86,6 +86,17 @@ enum class Add_joint_avoidance : unsigned int {
     whole_world = 1  // every other body in the physics world
 };
 
+// What the active item means to an operation (doc/active-item-plan.md D6).
+// operands_only: the operation has operands and no target, so the active item
+// only orders them - an unselected active item stays out. active_is_target:
+// the operation has one target (the merge survivor, the CSG target), which is
+// the active mesh, added to the items when it is not selected.
+enum class Operation_reference
+{
+    operands_only,
+    active_is_target
+};
+
 class Operations : public erhe::imgui::Imgui_window
 {
 public:
@@ -108,6 +119,13 @@ public:
     void run_operation(erhe::commands::Command* command, const Operation_params& params);
 
     void merge();
+
+    // Operations "Attach" (doc/active-item-plan.md D6, Blender Ctrl-P): parent
+    // every node of the command target selection other than the active node
+    // under the active node, as one undoable Compound_operation. Nodes that are
+    // ancestors of the active node are skipped (a parent cannot be reparented
+    // under its own descendant) and reported once per invocation.
+    void attach_selection_to_active();
     auto align_selection(bool apply_scale) -> bool;
     // Compound: align the two selected components, then create a physics joint
     // between the two nodes' rigid bodies (ball for vertex, hinge about the edge
@@ -250,13 +268,22 @@ private:
     // selection-aware. Otherwise fills out_items with the component-selected nodes
     // (when a component selection is active and the operation is selection-aware) or
     // the object selection.
-    [[nodiscard]] auto resolve_operation_items(bool selection_aware, std::vector<std::shared_ptr<erhe::Item_base>>& out_items) const -> bool;
+    [[nodiscard]] auto resolve_operation_items(
+        bool                                           selection_aware,
+        Operation_reference                            reference,
+        std::vector<std::shared_ptr<erhe::Item_base>>& out_items
+    ) const -> bool;
 
     // True when exactly two components of the active mesh-component mode
     // (vertex / edge / face) are selected on two distinct nodes, i.e. when
     // align_selection() has a well-defined pair to act on. Used to gate the
     // toolbar button; deliberately allocation-free (runs per frame).
     [[nodiscard]] auto can_align() const -> bool;
+
+    // Per-frame gate for the Attach button: there is an active node (the
+    // reference, doc/active-item-plan.md D6) and at least one other node in the
+    // command target selection. Allocation-free.
+    [[nodiscard]] auto can_attach_to_active() const -> bool;
 
     // Cheap per-frame gate for the Flip Joint button: a single node is selected and
     // it has a nearest rigid body. The authoritative hinge-joint lookup (and the
@@ -270,7 +297,7 @@ private:
     // when exactly one exists.
     [[nodiscard]] auto get_target_scene_root() -> std::shared_ptr<Scene_root>;
 
-    template<typename T> void async_mesh_operation(bool selection_aware = false);
+    template<typename T> void async_mesh_operation(bool selection_aware = false, Operation_reference reference = Operation_reference::operands_only);
 
     // Scene close: drop a pending save-overwrite confirmation targeting the
     // closing scene - the modal's shared_ptr would pin the scene, and

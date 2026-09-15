@@ -25,17 +25,12 @@ namespace editor {
 Merge_operation::Merge_operation(Parameters&& parameters)
     : m_parameters{std::move(parameters)}
 {
-    // Merge acts on the ACTIVE scene's selection only: one host, so the
-    // reference frame is composed within one world space and no node is
-    // detached from another scene into this one. Selection in other scenes
-    // persists but never participates.
-    const std::shared_ptr<Scene_root> active_scene_root = parameters.context.selection->get_active_scene_root();
-    if (!active_scene_root) {
-        return;
-    }
-    // TODO count meshes in selection
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items =
-        parameters.context.selection->get_hosted_selection(static_cast<erhe::Item_host*>(active_scene_root.get()));
+    // Items come from Operations::resolve_operation_items: the active scene's
+    // selection only (one host, so the reference frame is composed within one
+    // world space and no node is detached from another scene into this one),
+    // in target-first order - the first mesh-carrying node is the survivor,
+    // which is the active mesh when there is one (doc/active-item-plan.md D6).
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_parameters.items;
     if (selected_items.size() < 2) {
         return;
     }
@@ -53,31 +48,12 @@ Merge_operation::Merge_operation(Parameters&& parameters)
 
     m_selection_before = selected_items;
 
-    if (!m_parameters.operation) {
-        // Sorting nodes ensures first node is not child of some other node.
-        // Other nodes will be detached from the scene.
-
-        // TODO Re-parent children of nodes that will be detached to
-        //      the remaining (first) node.
-        std::sort(
-            m_selection_before.begin(),
-            m_selection_before.end(),
-            [](const std::shared_ptr<erhe::Item_base>& lhs, const std::shared_ptr<erhe::Item_base>& rhs) {
-                auto lhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(lhs);
-                auto rhs_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(rhs);
-                if (lhs_hierarchy && !rhs_hierarchy) {
-                    return true;
-                }
-                if (rhs_hierarchy && !lhs_hierarchy) {
-                    return false;
-                }
-                if (!lhs_hierarchy && !rhs_hierarchy) {
-                    return true;
-                }
-                return lhs_hierarchy->get_depth() < rhs_hierarchy->get_depth();
-            }
-        );
-    }
+    // The survivor is the first mesh-carrying node of the item list, which the
+    // resolver already placed there. No depth sort: the user names the survivor
+    // by making it the active item, and reordering by hierarchy depth would
+    // silently overrule that choice.
+    // TODO Re-parent children of nodes that will be detached to
+    //      the remaining (first) node.
 
     std::vector<std::shared_ptr<erhe::geometry::Geometry>> geometries;
     std::vector<mat4> transforms;

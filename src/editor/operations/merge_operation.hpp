@@ -21,6 +21,10 @@ public:
     {
     public:
         App_context&                context;
+        // The items to merge, in target-first order: the first mesh-carrying
+        // node is the survivor. Filled by Operations::resolve_operation_items,
+        // which puts the active mesh first (doc/active-item-plan.md D6).
+        std::vector<std::shared_ptr<erhe::Item_base>> items;
         erhe::primitive::Build_info build_info;
         std::function<erhe::geometry::Geometry(
             const erhe::geometry::Geometry& lhs,

@@ -893,14 +893,15 @@ auto Mcp_server::run_geometry_op_with_target(const json& args, const std::functi
     // though the mesh work itself is async, so the caller-visible selection
     // is back to what it was when this returns.
     const std::vector<std::shared_ptr<erhe::Item_base>> saved = m_context.selection->get_selected_items();
+    const std::shared_ptr<erhe::Item_base> saved_active = m_context.selection->get_active_item();
     {
         Scoped_selection_change change{*m_context.selection};
-        m_context.selection->set_selection(targets);
+        m_context.selection->set_selection(targets, targets.front());
     }
     op();
     {
         Scoped_selection_change change{*m_context.selection};
-        m_context.selection->set_selection(saved);
+        m_context.selection->set_selection(saved, saved_active);
     }
     return {};
 }
@@ -1037,20 +1038,24 @@ auto Mcp_server::action_csg(const json& args) -> std::string
     // selection here does not race the async operation. The boolean acts on
     // the active scene's selection bucket, so activate the target scene too.
     const std::vector<std::shared_ptr<erhe::Item_base>> saved = m_context.selection->get_selected_items();
+    const std::shared_ptr<erhe::Item_base> saved_active = m_context.selection->get_active_item();
     m_context.selection->set_active_scene_root(sr->shared_from_this());
     {
         std::vector<std::shared_ptr<erhe::Item_base>> selection;
         selection.push_back(target_node);
         selection.insert(selection.end(), tool_nodes.begin(), tool_nodes.end());
         Scoped_selection_change change{*m_context.selection};
-        m_context.selection->set_selection(selection);
+        // The target is named explicitly as the active item: the CSG target is
+        // the active mesh (doc/active-item-plan.md D6), so an implicit active
+        // item (the last listed) must not take the target's place here.
+        m_context.selection->set_selection(selection, target_node);
     }
     if      (operation == "union")        { m_context.operations->union_();       }
     else if (operation == "intersection") { m_context.operations->intersection(); }
     else                                  { m_context.operations->difference();   }
     {
         Scoped_selection_change change{*m_context.selection};
-        m_context.selection->set_selection(saved);
+        m_context.selection->set_selection(saved, saved_active);
     }
     json tools = json::array();
     for (const std::shared_ptr<erhe::scene::Node>& tool_node : tool_nodes) {

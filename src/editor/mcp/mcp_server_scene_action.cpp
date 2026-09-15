@@ -435,6 +435,33 @@ auto Mcp_server::action_set_active_item(const json& args) -> std::string
     }).dump();
 }
 
+// The Operations window "Attach" button (doc/active-item-plan.md D6, Blender
+// Ctrl-P): parent every node of the command target selection other than the
+// active node under the active node, as one undoable compound operation.
+auto Mcp_server::action_attach_selection_to_active(const json& args) -> std::string
+{
+    static_cast<void>(args);
+    if (m_context.selection == nullptr) {
+        return make_error_content("Selection system not available");
+    }
+    if (m_context.operations == nullptr) {
+        return make_error_content("Operations not available");
+    }
+    const std::shared_ptr<erhe::Item_base> active_item = m_context.selection->get_active_item();
+    if (!active_item) {
+        return make_error_content("No active item to attach to");
+    }
+    m_context.operations->attach_selection_to_active();
+    return make_json_content({
+        {"queued", true},
+        {"active_item", {
+            {"name", active_item->get_name()},
+            {"type", std::string{active_item->get_type_name()}},
+            {"id",   active_item->get_id()}
+        }}
+    }).dump();
+}
+
 // Delete nodes (whole subtrees) by id and/or name - the MCP counterpart of
 // Edit > Delete, undoable through the same Selection::delete_items path, but
 // WITHOUT touching the user's selection. Built for partial-rebuild iteration:

@@ -304,6 +304,20 @@ curl -X POST http://127.0.0.1:3743/mcp \
 
 Returns: `{active_item: {name, type, id, selected}}`
 
+### attach_selection_to_active
+
+The Operations window "Attach" button (Blender Ctrl-P): parent every node of
+the command target selection other than the active node under the active node,
+as one undoable compound operation. Takes no arguments; name the parent with
+`set_active_item` first (or make it the last item of `select_items`). Nodes
+that are ancestors of the active node are skipped.
+
+```bash
+curl -X POST http://127.0.0.1:3743/mcp   -H "Content-Type: application/json"   -d '{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"attach_selection_to_active","arguments":{}}}'
+```
+
+Returns: `{queued, active_item: {name, type, id}}`
+
 ## Action Tools
 
 ### create_node
