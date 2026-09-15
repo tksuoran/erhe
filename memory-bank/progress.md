@@ -269,4 +269,4 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓3b{8482a6c92:resolve_operation_items(Operation_reference{operands_only|active_is_target})-active-mesh-first,inserted-when-unselected-for-merge/CSG-only;Merge_operation-items-from-resolver,depth-sort-gone;Attach=attach_selection_to_active-compound+MCP-tool;MCP-csg/retarget-name-active-explicitly;headless:merge-survivor=unselected-active,CSG-target=active,Attach-children,CatmullClark-leaves-unselected-active-alone}
 ✓3c{cc2f309cd:update_target_nodes-rotates-active-target-to-front;anchor-rotation=representative-entry(was-last);on_active_item-rebuild-outside-component-mode/drag}
 ✓phase-4{plan-doc=standing-description;section-3=verification+user-interactive-list}
-  ACTIVE-ITEM-DONE-2026-09-15|?user-interactive{Ctrl-click-activate;hierarchy-accent;Settings-fields;Create/Brush/paste/gizmo-with-unselected-active}
+  ACTIVE-ITEM-DONE+USER-VERIFIED-2026-09-15

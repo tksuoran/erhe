@@ -1,7 +1,7 @@
 # Active item plan: one explicit reference item in the selection
 
-Status: LANDED (phases 1-4); interactive checks left to the user are in
-section 3. Modeled on Blender's active object
+Status: LANDED (phases 1-4) and verified interactively by the user
+(2026-09-15). Modeled on Blender's active object
 (`scene_layout/object/selecting.rst`; the semantics below were read off
 Blender's source: `view3d_select.cc` pick code, `object_select.cc`
 `base_activate`, `object_relations.cc` `parent_set_exec`,
@@ -175,7 +175,8 @@ Headless (`build_vs2026_vulkan_headless`, tests ON):
   nodes under it, `Geometry.Subdivision.Catmull-Clark` leaves it untouched,
   and `get_transform_state.anchor_frame` follows `set_active_item`.
 
-Interactive checks left to the user (no bare MCP entry reaches them):
+Interactive (no bare MCP entry reaches these; re-check by hand after
+changes to selection, the hierarchy window or the transform tool):
 
 - Ctrl-click on a selected, non-active row or mesh makes it active without
   deselecting; Ctrl-click on the active one deselects it and it stays active.
