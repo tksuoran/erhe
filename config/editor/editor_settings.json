@@ -110,11 +110,14 @@
         "point_size": 4
     },
     "selection_outline": {
+        "_version": 2,
         "selection_highlight_low": [2,1,0,0.8],
         "selection_highlight_high": [2,1,0,0.8],
         "selection_highlight_width_low": -3,
         "selection_highlight_width_high": -3,
-        "selection_highlight_frequency": 1
+        "selection_highlight_frequency": 1,
+        "active_highlight_low": [2,1.8,0.3,0.8],
+        "active_highlight_high": [2,1.8,0.3,0.8]
     },
     "mesh_component_style": {
         "vertex_color": [0.95,0.65,0.1,1],
@@ -671,9 +674,9 @@
         "rotate_arcball": false,
         "ring_pick_radius": 3,
         "arrow_shaft_length": 0,
-        "translate_cone_length": 8,
+        "translate_cone_length": 6,
         "translate_cone_radius": 2.5,
-        "rotate_ring_radius": 20,
+        "rotate_ring_radius": 22,
         "view_ring_radius_factor": 1.23,
         "arrow_ring_gap": 10,
         "box_scale_cone_length": 5,
@@ -683,11 +686,11 @@
         "translate_head_pick_radius": 2.69,
         "scale_shaft_length": 0,
         "scale_cube_half_length": 2.25,
-        "scale_handle_gap": 2,
+        "scale_handle_gap": 3.33,
         "uniform_scale_outer_radius": 3,
-        "plane_sector_gap": 0.5,
-        "plane_translate_outer_radius": 11,
-        "ring_sector_gap": 3,
+        "plane_sector_gap": 0.35,
+        "plane_translate_outer_radius": 6.6,
+        "ring_sector_gap": 11.15,
         "handle_line_width": 3,
         "handle_line_width_hot": 3,
         "plane_outline_width": 3,
