@@ -6,6 +6,13 @@ name: build
 #   - manual "Run workflow" button (workflow_dispatch)
 # Feature-branch pushes intentionally do NOT build, to keep noise down on a
 # high-commit repo. Open a PR against main (or trigger manually) to get CI.
+#
+# Every matrix job configures with tests enabled, builds the editor and the
+# test executables, and runs ctest. The ctest step never fails its job (the
+# job, and so this workflow's badge, is a build verdict); the JUnit output is
+# uploaded as a `test-results-*` artifact and the "tests" workflow
+# (tests.yml, triggered when this run completes) turns those into the test
+# verdict and the tests badge.
 on:
   push:
     branches: [ main ]
@@ -123,11 +130,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libwayland-dev libxkbcommon-dev xorg-dev libtbb-dev
 
+      # Every configure wrapper passes extra arguments through to cmake
+      # ("$@" / %*), which is how tests are switched on for the wrappers
+      # that leave them off by default.
       - name: Configure
-        run: ${{ matrix.configure }}
+        run: ${{ matrix.configure }} -DERHE_BUILD_TESTS=ON
 
       - name: Build editor
         run: cmake --build "${{ matrix.build_dir }}" --target editor --config "${{ matrix.config }}" --parallel
+
+      # erhe_tests depends on every test executable the configuration
+      # defines (top-level CMakeLists.txt).
+      - name: Build tests
+        run: cmake --build "${{ matrix.build_dir }}" --target erhe_tests --config "${{ matrix.config }}" --parallel
+
+      # The runners have no GPU: tests labeled "gpu" (they bring up a graphics
+      # Device) and "editor" (they drive a running editor over its MCP server)
+      # are left out. The step's outcome is deliberately not the job's: the
+      # tests workflow judges the uploaded JUnit file.
+      - name: Run tests
+        id: ctest
+        continue-on-error: true
+        run: ctest --test-dir "${{ matrix.build_dir }}" --build-config "${{ matrix.config }}" --label-exclude "gpu|editor" --output-on-failure --timeout 900 --output-junit "${{ github.workspace }}/test-results/${{ matrix.build_dir }}.xml"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.build_dir }}
+          path: test-results/${{ matrix.build_dir }}.xml
+          if-no-files-found: ignore
 
   # Grep-level rule (proposal D of doc/gl-worker-context-enforcement.md):
   # task scheduling in src/editor and src/erhe must go through the erhe::task

@@ -1,0 +1,46 @@
+name: tests
+
+# Evaluates the test results of a completed "build" workflow run: every job
+# of that run's matrix runs ctest and uploads its JUnit output as a
+# `test-results-*` artifact (the ctest step there does not fail its job, so
+# the build badge stays a build verdict). This workflow downloads those
+# artifacts and passes or fails on them, which gives README.md a tests badge
+# separate from the build badge. A build run that did not succeed fails here
+# too: results from an incomplete build are not a test verdict.
+on:
+  workflow_run:
+    workflows: [ build ]
+    types: [ completed ]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  tests:
+    name: Test results
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # A cancelled build run (a newer commit superseded it) carries no verdict.
+    if: github.event.workflow_run.conclusion != 'cancelled'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require a successful build run
+        if: github.event.workflow_run.conclusion != 'success'
+        run: |
+          echo "Build run ${{ github.event.workflow_run.html_url }} concluded '${{ github.event.workflow_run.conclusion }}'; tests are not evaluated."
+          exit 1
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: test-results
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summarize
+        run: python3 scripts/ci_test_summary.py test-results

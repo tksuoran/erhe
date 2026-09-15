@@ -195,15 +195,35 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   that editor with `ERHE_MCP_TEST_PORT` (default 3743); each case waits
   `ERHE_MCP_TEST_TIMEOUT_S` seconds (default 30) before launching one.
 
-- The macOS `configure_xcode_*.sh` scripts enable tests by default. On Windows,
-  `scripts\configure_tests_asan.bat` produces a dedicated test configuration
-  (`build_tests_asan/`, OpenGL + ASAN + tests ON); other Windows configure
-  scripts leave tests off -- pass `-DERHE_BUILD_TESTS=ON` through the wrapper
-  if you want tests in a regular build tree. For performance measurement,
-  `scripts\configure_tests.bat` produces `build_tests/` (no ASAN, profiler
-  none; VS generator, so `--config Release` and `--config Debug` build from
-  the same tree) -- used by the geometry timing harness, see
-  `doc/catmull_clark.md`.
+- The macOS `configure_xcode_*.sh` scripts and `configure_vs2026_vulkan.bat`
+  enable tests by default. On Windows, `scripts\configure_tests_asan.bat`
+  produces a dedicated test configuration (`build_tests_asan/`, OpenGL + ASAN
+  + tests ON); the other configure wrappers leave tests off -- every wrapper
+  passes extra arguments through to cmake (`%*` / `"$@"`), so pass
+  `-DERHE_BUILD_TESTS=ON` to get tests in a regular build tree. For
+  performance measurement, `scripts\configure_tests.bat` produces
+  `build_tests/` (no ASAN, profiler none; VS generator, so `--config Release`
+  and `--config Debug` build from the same tree) -- used by the geometry
+  timing harness, see `doc/catmull_clark.md`.
+- With tests enabled, the `erhe_tests` target builds every test executable
+  the configuration defines (each test `CMakeLists.txt` registers its target
+  with `add_dependencies(erhe_tests ...)`; a new test target must do the
+  same). Two ctest labels partition the tests by what they need: `gpu`
+  (they bring up a graphics `Device`: `erhe_graphics_gpu_tests`,
+  `erhe_scene_renderer_gpu_tests`) and `editor` (they drive a running
+  editor: `mcp_server_tests` and its fixtures). A machine without a GPU runs
+  `ctest --label-exclude "gpu|editor"`; a new test that needs either must
+  carry the label (`gtest_discover_tests(... PROPERTIES LABELS "gpu")`).
+- CI (`.github/workflows/build.yml`) configures every matrix entry with
+  tests on, builds `editor` and `erhe_tests`, and runs
+  `ctest --label-exclude "gpu|editor" --output-junit`; the runners have no
+  GPU. That ctest step does not fail its job, so the build badge stays a
+  build verdict: the JUnit files are uploaded as `test-results-*` artifacts
+  and `.github/workflows/tests.yml` (triggered when a build run completes)
+  summarizes them with `scripts/ci_test_summary.py` and gives the tests
+  badge in README.md. A build run that did not succeed fails the tests
+  workflow too. Running the `gpu` tests in CI under a software Vulkan is
+  future work (`doc/graphics_test_coverage.md`).
 - Run via `ctest` from the build directory, or invoke the
   `.../src/erhe/<name>/test/<config>/erhe_<name>_tests.exe` binary directly.
   Run suites serially and fix one failure at a time -- an abort hides the rest

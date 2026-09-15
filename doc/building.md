@@ -157,6 +157,8 @@ disabling unused features and selecting different backends.
 
 ### Notes on Specific Options
 
+**ERHE_BUILD_TESTS** -- Builds the gtest suites (see "Testing" in `AGENTS.md`). Every configure wrapper passes extra arguments through to cmake, so `scripts\configure_vs2026_opengl.bat -DERHE_BUILD_TESTS=ON` (or `bash scripts/configure_ninja_linux_vulkan.sh -DERHE_BUILD_TESTS=ON`) enables them in a regular build tree. The `erhe_tests` target then builds every test executable, and `ctest --test-dir <build_dir> -C <config>` runs them; `--label-exclude "gpu|editor"` leaves out the tests that need a graphics device or a running editor, which is what CI runs.
+
 **ERHE_PHYSICS_LIBRARY** -- The main backend is `jolt`. Set to `none` to disable physics.
 
 **ERHE_RAYTRACE_LIBRARY** -- The main backend is `bvh`, used for mouse picking in 3D viewports. When set to `none`, mouse picking uses GPU ID buffer rendering instead.

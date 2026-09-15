@@ -65,20 +65,23 @@ limitation, not a coverage gap to fill).
 
 None remaining.
 
-## Future work: CI ctest job (deferred)
+## CI
 
-The one unlanded piece of the original testing plan (the plan doc itself is
-retired; this sketch is its surviving implementation guide). Deferred by
-decision: it cannot be developed/verified from the (Windows) dev machine and
-needs new infrastructure.
+`.github/workflows/build.yml` builds `erhe_graphics_gpu_tests` on every
+matrix entry that supports it and runs ctest with `--label-exclude
+"gpu|editor"`: the deviceless `erhe_graphics_tests` runs there, the GPU
+target does not (the runners have no GPU; the target carries the ctest label
+`gpu`). The GPU coverage above is exercised on developer machines.
 
-`.github/workflows/build.yml` currently only builds the editor and runs no
-ctest. Add a job that configures `-DERHE_BUILD_TESTS=ON
+## Future work: GPU tests in CI under a software Vulkan
+
+Deferred by decision: it cannot be developed/verified from the (Windows) dev
+machine and needs new infrastructure. Add a matrix entry (or a step of the
+Linux Vulkan entry) that configures `-DERHE_BUILD_TESTS=ON
 -DERHE_GRAPHICS_API=vulkan -DERHE_WINDOW_LIBRARY=none`, installs a software
 Vulkan (Mesa lavapipe on Ubuntu runners; SwiftShader as alternative), points
 the loader at its ICD, verifies with `vulkaninfo`, then runs
-`ctest -R erhe_graphics_gpu_tests`. Keep a separate
-`ctest -R erhe_graphics_tests` (deviceless) job that needs no Vulkan.
+`ctest -L gpu` in addition to the label-excluded run.
 
 Software Vulkan does not support every format/feature; tests must probe and
 skip: `probe_image_format_support`, `get_format_properties`,

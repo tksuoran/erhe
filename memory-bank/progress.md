@@ -270,3 +270,8 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓3c{cc2f309cd:update_target_nodes-rotates-active-target-to-front;anchor-rotation=representative-entry(was-last);on_active_item-rebuild-outside-component-mode/drag}
 ✓phase-4{plan-doc=standing-description;section-3=verification+user-interactive-list}
   ACTIVE-ITEM-DONE+USER-VERIFIED-2026-09-15
+
+[TASK::ci-tests]{DONE-2026-09-15}
+erhe_tests-aggregate-target+gpu/editor-labels+wrapper-arg-pass-through+build.yml-ctest-step+tests.yml-verdict-workflow+ci_test_summary.py+README-tests-badge+AGENTS/building/graphics_test_coverage-docs
+verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-gpu|editor-1371-tests{gpu-80,editor-53-excluded}
+?first-CI-run-after-push{Linux/macOS/Windows-headless-test-builds-never-built-here}
