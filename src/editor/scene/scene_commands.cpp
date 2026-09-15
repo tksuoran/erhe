@@ -900,9 +900,11 @@ auto Scene_commands::create_new_layout(erhe::scene::Node* parent) -> std::shared
 
 auto Scene_commands::create_new_rigid_body(erhe::scene::Node* node) -> std::shared_ptr<Node_physics>
 {
+    // doc/active-item-plan.md D6: without an explicit node the target is the
+    // active node.
     std::shared_ptr<erhe::scene::Node> target = (node != nullptr)
         ? std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this())
-        : m_context.selection->get_last_selected<erhe::scene::Node>();
+        : m_context.selection->get_active_item_as<erhe::scene::Node>();
 
     if (!target) {
         // Nothing to attach to: create a new empty node carrying the body.
@@ -987,7 +989,8 @@ auto Scene_commands::create_new_joint(
     if (node != nullptr) {
         target = std::static_pointer_cast<erhe::scene::Node>(node->shared_from_this());
     } else {
-        target = m_context.selection->get_last_selected<erhe::scene::Node>();
+        // doc/active-item-plan.md D6: the target is the active node.
+        target = m_context.selection->get_active_item_as<erhe::scene::Node>();
         if (target && !connected) {
             // Convenience for the bare command: connect to another selected
             // node in the same scene, when there is one.

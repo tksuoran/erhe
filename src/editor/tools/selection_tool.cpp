@@ -497,6 +497,15 @@ void Selection::set_active_scene_root(const std::shared_ptr<Scene_root>& scene_r
     );
 }
 
+auto Selection::is_command_reference_host(const erhe::Item_base& item) -> bool
+{
+    erhe::Item_host* const host = item.get_item_host();
+    if (host == nullptr) {
+        return true;
+    }
+    return host == static_cast<erhe::Item_host*>(get_active_scene_root().get());
+}
+
 auto Selection::get_command_target_selection() -> const std::vector<std::shared_ptr<erhe::Item_base>>&
 {
     Scene_root* const active_scene_root = get_active_scene_root().get();
@@ -1459,7 +1468,19 @@ void Selection_tool::viewport_toolbar()
 
 void Selection::update_last_selected(const std::shared_ptr<erhe::Item_base>& item)
 {
-    m_last_selected_by_type[item->get_type()] = item;
+    // doc/active-item-plan.md D7: the per-type map is kept for exactly the
+    // library palette types Material and Brush, which answer "which material /
+    // brush is current" - a question the single active item stops answering
+    // once the user clicks a node. The remaining readers are
+    // get_default_material() (tools/tool.cpp), the Brush_tool brush fallback
+    // and the Operations make-mesh material. Every hierarchy-typed reference
+    // (Node, Mesh, Node_attachment, Hierarchy) reads the active item instead.
+    constexpr uint64_t recorded_types = erhe::Item_type::material | erhe::Item_type::brush;
+    const uint64_t type = item->get_type();
+    if ((type & recorded_types) == 0) {
+        return;
+    }
+    m_last_selected_by_type[type] = item;
 }
 
 auto Selection::get_last_selected(const uint64_t type) -> std::shared_ptr<erhe::Item_base>

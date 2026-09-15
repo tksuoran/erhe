@@ -1795,7 +1795,8 @@ auto Operations::add_joint(const Add_joint_avoidance avoidance) -> bool
 
 auto Operations::can_flip_joint() const -> bool
 {
-    const std::shared_ptr<erhe::scene::Node> node = m_context.selection->get_last_selected<erhe::scene::Node>();
+    // doc/active-item-plan.md D6: the reference node is the active item.
+    const std::shared_ptr<erhe::scene::Node> node = m_context.selection->get_active_item_as<erhe::scene::Node>();
     if (!node) {
         return false;
     }
@@ -1809,9 +1810,9 @@ auto Operations::flip_joint() -> bool
 
 auto Operations::flip_joint(const Add_joint_avoidance avoidance) -> bool
 {
-    const std::shared_ptr<erhe::scene::Node> selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
+    const std::shared_ptr<erhe::scene::Node> selected_node = m_context.selection->get_active_item_as<erhe::scene::Node>();
     if (!selected_node) {
-        log_operations->warn("Flip Joint: no node selected");
+        log_operations->warn("Flip Joint: no active node");
         return false;
     }
     std::shared_ptr<Scene_root> scene_root = get_target_scene_root();
@@ -2829,8 +2830,9 @@ void Operations::create_joint_settings()
 
 void Operations::create_brush()
 {
-    // Find mesh: check directly selected meshes, then check selected nodes for mesh attachments
-    std::shared_ptr<erhe::scene::Mesh> mesh = m_context.selection->get_last_selected<erhe::scene::Mesh>();
+    // Find mesh: the active mesh (doc/active-item-plan.md D6), else the first
+    // selected mesh or the mesh of a selected node.
+    std::shared_ptr<erhe::scene::Mesh> mesh = m_context.selection->get_active_item_as<erhe::scene::Mesh>();
     if (!mesh) {
         const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = m_context.selection->get_selected_items();
         for (const std::shared_ptr<erhe::Item_base>& item : selected_items) {

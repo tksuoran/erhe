@@ -96,7 +96,12 @@ auto Create::find_parent() -> std::shared_ptr<erhe::scene::Node>
     Selection& selection = *m_context.selection;
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
 
-    const auto selected_node       = get<erhe::scene::Node>(selected_items);
+    // doc/active-item-plan.md D6: the parent is the active node, else the
+    // first selected node.
+    std::shared_ptr<erhe::scene::Node> selected_node = selection.get_active_item_as<erhe::scene::Node>();
+    if (!selected_node) {
+        selected_node = get<erhe::scene::Node>(selected_items);
+    }
     const auto viewport_scene_view = m_context.scene_views->last_scene_view();
 
     Scene_view* scene_view = get_hover_scene_view();

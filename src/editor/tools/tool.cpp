@@ -193,14 +193,21 @@ auto Tool::get_material() const -> std::shared_ptr<erhe::primitive::Material>
     return get_default_material(m_context, *scene_root);
 }
 
-// If Node is currently selected, returns it.
-// If Node_attachment is currently selected and it has owner node, returns the owner node.
-// If a Node was selected, and it still exists, return it
-// If Node_attachemnt was selected, and it still exists, and it has owner node, returns the owner node.
+// The reference node of a tool (doc/active-item-plan.md D6): the active node,
+// or the node the active Node_attachment belongs to. When there is no active
+// node, the first node (or node of an attachment) of the command target
+// selection answers instead.
 auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
 {
     Selection* selection = m_context.selection;
-    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection->get_selected_items();
+    {
+        std::shared_ptr<erhe::scene::Node> active_node = selection->get_active_item_as<erhe::scene::Node>();
+        if (active_node) {
+            return active_node;
+        }
+    }
+
+    const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection->get_command_target_selection();
     {
         std::shared_ptr<erhe::scene::Node> node = get<erhe::scene::Node>(selected_items);
         if (node) {
@@ -216,27 +223,6 @@ auto Tool::get_node() const -> std::shared_ptr<erhe::scene::Node>
                 std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
                 std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
                 if (shared_node) {
-                    return shared_node;
-                }
-            }
-        }
-    }
-
-    {
-        std::shared_ptr<erhe::scene::Node> node = selection->get_last_selected<erhe::scene::Node>();
-        if (node && (node->get_item_host() != nullptr)) {
-            return node;
-        }
-    }
-
-    {
-        std::shared_ptr<erhe::scene::Node_attachment> attachment = selection->get_last_selected<erhe::scene::Node_attachment>();
-        if (attachment && (attachment->get_item_host() != nullptr)) {
-            erhe::scene::Node* node = attachment->get_node();
-            if (node != nullptr) {
-                std::shared_ptr<erhe::Item_base> item = node->shared_from_this();
-                std::shared_ptr<erhe::scene::Node> shared_node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (shared_node && (shared_node->get_item_host() != nullptr)) {
                     return shared_node;
                 }
             }

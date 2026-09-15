@@ -742,9 +742,10 @@ void Brush_tool::do_insert_operation(Brush& brush)
 
     // Determine parent node based on tool settings
     std::shared_ptr<erhe::scene::Node> parent;
-    const auto& first_selected_node = m_context.selection->get_last_selected<erhe::scene::Node>();
-    if (m_parent_to_first_selected && first_selected_node && (first_selected_node->get_item_host() != nullptr)) {
-        parent = first_selected_node;
+    // doc/active-item-plan.md D6: the reference node is the active item.
+    const std::shared_ptr<erhe::scene::Node> active_node = m_context.selection->get_active_item_as<erhe::scene::Node>();
+    if (m_parent_to_active && active_node && (active_node->get_item_host() != nullptr)) {
+        parent = active_node;
     }
     erhe::scene::Scene&                       scene     = scene_root->get_scene();
     const std::shared_ptr<erhe::scene::Node>& root_node = scene.get_root_node();
@@ -851,7 +852,7 @@ void Brush_tool::tool_properties(erhe::imgui::Imgui_window& /*imgui_window*/)
     const std::shared_ptr<Brush> last_selected_brush = m_context.selection->get_last_selected<Brush>();
     const std::shared_ptr<Brush> hover_brush = get_hover_brush();
 
-    ImGui::Checkbox("Parent to Selected", &m_parent_to_first_selected);
+    ImGui::Checkbox("Parent to Active",   &m_parent_to_active        );
     ImGui::Checkbox("Parent to Scene",    &m_parent_to_scene_root    );
     ImGui::Checkbox("Parent to Hovered",  &m_parent_to_hovered       );
 

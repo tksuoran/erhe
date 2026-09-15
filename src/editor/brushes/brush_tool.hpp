@@ -175,7 +175,7 @@ private:
     bool                               m_show_brush_frame      {true};
     bool                               m_show_preview          {true};
 
-    bool                               m_parent_to_first_selected{false};
+    bool                               m_parent_to_active        {false};
     bool                               m_parent_to_scene_root    {true};
     bool                               m_parent_to_hovered       {false};
 

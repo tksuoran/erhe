@@ -249,17 +249,19 @@ auto Clipboard::try_ready() -> bool
     }
 
     Selection& selection = *m_context.selection;
+    // doc/active-item-plan.md D6: the paste target is the active hierarchy
+    // item.
+    const std::shared_ptr<erhe::Hierarchy> active_hierarchy = selection.get_active_item_as<erhe::Hierarchy>();
+    if (active_hierarchy) {
+        return active_hierarchy;
+    }
+
     // Paste is a command: it targets the active scene's selection (plus
     // non-hosted items), never a hierarchy selected in another scene.
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_command_target_selection();
     const std::shared_ptr<erhe::Hierarchy>& selected_hierarchy = get<erhe::Hierarchy>(selected_items);
     if (selected_hierarchy) {
         return selected_hierarchy;
-    }
-
-    const std::shared_ptr<erhe::Hierarchy>& last_selected_hierarchy = selection.get_last_selected<erhe::Hierarchy>();
-    if (last_selected_hierarchy) {
-        return last_selected_hierarchy;
     }
 
     if (m_last_hover_scene_view != nullptr) {
