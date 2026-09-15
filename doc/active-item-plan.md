@@ -1,31 +1,22 @@
 # Active item plan: one explicit reference item in the selection
 
-Status: IN PROGRESS. Modeled on Blender's active object
+Status: LANDED (phases 1-4); interactive checks left to the user are in
+section 3. Modeled on Blender's active object
 (`scene_layout/object/selecting.rst`; the semantics below were read off
 Blender's source: `view3d_select.cc` pick code, `object_select.cc`
 `base_activate`, `object_relations.cc` `parent_set_exec`,
 `overlay_private.hh` `object_wire_theme_id`). Builds on the per-scene
 selection and the active scene of `doc/selection-improvements-plan.md`.
 
-## 1. Problem
+## 1. Scope
 
-`editor::Selection` keeps an ordered `std::vector` of selected items and no
-explicit reference item. Consumers that need one item out of the selection
-each pick it by a different implicit rule, and none of the rules is visible to
-the user:
-
-| Rule | Where | Consequence |
-|------|-------|-------------|
-| `get_last_selected<T>()` - a per-type `weak_ptr` map, written on every add, never on deselect | `Tool::get_node`, `Brush_tool` "Parent to Selected", `Operations::flip_joint` / `create_brush`, `Scene_commands::create_new_rigid_body` / `create_new_joint`, `Clipboard` paste target | Different types remember different items, so "the" reference item does not exist, and nothing shows the user which item a type remembers. |
-| `get<T>(items, 0)` - first item of a type in selection order | `Tool::get_node`, `Create::find_parent`, `Clipboard::resolve_paste_target`, `Mesh_operation` host lock, `Merge_operation` target mesh | The oldest selected item wins; the user has no way to see or change which one that is. |
-| Operations "Attach": `get<Node>(items, 0)` parents `get<Node>(items, 1)` | `operations_window.cpp` | Two-item order dependence, invisible to the user. |
-| `shared.entries.front()` | `Transform_tool` local reference frame, `m_first_node` | Local-mode gizmo orientation comes from whichever node was selected first. |
-| `Item_tree::m_last_focus_item` and `Range_selection` primary terminator | hierarchy window | Tree-local anchors that behave like an active item but are neither shown nor shared. |
-
-Presentation draws every selected item the same: the outline pass picks
-`constant_color0` for selected and `constant_color1` for hovered-only from the
-flag bits mirrored into each draw-list entry (`primitive_buffer.cpp`), and the
-hierarchy row only carries `ImGuiTreeNodeFlags_Selected`.
+This document is the standing description of the active item: what it is,
+how it changes, how it is shown, which commands take it as their reference,
+and how it is exposed over MCP. `editor::Selection` keeps an ordered
+`std::vector` of selected items; the active item is the one explicit
+reference item beside it, replacing the per-consumer rules (a per-type
+"last selected" map, "first item of a type in selection order",
+`entries.front()`) that used to pick the reference invisibly.
 
 ## 2. Design
 
@@ -131,19 +122,18 @@ or the node an active attachment belongs to, subject to the scene rule
 above, else empty), and falls back to the previous rule only when the helper
 returns empty:
 
-| Consumer | After |
-|----------|-------|
+| Consumer | Reference rule |
+|----------|----------------|
 | `Tool::get_node` | active node (or active attachment's node), else first hosted node of the command target selection |
-| `Brush_tool` "Parent to Selected" | renamed "Parent to Active"; active node |
+| `Brush_tool` "Parent to Active" | active node |
 | `Operations::can_flip_joint` / `flip_joint` | active node |
 | `Operations::create_brush` | active mesh, else first selected mesh |
 | `Scene_commands::create_new_rigid_body` / `create_new_joint` | target = active node; `create_new_joint` connects to another selected node of the same host as today |
 | `Clipboard::resolve_paste_target` | active hierarchy item, else the current fallbacks |
 | `Create::find_parent` | active node |
-| Operations "Attach" | every selected node of the command target selection other than the active node is parented under the active node (Blender Ctrl-P); enabled with an active node and at least one other selected node |
-| `Merge_operation` | the active mesh is the merge target; operands are the selected meshes; when the active mesh is unselected it is added as the target (Blender join) |
-| CSG operations (`geometry_operations.cpp`) | same target rule as merge |
-| `Transform_tool` local reference frame (`m_first_node`, `entries.front()`) | the active node when it is among the entries, else `entries.front()` |
+| Operations "Attach" (`Operations::attach_selection_to_active`, also the MCP tool `attach_selection_to_active`) | every selected node of the command target selection other than the active node is parented under the active node in one compound operation (Blender Ctrl-P); nodes that are ancestors of the active node are skipped with a warning; enabled with an active node and at least one other selected node |
+| `Merge_operation` and the CSG booleans | `Operations::resolve_operation_items` puts the active mesh node first in the item list, and both take the front item as their target; under `Operation_reference::active_is_target` (merge, difference, intersection, union) an unselected active mesh is inserted as the target (Blender join), while per-mesh operations (`operands_only`) act on the selected operands alone |
+| `Transform_tool` representative entry (local reference frame, single-entry numeric edit, IK effector) | `update_target_nodes` rotates the active node's target to the front, so `entries.front()` is the active node when it is among the targets, else the first target; the anchor orientation is that entry's; the tool rebuilds on `Active_item_changed_message` outside component mode and outside a drag |
 
 ### D7. The per-type map after the migration
 
@@ -165,43 +155,34 @@ only for Material and Brush.
 - `get_editor_references` reports the active item.
 - `reset_editor_state` clears it (D2).
 
-## 3. Phases
+## 3. Verification
 
-### Phase 1: state, rules, MCP
+Headless (`build_vs2026_vulkan_headless`, tests ON):
 
-`Item_flags::active_item`; `Selection` member, getters, `set_active_item`,
-`set_selection(items, active)`, message, items-removed / close / snapshot
-handling; the Ctrl-click rule in viewport and hierarchy; `sanity_check`
-verifies the bit is set on exactly the active item; MCP changes of D8; an
-`Mcp_test` case (select three items -> last is active; `select_items` with an
-empty list keeps it and reports `selected: false`; `set_active_item` on an
-unselected item; `reset_editor_state` clears it).
+- `ctest -C Debug -R "Mcp_"` includes `Mcp_test.active_item_follows_selection_and_survives_clearing`
+  (last listed item is active; an empty `select_items` keeps it with
+  `selected: false`; `set_active_item` on an unselected item; `reset_editor_state`
+  forgets it). The first `Mcp_test` case after a fresh editor can time out on
+  `reset_editor_state`; that is a startup flake unrelated to the active item.
+- `scripts/undo_reference_clearing_smoke_test.py`: the active item is
+  forgotten with removed content and on scene close (no `scene-close leak`).
+- Outline: `capture_screenshot` with two selected boxes shows the active one
+  in the active color and the other in the selected color; after `select_items`
+  with an empty list neither draws an outline.
+- Commands over MCP: with an unselected active mesh, the `Geometry.Merge`
+  command leaves the active mesh as the survivor, `Geometry.Difference` keeps
+  the active mesh, `attach_selection_to_active` parents the other selected
+  nodes under it, `Geometry.Subdivision.Catmull-Clark` leaves it untouched,
+  and `get_transform_state.anchor_frame` follows `set_active_item`.
 
-Verification: headless `ctest -R Mcp_`; `scripts/undo_reference_clearing_smoke_test.py`
-(active item survives undo/redo snapshots); close a scene holding an
-unselected active item and grep `logs/log.txt` for `scene-close leak`.
+Interactive checks left to the user (no bare MCP entry reaches them):
 
-### Phase 2: presentation
-
-D5. Verification: headless `capture_screenshot` with two selected meshes shows
-one in the active color, and none in it after `select_items` with an empty
-list; interactive check by the user for the hierarchy accent on an
-unselected active row and the Settings fields.
-
-### Phase 3: consumers
-
-D6 and D7, one commit per row group (tools / operations / clipboard+create /
-transform). Verification per commit over MCP: `select_items` with an explicit
-`active`, then `select_items` again without the active item so it is
-unselected, run the operation, `get_node_details` confirms the parent / merge
-target / joint target is the active item.
-
-### Phase 4: documents
-
-`mcp_server_usage.md` (tools of D8), `doc/import-undo-reference-clearing.md`
-(the `get_last_selected<Material>()` note stays valid under D7), and this
-file's status line and section 2 become the standing description once the
-phases land.
+- Ctrl-click on a selected, non-active row or mesh makes it active without
+  deselecting; Ctrl-click on the active one deselects it and it stays active.
+- The hierarchy accent on an unselected active row, and the two active
+  color fields in the Settings window.
+- Create window parent, Brush tool "Parent to Active", Ctrl-V paste target
+  and the local-mode gizmo axes with an unselected active node.
 
 ## 4. Follow-ups this enables (not in scope)
 
