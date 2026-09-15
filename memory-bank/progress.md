@@ -261,3 +261,7 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 ✓commit-2{18d269042:hover-gate=App_context::is_scene_load_in_flight;get_async_status.idle;headless-cannot-exercise-per-frame-hover}
 ✓commit-3{721be3dca:deferred-finalize-commit-collects-sharers-only-on-swap{quadratic-refresh-was-the-cost};USD-phase-breadcrumbs;simpleAssetScene-340->203s,stalls-BVH-commit-39->0}
 ?left::synchronous-load-on-tick-thread{plan-section-3-item-1-Asynchronous-load;simpleAssetScene-203s='usd: attach to scene'}
+
+[TASK::active-item]{doc/active-item-plan.md;via-harness;started-2026-09-15}
+✓plan{7f0409f36}+phase-1{41c535c30:state+rules+message+undo-snapshot+MCP+Mcp_test;item-tests-188;Mcp_-52/53(first-case-flake-pre-existing);smoke-55/55;scene-close-clean}
+?phase-2-presentation->phase-3-consumers->phase-4-docs
