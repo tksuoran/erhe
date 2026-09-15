@@ -3,6 +3,7 @@
 #include "erhe_hash/hash.hpp"
 #include "erhe_primitive/enums.hpp"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -232,7 +233,7 @@ public:
     [[nodiscard]] auto derive(
         const erhe::primitive::Material*       material,
         const erhe::dataformat::Vertex_format* vertex_format,
-        const bool                             mesh_has_skin
+        bool                                   mesh_has_skin
     ) const -> Shader_key;
 
     uint32_t                                                     bool_mask{0};

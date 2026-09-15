@@ -188,6 +188,36 @@ Light_buffer::Light_buffer(
             }
         )
     }
+    , m_fallback_ddgi_rgba_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = erhe::dataformat::Format::format_16_vec4_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .debug_label       = "Light_buffer::m_fallback_ddgi_rgba_texture"
+            }
+        )
+    }
+    , m_fallback_ddgi_rg_texture{
+        std::make_shared<erhe::graphics::Texture>(
+            graphics_device,
+            erhe::graphics::Texture_create_info {
+                .device            = graphics_device,
+                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
+                .type              = erhe::graphics::Texture_type::texture_2d,
+                .pixelformat       = erhe::dataformat::Format::format_16_vec2_float,
+                .width             = 1,
+                .height            = 1,
+                .depth             = 1,
+                .debug_label       = "Light_buffer::m_fallback_ddgi_rg_texture"
+            }
+        )
+    }
     , m_fallback_distance_texture{
         std::make_shared<erhe::graphics::Texture>(
             graphics_device,
@@ -232,36 +262,6 @@ Light_buffer::Light_buffer(
                 .height            = 1,
                 .depth             = 1,
                 .debug_label       = "Light_buffer::m_fallback_lightmap_texture"
-            }
-        )
-    }
-    , m_fallback_ddgi_rgba_texture{
-        std::make_shared<erhe::graphics::Texture>(
-            graphics_device,
-            erhe::graphics::Texture_create_info {
-                .device            = graphics_device,
-                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-                .type              = erhe::graphics::Texture_type::texture_2d,
-                .pixelformat       = erhe::dataformat::Format::format_16_vec4_float,
-                .width             = 1,
-                .height            = 1,
-                .depth             = 1,
-                .debug_label       = "Light_buffer::m_fallback_ddgi_rgba_texture"
-            }
-        )
-    }
-    , m_fallback_ddgi_rg_texture{
-        std::make_shared<erhe::graphics::Texture>(
-            graphics_device,
-            erhe::graphics::Texture_create_info {
-                .device            = graphics_device,
-                .usage_mask        = erhe::graphics::Image_usage_flag_bit_mask::sampled | erhe::graphics::Image_usage_flag_bit_mask::transfer_dst,
-                .type              = erhe::graphics::Texture_type::texture_2d,
-                .pixelformat       = erhe::dataformat::Format::format_16_vec2_float,
-                .width             = 1,
-                .height            = 1,
-                .depth             = 1,
-                .debug_label       = "Light_buffer::m_fallback_ddgi_rg_texture"
             }
         )
     }
