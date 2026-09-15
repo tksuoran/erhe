@@ -38,6 +38,13 @@ target_link_libraries(${_target}
 
 erhe_target_settings(${_target} "erhe")
 
+# A self-checking executable (asserts, exit code 0 on success) rather than a
+# gtest suite; ctest runs it like the gtest targets when tests are enabled.
+if (${ERHE_BUILD_TESTS} STREQUAL "ON")
+    add_test(NAME ${_target} COMMAND ${_target})
+    add_dependencies(erhe_tests ${_target})
+endif ()
+
 # Wire up code generation
 set(_test_defs "${CMAKE_CURRENT_SOURCE_DIR}/definitions")
 # OUTPUTS: see erhe_codegen_generate.cmake - declaring the generated files as

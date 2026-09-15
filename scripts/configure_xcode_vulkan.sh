@@ -23,6 +23,7 @@ cmake \
     -G "Xcode" \
     -B build_xcode_vulkan \
     -S . \
+    "$@" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \
     -DERHE_BUILD_TESTS=ON \

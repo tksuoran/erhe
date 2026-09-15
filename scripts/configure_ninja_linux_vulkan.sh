@@ -9,6 +9,7 @@ cmake \
     -G "Ninja" \
     -B build_ninja_linux_vulkan \
     -S . \
+    "$@" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
     -Wno-dev \

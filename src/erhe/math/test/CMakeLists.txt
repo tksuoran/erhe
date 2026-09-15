@@ -26,3 +26,4 @@ erhe_target_settings(${_target} "erhe/tests")
 
 include(GoogleTest)
 gtest_discover_tests(${_target})
+add_dependencies(erhe_tests ${_target})

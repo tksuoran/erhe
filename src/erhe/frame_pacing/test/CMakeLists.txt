@@ -25,6 +25,7 @@ erhe_target_settings(${_target} "erhe/tests")
 
 include(GoogleTest)
 gtest_discover_tests(${_target})
+add_dependencies(erhe_tests ${_target})
 
 # Standalone timer wake-up jitter probe (implementation plan step P0.5):
 # grounds the frame pacer 'guard' tunable on the target machine.

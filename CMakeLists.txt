@@ -72,6 +72,12 @@ set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"              
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     enable_testing()
+    # Builds every test executable (each test CMakeLists adds itself with
+    # add_dependencies(erhe_tests <target>)); CI builds this target and then
+    # runs ctest. Tests that need a GPU device carry the ctest label "gpu" and
+    # tests that drive a running editor carry the label "editor", so a
+    # device-less machine runs `ctest -LE "gpu|editor"`.
+    add_custom_target(erhe_tests)
 endif ()
 
 # TODO fix ERHE_USE_PRECOMPILED_HEADERS

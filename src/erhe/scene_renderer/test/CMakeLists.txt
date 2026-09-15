@@ -29,6 +29,7 @@ erhe_target_settings(${_target} "erhe/tests")
 
 include(GoogleTest)
 gtest_discover_tests(${_target})
+add_dependencies(erhe_tests ${_target})
 
 # Device-backed half (V2). erhe::gpu_test_support is defined by
 # src/erhe/graphics/test only where a Device can actually be brought up for the
@@ -52,5 +53,7 @@ if (TARGET erhe::gpu_test_support)
 
     erhe_target_settings(${_gpu_target} "erhe/tests")
 
-    gtest_discover_tests(${_gpu_target})
+    # Needs a Device: labeled "gpu" so a device-less machine can skip it.
+    gtest_discover_tests(${_gpu_target} PROPERTIES LABELS "gpu")
+    add_dependencies(erhe_tests ${_gpu_target})
 endif ()

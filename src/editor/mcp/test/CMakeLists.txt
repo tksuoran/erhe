@@ -96,6 +96,7 @@ function(erhe_add_mcp_editor_fixture fixture port environment)
         FIXTURES_SETUP "${fixture}"
         ENVIRONMENT    "ERHE_MCP_TEST_PORT=${port};${environment}"
         TIMEOUT        240
+        LABELS         "editor"
     )
     add_test(
         NAME    ${_stop}
@@ -105,6 +106,7 @@ function(erhe_add_mcp_editor_fixture fixture port environment)
         FIXTURES_CLEANUP "${fixture}"
         ENVIRONMENT      "ERHE_MCP_TEST_PORT=${port};${environment}"
         TIMEOUT          150
+        LABELS           "editor"
     )
 endfunction()
 
@@ -116,7 +118,10 @@ include(GoogleTest)
 # PROPERTIES to a post-build `cmake -P GoogleTestAddTests.cmake` command as
 # a flat list, and a ';' inside a value corrupts that command line. The
 # first case of a run pays the /health wait (ERHE_MCP_TEST_TIMEOUT_S default
-# 30 s) only for a hand-started editor; a fixture start returns ready.
+# 30 s) only for a hand-started editor; a fixture start returns ready. Every
+# test here (fixtures included) carries the "editor" label: they need a
+# running editor, which needs a GPU device, so a device-less machine (CI)
+# runs `ctest -LE editor`.
 gtest_discover_tests(${_target}
     TEST_FILTER "Mcp_test.*"
     PROPERTIES
@@ -124,6 +129,7 @@ gtest_discover_tests(${_target}
         # The client tests share one editor: run them one at a time.
         RESOURCE_LOCK     "mcp_editor"
         ENVIRONMENT       "ERHE_MCP_TEST_PORT=3773"
+        LABELS            "editor"
 )
 gtest_discover_tests(${_target}
     TEST_FILTER "Mcp_auth_test.*"
@@ -131,4 +137,6 @@ gtest_discover_tests(${_target}
         FIXTURES_REQUIRED "mcp_editor_auth"
         RESOURCE_LOCK     "mcp_editor_auth"
         ENVIRONMENT       "ERHE_MCP_TEST_AUTH_PORT=3774"
+        LABELS            "editor"
 )
+add_dependencies(erhe_tests ${_target})
