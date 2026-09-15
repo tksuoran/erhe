@@ -264,4 +264,5 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 
 [TASK::active-item]{doc/active-item-plan.md;via-harness;started-2026-09-15}
 ✓plan{7f0409f36}+phase-1{41c535c30:state+rules+message+undo-snapshot+MCP+Mcp_test;item-tests-188;Mcp_-52/53(first-case-flake-pre-existing);smoke-55/55;scene-close-clean}
-?phase-2-presentation->phase-3-consumers->phase-4-docs
+✓phase-2{outline-3rd-color-via-Primitive_interface_settings::constant_color_active+get_selected_color;TRAP:selection-outline-is-drawn-by-Content_wide_line_renderer-fed-in-viewport_scene_view/headset_view-not-primitive_buffer;hierarchy-accent+Properties-order;headless-pixel-verified}|?user-interactive{accent-tint,Settings-fields}
+?phase-3-consumers{3a-helper+simple-consumers,3b-resolve_operation_items+Attach,3c-transform-frame}->phase-4-docs
