@@ -167,8 +167,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Google removed the legacy 'tools' package from the SDK repository
+      # (2026-09), and setup-android still lists it in its default packages;
+      # name the packages explicitly so the step stops requesting it.
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       # NDK version is pinned in android-project/app/build.gradle; CMake 3.22.1
       # is AGP 8.7.3's default and satisfies erhe's 3.16.3 floor.
