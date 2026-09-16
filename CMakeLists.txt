@@ -259,8 +259,13 @@ endif ()
 
     # Static OpenVDB core in its minimal configuration: TBB is the only
     # dependency. Delayed loading OFF also drops the Boost requirement;
-    # Blosc/ZLib only affect .vdb file compression (files are written
-    # uncompressed and remain valid). v13.0.0 is the newest release whose
+    # Blosc/ZLib only affect .vdb file I/O, which erhe does not use yet; when
+    # .vdb import/export is added, enabling them needs c-blosc 1.x (OpenVDB
+    # uses the Blosc 1 API, blosc.h + blosc_compress_ctx, which c-blosc2 does
+    # not provide) plus zlib, both via find_package redirects like TBB's.
+    # CONCURRENT_MALLOC only selects the allocator linked into OpenVDB's own
+    # binaries and unit tests (not built); erhe's allocator choice is
+    # ERHE_MALLOC_LIBRARY. v13.0.0 is the newest release whose
     # CMake works as an add_subdirectory subproject (master has regressed
     # to CMAKE_SOURCE_DIR-relative paths).
     CPMAddPackage(
@@ -281,6 +286,7 @@ endif ()
             "OPENVDB_ENABLE_RPATH OFF"
             "OPENVDB_ENABLE_UNINSTALL OFF"
             "OPENVDB_CXX_STRICT OFF"
+            "CONCURRENT_MALLOC None"
             "USE_BLOSC OFF"
             "USE_ZLIB OFF"
             "USE_IMATH_HALF OFF"
