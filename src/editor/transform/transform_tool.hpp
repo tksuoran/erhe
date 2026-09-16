@@ -7,6 +7,7 @@
 #include "transform/lattice_point_transform.hpp"
 #include "transform/mesh_component_transform.hpp"
 #include "transform/rotation_inspector.hpp"
+#include "scene/analytic_hover_provider.hpp"
 #include "tools/tool.hpp"
 
 #include "windows/property_editor.hpp"
@@ -56,7 +57,6 @@ class App_message_bus;
 struct Active_scene_changed_message;
 class  Active_item_changed_message;
 struct Hover_scene_view_message;
-struct Hover_mesh_message;
 struct Selection_message;
 struct Animation_update_message;
 struct Node_touched_message;
@@ -184,7 +184,9 @@ public:
     erhe::imgui::Value_edit_state      m_skew_state;
 };
 
-class Transform_tool : public Tool
+class Transform_tool
+    : public Tool
+    , public Analytic_hover_provider
 {
 public:
     static constexpr int c_priority{1};
@@ -208,6 +210,18 @@ public:
     // Implements Tool
     void tool_render(const Render_context& context) override;
 
+    // Implements Analytic_hover_provider. The pick writes the gizmo hover
+    // state (hovered handle, grab point, box face, rotation sphere crossings)
+    // for the view it picks; on_drag_ready() starts a drag only from the state
+    // of the view the press happened in.
+    [[nodiscard]] auto get_analytic_hover_name() const -> const std::string& override;
+    [[nodiscard]] auto pick_analytic_hover(
+        Scene_view& scene_view,
+        glm::vec3   ray_origin,
+        glm::vec3   ray_direction
+    ) -> std::optional<Hover_entry> override;
+    void clear_analytic_hover(Scene_view& scene_view) override;
+
     // Public API
     void viewport_toolbar();
 
@@ -222,9 +236,10 @@ public:
     [[nodiscard]] auto get_active_handle  () const -> Handle;
     [[nodiscard]] auto get_hover_handle   () const -> Handle;
     // World-space point on the hovered gizmo handle (analytic pick or
-    // box-face hit), or nullopt when no handle is hovered. The gizmo has
-    // no meshes, so this is how non-slot consumers (the XR controller
-    // ray) learn where the ray meets the gizmo.
+    // box-face hit), or nullopt when no handle is hovered. Richer than the
+    // gizmo's tool_slot entry: the XR controller ray stops here, which
+    // excludes the arcball region and box faces and falls back to the
+    // rotation sphere exit.
     [[nodiscard]] auto get_hover_handle_position_in_world() const -> std::optional<glm::vec3>;
     // Where the control ray enters the rotation sphere this frame (clamped
     // to the ray origin when starting inside), or nullopt when it misses.
@@ -291,7 +306,6 @@ public:
 private:
     void window_imgui       ();
     void on_hover_scene_view(Hover_scene_view_message& message);
-    void on_hover_mesh      (Hover_mesh_message& message);
     void on_selection       (Selection_message& message);
     void on_active_scene    (Active_scene_changed_message& message);
     void on_active_item     (Active_item_changed_message& message);
@@ -302,7 +316,8 @@ private:
     // True when scene_view shows the active scene (the scene the gizmo
     // targets); the gizmo is visible, hoverable and draggable only there.
     [[nodiscard]] auto is_scene_view_of_active_scene(Scene_view* scene_view) const -> bool;
-    void update_hover       ();
+    void update_hover       (Scene_view& scene_view, glm::vec3 ray_origin, glm::vec3 ray_direction);
+    void clear_hover_state  ();
     auto update_box_face_hover(Scene_view* scene_view) -> bool;
     void render_rays        (erhe::scene::Node& node);
     void render_initial_position_ray();
@@ -334,7 +349,6 @@ private:
 
     Tool_window                         m_window;
     erhe::message_bus::Subscription<Hover_scene_view_message>  m_hover_scene_view_subscription;
-    erhe::message_bus::Subscription<Hover_mesh_message>        m_hover_mesh_subscription;
     erhe::message_bus::Subscription<Selection_message>         m_selection_subscription;
     erhe::message_bus::Subscription<Active_scene_changed_message> m_active_scene_subscription;
     erhe::message_bus::Subscription<Active_item_changed_message>  m_active_item_subscription;
@@ -345,6 +359,10 @@ private:
     erhe::commands::Redirect_command    m_drag_redirect_update_command;
     erhe::commands::Drag_enable_command m_drag_enable_command;
     Create_frame_node_command           m_create_frame_node_command;
+    // The view whose pick produced the hover state below (nullptr: none).
+    Scene_view*                         m_hover_state_scene_view{nullptr};
+    // The view the active drag started in.
+    Scene_view*                         m_drag_scene_view       {nullptr};
     Handle                              m_hover_handle {Handle::e_handle_none};
     Handle                              m_active_handle{Handle::e_handle_none};
     Handle                              m_box_face_hover_handle  {Handle::e_handle_none};

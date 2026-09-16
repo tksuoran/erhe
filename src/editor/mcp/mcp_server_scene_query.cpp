@@ -967,6 +967,10 @@ auto Mcp_server::query_pick_at(const json& args) -> std::string
         if (grid) {
             j["grid"] = grid->get_name();
         }
+        // Meshless tool hits (the transform gizmo) name their hover source.
+        if (entry.analytic_provider != nullptr) {
+            j["provider"] = entry.get_name();
+        }
         if (entry.position.has_value()) {
             const glm::vec3& p = entry.position.value();
             j["position"] = {p.x, p.y, p.z};

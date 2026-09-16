@@ -1,6 +1,7 @@
 // #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 #include "scene/scene_view.hpp"
+#include "scene/analytic_hover_provider.hpp"
 
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
@@ -57,6 +58,9 @@ void Hover_entry::reset()
 
 auto Hover_entry::get_name() const -> const std::string&
 {
+    if (analytic_provider != nullptr) {
+        return analytic_provider->get_analytic_hover_name();
+    }
     std::shared_ptr<erhe::scene::Mesh> scene_mesh = scene_mesh_weak.lock();
     if (scene_mesh) {
         return scene_mesh->get_name();
@@ -414,12 +418,9 @@ void Scene_view::set_world_from_control(glm::vec3 near_position_in_world, glm::v
 void Scene_view::set_world_from_control(const glm::mat4& world_from_control)
 {
     // The control ray is a hover input in its own right, beyond the hovered
-    // mesh: the transform gizmo hit-tests its handles analytically against
-    // this ray, so a ray change must re-trigger the hover consumers even
-    // when the hovered mesh stays the same. Without this, gizmo handle
-    // hover froze whenever the pointer moved between handles over an
-    // unchanging background (no mesh change -> no Hover_mesh_message), and
-    // only recovered when a refocus reset the hover slots.
+    // mesh: Hover_mesh_message consumers may read positions along the ray
+    // (not only the mesh), so a ray change re-triggers them even when the
+    // hovered mesh stays the same.
     if (!m_world_from_control.has_value() || (m_world_from_control.value() != world_from_control)) {
         m_hover_update_pending = true;
     }
@@ -429,10 +430,7 @@ void Scene_view::set_world_from_control(const glm::mat4& world_from_control)
 
 void Scene_view::reset_control_transform()
 {
-    for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
-        set_hover(slot, Hover_entry{});
-    }
-
+    reset_hover();
     m_world_from_control.reset();
 }
 
@@ -440,6 +438,34 @@ void Scene_view::reset_hover_slots()
 {
     for (std::size_t slot = 0; slot < Hover_entry::slot_count; ++slot) {
         set_hover(slot, Hover_entry{});
+    }
+}
+
+void Scene_view::reset_hover()
+{
+    reset_hover_slots();
+    for (Analytic_hover_provider* provider : m_context.analytic_hover_providers) {
+        provider->clear_analytic_hover(*this);
+    }
+}
+
+void Scene_view::update_hover_with_analytic_tools()
+{
+    const std::optional<glm::vec3> origin_opt    = get_control_ray_origin_in_world();
+    const std::optional<glm::vec3> direction_opt = get_control_ray_direction_in_world();
+    if (!origin_opt.has_value() || !direction_opt.has_value()) {
+        for (Analytic_hover_provider* provider : m_context.analytic_hover_providers) {
+            provider->clear_analytic_hover(*this);
+        }
+        return;
+    }
+    for (Analytic_hover_provider* provider : m_context.analytic_hover_providers) {
+        std::optional<Hover_entry> entry = provider->pick_analytic_hover(*this, origin_opt.value(), direction_opt.value());
+        if (!entry.has_value()) {
+            continue;
+        }
+        entry->analytic_provider = provider;
+        merge_hover(Hover_entry::tool_slot, entry.value());
     }
 }
 
@@ -549,10 +575,9 @@ void Scene_view::update_hover_with_raytrace()
             .flags     = 0
         };
         erhe::raytrace::Hit hit;
-        // tool_slot has no producer: the transform gizmo is drawn with the
-        // debug renderer and picked analytically (Handle_visualizations), and
-        // nothing puts a mesh in the tool layer. The slot is kept so hover
-        // consumers keep their indices and a future producer can fill it.
+        // Nothing puts a mesh in the tool layer: tool_slot is filled by the
+        // analytic hover source (update_hover_with_analytic_tools), which runs
+        // after this and merges into the slot this clears.
         if (slot != Hover_entry::tool_slot) {
             rt_scene.intersect(ray, hit);
         }

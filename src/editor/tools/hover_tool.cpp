@@ -246,10 +246,11 @@ void Hover_tool::window_imgui()
     }
 
     std::shared_ptr<erhe::scene::Mesh> hover_scene_mesh        = hover       .scene_mesh_weak.lock();
-    std::shared_ptr<erhe::scene::Mesh> tool_scene_mesh         = tool        .scene_mesh_weak.lock();
     std::shared_ptr<erhe::scene::Mesh> rendertarget_scene_mesh = rendertarget.scene_mesh_weak.lock();
     ImGui::Text("Content: %s",      (hover       .valid && hover_scene_mesh       ) ? hover_scene_mesh       ->get_name().c_str() : "");
-    ImGui::Text("Tool: %s",         (tool        .valid && tool_scene_mesh        ) ? tool_scene_mesh        ->get_name().c_str() : "");
+    // get_name(): the tool slot is filled by analytic sources (the transform
+    // gizmo), which have no mesh and are named by their provider.
+    ImGui::Text("Tool: %s",         tool.valid ? tool.get_name().c_str() : "");
     ImGui::Text("Rendertarget: %s", (rendertarget.valid && rendertarget_scene_mesh) ? rendertarget_scene_mesh->get_name().c_str() : "");
 
     // Bone proxies are only pickable in bone selection mode, so this line stays

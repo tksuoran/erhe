@@ -537,6 +537,7 @@ erhe_target_sources_grouped(
     scene/scene_builder.hpp
     scene/scene_commands.cpp
     scene/scene_commands.hpp
+    scene/analytic_hover_provider.hpp
     scene/draw_list_scene_dependencies.cpp
     scene/draw_list_scene_dependencies.hpp
     scene/item_lookup.cpp

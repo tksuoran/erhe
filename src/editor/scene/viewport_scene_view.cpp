@@ -908,7 +908,6 @@ void Viewport_scene_view::update_hover(bool ray_only)
     const auto camera = m_camera.lock();
     if (!near_position_in_world.has_value() || !far_position_in_world.has_value() || !camera || !m_is_scene_view_hovered) {
         reset_control_transform();
-        reset_hover_slots();
         return;
     }
 
@@ -936,6 +935,9 @@ void Viewport_scene_view::update_hover(bool ray_only)
     if (m_context.id_renderer != nullptr) {
         update_hover_with_id_render();
     }
+    // Meshless tools (the transform gizmo) last: they merge into tool_slot
+    // against what the two mesh sources left there.
+    update_hover_with_analytic_tools();
 
     update_grid_hover();
 

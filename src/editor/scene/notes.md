@@ -33,7 +33,8 @@ Manages 3D scene data for the editor: scene roots (the top-level scene container
 
 - **`Scene_builder`** -- Constructs an initial scene with cameras, lights, and brush meshes (platonic solids, spheres, tori, etc.). Used during startup to populate the default scene.
 
-- **`Hover_entry`** -- Per-slot raytrace/pick result storing the hovered mesh, geometry, position, normal, UV, triangle index, and facet.
+- **`Hover_entry`** -- Per-slot raytrace/pick result storing the hovered mesh, geometry, position, normal, UV, triangle index, and facet. Entries from an analytic source carry no mesh; `analytic_provider` names their provider and `get_name()` returns its name.
+- **`Analytic_hover_provider`** (`analytic_hover_provider.hpp`) -- Third hover source next to raytrace and ID render, for tools hit tested analytically (the transform gizmo). Providers are registered in `App_context::analytic_hover_providers` after part construction. `Scene_view::update_hover_with_analytic_tools()` runs last in each hover update and merges every provider's entry into `tool_slot` by ray-t. `Scene_view::reset_hover_slots()` clears slots only (the sources refill them in the same update); `reset_hover()` also calls every provider's `clear_analytic_hover()` and is used where a view stops picking.
 
 - **`Frame_controller`** -- Camera controller with 6DOF input axes (translate XYZ, rotate XYZ). Used by `Fly_camera_tool`.
 

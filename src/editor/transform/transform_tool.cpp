@@ -220,11 +220,6 @@ Transform_tool::Transform_tool(
             on_hover_scene_view(message);
         }
     );
-    m_hover_mesh_subscription = app_message_bus.hover_mesh.subscribe(
-        [&](Hover_mesh_message& message) {
-            on_hover_mesh(message);
-        }
-    );
     m_selection_subscription = app_message_bus.selection.subscribe(
         [&](Selection_message& message) {
             on_selection(message);
@@ -267,11 +262,15 @@ Transform_tool::Transform_tool(
 void Transform_tool::on_hover_scene_view(Hover_scene_view_message& message)
 {
     Tool::on_message(message);
-}
-
-void Transform_tool::on_hover_mesh(Hover_mesh_message&)
-{
-    update_hover();
+    // The pointer moved to another view (or to none): the kept hover state
+    // describes a view that no longer picks, so it must not arm a drag or
+    // keep a handle highlighted. The new view's next pick refills it.
+    if (message.scene_view != m_hover_state_scene_view) {
+        clear_hover_state();
+    }
+    if ((message.destroyed_scene_view != nullptr) && (message.destroyed_scene_view == m_drag_scene_view)) {
+        m_drag_scene_view = nullptr;
+    }
 }
 
 void Transform_tool::on_selection(Selection_message&)
@@ -1027,79 +1026,121 @@ void Transform_tool::apply_skew_edit(const glm::vec3 skew, const bool local)
     update_transforms();
 }
 
-void Transform_tool::update_hover()
+auto Transform_tool::get_analytic_hover_name() const -> const std::string&
 {
-    auto* scene_view = get_hover_scene_view();
-    if (scene_view == nullptr) {
-        log_trs_tool->debug("scene_view == nullptr");
-        m_hover_handle          = Handle::e_handle_none;
-        m_box_face_hover_active = false;
-        m_pick_active           = false;
-        m_ray_sphere_entry.reset();
-        m_ray_sphere_exit.reset();
-        m_ray_sphere_plane_crossing.reset();
+    static const std::string name{"Transform gizmo"};
+    return name;
+}
+
+auto Transform_tool::pick_analytic_hover(
+    Scene_view&     scene_view,
+    const glm::vec3 ray_origin,
+    const glm::vec3 ray_direction
+) -> std::optional<Hover_entry>
+{
+    update_hover(scene_view, ray_origin, ray_direction);
+
+    // During a drag the gizmo owns the pointer in the view the drag runs in,
+    // whether or not the ray still meets the dragged handle's pick shape.
+    // Report the grab point as carried by the anchor's motion so far,
+    // projected onto the ray so the entry lies on it like every other hit.
+    if ((m_active_handle != Handle::e_handle_none) && (m_drag_scene_view == &scene_view)) {
+        const glm::vec3 grab_point_initial = shared.get_initial_drag_position_in_world();
+        const glm::mat4 anchor_motion      = shared.world_from_anchor.get_matrix() * shared.world_from_anchor_initial_state.get_inverse_matrix();
+        const glm::vec3 grab_point         = glm::vec3{anchor_motion * glm::vec4{grab_point_initial, 1.0f}};
+        const float     t                  = std::max(0.0f, glm::dot(grab_point - ray_origin, ray_direction));
+        return Hover_entry{
+            .valid    = true,
+            .position = ray_origin + (t * ray_direction),
+            .normal   = -ray_direction
+        };
+    }
+
+    if (m_hover_handle == Handle::e_handle_none) {
+        return std::nullopt;
+    }
+    return Hover_entry{
+        .valid    = true,
+        .position = m_box_face_hover_active ? m_box_face_hover_position : m_pick_position,
+        .normal   = -ray_direction
+    };
+}
+
+void Transform_tool::clear_analytic_hover(Scene_view& scene_view)
+{
+    if (m_hover_state_scene_view == &scene_view) {
+        clear_hover_state();
+    }
+}
+
+void Transform_tool::clear_hover_state()
+{
+    m_hover_state_scene_view = nullptr;
+    m_hover_handle           = Handle::e_handle_none;
+    m_box_face_hover_active  = false;
+    m_pick_active            = false;
+    m_hover_tool             = nullptr;
+    m_ray_sphere_entry.reset();
+    m_ray_sphere_exit.reset();
+    m_ray_sphere_plane_crossing.reset();
+}
+
+void Transform_tool::update_hover(Scene_view& scene_view, const glm::vec3 ray_origin, const glm::vec3 ray_direction)
+{
+    // The gizmo targets the active scene only: in views of other scenes the
+    // handles are hidden and must not arm.
+    if (!is_scene_view_of_active_scene(&scene_view)) {
+        clear_hover_state();
+        m_hover_state_scene_view = &scene_view;
         return;
     }
 
-    // The gizmo targets the active scene only: in views of other scenes the
-    // handles are hidden and must not arm.
-    if (!is_scene_view_of_active_scene(scene_view)) {
-        m_hover_handle          = Handle::e_handle_none;
-        m_box_face_hover_active = false;
-        m_pick_active           = false;
-        m_hover_tool            = nullptr;
-        m_ray_sphere_entry.reset();
-        m_ray_sphere_exit.reset();
-        m_ray_sphere_plane_crossing.reset();
-        return;
-    }
+    // m_hover_handle keeps the previous pick until the end: pick() reads it
+    // back through get_hover_handle() for its hover-driven handle exemptions.
+    m_hover_state_scene_view = &scene_view;
+    m_box_face_hover_active  = false;
+    m_pick_active            = false;
+    m_ray_sphere_entry.reset();
+    m_ray_sphere_exit.reset();
+    m_ray_sphere_plane_crossing.reset();
 
     // All handles are hit tested analytically against the control ray
     // (Handle_visualizations::pick) - there are no gizmo meshes.
     Handle new_handle = Handle::e_handle_none;
-    m_pick_active = false;
-    m_ray_sphere_entry.reset();
-    m_ray_sphere_exit.reset();
-    m_ray_sphere_plane_crossing.reset();
     Handle_visualizations* visualizations = shared.get_visualizations();
     if (visualizations != nullptr) {
-        const std::optional<glm::vec3> origin_opt    = scene_view->get_control_ray_origin_in_world();
-        const std::optional<glm::vec3> direction_opt = scene_view->get_control_ray_direction_in_world();
-        if (origin_opt.has_value() && direction_opt.has_value()) {
-            // View-dependent shown/hidden choices are made from the camera
-            // (in XR the head - one mono decision both eyes share), matching
-            // render(); only the intersection uses the control ray, which in
-            // XR originates at the controller.
-            glm::vec3 eye_position = origin_opt.value();
-            const std::shared_ptr<erhe::scene::Camera> camera = scene_view->get_camera();
-            const erhe::scene::Node* camera_node = camera ? camera.get() : nullptr;
-            if (camera_node != nullptr) {
-                eye_position = glm::vec3{camera_node->position_in_world()};
-            }
-            const std::optional<Handle_pick> pick = visualizations->pick(eye_position, origin_opt.value(), direction_opt.value());
-            if (pick.has_value()) {
-                new_handle      = pick->handle;
-                m_pick_position = pick->position;
-                m_pick_active   = true;
-            }
-            // Rotation-sphere crossing for the XR controller ray stop:
-            // computed regardless of the pick result - a ray can hit a
-            // visible handle AND cross the sphere, or cross only the
-            // (invisible) sphere interior.
-            const std::optional<Handle_visualizations::Rotate_sphere_intersection> sphere =
-                visualizations->intersect_rotate_sphere(origin_opt.value(), direction_opt.value());
-            if (sphere.has_value()) {
-                m_ray_sphere_entry          = sphere->entry;
-                m_ray_sphere_exit           = sphere->exit;
-                m_ray_sphere_plane_crossing = sphere->first_plane_crossing;
-            }
+        // View-dependent shown/hidden choices are made from the camera
+        // (in XR the head - one mono decision both eyes share), matching
+        // render(); only the intersection uses the control ray, which in
+        // XR originates at the controller.
+        glm::vec3 eye_position = ray_origin;
+        const std::shared_ptr<erhe::scene::Camera> camera = scene_view.get_camera();
+        const erhe::scene::Node* camera_node = camera ? camera.get() : nullptr;
+        if (camera_node != nullptr) {
+            eye_position = glm::vec3{camera_node->position_in_world()};
+        }
+        const std::optional<Handle_pick> pick = visualizations->pick(eye_position, ray_origin, ray_direction);
+        if (pick.has_value()) {
+            new_handle      = pick->handle;
+            m_pick_position = pick->position;
+            m_pick_active   = true;
+        }
+        // Rotation-sphere crossing for the XR controller ray stop:
+        // computed regardless of the pick result - a ray can hit a
+        // visible handle AND cross the sphere, or cross only the
+        // (invisible) sphere interior.
+        const std::optional<Handle_visualizations::Rotate_sphere_intersection> sphere =
+            visualizations->intersect_rotate_sphere(ray_origin, ray_direction);
+        if (sphere.has_value()) {
+            m_ray_sphere_entry          = sphere->entry;
+            m_ray_sphere_exit           = sphere->exit;
+            m_ray_sphere_plane_crossing = sphere->first_plane_crossing;
         }
     }
 
     // When no handle is picked, fall back to the ray vs bounding-box-face test
     // so every box face is draggable, not only the face-center cones.
-    m_box_face_hover_active = false;
-    if ((new_handle == Handle::e_handle_none) && update_box_face_hover(scene_view)) {
+    if ((new_handle == Handle::e_handle_none) && update_box_face_hover(&scene_view)) {
         new_handle              = m_box_face_hover_handle;
         m_box_face_hover_active = true;
     }
@@ -1229,6 +1270,11 @@ auto Transform_tool::on_drag_ready() -> bool
         return false;
     }
 
+    if (m_hover_state_scene_view != scene_view) {
+        log_trs_tool->trace("Transform tool cannot start drag - Hover state belongs to another view");
+        return false;
+    }
+
     m_active_handle = m_hover_handle;
     m_active_tool   = m_hover_tool;
     if (
@@ -1269,6 +1315,9 @@ auto Transform_tool::on_drag_ready() -> bool
     // end_drag() never runs and a prematurely-begun component edit would be left
     // stuck active, freezing the gizmo anchor.
     const bool started = m_active_tool->begin(axis_mask, scene_view);
+    if (started) {
+        m_drag_scene_view = scene_view;
+    }
     if (started && shared.component_mode) {
         begin_component_edit();
     }
@@ -1290,8 +1339,9 @@ void Transform_tool::end_drag()
         commit_component_edit();
     }
 
-    m_active_handle = Handle::e_handle_none;
-    m_active_tool   = nullptr;
+    m_active_handle   = Handle::e_handle_none;
+    m_active_tool     = nullptr;
+    m_drag_scene_view = nullptr;
     shared.initial_drag_position_distance_to_camera = 0.0;
 
     // record_transform_operation() already ran (via Subtool::end above) and

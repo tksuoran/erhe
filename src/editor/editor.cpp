@@ -3002,6 +3002,7 @@ public:
         m_app_context.animation_window         = m_animation_window      .get();
         m_app_context.tools                    = m_tools                 .get();
         m_app_context.transform_tool           = m_transform_tool        .get();
+        m_app_context.analytic_hover_providers.push_back(m_transform_tool.get());
         m_app_context.scene_views              = m_viewport_scene_views  .get();
 
         // Subsystems whose live state lives outside Editor_settings_config /

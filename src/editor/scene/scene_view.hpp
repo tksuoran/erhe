@@ -29,6 +29,7 @@ namespace erhe::scene_renderer { class Light_projections; }
 
 namespace editor {
 
+class Analytic_hover_provider;
 class App_context;
 class App_message;
 class App_message_bus;
@@ -90,6 +91,8 @@ public:
     // For now, these are weak pointers to avoid dangling pointers
     std::weak_ptr<erhe::scene::Mesh>          scene_mesh_weak           {};
     std::weak_ptr<Grid>                       grid_weak                 {};
+    // Set for entries from an analytic hover source (no mesh); names it.
+    Analytic_hover_provider*                  analytic_provider         {nullptr};
 
     std::size_t                               scene_mesh_primitive_index{std::numeric_limits<std::size_t>::max()};
     std::shared_ptr<erhe::geometry::Geometry> geometry                  {};
@@ -164,9 +167,18 @@ public:
 
     void set_world_from_control    (const glm::mat4& world_from_control);
     void reset_control_transform   ();
+    // Clears the slots only; the hover sources refill them within the same
+    // hover update.
     void reset_hover_slots         ();
+    // The view stops picking (pointer left it, HUD grab): clears the slots
+    // and the per-view state of every analytic hover provider.
+    void reset_hover               ();
     void update_transforms         ();
     void update_hover_with_raytrace();
+    // Third hover source, after raytrace and ID render: every provider in
+    // App_context::analytic_hover_providers picks against this view's control
+    // ray and its entry is merged into Hover_entry::tool_slot by ray-t.
+    void update_hover_with_analytic_tools();
     void update_grid_hover         ();
 
     auto icon_button(ImFont* icon_font, float font_size, const char* icon, const char* fallback_text, const char* tooltip, bool& toggle) -> bool;

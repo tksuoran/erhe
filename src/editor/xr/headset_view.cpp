@@ -449,12 +449,13 @@ void Headset_view::render(const Render_context& render_context)
 
         // Tool / rendertarget hover terminates the ray: one solid line from
         // the controller to the hit, nothing drawn past it. "Tool" is the
-        // tool_slot hover (tool-scene meshes) or the transform gizmo's
-        // analytic handle pick - the gizmo has no meshes, so it never
-        // appears in the hover slots. When several of these are hovered at
-        // once, the nearest along the ray wins. Content / grid / empty
-        // hovers keep the two-segment presentation below (bright to the
-        // hit, dim continuation past it).
+        // tool_slot hover. The transform gizmo's own tool_slot entry is
+        // replaced by Transform_tool::get_hover_handle_position_in_world(),
+        // whose stop rule is richer than a Hover_entry: the arcball region
+        // and box faces do not stop the ray, the rotation sphere exit does.
+        // When several of these are hovered at once, the nearest along the
+        // ray wins. Content / grid / empty hovers keep the two-segment
+        // presentation below (bright to the hit, dim continuation past it).
         struct Ray_stop {
             float     t;
             glm::vec4 color;
@@ -478,7 +479,10 @@ void Headset_view::render(const Render_context& render_context)
         };
         const Hover_entry& tool_entry         = get_hover(Hover_entry::tool_slot);
         const Hover_entry& rendertarget_entry = get_hover(Hover_entry::rendertarget_slot);
-        if (tool_entry.valid) {
+        const bool tool_entry_is_gizmo =
+            (m_context.transform_tool != nullptr) &&
+            (tool_entry.analytic_provider == m_context.transform_tool);
+        if (tool_entry.valid && !tool_entry_is_gizmo) {
             consider_ray_stop(tool_entry.position, tool_ray_color, 0);
         }
         if (m_context.transform_tool != nullptr) {
@@ -656,7 +660,7 @@ void Headset_view::update_pointer_context_from_controller()
     // tool acts on hits from before the drag. The drag itself does not use
     // the control ray (it follows get_world_from_controller()).
     if ((m_context.hud != nullptr) && m_context.hud->is_dragging()) {
-        reset_hover_slots();
+        reset_hover();
         return;
     }
 
@@ -674,6 +678,7 @@ void Headset_view::update_pointer_context_from_controller()
     // buffer rendered from the controller-aligned pick camera in the
     // previous frame's update_id_render() and merges any closer hit.
     update_hover_with_id_render();
+    this->Scene_view::update_hover_with_analytic_tools();
     this->Scene_view::update_grid_hover();
     update_quad_layer_hover();
 }

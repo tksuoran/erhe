@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <thread>
+#include <vector>
 
 namespace erhe::graphics {
     class Command_buffer;
@@ -52,6 +53,7 @@ struct Window_config;
 
 namespace editor {
 
+class Analytic_hover_provider;
 class Animation_player;
 class Animation_window;
 class Asset_manager;
@@ -205,6 +207,10 @@ public:
     std::thread::id                         main_thread_id        {};
 
     erhe::commands::Commands*               commands              {nullptr};
+    // Hover sources without scene meshes (the transform gizmo), consulted by
+    // Scene_view::update_hover_with_analytic_tools(). Filled once, after all
+    // parts are constructed; see scene/analytic_hover_provider.hpp.
+    std::vector<Analytic_hover_provider*>   analytic_hover_providers{};
     // Set by Editor::tick() to the cb being recorded for the current frame.
     // Runtime-triggered code paths (e.g. Scene_commands::create_new_rendertarget,
     // Hotbar / Hud rendertarget construction) read this to record GPU work into
