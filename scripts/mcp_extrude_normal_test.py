@@ -11,7 +11,7 @@ Normal) / Extrude (Vertex Normal) modes end to end:
   - Plain "move" must NOT change the topology (vertex/facet counts stay equal); all
     extrude modes MUST grow it; the undo stack must carry the matching operation.
 
-Usage: launch build_*/src/editor/<Config>/editor.exe (cwd = repo root), then
+Usage: launch build_*/bin/<Config>/editor.exe (cwd = repo root), then
     py -3 scripts/mcp_extrude_normal_test.py
 Env: ERHE_MCP_PORT (default 3743), ERHE_MCP_TIMEOUT_S (default 30).
 """

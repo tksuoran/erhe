@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from erhe_mcp import McpClient, wait_for_server  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_EDITOR_EXE = os.path.join(REPO_ROOT, "build_vs2026_vulkan", "src", "editor", "Release", "editor.exe")
+DEFAULT_EDITOR_EXE = os.path.join(REPO_ROOT, "build_vs2026_vulkan", "bin", "Release", "editor.exe")
 EMPTY_COMMANDS = os.path.join("config", "editor", "commands_empty.json")
 
 

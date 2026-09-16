@@ -151,6 +151,18 @@ if (${ERHE_PHYSICS_LIBRARY} STREQUAL "jolt")
     include(JoltPhysicsCompatibility)
 endif ()
 
+# Every executable and shared library of the build, erhe's and the
+# dependencies', lands in one directory: <build>/bin, plus a <Config>
+# subdirectory under multi-config generators (Visual Studio, Xcode). Windows
+# has no rpath, so this is what lets executables find shared libraries such as
+# oneTBB's DLL. Set before any dependency is added so their targets inherit it.
+# Android is excluded: the Gradle toolchain sets CMAKE_LIBRARY_OUTPUT_DIRECTORY
+# to where the APK packaging collects libmain.so.
+if (NOT ERHE_TARGET_OS_ANDROID)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+endif ()
+
 # Dependencies
 message("Fetching dependencies")
 
@@ -174,12 +186,14 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     endif ()
 
-    # Static oneTBB, providing the TBB::tbb target for OpenVDB (mandatory
-    # dependency) and Geogram (optional, see GEOGRAM_WITH_TBB below).
-    # BUILD_SHARED_LIBS is saved/restored around the package because oneTBB
-    # keys shared-vs-static off it (same push/pop Geogram's onetbb.cmake does).
+    # Shared oneTBB, providing the TBB::tbb target for OpenVDB (mandatory
+    # dependency) and Geogram (optional, see GEOGRAM_WITH_TBB below). oneTBB
+    # supports only the dynamic library configuration; a static build warns at
+    # configure time. BUILD_SHARED_LIBS is saved/restored around the package
+    # because oneTBB keys shared-vs-static off it. Its DLL is redirected
+    # into the shared output directory with every executable.
     set(ERHE_SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_SHARED_LIBS ON)
     CPMAddPackage(
         NAME              oneTBB
         VERSION           2022.3.0
@@ -198,9 +212,25 @@ if (${ERHE_VOXEL_LIBRARY} STREQUAL "openvdb")
     if (NOT TARGET TBB::tbb)
         message(FATAL_ERROR "oneTBB did not define the TBB::tbb target")
     endif ()
-    # With a static TBB the MSVC auto-linking pragmas in the oneTBB headers
-    # (tbb12.lib / tbb12_debug.lib) must not fire; consumers link the CMake
-    # target explicitly. Same define Geogram's onetbb.cmake applies.
+    # oneTBB overrides CMAKE_<type>_OUTPUT_DIRECTORY[_<CONFIG>] in its own
+    # directory scope (<build>/<compiler>_<arch>_<config>); put its binaries
+    # back into the shared output directory.
+    if (DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+        set_target_properties(tbb PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+        )
+        foreach (erhe_tbb_config IN LISTS CMAKE_CONFIGURATION_TYPES)
+            string(TOUPPER ${erhe_tbb_config} erhe_tbb_config_upper)
+            set_target_properties(tbb PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY_${erhe_tbb_config_upper} "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${erhe_tbb_config}"
+                LIBRARY_OUTPUT_DIRECTORY_${erhe_tbb_config_upper} "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/${erhe_tbb_config}"
+            )
+        endforeach ()
+    endif ()
+    # Consumers link the CMake target explicitly, so the MSVC auto-linking
+    # pragmas in the oneTBB headers (tbb12.lib / tbb12_debug.lib by bare name,
+    # no library path) must not fire. Same define Geogram's onetbb.cmake applies.
     target_compile_definitions(tbb PUBLIC __TBB_NO_IMPLICIT_LINKAGE=1)
 
     # OpenVDB calls find_package(TBB REQUIRED) instead of checking for an

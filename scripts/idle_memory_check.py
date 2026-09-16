@@ -58,7 +58,7 @@ GPU_METRICS = ("drm_vram_kib", "drm_gtt_kib", "drm_cpu_kib")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", default="build_ninja_linux_vulkan", help="build directory containing src/editor/editor")
+    parser.add_argument("--build-dir", default="build_ninja_linux_vulkan", help="build directory containing bin/editor")
     parser.add_argument("--duration", type=float, default=300.0, help="sampling window in seconds after settle (0 = until editor exits by itself)")
     parser.add_argument("--settle", type=float, default=20.0, help="seconds after readiness before samples count toward the fit")
     parser.add_argument("--interval", type=float, default=1.0, help="sample period in seconds")
@@ -276,7 +276,7 @@ def linear_fit(points: list) -> dict:
 
 def main() -> int:
     args = parse_args()
-    editor = REPO_ROOT / args.build_dir / "src" / "editor" / "editor"
+    editor = REPO_ROOT / args.build_dir / "bin" / "editor"
     if not editor.is_file():
         print(f"error: editor binary not found: {editor}", file=sys.stderr)
         return 2

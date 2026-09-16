@@ -47,7 +47,7 @@ for %%B in (%BACKENDS%) do (
             set /a FAIL_COUNT+=1
         ) else (
             echo --- Running tests for %%B ---
-            build_test_raytrace_%%B\src\erhe\raytrace\test\Debug\erhe_raytrace_tests.exe
+            build_test_raytrace_%%B\bin\Debug\erhe_raytrace_tests.exe
             if errorlevel 1 (
                 echo SOME TESTS FAILED for %%B ^(expected for none backend^)
                 set /a FAIL_COUNT+=1

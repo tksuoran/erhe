@@ -447,7 +447,7 @@ Bistro, specifically:
     ERHE_SHOT_SCENE=res/editor/assets/niagara_bistro/bistro.gltf
     ERHE_SHOT_EXPOSURE=0.001
     ERHE_SHOT_FRAME=0
-    ERHE_SHOT_EXE=build_ninja_win_vulkan_release/src/editor/editor.exe
+    ERHE_SHOT_EXE=build_ninja_win_vulkan_release/bin/editor.exe
 
 Bistro saturates the viewport to near-white at default exposure (still
 almost entirely clipped at 0.02, measured); 0.001 makes it readable.

@@ -12,7 +12,7 @@ ERHE_USD_WG_ASSETS environment variable:
     py -3 scripts/usd_wg_asset_survey.py --from-summary      (doc only)
 
 It needs the headless Vulkan build
-(build_vs2026_vulkan_headless/src/editor/Debug/editor.exe, see AGENTS.md
+(build_vs2026_vulkan_headless/bin/Debug/editor.exe, see AGENTS.md
 "In-editor MCP server"); it launches and, after a crash or a load that does
 not answer in time, relaunches the editor itself.
 
@@ -1902,7 +1902,7 @@ def write_document(path: pathlib.Path, summary: dict) -> None:
 # Main
 # --------------------------------------------------------------------------
 
-DEFAULT_EDITOR = pathlib.Path("build_vs2026_vulkan_headless/src/editor/Debug/editor.exe")
+DEFAULT_EDITOR = pathlib.Path("build_vs2026_vulkan_headless/bin/Debug/editor.exe")
 # --------------------------------------------------------------------------
 # Test database: per-entry status and run time of the last recorded run
 # --------------------------------------------------------------------------

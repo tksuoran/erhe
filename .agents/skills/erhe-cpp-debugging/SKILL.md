@@ -18,7 +18,7 @@ Windows / MSVC (Visual Studio MCP server)".
 
 - **macOS / Linux -> lldb via a shell.** `/usr/bin/lldb` ships with the
   Command Line Tools (no install). All three Debug builds have full symbols:
-  `build_xcode_{metal,opengl,vulkan}/src/editor/Debug/editor`.
+  `build_xcode_{metal,opengl,vulkan}/bin/Debug/editor`.
 - **Windows -> the `visualstudio` MCP server** (`mcp__visualstudio__*`). It drives a
   live VS instance: `debugger_add_breakpoint` -> `debugger_launch` -> poll
   `debugger_status` until it breaks -> `debugger_get_callstack` /

@@ -33,7 +33,7 @@ res/, logs/ are cwd-relative) and poll `logs/log.txt` for the listening line
 Get-Process editor -ErrorAction SilentlyContinue | Stop-Process -Force   # no stale server on 3743
 Start-Sleep -Milliseconds 800
 if (Test-Path logs\log.txt) { Clear-Content logs\log.txt }
-$p = Start-Process -FilePath "build_vs2026_vulkan_headless\src\editor\Debug\editor.exe" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden
+$p = Start-Process -FilePath "build_vs2026_vulkan_headless\bin\Debug\editor.exe" -WorkingDirectory (Get-Location) -PassThru -WindowStyle Hidden
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Milliseconds 1000
     if ((Test-Path logs\log.txt) -and (Select-String -Path logs\log.txt -Pattern "MCP server: listening" -Quiet)) { break }

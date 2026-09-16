@@ -11,7 +11,7 @@ Read this first when continuing SDF work. Companion docs:
 ## State: everything below is DONE, verified, committed on main (unpushed)
 
 - ERHE_VOXEL_LIBRARY CMake option (`openvdb`/`none`): oneTBB v2022.3.0
-  static + OpenVDB v13.0.0 static core via CPM; find_package(TBB) satisfied
+  shared + OpenVDB v13.0.0 static core via CPM; find_package(TBB) satisfied
   through a CMAKE_FIND_PACKAGE_REDIRECTS_DIR shim; GEOGRAM_WITH_TBB follows
   the option (Geogram adopts the shared TBB::tbb target). ba13d048.
 - src/erhe/voxel: erhe::voxel::Grid pimpl over openvdb::FloatGrid

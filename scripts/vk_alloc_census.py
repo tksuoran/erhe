@@ -207,7 +207,7 @@ def main() -> int:
     parser.add_argument("--debuginfod", action="store_true", help="enable debuginfod symbol download (slow first run)")
     args = parser.parse_args()
 
-    editor = imc.REPO_ROOT / args.build_dir / "src" / "editor" / "editor"
+    editor = imc.REPO_ROOT / args.build_dir / "bin" / "editor"
     if not editor.is_file():
         print(f"error: editor binary not found: {editor}", file=sys.stderr)
         return 2

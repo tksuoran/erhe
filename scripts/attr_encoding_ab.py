@@ -54,7 +54,7 @@ OUT_DIR = os.path.join(REPO, OUT_DIR_REL)
 
 # The tree the encoding work was built in. Both sides of every comparison must
 # use the SAME executable, so this is set once, here.
-EXE = os.environ.get("ERHE_SHOT_EXE") or os.path.join(REPO, r"build_vs2026_vulkan\src\editor\Debug\editor.exe")
+EXE = os.environ.get("ERHE_SHOT_EXE") or os.path.join(REPO, r"build_vs2026_vulkan\bin\Debug\editor.exe")
 
 os.environ["ERHE_SHOT_EXE"] = EXE
 os.environ.setdefault("ERHE_SHOT_SCENE", "res/editor/assets/ABeautifulGame.glb")

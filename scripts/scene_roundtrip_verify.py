@@ -38,7 +38,7 @@ verification of doc/gltf-scene-roundtrip-plan.md:
 
 Run each invocation against a FRESH headless editor session:
 
-    build_vs2026_vulkan_headless\\src\\editor\\Debug\\editor.exe   (from repo root)
+    build_vs2026_vulkan_headless\\bin\\Debug\\editor.exe   (from repo root)
     py -3 scripts/scene_roundtrip_verify.py
 
 Exit code 0 = every executed check passed (skipped sections do not fail).

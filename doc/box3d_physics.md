@@ -49,7 +49,7 @@ Windows toolchain:
 ```bat
 scripts\configure_ninja_win_vulkan_box3d.bat -DERHE_BUILD_TESTS=ON
 scripts\build_ninja_win_vulkan_box3d.bat editor
-build_ninja_win_vulkan_box3d\src\erhe\physics\test\erhe_physics_tests.exe
+build_ninja_win_vulkan_box3d\bin\erhe_physics_tests.exe
 ```
 
 Headless build for MCP-driven verification and `capture_screenshot`:

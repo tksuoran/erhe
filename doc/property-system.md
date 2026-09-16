@@ -2115,7 +2115,7 @@ style layer is D25 and the reference layer is D33.
   `erhe_scene_renderer_gpu_tests`, `editor`. Run the test executables one at
   a time from `build_xcode_metal/src/erhe/<lib>/test/Debug/`.
 - Editor: from the repo root `ERHE_MCP_PORT=3743
-  build_xcode_metal/src/editor/Debug/editor &`, wait for
+  build_xcode_metal/bin/Debug/editor &`, wait for
   `MCP server: listening` in `logs/log.txt`, then drive it with
   `python3 scripts/mcp_call.py <tool> '<json>'`. Useful id sources:
   `list_scenes`, `get_scene_nodes`, `get_scene_materials`,

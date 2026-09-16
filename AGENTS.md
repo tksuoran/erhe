@@ -128,6 +128,16 @@ For the OpenGL backend, use `scripts/configure_ninja_linux_opengl.sh` and build 
 
 Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equivalent.
 
+### Build output directory
+
+Every executable and shared library of a build tree, erhe's and the
+dependencies', is written to `<build>/bin/` (`<build>/bin/<Config>/` under the
+Visual Studio and Xcode generators), e.g.
+`build_vs2026_vulkan_headless/bin/Debug/editor.exe`,
+`build_ninja_win_vulkan/bin/editor.exe`. Shared libraries such as oneTBB's DLL
+sit next to the executables that load them. Android is the exception: Gradle
+chooses the library output directory for APK packaging.
+
 ### CMake presets exist but should not be used
 
 `CMakePresets.json` defines presets like `OpenGL_Debug` and `Vulkan_Debug`. Do not invoke `cmake --preset ...` directly. The `scripts/` wrappers (`configure_vs2026_*.bat` on Windows, `configure_xcode_*.sh` on macOS, `configure_ninja_linux_*.sh` on Linux) wrap the configure step with the project's expected environment and should be used instead. Plans, scripts, and docs should not reference `cmake --preset`.
@@ -235,7 +245,7 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   workflow too. Running the `gpu` tests in CI under a software Vulkan is
   future work (`doc/graphics_test_coverage.md`).
 - Run via `ctest` from the build directory, or invoke the
-  `.../src/erhe/<name>/test/<config>/erhe_<name>_tests.exe` binary directly.
+  `.../bin/<config>/erhe_<name>_tests.exe` binary directly.
   Run suites serially and fix one failure at a time -- an abort hides the rest
   of the run.
 - When adding pure-logic code to an `erhe::*` library that already has a
@@ -471,7 +481,7 @@ inline JSON containing spaces. Raw HTTP works too (`POST` the JSON-RPC body to
 
 **Screenshots (`capture_screenshot`, default `logs/mcp_screenshot.png`) work in BOTH builds** (windowed support added 2026-08-08). Headless: `Device::capture_last_frame` reads back the *emulated* swapchain synchronously. Windowed: the tool arms a one-shot swapchain capture (`Device::request_frame_capture`), the MCP server defers the request one frame while the swapchain render pass records a copy of the composited image, and the retry returns the pixels -- one extra frame of latency, invisible to the caller. The windowed path needs the surface to grant `TRANSFER_SRC` image usage (all desktop drivers do) and a supported 4x8-bit swapchain format; otherwise the tool errors. The macOS Metal build has the same windowed path (the layer hands out readable drawables and the swapchain render pass blits the composited drawable into a shared buffer). This is the preferred screenshot path in every build -- no OS-level window capture, no occlusion, no permission concerns; never use `screencapture` or other system capture tools, they trigger the endpoint security agent (Cortex XDR). For deeper GPU diagnostics (individual textures, pixel-debug shaders) use the RenderDoc fork ([`doc/renderdoc_fork.md`](doc/renderdoc_fork.md)).
 
-**Windowed editor needs a live display; switch to headless when it does not start.** The windowed build creates a real WSI swapchain, so it needs a present-capable GPU queue on the window surface. When the **display is powered off / asleep / disconnected** (common when an AI is driving the machine unattended), no present queue exists, `choose_physical_device()` finds no usable GPU, and the editor aborts at startup. The log now says exactly this and recommends the fix (look for "Switch to the HEADLESS build" in `logs/log.txt`); older builds printed a misleading `vkCreateInstance() failed with 0 VK_SUCCESS` -- that message is really `choose_physical_device()` failing, not `vkCreateInstance()`. **When this happens, run the headless build instead** (`build_vs2026_vulkan_headless/src/editor/Debug/editor.exe`, `ERHE_WINDOW_LIBRARY=none`): it is surfaceless (emulated swapchain), needs no display, still runs the full render pipeline + MCP server, and supports `capture_screenshot`. The same RenderDoc/GPU-capture flows do not work against a headless emulated swapchain (no real present), so for GPU captures the windowed build + a live display is still required.
+**Windowed editor needs a live display; switch to headless when it does not start.** The windowed build creates a real WSI swapchain, so it needs a present-capable GPU queue on the window surface. When the **display is powered off / asleep / disconnected** (common when an AI is driving the machine unattended), no present queue exists, `choose_physical_device()` finds no usable GPU, and the editor aborts at startup. The log now says exactly this and recommends the fix (look for "Switch to the HEADLESS build" in `logs/log.txt`); older builds printed a misleading `vkCreateInstance() failed with 0 VK_SUCCESS` -- that message is really `choose_physical_device()` failing, not `vkCreateInstance()`. **When this happens, run the headless build instead** (`build_vs2026_vulkan_headless/bin/Debug/editor.exe`, `ERHE_WINDOW_LIBRARY=none`): it is surfaceless (emulated swapchain), needs no display, still runs the full render pipeline + MCP server, and supports `capture_screenshot`. The same RenderDoc/GPU-capture flows do not work against a headless emulated swapchain (no real present), so for GPU captures the windowed build + a live display is still required.
 
 **Reaching the server on Quest / Android.** On device the server binds the same loopback address (`127.0.0.1:3743`), unreachable from the host directly -- forward it over adb (`adb forward tcp:3743 tcp:3743`, re-run after each device reconnect) and then drive it exactly as on desktop. The APK declares the `INTERNET` permission (`android-project/app/src/main/AndroidManifest.xml`): Android gates **all** socket creation -- even loopback -- behind it, so without it `bind()` returns `EACCES` on every port and the fallback loop logs `failed to bind any port in [3743, 3763)` (a blanket denial, not a port clash). Confirm the grant with `adb shell dumpsys package org.libsdl.app.quest | grep INTERNET`. See [`mcp_server_usage.md`](mcp_server_usage.md) for the full recipe.
 
@@ -482,7 +492,7 @@ the headless flow above is still preferred when a real display is not
 required):
 - Launch with a hidden console (the editor is a console-subsystem binary and
   its console window annoys the user):
-  `powershell Start-Process -FilePath <build>\src\editor\editor.exe -WorkingDirectory <repo> -WindowStyle Hidden`.
+  `powershell Start-Process -FilePath <build>\bin\editor.exe -WorkingDirectory <repo> -WindowStyle Hidden`.
   The working directory MUST be the repo root (config/, res/, logs/).
 - Kill `editor.exe` before every relink (LNK1168 otherwise), and poll
   readiness by grepping `logs/log.txt` for `Main loop: completed frame 12`.

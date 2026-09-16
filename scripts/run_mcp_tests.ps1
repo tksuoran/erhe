@@ -17,8 +17,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$editorExe = Join-Path $repoRoot "$BuildDir\src\editor\$Config\editor.exe"
-$testExe   = Join-Path $repoRoot "$BuildDir\src\editor\mcp\test\$Config\mcp_server_tests.exe"
+$editorExe = Join-Path $repoRoot "$BuildDir\bin\$Config\editor.exe"
+$testExe   = Join-Path $repoRoot "$BuildDir\bin\$Config\mcp_server_tests.exe"
 
 if (-not (Test-Path $editorExe)) {
     Write-Error "editor.exe not found at $editorExe. Build the editor target first."

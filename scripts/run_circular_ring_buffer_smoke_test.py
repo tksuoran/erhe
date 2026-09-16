@@ -33,10 +33,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Release and the macOS / Linux build trees are tried as fallbacks so the
 # same script works after any of the supported configures.
 EXE_CANDIDATES = [
-    REPO_ROOT / "build_vs2026_opengl" / "src" / "erhe" / "circular_ring_buffer" / "test" / "Debug" / "erhe_circular_ring_buffer_tests.exe",
-    REPO_ROOT / "build_vs2026_opengl" / "src" / "erhe" / "circular_ring_buffer" / "test" / "Release" / "erhe_circular_ring_buffer_tests.exe",
-    REPO_ROOT / "build_xcode_metal" / "src" / "erhe" / "circular_ring_buffer" / "test" / "Debug" / "erhe_circular_ring_buffer_tests",
-    REPO_ROOT / "build" / "src" / "erhe" / "circular_ring_buffer" / "test" / "erhe_circular_ring_buffer_tests",
+    REPO_ROOT / "build_vs2026_opengl" / "bin" / "Debug" / "erhe_circular_ring_buffer_tests.exe",
+    REPO_ROOT / "build_vs2026_opengl" / "bin" / "Release" / "erhe_circular_ring_buffer_tests.exe",
+    REPO_ROOT / "build_xcode_metal" / "bin" / "Debug" / "erhe_circular_ring_buffer_tests",
+    REPO_ROOT / "build" / "bin" / "erhe_circular_ring_buffer_tests",
 ]
 
 TEST_FILTER = "CircularRingBufferAlgorithm.stress_test_long_running_mixed_workload"

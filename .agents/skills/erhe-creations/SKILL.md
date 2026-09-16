@@ -56,7 +56,7 @@ they carry the current idioms.
   frame -- one frame of extra latency, handled inside the MCP server).
   Iterating against the WINDOWED build is now fine and needs no ini
   ritual; the headless build (`--editor-exe
-  build_vs2026_vulkan_headless/src/editor/Release/editor.exe`) is still
+  build_vs2026_vulkan_headless/bin/Release/editor.exe`) is still
   useful when the display is off or the user is using the machine.
   Judge the PNG in `logs/creations/`, fix, rerun. Expect 2-4
   iterations; composition problems (occlusion, framing, washed

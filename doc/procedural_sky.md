@@ -186,7 +186,7 @@ count dropped from 88,424 to 872.
 
 ## How to verify (remaining: Metal, and after sky changes)
 
-1. Run `build_vs2026_vulkan/src/editor/Debug/editor.exe` interactively (real desktop GPU).
+1. Run `build_vs2026_vulkan/bin/Debug/editor.exe` interactively (real desktop GPU).
 2. In Settings -> Sky, set **Sky Mode = 1** (atmosphere). The first atmosphere frame
    generates the LUTs (one-time) and compiles the atmosphere pipeline (a one-time hitch).
 3. Confirm a physically-plausible sky: blue zenith, warmer horizon, a bright sun disc
@@ -206,7 +206,7 @@ count dropped from 88,424 to 872.
 
 ### OpenGL
 
-Build and run `build_vs2026_opengl/src/editor/Debug/editor.exe` on a GL 4.3+ desktop GPU,
+Build and run `build_vs2026_opengl/bin/Debug/editor.exe` on a GL 4.3+ desktop GPU,
 then set **Sky Mode = 1**. The same visual / regression checks (1-7 above) apply.
 `capture_screenshot` works only in the headless **Vulkan** build, so confirm GL visually in
 the window (or with a RenderDoc capture: two compute dispatches binding the LUTs as images,

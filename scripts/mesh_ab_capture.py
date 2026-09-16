@@ -47,7 +47,7 @@ REPO  = r"D:\erhe"
 # A large scene (Bistro) is painfully slow in the Debug build; point this at
 # build_ninja_win_vulkan_release for those. Both builds render the same, so an
 # A/B is valid as long as BOTH sides of it use the same executable.
-EXE   = os.environ.get("ERHE_SHOT_EXE") or os.path.join(REPO, r"build_ninja_win_vulkan\src\editor\editor.exe")
+EXE   = os.environ.get("ERHE_SHOT_EXE") or os.path.join(REPO, r"build_ninja_win_vulkan\bin\editor.exe")
 CFG   = os.path.join(REPO, r"config\editor\mesh_memory.json")
 SCENE = os.environ.get("ERHE_SHOT_SCENE", "res/editor/assets/ABeautifulGame.glb")
 # Bistro needs about 0.02; the default is neutral.

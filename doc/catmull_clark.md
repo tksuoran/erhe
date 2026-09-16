@@ -372,7 +372,7 @@ instead of re-instrumenting.
   ```bat
   scripts\configure_tests.bat
   cmake --build build_tests --target erhe_geometry_tests --config Release
-  build_tests\src\erhe\geometry\test\Release\erhe_geometry_tests.exe ^
+  build_tests\bin\Release\erhe_geometry_tests.exe ^
       --gtest_also_run_disabled_tests --gtest_filter=*TimingHarness*
   ```
 

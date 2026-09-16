@@ -21,7 +21,7 @@
 @compile-db:        build_ninja_win_clang         # dir holding compile_commands.json (clang-cl)
 
 ## Runtime / logs
-@run:          build_ninja_win_vulkan\src\editor\editor.exe   # launch from repo root (needs config/, res/, writes logs/)
+@run:          build_ninja_win_vulkan\bin\editor.exe   # launch from repo root (needs config/, res/, writes logs/)
 @logs:         logs/log.txt                                   # spdlog file sink (also logs/vulkan.txt, logs/openxr.txt)
 @platform:     Windows + MSVC (x64 Native Tools), Vulkan default. Live debugging via Visual Studio / VS-MCP, NOT gdb/lldb. clangd/LSAI must be launched from the x64 Native Tools prompt so it resolves the STL + Windows SDK headers.
 

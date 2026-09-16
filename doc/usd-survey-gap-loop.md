@@ -111,8 +111,8 @@ The interactive session holds the loop's state and nothing else: which
 worker is running, what the last report said, what the queue says. It:
 
 1. Checks that no `editor.exe` is running and that
-   `build_vs2026_vulkan_headless/src/editor/Debug/editor.exe` and
-   `build_vs2026_vulkan/src/erhe/usd/test/Debug/erhe_usd_tests.exe` exist
+   `build_vs2026_vulkan_headless/bin/Debug/editor.exe` and
+   `build_vs2026_vulkan/bin/Debug/erhe_usd_tests.exe` exist
    (build them first if not).
 2. Launches one worker with the brief, in the background, and waits for
    its report. One worker at a time: they share the build trees and the

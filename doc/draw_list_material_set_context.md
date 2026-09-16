@@ -136,7 +136,7 @@ recipe and the two false-negative traps.
 
 **Verification recipe.** Build `editor` and the test targets in `build_tests`
 (configured **OpenGL**, so the Vulkan path needs `scripts/build_ninja_win_vulkan.bat`
-as well). For V3: launch `build_tests/src/editor/Debug/editor.exe`, wait on
+as well). For V3: launch `build_tests/bin/Debug/editor.exe`, wait on
 `127.0.0.1:3743/health`, then run `mcp_server_tests.exe` with
 `ERHE_MCP_TEST_TIMEOUT_S=1` (`scripts/run_mcp_tests.ps1` does not forward
 `--gtest_filter`). Baseline: 42 pass, 5 pre-existing skips, V3 green.

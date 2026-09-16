@@ -11,7 +11,7 @@ Once TBB is in the dependency set, it becomes a shared erhe facility usable
 by other libraries that support it (Geogram has `GEOGRAM_WITH_TBB`).
 
 Status: **Phase 1 DONE 2026-08-12** (commits ba13d048 + 56571fbb: option +
-oneTBB v2022.3.0 + OpenVDB v13.0.0 static core + find_package(TBB)
+oneTBB v2022.3.0 (shared library) + OpenVDB v13.0.0 static core + find_package(TBB)
 redirection + GEOGRAM_WITH_TBB + smoke gtest, 2/2 pass in
 build_vs2026_vulkan_openvdb Release; default configs verified untouched).
 Note learned in Phase 1: OpenVDB *master* has regressed to
@@ -67,8 +67,9 @@ impact on existing builds.
 1. Option next to the other selectors in `CMakeLists.txt`:
    `set_option(ERHE_VOXEL_LIBRARY "Voxel/SDF library. Either openvdb or none" "none" "openvdb;none")`
 2. **TBB via CPM** (oneTBB, pinned release tag), added *before* OpenVDB:
-   `TBB_TEST=OFF TBB_EXAMPLES=OFF TBB_STRICT=OFF`, static preferred
-   (mirrors Geogram's own `onetbb.cmake` settings). This defines
+   `TBB_TEST=OFF TBB_EXAMPLES=OFF TBB_STRICT=OFF`, built as a shared
+   library (the only configuration oneTBB supports; its DLL shares the
+   build's single `bin/` output directory with the executables). This defines
    `TBB::tbb` for the whole build.
    - Integration wrinkle to solve here: upstream OpenVDB calls
      `find_package(TBB REQUIRED)` rather than checking for an existing

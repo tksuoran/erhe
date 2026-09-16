@@ -80,7 +80,7 @@ This skill is the condensed, cross-platform run-book.
 
 - macOS/Linux: launch the built binary directly, backgrounded, and redirect
   output (the spdlog file sink writes `logs/log.txt` regardless):
-  `./build_xcode_vulkan/src/editor/Debug/editor > logs/editor_run.out 2>&1 &`
+  `./build_xcode_vulkan/bin/Debug/editor > logs/editor_run.out 2>&1 &`
 - Windows: debug-launch via the VS MCP `debugger_launch` (so you also get the
   debugger if it crashes).
 - macOS Vulkan ICD note: MoltenVK vs KosmicKrisp selection is via the
