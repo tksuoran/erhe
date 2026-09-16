@@ -72,6 +72,12 @@ set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"              
 
 if (${ERHE_BUILD_TESTS} STREQUAL "ON")
     enable_testing()
+    # Discover the gtest cases when ctest runs, not as a post-build step of
+    # each test executable. MSBuild's Exec task turns any stderr output of a
+    # post-build discovery run into a build error even when the run itself
+    # succeeds, so anything a test binary prints at startup (Tracy's dbghelp
+    # SymInitialize warning does this on CI runners) fails the build.
+    set(CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
     # Builds every test executable (each test CMakeLists adds itself with
     # add_dependencies(erhe_tests <target>)); CI builds this target and then
     # runs ctest. Tests that need a GPU device carry the ctest label "gpu" and

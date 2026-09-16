@@ -214,6 +214,14 @@ builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
   editor: `mcp_server_tests` and its fixtures). A machine without a GPU runs
   `ctest --label-exclude "gpu|editor"`; a new test that needs either must
   carry the label (`gtest_discover_tests(... PROPERTIES LABELS "gpu")`).
+- Test cases are discovered when `ctest` runs, not as a post-build step: the
+  top-level `CMakeLists.txt` sets
+  `CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST`. Keep it that way --
+  MSBuild's `Exec` task turns any stderr output of a post-build discovery run
+  into a build error even when the run exits 0, so a test binary that prints
+  anything at startup breaks the Visual Studio build. Precedent: Tracy's
+  `SymInitialize FAILED with code 0xc0000004` warning failed the Windows CI
+  test builds while discovery ran post-build.
 - CI (`.github/workflows/build.yml`) configures every matrix entry with
   tests on, builds `editor` and `erhe_tests`, and runs
   `ctest --label-exclude "gpu|editor" --output-junit`; the runners have no
