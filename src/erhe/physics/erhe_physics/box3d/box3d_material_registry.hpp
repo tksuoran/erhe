@@ -11,14 +11,15 @@
 
 namespace erhe::physics {
 
-// Immutable copy of a Physics_material's values, matching the Jolt backend's
-// per-body snapshot.
+// Immutable copy of a Physics_material's contact values, matching the Jolt
+// backend's per-body snapshot. The defaults are the material defaults, so a
+// body without a material reads the same values.
 class Physics_material_snapshot
 {
 public:
-    float        static_friction     {0.6f};
-    float        dynamic_friction    {0.6f};
-    float        restitution         {0.0f};
+    float        static_friction     {c_default_friction};
+    float        dynamic_friction    {c_default_friction};
+    float        restitution         {c_default_restitution};
     Combine_mode friction_combine    {Combine_mode::e_average};
     Combine_mode restitution_combine {Combine_mode::e_average};
 };
@@ -40,13 +41,21 @@ public:
 class Box3d_material_registry
 {
 public:
-    // userMaterialId 0 means "no erhe material": the callbacks then fall back
-    // to Box3D's own mixing rules.
+    // userMaterialId 0 means "no erhe material" (a shape erhe did not create):
+    // the callbacks then fall back to Box3D's own mixing rules.
     static constexpr uint64_t no_material_id = 0;
+
+    // The snapshot of the material defaults, registered at construction. A
+    // body without a material behaves like one with the default material
+    // (Physics_material), so it is stamped with this id.
+    static constexpr uint64_t default_material_id = 1;
+
+    Box3d_material_registry();
 
     [[nodiscard]] static auto get() -> Box3d_material_registry&;
 
-    // Returns the userMaterialId to stamp onto a shape's b3SurfaceMaterial.
+    // Returns the userMaterialId to stamp onto a shape's b3SurfaceMaterial;
+    // default_material_id for no material.
     [[nodiscard]] auto register_material(const std::shared_ptr<Physics_material>& material) -> uint64_t;
 
     // Returns nullptr for no_material_id or an id this registry never issued.

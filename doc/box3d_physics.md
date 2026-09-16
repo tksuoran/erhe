@@ -232,6 +232,13 @@ bite.
   diffing a per-body awake flag against `b3World_GetBodyEvents()`: only bodies
   that MOVED appear, and each carries `fellAsleep`. A body woken WITHOUT moving
   is therefore reported on its first moving step.
+- **A disabled body has no velocity state.** Bodies are created disabled (erhe
+  adds them to the world as a separate step), and Box3D keeps velocity only in
+  the awake set's body state, so `b3BodyDef` velocities and
+  `b3Body_SetLinearVelocity` on a disabled body are silently dropped.
+  `Box3d_rigid_body` holds the velocity of a body outside the world and applies
+  it on entry; `b3Body_Enable` wakes every non-static body, so a body at rest is
+  put back to sleep there to enter the world asleep as `IWorld` requires.
 - **Sensor touches are reported per SHAPE pair**, so a compound-shaped visitor
   produces one begin event per child shape. They are counted per BODY pair and
   only the 0 -> 1 and 1 -> 0 edges are emitted, matching Jolt. This was verified

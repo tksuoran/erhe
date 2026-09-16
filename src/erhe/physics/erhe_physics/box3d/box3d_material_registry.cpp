@@ -4,6 +4,11 @@
 
 namespace erhe::physics {
 
+Box3d_material_registry::Box3d_material_registry()
+{
+    m_snapshots.push_back(Physics_material_snapshot{}); // default_material_id
+}
+
 auto Box3d_material_registry::get() -> Box3d_material_registry&
 {
     static Box3d_material_registry instance;
@@ -13,14 +18,14 @@ auto Box3d_material_registry::get() -> Box3d_material_registry&
 auto Box3d_material_registry::register_material(const std::shared_ptr<Physics_material>& material) -> uint64_t
 {
     if (!material) {
-        return no_material_id;
+        return default_material_id;
     }
     Physics_material_snapshot snapshot{};
-    snapshot.static_friction     = material->static_friction;
-    snapshot.dynamic_friction    = material->dynamic_friction;
-    snapshot.restitution         = material->restitution;
-    snapshot.friction_combine    = material->friction_combine;
-    snapshot.restitution_combine = material->restitution_combine;
+    snapshot.static_friction     = material->get_static_friction();
+    snapshot.dynamic_friction    = material->get_dynamic_friction();
+    snapshot.restitution         = material->get_restitution();
+    snapshot.friction_combine    = material->get_friction_combine();
+    snapshot.restitution_combine = material->get_restitution_combine();
 
     const std::lock_guard<std::mutex> lock{m_mutex};
     m_snapshots.push_back(snapshot);
@@ -53,7 +58,7 @@ namespace {
     const Physics_material_snapshot* snapshot_a = registry.find_snapshot(material_id_a);
     const Physics_material_snapshot* snapshot_b = registry.find_snapshot(material_id_b);
     if ((snapshot_a == nullptr) || (snapshot_b == nullptr)) {
-        // At least one shape has no erhe material, so there is no combine mode
+        // At least one shape was not created by erhe, so there is no combine mode
         // to honor; use Box3D's own rule (b3DefaultFrictionCallback).
         return std::sqrt(friction_a * friction_b);
     }

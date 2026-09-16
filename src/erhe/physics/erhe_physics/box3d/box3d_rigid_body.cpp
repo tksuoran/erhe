@@ -51,6 +51,22 @@ constexpr float kinematic_target_time_step = 1.0f / 30.0f;
     return filter;
 }
 
+[[nodiscard]] auto get_density(const Physics_material* material) -> float
+{
+    return (material != nullptr) ? material->get_density() : c_default_density;
+}
+
+// The surface values of a material; a body without one uses the material
+// defaults. Box3D carries a single friction per surface, so the dynamic one
+// acts. The mixing callbacks look the erhe material up by userMaterialId.
+[[nodiscard]] auto make_surface_material(const std::shared_ptr<Physics_material>& material, b3SurfaceMaterial surface_material) -> b3SurfaceMaterial
+{
+    surface_material.friction       = material ? material->get_dynamic_friction() : c_default_friction;
+    surface_material.restitution    = material ? material->get_restitution()      : c_default_restitution;
+    surface_material.userMaterialId = Box3d_material_registry::get().register_material(material);
+    return surface_material;
+}
+
 } // anonymous namespace
 
 Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_info& create_info)
@@ -61,6 +77,10 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     , m_debug_label     {create_info.debug_label}
     , m_motion_mode     {create_info.motion_mode}
     , m_is_sensor       {create_info.is_sensor}
+    , m_explicit_mass   {create_info.mass}
+    , m_inertia_override{create_info.inertia_override}
+    , m_pending_linear_velocity {create_info.linear_velocity}
+    , m_pending_angular_velocity{create_info.angular_velocity}
 {
     const Box3d_collision_shape* shape = static_cast<const Box3d_collision_shape*>(m_collision_shape.get());
     if (shape == nullptr) {
@@ -85,10 +105,9 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     body_def.type            = to_box3d_body_type(m_motion_mode);
     body_def.position        = to_box3d(create_info.position);
     body_def.rotation        = to_box3d(create_info.orientation);
-    body_def.linearVelocity  = to_box3d(create_info.linear_velocity);
-    body_def.angularVelocity = to_box3d(create_info.angular_velocity);
-    body_def.linearDamping   = create_info.linear_damping;
-    body_def.angularDamping  = create_info.angular_damping;
+    // The material carries damping; a body without one uses the defaults.
+    body_def.linearDamping   = m_physics_material ? m_physics_material->get_linear_damping () : c_default_linear_damping;
+    body_def.angularDamping  = m_physics_material ? m_physics_material->get_angular_damping() : c_default_angular_damping;
     body_def.gravityScale    = create_info.gravity_factor;
     body_def.enableSleep     = true;
     body_def.userData        = this;
@@ -108,17 +127,10 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     m_filter_index = m_world.get_filter_table().get_or_compile(m_collision_filter);
 
     b3ShapeDef shape_def = b3DefaultShapeDef();
-    shape_def.density                = create_info.density.value_or(1.0f);
-    shape_def.baseMaterial.friction  = create_info.friction;
-    shape_def.baseMaterial.restitution = create_info.restitution;
-    // The mixing callbacks look the erhe material up by this id; 0 means "no
-    // erhe material", in which case Box3D's own mixing rules apply.
-    shape_def.baseMaterial.userMaterialId = Box3d_material_registry::get().register_material(m_physics_material);
-    if (m_physics_material) {
-        // Box3D carries a single friction per surface, so the dynamic one acts.
-        shape_def.baseMaterial.friction    = m_physics_material->dynamic_friction;
-        shape_def.baseMaterial.restitution = m_physics_material->restitution;
-    }
+    // Without an explicit mass the body's mass is its shape volume times the
+    // material density, which is what Box3D derives from shape density.
+    shape_def.density                = get_density(m_physics_material.get());
+    shape_def.baseMaterial           = make_surface_material(m_physics_material, shape_def.baseMaterial);
     shape_def.isSensor               = m_is_sensor;
     // Enabled unconditionally, not just for bodies that already carry a
     // filter: enableCustomFiltering is a creation-time shape flag with no
@@ -136,7 +148,7 @@ Box3d_rigid_body::Box3d_rigid_body(Box3d_world& world, const IRigid_body_create_
     shape_def.updateBodyMass         = false; // mass is applied once, after all shapes are attached
 
     attach_shapes(shape_def);
-    apply_mass(create_info);
+    apply_mass();
 }
 
 void Box3d_rigid_body::attach_shapes(b3ShapeDef& shape_def)
@@ -152,31 +164,29 @@ void Box3d_rigid_body::attach_shapes(b3ShapeDef& shape_def)
 
     shape->attach_to_body(context, b3Transform_identity, glm::vec3{1.0f});
 
-    if (context.has_center_of_mass_offset) {
-        // Box3D carries the center of mass on the body, so the wrapper's offset
-        // is applied here, after all shapes exist and their mass is known.
-        b3Body_ApplyMassFromShapes(m_body);
-        b3MassData mass_data = b3Body_GetMassData(m_body);
-        mass_data.center = to_box3d(from_box3d(mass_data.center) + context.center_of_mass_offset);
-        b3Body_SetMassData(m_body, mass_data);
-    }
-
+    // Box3D carries the center of mass on the body, so the wrapper's offset is
+    // applied by apply_mass(), after all shapes exist and their mass is known.
+    m_has_center_of_mass_offset = context.has_center_of_mass_offset;
+    m_center_of_mass_offset     = context.center_of_mass_offset;
 }
 
-void Box3d_rigid_body::apply_mass(const IRigid_body_create_info& create_info)
+void Box3d_rigid_body::apply_mass()
 {
     if (m_shape_ids.empty()) {
         return;
     }
 
-    // Shape density was set from create_info.density, so this already yields
-    // the density-derived mass.
+    // Shape density is the material density, so this already yields the
+    // density-derived mass.
     b3Body_ApplyMassFromShapes(m_body);
     b3MassData mass_data = b3Body_GetMassData(m_body);
+    if (m_has_center_of_mass_offset) {
+        mass_data.center = to_box3d(from_box3d(mass_data.center) + m_center_of_mass_offset);
+    }
 
     // KHR_physics_rigid_bodies convention: an explicitly provided mass of 0
     // means infinite mass.
-    const bool infinite_mass = create_info.mass.has_value() && (create_info.mass.value() == 0.0f);
+    const bool infinite_mass = m_explicit_mass.has_value() && (m_explicit_mass.value() == 0.0f);
     if (infinite_mass) {
         mass_data.mass    = 0.0f;
         mass_data.inertia = b3Matrix3{b3Vec3_zero, b3Vec3_zero, b3Vec3_zero};
@@ -184,10 +194,10 @@ void Box3d_rigid_body::apply_mass(const IRigid_body_create_info& create_info)
         return;
     }
 
-    if (create_info.mass.has_value() && (mass_data.mass > 0.0f)) {
+    if (m_explicit_mass.has_value() && (mass_data.mass > 0.0f)) {
         // The inertia tensor is linear in mass at fixed geometry.
-        const float factor = create_info.mass.value() / mass_data.mass;
-        mass_data.mass    = create_info.mass.value();
+        const float factor = m_explicit_mass.value() / mass_data.mass;
+        mass_data.mass    = m_explicit_mass.value();
         mass_data.inertia = to_box3d(from_box3d(mass_data.inertia) * factor);
     } else if ((mass_data.mass <= 0.0f) && (m_motion_mode == Motion_mode::e_dynamic)) {
         // A shape that cannot report a mass (an empty shape, or a mesh) would
@@ -201,8 +211,8 @@ void Box3d_rigid_body::apply_mass(const IRigid_body_create_info& create_info)
         mass_data.inertia = to_box3d(glm::mat3{1.0f});
     }
 
-    if (create_info.inertia_override.has_value()) {
-        mass_data.inertia = inertia_to_box3d(create_info.inertia_override.value());
+    if (m_inertia_override.has_value()) {
+        mass_data.inertia = inertia_to_box3d(m_inertia_override.value());
     }
 
     b3Body_SetMassData(m_body, mass_data);
@@ -234,11 +244,45 @@ void Box3d_rigid_body::set_enabled_in_world(const bool enabled)
     if (!m_is_valid) {
         return;
     }
-    if (enabled) {
-        b3Body_Enable(m_body);
-    } else {
-        b3Body_Disable(m_body);
+    if (enabled == m_enabled_in_world) {
+        return;
     }
+    if (enabled) {
+        const bool moving = is_moving();
+        b3Body_Enable(m_body);
+        m_enabled_in_world = true;
+        if (m_motion_mode == Motion_mode::e_static) {
+            return;
+        }
+        // A body that carries a velocity enters the world active: setting it
+        // wakes the body, so the velocity is integrated by the first step. A
+        // body at rest enters the world asleep, which keeps scene loading
+        // quiet. Putting a body to sleep sleeps its whole island, so a body
+        // already jointed to others is left awake rather than stopping them.
+        if (moving) {
+            b3Body_SetLinearVelocity (m_body, to_box3d(m_pending_linear_velocity));
+            b3Body_SetAngularVelocity(m_body, to_box3d(m_pending_angular_velocity));
+        } else if (b3Body_GetJointCount(m_body) == 0) {
+            b3Body_SetAwake(m_body, false);
+        }
+    } else {
+        m_pending_linear_velocity  = from_box3d(b3Body_GetLinearVelocity (m_body));
+        m_pending_angular_velocity = from_box3d(b3Body_GetAngularVelocity(m_body));
+        b3Body_Disable(m_body);
+        m_enabled_in_world = false;
+    }
+}
+
+// A non-static body with a non-zero linear or angular velocity is moving.
+auto Box3d_rigid_body::is_moving() const -> bool
+{
+    if (!m_is_valid || (m_motion_mode == Motion_mode::e_static)) {
+        return false;
+    }
+    constexpr float epsilon_squared = 1.0e-12f;
+    const glm::vec3 linear  = get_linear_velocity ();
+    const glm::vec3 angular = get_angular_velocity();
+    return (glm::dot(linear, linear) > epsilon_squared) || (glm::dot(angular, angular) > epsilon_squared);
 }
 
 // -----------------------------------------------------------------------------
@@ -252,7 +296,10 @@ auto Box3d_rigid_body::get_angular_damping() const -> float
 
 auto Box3d_rigid_body::get_angular_velocity() const -> glm::vec3
 {
-    return m_is_valid ? from_box3d(b3Body_GetAngularVelocity(m_body)) : glm::vec3{0.0f};
+    if (!m_is_valid) {
+        return glm::vec3{0.0f};
+    }
+    return m_enabled_in_world ? from_box3d(b3Body_GetAngularVelocity(m_body)) : m_pending_angular_velocity;
 }
 
 auto Box3d_rigid_body::get_center_of_mass() const -> glm::vec3
@@ -303,7 +350,10 @@ auto Box3d_rigid_body::get_linear_damping() const -> float
 
 auto Box3d_rigid_body::get_linear_velocity() const -> glm::vec3
 {
-    return m_is_valid ? from_box3d(b3Body_GetLinearVelocity(m_body)) : glm::vec3{0.0f};
+    if (!m_is_valid) {
+        return glm::vec3{0.0f};
+    }
+    return m_enabled_in_world ? from_box3d(b3Body_GetLinearVelocity(m_body)) : m_pending_linear_velocity;
 }
 
 auto Box3d_rigid_body::get_local_inertia() const -> glm::mat4
@@ -386,10 +436,55 @@ void Box3d_rigid_body::end_move()
     set_allow_sleeping(true);
 }
 
+void Box3d_rigid_body::apply_force(const glm::vec3& force)
+{
+    if (!m_is_valid || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    b3Body_ApplyForceToCenter(m_body, to_box3d(force), true);
+}
+
+void Box3d_rigid_body::apply_force_at(const glm::vec3& force, const glm::vec3& point)
+{
+    if (!m_is_valid || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    b3Body_ApplyForce(m_body, to_box3d(force), to_box3d(point), true);
+}
+
+void Box3d_rigid_body::apply_torque(const glm::vec3& torque)
+{
+    if (!m_is_valid || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    b3Body_ApplyTorque(m_body, to_box3d(torque), true);
+}
+
+void Box3d_rigid_body::apply_impulse(const glm::vec3& impulse)
+{
+    if (!m_is_valid || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    b3Body_ApplyLinearImpulseToCenter(m_body, to_box3d(impulse), true);
+}
+
+void Box3d_rigid_body::apply_impulse_at(const glm::vec3& impulse, const glm::vec3& point)
+{
+    if (!m_is_valid || (m_motion_mode != Motion_mode::e_dynamic)) {
+        return;
+    }
+    b3Body_ApplyLinearImpulse(m_body, to_box3d(impulse), to_box3d(point), true);
+}
+
 void Box3d_rigid_body::set_angular_velocity(const glm::vec3& velocity)
 {
-    if (m_is_valid) {
-        b3Body_SetAngularVelocity(m_body, to_box3d(velocity));
+    if (!m_is_valid || (m_motion_mode == Motion_mode::e_static)) {
+        return;
+    }
+    if (m_enabled_in_world) {
+        b3Body_SetAngularVelocity(m_body, to_box3d(velocity)); // a non-zero velocity wakes the body
+    } else {
+        m_pending_angular_velocity = velocity;
     }
 }
 
@@ -417,8 +512,13 @@ void Box3d_rigid_body::set_gravity_factor(const float gravity_factor)
 
 void Box3d_rigid_body::set_linear_velocity(const glm::vec3& velocity)
 {
-    if (m_is_valid) {
-        b3Body_SetLinearVelocity(m_body, to_box3d(velocity));
+    if (!m_is_valid || (m_motion_mode == Motion_mode::e_static)) {
+        return;
+    }
+    if (m_enabled_in_world) {
+        b3Body_SetLinearVelocity(m_body, to_box3d(velocity)); // a non-zero velocity wakes the body
+    } else {
+        m_pending_linear_velocity = velocity;
     }
 }
 
@@ -427,6 +527,8 @@ void Box3d_rigid_body::set_mass_properties(const float mass, const glm::mat4& lo
     if (!m_is_valid) {
         return;
     }
+    m_explicit_mass    = mass;
+    m_inertia_override = local_inertia;
     b3MassData mass_data = b3Body_GetMassData(m_body);
     mass_data.mass    = mass;
     mass_data.inertia = inertia_to_box3d(local_inertia);
@@ -497,19 +599,36 @@ void Box3d_rigid_body::set_physics_material(const std::shared_ptr<Physics_materi
 {
     m_physics_material = material;
 
+    if (!m_is_valid) {
+        return;
+    }
+
     // Snapshots are immutable once registered, so assigning a material
     // allocates a new id rather than mutating an existing snapshot. That keeps
     // the mixing callbacks (which run on Box3D worker threads) reading data
     // that never changes underneath them.
-    const uint64_t material_id = Box3d_material_registry::get().register_material(material);
+    const b3SurfaceMaterial surface_material = make_surface_material(material, b3SurfaceMaterial{});
+    const float             density          = get_density(material.get());
     for (const b3ShapeId shape_id : m_shape_ids) {
-        b3SurfaceMaterial surface_material = b3Shape_GetSurfaceMaterial(shape_id);
-        surface_material.userMaterialId = material_id;
-        if (material) {
-            surface_material.friction    = material->dynamic_friction;
-            surface_material.restitution = material->restitution;
-        }
-        b3Shape_SetSurfaceMaterial(shape_id, surface_material);
+        b3SurfaceMaterial shape_material = b3Shape_GetSurfaceMaterial(shape_id);
+        shape_material.friction       = surface_material.friction;
+        shape_material.restitution    = surface_material.restitution;
+        shape_material.userMaterialId = surface_material.userMaterialId;
+        b3Shape_SetSurfaceMaterial(shape_id, shape_material);
+        b3Shape_SetDensity(shape_id, density, false);
+    }
+
+    // The material carries damping and density: apply the damping and, while
+    // the body has no explicit mass, re-derive the mass from the new density.
+    if (m_motion_mode == Motion_mode::e_static) {
+        return; // a static body has no motion properties
+    }
+    set_damping(
+        material ? material->get_linear_damping () : c_default_linear_damping,
+        material ? material->get_angular_damping() : c_default_angular_damping
+    );
+    if (!m_explicit_mass.has_value()) {
+        apply_mass();
     }
 }
 

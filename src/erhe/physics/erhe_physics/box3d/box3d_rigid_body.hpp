@@ -5,6 +5,7 @@
 
 #include <box3d/box3d.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,11 @@ public:
 
     void begin_move          ()                                                    override;
     void end_move            ()                                                    override;
+    void apply_force         (const glm::vec3& force)                              override;
+    void apply_force_at      (const glm::vec3& force, const glm::vec3& point)      override;
+    void apply_torque        (const glm::vec3& torque)                             override;
+    void apply_impulse       (const glm::vec3& impulse)                            override;
+    void apply_impulse_at    (const glm::vec3& impulse, const glm::vec3& point)    override;
     void set_angular_velocity(const glm::vec3& velocity)                           override;
     void set_damping         (float linear_damping, float angular_damping)         override;
     void set_friction        (float friction)                                      override;
@@ -69,7 +75,9 @@ public:
 
     // The world enables a body when it is added to the simulation and disables
     // it when removed, mirroring erhe's create-then-add lifetime. Box3D itself
-    // puts a body in the world the moment b3CreateBody returns.
+    // puts a body in the world the moment b3CreateBody returns. Box3D wakes
+    // every non-static body it enables; a body without velocity is put back to
+    // sleep so it enters the world asleep, as IWorld::add_rigid_body() requires.
     void set_enabled_in_world(bool enabled);
 
     // Awake state as last reported to the activation callbacks. Box3D has no
@@ -80,7 +88,10 @@ public:
 
 private:
     void attach_shapes  (b3ShapeDef& shape_def);
-    void apply_mass     (const IRigid_body_create_info& create_info);
+    // Derives mass and inertia from the shapes (whose density is the
+    // material's), then applies the explicit mass and inertia override.
+    void apply_mass     ();
+    [[nodiscard]] auto is_moving() const -> bool;
 
     Box3d_world&                      m_world;
     b3BodyId                          m_body            {};
@@ -96,6 +107,20 @@ private:
     bool                              m_is_valid        {false};
     bool                              m_reported_awake  {false};
     int                               m_filter_index    {-1};
+
+    // Mass inputs kept so a material change can re-derive the mass from the
+    // new density while the body has no explicit mass.
+    std::optional<float>              m_explicit_mass   {};
+    std::optional<glm::mat4>          m_inertia_override{};
+    glm::vec3                         m_center_of_mass_offset{0.0f};
+    bool                              m_has_center_of_mass_offset{false};
+
+    // Box3D keeps a body's velocity only while the body is enabled (a disabled
+    // body has no body state), so the velocity of a body outside the world is
+    // held here and applied when the world enables it.
+    bool                              m_enabled_in_world        {false};
+    glm::vec3                         m_pending_linear_velocity {0.0f};
+    glm::vec3                         m_pending_angular_velocity{0.0f};
 
     // Box3D resources owned by this body.
     std::vector<b3ShapeId>            m_shape_ids       {};

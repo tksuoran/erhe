@@ -34,6 +34,7 @@ class Box3d_rigid_body;
 // | non-uniform scale over a rotation    | approximated, warns       | the exact result is a shear; same as Jolt
 // | collision systems per world          | 64                        | interned into a uint64 bitset
 // | body woken without moving            | reported on first move    | synthesized from b3BodyMoveEvent
+// | resting body added with joints       | enters awake              | sleeping a body sleeps its whole island
 // | height fields                        | not exposed               | erhe has no height field shape type
 class Box3d_world : public IWorld
 {

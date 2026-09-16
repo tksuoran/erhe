@@ -70,11 +70,14 @@ TEST(world_events, a_compound_visitor_produces_one_enter_and_one_exit_per_body_p
     sensor_create_info.debug_label     = "sensor";
     const std::shared_ptr<IRigid_body> sensor = world->create_rigid_body_shared(sensor_create_info);
 
-    // Dropped from above the sensor, falls through it and out the other side.
+    // Thrown down from above the sensor, falls through it and out the other
+    // side. A body at rest enters the world asleep, so the initial velocity is
+    // what sets it in motion.
     IRigid_body_create_info visitor_create_info;
     visitor_create_info.collision_shape = make_two_child_compound();
     visitor_create_info.motion_mode     = Motion_mode::e_dynamic;
     visitor_create_info.position        = glm::vec3{0.0f, 3.0f, 0.0f};
+    visitor_create_info.linear_velocity = glm::vec3{0.0f, -1.0f, 0.0f};
     visitor_create_info.debug_label     = "visitor";
     const std::shared_ptr<IRigid_body> visitor = world->create_rigid_body_shared(visitor_create_info);
 
@@ -170,6 +173,7 @@ TEST(world_events, a_falling_body_activates_then_deactivates_when_it_sleeps)
     box_create_info.collision_shape = ICollision_shape::create_box_shape_shared(glm::vec3{0.5f, 0.5f, 0.5f});
     box_create_info.motion_mode     = Motion_mode::e_dynamic;
     box_create_info.position        = glm::vec3{0.0f, 2.0f, 0.0f};
+    box_create_info.linear_velocity = glm::vec3{0.0f, -1.0f, 0.0f}; // a body at rest enters the world asleep
     box_create_info.debug_label     = "box";
     const std::shared_ptr<IRigid_body> box = world->create_rigid_body_shared(box_create_info);
 

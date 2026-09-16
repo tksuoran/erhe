@@ -75,8 +75,11 @@ a specific engine.
   Jolt requires this: a sleeping non-static body holding a velocity trips `Body::ValidateMotion()`
   in an asserts-enabled build, and a body added asleep is never integrated, so its velocity is
   silently dropped. Assigning a non-zero velocity to a sleeping body that is already in the world
-  wakes it (Jolt's `BodyInterface` does this itself). The null backend never simulates and has no
-  activation state: its `is_active()` is always false.
+  wakes it (Jolt's `BodyInterface` does this itself). The Box3D backend enables a body on
+  `add_rigid_body()` (which wakes it) and puts a body at rest back to sleep; a disabled Box3D body
+  has no velocity state, so `Box3d_rigid_body` holds the velocity of a body outside the world and
+  applies it on entry. The null backend never simulates and has no activation state: its
+  `is_active()` is always false.
 - The `IMotion_state` header appears to be an empty/placeholder file.
 - Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). The suite
   builds for the simulating backends (`jolt`, `box3d`). Every build runs the
@@ -119,6 +122,7 @@ change detection, the event model). Read it before doing anything non-trivial he
 | non-uniform scale over a rotation    | approximated, warns       | the exact result is a shear; same as Jolt |
 | collision systems per world          | 64                        | interned into a uint64 bitset |
 | body woken without moving            | reported on first move    | synthesized from `b3BodyMoveEvent` |
+| resting body added with joints       | enters awake              | sleeping a body sleeps its whole island |
 | height fields                        | not exposed               | erhe has no height field shape type |
 
 Backend-specific design notes:
@@ -133,6 +137,13 @@ Backend-specific design notes:
   listener at all and is diffed out of the `b3BodyMoveEvent` stream; sensor touches are
   reported per shape pair and are counted per body pair so a compound visitor produces one
   enter and one exit, as with Jolt.
+- **Materials resolve per contact pair.** A combine mode belongs to the pair, so friction and
+  restitution are mixed in the world's friction / restitution callbacks from immutable
+  per-material snapshots (`Box3d_material_registry`, looked up by `userMaterialId`); a body
+  without a material is stamped with the default-material snapshot. The material's density
+  is the shape density, so Box3D's mass from shapes is the density-derived mass;
+  `set_physics_material()` updates density and damping and, while the body has no explicit
+  mass, re-derives the mass.
 - **Collision filtering runs through the custom filter callback**, not Box3D category/mask
   bits, since erhe's collision-system allow/deny lists cannot be expressed as bits. Per-pair
   collision exclusion (joint `enableCollision = false`) uses Box3D filter joints, which exist
