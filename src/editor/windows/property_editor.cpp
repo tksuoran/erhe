@@ -108,6 +108,15 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
     ImGui::TableSetupColumn("editor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 
+    if (filtering) {
+        // Filtered rows are drawn in their own ID scope. Force-opening a group
+        // (below) writes the open state into ImGui's storage, so without a
+        // separate scope a filter would overwrite - and on clearing leave
+        // behind - the fold state the user had set. With the scope, the
+        // unfiltered rows keep their own storage entries untouched.
+        ImGui::PushID("##filtered");
+    }
+
     for (std::size_t entry_index = 0, entry_end = m_entries.size(); entry_index < entry_end; ++entry_index) {
         const Entry& entry = m_entries[entry_index];
         ImGui::PushID(m_row++);
@@ -199,6 +208,9 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
         ImGui::PopID();
     }
     ERHE_VERIFY(m_stack.empty());
+    if (filtering) {
+        ImGui::PopID();
+    }
 
     ImGui::EndTable();
     ImGui::PopStyleVar(1);
