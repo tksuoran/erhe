@@ -86,14 +86,15 @@ private:
 };
 
 // The editor's settings root: owns Editor_settings_store (which owns the
-// loaded Editor_settings_config and its autosave) plus live runtime state
-// that is not a plain copy of the config -- device-derived graphics limits,
-// the graphics preset list (a separate file, graphics_presets.json), the
-// erhe::imgui font settings (foreign type), and ephemeral UI state.
+// loaded Editor_settings_config, the loaded User_state_config and their
+// autosave) plus live runtime state that is not a plain copy of the config --
+// device-derived graphics limits, the graphics preset list (a separate file,
+// graphics_presets.json), the erhe::imgui font settings (foreign type), and
+// ephemeral UI state.
 //
-// Live state persists into editor_settings.json through a collect callback
-// registered at construction; explicit save calls are not needed. The
-// graphics preset list is written separately via Graphics_settings::
+// Live state persists into editor_settings.json / user_state.json through a
+// collect callback registered at construction; explicit save calls are not
+// needed. The graphics preset list is written separately via Graphics_settings::
 // write_presets() (Settings window "Save Presets").
 class App_settings
 {
@@ -123,6 +124,11 @@ public:
     [[nodiscard]] auto settings_store()       ->       Editor_settings_store&;
     [[nodiscard]] auto config        ()       ->       Editor_settings_config&;
     [[nodiscard]] auto config        () const -> const Editor_settings_config&;
+
+    // The user state (inventory / hotbar slots, per scene view selections),
+    // persisted next to the settings in user_state.json.
+    [[nodiscard]] auto user_state    ()       ->       User_state_config&;
+    [[nodiscard]] auto user_state    () const -> const User_state_config&;
 
     // Node tree (ephemeral UI state, not persisted)
     bool node_tree_expand_attachments{false};

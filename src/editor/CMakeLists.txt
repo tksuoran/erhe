@@ -29,6 +29,7 @@ erhe_target_sources_grouped(
     config/editor/openxr_windows.json
     config/editor/renderer.json
     config/editor/text_renderer.json
+    config/editor/user_state.json
 
     res/editor/shaders/ddgi_blend.comp
     res/editor/shaders/ddgi_trace.comp
@@ -920,6 +921,9 @@ set(_config_sources
     ${_config_out}/editor_settings_config.hpp
     ${_config_out}/editor_settings_config_serialization.hpp
     ${_config_out}/editor_settings_config.cpp
+    ${_config_out}/user_state_config.hpp
+    ${_config_out}/user_state_config_serialization.hpp
+    ${_config_out}/user_state_config.cpp
     ${_config_out}/render_style_data.hpp
     ${_config_out}/render_style_data_serialization.hpp
     ${_config_out}/render_style_data.cpp

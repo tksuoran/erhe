@@ -1,7 +1,7 @@
 from erhe_codegen import *
 
 struct("Editor_settings_config",
-    version=3,
+    version=4,
     short_desc="Editor settings",
     long_desc="Runtime-editable settings saved to editor_settings.json.",
     developer=False,
@@ -42,7 +42,10 @@ struct("Editor_settings_config",
         # Editor-global geometry graph node preview thumbnails: visibility
         # (on by default) and hover auto-rotation.
         field("graph_node_previews",              StructRef("Graph_node_previews_config"), added_in=1),
-        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=1),
+        # inventory / scene_views moved to User_state_config (user_state.json)
+        # in v4; kept here so a v3 file is still read and migrated by
+        # Editor_settings_store on first load.
+        field("scene_views",          Vector(StructRef("Scene_view_settings")), added_in=1, removed_in=4),
         field("developer",            StructRef("Developer_config"),       added_in=1),
         field("grid",                 StructRef("Grid_config"),            added_in=1),
         field("headset",              StructRef("Headset_config"),         added_in=1),
@@ -52,7 +55,7 @@ struct("Editor_settings_config",
         field("ray_trace",            StructRef("Ray_trace_config"),       added_in=1),
         field("ddgi",                 StructRef("Ddgi_config"),            added_in=1),
         field("lightmap",             StructRef("Lightmap_config"),        added_in=1),
-        field("inventory",            StructRef("Inventory_config"),       added_in=1),
+        field("inventory",            StructRef("Inventory_config"),       added_in=1, removed_in=4),
         # glTF import/open performance options (doc/gltf-load-speedup-plan.md).
         field("load",                 StructRef("Load_config"),            added_in=1),
         field("network",              StructRef("Network_config"),         added_in=1),

@@ -641,7 +641,7 @@ void Settings_window::imgui()
         add_config_section(settings.headset);
         add_config_section(settings.hotbar);
         add_config_section(settings.hud);
-        add_config_section(settings.inventory);
+        add_config_section(m_context.app_settings->user_state().inventory);
         add_config_section(settings.load);
         add_config_section(settings.id_renderer);
         add_config_section(settings.network);

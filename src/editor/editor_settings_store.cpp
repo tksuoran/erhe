@@ -2,6 +2,7 @@
 #include "editor_log.hpp"
 
 #include "config/generated/editor_settings_config_serialization.hpp"
+#include "config/generated/user_state_config_serialization.hpp"
 #include "erhe_codegen/config_io.hpp"
 #include "erhe_verify/verify.hpp"
 
@@ -9,6 +10,35 @@
 #include <filesystem>
 
 namespace editor {
+
+namespace {
+
+// One-time move of the inventory / scene view sections out of a pre-v4
+// settings file: Editor_settings_config keeps those fields readable (marked
+// removed in v4) purely so an existing setup carries over into the new
+// user_state.json. A file already written in v4 has them at their defaults,
+// which is exactly the empty user state a fresh install starts from.
+#if defined(_MSC_VER)
+#   pragma warning(push)
+#   pragma warning(disable : 4996)
+#elif defined(__GNUC__) || defined(__clang__)
+#   pragma GCC diagnostic push
+#   pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+[[nodiscard]] auto make_user_state_from_settings(const Editor_settings_config& settings) -> User_state_config
+{
+    User_state_config user_state{};
+    user_state.inventory   = settings.inventory;
+    user_state.scene_views = settings.scene_views;
+    return user_state;
+}
+#if defined(_MSC_VER)
+#   pragma warning(pop)
+#elif defined(__GNUC__) || defined(__clang__)
+#   pragma GCC diagnostic pop
+#endif
+
+}
 
 Editor_settings_store::Editor_settings_store()
 {
@@ -34,7 +64,8 @@ Editor_settings_store::Editor_settings_store()
     // headset.openxr selects the mode; under OpenXR, switch to the OpenXR
     // settings file, seeding it from the shared file on first OpenXR run.
     if (m_settings.headset.openxr) {
-        m_file_path = c_editor_settings_openxr_file_path;
+        m_file_path            = c_editor_settings_openxr_file_path;
+        m_user_state_file_path = c_user_state_openxr_file_path;
         std::error_code ec{};
         if (std::filesystem::exists(std::filesystem::path{c_editor_settings_openxr_file_path}, ec)) {
             m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_openxr_file_path, &upgraded);
@@ -53,6 +84,27 @@ Editor_settings_store::Editor_settings_store()
         // load, instead of waiting for the next settings change to trigger an autosave.
         const bool ok = erhe::codegen::save_config(m_settings, m_file_path.c_str());
         log_startup->info("Rewrote {} in current schema format (ok={})", m_file_path, ok);
+    }
+
+    std::error_code user_state_ec{};
+    if (std::filesystem::exists(std::filesystem::path{m_user_state_file_path}, user_state_ec)) {
+        bool user_state_upgraded = false;
+        m_user_state = erhe::codegen::load_config<User_state_config>(m_user_state_file_path, &user_state_upgraded);
+        log_startup->info(
+            "User state loaded from {} (current schema version {}, older-version detected: {})",
+            m_user_state_file_path, User_state_config::current_version, user_state_upgraded
+        );
+        if (user_state_upgraded) {
+            const bool ok = erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+            log_startup->info("Rewrote {} in current schema format (ok={})", m_user_state_file_path, ok);
+        }
+    } else {
+        // No user state file yet: take the sections the settings file carried
+        // before the two were split (see make_user_state_from_settings()) and
+        // write them where they live now.
+        m_user_state = make_user_state_from_settings(m_settings);
+        const bool ok = erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+        log_startup->info("Seeded {} from {} (ok={})", m_user_state_file_path, m_file_path, ok);
     }
 }
 
@@ -88,11 +140,21 @@ auto Editor_settings_store::get_settings() const -> const Editor_settings_config
     return m_settings;
 }
 
+auto Editor_settings_store::get_user_state() -> User_state_config&
+{
+    return m_user_state;
+}
+
+auto Editor_settings_store::get_user_state() const -> const User_state_config&
+{
+    return m_user_state;
+}
+
 void Editor_settings_store::collect()
 {
     const std::lock_guard<std::mutex> lock{m_callbacks_mutex};
     for (const Callback_entry& entry : m_collect_callbacks) {
-        entry.callback(m_settings);
+        entry.callback(m_settings, m_user_state);
     }
 }
 
@@ -105,10 +167,11 @@ void Editor_settings_store::update(const bool allow_save)
 {
     if (!m_baseline_initialized) {
         // First evaluation after startup: take the current state as the
-        // baseline so launching the editor does not rewrite the file.
+        // baseline so launching the editor does not rewrite the files.
         collect();
-        m_last_saved_state     = serialize(m_settings, 0);
-        m_baseline_initialized = true;
+        m_last_saved_state      = serialize(m_settings,   0);
+        m_last_saved_user_state = serialize(m_user_state, 0);
+        m_baseline_initialized  = true;
         return;
     }
     if (!m_dirty || !allow_save) {
@@ -119,6 +182,11 @@ void Editor_settings_store::update(const bool allow_save)
     if (serialized != m_last_saved_state) {
         erhe::codegen::save_config(m_settings, m_file_path.c_str());
         m_last_saved_state = std::move(serialized);
+    }
+    std::string serialized_user_state = serialize(m_user_state, 0);
+    if (serialized_user_state != m_last_saved_user_state) {
+        erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+        m_last_saved_user_state = std::move(serialized_user_state);
     }
     m_dirty = false;
 }
@@ -131,16 +199,23 @@ void Editor_settings_store::flush()
         erhe::codegen::save_config(m_settings, m_file_path.c_str());
     }
     m_last_saved_state = std::move(serialized);
+    std::string serialized_user_state = serialize(m_user_state, 0);
+    if (m_baseline_initialized && (serialized_user_state != m_last_saved_user_state)) {
+        erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+    }
+    m_last_saved_user_state = std::move(serialized_user_state);
     m_dirty = false;
 }
 
 void Editor_settings_store::save()
 {
     collect();
-    erhe::codegen::save_config(m_settings, m_file_path.c_str());
-    m_last_saved_state     = serialize(m_settings, 0);
-    m_baseline_initialized = true;
-    m_dirty                = false;
+    erhe::codegen::save_config(m_settings,   m_file_path.c_str());
+    erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+    m_last_saved_state      = serialize(m_settings,   0);
+    m_last_saved_user_state = serialize(m_user_state, 0);
+    m_baseline_initialized  = true;
+    m_dirty                 = false;
 }
 
 }

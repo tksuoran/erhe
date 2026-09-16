@@ -83,15 +83,15 @@ Scene_view::Scene_view(
         return;
     }
 
-    const Editor_settings_config& settings = m_editor_settings_store->get_settings();
+    const User_state_config& user_state = m_editor_settings_store->get_user_state();
     const auto i = std::find_if(
-        settings.scene_views.begin(),
-        settings.scene_views.end(),
+        user_state.scene_views.begin(),
+        user_state.scene_views.end(),
         [this](const Scene_view_settings& entry) {
             return entry.name == m_settings_key;
         }
     );
-    if (i != settings.scene_views.end()) {
+    if (i != user_state.scene_views.end()) {
         m_debug_visualizations.read_config(i->debug_visualizations);
         // Per-view Visual Style overrides the make_viewport_config() default.
         // (On the first run after upgrading a pre-v2 entry that has no saved
@@ -112,19 +112,19 @@ Scene_view::Scene_view(
     // constructor-provided scene/camera (nothing pending).
 
     m_collect_callback_id = m_editor_settings_store->register_collect_callback(
-        [this](Editor_settings_config& settings_out) {
+        [this](Editor_settings_config&, User_state_config& user_state_out) {
             auto j = std::find_if(
-                settings_out.scene_views.begin(),
-                settings_out.scene_views.end(),
+                user_state_out.scene_views.begin(),
+                user_state_out.scene_views.end(),
                 [this](const Scene_view_settings& entry) {
                     return entry.name == m_settings_key;
                 }
             );
-            if (j == settings_out.scene_views.end()) {
+            if (j == user_state_out.scene_views.end()) {
                 Scene_view_settings new_entry{};
                 new_entry.name = m_settings_key;
-                settings_out.scene_views.push_back(std::move(new_entry));
-                j = std::prev(settings_out.scene_views.end());
+                user_state_out.scene_views.push_back(std::move(new_entry));
+                j = std::prev(user_state_out.scene_views.end());
             }
             m_debug_visualizations.write_config(j->debug_visualizations);
             j->viewport_config = m_viewport_config;
@@ -137,7 +137,7 @@ Scene_view::Scene_view(
 
     // A view whose settings entry does not exist yet adds one via the collect
     // callback above - that is a settings change, so schedule a save.
-    if (i == settings.scene_views.end()) {
+    if (i == user_state.scene_views.end()) {
         m_editor_settings_store->touch();
     }
 }

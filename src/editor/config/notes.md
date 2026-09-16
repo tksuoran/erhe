@@ -14,6 +14,13 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
 - **`Editor_settings_config`** -- Aggregates runtime-editable settings (camera controls,
   grid, headset, hotbar, HUD, etc.) loaded from `editor_settings.json`.
 
+- **`User_state_config`** -- The state the user builds up by using the editor: the
+  inventory / hotbar slot contents and the per scene view scene / camera / visual style
+  selections. Loaded from `user_state.json`, alongside `editor_settings.json` and with the
+  same autosave. `Editor_settings_store` seeds a missing `user_state.json` from the
+  matching sections of a pre-v4 `editor_settings.json`, which is why
+  `Editor_settings_config` still declares `inventory` and `scene_views` as removed in v4.
+
 ## Public API / Integration Points
 
 - `load_config<Graphics_config>("config/<app_name>/erhe_graphics.json")` -- per-library config loading
@@ -22,8 +29,8 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
 
 ## Notes
 
-- `editor_settings.json` is written by the running editor, and settings only materialize
-  into it after the editor has run **with a scene open**. To exercise a stored setting
+- `editor_settings.json` and `user_state.json` are written by the running editor, and
+  settings only materialize into them after the editor has run **with a scene open**. To exercise a stored setting
   headlessly: run once with a scene open, kill the editor, edit the JSON, run again. The
   file is user experiment state -- treat edits to it as destructive.
 - A stored value always beats a changed default. Lowering a default in

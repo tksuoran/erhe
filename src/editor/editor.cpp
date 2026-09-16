@@ -2317,7 +2317,7 @@ public:
                     *m_imgui_renderer.get(),
                     *m_imgui_windows.get(),
                     m_app_context,
-                    m_editor_settings.inventory
+                    m_user_state.inventory
                 );
                 m_hover_tool = std::make_unique<Hover_tool>(
                     *m_imgui_renderer.get(),
@@ -3016,18 +3016,19 @@ public:
         m_app_context.transform_tool           = m_transform_tool        .get();
         m_app_context.scene_views              = m_viewport_scene_views  .get();
 
-        // Subsystems whose live state lives outside Editor_settings_config
-        // provide collect callbacks; the store copies their state into the
-        // config before change detection / saving. Sections edited directly
-        // in the config struct (Settings window) need no callback.
+        // Subsystems whose live state lives outside Editor_settings_config /
+        // User_state_config provide collect callbacks; the store copies their
+        // state into the config before change detection / saving. Sections
+        // edited directly in the config structs (Settings window) need no
+        // callback.
         m_app_settings.settings_store().register_collect_callback(
-            [this](Editor_settings_config& settings) {
+            [this](Editor_settings_config& settings, User_state_config&) {
                 m_grid_tool->write_config(settings.grid);
             }
         );
         m_app_settings.settings_store().register_collect_callback(
-            [this](Editor_settings_config& settings) {
-                m_inventory_window->write_config(settings.inventory);
+            [this](Editor_settings_config&, User_state_config& user_state) {
+                m_inventory_window->write_config(user_state.inventory);
             }
         );
     }
@@ -4034,6 +4035,7 @@ public:
     // Convenience alias for the loaded config; same object as
     // m_app_settings.config().
     Editor_settings_config&             m_editor_settings{m_app_settings.config()};
+    User_state_config&                  m_user_state     {m_app_settings.user_state()};
 
     std::unique_ptr<tf::Executor>       m_executor;
     Item_async_task_guard               m_item_task_guard; // destroyed before m_executor

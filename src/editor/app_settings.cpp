@@ -22,7 +22,7 @@ App_settings::App_settings()
     // other collect-callback client. App_settings is an app-lifetime member
     // of Editor, so the callback is never unregistered.
     m_store.register_collect_callback(
-        [this](Editor_settings_config& editor_settings) {
+        [this](Editor_settings_config& editor_settings, User_state_config&) {
             if (!m_openxr) {
                 // editor_settings.graphics_preset_name only references the
                 // desktop preset list; do not write the XR preset name to it.
@@ -61,6 +61,16 @@ auto App_settings::config() -> Editor_settings_config&
 auto App_settings::config() const -> const Editor_settings_config&
 {
     return m_store.get_settings();
+}
+
+auto App_settings::user_state() -> User_state_config&
+{
+    return m_store.get_user_state();
+}
+
+auto App_settings::user_state() const -> const User_state_config&
+{
+    return m_store.get_user_state();
 }
 
 auto App_settings::get_ui_scale() const -> float
