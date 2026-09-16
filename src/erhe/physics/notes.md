@@ -78,10 +78,12 @@ a specific engine.
   wakes it (Jolt's `BodyInterface` does this itself). The null backend never simulates and has no
   activation state: its `is_active()` is always false.
 - The `IMotion_state` header appears to be an empty/placeholder file.
-- Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). They are
-  written against the Box3D backend, and cover both pure logic (hull builder, shape
-  descriptors, collision filter table, six-DOF classifier) and world-level behavior that
-  steps a real world (activation / sensor events, trial-placement overlap queries).
+- Unit tests live in `test/` (`-DERHE_BUILD_TESTS=ON` -> `erhe_physics_tests`). The suite
+  builds for the simulating backends (`jolt`, `box3d`). Every build runs the
+  backend-neutral tests, which step a real `IWorld` through the interface (body
+  activation, trial-placement overlap queries). A `box3d` build adds the Box3D-specific
+  tests: pure logic (hull builder, shape descriptors, collision filter table, six-DOF
+  classifier) and the activation / sensor events `Box3d_world` synthesizes.
 - KHR_physics_rigid_bodies support status, design and known limitations are tracked in
   `doc/khr_physics_rigid_bodies_support.md`. Jolt-imposed limits: triangle mesh shapes are
   static/kinematic only; sensors must be non-static to detect static bodies (callers create

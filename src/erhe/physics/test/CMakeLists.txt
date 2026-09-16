@@ -12,13 +12,22 @@ set(_target "erhe_physics_tests")
 add_executable(${_target}
     main.cpp
     test_body_activation.cpp
-    test_collision_filter_table.cpp
-    test_hull_builder.cpp
     test_overlap_query.cpp
-    test_shape_descriptor.cpp
-    test_six_dof_classifier.cpp
-    test_world_events.cpp
 )
+
+# Box3d_world internals (collision filter interning, hull point generation,
+# six-DOF joint classification, shape descriptors) and the activation and sensor
+# events that Box3d_world synthesizes itself.
+if (${ERHE_PHYSICS_LIBRARY} STREQUAL "box3d")
+    target_sources(${_target}
+        PRIVATE
+            test_collision_filter_table.cpp
+            test_hull_builder.cpp
+            test_shape_descriptor.cpp
+            test_six_dof_classifier.cpp
+            test_world_events.cpp
+    )
+endif ()
 
 target_link_libraries(${_target}
     PRIVATE
@@ -26,7 +35,6 @@ target_link_libraries(${_target}
         erhe::file
         erhe::item
         erhe::log
-        erhe::physics
         erhe::profile
         erhe::verify
         glm::glm-header-only

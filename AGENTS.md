@@ -154,8 +154,9 @@ Several `erhe::*` libraries have gtest suites under `src/erhe/<name>/test/`
 (circular_ring_buffer, codegen, dataformat, geometry, graphics, item, math,
 physics, primitive, raytrace, usd), plus `mcp_server_tests` for the editor's
 MCP server. `erhe_usd_tests` additionally needs `-DERHE_USD_LIBRARY=lightusd`,
-and `erhe_physics_tests` is written against the Box3D backend, so it needs a
-build tree configured with `-DERHE_PHYSICS_LIBRARY=box3d`. Each
+and `erhe_physics_tests` needs a backend that simulates
+(`-DERHE_PHYSICS_LIBRARY=jolt`, the default, or `box3d`); a `box3d` tree adds
+that backend's own tests to the suite. Each
 builds an `erhe_<name>_tests` executable, gated behind `-DERHE_BUILD_TESTS=ON`
 (default OFF).
 
