@@ -35,3 +35,9 @@ depending on the selected backend.
 - The `Profile_allocator` is always active (controlled by `ERHE_USE_PROFILE_ALLOCATOR`).
 - Tracy integration redefines GL query functions to use erhe's dynamic loader, then undefines them after include.
 - `ERHE_PROFILE_MUTEX` is used extensively throughout erhe to make mutex contention visible in Tracy.
+- The global allocator is selected via `ERHE_MALLOC_LIBRARY`: `mimalloc`, `jemalloc`, or `none`.
+  `erhe_profile` links the allocator target (`${ERHE_MALLOC_TARGET}`, also linked by the executables)
+  and `profile.cpp` defines the replacement global `operator new` / `operator delete`:
+  `<mimalloc-new-delete.h>` for mimalloc, `erhe_profile/jemalloc_new_delete.hpp` for jemalloc.
+  jemalloc is built with the `je_` prefix (`cmake/jemalloc.cmake`), so C `malloc` / `free`
+  stay on the platform allocator and only C++ allocations go through jemalloc.

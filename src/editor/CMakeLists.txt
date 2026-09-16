@@ -744,8 +744,8 @@ if (${ERHE_USD_LIBRARY} STREQUAL "lightusd")
     target_link_libraries(${_target} PRIVATE erhe::usd)
 endif ()
 
-if (ERHE_USE_MIMALLOC)
-    target_link_libraries(${_target} PUBLIC mimalloc-static)
+if (DEFINED ERHE_MALLOC_TARGET)
+    target_link_libraries(${_target} PUBLIC ${ERHE_MALLOC_TARGET})
 endif ()
 
 # Editor config / library definition dirs (shared by the scene and config codegen
@@ -1192,8 +1192,8 @@ if (NOT ERHE_TARGET_OS_ANDROID)
         net_test.cpp
     )
 
-    if (ERHE_USE_MIMALLOC)
-        target_link_libraries(${_target} PUBLIC mimalloc-static)
+    if (DEFINED ERHE_MALLOC_TARGET)
+        target_link_libraries(${_target} PUBLIC ${ERHE_MALLOC_TARGET})
     endif ()
 
     target_link_libraries(

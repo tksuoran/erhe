@@ -40,8 +40,8 @@ if (ERHE_GRAPHICS_API_OPENGL)
     target_link_libraries(${_target} PRIVATE erhe::gl)
 endif ()
 
-if (ERHE_USE_MIMALLOC)
-    target_link_libraries(${_target} PUBLIC mimalloc-static)
+if (DEFINED ERHE_MALLOC_TARGET)
+    target_link_libraries(${_target} PUBLIC ${ERHE_MALLOC_TARGET})
 endif ()
 
 target_link_libraries(

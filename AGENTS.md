@@ -144,6 +144,7 @@ Required packages: `libwayland-dev libxkbcommon-dev xorg-dev` (Ubuntu) or equiva
 | `ERHE_WINDOW_LIBRARY` | `sdl` | `sdl`, `glfw` (deprecated), or `none` (headless) |
 | `ERHE_XR_LIBRARY` | `none` | `openxr` or `none`; the configure wrappers pass `openxr` |
 | `ERHE_USD_LIBRARY` | `none` | `lightusd` or `none`; the Windows configure wrappers and the Android build pass `lightusd`. Builds `erhe::usd` (LightUSD) and the `describe_usd_file` MCP tool |
+| `ERHE_MALLOC_LIBRARY` | `none` | `mimalloc`, `jemalloc`, or `none`; routes C++ `new`/`delete` to the allocator (`jemalloc` runs its autoconf `configure` once per build tree at configure time, see `cmake/jemalloc.cmake`) |
 | `ERHE_USE_ASAN` | `OFF` | AddressSanitizer |
 | `ERHE_USE_PRECOMPILED_HEADERS` | `OFF` | Speeds up builds; the configure wrappers pass `ON` |
 | `ERHE_BUILD_TESTS` | `OFF` | gtest unit test targets (see Testing below) |

@@ -129,7 +129,7 @@ if (ERHE_TARGET_OS_ANDROID)
     set(ERHE_XR_LIBRARY       "none"    CACHE STRING "" FORCE)
     set(ERHE_RAYTRACE_LIBRARY "bvh"     CACHE STRING "" FORCE)
     set(ERHE_PROFILE_LIBRARY  "none"    CACHE STRING "" FORCE)
-    set(ERHE_USE_MIMALLOC     OFF       CACHE BOOL   "" FORCE)
+    set(ERHE_MALLOC_LIBRARY   "none"    CACHE STRING "" FORCE)
     set(ERHE_USE_ASAN         OFF       CACHE BOOL   "" FORCE)
 endif()
 ```

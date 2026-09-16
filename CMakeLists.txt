@@ -52,6 +52,7 @@ set_option(ERHE_FONT_RASTERIZATION_LIBRARY "Font rasterization library. Either f
 set_option(ERHE_GLTF_LIBRARY               "GLTF library. Either fastgltf or none"                                      "fastgltf" "fastgltf;none")
 set_option(ERHE_GUI_LIBRARY                "GUI library. Either imgui or none"                                          "imgui"    "imgui;none")
 set_option(ERHE_GRAPHICS_API               "Graphics library to use with erhe. Either vulkan, opengl, metal or none"    "vulkan"   "opengl;vulkan;metal;none")
+set_option(ERHE_MALLOC_LIBRARY             "Memory allocator library. Either mimalloc, jemalloc or none"                "none"     "mimalloc;jemalloc;none")
 set_option(ERHE_NAVIGATION_LIBRARY         "Navigation mesh library. Either recastnavigation or none"                   "none"     "recastnavigation;none")
 set_option(ERHE_PHYSICS_LIBRARY            "Physics library to use with erhe. Either jolt, box3d or none"               "jolt"     "jolt;box3d;none")
 set_option(ERHE_PROFILE_LIBRARY            "Profile library to use with erhe. Either nvtx, superluminal, tracy or none" "none"     "nvtx;superluminal;tracy;none")
@@ -65,7 +66,6 @@ set_option(ERHE_USD_LIBRARY                "USD library to use with erhe. Either
 set_option(ERHE_VOXEL_LIBRARY              "Voxel/SDF library to use with erhe. Either openvdb or none"                 "none"     "openvdb;none")
 set_option(ERHE_USE_PRECOMPILED_HEADERS    "Use precompiled headers in erhe"                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_ASAN                   "Enable AddressSanitizer"                                                    "OFF"      "ON;OFF")
-set_option(ERHE_USE_MIMALLOC               "Enable mimalloc"                                                            "OFF"      "ON;OFF")
 set_option(ERHE_USE_FPNG                   "Build the fpng image writer (fast PNG save), independent of window lib"     "ON"       "ON;OFF")
 set_option(ERHE_SPIRV                      "Enable SPIR-V"                                                              "OFF"      "ON;OFF")
 set_option(ERHE_BUILD_TESTS                "Build erhe unit tests"                                                      "OFF"      "ON;OFF")
@@ -122,7 +122,7 @@ else ()
 endif ()
 
 # On Android, force a known-good subset of options. OpenGL is desktop-only,
-# Embree is x86-only, and mimalloc / Tracy are not yet ported.
+# Embree is x86-only, and mimalloc / jemalloc / Tracy are not yet ported.
 #
 # OpenXR is enabled only for the `quest` Gradle product flavor (Meta Quest 3),
 # selected via -DERHE_ANDROID_FLAVOR=quest forwarded by Gradle. The Khronos
@@ -143,7 +143,7 @@ if (ERHE_TARGET_OS_ANDROID)
     endif ()
     set(ERHE_RAYTRACE_LIBRARY "bvh"     CACHE STRING "" FORCE)
     set(ERHE_PROFILE_LIBRARY  "none"    CACHE STRING "" FORCE)
-    set(ERHE_USE_MIMALLOC     OFF       CACHE BOOL   "" FORCE)
+    set(ERHE_MALLOC_LIBRARY   "none"    CACHE STRING "" FORCE)
     set(ERHE_USE_ASAN         OFF       CACHE BOOL   "" FORCE)
 endif ()
 
@@ -989,7 +989,7 @@ else ()
     add_definitions(-DERHE_PROFILE_LIBRARY_NONE)
 endif ()
 
-if (ERHE_USE_MIMALLOC)
+if (${ERHE_MALLOC_LIBRARY} STREQUAL "mimalloc")
     if (${ERHE_PROFILE_LIBRARY} STREQUAL "tracy")
         CPMAddPackage(
             NAME              mimalloc
@@ -997,7 +997,7 @@ if (ERHE_USE_MIMALLOC)
             GIT_SHALLOW       TRUE
             GITHUB_REPOSITORY tksuoran/mimalloc
             OPTIONS
-                    "MI_OVERRIDE OFF"
+                "MI_OVERRIDE OFF"
                 "MI_WIN_REDIRECT OFF"
                 "MI_BUILD_SHARED OFF"
                 "MI_BUILD_STATIC ON"
@@ -1017,9 +1017,16 @@ if (ERHE_USE_MIMALLOC)
         )
         message(STATUS "Erhe configured to use mimalloc without tracking.")
     endif ()
-    add_definitions(-DERHE_USE_MIMALLOC)
+    add_definitions(-DERHE_MALLOC_LIBRARY_MIMALLOC)
+    set(ERHE_MALLOC_TARGET mimalloc-static)
+elseif (${ERHE_MALLOC_LIBRARY} STREQUAL "jemalloc")
+    include(jemalloc)
+    message(STATUS "Erhe configured to use jemalloc.")
+    add_definitions(-DERHE_MALLOC_LIBRARY_JEMALLOC)
+    set(ERHE_MALLOC_TARGET erhe_jemalloc)
 else ()
-    message(STATUS "Erhe configured to NOT use mimalloc.")
+    message(STATUS "Erhe configured to use the default memory allocator.")
+    add_definitions(-DERHE_MALLOC_LIBRARY_NONE)
 endif ()
 
 if (${ERHE_GUI_LIBRARY} STREQUAL "imgui")

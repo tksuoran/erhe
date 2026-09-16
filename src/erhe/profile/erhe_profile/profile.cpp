@@ -1,7 +1,9 @@
 #include "erhe_profile/profile.hpp"
 
-#if defined(ERHE_USE_MIMALLOC)
+#if defined(ERHE_MALLOC_LIBRARY_MIMALLOC)
 #   include <mimalloc-new-delete.h>
+#elif defined(ERHE_MALLOC_LIBRARY_JEMALLOC)
+#   include "erhe_profile/jemalloc_new_delete.hpp"
 #endif
 
 // #if defined(ERHE_PROFILE_LIBRARY_TRACY)

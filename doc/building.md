@@ -132,6 +132,7 @@ attempt and the launch must be retried.
 | `ERHE_WINDOW_LIBRARY` | Window library | `sdl`, `glfw` (deprecated), `none` (headless) | `sdl` |
 | `ERHE_PHYSICS_LIBRARY` | Physics library | `jolt`, `box3d`, `none` | `jolt` |
 | `ERHE_RAYTRACE_LIBRARY` | Raytrace library | `bvh`, `tinybvh`, `embree`, `none` | `bvh` |
+| `ERHE_MALLOC_LIBRARY` | Memory allocator for C++ `new`/`delete` | `mimalloc`, `jemalloc`, `none` | `none` |
 | `ERHE_NAVIGATION_LIBRARY` | Navigation mesh library | `recastnavigation`, `none` | `none` |
 | `ERHE_PROFILE_LIBRARY` | Profiler integration | `nvtx`, `superluminal`, `tracy`, `none` | `none` |
 | `ERHE_XR_LIBRARY` | XR library | `openxr`, `none` | `none` |
@@ -145,7 +146,6 @@ attempt and the launch must be retried.
 | `ERHE_SPIRV` | Enable SPIR-V shader compilation | `ON`, `OFF` | `OFF` |
 | `ERHE_BUILD_TESTS` | Build the `erhe_<name>_tests` gtest targets | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_ASAN` | AddressSanitizer | `ON`, `OFF` | `OFF` |
-| `ERHE_USE_MIMALLOC` | Use mimalloc allocator | `ON`, `OFF` | `OFF` |
 | `ERHE_USE_FPNG` | Build the fpng image writer (fast PNG save) | `ON`, `OFF` | `ON` |
 | `ERHE_USE_PRECOMPILED_HEADERS` | Precompiled headers (faster builds) | `ON`, `OFF` | `OFF` |
 
