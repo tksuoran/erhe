@@ -29,7 +29,6 @@ erhe_target_sources_grouped(
     config/editor/openxr_windows.json
     config/editor/renderer.json
     config/editor/text_renderer.json
-    config/editor/user_state.json
 
     res/editor/shaders/ddgi_blend.comp
     res/editor/shaders/ddgi_trace.comp
@@ -93,6 +92,8 @@ erhe_target_sources_grouped(
     animation/animation_player.hpp
     animation/animation_window.cpp
     animation/animation_window.hpp
+    ai_driver.cpp
+    ai_driver.hpp
     app_context.cpp
     app_context.hpp
     crash_handler.cpp

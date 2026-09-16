@@ -1,5 +1,6 @@
 ﻿#include "editor.hpp"
 
+#include "ai_driver.hpp"
 #include "app_context.hpp"
 #include "config/generated/add_cameras_args.hpp"
 #include "config/generated/add_cameras_args_serialization.hpp"
@@ -260,19 +261,6 @@
 namespace editor {
 
 namespace {
-
-// AI-driven editor runs (see AGENTS.md): when an AI coding agent launches
-// the editor it sets ERHE_AI_DRIVER=1. Error artifacts then go to files
-// under logs/ that the agent can read, instead of the clipboard (which
-// assumed a human pastes the prepared message into an AI chat).
-[[nodiscard]] auto is_ai_driver() -> bool
-{
-    static const bool s_ai_driver = []() {
-        const char* const value = std::getenv("ERHE_AI_DRIVER");
-        return (value != nullptr) && (value[0] == '1');
-    }();
-    return s_ai_driver;
-}
 
 // Appends a report to the given file; the file is truncated on the first
 // write of each run so an agent always reads the current run's errors.

@@ -93,5 +93,11 @@ android-project/local.properties
 # (src/editor/editor_default_layout.cpp) when this file is absent.
 config/editor/desktop_window_imgui_host_imgui.ini
 
+# Per-user editor state (inventory / hotbar slots, per scene view scene,
+# camera and visual style selections). Written by the running editor; a fresh
+# clone starts from the User_state_config defaults.
+config/editor/user_state.json
+config/editor/openxr_user_state.json
+
 # Per-machine memory bank state (see memory-bank/README.md Machine-Scope Rule)
 memory-bank/local/

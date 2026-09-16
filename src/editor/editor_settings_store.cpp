@@ -1,4 +1,5 @@
 #include "editor_settings_store.hpp"
+#include "ai_driver.hpp"
 #include "editor_log.hpp"
 
 #include "config/generated/editor_settings_config_serialization.hpp"
@@ -41,6 +42,7 @@ namespace {
 }
 
 Editor_settings_store::Editor_settings_store()
+    : m_persist_user_state{!is_ai_driver()}
 {
     bool upgraded = false;
     m_settings = erhe::codegen::load_config<Editor_settings_config>(c_editor_settings_file_path, &upgraded);
@@ -84,6 +86,13 @@ Editor_settings_store::Editor_settings_store()
         // load, instead of waiting for the next settings change to trigger an autosave.
         const bool ok = erhe::codegen::save_config(m_settings, m_file_path.c_str());
         log_startup->info("Rewrote {} in current schema format (ok={})", m_file_path, ok);
+    }
+
+    if (!m_persist_user_state) {
+        // AI-driven run: keep the User_state_config defaults and touch no user
+        // state file (see class comment).
+        log_startup->info("AI-driven run: {} is neither read nor written", m_user_state_file_path);
+        return;
     }
 
     std::error_code user_state_ec{};
@@ -170,7 +179,7 @@ void Editor_settings_store::update(const bool allow_save)
         // baseline so launching the editor does not rewrite the files.
         collect();
         m_last_saved_state      = serialize(m_settings,   0);
-        m_last_saved_user_state = serialize(m_user_state, 0);
+        m_last_saved_user_state = m_persist_user_state ? serialize(m_user_state, 0) : std::string{};
         m_baseline_initialized  = true;
         return;
     }
@@ -183,10 +192,12 @@ void Editor_settings_store::update(const bool allow_save)
         erhe::codegen::save_config(m_settings, m_file_path.c_str());
         m_last_saved_state = std::move(serialized);
     }
-    std::string serialized_user_state = serialize(m_user_state, 0);
-    if (serialized_user_state != m_last_saved_user_state) {
-        erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
-        m_last_saved_user_state = std::move(serialized_user_state);
+    if (m_persist_user_state) {
+        std::string serialized_user_state = serialize(m_user_state, 0);
+        if (serialized_user_state != m_last_saved_user_state) {
+            erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+            m_last_saved_user_state = std::move(serialized_user_state);
+        }
     }
     m_dirty = false;
 }
@@ -199,23 +210,27 @@ void Editor_settings_store::flush()
         erhe::codegen::save_config(m_settings, m_file_path.c_str());
     }
     m_last_saved_state = std::move(serialized);
-    std::string serialized_user_state = serialize(m_user_state, 0);
-    if (m_baseline_initialized && (serialized_user_state != m_last_saved_user_state)) {
-        erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+    if (m_persist_user_state) {
+        std::string serialized_user_state = serialize(m_user_state, 0);
+        if (m_baseline_initialized && (serialized_user_state != m_last_saved_user_state)) {
+            erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+        }
+        m_last_saved_user_state = std::move(serialized_user_state);
     }
-    m_last_saved_user_state = std::move(serialized_user_state);
     m_dirty = false;
 }
 
 void Editor_settings_store::save()
 {
     collect();
-    erhe::codegen::save_config(m_settings,   m_file_path.c_str());
-    erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
-    m_last_saved_state      = serialize(m_settings,   0);
-    m_last_saved_user_state = serialize(m_user_state, 0);
-    m_baseline_initialized  = true;
-    m_dirty                 = false;
+    erhe::codegen::save_config(m_settings, m_file_path.c_str());
+    m_last_saved_state = serialize(m_settings, 0);
+    if (m_persist_user_state) {
+        erhe::codegen::save_config(m_user_state, m_user_state_file_path.c_str());
+        m_last_saved_user_state = serialize(m_user_state, 0);
+    }
+    m_baseline_initialized = true;
+    m_dirty                = false;
 }
 
 }

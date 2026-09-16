@@ -28,6 +28,11 @@ static const char* const c_user_state_openxr_file_path      = "config/editor/ope
 // seeded from the pre-v4 editor_settings.json sections the two structs were
 // split out of, so an existing setup carries over.
 //
+// An AI-driven run (is_ai_driver(), ERHE_AI_DRIVER=1) neither reads nor writes
+// the user state file: it starts from the User_state_config defaults and
+// leaves the user's own inventory / scene view state as it was. The settings
+// file is read and autosaved as usual.
+//
 // Desktop and OpenXR sessions keep separate settings files (matching the
 // openxr_commands.json / openxr_ imgui-config convention): the shared
 // editor_settings.json is always loaded first and its headset.openxr flag
@@ -107,6 +112,9 @@ private:
 
     Editor_settings_config      m_settings;
     User_state_config           m_user_state;
+    // False in an AI-driven run: the user state file is then neither read at
+    // construction nor written by update() / flush() / save().
+    bool                        m_persist_user_state{true};
     // The files this store loads from and saves to: editor_settings.json /
     // user_state.json on desktop, the openxr_ variants under OpenXR (see
     // class comment).

@@ -20,6 +20,8 @@ in the `config/` directory (e.g. `config/<app_name/erhe_graphics.json`, `config/
   same autosave. `Editor_settings_store` seeds a missing `user_state.json` from the
   matching sections of a pre-v4 `editor_settings.json`, which is why
   `Editor_settings_config` still declares `inventory` and `scene_views` as removed in v4.
+  The file is gitignored (it is per-user state, like the ImGui ini), and an AI-driven
+  run (`ERHE_AI_DRIVER=1`) neither reads nor writes it.
 
 ## Public API / Integration Points
 

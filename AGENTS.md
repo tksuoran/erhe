@@ -392,6 +392,11 @@ message into an AI chat):
   `logs/device_error.txt` (truncated at each run's first error).
 - Shader compile/link errors: `logs/shader_error.txt` (error, source,
   callstack).
+- The per-user editor state file (`config/editor/user_state.json`: inventory /
+  hotbar slots, per scene view scene, camera and visual style selections) is
+  neither read nor written, so an agent run starts from that struct's defaults
+  and leaves the user's own state alone. `config/editor/editor_settings.json`
+  is read and autosaved as usual.
 - Fatal behavior is unchanged (errors still abort); the log line names the
   file to read. After any crashed or aborted run, grep `logs/log.txt` and
   read these files before theorizing.
