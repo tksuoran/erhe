@@ -1,69 +1,70 @@
 #include "windows/settings_window.hpp"
 
-#include "windows/config_ui.hpp"
 #include "app_context.hpp"
 #include "app_message_bus.hpp"
 #include "app_scenes.hpp"
 #include "app_settings.hpp"
-#include "scene/scene_root.hpp"
-#include "windows/inventory_window.hpp"
-#include "tools/debug_visualizations.hpp"
 #include "editor_settings_store.hpp"
-#include "config/generated/developer_config.hpp"
-#include "config/generated/editor_settings_config.hpp"
-#include "config/generated/shadow_filter_mode.hpp"
-#include "config/generated/shadow_bias_mode.hpp"
-#include "config/generated/shadow_cull_mode.hpp"
-#include "config/generated/shadow_technique_mode.hpp"
-#include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
-#include "config/generated/renderer_config.hpp"
-#include "config/generated/text_renderer_config.hpp"
-#include "config/generated/threading_config.hpp"
-#include "config/generated/window_config.hpp"
-#include "erhe_graphics/generated/graphics_config.hpp"
-#include "erhe_graphics/generated/opengl_config.hpp"
-#include "erhe_graphics/generated/vulkan_config.hpp"
-#include "config/generated/editor_settings_config_serialization.hpp"
-#include "erhe_codegen/config_io.hpp"
+#include "scene/scene_root.hpp"
+#include "tools/debug_visualizations.hpp"
+#include "windows/config_ui.hpp"
+#include "windows/inventory_window.hpp"
+
 #include "config/generated/camera_controls_config_serialization.hpp"
-#include "config/generated/render_style_appearance_serialization.hpp"
-#include "config/generated/selection_outline_style_serialization.hpp"
-#include "config/generated/mesh_component_style_serialization.hpp"
 #include "config/generated/content_edge_lines_config_serialization.hpp"
-#include "config/generated/preview_edge_lines_config_serialization.hpp"
-#include "config/generated/graph_node_previews_config_serialization.hpp"
-#include "config/generated/debug_visualizations_settings_serialization.hpp"
 #include "config/generated/ddgi_config_serialization.hpp"
+#include "config/generated/debug_visualizations_settings_serialization.hpp"
+#include "config/generated/developer_config.hpp"
 #include "config/generated/developer_config_serialization.hpp"
+#include "config/generated/editor_settings_config.hpp"
+#include "config/generated/editor_settings_config_serialization.hpp"
+#include "config/generated/graph_node_previews_config_serialization.hpp"
 #include "config/generated/grid_config_serialization.hpp"
-#include "erhe_xr/generated/headset_config_serialization.hpp"
 #include "config/generated/hotbar_config_serialization.hpp"
 #include "config/generated/hud_config_serialization.hpp"
-#include "config/generated/inventory_slot_serialization.hpp"
-#include "config/generated/inventory_config_serialization.hpp"
 #include "config/generated/id_renderer_config_serialization.hpp"
+#include "config/generated/inventory_config_serialization.hpp"
+#include "config/generated/inventory_slot_serialization.hpp"
 #include "config/generated/load_config_serialization.hpp"
-#include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
+#include "config/generated/mesh_component_style_serialization.hpp"
 #include "config/generated/network_config_serialization.hpp"
 #include "config/generated/physics_config_serialization.hpp"
+#include "config/generated/preview_edge_lines_config_serialization.hpp"
+#include "config/generated/render_style_appearance_serialization.hpp"
+#include "config/generated/renderer_config.hpp"
 #include "config/generated/renderer_config_serialization.hpp"
 #include "config/generated/scene_config_serialization.hpp"
+#include "config/generated/selection_outline_style_serialization.hpp"
+#include "config/generated/shadow_bias_mode.hpp"
+#include "config/generated/shadow_cull_mode.hpp"
+#include "config/generated/shadow_filter_mode.hpp"
 #include "config/generated/shadow_frustum_fit_config_serialization.hpp"
+#include "config/generated/shadow_technique_mode.hpp"
 #include "config/generated/sky_config_serialization.hpp"
+#include "config/generated/text_renderer_config.hpp"
 #include "config/generated/text_renderer_config_serialization.hpp"
+#include "config/generated/threading_config.hpp"
 #include "config/generated/threading_config_serialization.hpp"
 #include "config/generated/thumbnails_config_serialization.hpp"
 #include "config/generated/transform_tool_config_serialization.hpp"
 #include "config/generated/viewport_config_data_serialization.hpp"
+#include "config/generated/window_config.hpp"
 #include "config/generated/window_config_serialization.hpp"
-#include "erhe_graphics/generated/graphics_config_serialization.hpp"
-#include "erhe_graphics/generated/opengl_config_serialization.hpp"
-#include "erhe_graphics/generated/vulkan_config_serialization.hpp"
 
+#include "erhe_codegen/config_io.hpp"
 #include "erhe_codegen/field_info.hpp"
+#include "erhe_graphics/generated/graphics_config.hpp"
+#include "erhe_graphics/generated/graphics_config_serialization.hpp"
+#include "erhe_graphics/generated/opengl_config.hpp"
+#include "erhe_graphics/generated/opengl_config_serialization.hpp"
+#include "erhe_graphics/generated/vulkan_config.hpp"
+#include "erhe_graphics/generated/vulkan_config_serialization.hpp"
 #include "erhe_imgui/imgui_helpers.hpp"
 #include "erhe_imgui/imgui_renderer.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_scene_renderer/generated/mesh_memory_config.hpp"
+#include "erhe_scene_renderer/generated/mesh_memory_config_serialization.hpp"
+#include "erhe_xr/generated/headset_config_serialization.hpp"
 
 #include <fmt/format.h>
 
@@ -158,7 +159,7 @@ void Settings_window::imgui()
     const float ui_scale = m_context.app_settings->get_ui_scale();
     const ImVec2 button_size{110.0f * ui_scale, 0.0f};
 
-    push_group("User Interface", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen);
+    push_group("User Interface", ImGuiTreeNodeFlags_Framed);
     add_entry("UI Font Size", [this](){
         auto& imgui = m_context.app_settings->imgui;
         const bool font_size_changed = ImGui::DragFloat("UI Font Size", &imgui.font_size, 0.1f, 6.0f, 100.0f, "%.1f");
@@ -196,7 +197,7 @@ void Settings_window::imgui()
 
     pop_group();
 
-    push_group("Graphics", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen);
+    push_group("Graphics", ImGuiTreeNodeFlags_Framed);
 
     auto& graphics = m_context.app_settings->graphics;
     add_entry("Currently Used Preset", [&graphics]() {
@@ -525,18 +526,6 @@ void Settings_window::imgui()
         // from the edit site (on_graphics_preset_edited / _selected).
     });
     pop_group();
-
-    // The graphics preset list (graphics_presets.json) is applied and saved
-    // from the edit sites above, like editor_settings.json. "Load Presets"
-    // remains for re-reading the file from disk on demand.
-    add_entry("", [this, button_size](){
-        if (ImGui::Button("Load Presets", button_size)) {
-            m_context.app_settings->read(m_context.OpenXR);
-            // read() only loads; apply the (possibly changed) active preset so
-            // subscribers react now that there is no per-frame auto-apply.
-            m_context.app_settings->graphics.apply_active_preset(*m_context.app_message_bus);
-        }
-    });
 
     const bool show_developer = (m_context.developer_config != nullptr) && m_context.developer_config->enable;
 
