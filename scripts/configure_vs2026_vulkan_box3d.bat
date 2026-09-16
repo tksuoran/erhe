@@ -1,0 +1,33 @@
+:: --graphviz=build/erhe_cmake_dependencies.dot ^
+:: --profiling-format=google-trace ^
+:: --profiling-output=build/erhe_cmake_profiling.json ^
+
+@echo off
+
+setlocal
+
+cmake ^
+ -G "Visual Studio 18 2026" ^
+ -A x64 ^
+ -B build_vs2026_vulkan_box3d ^
+ -S . ^
+ -Wno-dev ^
+ %* ^
+ -DERHE_BUILD_TESTS=ON ^
+ -DERHE_FONT_RASTERIZATION_LIBRARY=freetype ^
+ -DERHE_GLTF_LIBRARY=fastgltf ^
+ -DERHE_GRAPHICS_API=vulkan ^
+ -DERHE_GUI_LIBRARY=imgui ^
+ -DERHE_NAVIGATION_LIBRARY=none ^
+ -DERHE_PHYSICS_LIBRARY=box3d ^
+ -DERHE_PROFILE_LIBRARY=tracy ^
+ -DERHE_RAYTRACE_LIBRARY=bvh ^
+ -DERHE_SPIRV=ON ^
+ -DERHE_SVG_LIBRARY=plutosvg ^
+ -DERHE_TEXT_LAYOUT_LIBRARY=harfbuzz ^
+ -DERHE_USD_LIBRARY=lightusd ^
+ -DERHE_USE_ASAN:BOOL=OFF ^
+ -DERHE_USE_PRECOMPILED_HEADERS=ON ^
+ -DERHE_VOXEL_LIBRARY=openvdb ^
+ -DERHE_WINDOW_LIBRARY=sdl ^
+ -DERHE_XR_LIBRARY=openxr ^
