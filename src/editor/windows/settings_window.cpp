@@ -81,6 +81,10 @@ Settings_window::Settings_window(
     : erhe::imgui::Imgui_window{imgui_renderer, imgui_windows, "Settings", "settings"}
     , m_context                {app_context}
 {
+    // Text search filter row at the top of the settings table: this window is
+    // long enough that finding a single setting by scrolling is impractical.
+    enable_filter();
+
     m_graphics_settings_subscription = app_message_bus.graphics_settings.subscribe(
         [&](Graphics_settings_message& /*message*/) {
             const std::string& current_preset_name = m_context.app_settings->graphics.current_graphics_preset.name;

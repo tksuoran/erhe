@@ -41,29 +41,89 @@ void Property_editor::add_entry(std::string&& label, uint32_t label_text_color, 
     m_entries.push_back(Entry{false, false, std::move(label), {}, {}, {editor}, ImGuiTreeNodeFlags_None, 0.0f, label_text_color, label_background_color});
 }
 
+void Property_editor::enable_filter()
+{
+    m_filter_enabled = true;
+}
+
+void Property_editor::show_filter_row()
+{
+    m_filter.Draw("Filter");
+}
+
+void Property_editor::update_entry_visibility()
+{
+    m_entry_visible.clear();
+    m_entry_visible.resize(m_entries.size(), static_cast<uint8_t>(1));
+    if (!m_filter_enabled || !m_filter.IsActive()) {
+        return;
+    }
+
+    m_filter_stack.clear();
+    for (std::size_t index = 0, end = m_entries.size(); index < end; ++index) {
+        const Entry& entry = m_entries[index];
+        const bool   inside_match = !m_filter_stack.empty() && m_filter_stack.back().inside_match;
+        if (entry.pop_group) {
+            if (!m_filter_stack.empty()) {
+                m_filter_stack.pop_back();
+            }
+            continue;
+        }
+        const bool self_match = m_filter.PassFilter(entry.label.c_str());
+        const bool visible    = inside_match || self_match;
+        m_entry_visible[index] = visible ? static_cast<uint8_t>(1) : static_cast<uint8_t>(0);
+        if (self_match && !inside_match) {
+            // Show every ancestor of a match, so the matching row can be
+            // reached through its groups.
+            for (const Filter_group& group : m_filter_stack) {
+                m_entry_visible[group.index] = static_cast<uint8_t>(1);
+            }
+        }
+        if (entry.push_group) {
+            m_filter_stack.push_back(Filter_group{index, visible});
+        }
+    }
+    m_filter_stack.clear(); // entries hold no reference past this point; capacity kept
+}
+
 void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
 {
     ERHE_PROFILE_FUNCTION();
+
+    if (m_filter_enabled) {
+        show_filter_row();
+    }
+    update_entry_visibility();
+    const bool filtering = m_filter_enabled && m_filter.IsActive();
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, cell_padding);
 
     bool table_visible = ImGui::BeginTable(label, 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable);
     if (!table_visible) {
+        ImGui::PopStyleVar(1);
+        m_entries.clear();
         return;
     }
 
     ImGui::TableSetupColumn("label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
     ImGui::TableSetupColumn("editor", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 
-    for (const Entry& entry : m_entries) {
+    for (std::size_t entry_index = 0, entry_end = m_entries.size(); entry_index < entry_end; ++entry_index) {
+        const Entry& entry = m_entries[entry_index];
         ImGui::PushID(m_row++);
+        const bool filtered_in = m_entry_visible[entry_index] != 0;
         bool currently_open = m_stack.empty() || m_stack.back().subtree_open;
         float indent_amount = m_stack.empty() ? 0.0f : m_stack.back().indent_amount;
         if (entry.push_group) {
-            if (currently_open) {
+            if (currently_open && filtered_in) {
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4.0f, 4.0f});
                 ImGui::TableNextRow(ImGuiTableRowFlags_None);
                 ImGui::TableSetColumnIndex(0);
+                if (filtering) {
+                    // A group is only visible while filtering when it or one of
+                    // its descendants matches - open it so the match is reached.
+                    ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+                }
                 const ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_LabelSpanAllColumns | entry.flags;
                 const bool subtree_open = ImGui::TreeNodeEx(entry.label.c_str(), flags);
                 if (entry.open_state != nullptr) {
@@ -85,7 +145,7 @@ void Property_editor::show_entries(const char* label, ImVec2 cell_padding)
                 ImGui::TreePop();
             }
             m_stack.pop_back();
-        } else if (currently_open) {
+        } else if (currently_open && filtered_in) {
             ImGui::TableNextRow(ImGuiTableRowFlags_None);
             ImGui::TableSetColumnIndex(0);
             if (entry.label_text_color.has_value()) {

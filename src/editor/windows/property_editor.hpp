@@ -2,6 +2,8 @@
 
 #include <imgui/imgui.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -36,6 +38,10 @@ public:
     // (doc/usd-compatibility-plan.md X5) costs an ancestor walk and a few
     // strings, which no frame should pay for every row.
     void set_entry_tooltip_extra(std::function<std::string()> provider);
+    // Opt in to the text search filter row drawn at the top of show_entries().
+    // Only windows that ask for it get the row; the filter text is owned by
+    // this Property_editor, so it survives across frames.
+    void enable_filter      ();
     void show_entries       (const char* label = "##", ImVec2 cell_padding = ImVec2{0.0f, 0.0f});
     void use_state          (Editor_state* state);
     void set_dirty_editing  ();
@@ -58,11 +64,30 @@ protected:
         bool*                   open_state{nullptr};
     };
 
+    // Fills m_entry_visible for the current m_entries: an entry is visible
+    // when its own label matches the filter, when an enclosing group's label
+    // matches (the whole subtree of a matching group is shown), or - for a
+    // group - when any of its descendants matches, so every ancestor of a
+    // match is shown.
+    void update_entry_visibility();
+    void show_filter_row        ();
+
+    class Filter_group
+    {
+    public:
+        std::size_t index;
+        bool        inside_match;
+    };
+
     float                    m_indent{10.0f};
     int                      m_row   {0};
     Editor_state*            m_state {nullptr};
     std::vector<Entry>       m_entries;
     std::string              m_tooltip_scratch; // built while a row with a tooltip_extra is hovered
+    bool                     m_filter_enabled{false};
+    ImGuiTextFilter          m_filter{};        // same search syntax as the Operations window filter
+    std::vector<uint8_t>      m_entry_visible;  // scratch, one per entry; capacity kept
+    std::vector<Filter_group> m_filter_stack;   // scratch; capacity kept
 
     struct Stack_entry
     {
