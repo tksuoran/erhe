@@ -45,6 +45,10 @@ a specific engine.
 - `Physics_material`, `Collision_filter` and `Physics_joint_settings` are typed prims
   (`erhe::Typed`, `src/erhe/item/notes.md` "Prim classes"), each with its erhe class name as
   its fixed `typeName` token
+- `Joint_reach` -- pure projection of a target position onto the positions a point of a jointed
+  body can reach while one six-DOF joint to a fixed anchor frame holds (`Joint_side` names the
+  moving body's side; shapes point / circle / sphere / box, or unprojected for combinations it does
+  not handle); used by the editor's interactive physics drags; tests in `test/test_joint_reach.cpp`
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
 - `Motion_mode` -- enum: static, kinematic (non-physical/physical), dynamic

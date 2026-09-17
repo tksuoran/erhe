@@ -12,6 +12,7 @@ set(_target "erhe_physics_tests")
 add_executable(${_target}
     main.cpp
     test_body_activation.cpp
+    test_joint_reach.cpp
     test_overlap_query.cpp
 )
 

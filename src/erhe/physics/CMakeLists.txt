@@ -99,6 +99,8 @@ erhe_target_sources_grouped(
     erhe_physics/irigid_body.cpp
     erhe_physics/irigid_body.hpp
     erhe_physics/iworld.hpp
+    erhe_physics/joint_reach.cpp
+    erhe_physics/joint_reach.hpp
     erhe_physics/physics_joint_settings.cpp
     erhe_physics/physics_joint_settings.hpp
     erhe_physics/physics_log.cpp
