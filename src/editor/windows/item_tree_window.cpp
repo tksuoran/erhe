@@ -1557,12 +1557,18 @@ void Item_tree::root_popup_menu()
         return;
     }
 
-    // Press-edge in XR, release on desktop - see item_popup_menu().
+    const bool window_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByPopup);
+    // Press-edge in XR, release on desktop - see item_popup_menu(). Only the
+    // opening click needs the window hovered: once open, the popup is
+    // submitted every frame. While a menu entry is held down it is the active
+    // item, and IsWindowHovered() reports the tree window as not hovered, so
+    // a popup submitted only while hovered never sees the release that
+    // activates the entry.
     const bool context_menu_click = m_context.OpenXR
         ? ImGui::IsMouseClicked(ImGuiMouseButton_Right)
         : ImGui::IsMouseReleased(ImGuiMouseButton_Right);
-    static bool opened = false;
     if (
+        window_hovered &&
         context_menu_click &&
         !m_popup_item
     ) {
@@ -1574,13 +1580,9 @@ void Item_tree::root_popup_menu()
             m_popup_id,
             ImGuiPopupFlags_MouseButtonRight
         );
-        opened = true;
     }
 
     if ((m_popup_item != m_root) || m_popup_id_string.empty()) {
-        if (opened) {
-            opened = false;
-        }
         return;
     }
 
@@ -2246,8 +2248,8 @@ void Item_tree::imgui_tree(float ui_scale)
         if (m_hover_callback) {
             m_hover_callback();
         }
-        root_popup_menu();
     }
+    root_popup_menu();
 
     // Clear stale popup state when the popup item was removed from the tree
     // (e.g. after Delete) and ImGui already closed the popup.
