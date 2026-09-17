@@ -79,7 +79,8 @@ Momentum passed ball to ball needs each collision solved on its own.
   bounced back. The gap must exceed that distance plus one fixed step
   of travel (steps are 240 Hz): 2.2 cm gap -> far ball reaches 0.408 m
   of the 0.410 m lift.
-- Box3D transfers cleanly with the 0.5 mm gap (far ball 0.406 m); the
+- Box3D transfers cleanly with the 0.5 mm gap (far ball 0.406 m;
+  creation 21 picks the gap with `--jolt` / `--box3d`); the
   2.2 cm gap also works there (0.400 m, middle balls follow through
   about 4 cm).
 - Jolt applies restitution only above 1 m/s approach speed (Jolt default

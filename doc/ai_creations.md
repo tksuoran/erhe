@@ -254,7 +254,8 @@ and captures the frame where the far ball tops out. How much gap the
 balls need depends on the physics backend: Jolt solves touching
 contacts together and swings the whole row off unless the balls hang
 2.2 cm apart, while Box3D passes the momentum along with the balls
-nearly touching (the skill's `physics_rigs.md` has the numbers).
+nearly touching (`--jolt` / `--box3d` pick the gap; the skill's
+`physics_rigs.md` has the numbers).
 
 ### 20 - Frog (2026-08-11)
 

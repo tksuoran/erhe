@@ -22,8 +22,9 @@ Physics setup that makes the momentum transfer work:
     reach 0.16 m, ball 1 bounces back). A gap wider than that distance
     plus one 240 Hz step of travel makes the hits sequential: gap 2.2 cm
     -> the far ball reaches 0.408 m of the 0.410 m lift. Box3D transfers
-    cleanly even with a 0.5 mm gap (0.406 m) - set BALL_GAP to 0.0005
-    for a Box3D build (scripts/configure_*_box3d.bat).
+    cleanly even with a 0.5 mm gap (0.406 m). --jolt (default) and
+    --box3d pick the gap; match the flag to the editor's physics backend
+    (Box3D builds come from scripts/configure_*_box3d.bat).
 
 The threads and ball caps are motion_mode "none" children of the ball
 node, so they swing with it. The script probes the swing under the
@@ -34,6 +35,7 @@ Iteration:
   --reframe <glb>  camera/screenshot stage only on a saved scene.
   --only <object>  rebuild one object (Newton's Cradle | Books | Desk)
                    in the running editor's scene.
+  --jolt | --box3d ball gap for the editor's physics backend.
 """
 
 import math
@@ -54,7 +56,9 @@ SAVE_PATH = "res/editor/scenes/creations/newtons_cradle.glb"
 # ------------------------------------------------------------- dimensions
 BALL_COUNT = 5
 BALL_RADIUS = 0.075
-BALL_GAP = 0.022                 # Jolt; Box3D works at 0.0005 (see docstring)
+# Clearance between neighbouring balls per physics backend (see docstring).
+BALL_GAPS = {"jolt": 0.022, "box3d": 0.0005}
+BALL_GAP = BALL_GAPS["jolt"]     # set from --jolt / --box3d in main()
 BALL_MASS = 2.0
 Y_BASE_TOP = 0.08                # top of the black base
 Y_RAIL = 1.00                    # pivot height (top rails)
@@ -282,8 +286,22 @@ def capture_far_ball_peak(c, ball_names):
     return best
 
 
+def add_backend_arguments(parser):
+    backend = parser.add_mutually_exclusive_group()
+    backend.add_argument("--jolt", dest="backend", action="store_const",
+                         const="jolt", help=f"ball gap for the Jolt backend "
+                         f"({BALL_GAPS['jolt']} m, default)")
+    backend.add_argument("--box3d", dest="backend", action="store_const",
+                         const="box3d", help=f"ball gap for the Box3D backend "
+                         f"({BALL_GAPS['box3d']} m)")
+    parser.set_defaults(backend="jolt")
+
+
 def main():
-    args = standard_args("Newton's Cradle")
+    global BALL_GAP
+    args = standard_args("Newton's Cradle", add_backend_arguments)
+    BALL_GAP = BALL_GAPS[args.backend]
+    print(f"physics backend: {args.backend} (ball gap {BALL_GAP} m)")
     if reframe(args, "Newton's Cradle", BASE, SHOTS):
         return
     only = args.only

@@ -1476,7 +1476,9 @@ def reframe(args, title, base_path, views):
     return True
 
 
-def standard_args(description):
+def standard_args(description, add_arguments=None):
+    """Shared creation flags; add_arguments(parser) lets a script add its
+    own flags to the same parser."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--port", type=int, default=3743)
     parser.add_argument("--no-save", action="store_true", help="skip save_scene")
@@ -1504,4 +1506,6 @@ def standard_args(description):
                              "scene (implies --reuse --keep-scenes), delete "
                              "the named root group and rebuild ONLY that "
                              "object (scripts that support it)")
+    if add_arguments is not None:
+        add_arguments(parser)
     return parser.parse_args()
