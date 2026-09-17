@@ -13,6 +13,11 @@ namespace erhe::physics {
 
 class IRigid_body;
 
+// Pivots are body-local: Jolt measures them from the center of mass, Box3D
+// from the body origin (the two agree for shapes without a center of mass
+// offset). frequency 0 is a rigid constraint; frequency > 0 (Hz) with damping
+// (damping ratio) is a spring pulling the pivots together, with at most
+// max_force newtons (Jolt clamps each world axis, Box3D the magnitude).
 class Point_to_point_constraint_settings
 {
 public:
@@ -22,6 +27,14 @@ public:
     glm::vec3    pivot_in_b  {0.0f, 0.0f, 0.0f};
     float        frequency   {1.0f};
     float        damping     {1.0f};
+    float        max_force   {std::numeric_limits<float>::infinity()}; // spring only
+    // Solver iterations while the constraint is live; 0 = the world default.
+    // Jolt raises the whole island (every body and constraint connected to
+    // the constrained bodies) to the largest override in it, so a strong pull
+    // on a jointed body does not overpower the joints. Box3D's substepping
+    // solver has no per-constraint iteration count and ignores them.
+    unsigned int solver_velocity_iterations{0};
+    unsigned int solver_position_iterations{0};
 };
 
 // Per-axis limit for Six_dof_constraint_settings:

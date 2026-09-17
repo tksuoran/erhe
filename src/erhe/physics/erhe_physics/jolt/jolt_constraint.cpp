@@ -5,6 +5,7 @@
 #include <Jolt/Physics/Constraints/MotorSettings.h>
 #include <Jolt/Physics/Constraints/SpringSettings.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -51,27 +52,59 @@ Jolt_point_to_point_constraint::Jolt_point_to_point_constraint(
     const Point_to_point_constraint_settings& settings
 )
 {
-    m_settings.mSpace       = JPH::EConstraintSpace::LocalToBodyCOM;
-    m_settings.mPoint1      = to_jolt(settings.pivot_in_a);
-    m_settings.mPoint2      = to_jolt(settings.pivot_in_b);
-    m_settings.mMinDistance = 0.0f;
-    m_settings.mMaxDistance = 0.0f;
     auto* const body_a = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_a)->get_jolt_body();
     auto* const body_b = reinterpret_cast<Jolt_rigid_body*>(settings.rigid_body_b)->get_jolt_body();
-    m_constraint = m_settings.Create(
-        *body_a,
-        *body_b
-    );
+
+    // Jolt runs the largest override of any constraint in the island.
+    const unsigned int velocity_steps = std::min(settings.solver_velocity_iterations, 255u);
+    const unsigned int position_steps = std::min(settings.solver_position_iterations, 255u);
+
+    if (settings.frequency <= 0.0f) {
+        // Rigid: zero-length distance constraint.
+        JPH::DistanceConstraintSettings jolt_settings{};
+        jolt_settings.mSpace                    = JPH::EConstraintSpace::LocalToBodyCOM;
+        jolt_settings.mPoint1                   = to_jolt(settings.pivot_in_a);
+        jolt_settings.mPoint2                   = to_jolt(settings.pivot_in_b);
+        jolt_settings.mMinDistance              = 0.0f;
+        jolt_settings.mMaxDistance              = 0.0f;
+        jolt_settings.mNumVelocityStepsOverride = velocity_steps;
+        jolt_settings.mNumPositionStepsOverride = position_steps;
+        m_constraint = jolt_settings.Create(*body_a, *body_b);
+        return;
+    }
+
+    // Spring: every axis free, the three translation axes driven by position
+    // motors toward coincident pivots. The motor spring is the pull, and its
+    // force limits bound it (per axis).
+    JPH::SixDOFConstraintSettings jolt_settings{};
+    jolt_settings.mSpace                    = JPH::EConstraintSpace::LocalToBodyCOM;
+    jolt_settings.mPosition1                = to_jolt(settings.pivot_in_a);
+    jolt_settings.mPosition2                = to_jolt(settings.pivot_in_b);
+    jolt_settings.mNumVelocityStepsOverride = velocity_steps;
+    jolt_settings.mNumPositionStepsOverride = position_steps;
+    for (std::size_t axis_index = 0; axis_index < 3; ++axis_index) {
+        JPH::MotorSettings& motor_settings = jolt_settings.mMotorSettings[axis_index];
+        motor_settings.mSpringSettings = JPH::SpringSettings{
+            JPH::ESpringMode::FrequencyAndDamping,
+            settings.frequency,
+            settings.damping
+        };
+        if (std::isfinite(settings.max_force)) {
+            motor_settings.SetForceLimits(-settings.max_force, settings.max_force);
+        }
+    }
+    JPH::SixDOFConstraint* const constraint = static_cast<JPH::SixDOFConstraint*>(jolt_settings.Create(*body_a, *body_b));
+    constraint->SetMotorState(JPH::SixDOFConstraintSettings::EAxis::TranslationX, JPH::EMotorState::Position);
+    constraint->SetMotorState(JPH::SixDOFConstraintSettings::EAxis::TranslationY, JPH::EMotorState::Position);
+    constraint->SetMotorState(JPH::SixDOFConstraintSettings::EAxis::TranslationZ, JPH::EMotorState::Position);
+    m_constraint = constraint;
 }
 
-Jolt_point_to_point_constraint::~Jolt_point_to_point_constraint() noexcept
-{
-    // TODO destroy
-}
+Jolt_point_to_point_constraint::~Jolt_point_to_point_constraint() noexcept = default;
 
 auto Jolt_point_to_point_constraint::get_jolt_constraint() const -> JPH::Constraint*
 {
-    return m_constraint;
+    return m_constraint.GetPtr();
 }
 
 namespace {

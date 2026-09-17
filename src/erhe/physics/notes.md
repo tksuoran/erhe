@@ -25,7 +25,13 @@ a specific engine.
   `get_scale()` / `get_offset()`, compound `get_children()`
 - `IConstraint` -- joint constraints: point-to-point and the generic six-DOF constraint
   (`Six_dof_constraint_settings`: per-axis limits incl. translation soft limits, position /
-  velocity motors; frames in body node space, axes 0..2 translation, 3..5 rotation)
+  velocity motors; frames in body node space, axes 0..2 translation, 3..5 rotation).
+  `Point_to_point_constraint_settings` with `frequency` 0 is rigid (Jolt: zero-length distance
+  constraint; Box3D: spherical joint); `frequency` > 0 is a spring pulling the pivots together
+  with at most `max_force` (Jolt: six-DOF with free axes and translation position motors whose
+  force limits clamp each axis; Box3D: motor joint linear spring with `maxSpringForce` clamping
+  the magnitude). `solver_velocity_iterations` / `solver_position_iterations` raise Jolt's
+  iteration counts for the constraint's whole island while it lives (Box3D ignores them)
 - `Physics_material` -- shared material item, the carrier of how a kind of matter behaves:
   static/dynamic friction, restitution, the combine modes, linear/angular damping, wind
   receptivity and density are registered `erhe::property` properties (doc/property-system.md
@@ -123,6 +129,7 @@ change detection, the event model). Read it before doing anything non-trivial he
 | collision systems per world          | 64                        | interned into a uint64 bitset |
 | body woken without moving            | reported on first move    | synthesized from `b3BodyMoveEvent` |
 | resting body added with joints       | enters awake              | sleeping a body sleeps its whole island |
+| six-DOF joint softness               | stiffest the step allows  | `constraintHertz` asks for more than Box3D's clamp (a quarter of the substep rate); Box3D's soft joints are stiff relative to the effective mass at the joint, which is tiny across the swing plane of a body hanging far from its joint, so the 60 Hz default gave way ~2 mm per newton there |
 | height fields                        | not exposed               | erhe has no height field shape type |
 
 Backend-specific design notes:

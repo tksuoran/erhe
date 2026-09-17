@@ -26,6 +26,17 @@ namespace {
 // infinity to mean "unbounded".
 constexpr float unbounded_drive_force = 1.0e6f;
 
+// Joint constraint softness. Box3D's soft constraints are stiff relative to the
+// effective mass at the joint, which is tiny for a body hanging far from a
+// joint compared to its own size (a pendulum bob: 2 kg, 7.5 cm radius, 0.64 m
+// arm has ~0.01 kg effective mass across the swing plane). At Box3D's default
+// 60 Hz such a joint gave way ~2 mm per newton pushing out of its plane.
+// Box3D clamps constraintHertz to a quarter of the substep rate (joint.c
+// b3PrepareJoint), so asking for more than any step allows gets the stiffest
+// joint the step supports - 16x stiffer than the default at erhe's 240 Hz x 4
+// substeps.
+constexpr float stiffest_joint_hertz = 1.0e6f;
+
 // Box3D clamps revolute and twist ranges just inside +/- pi.
 constexpr float max_joint_angle = 0.99f * glm::pi<float>();
 
@@ -59,6 +70,7 @@ public:
         base.localFrameA      = local_frame_a;
         base.localFrameB      = local_frame_b;
         base.collideConnected = false;
+        base.constraintHertz  = stiffest_joint_hertz;
     }
 };
 
@@ -119,6 +131,30 @@ public:
             return;
         }
 
+        // b3JointDef frames are relative to the body origin, not the center of
+        // mass, which is the same convention as erhe's pivots.
+        const b3Transform frame_a{to_box3d(settings.pivot_in_a), b3Quat_identity};
+        const b3Transform frame_b{to_box3d(settings.pivot_in_b), b3Quat_identity};
+
+        if (settings.frequency > 0.0f) {
+            // A spring: the motor joint's linear spring pulls frame B onto
+            // frame A with a bounded force; no velocity motor, no angular
+            // spring, so rotation stays free.
+            b3MotorJointDef joint_def = b3DefaultMotorJointDef();
+            joint_def.base.bodyIdA          = bodies.body_a;
+            joint_def.base.bodyIdB          = bodies.body_b;
+            joint_def.base.localFrameA      = frame_a;
+            joint_def.base.localFrameB      = frame_b;
+            joint_def.base.collideConnected = true;
+            joint_def.linearHertz           = settings.frequency;
+            joint_def.linearDampingRatio    = settings.damping;
+            joint_def.maxSpringForce        = finite_force(settings.max_force);
+
+            m_joint    = b3CreateMotorJoint(bodies.world->get_box3d_world(), &joint_def);
+            m_is_valid = true;
+            return;
+        }
+
         // A spherical joint with no limits, no motor and no spring IS a
         // point-to-point constraint. The softness comes from the joint's
         // positional constraint tuning, NOT from b3SphericalJointDef's spring,
@@ -126,10 +162,8 @@ public:
         b3SphericalJointDef joint_def = b3DefaultSphericalJointDef();
         joint_def.base.bodyIdA = bodies.body_a;
         joint_def.base.bodyIdB = bodies.body_b;
-        // b3JointDef frames are relative to the body origin, not the center of
-        // mass, which is the same convention as erhe's pivots.
-        joint_def.base.localFrameA = b3Transform{to_box3d(settings.pivot_in_a), b3Quat_identity};
-        joint_def.base.localFrameB = b3Transform{to_box3d(settings.pivot_in_b), b3Quat_identity};
+        joint_def.base.localFrameA = frame_a;
+        joint_def.base.localFrameB = frame_b;
         joint_def.base.collideConnected       = true;
         joint_def.base.constraintHertz        = settings.frequency;
         joint_def.base.constraintDampingRatio = settings.damping;

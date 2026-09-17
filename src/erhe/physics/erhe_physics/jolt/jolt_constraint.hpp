@@ -29,8 +29,7 @@ public:
     [[nodiscard]] auto get_jolt_constraint() const -> JPH::Constraint* override;
 
 private:
-    JPH::DistanceConstraintSettings m_settings;
-    JPH::Constraint*                m_constraint;
+    JPH::Ref<JPH::Constraint> m_constraint;
 };
 
 class Jolt_six_dof_constraint : public Jolt_constraint
