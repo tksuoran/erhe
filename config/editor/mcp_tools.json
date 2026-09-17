@@ -761,6 +761,66 @@
     "name": "drag_selection"
   },
   {
+    "description": "Drag a dynamic rigid body through the Physics tool's drag path - the same drag start, per-frame drag goal and release a right-mouse drag takes - spread over real editor frames. The grab point (default: the body's center of mass) is grabbed like a right-drag press; its goal moves linearly from the grab point to `target` (or grab point + `translation`) over `frames` frames (one step per frame; the call returns after the last step), and with release=true the drag ends like a button release (the body keeps its velocity). A body held by a live joint is pulled at its center of mass by a force-bounded spring toward a goal projected onto the positions the joint lets it reach, without the tool's damping / friction / gravity overrides; other bodies get the tool's rigid grab at the grab point with its overrides. With release=false the drag stays held after the last step (query the scene mid-drag); end it with action='release'. Keep frames small enough for the steps to finish inside the MCP request timeout (5 s); an expired call leaves the drag held.",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "'drag' (default) starts a drag; 'release' ends a held drag (release=false)",
+          "type": "string"
+        },
+        "frames": {
+          "description": "Frames over which the goal moves (default 30)",
+          "type": "integer"
+        },
+        "grab_point": {
+          "description": "World grab point [x, y, z] on the body (default: the body's center of mass)",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "node_id": {
+          "description": "Id of the Mesh node with the dynamic rigid body",
+          "type": "integer"
+        },
+        "node_name": {
+          "description": "Name of the Mesh node with the dynamic rigid body (when node_id is not given)",
+          "type": "string"
+        },
+        "release": {
+          "description": "End the drag after the last step (default true)",
+          "type": "boolean"
+        },
+        "scene_name": {
+          "description": "Scene holding the node",
+          "type": "string"
+        },
+        "target": {
+          "description": "World goal [x, y, z] of the grab point after the last step",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "translation": {
+          "description": "World translation [x, y, z] of the grab point's goal after the last step",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "name": "physics_drag"
+  },
+  {
     "description": "Place an instance of a content-library brush in a scene. THE shape-reuse path: every placement of one brush shares its geometry and GPU buffers, so create a shape once (create_shape with add_brush) and place it N times instead of calling create_shape N times. Placement parameters are identical to create_shape's instance parameters. STRICT arguments: unrecognized keys are rejected, never silently ignored.",
     "inputSchema": {
       "properties": {

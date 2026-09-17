@@ -21,32 +21,6 @@
 
 namespace editor {
 
-namespace {
-
-// Spring of the drag pull. The static sag of a spring-hung body under gravity
-// is g / (2 pi f)^2 independent of mass: 2.5 mm at 10 Hz, so a jointed body
-// follows the gizmo closely. Critically damped, so it settles on the target
-// without ringing.
-constexpr float c_spring_frequency = 10.0f;
-constexpr float c_spring_damping   = 1.0f;
-
-// The pull is bounded to this many times the body's weight: enough to lift
-// the body and push what it leans on, while the joints never carry more.
-// Unbounded, a 10 Hz pull dragged 0.25 m out of a cradle ball's swing plane
-// tore its hinge 48 mm (Jolt) / 112 mm (Box3D) apart. Pulling against a joint
-// deflects the joint by the pull over the joint's stiffness, so a bound pull
-// is what keeps every joint of the dragged body holding.
-constexpr float c_max_force_in_body_weights = 3.0f;
-constexpr float c_standard_gravity          = 9.81f;
-
-// Jolt's default solver iterations (10 velocity / 2 position) leave a jointed
-// body's joints visibly strained under a steady pull; the drag raises the
-// dragged body's island to these for the lifetime of the drag constraint.
-constexpr unsigned int c_solver_velocity_iterations = 40;
-constexpr unsigned int c_solver_position_iterations = 20;
-
-}
-
 Physics_driven_drag::Driven_node::Driven_node() = default;
 Physics_driven_drag::Driven_node::Driven_node(Driven_node&&) noexcept = default;
 auto Physics_driven_drag::Driven_node::operator=(Driven_node&&) noexcept -> Driven_node& = default;
@@ -114,13 +88,7 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
                 *rigid_body,
                 glm::vec3{0.0f, 0.0f, 0.0f},
                 drag_point,
-                Physics_drag_constraint_settings{
-                    .frequency                  = c_spring_frequency,
-                    .damping                    = c_spring_damping,
-                    .max_force                  = c_max_force_in_body_weights * rigid_body->get_mass() * c_standard_gravity,
-                    .solver_velocity_iterations = c_solver_velocity_iterations,
-                    .solver_position_iterations = c_solver_position_iterations
-                },
+                make_jointed_body_drag_settings(rigid_body->get_mass()),
                 Physics_drag_monitor_info{
                     .monitor            = &scene_root->get_physics_drag_monitor(),
                     .tool_name          = "transform tool",
@@ -132,11 +100,12 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
                         .gravity_factor  = rigid_body->get_gravity_factor()
                     },
                     .tool_details = fmt::format(
-                        "drag kind {}, spring pivot at center of mass {}, drag point teleported to the gizmo pose each drive",
+                        "drag kind {}, spring pivot at center of mass {}, drag point teleported to the gizmo pose's center of mass (joint-space projected) each drive",
                         (kind == Transform_drag_kind::translate) ? "translate" : "rotate",
                         driven_node.center_of_mass_in_node
                     )
-                }
+                },
+                scene_root->get_node_joints()
             );
             log_physics->trace("Transform drag pulls jointed body through physics: {}", node->describe());
         } else {

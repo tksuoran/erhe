@@ -32,8 +32,10 @@ enum class Transform_drag_kind : unsigned int {
 // A dragged node whose rigid body is dynamic in a scene whose simulation runs
 // is handled here at drag start:
 // - translate / rotate of a body held by a live Node_joint: the body stays
-//   dynamic and is pulled by a spring (Physics_drag_constraint) toward the
-//   pose the gizmo asks for; the simulation (joints, gravity, contacts)
+//   dynamic and is pulled by a spring (Physics_drag_constraint,
+//   make_jointed_body_drag_settings()) toward the center of mass of the pose
+//   the gizmo asks for, projected onto the positions the body's joint lets
+//   the center of mass reach; the simulation (joints, gravity, contacts)
 //   decides where it goes and writes the node transform as usual. Release
 //   keeps the body's velocity.
 // - any other drag of a dynamic body (a scale drag, or a body without a live

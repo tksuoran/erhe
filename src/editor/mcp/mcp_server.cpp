@@ -462,6 +462,10 @@ auto Mcp_server::process_queued_requests() -> int
                 m_selection_drag_steps.reset();
                 log_mcp->warn("MCP server: drag_selection expired mid-drag; the drag is held - release it with action 'release'");
             }
+            if (m_physics_drag_steps.has_value() && (m_physics_drag_steps->request == req.get())) {
+                m_physics_drag_steps.reset();
+                log_mcp->warn("MCP server: physics_drag expired mid-drag; the drag is held - release it with action 'release'");
+            }
             log_mcp->warn("MCP server: dropped expired '{}' before processing", req->tool_name);
             continue;
         }
@@ -567,6 +571,7 @@ auto Mcp_server::get_dispatch_table() -> std::span<const Mcp_server::Tool_dispat
         { "set_active_scene",               &Mcp_server::action_set_active_scene              },
         { "transform_selection",            &Mcp_server::action_transform_selection           },
         { "drag_selection",                 &Mcp_server::action_drag_selection                },
+        { "physics_drag",                   &Mcp_server::action_physics_drag                  },
         { "set_node_transform",             &Mcp_server::action_set_node_transform            },
         { "place_brush",                    &Mcp_server::action_place_brush                   },
         { "place_brush_instances",          &Mcp_server::action_place_brush_instances         },

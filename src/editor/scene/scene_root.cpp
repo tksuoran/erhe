@@ -1868,6 +1868,11 @@ auto Scene_root::is_jointed_rigid_body(const erhe::physics::IRigid_body* const r
     return false;
 }
 
+auto Scene_root::get_node_joints() const -> const std::vector<std::shared_ptr<Node_joint>>&
+{
+    return m_node_joints;
+}
+
 void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_joint)
 {
     if (!m_physics_world) {

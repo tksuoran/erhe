@@ -365,6 +365,9 @@ public:
     // a selected jointed dynamic body stays dynamic, and a Transform tool drag
     // pulls it through physics instead of writing its node transform.
     [[nodiscard]] auto is_jointed_rigid_body(const erhe::physics::IRigid_body* rigid_body) const -> bool;
+    // Every registered Node_joint, live or pending (read at drag start to
+    // build the joint-space projection of a physics drag).
+    [[nodiscard]] auto get_node_joints() const -> const std::vector<std::shared_ptr<Node_joint>>&;
 
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(double dt, const Physics_config& physics);

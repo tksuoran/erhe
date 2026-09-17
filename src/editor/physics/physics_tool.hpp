@@ -80,6 +80,22 @@ public:
     auto acquire_target() -> bool;
     void release_target();
 
+    // A Drag mode drag run from code (the MCP physics_drag tool) through the
+    // same drag start, per-frame goal and release as a right-drag: grab
+    // mesh's rigid body at grab_point_in_world, move the grab point's goal
+    // with step_scripted_drag() once per frame, end with release_target().
+    // Refused while a pointer drag is active; a scripted drag refuses pointer
+    // drags and survives hover view changes.
+    auto begin_scripted_drag(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Mesh>& mesh,
+        glm::vec3                                 grab_point_in_world
+    ) -> bool;
+    void step_scripted_drag     (glm::vec3 goal_in_world);
+    [[nodiscard]] auto is_scripted_drag_active() const -> bool;
+    [[nodiscard]] auto is_target_jointed      () const -> bool;
+    [[nodiscard]] auto get_drag_constraint    () const -> const Physics_drag_constraint&;
+
     [[nodiscard]] auto get_mode() const -> Physics_tool_mode;
     void set_mode(Physics_tool_mode value);
 
@@ -90,13 +106,24 @@ public:
     // (doc/import-undo-reference-clearing.md).
     [[nodiscard]] auto get_last_target_mesh() const -> const std::shared_ptr<erhe::scene::Mesh>&;
 private:
+    // Shared drag start of the right-drag and the scripted drag.
+    auto begin_drag(
+        Scene_root&                               scene_root,
+        const std::shared_ptr<erhe::scene::Mesh>& target_mesh,
+        glm::vec3                                 grab_position_in_world
+    ) -> bool;
+    // Moves the drag point toward m_goal_position_in_world (the grab point's
+    // goal) and applies the per-frame velocity damping of unjointed drags.
+    void apply_drag_goal();
+
     void on_message(Hover_scene_view_message& message);
     void tool_hover(Scene_view* scene_view);
-    // Scene close: drop the last-target cache when the closing scene hosts
-    // it (write-only debug state; it would keep the dead scene's mesh alive).
+    // Scene close: release a drag of the closing scene's content and drop
+    // the last-target cache when the closing scene hosts it (write-only debug
+    // state; it would keep the dead scene's mesh alive).
     void on_close_scene(erhe::Item_host* closing_host);
     // Content removed without a scene closing (undo of a glTF import):
-    // drop the reference when it names one of the removed items.
+    // release the drag / drop the reference when it names a removed item.
     void on_items_removed(const Removed_items& removed);
 
     erhe::message_bus::Subscription<Hover_scene_view_message> m_hover_scene_view_subscription;
@@ -121,7 +148,13 @@ private:
     glm::vec3                                   m_grab_position_in_node           {0.0f, 0.0f, 0.0f}; // Where object drag started in local node space
     glm::vec3                                   m_grab_position_in_collision_shape{0.0f, 0.0f, 0.0f}; // Where object drag started in local node space
     glm::vec3                                   m_grab_position_world             {0.0f, 0.0f, 0.0f}; // Where object drag started in world space
-    glm::vec3                                   m_goal_position_in_world          {0.0f, 0.0f, 0.0f}; // Goal position for drag point in world space
+    glm::vec3                                   m_goal_position_in_world          {0.0f, 0.0f, 0.0f}; // Goal position for the grab point in world space
+    // A body held by a live joint: pulled at its center of mass by the
+    // bounded jointed-body spring, without the tool's body overrides.
+    bool                                        m_target_jointed                  {false};
+    glm::vec3                                   m_center_of_mass_in_node          {0.0f, 0.0f, 0.0f};
+    bool                                        m_overrides_applied               {false};
+    bool                                        m_scripted_drag                   {false};
 
     erhe::physics::IWorld*                      m_physics_world{nullptr};
     Physics_drag_constraint                     m_drag_constraint;

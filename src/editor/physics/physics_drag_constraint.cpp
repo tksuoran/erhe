@@ -1,11 +1,63 @@
 #include "physics/physics_drag_constraint.hpp"
 
+#include "scene/node_joint.hpp"
+#include "scene/node_physics.hpp"
+
+#include "erhe_log/log_glm.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/iconstraint.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/iworld.hpp"
+#include "erhe_scene/node.hpp"
+
+#include <fmt/format.h>
+
+#include <glm/gtc/constants.hpp>
 
 namespace editor {
+
+namespace {
+
+// Rotation + translation of the node world transform; scale ignored. The
+// convention Node_joint::try_create_constraint() builds the joint frames with.
+[[nodiscard]] auto world_transform_of(const erhe::scene::Node& node) -> erhe::physics::Transform
+{
+    const erhe::scene::Trs_transform& world_from_node = node.world_from_node_transform();
+    return erhe::physics::Transform{
+        glm::mat3_cast(world_from_node.get_rotation()),
+        world_from_node.get_translation()
+    };
+}
+
+[[nodiscard]] auto name_of(const Node_physics* const node_physics) -> std::string
+{
+    if (node_physics == nullptr) {
+        return "world";
+    }
+    const erhe::scene::Node* const node = node_physics->get_node();
+    return (node != nullptr) ? node->get_name() : std::string{"(detached)"};
+}
+
+[[nodiscard]] auto joint_name_of(const Node_joint& joint) -> std::string
+{
+    const erhe::scene::Node* const node = joint.get_node();
+    return (node != nullptr) ? node->get_name() : joint.get_name();
+}
+
+constexpr const char* c_axis_names[3] = { "X", "Y", "Z" };
+
+} // anonymous namespace
+
+auto make_jointed_body_drag_settings(const float body_mass) -> Physics_drag_constraint_settings
+{
+    return Physics_drag_constraint_settings{
+        .frequency                  = c_jointed_drag_frequency,
+        .damping                    = c_jointed_drag_damping,
+        .max_force                  = c_jointed_drag_max_force_in_body_weights * body_mass * c_standard_gravity,
+        .solver_velocity_iterations = c_jointed_drag_solver_velocity_iterations,
+        .solver_position_iterations = c_jointed_drag_solver_position_iterations
+    };
+}
 
 Physics_drag_constraint::Physics_drag_constraint() = default;
 
@@ -19,8 +71,9 @@ auto Physics_drag_constraint::attach(
     erhe::physics::IRigid_body&             body,
     const glm::vec3                         pivot_in_body,
     const glm::vec3                         drag_point_in_world,
-    const Physics_drag_constraint_settings& settings,
-    const Physics_drag_monitor_info&        monitor_info
+    const Physics_drag_constraint_settings&            settings,
+    const Physics_drag_monitor_info&                   monitor_info,
+    const std::span<const std::shared_ptr<Node_joint>> node_joints
 ) -> bool
 {
     detach();
@@ -45,6 +98,7 @@ auto Physics_drag_constraint::attach(
         return false;
     }
     world.add_rigid_body(m_drag_point_body.get());
+    configure_projection(node_joints, drag_point_in_world);
     move_drag_point(drag_point_in_world, Drag_point_motion::teleport);
 
     body.begin_move();
@@ -71,11 +125,125 @@ auto Physics_drag_constraint::attach(
     return true;
 }
 
-void Physics_drag_constraint::move_drag_point(const glm::vec3 position_in_world, const Drag_point_motion motion)
+void Physics_drag_constraint::configure_projection(
+    const std::span<const std::shared_ptr<Node_joint>> node_joints,
+    const glm::vec3                                    pivot_in_world
+)
+{
+    m_reach = erhe::physics::Joint_reach{};
+
+    const Node_joint* joint      = nullptr;
+    std::size_t       live_count = 0;
+    for (const std::shared_ptr<Node_joint>& node_joint : node_joints) {
+        if ((node_joint->get_constraint_state() == nullptr) || !node_joint->constrains_rigid_body(m_body)) {
+            continue;
+        }
+        joint = node_joint.get();
+        ++live_count;
+    }
+    if (live_count == 0) {
+        m_projection_description = "unprojected: no live joint holds the body";
+        return;
+    }
+    if (live_count > 1) {
+        m_projection_description = fmt::format("unprojected: {} live joints hold the body (several anchors are not handled)", live_count);
+        return;
+    }
+
+    const Node_joint_constraint_state& state = *joint->get_constraint_state();
+    const bool moving_a =
+        (state.node_physics_a != nullptr) &&
+        (state.node_physics_a->get_rigid_body() == m_body);
+    const erhe::physics::Joint_side side   = moving_a ? erhe::physics::Joint_side::a : erhe::physics::Joint_side::b;
+    const Node_physics* const       moving = moving_a ? state.node_physics_a : state.node_physics_b;
+    const Node_physics* const       fixed  = moving_a ? state.node_physics_b : state.node_physics_a;
+    const std::string joint_name = joint_name_of(*joint);
+    if ((moving == nullptr) || (moving->get_node() == nullptr)) {
+        m_projection_description = fmt::format("unprojected: joint '{}' body node not found", joint_name);
+        return;
+    }
+    if (fixed != nullptr) {
+        const erhe::physics::IRigid_body* const fixed_body = fixed->get_rigid_body();
+        if ((fixed_body == nullptr) || (fixed->get_node() == nullptr)) {
+            m_projection_description = fmt::format("unprojected: joint '{}' anchor body not found", joint_name);
+            return;
+        }
+        if (fixed_body->get_motion_mode() == erhe::physics::Motion_mode::e_dynamic) {
+            m_projection_description = fmt::format(
+                "unprojected: joint '{}' connects to dynamic body '{}' (not a fixed anchor)",
+                joint_name, name_of(fixed)
+            );
+            return;
+        }
+    }
+
+    const erhe::physics::Transform& frame_in_moving = moving_a ? state.frame_in_a : state.frame_in_b;
+    const erhe::physics::Transform& frame_in_fixed  = moving_a ? state.frame_in_b : state.frame_in_a;
+    const erhe::physics::Transform  world_from_moving_anchor = world_transform_of(*moving->get_node()) * frame_in_moving;
+    const erhe::physics::Transform  world_from_fixed_anchor  = (fixed == nullptr)
+        ? frame_in_fixed // world-anchored side: the frame is in world space
+        : (world_transform_of(*fixed->get_node()) * frame_in_fixed);
+    const erhe::physics::Transform moving_anchor_from_world = inverse(world_from_moving_anchor);
+    const glm::vec3 pivot_in_moving_anchor = (moving_anchor_from_world.basis * pivot_in_world) + moving_anchor_from_world.origin;
+
+    m_reach.configure(world_from_fixed_anchor, side, state.limits, pivot_in_moving_anchor, pivot_in_world);
+
+    const std::string anchor = fmt::format(
+        "joint '{}', dragged body is side {}, anchor '{}' at {}",
+        joint_name, moving_a ? "A" : "B", name_of(fixed), world_from_fixed_anchor.origin
+    );
+    switch (m_reach.get_shape()) {
+        case erhe::physics::Joint_reach_shape::circle: {
+            const int axis = m_reach.get_axis();
+            const erhe::physics::Constraint_axis_limit& limit = state.limits[3 + static_cast<std::size_t>(axis)];
+            const float to_degrees = 180.0f / glm::pi<float>();
+            m_projection_description = fmt::format(
+                "projected: circle ({}; rotation axis {} = world {}, center {}, radius {:.4f} m, angle {})",
+                anchor,
+                c_axis_names[axis],
+                world_from_fixed_anchor.basis[axis],
+                m_reach.get_center(), m_reach.get_radius(),
+                limit.limited ? fmt::format("{:.2f} .. {:.2f} deg", limit.min * to_degrees, limit.max * to_degrees) : std::string{"free"}
+            );
+            break;
+        }
+        case erhe::physics::Joint_reach_shape::sphere: {
+            m_projection_description = fmt::format(
+                "projected: sphere ({}; center {}, radius {:.4f} m, angular limits not applied)",
+                anchor, m_reach.get_center(), m_reach.get_radius()
+            );
+            break;
+        }
+        case erhe::physics::Joint_reach_shape::box: {
+            m_projection_description = fmt::format("projected: box ({}; per-axis translation ranges)", anchor);
+            break;
+        }
+        case erhe::physics::Joint_reach_shape::point: {
+            m_projection_description = fmt::format(
+                "projected: point ({}; no free axis moves the pivot, it stays at {})",
+                anchor, m_reach.get_last_projected()
+            );
+            break;
+        }
+        case erhe::physics::Joint_reach_shape::unprojected:
+        default: {
+            m_projection_description = fmt::format(
+                "unprojected: {}; limit combination not handled (translation and rotation both free, or a rotation fixed at a non-zero angle)",
+                anchor
+            );
+            break;
+        }
+    }
+}
+
+void Physics_drag_constraint::move_drag_point(const glm::vec3 requested_position_in_world, const Drag_point_motion motion)
 {
     if (!m_drag_point_body) {
         return;
     }
+    const glm::vec3 position_in_world = m_reach.project(requested_position_in_world);
+    m_requested_drag_point = requested_position_in_world;
+    m_projected_drag_point = position_in_world;
     m_drag_point_body->set_motion_mode(
         (motion == Drag_point_motion::kinematic)
             ? erhe::physics::Motion_mode::e_kinematic_physical
@@ -137,6 +305,26 @@ auto Physics_drag_constraint::get_pivot_in_body() const -> glm::vec3
 auto Physics_drag_constraint::get_settings() const -> const Physics_drag_constraint_settings&
 {
     return m_settings;
+}
+
+auto Physics_drag_constraint::is_projected() const -> bool
+{
+    return m_reach.get_shape() != erhe::physics::Joint_reach_shape::unprojected;
+}
+
+auto Physics_drag_constraint::get_projection_description() const -> const std::string&
+{
+    return m_projection_description;
+}
+
+auto Physics_drag_constraint::get_requested_drag_point() const -> glm::vec3
+{
+    return m_requested_drag_point;
+}
+
+auto Physics_drag_constraint::get_projected_drag_point() const -> glm::vec3
+{
+    return m_projected_drag_point;
 }
 
 }

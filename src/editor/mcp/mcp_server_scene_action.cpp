@@ -26,6 +26,7 @@
 #include "operations/operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "operations/operations_window.hpp"
+#include "physics/physics_tool.hpp"
 #include "prefabs/instance_structure.hpp"
 #include "time.hpp"
 #include "renderers/lightmap_baker.hpp"
@@ -41,6 +42,7 @@
 #include "scene/scene_commands.hpp"
 #include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
+#include "scene/scene_settings_resolve.hpp"
 #include "scene/viewport_scene_view.hpp"
 #include "scene/viewport_scene_views.hpp"
 #include "tools/clipboard.hpp"
@@ -1482,6 +1484,161 @@ auto Mcp_server::action_drag_selection(const json& args) -> std::string
         {"frames",   finished.frame_count},
         {"released", finished.release},
         {"nodes",    nodes}
+    }).dump();
+}
+
+auto Mcp_server::action_physics_drag(const json& args) -> std::string
+{
+    Physics_tool* physics_tool = m_context.physics_tool;
+    if (physics_tool == nullptr) {
+        return make_error_content("Physics tool not available");
+    }
+
+    auto state_json = [physics_tool]() -> json {
+        const Physics_drag_constraint& drag = physics_tool->get_drag_constraint();
+        json result = json::object();
+        result["attached"] = drag.is_attached();
+        result["jointed"]  = physics_tool->is_target_jointed();
+        result["target"]   = drag.get_projection_description();
+        const glm::vec3 requested = drag.get_requested_drag_point();
+        const glm::vec3 projected = drag.get_projected_drag_point();
+        result["requested_drag_point"] = {requested.x, requested.y, requested.z};
+        result["projected_drag_point"] = {projected.x, projected.y, projected.z};
+        const erhe::physics::IRigid_body* const body = drag.get_body();
+        if (body != nullptr) {
+            const glm::vec3 position = glm::vec3{body->get_world_transform()[3]};
+            const glm::vec3 v        = body->get_linear_velocity();
+            const glm::vec3 w        = body->get_angular_velocity();
+            result["body_position"]    = {position.x, position.y, position.z};
+            result["linear_velocity"]  = {v.x, v.y, v.z};
+            result["angular_velocity"] = {w.x, w.y, w.z};
+        }
+        return result;
+    };
+
+    // Re-run of this request's deferral: apply the next frame's step.
+    const bool continuation =
+        m_physics_drag_steps.has_value() &&
+        (m_physics_drag_steps->request == m_current_request);
+
+    if (!continuation) {
+        const std::string action = args.value("action", "drag");
+        if (action == "release") {
+            if (!physics_tool->is_scripted_drag_active()) {
+                return make_error_content("No held physics_drag drag to release");
+            }
+            if (m_physics_drag_steps.has_value()) {
+                return make_error_content("A physics_drag drag is still stepping; release after it returns");
+            }
+            json state = state_json();
+            physics_tool->release_target();
+            return make_json_content({{"released", true}, {"state", state}}).dump();
+        }
+        if (action != "drag") {
+            return make_error_content("Invalid action '" + action + "' (expected 'drag' or 'release')");
+        }
+        if (m_physics_drag_steps.has_value() || physics_tool->is_scripted_drag_active()) {
+            return make_error_content("A physics_drag drag is already in progress (held drags end with action 'release')");
+        }
+
+        const std::string scene_name = args.value("scene_name", "");
+        Scene_root* scene_root = find_scene(scene_name);
+        if (scene_root == nullptr) {
+            return make_error_content("Scene not found: " + scene_name);
+        }
+        const std::shared_ptr<erhe::scene::Node> node = find_node_in_scene(*scene_root, args, "node_id", "node_name");
+        if (!node) {
+            return make_error_content("Node not found");
+        }
+        std::shared_ptr<erhe::scene::Mesh> mesh = std::dynamic_pointer_cast<erhe::scene::Mesh>(node);
+        if (!mesh) {
+            return make_error_content("physics_drag drags a Mesh prim with a rigid body; '" + node->get_name() + "' is not a Mesh");
+        }
+        const std::shared_ptr<Node_physics> node_physics = erhe::scene::get_attachment<Node_physics>(node.get());
+        erhe::physics::IRigid_body* const rigid_body = node_physics ? node_physics->get_rigid_body() : nullptr;
+        if (rigid_body == nullptr) {
+            return make_error_content("Node '" + node->get_name() + "' has no rigid body");
+        }
+        if (rigid_body->get_motion_mode() != erhe::physics::Motion_mode::e_dynamic) {
+            return make_error_content("Node '" + node->get_name() + "' rigid body is not dynamic");
+        }
+        if (!scene_root->has_physics_world()) {
+            return make_error_content("Scene has no physics world");
+        }
+        const Physics_config& physics = get_effective_physics(*m_context.editor_settings, *scene_root);
+        if (!physics.static_enable || !physics.dynamic_enable) {
+            return make_error_content("The scene's physics simulation is not running (enable static and dynamic physics)");
+        }
+
+        std::string parse_error;
+        auto read_vec3 = [&args, &parse_error](const char* key, glm::vec3& out_value) -> bool {
+            if (!args.contains(key)) {
+                return false;
+            }
+            const json& value = args.at(key);
+            if (!value.is_array() || (value.size() != 3) || !value[0].is_number() || !value[1].is_number() || !value[2].is_number()) {
+                parse_error = std::string{key} + " must be an array of 3 numbers";
+                return false;
+            }
+            out_value = glm::vec3{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+            return true;
+        };
+
+        glm::vec3 grab_point{0.0f};
+        glm::vec3 translation{0.0f};
+        glm::vec3 target{0.0f};
+        const bool has_grab_point  = read_vec3("grab_point", grab_point);
+        const bool has_translation = read_vec3("translation", translation);
+        const bool has_target      = read_vec3("target", target);
+        if (!parse_error.empty()) {
+            return make_error_content(parse_error);
+        }
+        if ((has_translation ? 1 : 0) + (has_target ? 1 : 0) != 1) {
+            return make_error_content("Provide exactly one of translation or target");
+        }
+        if (!has_grab_point) {
+            const std::shared_ptr<erhe::physics::ICollision_shape> collision_shape = rigid_body->get_collision_shape();
+            const glm::vec3 center_of_mass_in_node = collision_shape ? collision_shape->get_center_of_mass() : glm::vec3{0.0f};
+            grab_point = glm::vec3{node->world_from_node() * glm::vec4{center_of_mass_in_node, 1.0f}};
+        }
+
+        Physics_drag_steps steps{};
+        steps.start_goal  = grab_point;
+        steps.end_goal    = has_target ? target : (grab_point + translation);
+        steps.frame_count = args.value("frames", 30);
+        if (steps.frame_count < 1) {
+            return make_error_content("frames must be at least 1");
+        }
+        steps.release = args.value("release", true);
+
+        if (!physics_tool->begin_scripted_drag(*scene_root, mesh, grab_point)) {
+            return make_error_content("Drag refused: a Physics tool drag is active, or the body cannot be grabbed (see log)");
+        }
+        steps.request = m_current_request;
+        m_physics_drag_steps = steps;
+    }
+
+    Physics_drag_steps& steps = m_physics_drag_steps.value();
+    ++steps.frame;
+    const float fraction = static_cast<float>(steps.frame) / static_cast<float>(steps.frame_count);
+    physics_tool->step_scripted_drag(glm::mix(steps.start_goal, steps.end_goal, fraction));
+
+    if ((steps.frame < steps.frame_count) && physics_tool->is_scripted_drag_active()) {
+        m_defer_current_request = true;
+        return {};
+    }
+
+    const Physics_drag_steps finished = steps;
+    m_physics_drag_steps.reset();
+    json state = state_json();
+    const bool released = finished.release || !physics_tool->is_scripted_drag_active();
+    if (finished.release) {
+        physics_tool->release_target();
+    }
+    return make_json_content({
+        {"frames",   finished.frame},
+        {"released", released},
+        {"state",    state}
     }).dump();
 }
 

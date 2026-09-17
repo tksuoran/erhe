@@ -236,6 +236,7 @@ void Physics_drag_monitor::begin(
     if (!info.tool_details.empty()) {
         log_physics_drag->info("  tool settings: {}", info.tool_details);
     }
+    log_physics_drag->info("  drag target {}", drag.get_projection_description());
     log_physics_drag->info(
         "  world: {}; gravity {}; last fixed step dt {:.6f} s",
         world.describe_stepping(), world.get_gravity(), m_last_fixed_step_dt
@@ -404,9 +405,10 @@ void Physics_drag_monitor::after_physics_simulation_steps()
             record.last_worst     = *worst;
             record.has_last_worst = true;
             log_physics_drag->info(
-                "drag [{}] frame {} steps {} dt {:.5f}: '{}' drag point {} pivot {} spring {:.2f} mm body {} v {} |v| {:.3f} w {} |w| {:.3f} | worst joint '{}' sep {:.3f} mm (viol {:.3f}) rot {:.2f} deg (viol {:.3f}) | {} joints over 1 mm / 1 deg",
+                "drag [{}] frame {} steps {} dt {:.5f}: '{}' target {} projected {} drag point {} pivot {} spring {:.2f} mm body {} v {} |v| {:.3f} w {} |w| {:.3f} | worst joint '{}' sep {:.3f} mm (viol {:.3f}) rot {:.2f} deg (viol {:.3f}) | {} joints over 1 mm / 1 deg",
                 record.tool_name, record.frame_count, m_frame_fixed_steps, m_last_fixed_step_dt,
-                record.node_name, drag_point, pivot_in_world, spring_mm,
+                record.node_name, record.drag->get_requested_drag_point(), record.drag->get_projected_drag_point(),
+                drag_point, pivot_in_world, spring_mm,
                 glm::vec3{body_transform[3]}, linear_velocity, glm::length(linear_velocity),
                 angular_velocity, glm::length(angular_velocity),
                 joint_name_of(*worst->joint), worst->separation_mm, worst->violation_mm, worst->angle_deg, worst->violation_deg,
@@ -414,9 +416,10 @@ void Physics_drag_monitor::after_physics_simulation_steps()
             );
         } else {
             log_physics_drag->info(
-                "drag [{}] frame {} steps {} dt {:.5f}: '{}' drag point {} pivot {} spring {:.2f} mm body {} v {} |v| {:.3f} w {} |w| {:.3f} | no live joints",
+                "drag [{}] frame {} steps {} dt {:.5f}: '{}' target {} projected {} drag point {} pivot {} spring {:.2f} mm body {} v {} |v| {:.3f} w {} |w| {:.3f} | no live joints",
                 record.tool_name, record.frame_count, m_frame_fixed_steps, m_last_fixed_step_dt,
-                record.node_name, drag_point, pivot_in_world, spring_mm,
+                record.node_name, record.drag->get_requested_drag_point(), record.drag->get_projected_drag_point(),
+                drag_point, pivot_in_world, spring_mm,
                 glm::vec3{body_transform[3]}, linear_velocity, glm::length(linear_velocity),
                 angular_velocity, glm::length(angular_velocity)
             );

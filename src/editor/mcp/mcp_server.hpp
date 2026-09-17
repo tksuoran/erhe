@@ -230,6 +230,7 @@ private:
     auto action_set_active_scene(const nlohmann::json& args) -> std::string;
     auto action_transform_selection(const nlohmann::json& args) -> std::string;
     auto action_drag_selection     (const nlohmann::json& args) -> std::string;
+    auto action_physics_drag       (const nlohmann::json& args) -> std::string;
     auto action_set_node_transform(const nlohmann::json& args) -> std::string;
     auto action_place_brush     (const nlohmann::json& args) -> std::string;
     auto action_create_shape    (const nlohmann::json& args) -> std::string;
@@ -484,6 +485,20 @@ private:
         bool                  release        {true};
     };
     std::optional<Selection_drag_steps>              m_selection_drag_steps;
+
+    // physics_drag: one scripted Physics tool drag stepping one frame per
+    // pass of its deferred request (main thread only).
+    class Physics_drag_steps
+    {
+    public:
+        const Queued_request* request    {nullptr};
+        glm::vec3             start_goal {0.0f}; // grab point at drag start
+        glm::vec3             end_goal   {0.0f}; // grab point goal after the last step
+        int                   frame_count{1};
+        int                   frame      {0};
+        bool                  release    {true};
+    };
+    std::optional<Physics_drag_steps>                m_physics_drag_steps;
 
     // reset_editor_state has queued the close of every open scene and is
     // deferring itself until the scene list is empty (main thread only).
