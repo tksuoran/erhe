@@ -102,3 +102,6 @@ Momentum passed ball to ball needs each collision solved on its own.
   0.02 s at a time and print every ball's row-axis displacement
   (`capture_far_ball_peak` in creation 21); the step where the far ball
   stops rising is also the action screenshot.
+- Drags of a jointed ball must not pull its hinge apart:
+  `scripts/physics_drag_joint_sweep.py [--box3d]` rebuilds the cradle per
+  case and fails when a hinge separates by more than 1 mm.

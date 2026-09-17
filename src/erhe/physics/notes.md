@@ -51,7 +51,8 @@ a specific engine.
   not handle; a limited hinge range is narrowed by a configured angular margin); `step_toward()`
   moves a reachable point along the reach (circle arc inside the range, sphere great circle,
   straight line otherwise); used by the editor's interactive physics drags; tests in
-  `test/test_joint_reach.cpp`
+  `test/test_joint_reach.cpp`, and `scripts/physics_drag_joint_sweep.py` checks the drags end to end
+  against a running editor
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
 - `Motion_mode` -- enum: static, kinematic (non-physical/physical), dynamic
