@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+namespace erhe {
+    class Hierarchy;
+}
 namespace erhe::gltf {
     class Gltf_data;
     class Gltf_image_source;
@@ -100,17 +103,21 @@ auto reference_material_into_scene(
 ) -> std::shared_ptr<erhe::primitive::Material>;
 
 // IMPORT TEXTURE: load an image file (PNG / JPEG / KTX2 / DDS) into a fresh
-// GPU texture and list it in the scene's content library Textures folder as
-// an owning definition entry. The decode and the upload are asynchronous
+// GPU texture and list it in the scene's content library as an owning
+// definition entry, placed as the last child of `parent` - any prim of the
+// scene (doc/usd-compatibility-plan.md C5) - or in the Textures scope when
+// `parent` is null. The decode and the upload are asynchronous
 // (Texture_file_loader); the undoable library insert is
 // queued once the texture is resident, so nothing appears in the library for
 // a frame or two - and nothing at all if the file cannot be decoded (a
-// warning names it). Shared by the asset browser's context menu and the
-// Content Library drag-and-drop target.
+// warning names it). A `parent` that has left the scene by then gives way to
+// the Textures scope. Shared by the asset browser's context menu and the
+// Scene Hierarchy drag-and-drop target.
 void import_texture_into_scene(
-    App_context&                       context,
-    const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    App_context&                            context,
+    const std::shared_ptr<Scene_root>&      scene_root,
+    const std::filesystem::path&            path,
+    const std::shared_ptr<erhe::Hierarchy>& parent = {}
 );
 
 }

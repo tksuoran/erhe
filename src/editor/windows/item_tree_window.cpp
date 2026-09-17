@@ -26,6 +26,7 @@
 #include "prefabs/prefab_instance.hpp"
 #include "prefabs/prefab_library.hpp"
 #include "preview/brush_preview.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/clipboard.hpp"
 #include "tools/selection_tool.hpp"
@@ -36,6 +37,8 @@
 #include "erhe_defer/defer.hpp"
 #include "erhe_file/file.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_item/scope.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_profile/profile.hpp"
 #include "erhe_scene/camera.hpp"
@@ -52,9 +55,9 @@
 #include <fmt/format.h>
 
 #include <algorithm>
-#include <array>
 #include <filesystem>
 #include <limits>
+#include <optional>
 
 #define ICON_MDI_FILTER                                   "\xf3\xb0\x88\xb2" // U+F0232
 #define ICON_MDI_LINK                                     "\xf3\xb0\x8c\xb7" // U+F0337
@@ -68,31 +71,6 @@ namespace {
 // Live Item_tree instances, in construction order. Raw pointers: entries are
 // added and removed by the constructor / destructor below.
 std::vector<Item_tree*> g_item_trees;
-
-// A hierarchy drag carries the dragged item's own type name
-// (Item_tree::drag_and_drop_source), so a prim payload is named for the prim's
-// concrete class. These are the classes a tree row takes as a reparent /
-// reorder payload: every Xformable the tree shows as a row.
-constexpr std::array<std::string_view, 5> c_prim_payload_types{
-    erhe::scene::Xform ::static_type_name,
-    erhe::scene::Mesh  ::static_type_name,
-    erhe::scene::Camera::static_type_name,
-    erhe::scene::Light ::static_type_name,
-    erhe::scene::Node  ::static_type_name
-};
-
-[[nodiscard]] auto is_prim_payload(const ImGuiPayload* const payload) -> bool
-{
-    if (payload == nullptr) {
-        return false;
-    }
-    for (const std::string_view type_name : c_prim_payload_types) {
-        if (payload->IsDataType(type_name.data())) {
-            return true;
-        }
-    }
-    return false;
-}
 
 // True when the payload is named for an erhe item class (Item_type::c_bit_labels),
 // which is how every item drag in the editor names its payload. Only such a
@@ -149,15 +127,13 @@ constexpr std::array<std::string_view, 5> c_prim_payload_types{
     return {};
 }
 
-[[nodiscard]] auto accept_prim_payload(const ImGuiDragDropFlags flags) -> const ImGuiPayload*
+// The rows that take the structural move (before / into / after), as target
+// and as payload: every prim of the one object model
+// (doc/usd-compatibility-plan.md C5), whatever its kind. The Scene header row
+// and node attachment rows are not prims.
+[[nodiscard]] auto is_tree_prim(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
-    for (const std::string_view type_name : c_prim_payload_types) {
-        const ImGuiPayload* const payload = ImGui::AcceptDragDropPayload(type_name.data(), flags);
-        if (payload != nullptr) {
-            return payload;
-        }
-    }
-    return nullptr;
+    return std::dynamic_pointer_cast<erhe::Typed>(item) != nullptr;
 }
 
 }
@@ -352,26 +328,23 @@ void Item_tree::move_selection(const std::shared_ptr<erhe::Item_base>& target_no
         // In this case we apply reposition to whole selection.
         if (placement == Placement::Before_anchor) {
             for (const auto& item : selection) {
-                const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (node) {
-                    reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
+                if (is_tree_prim(item)) {
+                    reposition(compound_parameters, anchor, item, placement, Selection_usage::Selection_used);
                 }
             }
         } else { // if (placement == Placement::After_anchor)
             for (auto i = selection.rbegin(), end = selection.rend(); i < end; ++i) {
                 const auto& item = *i;
-                const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
-                if (node) {
-                    reposition(compound_parameters, anchor, node, placement, Selection_usage::Selection_used);
+                if (is_tree_prim(item)) {
+                    reposition(compound_parameters, anchor, item, placement, Selection_usage::Selection_used);
                 }
             }
         }
     } else if (compound_parameters.operations.empty()) {
         // Dragging a single node which is not part of the selection.
         // In this case we ignore selection and apply operation only to dragged node.
-        const auto& drag_node = std::dynamic_pointer_cast<erhe::scene::Node>(drag_item);
-        if (drag_node) {
-            reposition(compound_parameters, anchor, drag_node, placement, Selection_usage::Selection_ignored);
+        if (is_tree_prim(drag_item)) {
+            reposition(compound_parameters, anchor, drag_item, placement, Selection_usage::Selection_ignored);
         }
     }
 
@@ -432,6 +405,10 @@ void Item_tree::reposition(
 
     // Nodes cannot be attached to themselves
     if (item == anchor) {
+        return;
+    }
+
+    if (!is_tree_prim(item) || !is_tree_prim(anchor)) {
         return;
     }
 
@@ -528,6 +505,10 @@ void Item_tree::try_add_to_attach(
     // Nodes cannot be attached to themselves
     if (item == target) {
         SPDLOG_LOGGER_WARN(log_tree, "Nodes cannot be moved as child of themselves");
+        return;
+    }
+
+    if (!is_tree_prim(item) || !is_tree_prim(target)) {
         return;
     }
 
@@ -716,6 +697,327 @@ void instantiate_gltf_prefab(
 
 }
 
+// The geometry of one tree row as a drop target: its rect, the split lines of
+// the before / into / after zones, and the ImGui ids of the zones.
+class Item_tree_drop_row
+{
+public:
+    ImVec2  rect_min {};
+    ImVec2  rect_max {};
+    float   x0       {0.0f};
+    float   x1       {0.0f};
+    float   y0       {0.0f};
+    float   y1       {0.0f};
+    float   y2       {0.0f};
+    float   y3       {0.0f};
+    ImGuiID id_top   {0};
+    ImGuiID id_center{0};
+    ImGuiID id_bottom{0};
+};
+
+namespace {
+
+enum class Drop_zone : unsigned int {
+    before = 0, // sibling before the row
+    into,       // last child of the row
+    after       // sibling after the row
+};
+
+// Which of the three zones a drop target offers.
+class Drop_zones
+{
+public:
+    bool before{true};
+    bool into  {true};
+    bool after {true};
+};
+
+// The before / into / after drop target of a row: top third, middle third
+// and bottom third, each with its own preview. `on_drop(Drop_zone)` runs when
+// a payload of `payload_type` is delivered. True while the row is the
+// hovered drop target.
+template <typename On_drop>
+[[nodiscard]] auto three_zone_drop_target(
+    const Item_tree_drop_row& row,
+    const char* const         payload_type,
+    const Drop_zones          zones,
+    On_drop&&                 on_drop
+) -> bool
+{
+    if (zones.before) {
+        const ImRect top_rect{row.rect_min, ImVec2{row.rect_max.x, row.y1}};
+        if (ImGui::BeginDragDropTargetCustom(top_rect, row.id_top)) {
+            drag_and_drop_gradient_preview(row.x0, row.x1, row.y0, row.y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
+            if (ImGui::AcceptDragDropPayload(payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect) != nullptr) {
+                on_drop(Drop_zone::before);
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+    }
+
+    if (zones.into) {
+        const ImRect middle_rect{ImVec2{row.rect_min.x, row.y1}, ImVec2{row.rect_max.x, row.y2}};
+        if (ImGui::BeginDragDropTargetCustom(middle_rect, row.id_center)) {
+            drag_and_drop_rectangle_preview(middle_rect);
+            if (ImGui::AcceptDragDropPayload(payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect) != nullptr) {
+                on_drop(Drop_zone::into);
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+    }
+
+    if (zones.after) {
+        const ImRect bottom_rect{ImVec2{row.rect_min.x, row.y2}, row.rect_max};
+        if (ImGui::BeginDragDropTargetCustom(bottom_rect, row.id_bottom)) {
+            drag_and_drop_gradient_preview(row.x0, row.x1, row.y1, row.y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
+            if (ImGui::AcceptDragDropPayload(payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect) != nullptr) {
+                on_drop(Drop_zone::after);
+            }
+            ImGui::EndDragDropTarget();
+            return true;
+        }
+    }
+    return false;
+}
+
+// The whole-row drop target of an action: `on_drop()` runs when a payload of
+// `payload_type` is delivered. True while the row is the hovered drop target.
+template <typename On_drop>
+[[nodiscard]] auto whole_row_drop_target(
+    const Item_tree_drop_row& row,
+    const char* const         payload_type,
+    On_drop&&                 on_drop
+) -> bool
+{
+    const ImRect rect{row.rect_min, row.rect_max};
+    if (ImGui::BeginDragDropTargetCustom(rect, row.id_center)) {
+        drag_and_drop_rectangle_preview(rect);
+        if (ImGui::AcceptDragDropPayload(payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect) != nullptr) {
+            on_drop();
+        }
+        ImGui::EndDragDropTarget();
+        return true;
+    }
+    return false;
+}
+
+// Material dropped onto a brush: a brush with the brush's geometry and that
+// material joins the brush's parent, unless the library already has one.
+void fork_brush_with_material(
+    Content_library&                                  library,
+    const std::shared_ptr<Brush>&                     target_brush,
+    const std::shared_ptr<erhe::primitive::Material>& material
+)
+{
+    const std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
+    for (const std::shared_ptr<Brush>& existing_brush : library.get_all<Brush>()) {
+        if ((existing_brush->get_geometry() == original_geometry) && (existing_brush->get_material() == material)) {
+            return;
+        }
+    }
+    const std::shared_ptr<Brush> forked = target_brush->make_with_material(material);
+    const std::shared_ptr<erhe::Hierarchy> brush_parent = target_brush->get_parent().lock();
+    if (brush_parent) {
+        forked->set_parent(brush_parent);
+    } else {
+        library.add(forked);
+    }
+}
+
+} // anonymous namespace
+
+auto Item_tree::material_assign_drop_target(
+    const Item_tree_drop_row&                         row,
+    const std::shared_ptr<erhe::scene::Node>&         node,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    const char* const                                 payload_type
+) -> std::optional<bool>
+{
+    const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
+    if (!mesh || mesh->get_primitives().empty()) {
+        return std::nullopt;
+    }
+    return whole_row_drop_target(
+        row,
+        payload_type,
+        [this, &mesh, &material]() {
+            queue_mesh_material_assign_to_all_primitives(m_context, mesh, material);
+        }
+    );
+}
+
+auto Item_tree::brush_drop_target(
+    const Item_tree_drop_row&                         row,
+    const std::shared_ptr<erhe::scene::Node>&         node,
+    const std::shared_ptr<Brush>&                     brush,
+    const std::shared_ptr<erhe::primitive::Material>& material,
+    const char* const                                 payload_type
+) -> std::optional<bool>
+{
+    Scene_root* const scene_root = find_scene_root_for_item(m_context, *node);
+    if (scene_root == nullptr) {
+        return std::nullopt;
+    }
+    const auto insert_brush_instance = [this, &brush, &material, scene_root](
+        const std::shared_ptr<erhe::scene::Node>& parent,
+        const std::size_t                         index_in_parent
+    ) {
+        if (!parent) {
+            return;
+        }
+        // Material priority: payload material (inventory slot) > brush material > default
+        std::shared_ptr<erhe::primitive::Material> brush_material = material ? material : brush->get_material();
+        if (!brush_material) {
+            brush_material = get_default_material(m_context, *scene_root);
+        }
+        if (!brush_material) {
+            return;
+        }
+        place_brush_in_scene(
+            m_context,
+            *brush,
+            *scene_root,
+            parent->world_from_node(), // identity local transform under the chosen parent
+            brush_material,
+            1.0,
+            erhe::physics::Motion_mode::e_dynamic,
+            parent,
+            index_in_parent
+        );
+    };
+    return three_zone_drop_target(
+        row,
+        payload_type,
+        Drop_zones{},
+        [&node, &insert_brush_instance](const Drop_zone zone) {
+            switch (zone) {
+                case Drop_zone::before: insert_brush_instance(node->get_parent_node(), node->get_index_in_parent()); break;
+                case Drop_zone::into:   insert_brush_instance(node, std::numeric_limits<std::size_t>::max()); break;
+                case Drop_zone::after:  insert_brush_instance(node->get_parent_node(), node->get_index_in_parent() + 1); break;
+            }
+        }
+    );
+}
+
+auto Item_tree::move_drop_target(
+    const Item_tree_drop_row&               row,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const std::shared_ptr<erhe::Item_base>& payload_prim
+) -> bool
+{
+    return three_zone_drop_target(
+        row,
+        payload_prim->get_type_name().data(),
+        Drop_zones{},
+        [this, &item, &payload_prim](const Drop_zone zone) {
+            switch (zone) {
+                case Drop_zone::before: move_selection     (item, payload_prim.get(), Placement::Before_anchor); break;
+                case Drop_zone::into:   attach_selection_to(item, payload_prim.get()); break;
+                case Drop_zone::after:  move_selection     (item, payload_prim.get(), Placement::After_anchor); break;
+            }
+        }
+    );
+}
+
+auto Item_tree::action_drop_target(
+    const Item_tree_drop_row&               row,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const std::shared_ptr<erhe::Item_base>& payload_prim
+) -> std::optional<bool>
+{
+    const char* const payload_type = payload_prim->get_type_name().data();
+
+    const std::shared_ptr<erhe::scene::Node>         node           = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    const std::shared_ptr<Brush>                     target_brush   = std::dynamic_pointer_cast<Brush>(item);
+    const std::shared_ptr<erhe::primitive::Material> material       = std::dynamic_pointer_cast<erhe::primitive::Material>(payload_prim);
+    const std::shared_ptr<Brush>                     brush          = std::dynamic_pointer_cast<Brush>(payload_prim);
+    const std::shared_ptr<Graph_mesh>                graph_mesh     = std::dynamic_pointer_cast<Graph_mesh>(payload_prim);
+    const std::shared_ptr<Content_library>           target_library = find_owning_library(m_context, item);
+
+    // Graph Mesh onto a scene node: source the node's mesh from the graph by
+    // creating (or retargeting) a Geometry_graph_mesh attachment - same bind
+    // logic as Properties and MCP set_node_graph_mesh. The graph mesh comes
+    // from the node's own scene content library; the scene file resolves the
+    // binding by name in that library on load, so a cross-scene bind would
+    // not survive a save/load round-trip.
+    if (graph_mesh && node && target_library && target_library->has_item(*graph_mesh)) {
+        return whole_row_drop_target(
+            row,
+            payload_type,
+            [&node, &graph_mesh]() {
+                std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
+                if (!attachment) {
+                    attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
+                    node->attach(attachment);
+                } else {
+                    attachment->set_graph_mesh(graph_mesh);
+                }
+                // Materialize the asset's latest bake immediately; a
+                // never-baked asset applies on its first evaluation push.
+                attachment->apply_baked_products();
+            }
+        );
+    }
+
+    // Material onto a node holding a mesh: assign it to every primitive.
+    if (material && node) {
+        const std::optional<bool> assign = material_assign_drop_target(row, node, material, payload_type);
+        if (assign.has_value()) {
+            return assign;
+        }
+    }
+
+    // Material onto a brush of this scene: fork the brush with that material.
+    if (material && target_brush && target_library && target_library->has_item(*target_brush)) {
+        return whole_row_drop_target(
+            row,
+            payload_type,
+            [&target_library, &target_brush, &material]() {
+                fork_brush_with_material(*target_library, target_brush, material);
+            }
+        );
+    }
+
+    // Brush onto a scene node: place a brush instance before / under / after it.
+    if (brush && node) {
+        const std::optional<bool> placement = brush_drop_target(row, node, brush, {}, payload_type);
+        if (placement.has_value()) {
+            return placement;
+        }
+    }
+
+    // Material from another scene's library: copy it into this scene's
+    // library, as a child of the row.
+    if (material && target_library && !target_library->has_item(*material) && (m_context.asset_manager != nullptr)) {
+        const std::shared_ptr<erhe::Hierarchy> parent     = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
+        Scene_root* const                      scene_root = find_scene_root_for_item(m_context, *item);
+        if (parent && (scene_root != nullptr) && !refuses_instance_child(*parent)) {
+            return whole_row_drop_target(
+                row,
+                payload_type,
+                [this, &material, &parent, scene_root]() {
+                    const std::shared_ptr<erhe::primitive::Material> new_material =
+                        m_context.asset_manager->create<erhe::primitive::Material>(*scene_root, *material);
+                    m_context.operation_stack->queue(
+                        std::make_shared<Item_insert_remove_operation>(
+                            Item_insert_remove_operation::Parameters{
+                                .context = m_context,
+                                .item    = new_material,
+                                .parent  = parent,
+                                .mode    = Item_insert_remove_operation::Mode::insert
+                            }
+                        )
+                    );
+                }
+            );
+        }
+    }
+
+    return std::nullopt;
+}
+
 auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& item) -> bool
 {
     ERHE_PROFILE_FUNCTION();
@@ -725,113 +1027,38 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
         return false;
     }
 
-    const auto  rect_min = ImGui::GetItemRectMin();
-    const auto  rect_max = ImGui::GetItemRectMax();
-    const float height   = rect_max.y - rect_min.y;
-    const float y0       = rect_min.y;
-    const float y1       = rect_min.y + 0.3f * height;
-    const float y2       = rect_max.y - 0.3f * height;
-    const float y3       = rect_max.y;
-    const float x0       = rect_min.x;
-    const float x1       = rect_max.x;
-
-    const auto        id              = item->get_id();
-    const std::string label_top       = fmt::format("node dnd top {}: {} {}",    id, item->get_type_name(), item->get_name());
-    const std::string label_center    = fmt::format("node dnd center {}: {} {}", id, item->get_type_name(), item->get_name());
-    const std::string label_bottom    = fmt::format("node dnd bottom {}: {} {}", id, item->get_type_name(), item->get_name());
-    const ImGuiID     imgui_id_top    = ImGui::GetID(label_top.c_str());
-    const ImGuiID     imgui_id_center = ImGui::GetID(label_center.c_str());
-    const ImGuiID     imgui_id_bottom = ImGui::GetID(label_bottom.c_str());
-
-    const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
-
-    const std::shared_ptr<erhe::Item_base> payload_prim   = peek_prim_payload(payload_peek);
-    const std::shared_ptr<Content_library> target_library = find_owning_library(m_context, item);
-
-    // A resource prim or a folder scope dropped on any prim of the same scene
-    // moves there (doc/content-library-folders.md D3, doc/usd-compatibility-
-    // plan.md C5: a resource may sit under any prim). A kind scope is a target
-    // but never a payload: it is where a kind lives.
-    {
-        const std::shared_ptr<erhe::Hierarchy> target_hierarchy  = std::dynamic_pointer_cast<erhe::Hierarchy>(item);
-        const std::shared_ptr<erhe::Hierarchy> payload_hierarchy = std::dynamic_pointer_cast<erhe::Hierarchy>(payload_prim);
-        const bool payload_is_resource =
-            target_library && payload_hierarchy &&
-            (find_owning_library(m_context, payload_prim) == target_library) &&
-            (target_library->find_scope_kind(*payload_hierarchy) != 0) &&
-            (target_library->find_scope(target_library->find_scope_kind(*payload_hierarchy)) != payload_hierarchy);
-        const bool payload_movable =
-            payload_is_resource && target_hierarchy &&
-            (find_owning_library(m_context, item) == target_library) &&
-            (payload_hierarchy != target_hierarchy) &&
-            (payload_hierarchy->get_parent().lock() != target_hierarchy) &&
-            !target_hierarchy->is_ancestor(payload_hierarchy.get());
-        if (payload_movable) {
-            const ImRect rect{rect_min, rect_max};
-            if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
-                drag_and_drop_rectangle_preview(rect);
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                    payload_prim->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-                );
-                if (payload != nullptr) {
-                    m_context.operation_stack->queue(
-                        std::make_shared<Item_parent_change_operation>(
-                            target_hierarchy,
-                            payload_hierarchy,
-                            std::shared_ptr<erhe::Hierarchy>{},
-                            std::shared_ptr<erhe::Hierarchy>{}
-                        )
-                    );
-                }
-                ImGui::EndDragDropTarget();
-                return true;
-            }
-            return false;
-        }
+    const ImGuiPayload* const payload_peek = ImGui::GetDragDropPayload();
+    if (payload_peek == nullptr) {
+        return false;
     }
 
-    // Handle material drop onto a brush in the content library
-    {
-        const std::shared_ptr<Brush> target_brush = std::dynamic_pointer_cast<Brush>(item);
-        const std::shared_ptr<erhe::primitive::Material> dropped_material =
-            std::dynamic_pointer_cast<erhe::primitive::Material>(payload_prim);
-        if (target_brush && dropped_material && target_library && target_library->has_item(*target_brush)) {
-            const ImRect rect{rect_min, rect_max};
-            if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
-                drag_and_drop_rectangle_preview(rect);
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                    dropped_material->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-                );
-                if (payload != nullptr) {
-                    // Check for an existing fork with the same geometry and material
-                    const std::shared_ptr<erhe::geometry::Geometry> original_geometry = target_brush->get_geometry();
-                    bool found = false;
-                    for (const std::shared_ptr<Brush>& b : target_library->get_all<Brush>()) {
-                        if ((b->get_geometry() == original_geometry) && (b->get_material() == dropped_material)) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        const std::shared_ptr<Brush> forked = target_brush->make_with_material(dropped_material);
-                        const std::shared_ptr<erhe::Hierarchy> brush_parent = target_brush->get_parent().lock();
-                        if (brush_parent) {
-                            forked->set_parent(brush_parent);
-                        } else {
-                            target_library->add(forked);
-                        }
-                    }
-                }
-                ImGui::EndDragDropTarget();
-                return true;
-            }
-        }
-    }
+    const ImVec2 rect_min = ImGui::GetItemRectMin();
+    const ImVec2 rect_max = ImGui::GetItemRectMax();
+    const float  height   = rect_max.y - rect_min.y;
+
+    const auto        id           = item->get_id();
+    const std::string label_top    = fmt::format("node dnd top {}: {} {}",    id, item->get_type_name(), item->get_name());
+    const std::string label_center = fmt::format("node dnd center {}: {} {}", id, item->get_type_name(), item->get_name());
+    const std::string label_bottom = fmt::format("node dnd bottom {}: {} {}", id, item->get_type_name(), item->get_name());
+
+    const Item_tree_drop_row row{
+        .rect_min  = rect_min,
+        .rect_max  = rect_max,
+        .x0        = rect_min.x,
+        .x1        = rect_max.x,
+        .y0        = rect_min.y,
+        .y1        = rect_min.y + (0.3f * height),
+        .y2        = rect_max.y - (0.3f * height),
+        .y3        = rect_max.y,
+        .id_top    = ImGui::GetID(label_top.c_str()),
+        .id_center = ImGui::GetID(label_center.c_str()),
+        .id_bottom = ImGui::GetID(label_bottom.c_str())
+    };
 
     // glTF asset dragged from the Asset browser: extract the payload once;
     // accepted below by the Scene header row and by scene node rows.
     std::shared_ptr<Asset_file_gltf> gltf_asset{};
-    if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_gltf::static_type_name.data())) {
+    if (payload_peek->IsDataType(Asset_file_gltf::static_type_name.data())) {
         erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
         gltf_asset = std::dynamic_pointer_cast<Asset_file_gltf>(payload_item_base->shared_from_this());
     }
@@ -846,308 +1073,96 @@ auto Item_tree::drag_and_drop_target(const std::shared_ptr<erhe::Item_base>& ite
             if (scene_root == nullptr) {
                 return false;
             }
-            const ImRect rect{rect_min, rect_max};
-            if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
-                drag_and_drop_rectangle_preview(rect);
-                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                    Asset_file_gltf::static_type_name.data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-                );
-                if (payload != nullptr) {
+            return whole_row_drop_target(
+                row,
+                Asset_file_gltf::static_type_name.data(),
+                [this, &gltf_asset, scene_root, &root_node]() {
                     instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, root_node, std::numeric_limits<std::size_t>::max());
                 }
-                ImGui::EndDragDropTarget();
-                return true;
-            }
-            return false;
+            );
         }
     }
 
-    const auto& node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
+    if (!is_tree_prim(item)) {
+        return false;
+    }
+
+    // A tree row dropped on a tree row: move wins, the modifier acts. The drop
+    // is a structural move (before / as last child / after); while Alt is held
+    // the action this payload has on this row is offered instead, and the
+    // move stays offered where no action applies.
+    const std::shared_ptr<erhe::Item_base> payload_prim = peek_prim_payload(payload_peek);
+    if (payload_prim && is_tree_prim(payload_prim)) {
+        const bool alt_down = ImGui::GetIO().KeyAlt;
+        if (alt_down) {
+            const std::optional<bool> action = action_drop_target(row, item, payload_prim);
+            if (action.has_value()) {
+                return action.value();
+            }
+        }
+        return move_drop_target(row, item, payload_prim);
+    }
+
+    // The payloads that are not tree rows act on a scene node regardless of
+    // modifier: an inventory slot and a glTF asset.
+    const std::shared_ptr<erhe::scene::Node> node = std::dynamic_pointer_cast<erhe::scene::Node>(item);
     if (!node) {
         return false;
     }
 
-    const bool payload_is_node = is_prim_payload(payload_peek);
-    std::shared_ptr<erhe::primitive::Material> material{};
-    std::shared_ptr<Brush>                     brush{};
-    std::shared_ptr<Graph_mesh>                graph_mesh{};
-
-    if (!payload_is_node && payload_prim) {
-        material   = std::dynamic_pointer_cast<erhe::primitive::Material>(payload_prim);
-        brush      = std::dynamic_pointer_cast<Brush>(payload_prim);
-        graph_mesh = std::dynamic_pointer_cast<Graph_mesh>(payload_prim);
-    }
-    if (!payload_is_node && payload_peek->IsDataType(c_inventory_slot_payload_type)) {
-        // An inventory slot can define a brush, a material, or both.
+    if (payload_peek->IsDataType(c_inventory_slot_payload_type)) {
+        // An inventory slot can define a brush, a material, or both. When it
+        // defines both, the brush wins: a new node is created and the slot
+        // material is applied to its mesh.
         const Slot_drag_payload& slot_payload = *static_cast<const Slot_drag_payload*>(payload_peek->Data);
-        if (slot_payload.brush != nullptr) {
-            brush = std::dynamic_pointer_cast<Brush>(slot_payload.brush->shared_from_this());
+        const std::shared_ptr<Brush> slot_brush = (slot_payload.brush != nullptr)
+            ? std::dynamic_pointer_cast<Brush>(slot_payload.brush->shared_from_this())
+            : std::shared_ptr<Brush>{};
+        const std::shared_ptr<erhe::primitive::Material> slot_material = (slot_payload.material != nullptr)
+            ? std::dynamic_pointer_cast<erhe::primitive::Material>(slot_payload.material->shared_from_this())
+            : std::shared_ptr<erhe::primitive::Material>{};
+        if (slot_brush) {
+            return brush_drop_target(row, node, slot_brush, slot_material, c_inventory_slot_payload_type).value_or(false);
         }
-        if (slot_payload.material != nullptr) {
-            material = std::dynamic_pointer_cast<erhe::primitive::Material>(slot_payload.material->shared_from_this());
-        }
-    }
-
-    // Accept either payload type that can carry a brush / material: the
-    // resource prim's own class name, or an inventory slot.
-    const auto accept_brush_or_material_payload = [&payload_prim]() -> const ImGuiPayload* {
-        const ImGuiPayload* payload = payload_prim
-            ? ImGui::AcceptDragDropPayload(payload_prim->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect)
-            : nullptr;
-        if (payload == nullptr) {
-            payload = ImGui::AcceptDragDropPayload(c_inventory_slot_payload_type, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-        }
-        return payload;
-    };
-
-    // Graph Mesh asset drop onto a scene node: source the node's mesh from
-    // the graph by creating (or retargeting) a Geometry_graph_mesh
-    // attachment - same bind logic as Properties and MCP set_node_graph_mesh.
-    // Only assets from the node's own scene content library are accepted;
-    // the scene file resolves the binding by name in that library on load,
-    // so a cross-scene bind would not survive a save/load round-trip.
-    if (graph_mesh) {
-        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
-        const std::shared_ptr<Content_library> library = (scene_root != nullptr) ? scene_root->get_content_library() : std::shared_ptr<Content_library>{};
-        if (!library || !library->has_item(*graph_mesh)) {
-            return false;
-        }
-        const ImRect rect{rect_min, rect_max};
-        if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_center)) {
-            drag_and_drop_rectangle_preview(rect);
-            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(graph_mesh->get_type_name().data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            if (payload != nullptr) {
-                std::shared_ptr<Geometry_graph_mesh> attachment = erhe::scene::get_attachment<Geometry_graph_mesh>(node.get());
-                if (!attachment) {
-                    attachment = std::make_shared<Geometry_graph_mesh>(graph_mesh);
-                    node->attach(attachment);
-                } else {
-                    attachment->set_graph_mesh(graph_mesh);
-                }
-                // Materialize the asset's latest bake immediately; a
-                // never-baked asset applies on its first evaluation push.
-                attachment->apply_baked_products();
-            }
-            ImGui::EndDragDropTarget();
-            return true;
+        if (slot_material) {
+            return material_assign_drop_target(row, node, slot_material, c_inventory_slot_payload_type).value_or(false);
         }
         return false;
     }
 
-    // When an inventory slot defines both brush and material, the brush wins:
-    // a new node is created and the slot material is applied to its mesh.
-    if (material && !brush) {
-        const std::shared_ptr<erhe::scene::Mesh> mesh = erhe::scene::get_mesh(node.get());
-        if (mesh) {
-            const std::vector<erhe::scene::Mesh_primitive>& mesh_primitives = mesh->get_primitives();
-            if (!mesh_primitives.empty()) {
-                const ImRect rect{rect_min, rect_max};
-                if (ImGui::BeginDragDropTargetCustom(rect, imgui_id_top)) {
-                    drag_and_drop_rectangle_preview(rect);
-                    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                        material->get_type_name().data(), ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-                    );
-                    if (payload == nullptr) {
-                        payload = ImGui::AcceptDragDropPayload(
-                            c_inventory_slot_payload_type, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect
-                        );
-                    }
-                    if (payload != nullptr) {
-                        // TODO payload->Preview
-                        if (payload->Delivery) {
-                            queue_mesh_material_assign_to_all_primitives(m_context, mesh, material);
-                        }
-                    }
-                    ImGui::EndDragDropTarget();
-                    return true;
-                }
-            }
-        }
-    } else if (brush) {
-        // Brush drop onto a scene node: create a new node with a mesh instance of the brush.
-        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
-        if (scene_root == nullptr) {
-            return false;
-        }
-        const auto insert_brush_instance = [this, &brush, &material, scene_root](
-            const std::shared_ptr<erhe::scene::Node>& parent,
-            const std::size_t                         index_in_parent
-        ) {
-            if (!parent) {
-                return;
-            }
-            // Material priority: payload material (inventory slot) > brush material > default
-            std::shared_ptr<erhe::primitive::Material> brush_material = material ? material : brush->get_material();
-            if (!brush_material) {
-                brush_material = get_default_material(m_context, *scene_root);
-            }
-            if (!brush_material) {
-                return;
-            }
-            place_brush_in_scene(
-                m_context,
-                *brush,
-                *scene_root,
-                parent->world_from_node(), // identity local transform under the chosen parent
-                brush_material,
-                1.0,
-                erhe::physics::Motion_mode::e_dynamic,
-                parent,
-                index_in_parent
-            );
-        };
-
-        // Insert as sibling before drop target
-        const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
-        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
-            drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
-            const ImGuiPayload* payload = accept_brush_or_material_payload();
-            if (payload != nullptr) {
-                insert_brush_instance(node->get_parent_node(), node->get_index_in_parent());
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-
-        // Insert as last child of drop target
-        const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
-        if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
-            drag_and_drop_rectangle_preview(middle_rect);
-            const ImGuiPayload* payload = accept_brush_or_material_payload();
-            if (payload != nullptr) {
-                insert_brush_instance(node, std::numeric_limits<std::size_t>::max());
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-
-        // Insert as sibling after drop target
-        const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
-        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
-            drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
-            const ImGuiPayload* payload = accept_brush_or_material_payload();
-            if (payload != nullptr) {
-                insert_brush_instance(node->get_parent_node(), node->get_index_in_parent() + 1);
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-    } else if (gltf_asset) {
+    if (gltf_asset) {
         // glTF asset dropped onto a scene node: instantiate as a prefab, as
-        // sibling before / child of / sibling after the drop target (the
-        // same three rects as the brush drop).
-        Scene_root* scene_root = static_cast<Scene_root*>(node->get_item_host());
+        // sibling before / child of / sibling after the drop target.
+        Scene_root* const scene_root = find_scene_root_for_item(m_context, *node);
         if (scene_root == nullptr) {
             return false;
         }
-        const auto accept_gltf_payload = []() -> const ImGuiPayload* {
-            return ImGui::AcceptDragDropPayload(Asset_file_gltf::static_type_name.data(), ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-        };
-
         // A reference instance protects its structure
         // (doc/usd-compatibility-plan.md X2): no prim is added under a
-        // carrier or inside one, so the child (middle) rect is not offered
-        // there, and the sibling rects are not offered when the prim's own
-        // parent refuses children.
-        const bool refuse_child_of_node   = refuses_instance_child(*node);
+        // carrier or inside one, so the child zone is not offered there, and
+        // the sibling zones are not offered when the prim's own parent
+        // refuses children.
         const std::shared_ptr<erhe::scene::Node> node_parent = node->get_parent_node();
+        const bool refuse_child_of_node   = refuses_instance_child(*node);
         const bool refuse_child_of_parent = node_parent && refuses_instance_child(*node_parent);
-
-        // Insert as sibling before drop target
-        const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
-        if (!refuse_child_of_parent && ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
-            drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
-            const ImGuiPayload* payload = accept_gltf_payload();
-            if (payload != nullptr) {
-                instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node->get_parent_node(), node->get_index_in_parent());
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-
-        // Insert as last child of drop target
-        if (!refuse_child_of_node) {
-            const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
-            if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
-                drag_and_drop_rectangle_preview(middle_rect);
-                const ImGuiPayload* payload = accept_gltf_payload();
-                if (payload != nullptr) {
-                    instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node, std::numeric_limits<std::size_t>::max());
-                }
-                ImGui::EndDragDropTarget();
-                return true;
-            }
-        }
-
-        // Insert as sibling after drop target
-        const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
-        if (!refuse_child_of_parent && ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
-            drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
-            const ImGuiPayload* payload = accept_gltf_payload();
-            if (payload != nullptr) {
-                instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node->get_parent_node(), node->get_index_in_parent() + 1);
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-    } else if (payload_is_node) {
-        log_tree_frame->trace("Dnd item is a prim: {}", node->describe());
-        const ImRect top_rect{rect_min, ImVec2{rect_max.x, y1}};
-        if (ImGui::BeginDragDropTargetCustom(top_rect, imgui_id_top)) {
-            {
-                drag_and_drop_gradient_preview(x0, x1, y0, y2, ImGui::GetColorU32(ImGuiCol_DragDropTarget), 0);
-                const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-                if (payload != nullptr) {
-                    if (payload != nullptr) {
-                        log_tree_frame->trace("Dnd payload is a prim (top rect)");
-                        IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
-                        erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
-                        move_selection(node, payload_item, Placement::Before_anchor);
-                    } else {
-                        log_tree_frame->trace("Dnd payload is not a prim (top rect)");
-                    }
+        return three_zone_drop_target(
+            row,
+            Asset_file_gltf::static_type_name.data(),
+            Drop_zones{
+                .before = !refuse_child_of_parent,
+                .into   = !refuse_child_of_node,
+                .after  = !refuse_child_of_parent
+            },
+            [this, &gltf_asset, scene_root, &node, &node_parent](const Drop_zone zone) {
+                switch (zone) {
+                    case Drop_zone::before: instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node_parent, node->get_index_in_parent()); break;
+                    case Drop_zone::into:   instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node, std::numeric_limits<std::size_t>::max()); break;
+                    case Drop_zone::after:  instantiate_gltf_prefab(m_context, *gltf_asset, *scene_root, node_parent, node->get_index_in_parent() + 1); break;
                 }
             }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-
-        // Attach selection to target
-        const ImRect middle_rect{ImVec2{rect_min.x, y1}, ImVec2{rect_max.x, y2}};
-        if (ImGui::BeginDragDropTargetCustom(middle_rect, imgui_id_center)) {
-            drag_and_drop_rectangle_preview(middle_rect);
-            const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            if (payload != nullptr) {
-                log_tree_frame->trace("Dnd payload is a prim (middle rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
-                erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
-                attach_selection_to(node, payload_item);
-            } else {
-                log_tree_frame->trace("Dnd payload is not a prim (middle rect)");
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-
-        // Move selection after drop target
-        const ImRect bottom_rect{ImVec2{rect_min.x, y2}, rect_max};
-        if (ImGui::BeginDragDropTargetCustom(bottom_rect, imgui_id_bottom)) {
-            const ImGuiPayload* payload = accept_prim_payload(ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-            if (payload != nullptr) {
-                drag_and_drop_gradient_preview(x0, x1, y1, y3, 0, ImGui::GetColorU32(ImGuiCol_DragDropTarget));
-                log_tree_frame->trace("Dnd payload is a prim (bottom rect)");
-                IM_ASSERT(payload->DataSize == sizeof(erhe::Item_base*));
-                erhe::Item_base* payload_item = *(static_cast<erhe::Item_base**>(payload->Data));
-                move_selection(node, payload_item, Placement::After_anchor);
-            } else {
-                log_tree_frame->trace("Dnd payload is not a prim (bottom rect)");
-            }
-            ImGui::EndDragDropTarget();
-            return true;
-        }
-    } else {
-        log_tree_frame->trace("Dnd item is not a prim / Material: {}", item->describe());
+        );
     }
+
     return false;
 }
 
@@ -1376,24 +1391,21 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
         }
 
         if (hierarchy) {
-        // In the content library, only Materials are copyable for now.
-        const std::shared_ptr<Content_library> item_library = find_owning_library(m_context, item);
-        const bool is_library_resource = item_library && item_library->has_item(*item);
-        const bool is_library_scope    = item_library &&
-            (std::dynamic_pointer_cast<erhe::Scope>(item) != nullptr) &&
-            (item_library->find_scope_kind(*std::dynamic_pointer_cast<erhe::Scope>(item)) != 0);
-        const bool is_content_library_non_copyable =
-            (is_library_scope || is_library_resource) &&
-            (std::dynamic_pointer_cast<erhe::primitive::Material>(item) == nullptr);
-
-        const bool selected_or_hierarchy = item->is_selected() || hierarchy;
-        const bool can_copy = selected_or_hierarchy && !is_content_library_non_copyable;
+        // The clipboard entries apply to every prim of the tree - node,
+        // scope, kind scope or resource alike (doc/usd-compatibility-plan.md
+        // C5). A copy is a clone, so a kind that is
+        // erhe::Item_kind::not_clonable (a texture, a brush, a graph asset)
+        // is not copied, cut or duplicated; a subtree clone leaves such
+        // descendants out.
+        const bool is_prim   = is_tree_prim(item);
+        const bool clonable  = item->is_clonable();
+        const bool can_copy  = is_prim && clonable;
         // Structure protection (doc/usd-compatibility-plan.md X2): an item
         // inside a reference instance is not removed, and nothing is
         // inserted under a carrier or inside one.
         const std::shared_ptr<erhe::Hierarchy> item_parent = hierarchy->get_parent().lock();
         const bool can_cut       = can_copy && !is_instance_structure_protected(*item);
-        const bool can_duplicate = can_copy && !(item_parent && refuses_instance_child(*item_parent));
+        const bool can_duplicate = can_copy && item_parent && !refuses_instance_child(*item_parent);
         if (!can_cut) {
             ImGui::BeginDisabled();
         }
@@ -1430,21 +1442,11 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             ImGui::EndDisabled();
         }
 
-        // For content-library resources, paste always targets the scope. If
-        // the target is a resource prim, redirect to its parent scope. Only
-        // allow paste into a Materials scope for now.
-        std::shared_ptr<erhe::Hierarchy> paste_target = hierarchy;
-        if (is_library_resource) {
-            paste_target = hierarchy->get_parent().lock();
-        }
-        const std::shared_ptr<erhe::Scope> paste_target_scope = std::dynamic_pointer_cast<erhe::Scope>(paste_target);
-        const bool is_materials_scope = item_library && paste_target_scope &&
-            (item_library->find_scope_kind(*paste_target_scope) == erhe::Item_type::material);
-
+        // Paste inserts the clipboard contents as the last children of the
+        // row's prim.
+        const std::shared_ptr<erhe::Hierarchy>& paste_target = hierarchy;
         const std::vector<std::shared_ptr<erhe::Item_base>>& clipboard_contents = m_context.clipboard->get_contents();
-        const bool can_paste = !clipboard_contents.empty() && paste_target &&
-            (!(is_library_scope || is_library_resource) || is_materials_scope) &&
-            !(paste_target && refuses_instance_child(*paste_target));
+        const bool can_paste = is_prim && !clipboard_contents.empty() && !refuses_instance_child(*paste_target);
         if (!can_paste) {
             ImGui::BeginDisabled();
         }
@@ -1484,9 +1486,6 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
             ImGui::EndDisabled();
         }
 
-        if (!selected_or_hierarchy) {
-            ImGui::BeginDisabled();
-        }
         if (ImGui::MenuItem("Delete")) {
             if (item->is_selected()) {
                 m_context.selection->delete_selection();
@@ -1497,9 +1496,6 @@ void Item_tree::item_popup_menu(const std::shared_ptr<erhe::Item_base>& item)
                 // instance's sealed interior).
                 m_context.selection->delete_items({item});
             }
-        }
-        if (!selected_or_hierarchy) {
-            ImGui::EndDisabled();
         }
         ImGui::Separator();
         // The M1 namespace path (doc/usd-compatibility-plan.md), the form the

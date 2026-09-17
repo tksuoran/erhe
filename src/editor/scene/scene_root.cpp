@@ -43,6 +43,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_graphics/texture.hpp"
 #include "erhe_imgui/imgui_windows.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_physics/iworld.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_material.hpp"
@@ -482,69 +483,40 @@ auto Scene_root::make_browser_window(
                 return m_node_tree_window->drag_and_drop_target(item);
             }
             // Texture file drop from the asset browser: dropping an image file
-            // onto this scene's Textures scope (or a texture in it) imports it
-            // into this content library, the same verb the asset browser's
-            // context menu offers.
+            // onto any row of this scene imports it into this scene's content
+            // library, the same verb the asset browser's context menu offers.
+            // The texture lands as a child of the hovered prim, or in the
+            // Textures scope when the row is not a prim (the Scene header, a
+            // node attachment).
             {
-                const std::shared_ptr<erhe::Scope> textures_scope = library->find_scope(erhe::Item_type::texture);
-                const bool is_textures_scope = textures_scope && (item == textures_scope);
-                const bool is_texture_item   = !is_textures_scope &&
-                    (std::dynamic_pointer_cast<erhe::graphics::Texture>(item) != nullptr) &&
-                    library->has_item(*item);
-                if (is_textures_scope || is_texture_item) {
-                    const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
-                    if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_texture::static_type_name.data())) {
-                        if (ImGui::BeginDragDropTarget()) {
-                            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Asset_file_texture::static_type_name.data());
-                            if (payload != nullptr) {
-                                erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload->Data));
-                                const std::filesystem::path* source_path = (payload_item_base != nullptr)
-                                    ? payload_item_base->get_source_path()
-                                    : nullptr;
-                                if (source_path != nullptr) {
-                                    import_texture_into_scene(
-                                        context,
-                                        std::dynamic_pointer_cast<Scene_root>(shared_from_this()),
-                                        *source_path
-                                    );
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                            return true;
-                        }
+                const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
+                if ((payload_peek != nullptr) && payload_peek->IsDataType(Asset_file_texture::static_type_name.data())) {
+                    const std::shared_ptr<erhe::Hierarchy> parent = (std::dynamic_pointer_cast<erhe::Typed>(item) != nullptr)
+                        ? std::dynamic_pointer_cast<erhe::Hierarchy>(item)
+                        : std::shared_ptr<erhe::Hierarchy>{};
+                    if (parent && refuses_instance_child(*parent)) {
+                        return false;
                     }
-                }
-            }
-            // Material cross-library drop (migrated from the removed Content
-            // Library window, #241 follow-up): dropping a material from another
-            // scene's content library onto this scene's Materials scope (or a
-            // material in it) copies the material into this library.
-            {
-                const std::shared_ptr<erhe::Scope> materials_scope = library->find_scope(erhe::Item_type::material);
-                const bool is_materials_scope = materials_scope && (item == materials_scope);
-                const bool is_material_item   = !is_materials_scope &&
-                    (std::dynamic_pointer_cast<erhe::primitive::Material>(item) != nullptr) &&
-                    library->has_item(*item);
-                if (is_materials_scope || is_material_item) {
-                    const ImGuiPayload* payload_peek = ImGui::GetDragDropPayload();
-                    if ((payload_peek != nullptr) && payload_peek->IsDataType(erhe::primitive::Material::static_type_name.data())) {
-                        erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload_peek->Data));
-                        const std::shared_ptr<erhe::primitive::Material> source_material =
-                            (payload_item_base != nullptr)
-                                ? std::dynamic_pointer_cast<erhe::primitive::Material>(payload_item_base->shared_from_this())
-                                : std::shared_ptr<erhe::primitive::Material>{};
-                        if (source_material && !library->has_item(*source_material) && ImGui::BeginDragDropTarget()) {
-                            const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(erhe::primitive::Material::static_type_name.data());
-                            if (payload != nullptr) {
-                                const std::shared_ptr<erhe::primitive::Material> new_material =
-                                    context.asset_manager->create<erhe::primitive::Material>(*this, *source_material);
-                                auto op = make_library_insert_operation(context, library, new_material);
-                                context.operation_stack->queue(op);
+                    if (ImGui::BeginDragDropTarget()) {
+                        const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(Asset_file_texture::static_type_name.data());
+                        if (payload != nullptr) {
+                            erhe::Item_base* payload_item_base = *(static_cast<erhe::Item_base**>(payload->Data));
+                            const std::filesystem::path* source_path = (payload_item_base != nullptr)
+                                ? payload_item_base->get_source_path()
+                                : nullptr;
+                            if (source_path != nullptr) {
+                                import_texture_into_scene(
+                                    context,
+                                    std::dynamic_pointer_cast<Scene_root>(shared_from_this()),
+                                    *source_path,
+                                    parent
+                                );
                             }
-                            ImGui::EndDragDropTarget();
-                            return true;
                         }
+                        ImGui::EndDragDropTarget();
+                        return true;
                     }
+                    return false;
                 }
             }
             return m_node_tree_window->drag_and_drop_target(item);

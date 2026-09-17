@@ -19,8 +19,8 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
 - R2 Editing. The Scene Hierarchy offers "Create Scope" on a kind scope and
   on a folder inside one; a folder is renamed from the Properties window name
   row, deleted with the tree's "Delete", and resources and folders are moved
-  by dragging them onto a scope of the same kind. Every one of these is one
-  undoable operation.
+  by dragging them in the tree (D3). Every one of these is one undoable
+  operation.
 - R3 Selection and Properties. A folder row is selected like any row and the
   Properties window shows the folder: name row, its registered properties
   (its class chain: `Item_base` flags, the `Hierarchy` child count) and the
@@ -73,13 +73,16 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
 - D3 Moves. A move is `Item_parent_change_operation`, the same undoable
   reparent the Hierarchy window runs for nodes: it records the moved prim, its
   parent and index before and after, and execute and undo are one
-  `Hierarchy::set_parent(parent, index)` each. The tree accepts a resource
-  prim or a folder scope on ANY prim row of the same scene when the payload is
-  neither the target nor one of its ancestors, so a material can be dropped
-  under an `Xform` (C5); the drop appends to the target. A drop on a brush row
-  keeps its existing meaning (fork the brush with the dropped material). A
-  move keeps the prim's item host, so the host is not told and the library
-  index is untouched - a move is not a removal.
+  `Hierarchy::set_parent(parent, index)` each. Resources, folder scopes and
+  kind scopes are prims and take the Hierarchy's structural move like every
+  other prim - before, into or after any prim row, a material under an `Xform`
+  (C5) included; the drop rules, the Alt actions (such as forking a brush with
+  a dropped material) and the zones are stated once in
+  `src/editor/windows/notes.md` "Scene Hierarchy drag and drop". A move within
+  a scene keeps the prim's item host, so the host is not told and the library
+  index is untouched - a move is not a removal; a move to another scene
+  re-registers the prim with that scene's library through
+  `erhe::Typed::handle_item_host_update`.
 - D8 Kind properties (R7). A `Scope`'s secondary owner type
   (`doc/property-system.md` D30) is the root owner type, as a `Style`'s is, so
   it holds any class's value properties by qualified name and its descendants

@@ -12,6 +12,7 @@
 #include "operations/node_attach_operation.hpp"
 #include "operations/operation_stack.hpp"
 #include "prefabs/prefab_library.hpp"
+#include "scene/item_lookup.hpp"
 #include "scene/scene_commands.hpp"
 #include "scene/scene_root.hpp"
 #include "scene/scene_view.hpp"
@@ -20,6 +21,7 @@
 
 #include "erhe_commands/commands.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/typed.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
 #include "erhe_scene/node.hpp"
@@ -235,8 +237,9 @@ auto Clipboard::try_ready() -> bool
     Selection& selection = *m_context.selection;
     const std::vector<std::shared_ptr<erhe::Item_base>>& selected_items = selection.get_selected_items();
 
-    const auto target_node = get<erhe::scene::Node>(selected_items);
-    return !m_contents.empty() && target_node;
+    // Any prim takes pasted children (doc/usd-compatibility-plan.md C5).
+    const std::shared_ptr<erhe::Typed> target_prim = get<erhe::Typed>(selected_items);
+    return !m_contents.empty() && target_prim;
 }
 
 [[nodiscard]] auto Clipboard::resolve_paste_target() -> std::shared_ptr<erhe::Hierarchy>
@@ -328,8 +331,7 @@ auto Clipboard::try_paste(const std::shared_ptr<erhe::Hierarchy>& target_parent,
     // - otherwise the source scene is gone AND its record was released: the
     //   target scene claims the definition, undoably with the paste itself
     //   and BEFORE the node insert, so register_mesh sees a definition.
-    const std::shared_ptr<erhe::scene::Node> target_node = std::dynamic_pointer_cast<erhe::scene::Node>(target_parent);
-    Scene_root* const target_scene_root = target_node ? static_cast<Scene_root*>(target_node->get_item_host()) : nullptr;
+    Scene_root* const target_scene_root = find_scene_root_for_item(m_context, *target_parent);
     if (target_scene_root != nullptr) {
         std::vector<std::shared_ptr<erhe::primitive::Material>> orphan_materials;
         for (const std::shared_ptr<erhe::Hierarchy>& pasted_hierarchy : pasted_hierarchies) {

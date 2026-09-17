@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string_view>
 
 namespace erhe {
@@ -27,7 +28,7 @@ namespace erhe::imgui {
     class Imgui_windows;
 }
 namespace erhe::primitive { class Material; }
-namespace erhe::scene { class Light; }
+namespace erhe::scene { class Light; class Xformable; using Node = Xformable; }
 
 namespace editor {
 
@@ -35,6 +36,7 @@ class App_scenes;
 class App_settings;
 class Brush;
 class Icon_set;
+class Item_tree_drop_row;
 class Operation;
 class Operation_stack;
 class Scene_root;
@@ -198,6 +200,33 @@ private:
         Selection_usage                         selection_usage
     );
     void drag_and_drop_source(const std::shared_ptr<erhe::Item_base>& node);
+
+    // Drop targets of a row. Each returns whether the row is the hovered drop
+    // target; the std::optional forms return nullopt when the drop does not
+    // apply to this payload / row pair.
+    [[nodiscard]] auto move_drop_target(
+        const Item_tree_drop_row&               row,
+        const std::shared_ptr<erhe::Item_base>& item,
+        const std::shared_ptr<erhe::Item_base>& payload_prim
+    ) -> bool;
+    [[nodiscard]] auto action_drop_target(
+        const Item_tree_drop_row&               row,
+        const std::shared_ptr<erhe::Item_base>& item,
+        const std::shared_ptr<erhe::Item_base>& payload_prim
+    ) -> std::optional<bool>;
+    [[nodiscard]] auto material_assign_drop_target(
+        const Item_tree_drop_row&                         row,
+        const std::shared_ptr<erhe::scene::Node>&         node,
+        const std::shared_ptr<erhe::primitive::Material>& material,
+        const char*                                       payload_type
+    ) -> std::optional<bool>;
+    [[nodiscard]] auto brush_drop_target(
+        const Item_tree_drop_row&                         row,
+        const std::shared_ptr<erhe::scene::Node>&         node,
+        const std::shared_ptr<Brush>&                     brush,
+        const std::shared_ptr<erhe::primitive::Material>& material,
+        const char*                                       payload_type
+    ) -> std::optional<bool>;
 
     erhe::Item_filter                                            m_filter;
     ImGuiTextFilter                                              m_text_filter;

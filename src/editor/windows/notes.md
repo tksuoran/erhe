@@ -22,6 +22,24 @@ ImGui window implementations for the editor UI, including viewport display, prop
 
 - **`Item_tree_window`** -- Generic tree view window used for both scene hierarchy browsing and content library browsing. Supports drag-and-drop, context menus, and custom item callbacks.
 
+## Scene Hierarchy drag and drop
+
+The scene hierarchy is USD-like: every `erhe::Typed` item - `Scope`, the `Xformable`s (`Xform`, `Mesh`, `Camera`, `Light`), and every content-library resource (`Material`, `Brush`, `Style`, textures, graph assets, physics resources, ...) - is a prim, and any prim may be the child of any other prim (`doc/usd-compatibility-plan.md` C5). A content library kind scope (`Materials`, `Brushes`, ...) is where a new resource is placed by default and is an ordinary, movable `Scope`. The Scene header row and node attachment rows are not prims. Drops follow "move wins, modifier acts" (`Item_tree::drag_and_drop_target`):
+
+- **Move.** A prim row dragged from any scene's hierarchy and dropped on a prim row moves: the top third of the target row places it as the sibling before the row, the middle third as the row's last child, the bottom third as the sibling after the row, each zone with its own preview. When the dragged row is selected, the whole selection moves (selected prims whose ancestor is selected move with that ancestor). A move is `Item_parent_change_operation` or `Item_reposition_in_parent_operation`, one compound per drop; `erhe::Typed::handle_item_host_update` carries a prim moved to another scene over to that scene's content library.
+- **Action (Alt held).** While Alt is held, the action the dragged prim has on the hovered row is offered in place of the move. The actions, in the order they are considered:
+  - a `Graph_mesh` of the node's own scene onto a node: bind it through a `Geometry_graph_mesh` attachment (whole row);
+  - a `Material` onto a node holding a mesh with primitives: assign it to every primitive (whole row);
+  - a `Material` onto a brush of this scene: fork the brush with that material (whole row);
+  - a `Brush` onto a node: place a brush instance before / under / after the node (three zones);
+  - a `Material` another scene's library holds onto any prim of this scene: copy it into this scene's library as the prim's last child (whole row).
+  Where none applies to the pair, the move zones stay offered, so Alt never takes a drop away.
+- **Payloads that are not prim rows** act regardless of modifier: an inventory slot onto a node places its brush (with the slot material, three zones) or, for a material-only slot, assigns the material to the node's mesh; an Asset Browser glTF file onto the Scene header row instantiates its prefab as the scene root's last child, and onto a node before / under / after it; an Asset Browser texture file onto any row of the scene imports it (`import_texture_into_scene`) as the hovered prim's last child, or into the Textures scope when the row is not a prim.
+
+The row context menu follows the same model. On any prim row - node, scope, kind scope or resource - Copy, Cut and Duplicate are offered when the item is clonable, and Paste inserts the clipboard contents as the row's last children. A copy is a clone, so the `erhe::Item_kind::not_clonable` kinds (`erhe::graphics::Texture`, `Brush`, the graph assets `Graph_texture` / `Graph_mesh`) offer Delete and Copy Path but not Copy, Cut or Duplicate, and a clone of a subtree leaves such descendants out. Rows that are not prims (Asset Browser file rows) offer Delete and Copy Path only. Cut, Duplicate and Paste respect instance structure protection like the drops below.
+
+Reference instance structure protection applies to every drop (`prefabs/instance_structure.hpp`, `doc/usd-compatibility-plan.md` X2): a move of a protected prim or under a refusing parent is refused and logged at drop, and the glTF, texture and material-copy drops are not offered where the parent refuses children.
+
 ## Public API / Integration Points
 
 - `Viewport_window::viewport_scene_view()` -- access the associated scene view

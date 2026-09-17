@@ -14,6 +14,7 @@
 #include "erhe_file/file.hpp"
 #include "erhe_gltf/gltf.hpp"
 #include "erhe_graphics/texture.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_verify/verify.hpp"
 #include "erhe_primitive/material.hpp"
 #include "erhe_scene/mesh.hpp"
@@ -278,9 +279,10 @@ auto reference_material_into_scene(
 }
 
 void import_texture_into_scene(
-    App_context&                       context,
-    const std::shared_ptr<Scene_root>& scene_root,
-    const std::filesystem::path&       path
+    App_context&                            context,
+    const std::shared_ptr<Scene_root>&      scene_root,
+    const std::filesystem::path&            path,
+    const std::shared_ptr<erhe::Hierarchy>& parent
 )
 {
     if (!scene_root || (context.texture_file_loader == nullptr) || (context.operation_stack == nullptr)) {
@@ -295,9 +297,10 @@ void import_texture_into_scene(
     const std::weak_ptr<Scene_root> weak_scene_root = scene_root;
     App_context* const              context_ptr     = &context;
     const std::string               path_string     = path.generic_string();
+    const std::weak_ptr<erhe::Hierarchy> weak_parent = parent;
     context.texture_file_loader->load_async(
         path,
-        [context_ptr, weak_scene_root, path_string](const std::shared_ptr<erhe::graphics::Texture>& texture) {
+        [context_ptr, weak_scene_root, weak_parent, path_string](const std::shared_ptr<erhe::graphics::Texture>& texture) {
             if (!texture) {
                 log_asset->warn("import texture: '{}' could not be loaded", path_string);
                 return;
@@ -310,6 +313,16 @@ void import_texture_into_scene(
             if (!target_library) {
                 return;
             }
+            // The requested parent, while it is still a prim of the target
+            // scene; otherwise the Textures scope.
+            std::shared_ptr<erhe::Hierarchy> target_parent = weak_parent.lock();
+            if (target_parent && (target_parent->get_item_host() != static_cast<erhe::Item_host*>(target.get()))) {
+                log_asset->info(
+                    "import texture: '{}' goes to the Textures scope, the drop parent '{}' left scene '{}'",
+                    path_string, target_parent->get_name(), target->get_name()
+                );
+                target_parent.reset();
+            }
             context_ptr->operation_stack->queue(
                 make_library_attach_operation(
                     *context_ptr,
@@ -320,7 +333,10 @@ void import_texture_into_scene(
                         .item_name  = texture->get_name(),
                         .item_index = -1, // a standalone file, not an index into a glTF
                         .item_type  = "texture",
-                    }
+                    },
+                    {},
+                    {},
+                    target_parent
                 )
             );
             log_asset->info(

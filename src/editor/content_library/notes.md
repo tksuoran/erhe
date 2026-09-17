@@ -112,7 +112,7 @@ and its Add Property list offers the classes of the prims below it first
 without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
 The editor creates folders ("Create Scope", `create_library_folder`), moves
-resources between them and under any other prim (drag onto a prim row,
+resources between them and under any other prim (the Hierarchy move drop,
 `move_library_item`; `Item_parent_change_operation`) and persists where each
 resource sits through `ERHE_scene` `library_folders`, whose `path` names the
 prim that holds it - a folder scope, an `Xform`, the `Mesh` that binds it
@@ -142,7 +142,7 @@ material's style into the target library. Styles save through
 Image files the editor can decode (`.png` / `.jpg` / `.jpeg` / `.ktx2` / `.dds`, see `is_texture_file_extension`) appear in the Asset Browser as `Asset_file_texture` items, and enter a scene's library through `import_texture_into_scene` (`assets/asset_workflow.hpp`) two ways:
 
 - the browser's **"Import to content library texture"** context menu item - a plain item when one scene is open, a submenu of scene names when several are;
-- **dropping** the file onto the target scene's `Textures` scope (or a texture in it) in the Scene Hierarchy window.
+- **dropping** the file onto any row of the target scene in the Scene Hierarchy window, which places the texture as the hovered prim's last child (`src/editor/windows/notes.md` "Scene Hierarchy drag and drop").
 
 Both queue an undoable insert through `make_library_attach_operation` once the texture is resident. Every import creates a FRESH texture: an owned resource is a prim of its scene's tree and reports that scene as its `Item_host`, so two libraries must never own the same object - importing the same file into two scenes gives each its own GPU texture.
 
