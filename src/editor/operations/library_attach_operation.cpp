@@ -41,6 +41,16 @@ auto make_library_attach_operation(
         content_library->set_asset_key(item, asset_key.value());
     }
 
+    return make_resource_insert_operation(context, content_library, item, parent);
+}
+
+auto make_resource_insert_operation(
+    App_context&                            context,
+    const std::shared_ptr<Content_library>& content_library,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const std::shared_ptr<erhe::Hierarchy>& parent
+) -> std::shared_ptr<Operation>
+{
     if (!parent) {
         return make_library_insert_operation(context, content_library, item);
     }

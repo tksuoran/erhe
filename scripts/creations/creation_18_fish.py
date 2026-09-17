@@ -1083,9 +1083,9 @@ def build_mandarin(c, cfg=None):
         root_id = c.node_by_name(body)["id"]
         for child in node_names[1:]:
             child_id = c.node_by_name(child)["id"]
-            c.mutate("reparent_node", {"scene_name": c.scene,
-                                       "node_id": child_id,
-                                       "parent_node_id": root_id})
+            c.mutate("reparent_item", {"scene_name": c.scene,
+                                       "item_id": child_id,
+                                       "parent_id": root_id})
         c.settle()
     # Eyes probe the LAST part (the head when split, the body otherwise).
     return _mandarin_attachments(c, cfg, body, eye_node=node_names[-1])

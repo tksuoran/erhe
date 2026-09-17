@@ -506,8 +506,8 @@ auto Mcp_server::action_set_item_style(const json& args) -> std::string
     ).dump();
 }
 
-// An empty style item in the scene's Styles folder (doc/style-library.md
-// R1); fill it with set_item_property by qualified name and assign it
+// An empty style item under the parent prim, or in the scene's Styles
+// scope without one (doc/style-library.md R1); fill it with set_item_property by qualified name and assign it
 // through an item's 'style' property.
 auto Mcp_server::action_create_style(const json& args) -> std::string
 {
@@ -527,13 +527,18 @@ auto Mcp_server::action_create_style(const json& args) -> std::string
     if (!library) {
         return make_error_content("Scene has no content library");
     }
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*scene_root, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
     std::shared_ptr<Style> style{};
     {
         std::lock_guard<ERHE_PROFILE_LOCKABLE_BASE(std::mutex)> lock{library->mutex};
         style = std::make_shared<Style>(make_unique_style_name(*library, name));
     }
     m_context.operation_stack->execute_now(
-        make_library_insert_operation(m_context, library, style)
+        make_resource_insert_operation(m_context, library, style, parent)
     );
     return make_json_content(
         json{

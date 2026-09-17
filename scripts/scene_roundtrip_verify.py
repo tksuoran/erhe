@@ -907,15 +907,15 @@ def section_build_scene():
         # carries where. Three placements, one per shape the carrier can take:
         # a folder scope under the kind scope, a scope under an Xform, and a
         # Mesh that binds the material directly.
-        folder = mutate("create_library_folder", {"scene_name": scene, "folder_path": "Materials/P6 Metals"})
-        check(S, "create_library_folder under the kind scope", bool(folder) and folder.get("folder"), str(folder))
+        folder = mutate("create_scope", {"scene_name": scene, "path": "Materials/P6 Metals"})
+        check(S, "create_scope below the Materials scope", bool(folder) and folder.get("scope"), str(folder))
         for name in ("P6 Folder Material", "P6 Node Material", "P6 Mesh Material"):
             created = mutate("create_material", {"scene_name": scene, "name": name})
             check(S, f"create_material {name}", bool(created) and created.get("id") is not None, str(created))
-        moved = mutate("move_library_item", {
-            "scene_name": scene, "item_name": "P6 Folder Material", "folder_path": "Materials/P6 Metals",
+        moved = mutate("reparent_item", {
+            "scene_name": scene, "item_name": "P6 Folder Material", "parent_name": "Materials/P6 Metals",
         })
-        check(S, "material moved into the folder scope", bool(moved) and moved.get("folder"), str(moved))
+        check(S, "material moved into the folder scope", bool(moved) and moved.get("parent"), str(moved))
         # Every one of the three must be USED: the exporter is lazy and never
         # writes an unused library material (doc/asset_manager.md).
         for shape_name, material_name in (
@@ -938,10 +938,10 @@ def section_build_scene():
         check(S, "resource holder node created", wait_for_scene_node(scene, "P6 Holder"))
         scoped = mutate("create_node", {"scene_name": scene, "name": "P6 Holder Scope", "prim_type": "Scope", "parent_node_name": "P6 Holder"})
         check(S, "scope under the holder created", bool(scoped) and scoped.get("node_id") is not None, str(scoped))
-        moved = mutate("move_library_item", {
-            "scene_name": scene, "item_name": "P6 Node Material", "folder_name": "P6 Holder Scope",
+        moved = mutate("reparent_item", {
+            "scene_name": scene, "item_name": "P6 Node Material", "parent_name": "P6 Holder Scope",
         })
-        check(S, "material moved under the scope below an Xform", bool(moved) and moved.get("folder"), str(moved))
+        check(S, "material moved under the scope below an Xform", bool(moved) and moved.get("parent"), str(moved))
 
         # Directly under the Mesh that binds it.
         box = mutate("create_shape", {
@@ -953,10 +953,10 @@ def section_build_scene():
             "scene_name": scene, "mesh_name": "P6 Bound Box", "material_name": "P6 Mesh Material",
         })
         check(S, "material assigned to the mesh", bool(assigned), str(assigned))
-        moved = mutate("move_library_item", {
-            "scene_name": scene, "item_name": "P6 Mesh Material", "folder_name": "P6 Bound Box",
+        moved = mutate("reparent_item", {
+            "scene_name": scene, "item_name": "P6 Mesh Material", "parent_name": "P6 Bound Box",
         })
-        check(S, "material moved under the mesh that binds it", bool(moved) and moved.get("folder"), str(moved))
+        check(S, "material moved under the mesh that binds it", bool(moved) and moved.get("parent"), str(moved))
 
         E2E_STATE["resource_placements"] = {
             "P6 Folder Material": "P6 Metals",
@@ -1915,14 +1915,14 @@ def usd_library_folder_leg(S):
     # keeps its own materials in its own scopes, so it has none yet.
     material = mutate("create_material", {"scene_name": scene_name, "name": "E4d Folder Material"})
     check(S, "material created", bool(material) and material.get("queued"), str(material))
-    holding = mutate("create_library_folder", {"scene_name": scene_name, "folder_path": "Materials/E4d Metals"})
-    check(S, "folder created under the Materials kind scope", bool(holding) and holding.get("folder"), str(holding))
-    empty = mutate("create_library_folder", {"scene_name": scene_name, "folder_path": "Materials/E4d Empty"})
-    check(S, "empty folder created beside it", bool(empty) and empty.get("folder"), str(empty))
-    moved = mutate("move_library_item", {
-        "scene_name": scene_name, "item_name": "E4d Folder Material", "folder_path": "Materials/E4d Metals",
+    holding = mutate("create_scope", {"scene_name": scene_name, "path": "Materials/E4d Metals"})
+    check(S, "folder created under the Materials kind scope", bool(holding) and holding.get("scope"), str(holding))
+    empty = mutate("create_scope", {"scene_name": scene_name, "path": "Materials/E4d Empty"})
+    check(S, "empty folder created beside it", bool(empty) and empty.get("scope"), str(empty))
+    moved = mutate("reparent_item", {
+        "scene_name": scene_name, "item_name": "E4d Folder Material", "parent_name": "Materials/E4d Metals",
     })
-    check(S, "material moved into the folder", bool(moved) and moved.get("folder"), str(moved))
+    check(S, "material moved into the folder", bool(moved) and moved.get("parent"), str(moved))
 
     saved = USD_SAVE_DIR / "usd_library_folders.usda"
     if not usd_save_scene(S, scene_name, saved):
@@ -2129,10 +2129,10 @@ def usd_resource_placement_leg(S):
     })
     check(S, "folder scope created below the material scope",
           bool(scoped) and scoped.get("node_id") is not None, str(scoped))
-    moved = mutate("move_library_item", {
-        "scene_name": scene_name, "item_name": "Gold", "folder_name": "Metals",
+    moved = mutate("reparent_item", {
+        "scene_name": scene_name, "item_name": "Gold", "parent_name": "Metals",
     })
-    check(S, "material moved into the folder scope", bool(moved) and moved.get("folder"), str(moved))
+    check(S, "material moved into the folder scope", bool(moved) and moved.get("parent"), str(moved))
 
     saved = USD_SAVE_DIR / "usd_placement_looks.usda"
     if not usd_save_scene(S, scene_name, saved):

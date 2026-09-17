@@ -62,8 +62,8 @@ def main() -> int:
     })
     print(f"Placed parent '{parent['node_name']}' (id {parent['node_id']}) and child '{child['node_name']}' (id {child['node_id']})")
 
-    client.call("reparent_node", {
-        "scene_name": scene_name, "node_id": child["node_id"], "parent_node_id": parent["node_id"],
+    client.call("reparent_item", {
+        "scene_name": scene_name, "item_id": child["node_id"], "parent_id": parent["node_id"],
     })
 
     parent_details = client.call("get_node_details", {"scene_name": scene_name, "node_name": parent["node_name"]})

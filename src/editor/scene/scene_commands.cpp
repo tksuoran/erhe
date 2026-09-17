@@ -946,20 +946,12 @@ void Scene_commands::queue_resource_insert(
     const std::shared_ptr<erhe::Hierarchy>& item
 )
 {
-    if (parent == nullptr) {
-        m_context.operation_stack->queue(
-            make_library_insert_operation(m_context, scene_root.get_content_library(), item)
-        );
-        return;
-    }
     m_context.operation_stack->queue(
-        std::make_shared<Item_insert_remove_operation>(
-            Item_insert_remove_operation::Parameters{
-                .context = m_context,
-                .item    = item,
-                .parent  = std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this()),
-                .mode    = Item_insert_remove_operation::Mode::insert
-            }
+        make_resource_insert_operation(
+            m_context,
+            scene_root.get_content_library(),
+            item,
+            (parent != nullptr) ? std::static_pointer_cast<erhe::Hierarchy>(parent->shared_from_this()) : std::shared_ptr<erhe::Hierarchy>{}
         )
     );
 }

@@ -111,9 +111,9 @@ and its Add Property list offers the classes of the prims below it first
 `Material.base_color` and the other `Material` values, and a material below it
 without a local value reads them. Resource and folder names are
 sibling-unique (`src/erhe/item/notes.md` "Sibling-unique names") by the tree.
-The editor creates folders (the Hierarchy "Create" > Scope on any prim, `create_library_folder`), moves
+The editor creates folders (the Hierarchy "Create" > Scope on any prim, MCP `create_scope`), moves
 resources between them and under any other prim (the Hierarchy move drop,
-`move_library_item`; `Item_parent_change_operation`) and persists where each
+MCP `reparent_item`; `Item_parent_change_operation`) and persists where each
 resource sits through `ERHE_scene` `library_folders`, whose `path` names the
 prim that holds it - a folder scope, an `Xform`, the `Mesh` that binds it
 (`doc/gltf_extensions/ERHE_scene.md`). A resource directly under its kind

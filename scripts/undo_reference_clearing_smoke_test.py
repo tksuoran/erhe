@@ -378,7 +378,7 @@ def section_announcement_content():
 
 
 def section_false_positive_move():
-    """A library folder move is a detach + attach: it must not read as removal."""
+    """A move of a resource under another prim is a detach + attach: it must not read as removal."""
     section = "false positive (move)"
     scene, imported_nodes, imported_materials = import_into_new_scene()
     if not check(section, "import added a material", len(imported_materials) > 0):
@@ -393,7 +393,8 @@ def section_false_positive_move():
         return
     count_before = before.get("items_removed_announcement_count", 0)
 
-    call("move_library_item", {"scene_name": scene, "item_name": material, "folder_name": "Moved"})
+    call("create_scope", {"scene_name": scene, "path": "Moved"})
+    call("reparent_item", {"scene_name": scene, "item_name": material, "parent_name": "Moved"})
     advance(4)
     after = refs()
     check(section, "material paint tool keeps the moved material",

@@ -78,6 +78,46 @@ auto find_node_in_scene(Scene_root& scene_root, const json& args, const char* id
 // are not nodes - a Scope and the prims below it.
 auto find_prim_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::Hierarchy>;
 
+// What find_unique_prim_in_scene answers when args hold neither key.
+enum class Absent_prim : unsigned int
+{
+    error,      // the prim is required
+    scene_root, // the scene root node (also for an id of 0)
+    none        // empty, with no error
+};
+
+// The one prim a structural edit (reparent_item, create_scope) addresses:
+// by the integer args[id_key], or by the string args[name_key] - a path in
+// the erhe::Hierarchy::get_path() form when it holds '/' (a leading '/' is
+// accepted, so '/cube' names the root's child 'cube'), else a name that
+// names exactly one prim of the scene tree. Any prim qualifies
+// (doc/usd-compatibility-plan.md C5). On failure returns empty and sets
+// out_error, naming the prim by `role`.
+auto find_unique_prim_in_scene(
+    Scene_root&       scene_root,
+    const json&       args,
+    const char*       id_key,
+    const char*       name_key,
+    const char*       role,
+    Absent_prim       absent,
+    std::string&      out_error
+) -> std::shared_ptr<erhe::Hierarchy>;
+
+// The reason `prim` cannot become a child of `new_parent`, nothing when it
+// can: every prim may parent every other prim (C5) except that the scene
+// root stays the root, a prim does not move under itself or its own
+// subtree, and reference instances keep their structure
+// (doc/usd-compatibility-plan.md X2, prefabs/instance_structure.hpp).
+auto prim_move_refusal(const erhe::Hierarchy& prim, const erhe::Hierarchy& new_parent) -> std::optional<std::string>;
+
+// The parent a resource creator (create_material, create_style, ...) inserts
+// its new resource under: the prim args["parent_id"] / args["parent_name"]
+// names (find_unique_prim_in_scene), any prim; empty when args name none,
+// which places the resource in its kind scope (make_resource_insert_operation).
+// Returns the reason when the named parent is missing or refuses a child
+// (a reference instance, prefabs/instance_structure.hpp).
+auto find_resource_parent(Scene_root& scene_root, const json& args, std::shared_ptr<erhe::Hierarchy>& out_parent) -> std::optional<std::string>;
+
 auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>;
 
 auto parse_light_type(const std::string& type, const erhe::scene::Light_type fallback) -> erhe::scene::Light_type;

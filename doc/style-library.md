@@ -121,7 +121,7 @@ Headless, over `scripts/mcp_call.py` on a fresh editor:
    restores.
 3. `set_item_property` `style` `null` on `Copper`: `roughness` reads the
    default; setting `style` back by name restores.
-4. A folder with a style: `create_library_folder` `Materials/Styled`,
+4. A folder with a style: `create_scope` `Materials/Styled`,
    move `Floor` into it, set the folder's `style` to `Brushed metal`,
    clear `Floor`'s own `metallic` (value `null`): `Floor` reads `1` with
    source `inherited` (a create-info material carries every value as
@@ -136,7 +136,7 @@ Headless, over `scripts/mcp_call.py` on a fresh editor:
    styles; `save_scene` and reopen keeps the chain.
 
 7. Lights through a node: `create_node` an empty node, `create_light` a
-   point light and `reparent_node` it below the node;
+   point light and `reparent_item` it below the node;
    `get_addable_item_properties` on the node lists `Light.color`;
    `set_item_property` `Light.color` `1 0 0` on the node and clear the
    light's own `color` (value `null`): the light reads `1 0 0` with

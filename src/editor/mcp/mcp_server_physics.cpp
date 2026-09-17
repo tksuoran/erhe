@@ -569,6 +569,12 @@ auto Mcp_server::action_create_physics_material(const json& args) -> std::string
         return make_error_content("Physics material already exists: " + name);
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*sr, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     auto item = std::make_shared<erhe::physics::Physics_material>(name);
     item->set_static_friction    (args.value("static_friction",  item->get_static_friction()));
     item->set_dynamic_friction   (args.value("dynamic_friction", item->get_dynamic_friction()));
@@ -581,7 +587,7 @@ auto Mcp_server::action_create_physics_material(const json& args) -> std::string
     item->set_density            (args.value("density",          item->get_density()));
 
     m_context.operation_stack->queue(
-        make_library_insert_operation(m_context, library, item)
+        make_resource_insert_operation(m_context, library, item, parent)
     );
     return make_json_content({
         {"created", true},
@@ -669,13 +675,19 @@ auto Mcp_server::action_create_collision_filter(const json& args) -> std::string
         return make_error_content("Collision filter already exists: " + name);
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*sr, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     auto item = std::make_shared<erhe::physics::Collision_filter>(name);
     if (args.contains("collision_systems"))        { item->collision_systems        = args["collision_systems"].get<std::vector<std::string>>(); }
     if (args.contains("collide_with_systems"))     { item->collide_with_systems     = args["collide_with_systems"].get<std::vector<std::string>>(); }
     if (args.contains("not_collide_with_systems")) { item->not_collide_with_systems = args["not_collide_with_systems"].get<std::vector<std::string>>(); }
 
     m_context.operation_stack->queue(
-        make_library_insert_operation(m_context, library, item)
+        make_resource_insert_operation(m_context, library, item, parent)
     );
     return make_json_content({
         {"created", true},
@@ -755,6 +767,12 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
         return make_error_content("Joint settings already exist: " + name);
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*sr, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     auto item = std::make_shared<erhe::physics::Physics_joint_settings>(name);
     if (args.contains("limits")) {
         parse_joint_limits(args["limits"], item->limits);
@@ -764,7 +782,7 @@ auto Mcp_server::action_create_physics_joint_settings(const json& args) -> std::
     }
 
     m_context.operation_stack->queue(
-        make_library_insert_operation(m_context, library, item)
+        make_resource_insert_operation(m_context, library, item, parent)
     );
     json result = joint_settings_to_json(*item);
     result["created"] = true;

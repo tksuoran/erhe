@@ -597,14 +597,14 @@
     "inputSchema": {
       "properties": {
         "ids": {
-          "description": "Node ids to delete (subtrees)",
+          "description": "Prim ids to delete (subtrees; any prim)",
           "items": {
             "type": "integer"
           },
           "type": "array"
         },
         "names": {
-          "description": "Node names to delete (subtrees; exact match, all matches)",
+          "description": "Prim names to delete (subtrees; any prim; exact match, all matches)",
           "items": {
             "type": "string"
           },
@@ -732,8 +732,12 @@
           "type": "string"
         },
         "parent_node_id": {
-          "description": "Parent node ID for the instance (default: scene root); the world position is preserved",
+          "description": "Id of the prim to parent the instance under (any prim; default: scene root); the world position is preserved",
           "type": "integer"
+        },
+        "parent_node_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the prim to parent the instance under; alternative to parent_node_id",
+          "type": "string"
         },
         "pose_node": {
           "description": "Insert an extra rigid (position + rotation, NO scale) pose node and hang the scaled instance under it as a leaf. Node scale scales the whole subtree, so use this for any scaled part that will carry children; the returned node_id is the pose node (the safe attach point, also for joint carriers - it keeps the rotated frame), mesh_node_id is the scaled instance",
@@ -890,8 +894,12 @@
           "type": "number"
         },
         "parent_node_id": {
-          "description": "Parent node ID for the instance (default: scene root); the world position is preserved",
+          "description": "Id of the prim to parent the instance under (any prim; default: scene root); the world position is preserved",
           "type": "integer"
+        },
+        "parent_node_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the prim to parent the instance under; alternative to parent_node_id",
+          "type": "string"
         },
         "points": {
           "description": "convex_hull: node-local points [[x,y,z], ...], at least 4 non-coplanar",
@@ -1447,16 +1455,24 @@
     "name": "remove_node_attachment"
   },
   {
-    "description": "Set a node's parent (by node IDs)",
+    "description": "Move any prim - a scene node, a resource (material, brush, style, texture, graph asset, physics material, ...) or a Scope - under any other prim of the same scene, as one undoable parent change executed on the next editor frame. Name the item and the new parent by id, by name (the name must name exactly one prim of the scene) or by path ('Parent/Child', the erhe item path form; a leading '/' addresses a child of the scene root, e.g. '/cube'). Without parent_id / parent_name (or with parent_id 0) the item moves under the scene root. Refused: the scene root itself, a move under the item itself or its subtree, and structural edits of a reference instance. A move is a detach immediately followed by an attach and is not announced as a removal.",
     "inputSchema": {
       "properties": {
-        "node_id": {
-          "description": "ID of the node to reparent",
+        "item_id": {
+          "description": "Id of the prim to move",
           "type": "integer"
         },
-        "parent_node_id": {
-          "description": "ID of the new parent node (0 for scene root)",
+        "item_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the prim to move; alternative to item_id",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the new parent prim (0 or omitted: the scene root)",
           "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the new parent prim; alternative to parent_id",
+          "type": "string"
         },
         "scene_name": {
           "description": "Name of the scene",
@@ -1464,12 +1480,11 @@
         }
       },
       "required": [
-        "scene_name",
-        "node_id"
+        "scene_name"
       ],
       "type": "object"
     },
-    "name": "reparent_node"
+    "name": "reparent_item"
   },
   {
     "description": "Operations window 'Attach' (Blender Ctrl-P): parent every node of the command target selection other than the active node under the active node, as one undoable compound operation. Set the parent with set_active_item (or make it the last item of select_items); nodes that are ancestors of the active node are skipped. Takes no arguments.",
@@ -1480,11 +1495,11 @@
     "name": "attach_selection_to_active"
   },
   {
-    "description": "Copy scene nodes (by ID) into the editor clipboard. Same semantics as the interactive Copy: the clipboard holds ownerless clones of the node subtrees, so the content survives closing the source scene and can be pasted into another scene with clipboard_paste.",
+    "description": "Copy scene prims (by id; any prim - a node, a Scope, a resource) into the editor clipboard. Same semantics as the interactive Copy: the clipboard holds ownerless clones of the prim subtrees, so the content survives closing the source scene and can be pasted into another scene with clipboard_paste.",
     "inputSchema": {
       "properties": {
         "node_ids": {
-          "description": "IDs of the nodes to copy (each with its subtree)",
+          "description": "Ids of the prims to copy (each with its subtree)",
           "items": {
             "type": "integer"
           },
@@ -1504,12 +1519,16 @@
     "name": "clipboard_copy_nodes"
   },
   {
-    "description": "Paste the editor clipboard contents under a node of a scene (undoable, like Ctrl+V). Materials carried by the pasted meshes keep their owning scene when it is still open; when the source scene is gone they are explicitly re-registered into the target scene (R5.2b paste-site ownership decision).",
+    "description": "Paste the editor clipboard contents under any prim of a scene (undoable, like Ctrl+V). Materials carried by the pasted meshes keep their owning scene when it is still open; when the source scene is gone they are explicitly re-registered into the target scene (R5.2b paste-site ownership decision).",
     "inputSchema": {
       "properties": {
-        "parent_node_id": {
-          "description": "ID of the node to paste under (0 or omitted for scene root)",
+        "parent_id": {
+          "description": "Id of the prim to paste under (0 or omitted: the scene root)",
           "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the prim to paste under; alternative to parent_id",
+          "type": "string"
         },
         "scene_name": {
           "description": "Name of the target scene",
@@ -2022,7 +2041,7 @@
     "name": "edit_material"
   },
   {
-    "description": "Create a new material in a scene's content library and return its id. Accepts the same fields as edit_material; omitted fields keep the engine defaults (white, roughness 0.5, non-metal, opaque isotropic BRDF). Not undoable (like copy_library_item).",
+    "description": "Create a new material under parent_id / parent_name (any prim), or in the scene's Materials scope without one, and return its id. Accepts the same fields as edit_material; omitted fields keep the engine defaults (white, roughness 0.5, non-metal, opaque isotropic BRDF). Undoable; the insert executes on the next editor frame.",
     "inputSchema": {
       "properties": {
         "alpha_cutoff": {
@@ -2094,6 +2113,14 @@
         "opacity": {
           "description": "Opacity in [0, 1]",
           "type": "number"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the material under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the material goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the material under; alternative to parent_id",
+          "type": "string"
         },
         "reflectance": {
           "description": "Dielectric reflectance in [0, 1]",
@@ -3764,7 +3791,7 @@
     "name": "edit_physics_joint"
   },
   {
-    "description": "Create a shared physics material in the scene's content library (undoable)",
+    "description": "Create a shared physics material under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
     "inputSchema": {
       "properties": {
         "angular_damping": {
@@ -3795,6 +3822,14 @@
         },
         "name": {
           "description": "Name for the new physics material (must not already exist)",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the physics material under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the physics material goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the physics material under; alternative to parent_id",
           "type": "string"
         },
         "restitution": {
@@ -3906,7 +3941,7 @@
     "name": "edit_physics_material"
   },
   {
-    "description": "Create a shared collision filter in the scene's content library (undoable)",
+    "description": "Create a shared collision filter under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
     "inputSchema": {
       "properties": {
         "collide_with_systems": {
@@ -3933,6 +3968,14 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the collision filter under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the collision filter goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the collision filter under; alternative to parent_id",
+          "type": "string"
         },
         "scene_name": {
           "description": "Name of the scene",
@@ -3994,7 +4037,7 @@
     "name": "edit_collision_filter"
   },
   {
-    "description": "Create shared physics joint settings (limits + drives) in the scene's content library (undoable)",
+    "description": "Create shared physics joint settings (limits + drives) under parent_id / parent_name (any prim), or in its kind Scope of the scene without one (undoable)",
     "inputSchema": {
       "properties": {
         "drives": {
@@ -4087,6 +4130,14 @@
         },
         "name": {
           "description": "Name for the new joint settings (must not already exist)",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the joint settings under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the joint settings goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the joint settings under; alternative to parent_id",
           "type": "string"
         },
         "scene_name": {
@@ -5901,11 +5952,19 @@
     "name": "texture_graph_set_node_layout"
   },
   {
-    "description": "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene's content library and point the Texture Graph window at it (its new target). The window's target Graph Texture is what the texture_graph_* tools operate on (retarget later with set_texture_graph_target). A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.",
+    "description": "Create a Graph Texture asset (a procedural texture backed by a node graph) in a scene (under parent_id / parent_name, else in its kind Scope) and point the Texture Graph window at it (its new target). The window's target Graph Texture is what the texture_graph_* tools operate on (retarget later with set_texture_graph_target). A Material slot can then source from it (set_material_texture_source). Returns the new asset's id and name.",
     "inputSchema": {
       "properties": {
         "name": {
           "description": "Name of the new Graph Texture asset (must be unique in the scene)",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the Graph Texture under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the Graph Texture goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the Graph Texture under; alternative to parent_id",
           "type": "string"
         },
         "scene_name": {
@@ -5962,11 +6021,19 @@
     "name": "get_graph_textures"
   },
   {
-    "description": "Create a Graph Mesh asset (a procedural mesh backed by a geometry node graph) in a scene's content library and point the Geometry Graph window at it (its new target). The window's target Graph Mesh is what the geometry_graph_* tools operate on (retarget later with set_geometry_graph_target). A scene Node can then source its mesh from it (set_node_graph_mesh). Returns the new asset's id and name.",
+    "description": "Create a Graph Mesh asset (a procedural mesh backed by a geometry node graph) in a scene (under parent_id / parent_name, else in its kind Scope) and point the Geometry Graph window at it (its new target). The window's target Graph Mesh is what the geometry_graph_* tools operate on (retarget later with set_geometry_graph_target). A scene Node can then source its mesh from it (set_node_graph_mesh). Returns the new asset's id and name.",
     "inputSchema": {
       "properties": {
         "name": {
           "description": "Name of the new Graph Mesh asset (must be unique in the scene)",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the Graph Mesh under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the Graph Mesh goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the Graph Mesh under; alternative to parent_id",
           "type": "string"
         },
         "scene_name": {
@@ -6580,52 +6647,33 @@
     "name": "get_editor_references"
   },
   {
-    "description": "Create a content library folder (doc/content-library-folders.md D7) from a category-rooted, slash-separated path, e.g. 'Materials/Metals' or 'Brushes/Solids/Big'. Every component but the last must exist (the first is a category folder: Brushes, Animations, Skins, Materials, Textures, Graph Textures, Graph Meshes, Physics Materials, Collision Filters, Physics Joints). Queues one undoable insert; returns the new folder's item id, usable with get_item_properties / set_item_property / get_addable_item_properties. Folders are selectable, show in the Properties window and pass inherits-flagged property values (e.g. visible) to the entries below them.",
+    "description": "Create Scopes (folders) along a slash-separated path below any prim, e.g. 'Materials/Metals' below the scene root or 'Parts/Wheels' below a node: every path segment the tree does not hold yet becomes a Scope under the segment before it, as one undoable operation executed immediately, so the new Scopes are addressable by the next call. Returns the last Scope's id, name and path. A Scope is selectable, shows in the Properties window and passes inherits-flagged property values (e.g. visible) to the prims below it. Errors when the whole path already exists.",
     "inputSchema": {
       "properties": {
-        "scene_name": {
-          "description": "Scene whose content library gets the folder (optional, the first scene by default)",
+        "parent_id": {
+          "description": "Id of the prim the path starts below (0 or omitted: the scene root)",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('A/B', or '/A' for a child of the scene root) of the prim the path starts below; alternative to parent_id",
           "type": "string"
         },
-        "folder_path": {
-          "description": "Folder path from the library root, starting with the category folder name",
+        "path": {
+          "description": "Slash-separated Scope names below the parent, e.g. 'Materials/Metals'",
+          "type": "string"
+        },
+        "scene_name": {
+          "description": "Name of the scene",
           "type": "string"
         }
       },
       "required": [
-        "folder_path"
+        "scene_name",
+        "path"
       ],
       "type": "object"
     },
-    "name": "create_library_folder"
-  },
-  {
-    "description": "Move a content library entry into another folder of its category (doc/content-library-folders.md D7), as one undoable operation. Give either folder_path (category-rooted, e.g. 'Materials/Metals'; must exist - see create_library_folder) or folder_name (a folder anywhere in the library found by name; created under the entry's current parent when missing, in the same undo entry). The move is a detach immediately followed by an attach and must NOT read as a removal.",
-    "inputSchema": {
-      "properties": {
-        "scene_name": {
-          "description": "Scene whose content library holds the item",
-          "type": "string"
-        },
-        "item_name": {
-          "description": "Name of the library item to move (must be unique in the library)",
-          "type": "string"
-        },
-        "folder_name": {
-          "description": "Destination folder name, found anywhere in the library; created under the item's current parent when missing",
-          "type": "string"
-        },
-        "folder_path": {
-          "description": "Destination folder path from the library root, starting with the category folder name (e.g. 'Materials/Metals'); must exist",
-          "type": "string"
-        }
-      },
-      "required": [
-        "item_name"
-      ],
-      "type": "object"
-    },
-    "name": "move_library_item"
+    "name": "create_scope"
   },
   {
     "description": "Test hook: set or clear an item tree's hovered / popup item. Those pins are normally set only by live ImGui interaction and are reset by the render path, so the reference they keep alive is only observable on a tree that is not rendering. Pass clear=true to release.",
@@ -6758,15 +6806,23 @@
   },
   {
     "name": "create_style",
-    "description": "Create an empty style item (doc/style-library.md R1) in the scene's Styles folder, as one undoable insert executed immediately; returns the style's item id and final (unique) name. A style holds value properties of any class by qualified name ('Light.color', 'Material.roughness'; get_addable_item_properties on the style lists them all): fill it with set_item_property and assign it by setting any item's 'style' property to the style's name. Values of a class the user is not (Light.* on a node) reach the user's inheritance descendants of that class, so a style on an empty node styles the lights below it.",
+    "description": "Create an empty style item (doc/style-library.md R1) under a parent prim or in the scene's Styles scope, as one undoable insert executed immediately; returns the style's item id and final (unique) name. A style holds value properties of any class by qualified name ('Light.color', 'Material.roughness'; get_addable_item_properties on the style lists them all): fill it with set_item_property and assign it by setting any item's 'style' property to the style's name. Values of a class the user is not (Light.* on a node) reach the user's inheritance descendants of that class, so a style on an empty node styles the lights below it.",
     "inputSchema": {
       "properties": {
         "scene_name": {
-          "description": "Scene whose Styles folder gets the style (optional, the first scene by default)",
+          "description": "Scene that gets the style (optional, the first scene by default)",
           "type": "string"
         },
         "name": {
-          "description": "Style name (default 'New Style'; made unique in the folder)",
+          "description": "Style name (default 'New Style'; made unique in the scene)",
+          "type": "string"
+        },
+        "parent_id": {
+          "description": "Id of the prim to create the style under (any prim: an Xform, a Mesh, a Scope, another resource, ...). Without parent_id / parent_name the style goes into its kind Scope of the scene",
+          "type": "integer"
+        },
+        "parent_name": {
+          "description": "Name (must name exactly one prim) or path ('Parent/Child', or '/Child' for a child of the scene root) of the prim to create the style under; alternative to parent_id",
           "type": "string"
         }
       },

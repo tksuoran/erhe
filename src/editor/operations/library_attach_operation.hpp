@@ -57,4 +57,17 @@ class Operation;
     const std::shared_ptr<erhe::Item_base>& item
 ) -> std::shared_ptr<Operation>;
 
+// The undoable insert of a new resource prim: the last child of `parent`,
+// any prim (doc/usd-compatibility-plan.md C5), or into the resource kind's
+// `Scope` through `make_library_insert_operation` when `parent` is null. The
+// content library indexes the resource wherever it sits. Every resource
+// creator that takes an optional parent (the Create menu, the MCP `create_*`
+// tools, `make_library_attach_operation`) builds its insert here.
+[[nodiscard]] auto make_resource_insert_operation(
+    App_context&                            context,
+    const std::shared_ptr<Content_library>& content_library,
+    const std::shared_ptr<erhe::Item_base>& item,
+    const std::shared_ptr<erhe::Hierarchy>& parent
+) -> std::shared_ptr<Operation>;
+
 }

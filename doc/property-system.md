@@ -2120,7 +2120,7 @@ style layer is D25 and the reference layer is D33.
   `python3 scripts/mcp_call.py <tool> '<json>'`. Useful id sources:
   `list_scenes`, `get_scene_nodes`, `get_scene_materials`,
   `get_scene_lights`, `get_scene_cameras`, `get_node_details` (attachment
-  ids). `reparent_node` builds subtrees; `get_undo_redo_stack` shows the
+  ids). `reparent_item` builds subtrees; `get_undo_redo_stack` shows the
   operations a check queued.
 - `capture_screenshot` works on the Metal swapchain (the same one-frame
   arm-then-collect protocol as the Vulkan windowed build), so the visual

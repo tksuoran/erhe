@@ -4,12 +4,14 @@
 #include "mcp/mcp_server_shared.hpp"
 
 #include "editor_log.hpp"
+#include "prefabs/instance_structure.hpp"
 #include "scene/collision_shape_from_mesh.hpp"
 #include "scene/scene_root.hpp"
 #include "tools/mesh_component_selection.hpp"
 #include "transform/transform_tool_settings.hpp"
 
 #include "erhe_geometry/geometry.hpp"
+#include "erhe_item/hierarchy.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
 #include "erhe_physics/physics_joint_settings.hpp"
@@ -32,6 +34,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -172,6 +175,113 @@ auto find_prim_in_scene(Scene_root& scene_root, const json& args, const char* id
         };
     visit(std::static_pointer_cast<erhe::Hierarchy>(root_node));
     return found;
+}
+
+auto find_unique_prim_in_scene(
+    Scene_root&       scene_root,
+    const json&       args,
+    const char* const id_key,
+    const char* const name_key,
+    const char* const role,
+    const Absent_prim absent,
+    std::string&      out_error
+) -> std::shared_ptr<erhe::Hierarchy>
+{
+    out_error.clear();
+    const std::shared_ptr<erhe::scene::Node> root_node = scene_root.get_scene().get_root_node();
+    if (!root_node) {
+        out_error = "Scene has no root node";
+        return {};
+    }
+    const bool has_id   = args.contains(id_key) && args.at(id_key).is_number_integer();
+    const bool has_name = args.contains(name_key) && args.at(name_key).is_string() && !args.at(name_key).get<std::string>().empty();
+    const std::size_t prim_id = has_id ? args.at(id_key).get<std::size_t>() : std::size_t{0};
+    if (!has_name && (prim_id == 0)) {
+        if (absent == Absent_prim::scene_root) {
+            return std::static_pointer_cast<erhe::Hierarchy>(root_node);
+        }
+        if (absent == Absent_prim::none) {
+            return {};
+        }
+        out_error = std::string{"'"} + id_key + "' or '" + name_key + "' is required";
+        return {};
+    }
+
+    if (prim_id != 0) {
+        const std::shared_ptr<erhe::Hierarchy> prim = find_prim_in_scene(scene_root, args, id_key, name_key);
+        if (!prim) {
+            out_error = std::string{role} + " not found: id " + std::to_string(prim_id);
+        }
+        return prim;
+    }
+
+    const std::string name = args.at(name_key).get<std::string>();
+    if (name.find('/') != std::string::npos) {
+        // A leading '/' (the USD spelling) addresses a child of the root by
+        // path as well: '/cube' is the prim 'cube' directly below the root.
+        const std::string_view path = (name.front() == '/') ? std::string_view{name}.substr(1) : std::string_view{name};
+        erhe::Hierarchy* const prim = erhe::find_by_path(*root_node, path);
+        if (prim == nullptr) {
+            out_error = std::string{role} + " not found: path " + name;
+            return {};
+        }
+        return std::static_pointer_cast<erhe::Hierarchy>(prim->shared_from_this());
+    }
+
+    std::shared_ptr<erhe::Hierarchy> found{};
+    std::size_t                      match_count{0};
+    std::function<void(const std::shared_ptr<erhe::Hierarchy>&)> visit =
+        [&](const std::shared_ptr<erhe::Hierarchy>& prim) {
+            if (prim->get_name() == name) {
+                if (!found) {
+                    found = prim;
+                }
+                ++match_count;
+            }
+            for (const std::shared_ptr<erhe::Hierarchy>& child : prim->get_children()) {
+                visit(child);
+            }
+        };
+    for (const std::shared_ptr<erhe::Hierarchy>& child : root_node->get_children()) {
+        visit(child);
+    }
+    if (!found) {
+        out_error = std::string{role} + " not found: " + name;
+        return {};
+    }
+    if (match_count > 1) {
+        out_error = "Name '" + name + "' matches " + std::to_string(match_count) + " prims; address the " + role + " by id or by path";
+        return {};
+    }
+    return found;
+}
+
+auto prim_move_refusal(const erhe::Hierarchy& prim, const erhe::Hierarchy& new_parent) -> std::optional<std::string>
+{
+    if (!prim.get_parent().lock()) {
+        return std::string{"'"} + prim.get_name() + "' is the scene root and has no parent to change";
+    }
+    if ((&new_parent == &prim) || new_parent.is_ancestor(&prim)) {
+        return "'" + new_parent.get_name() + "' is '" + prim.get_name() + "' or inside it";
+    }
+    const std::optional<std::string> item_refusal = instance_structure_refusal(prim);
+    if (item_refusal.has_value()) {
+        return item_refusal;
+    }
+    return instance_child_refusal(new_parent);
+}
+
+auto find_resource_parent(Scene_root& scene_root, const json& args, std::shared_ptr<erhe::Hierarchy>& out_parent) -> std::optional<std::string>
+{
+    std::string error{};
+    out_parent = find_unique_prim_in_scene(scene_root, args, "parent_id", "parent_name", "Parent", Absent_prim::none, error);
+    if (!error.empty()) {
+        return error;
+    }
+    if (out_parent) {
+        return instance_child_refusal(*out_parent);
+    }
+    return {};
 }
 
 auto find_light_in_scene(Scene_root& scene_root, const json& args, const char* id_key, const char* name_key) -> std::shared_ptr<erhe::scene::Light>

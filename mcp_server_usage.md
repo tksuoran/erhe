@@ -165,14 +165,16 @@ A scene's content-library resources are prims of the scene's own tree
 (`Materials`, `Textures`, `Brushes`, `Styles`, `Physics Materials`, ...), so
 `get_scene_nodes` reports them with their class as `type` and the property
 tools address them by `item_name`, `item_id` or path like any prim.
-`create_library_folder` creates a `Scope` below a kind scope (the tool keeps
-its name and its `scene_name` / `folder_path` arguments) and
-`move_library_item` reparents a resource into one. Every `create_*` tool that
-makes a resource - `create_material`, `create_style`,
-`create_physics_material`, `create_collision_filter`, `create_joint_settings`,
-`create_graph_texture`, `create_graph_mesh` - queues an
-`Item_insert_remove_operation`, so it is undoable and reports `"queued": true`;
-`copy_library_item` still is not.
+Any prim may be the child of any other prim: `create_scope` creates the
+`Scope`s (folders) along a slash-separated `path` below any prim, and
+`reparent_item` moves any prim - a node, a resource or a `Scope` - under any
+prim, naming each by id, by a name that names exactly one prim, or by path.
+Every `create_*` tool that makes a resource - `create_material`,
+`create_style`, `create_physics_material`, `create_collision_filter`,
+`create_physics_joint_settings`, `create_graph_texture`, `create_graph_mesh` -
+takes an optional `parent_id` / `parent_name` (any prim; without one the
+resource goes into its kind scope) and inserts through an
+`Item_insert_remove_operation`, so it is undoable; `copy_library_item` is not.
 
 ```bash
 curl -X POST http://127.0.0.1:3743/mcp \

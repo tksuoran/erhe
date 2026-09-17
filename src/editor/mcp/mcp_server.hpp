@@ -25,6 +25,7 @@ namespace erhe::commands {
 }
 
 namespace erhe {
+    class Hierarchy;
     class Item_base;
 }
 namespace erhe::primitive {
@@ -148,8 +149,9 @@ private:
     // Shared instance-placement path for place_brush / place_brush_instances /
     // create_shape: resolves material / position / rotation / parent / scale /
     // mass / motion_mode / pose_node from args, places the brush instance and
-    // fills result. parent_override (from a same-batch placement) takes
-    // precedence over parent_node_id; out_attach_node receives the node later
+    // fills result. The parent is any prim (doc/usd-compatibility-plan.md C5);
+    // parent_override (from a same-batch placement) takes precedence over
+    // parent_node_id / parent_node_name; out_attach_node receives the node later
     // placements may parent under (the pose node when pose_node, else the
     // instance node). Returns an empty string on success, or a complete error
     // response to return to the client.
@@ -158,7 +160,7 @@ private:
         Scene_root&                               scene_root,
         Brush&                                    brush,
         nlohmann::json&                           result,
-        const std::shared_ptr<erhe::scene::Node>& parent_override = {},
+        const std::shared_ptr<erhe::Hierarchy>&   parent_override = {},
         std::shared_ptr<erhe::scene::Node>*       out_attach_node = nullptr
     ) -> std::string;
     auto action_place_brush_instances(const nlohmann::json& args) -> std::string;
@@ -233,7 +235,8 @@ private:
     auto action_advance_time    (const nlohmann::json& args) -> std::string;
     auto action_add_node_attachment   (const nlohmann::json& args) -> std::string;
     auto action_remove_node_attachment(const nlohmann::json& args) -> std::string;
-    auto action_reparent_node   (const nlohmann::json& args) -> std::string;
+    auto action_reparent_item   (const nlohmann::json& args) -> std::string;
+    auto action_create_scope    (const nlohmann::json& args) -> std::string;
     auto action_clipboard_copy_nodes(const nlohmann::json& args) -> std::string;
     auto action_clipboard_paste (const nlohmann::json& args) -> std::string;
     auto action_lock_items      (const nlohmann::json& args) -> std::string;
@@ -338,8 +341,6 @@ private:
     auto action_create_style                  (const nlohmann::json& args) -> std::string;
     auto action_clear_item_style              (const nlohmann::json& args) -> std::string;
     auto action_free_undone_loads             (const nlohmann::json& args) -> std::string;
-    auto action_create_library_folder         (const nlohmann::json& args) -> std::string;
-    auto action_move_library_item             (const nlohmann::json& args) -> std::string;
     auto action_debug_set_item_tree_hover     (const nlohmann::json& args) -> std::string;
     auto query_geometry_graph                 (const nlohmann::json& args) -> std::string;
     auto action_set_geometry_graph_target     (const nlohmann::json& args) -> std::string;

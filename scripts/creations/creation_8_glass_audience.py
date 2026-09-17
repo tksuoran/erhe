@@ -236,9 +236,9 @@ def main():
     light_node = c.node_by_name("Swinging Cone")
     if light_node is None:
         raise RuntimeError("spot light node not found")
-    c.mutate("reparent_node", {
-        "scene_name": c.scene, "node_id": light_node["id"],
-        "parent_node_id": rod_id,
+    c.mutate("reparent_item", {
+        "scene_name": c.scene, "item_id": light_node["id"],
+        "parent_id": rod_id,
     })
     # Point the cone down the rod: rest aim is -Y, tilted with the rod.
     q_down = quat_mul(q_rod, axis_angle_quaternion([1.0, 0.0, 0.0], -math.pi / 2.0))

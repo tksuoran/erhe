@@ -17,6 +17,7 @@
 #include "editor_log.hpp"
 #include "geometry_graph/geometry_graph_node.hpp"
 #include "items.hpp"
+#include "operations/compound_operation.hpp"
 #include "operations/geometry_operations.hpp"
 #include "operations/item_insert_remove_operation.hpp"
 #include "operations/item_parent_change_operation.hpp"
@@ -55,6 +56,7 @@
 #include "erhe_geometry/shapes/sweep.hpp"
 #include "erhe_gltf/gltf_item_flags.hpp"
 #include "erhe_item/item.hpp"
+#include "erhe_item/scope.hpp"
 #include "erhe_math/math_util.hpp"
 #include "erhe_physics/icollision_shape.hpp"
 #include "erhe_physics/irigid_body.hpp"
@@ -500,13 +502,20 @@ auto Mcp_server::action_delete_nodes(const json& args) -> std::string
         for (const auto& item : items) {
             have_ids.insert(item->get_id());
         }
-        sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if ((target_names.count(node->get_name()) > 0) && (have_ids.count(node->get_id()) == 0)) {
-                items.push_back(node);
-                have_ids.insert(node->get_id());
-            }
-            return true;
-        });
+        // Any prim of the tree by name, a Scope or a resource as readily as a
+        // node (doc/usd-compatibility-plan.md C5).
+        const std::shared_ptr<erhe::scene::Node> root_node = sr->get_scene().get_root_node();
+        if (root_node) {
+            root_node->for_each<erhe::Hierarchy>(
+                [&items, &have_ids, &target_names, &root_node](erhe::Hierarchy& prim) -> bool {
+                    if ((&prim != root_node.get()) && (target_names.count(prim.get_name()) > 0) && (have_ids.count(prim.get_id()) == 0)) {
+                        items.push_back(prim.shared_hierarchy_from_this());
+                        have_ids.insert(prim.get_id());
+                    }
+                    return true;
+                }
+            );
+        }
     }
     if (items.empty()) {
         json r = make_text_content("delete_nodes: no matching nodes");
@@ -1448,7 +1457,7 @@ using Key_list = std::vector<const char*>;
 // Placement keys accepted by place_brush_instance (shared by create_shape,
 // place_brush and place_brush_instances).
 const Key_list placement_keys{
-    "scene_name", "name", "position", "rotation_xyzw", "parent_node_id",
+    "scene_name", "name", "position", "rotation_xyzw", "parent_node_id", "parent_node_name",
     "material_name", "material_id", "scale", "mass", "motion_mode", "pose_node"
 };
 
@@ -1509,7 +1518,7 @@ auto Mcp_server::place_brush_instance(
     Scene_root&                               sr,
     Brush&                                    brush,
     json&                                     result,
-    const std::shared_ptr<erhe::scene::Node>& parent_override,
+    const std::shared_ptr<erhe::Hierarchy>&   parent_override,
     std::shared_ptr<erhe::scene::Node>*       out_attach_node
 ) -> std::string
 {
@@ -1569,20 +1578,14 @@ auto Mcp_server::place_brush_instance(
         }
     }
 
-    std::shared_ptr<erhe::scene::Node> parent = parent_override;
-    if (!parent && args.contains("parent_node_id")) {
-        const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
-        sr.get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (node->get_id() == parent_node_id) {
-                parent = node;
-                return false;
-            }
-            return true;
-        });
+    // Any prim parents the instance (doc/usd-compatibility-plan.md C5); the
+    // instance keeps the world transform the placement arguments give it.
+    std::shared_ptr<erhe::Hierarchy> parent = parent_override;
+    if (!parent && (args.contains("parent_node_id") || args.contains("parent_node_name"))) {
+        std::string error{};
+        parent = find_unique_prim_in_scene(sr, args, "parent_node_id", "parent_node_name", "Parent", Absent_prim::error, error);
         if (!parent) {
-            json r = make_text_content("Parent node not found with id: " + std::to_string(parent_node_id));
-            r["isError"] = true;
-            return r.dump();
+            return make_error_content(error);
         }
     }
     if (parent) {
@@ -1655,7 +1658,7 @@ auto Mcp_server::place_brush_instance(
                 Item_insert_remove_operation::Parameters{
                     .context = m_context,
                     .item    = attach_node,
-                    .parent  = parent ? parent : sr.get_scene().get_root_node(),
+                    .parent  = parent ? parent : std::static_pointer_cast<erhe::Hierarchy>(sr.get_scene().get_root_node()),
                     .mode    = Item_insert_remove_operation::Mode::insert
                 }
             )
@@ -1851,7 +1854,7 @@ auto Mcp_server::action_place_brush_instances(const json& args) -> std::string
             r["isError"] = true;
             return r.dump();
         }
-        std::shared_ptr<erhe::scene::Node> parent_override{};
+        std::shared_ptr<erhe::Hierarchy> parent_override{};
         if (p.contains("parent_index")) {
             const std::size_t parent_index = p.value("parent_index", std::size_t{0});
             if ((parent_index >= i) || !attach_nodes[parent_index]) {
@@ -2822,80 +2825,141 @@ auto Mcp_server::action_advance_time(const json& args) -> std::string
     }).dump();
 }
 
-auto Mcp_server::action_reparent_node(const json& args) -> std::string
+// Moves any prim under any prim (doc/usd-compatibility-plan.md C5): scene
+// nodes, resources (materials, brushes, styles, ...) and Scopes alike. The
+// move is one set_parent: erhe::Hierarchy detaches from the old parent and
+// attaches to the new one inside the call, so the removal note the detach
+// records is cancelled by the attach before the frame's flush - a move does
+// not read as a removal (doc/import-undo-reference-clearing.md).
+auto Mcp_server::action_reparent_item(const json& args) -> std::string
 {
-    const std::string scene_name    = args.value("scene_name", "");
-    const std::size_t node_id       = args.value("node_id", std::size_t{0});
-    const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
-
-    Scene_root* sr = find_scene(scene_name);
+    const std::string scene_name = args.value("scene_name", "");
+    Scene_root* const sr = find_scene(scene_name);
     if (sr == nullptr) {
-        json r = make_text_content("Scene not found: " + scene_name);
-        r["isError"] = true;
-        return r.dump();
+        return make_error_content("Scene not found: " + scene_name);
     }
 
-    erhe::scene::Scene& scene = sr->get_scene();
-
-    // Find child node
-    std::shared_ptr<erhe::scene::Node> child_node;
-    scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        if (node->get_id() == node_id) {
-            child_node = node;
-            return false;
-        }
-        return true;
-    });
-    if (!child_node) {
-        json r = make_text_content("Node not found: " + std::to_string(node_id));
-        r["isError"] = true;
-        return r.dump();
+    std::string error{};
+    const std::shared_ptr<erhe::Hierarchy> item = find_unique_prim_in_scene(*sr, args, "item_id", "item_name", "Item", Absent_prim::error, error);
+    if (!item) {
+        return make_error_content(error);
     }
-
-    // Find parent node (0 means scene root)
-    std::shared_ptr<erhe::scene::Node> new_parent;
-    if (parent_node_id == 0) {
-        new_parent = scene.get_root_node();
-    } else {
-        scene.for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (node->get_id() == parent_node_id) {
-                new_parent = node;
-                return false;
-            }
-            return true;
-        });
-    }
+    const std::shared_ptr<erhe::Hierarchy> new_parent = find_unique_prim_in_scene(*sr, args, "parent_id", "parent_name", "Parent", Absent_prim::scene_root, error);
     if (!new_parent) {
-        json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
-        r["isError"] = true;
-        return r.dump();
+        return make_error_content(error);
     }
 
-    // Structure protection (doc/usd-compatibility-plan.md X2): an item
-    // inside a reference instance is not reparented, and nothing is
-    // reparented under a carrier or inside one.
-    const std::optional<std::string> item_refusal = instance_structure_refusal(*child_node);
-    if (item_refusal.has_value()) {
-        log_mcp->info("reparent_node refused: {}", item_refusal.value());
-        return make_error_content(item_refusal.value());
+    const std::optional<std::string> refusal = prim_move_refusal(*item, *new_parent);
+    if (refusal.has_value()) {
+        log_mcp->info("reparent_item refused: {}", refusal.value());
+        return make_error_content(refusal.value());
     }
-    const std::optional<std::string> child_refusal = instance_child_refusal(*new_parent);
+
+    m_context.operation_stack->queue(
+        std::make_shared<Item_parent_change_operation>(
+            new_parent,
+            item,
+            std::shared_ptr<erhe::Hierarchy>{},
+            std::shared_ptr<erhe::Hierarchy>{}
+        )
+    );
+
+    return make_json_content({
+        {"item",      item->get_name()},
+        {"item_id",   item->get_id()},
+        {"parent",    new_parent->get_name()},
+        {"parent_id", new_parent->get_id()},
+        {"queued",    true} // the parent change executes on the next editor frame
+    }).dump();
+}
+
+// A chain of Scopes (folders) along a slash-separated path below any prim:
+// every segment the tree does not hold yet becomes a Scope under the one
+// before it, as one undoable operation executed immediately, so the new
+// Scopes are addressable by the next call.
+auto Mcp_server::action_create_scope(const json& args) -> std::string
+{
+    const std::string scene_name = args.value("scene_name", "");
+    const std::string path       = args.value("path", "");
+    if (path.empty()) {
+        return make_error_content("'path' is required");
+    }
+    Scene_root* const sr = find_scene(scene_name);
+    if (sr == nullptr) {
+        return make_error_content("Scene not found: " + scene_name);
+    }
+
+    std::string error{};
+    std::shared_ptr<erhe::Hierarchy> parent = find_unique_prim_in_scene(*sr, args, "parent_id", "parent_name", "Parent", Absent_prim::scene_root, error);
+    if (!parent) {
+        return make_error_content(error);
+    }
+
+    // Walk the existing prefix of the path, then collect the names still
+    // missing.
+    std::vector<std::string> missing_names{};
+    std::size_t start = 0;
+    while (start < path.size()) {
+        const std::size_t slash = path.find('/', start);
+        const std::string name  = (slash == std::string::npos) ? path.substr(start) : path.substr(start, slash - start);
+        start = (slash == std::string::npos) ? path.size() : (slash + 1);
+        if (name.empty()) {
+            continue;
+        }
+        if (missing_names.empty()) {
+            std::shared_ptr<erhe::Hierarchy> next{};
+            for (const std::shared_ptr<erhe::Hierarchy>& child : parent->get_children()) {
+                if (child && (child->get_name() == name)) {
+                    next = child;
+                    break;
+                }
+            }
+            if (next) {
+                parent = next;
+                continue;
+            }
+        }
+        missing_names.push_back(name);
+    }
+    if (missing_names.empty()) {
+        return make_error_content("Prim already exists at path: " + path);
+    }
+    const std::optional<std::string> child_refusal = instance_child_refusal(*parent);
     if (child_refusal.has_value()) {
-        log_mcp->info("reparent_node refused: {}", child_refusal.value());
+        log_mcp->info("create_scope refused: {}", child_refusal.value());
         return make_error_content(child_refusal.value());
     }
 
-    std::shared_ptr<Operation> op = std::make_shared<Item_parent_change_operation>(
-        new_parent,
-        child_node,
-        std::shared_ptr<erhe::Hierarchy>{},
-        std::shared_ptr<erhe::Hierarchy>{}
-    );
-    m_context.operation_stack->queue(op);
+    Compound_operation::Parameters compound{};
+    std::shared_ptr<erhe::Hierarchy> chain_parent = parent;
+    std::shared_ptr<erhe::Scope>     scope{};
+    for (const std::string& name : missing_names) {
+        scope = std::make_shared<erhe::Scope>(name);
+        scope->enable_flag_bits(erhe::Item_flags::show_in_ui);
+        compound.operations.push_back(
+            std::make_shared<Item_insert_remove_operation>(
+                Item_insert_remove_operation::Parameters{
+                    .context = m_context,
+                    .item    = scope,
+                    .parent  = chain_parent,
+                    .mode    = Item_insert_remove_operation::Mode::insert
+                }
+            )
+        );
+        chain_parent = scope;
+    }
+    if (compound.operations.size() == 1) {
+        m_context.operation_stack->execute_now(compound.operations.front());
+    } else {
+        m_context.operation_stack->execute_now(std::make_shared<Compound_operation>(std::move(compound)));
+    }
 
     return make_json_content({
-        {"node",   child_node->get_name()},
-        {"parent", new_parent->get_name()}
+        {"scope",         scope->get_name()},
+        {"scope_id",      scope->get_id()},
+        {"path",          scope->get_path()},
+        {"created_count", missing_names.size()},
+        {"scene",         sr->get_name()}
     }).dump();
 }
 
@@ -2928,14 +2992,16 @@ auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
     // watchdog reports as intentional clipboard pins.
     std::vector<std::shared_ptr<erhe::Item_base>> clones;
     json copied = json::array();
-    sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-        if (!target_ids.contains(node->get_id())) {
-            return true;
+    // Any prim is copied, a Scope as readily as a node
+    // (doc/usd-compatibility-plan.md C5).
+    std::set<std::size_t> copied_ids;
+    for (const std::shared_ptr<erhe::Item_base>& item : find_items_by_ids(*sr, target_ids)) {
+        if (!copied_ids.insert(item->get_id()).second) {
+            continue; // find_items_by_ids reports a camera or light prim once per list it is in
         }
-        clones.push_back(node->clone());
-        copied.push_back(node->get_name());
-        return true;
-    });
+        clones.push_back(item->clone());
+        copied.push_back(item->get_name());
+    }
     if (clones.empty()) {
         json r = make_text_content("No nodes found for the given node_ids");
         r["isError"] = true;
@@ -2951,8 +3017,7 @@ auto Mcp_server::action_clipboard_copy_nodes(const json& args) -> std::string
 
 auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
 {
-    const std::string scene_name     = args.value("scene_name", "");
-    const std::size_t parent_node_id = args.value("parent_node_id", std::size_t{0});
+    const std::string scene_name = args.value("scene_name", "");
 
     Scene_root* sr = find_scene(scene_name);
     if (sr == nullptr) {
@@ -2961,22 +3026,11 @@ auto Mcp_server::action_clipboard_paste(const json& args) -> std::string
         return r.dump();
     }
 
-    std::shared_ptr<erhe::scene::Node> parent_node;
-    if (parent_node_id == 0) {
-        parent_node = sr->get_scene().get_root_node();
-    } else {
-        sr->get_scene().for_each_node([&](const std::shared_ptr<erhe::scene::Node>& node) {
-            if (node->get_id() == parent_node_id) {
-                parent_node = node;
-                return false;
-            }
-            return true;
-        });
-    }
+    // Any prim is a paste target (doc/usd-compatibility-plan.md C5).
+    std::string error{};
+    const std::shared_ptr<erhe::Hierarchy> parent_node = find_unique_prim_in_scene(*sr, args, "parent_id", "parent_name", "Parent", Absent_prim::scene_root, error);
     if (!parent_node) {
-        json r = make_text_content("Parent node not found: " + std::to_string(parent_node_id));
-        r["isError"] = true;
-        return r.dump();
+        return make_error_content(error);
     }
 
     // Structure protection (doc/usd-compatibility-plan.md X2).

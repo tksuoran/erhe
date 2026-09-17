@@ -135,7 +135,7 @@ class UnitTestRunner:
             self.test_lock_edit,
             self.test_lock_edit_prevents_delete,
             self.test_tags,
-            self.test_reparent_node,
+            self.test_reparent_item,
             self.test_reparent_hierarchy,
             self.test_async_status,
             self.test_geometry_catmull_clark,
@@ -519,19 +519,19 @@ class UnitTestRunner:
         # Clean up
         self.client.call("undo")  # undo place
 
-    def test_reparent_node(self):
+    def test_reparent_item(self):
         """Place two brushes, reparent one under the other, verify, undo."""
         self._require_scene()
         parent_id = self._place_test_brush()
         child_id = self._place_test_brush()
 
         # Reparent child under parent
-        result = self.client.call_ok("reparent_node", {
+        result = self.client.call_ok("reparent_item", {
             "scene_name": self.scene_name,
-            "node_id": child_id,
-            "parent_node_id": parent_id
+            "item_id": child_id,
+            "parent_id": parent_id
         })
-        assert "node" in result
+        assert "item" in result
         assert "parent" in result
 
         # Verify child's parent changed
@@ -559,15 +559,15 @@ class UnitTestRunner:
         child_id = self._place_test_brush()
 
         # Build hierarchy: grandparent -> parent -> child
-        self.client.call_ok("reparent_node", {
+        self.client.call_ok("reparent_item", {
             "scene_name": self.scene_name,
-            "node_id": parent_id,
-            "parent_node_id": grandparent_id
+            "item_id": parent_id,
+            "parent_id": grandparent_id
         })
-        self.client.call_ok("reparent_node", {
+        self.client.call_ok("reparent_item", {
             "scene_name": self.scene_name,
-            "node_id": child_id,
-            "parent_node_id": parent_id
+            "item_id": child_id,
+            "parent_id": parent_id
         })
 
         # Verify 3-level hierarchy
@@ -576,11 +576,11 @@ class UnitTestRunner:
         parent_node = next((n for n in nodes if n["id"] == parent_id), None)
         assert child_node["parent"] == parent_node["name"]
 
-        # Reparent child directly to root (parent_node_id = 0)
-        self.client.call_ok("reparent_node", {
+        # Reparent child directly to root (parent_id = 0)
+        self.client.call_ok("reparent_item", {
             "scene_name": self.scene_name,
-            "node_id": child_id,
-            "parent_node_id": 0
+            "item_id": child_id,
+            "parent_id": 0
         })
         nodes = self.client.call_ok("get_scene_nodes", {"scene_name": self.scene_name})["nodes"]
         child_node = next((n for n in nodes if n["id"] == child_id), None)
@@ -1222,10 +1222,10 @@ class SmokeTestRunner:
             parent = self.rng.choice(nodes)
             if child["id"] == parent["id"]:
                 return
-            self.client.call_ok("reparent_node", {
+            self.client.call_ok("reparent_item", {
                 "scene_name": self.scene_name,
-                "node_id": child["id"],
-                "parent_node_id": parent["id"]
+                "item_id": child["id"],
+                "parent_id": parent["id"]
             })
         self._try("reparent", action)
 

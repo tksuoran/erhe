@@ -355,7 +355,7 @@ The asset test hooks already in the table (`acquire_asset` / `release_asset` /
 | Tool | Kind | Why it is needed |
 |---|---|---|
 | `get_editor_references` | query, no args | **The direct observable for this whole feature**, and the general debugging tool for the "Scene-hosted references" bug class. Reports every cached content reference §4 wires, each as `{name, uid, type}` or null |
-| `move_library_item` | action `{item, uid, destination_folder}` | Drives the detach-then-attach false-positive case. `copy_library_item` exists (`mcp_server.cpp:518`); no move variant exists under any name |
+| `reparent_item` | action `{item, parent}` | Drives the detach-then-attach false-positive case: any prim, a resource included, moves under any prim |
 | `debug_set_item_tree_hover` | action `{tree, item, uid, clear}` | `m_hovered_item` / `m_popup_item` are set only by ImGui interaction, so the pin they cause is otherwise untestable headless. Explicit-args test hook, same category as `acquire_asset` |
 
 `get_editor_references` additionally reports three counters, without which three of the
@@ -462,7 +462,7 @@ support. Cases:
    `last_announced_uids` rather than on a held reference: proxies carry `bone_proxy` and
    no `show_in_ui` (`bone_visualization.cpp:292-297`), so there is no headless way to
    point a Properties target at one.
-7. **False positive.** `move_library_item` on a material held by `material_paint_tool` →
+7. **False positive.** `reparent_item` on a material held by `material_paint_tool` ->
    the reference survives (detach+attach cancels within the frame).
 8. **Tree-window pin.** The pin only exists once the tree stops rendering — a visible
    tree resets `m_hovered_item` every frame (`item_tree_window.cpp:1746`) and
@@ -511,7 +511,7 @@ support. Cases:
     unwired subscriber. The
     other documented silence, the ownerless library (`content_library.cpp:150-157`), has
     no headless driver — no MCP tool removes a content-library item; only
-    `copy_library_item` (`:518`) and the new `move_library_item` touch libraries — so it
+    `copy_library_item` (`:518`) and `reparent_item` touch resources - so it
     stays documented-only, not asserted.
 14. **Announcement content.** After route 1, `last_announced_uids` contains the imported
     animation and material uids — pins the producer independently of whether any
@@ -581,7 +581,7 @@ reasoning stays readable.
   `Item_tree`, `Editor` (graph editor targets), `Brush_tool`,
   `Material_paint_tool`, `Material_preview`, `Brdf_slice`, `Operations`,
   `Create`, `Physics_tool`, `Selection`.
-- MCP: `get_editor_references`, `move_library_item`,
+- MCP: `get_editor_references`, `reparent_item`,
   `debug_set_item_tree_hover`, plus the accessors and the `Item_tree` registry
   they need.
 

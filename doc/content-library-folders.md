@@ -41,8 +41,8 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   property values and the folder each resource sits in, for every kind.
   Loading recreates the folders, applies the values and places the resources,
   after the resources themselves exist.
-- R6 MCP. `create_library_folder` creates a folder from a kind-scope-rooted
-  path, `move_library_item` accepts a folder path and is undoable, and the
+- R6 MCP. `create_scope` creates the folder scopes along a path below any
+  prim, `reparent_item` moves any prim under any prim and is undoable, and the
   D13 property tools address a folder by name or id like any item.
 
 ## 2. Design
@@ -130,22 +130,22 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
   does not hold logs a warning and is dropped; a resource name that matches
   nothing logs a warning, one that matches several moves the first and logs a
   warning. Undo of an import removes the scopes it created.
-- D7 MCP. `create_library_folder(scene_name, folder_path)` keeps its name and
-  arguments and creates an `erhe::Scope`: it resolves the path from the kind
-  scopes and queues the D2 insert for the last component.
-  `move_library_item(scene_name, item_name, folder_name | folder_path)` keeps
-  `folder_name` (a folder under the resource's own parent scope, created when
-  missing) and adds `folder_path` (kind-scope-rooted, must exist), queuing the
-  D3 reparent; a destination under another kind scope is refused, which is the
-  one place the same-kind rule still holds. It finds the resource by walking
-  the scene tree - a resource may sit under any prim, and a USD-backed scene
-  keeps its materials where the file put them - so `item_name` names a prim
-  whose class is a library kind, wherever it sits. Every `create_*` tool that makes a
-  resource - `create_material`, `create_style`, `create_physics_material`,
-  `create_collision_filter`, `create_joint_settings`, `create_graph_texture`,
-  `create_graph_mesh` - queues the D2 insert, so it is undoable. Resource
-  prims and folder scopes are prims of the scene tree, so `find_item_in_scene`
-  reaches them with the scene's own walk and `get_item_properties` /
+- D7 MCP. A folder is a `Scope` prim and a resource is a prim, so the MCP
+  surface is the scene tree's. `create_scope(scene_name, path, parent_id |
+  parent_name)` walks the slash-separated `path` below the parent prim (the
+  scene root without one), creates a `Scope` for every segment the tree does
+  not hold yet and executes the inserts as one operation. `reparent_item(
+  scene_name, item_id | item_name, parent_id | parent_name)` queues the D3
+  reparent of any prim under any prim; a name must name exactly one prim of
+  the tree, and a path (`Materials/Metals`) names a prim by its M1 path.
+  Every `create_*` tool that makes a resource - `create_material`,
+  `create_style`, `create_physics_material`, `create_collision_filter`,
+  `create_physics_joint_settings`, `create_graph_texture`,
+  `create_graph_mesh` - takes the same optional `parent_id` / `parent_name`
+  and inserts the resource under that prim, or into its kind scope without
+  one (`make_resource_insert_operation`), undoably. Resource prims and
+  folder scopes are prims of the scene tree, so `find_item_in_scene` reaches
+  them with the scene's own walk and `get_item_properties` /
   `set_item_property` / `get_addable_item_properties` take a folder by
   `item_id`, `item_name` or path.
 
@@ -153,9 +153,9 @@ wire format is `doc/gltf_extensions/ERHE_scene.md`.
 
 Headless, over `scripts/mcp_call.py` on a fresh editor:
 
-1. `create_library_folder` `Materials/Metals`; `get_scene_nodes` shows the
+1. `create_scope` `Materials/Metals`; `get_scene_nodes` shows the
    scope with type `Scope` under `Materials`.
-2. `move_library_item` a material into the folder; `set_item_property`
+2. `reparent_item` a material into the folder; `set_item_property`
    `Material.roughness` on the folder; a material below it with no local value
    and no style reads it with source `inherited`; `undo` restores each step.
 3. `save_scene` and reopen: the folder, its local value and the moved resource

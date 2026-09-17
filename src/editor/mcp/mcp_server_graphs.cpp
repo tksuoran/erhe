@@ -965,10 +965,16 @@ auto Mcp_server::action_create_graph_texture(const json& args) -> std::string
         return make_error_content("Graph texture already exists: " + name);
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*sr, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     const std::shared_ptr<Graph_texture> item = std::make_shared<Graph_texture>(name);
     // execute_now so the asset is live this frame and selectable immediately.
     m_context.operation_stack->execute_now(
-        make_library_insert_operation(m_context, library, item)
+        make_resource_insert_operation(m_context, library, item, parent)
     );
     // Issue #252: point the Texture Graph window at the new asset explicitly,
     // so the texture_graph_* tools (which operate on the window's target) act
@@ -1251,10 +1257,16 @@ auto Mcp_server::action_create_graph_mesh(const json& args) -> std::string
         return make_error_content("Graph mesh already exists: " + name);
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*sr, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     const std::shared_ptr<Graph_mesh> item = std::make_shared<Graph_mesh>(name);
     // execute_now so the asset is live this frame and selectable immediately.
     m_context.operation_stack->execute_now(
-        make_library_insert_operation(m_context, library, item)
+        make_resource_insert_operation(m_context, library, item, parent)
     );
     // Issue #252: point the Geometry Graph window at the new asset explicitly,
     // so the geometry_graph_* tools (which operate on the window's target) act

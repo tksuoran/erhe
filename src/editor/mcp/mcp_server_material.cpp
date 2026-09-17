@@ -818,6 +818,12 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
         }
     }
 
+    std::shared_ptr<erhe::Hierarchy> parent{};
+    const std::optional<std::string> parent_error = find_resource_parent(*scene_root, args, parent);
+    if (parent_error.has_value()) {
+        return make_error_content(parent_error.value());
+    }
+
     erhe::primitive::Material_values values{};
     erhe::primitive::Material_data   data{};
     json applied = json::object();
@@ -837,10 +843,10 @@ auto Mcp_server::action_create_material(const json& args) -> std::string
     );
 
     // A material is a resource prim, so its creation is the ordinary
-    // undoable insert under the Materials scope
-    // (doc/usd-compatibility-plan.md U4).
+    // undoable insert under the parent prim, or under the Materials scope
+    // without one (doc/usd-compatibility-plan.md U4, C5).
     m_context.operation_stack->queue(
-        make_library_insert_operation(m_context, library, material)
+        make_resource_insert_operation(m_context, library, material, parent)
     );
 
     return make_json_content({

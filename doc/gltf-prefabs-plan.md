@@ -22,7 +22,8 @@ deletes its subtree. The entry points are the Hierarchy window
 Duplicate / Paste), the Create menu on a prim (`scene_root.cpp`),
 `Selection::delete_items`, and the MCP tools that take a user-chosen parent or
 item (`create_node`, `create_shape`, `place_brush`, `place_brush_instances`,
-`reparent_node`, `delete_nodes`, `clipboard_paste`, `move_library_item`).
+`reparent_item`, `create_scope`, `delete_nodes`, `clipboard_paste`, and the
+resource `create_*` tools given a parent).
 `Item_insert_remove_operation` and `Item_parent_change_operation` themselves
 stay unconditional: instantiation and instance refresh use them.
 
