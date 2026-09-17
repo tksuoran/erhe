@@ -291,7 +291,7 @@ auto Physics_tool::begin_drag(
             m_target_mesh->world_from_node() * glm::vec4{m_center_of_mass_in_node, 1.0f}
         };
         m_drag_constraint.attach(
-            scene_root.get_physics_world(),
+            scene_root,
             *rigid_body,
             glm::vec3{0.0f, 0.0f, 0.0f},
             center_of_mass_in_world,
@@ -302,11 +302,10 @@ auto Physics_tool::begin_drag(
                 .node               = target_node,
                 .values_before_tool = values_before_tool,
                 .tool_details = fmt::format(
-                    "mode {}, jointed body: spring pivot at center of mass {}, grab in node {} (goal offset by grab -> center of mass each frame), no body overrides, no velocity reset, no extra damping, drag point teleported each frame",
+                    "mode {}, jointed body: spring pivot at center of mass {}, grab in node {} (goal offset by grab -> center of mass each frame), no body overrides, no velocity reset, no extra damping, drag target set each frame, drag point advanced toward it each fixed step",
                     mode_name, m_center_of_mass_in_node, m_grab_position_in_node
                 )
-            },
-            scene_root.get_node_joints()
+            }
         );
         return true;
     }
@@ -327,7 +326,7 @@ auto Physics_tool::begin_drag(
     rigid_body->set_linear_velocity (glm::vec3{0.0f, 0.0f, 0.0f});
 
     m_drag_constraint.attach(
-        scene_root.get_physics_world(),
+        scene_root,
         *rigid_body,
         m_grab_position_in_collision_shape, // shape center of mass taken into account
         m_goal_position_in_world,
@@ -349,8 +348,7 @@ auto Physics_tool::begin_drag(
                 m_override_gravity_enable, m_override_gravity_value,
                 m_extra_damping_enable, m_extra_linear_damping, m_extra_angular_damping
             )
-        },
-        scene_root.get_node_joints()
+        }
     );
 
     return true;

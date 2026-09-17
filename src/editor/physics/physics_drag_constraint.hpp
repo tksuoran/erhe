@@ -20,6 +20,7 @@ namespace erhe::physics {
 namespace editor {
 
 class Node_joint;
+class Scene_root;
 
 // How the drag point body follows a new drag point position.
 enum class Drag_point_motion : unsigned int {
@@ -27,15 +28,24 @@ enum class Drag_point_motion : unsigned int {
     kinematic = 1  // kinematic physical: moved over a step, carries the velocity of the move
 };
 
+// How the drag point body reaches the projected drag target.
+enum class Drag_point_speed : unsigned int {
+    immediate = 0, // move_drag_point() places it at once
+    braking   = 1  // each fixed physics step advances it along the joint reach at most
+                   // get_drag_point_speed_limit() * dt; see Physics_drag_constraint
+};
+
 // How hard the drag pulls; see erhe::physics::Point_to_point_constraint_settings.
 class Physics_drag_constraint_settings
 {
 public:
-    float        frequency                 {0.0f}; // Hz; 0 = rigid
-    float        damping                   {1.0f}; // damping ratio
-    float        max_force                 {std::numeric_limits<float>::infinity()}; // newtons, spring only
-    unsigned int solver_velocity_iterations{0};    // 0 = world default
-    unsigned int solver_position_iterations{0};    // 0 = world default
+    float            frequency                 {0.0f}; // Hz; 0 = rigid
+    float            damping                   {1.0f}; // damping ratio
+    float            max_force                 {std::numeric_limits<float>::infinity()}; // newtons, spring only
+    unsigned int     solver_velocity_iterations{0};    // 0 = world default
+    unsigned int     solver_position_iterations{0};    // 0 = world default
+    Drag_point_speed drag_point_speed          {Drag_point_speed::immediate};
+    float            limit_margin              {0.0f}; // radians the projected target stays inside a limited rotation range
 };
 
 // The pull of a drag of a dynamic body held by a live joint, shared by the
@@ -59,6 +69,17 @@ constexpr float        c_jointed_drag_max_force_in_body_weights = 3.0f;
 constexpr float        c_standard_gravity                       = 9.81f;
 constexpr unsigned int c_jointed_drag_solver_velocity_iterations = 40;
 constexpr unsigned int c_jointed_drag_solver_position_iterations = 20;
+
+// A drag point that jumps (a fast cursor) lets the bounded pull accelerate the
+// body until it slams into a joint limit: measured 4-6 m/s cradle balls
+// hitting the +-80 deg hinge limit with 12-25 mm hinge separation. The
+// jointed drag therefore keeps its target c_jointed_drag_limit_margin inside
+// a limited rotation range and advances the drag point at a speed the bounded
+// force can brake to rest within that margin:
+//   v_max = sqrt(2 * a_brake * d),  a_brake = max_force / mass - g,
+//   d = radius * margin for a limited circle reach, else c_jointed_drag_brake_distance.
+constexpr float        c_jointed_drag_limit_margin              = 0.1f;  // radians
+constexpr float        c_jointed_drag_brake_distance            = 0.05f; // meters
 
 [[nodiscard]] auto make_jointed_body_drag_settings(float body_mass) -> Physics_drag_constraint_settings;
 
@@ -86,6 +107,12 @@ constexpr unsigned int c_jointed_drag_solver_position_iterations = 20;
 // get_projection_description() and logged by the monitor at drag start. The
 // anchor frame is captured at attach().
 //
+// With Drag_point_speed::braking the drag point body does not jump to the
+// projected target: Scene_root calls on_fixed_step() before every fixed
+// physics step, which advances it along the reach
+// (erhe::physics::Joint_reach::step_toward) by at most
+// get_drag_point_speed_limit() * dt (see c_jointed_drag_limit_margin).
+//
 // The owner detaches before the world or the dragged body goes away: on scene
 // close and when the dragged node is removed (AGENTS.md "Scene-hosted
 // references in editor parts").
@@ -103,20 +130,25 @@ public:
     // body awake (begin_move) and adds the constraint. Detaches a previous
     // attachment first.
     // drag_point_in_world is where the pivot is at attach time (the
-    // projection's reach is built from it).
+    // projection's reach is built from it). The scene's physics world and
+    // joints are used; the drag registers for on_fixed_step() with the scene
+    // until detach().
     auto attach(
-        erhe::physics::IWorld&                        world,
-        erhe::physics::IRigid_body&                   body,
-        glm::vec3                                     pivot_in_body,
-        glm::vec3                                     drag_point_in_world,
-        const Physics_drag_constraint_settings&       settings,
-        const Physics_drag_monitor_info&              monitor_info,
-        std::span<const std::shared_ptr<Node_joint>>  node_joints
+        Scene_root&                             scene_root,
+        erhe::physics::IRigid_body&             body,
+        glm::vec3                               pivot_in_body,
+        glm::vec3                               drag_point_in_world,
+        const Physics_drag_constraint_settings& settings,
+        const Physics_drag_monitor_info&        monitor_info
     ) -> bool;
 
-    // Projects the requested position (see the class comment) and moves the
-    // drag point body there.
+    // Projects the requested position (see the class comment); an immediate
+    // drag moves the drag point body there, a braking drag makes it the
+    // target on_fixed_step() advances toward.
     void move_drag_point(glm::vec3 requested_position_in_world, Drag_point_motion motion);
+
+    // Scene_root::update_physics_simulation_fixed_step(), before the step.
+    void on_fixed_step(float dt);
 
     // Removes the constraint and the drag point body and lets the dragged
     // body sleep again (end_move). The dragged body keeps its velocity.
@@ -131,8 +163,11 @@ public:
     [[nodiscard]] auto get_projection_description() const -> const std::string&;
     [[nodiscard]] auto get_requested_drag_point  () const -> glm::vec3;
     [[nodiscard]] auto get_projected_drag_point  () const -> glm::vec3;
+    [[nodiscard]] auto get_drag_point            () const -> glm::vec3; // where the drag point body is placed
+    [[nodiscard]] auto get_drag_point_speed_limit() const -> float;     // m/s; infinity for an immediate drag
 
 private:
+    Scene_root*                                 m_scene_root{nullptr};
     erhe::physics::IWorld*                      m_world{nullptr};
     erhe::physics::IRigid_body*                 m_body {nullptr};
     std::unique_ptr<erhe::physics::IConstraint> m_constraint;
@@ -144,8 +179,11 @@ private:
     std::string                                 m_projection_description;
     glm::vec3                                   m_requested_drag_point{0.0f};
     glm::vec3                                   m_projected_drag_point{0.0f};
+    glm::vec3                                   m_drag_point          {0.0f};
+    float                                       m_drag_point_speed_limit{std::numeric_limits<float>::infinity()};
 
     void configure_projection(std::span<const std::shared_ptr<Node_joint>> node_joints, glm::vec3 pivot_in_world);
+    void place_drag_point    (glm::vec3 position_in_world, Drag_point_motion motion);
 };
 
 }

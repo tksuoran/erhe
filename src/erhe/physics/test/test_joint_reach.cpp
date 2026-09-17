@@ -136,7 +136,7 @@ TEST(joint_reach, hinge_circle_matches_joint_convention)
                 std::array<Constraint_axis_limit, 6> limits = all_fixed();
                 limits[3 + static_cast<std::size_t>(axis)] = ranged_axis(-1.4f, 0.6f);
                 Joint_reach reach;
-                reach.configure(frame, side, limits, p, hinge_point(frame, side, axis, 0.2f, glm::vec3{0.0f}, p));
+                reach.configure(frame, side, limits, p, hinge_point(frame, side, axis, 0.2f, glm::vec3{0.0f}, p), 0.0f);
                 ASSERT_EQ(reach.get_shape(), Joint_reach_shape::circle);
                 EXPECT_EQ(reach.get_axis(), axis);
                 EXPECT_LT(glm::distance(reach.get_last_projected(), hinge_point(frame, side, axis, 0.2f, glm::vec3{0.0f}, p)), 1.0e-4f);
@@ -160,7 +160,7 @@ TEST(joint_reach, hinge_circle_with_fixed_nonzero_offset)
         }
         limits[4] = free_axis();
         Joint_reach reach;
-        reach.configure(frame, side, limits, p, hinge_point(frame, side, 1, 0.0f, offset, p));
+        reach.configure(frame, side, limits, p, hinge_point(frame, side, 1, 0.0f, offset, p), 0.0f);
         ASSERT_EQ(reach.get_shape(), Joint_reach_shape::circle);
         const float pi = glm::pi<float>();
         for (const glm::vec3& target : { glm::vec3{2.0f, 0.0f, 0.0f}, glm::vec3{-1.0f, 1.0f, 3.0f}, glm::vec3{0.0f, 0.0f, -2.0f} }) {
@@ -175,7 +175,7 @@ TEST(joint_reach, pivot_on_axis_is_a_point)
     limits[5] = free_axis();
     Joint_reach reach;
     const Transform frame{glm::mat3{1.0f}, glm::vec3{1.0f, 2.0f, 3.0f}};
-    reach.configure(frame, Joint_side::a, limits, glm::vec3{0.0f, 0.0f, 0.25f}, glm::vec3{1.0f, 2.0f, 3.25f});
+    reach.configure(frame, Joint_side::a, limits, glm::vec3{0.0f, 0.0f, 0.25f}, glm::vec3{1.0f, 2.0f, 3.25f}, 0.0f);
     EXPECT_EQ(reach.get_shape(), Joint_reach_shape::point);
     EXPECT_LT(glm::distance(reach.project(glm::vec3{9.0f, 9.0f, 9.0f}), glm::vec3{1.0f, 2.0f, 3.25f}), 1.0e-5f);
 }
@@ -187,7 +187,7 @@ TEST(joint_reach, target_on_axis_keeps_last_projected)
     const Transform frame{glm::mat3{1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}};
     const glm::vec3 p{0.0f, -0.5f, 0.0f};
     Joint_reach reach;
-    reach.configure(frame, Joint_side::a, limits, p, glm::vec3{0.0f, 0.5f, 0.0f});
+    reach.configure(frame, Joint_side::a, limits, p, glm::vec3{0.0f, 0.5f, 0.0f}, 0.0f);
     const glm::vec3 first = reach.project(glm::vec3{0.3f, 0.6f, 0.0f});
     const glm::vec3 kept  = reach.project(glm::vec3{0.0f, 1.0f, 7.0f}); // on the hinge axis
     EXPECT_LT(glm::distance(first, kept), 1.0e-6f);
@@ -203,7 +203,7 @@ TEST(joint_reach, ball_sphere)
     const Transform frame = rotated_frame();
     const glm::vec3 p{0.0f, -0.4f, 0.3f};
     Joint_reach reach;
-    reach.configure(frame, Joint_side::b, limits, p, apply(frame, p));
+    reach.configure(frame, Joint_side::b, limits, p, apply(frame, p), 0.0f);
     ASSERT_EQ(reach.get_shape(), Joint_reach_shape::sphere);
     EXPECT_NEAR(reach.get_radius(), 0.5f, 1.0e-5f);
     const glm::vec3 target{3.0f, -1.0f, 2.0f};
@@ -223,14 +223,14 @@ TEST(joint_reach, slider_box)
     const glm::vec3 p{0.1f, 0.2f, 0.3f};
     {
         Joint_reach reach;
-        reach.configure(frame, Joint_side::b, limits, p, p);
+        reach.configure(frame, Joint_side::b, limits, p, p, 0.0f);
         ASSERT_EQ(reach.get_shape(), Joint_reach_shape::box);
         const glm::vec3 projected = reach.project(glm::vec3{5.0f, 5.0f, 5.0f});
         EXPECT_LT(glm::distance(projected, glm::vec3{0.6f, 0.2f, 5.0f}), 1.0e-5f);
     }
     {
         Joint_reach reach;
-        reach.configure(frame, Joint_side::a, limits, p, p);
+        reach.configure(frame, Joint_side::a, limits, p, p, 0.0f);
         const glm::vec3 projected = reach.project(glm::vec3{5.0f, 5.0f, -5.0f});
         EXPECT_LT(glm::distance(projected, glm::vec3{0.3f, 0.2f, -5.0f}), 1.0e-5f);
     }
@@ -241,7 +241,7 @@ TEST(joint_reach, all_fixed_is_a_point)
     const Transform frame = rotated_frame();
     const glm::vec3 p{0.1f, 0.2f, 0.3f};
     Joint_reach reach;
-    reach.configure(frame, Joint_side::a, all_fixed(), p, apply(frame, p));
+    reach.configure(frame, Joint_side::a, all_fixed(), p, apply(frame, p), 0.0f);
     EXPECT_EQ(reach.get_shape(), Joint_reach_shape::point);
     EXPECT_LT(glm::distance(reach.project(glm::vec3{4.0f}), apply(frame, p)), 1.0e-5f);
 }
@@ -252,13 +252,70 @@ TEST(joint_reach, translation_and_rotation_is_unprojected)
     limits[1] = free_axis();
     limits[5] = free_axis();
     Joint_reach reach;
-    reach.configure(Transform{}, Joint_side::a, limits, glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    reach.configure(Transform{}, Joint_side::a, limits, glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}, 0.0f);
     EXPECT_EQ(reach.get_shape(), Joint_reach_shape::unprojected);
     EXPECT_EQ(reach.project(glm::vec3{3.0f, 4.0f, 5.0f}), glm::vec3(3.0f, 4.0f, 5.0f));
 
     std::array<Constraint_axis_limit, 6> nonzero_rotation = all_fixed();
     nonzero_rotation[3] = fixed_axis(0.5f);
     nonzero_rotation[5] = free_axis();
-    reach.configure(Transform{}, Joint_side::a, nonzero_rotation, glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f});
+    reach.configure(Transform{}, Joint_side::a, nonzero_rotation, glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}, 0.0f);
     EXPECT_EQ(reach.get_shape(), Joint_reach_shape::unprojected);
+}
+
+TEST(joint_reach, circle_margin_keeps_inside_the_range)
+{
+    std::array<Constraint_axis_limit, 6> limits = all_fixed();
+    limits[5] = ranged_axis(-1.4f, 1.4f);
+    const Transform frame{glm::mat3{1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}};
+    const glm::vec3 p{0.0f, -0.5f, 0.0f};
+    Joint_reach reach;
+    reach.configure(frame, Joint_side::a, limits, p, glm::vec3{0.0f, 0.5f, 0.0f}, 0.1f);
+    ASSERT_TRUE(reach.is_angle_limited());
+    const float pi = glm::pi<float>();
+    // Straight up is out of range: the reach ends 1.3 rad from straight down.
+    const glm::vec3 projected = reach.project(glm::vec3{0.1f, 5.0f, 0.0f});
+    const glm::vec3 d = projected - frame.origin;
+    const float angle_from_down = std::acos(glm::dot(glm::normalize(d), glm::vec3{0.0f, -1.0f, 0.0f}));
+    EXPECT_NEAR(angle_from_down, 1.3f, 1.0e-4f);
+    EXPECT_LT(angle_from_down, pi);
+}
+
+TEST(joint_reach, circle_step_follows_the_arc)
+{
+    std::array<Constraint_axis_limit, 6> limits = all_fixed();
+    limits[5] = ranged_axis(-1.4f, 1.4f);
+    const Transform frame{glm::mat3{1.0f}, glm::vec3{0.0f, 1.0f, 0.0f}};
+    const glm::vec3 p{0.0f, -0.5f, 0.0f};
+    Joint_reach reach;
+    reach.configure(frame, Joint_side::a, limits, p, glm::vec3{0.0f, 0.5f, 0.0f}, 0.0f);
+    const glm::vec3 from = reach.project(glm::vec3{-1.0f, 0.9f, 0.0f});
+    const glm::vec3 to   = reach.project(glm::vec3{ 1.0f, 0.9f, 0.0f});
+    glm::vec3 current = from;
+    float     total   = 0.0f;
+    int       steps   = 0;
+    while ((glm::distance(current, to) > 1.0e-5f) && (steps < 10000)) {
+        const glm::vec3 next = reach.step_toward(current, to, 0.01f);
+        EXPECT_NEAR(glm::distance(next, frame.origin), 0.5f, 1.0e-4f);
+        EXPECT_LE(next.y, 1.0f); // stays on the lower arc, inside the range
+        total += glm::distance(next, current);
+        current = next;
+        ++steps;
+    }
+    EXPECT_LT(steps, 10000);
+    EXPECT_NEAR(total, 0.5f * 2.8f, 0.02f); // the arc of the range, not the chord
+}
+
+TEST(joint_reach, sphere_step_follows_a_great_circle)
+{
+    std::array<Constraint_axis_limit, 6> limits = all_fixed();
+    limits[3] = free_axis();
+    limits[4] = free_axis();
+    limits[5] = free_axis();
+    const Transform frame{glm::mat3{1.0f}, glm::vec3{0.0f}};
+    Joint_reach reach;
+    reach.configure(frame, Joint_side::b, limits, glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{1.0f, 0.0f, 0.0f}, 0.0f);
+    const glm::vec3 next = reach.step_toward(glm::vec3{1.0f, 0.0f, 0.0f}, glm::vec3{0.0f, 1.0f, 0.0f}, 0.1f);
+    EXPECT_NEAR(glm::length(next), 1.0f, 1.0e-5f);
+    EXPECT_NEAR(std::acos(next.x), 0.1f, 1.0e-4f);
 }

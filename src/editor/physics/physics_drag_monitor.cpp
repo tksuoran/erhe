@@ -238,6 +238,10 @@ void Physics_drag_monitor::begin(
     }
     log_physics_drag->info("  drag target {}", drag.get_projection_description());
     log_physics_drag->info(
+        "  drag point speed limit {:.3f} m/s (inf = moved to the target at once)",
+        drag.get_drag_point_speed_limit()
+    );
+    log_physics_drag->info(
         "  world: {}; gravity {}; last fixed step dt {:.6f} s",
         world.describe_stepping(), world.get_gravity(), m_last_fixed_step_dt
     );

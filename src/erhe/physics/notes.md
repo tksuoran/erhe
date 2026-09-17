@@ -48,7 +48,10 @@ a specific engine.
 - `Joint_reach` -- pure projection of a target position onto the positions a point of a jointed
   body can reach while one six-DOF joint to a fixed anchor frame holds (`Joint_side` names the
   moving body's side; shapes point / circle / sphere / box, or unprojected for combinations it does
-  not handle); used by the editor's interactive physics drags; tests in `test/test_joint_reach.cpp`
+  not handle; a limited hinge range is narrowed by a configured angular margin); `step_toward()`
+  moves a reachable point along the reach (circle arc inside the range, sphere great circle,
+  straight line otherwise); used by the editor's interactive physics drags; tests in
+  `test/test_joint_reach.cpp`
 - `IDebug_draw` -- debug rendering interface (wireframe, contacts, AABBs)
 - `Transform` -- basis (mat3) + origin (vec3) transform representation
 - `Motion_mode` -- enum: static, kinematic (non-physical/physical), dynamic

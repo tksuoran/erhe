@@ -1,4 +1,5 @@
 #include "scene/scene_root.hpp"
+#include "physics/physics_drag_constraint.hpp"
 #include "scene/item_lookup.hpp"
 
 #include "config/generated/physics_config.hpp"
@@ -1873,6 +1874,18 @@ auto Scene_root::get_node_joints() const -> const std::vector<std::shared_ptr<No
     return m_node_joints;
 }
 
+void Scene_root::register_physics_drag(Physics_drag_constraint* const drag)
+{
+    if (std::find(m_physics_drags.begin(), m_physics_drags.end(), drag) == m_physics_drags.end()) {
+        m_physics_drags.push_back(drag);
+    }
+}
+
+void Scene_root::unregister_physics_drag(Physics_drag_constraint* const drag)
+{
+    m_physics_drags.erase(std::remove(m_physics_drags.begin(), m_physics_drags.end(), drag), m_physics_drags.end());
+}
+
 void Scene_root::unregister_node_joint(const std::shared_ptr<Node_joint>& node_joint)
 {
     if (!m_physics_world) {
@@ -1937,6 +1950,9 @@ void Scene_root::update_physics_simulation_fixed_step(const double dt, const Phy
         return;
     }
     apply_wind_forces(static_cast<float>(dt), physics);
+    for (Physics_drag_constraint* const drag : m_physics_drags) {
+        drag->on_fixed_step(static_cast<float>(dt));
+    }
     m_physics_world->update_fixed_step(dt);
     m_physics_drag_monitor.on_fixed_step(dt);
 }

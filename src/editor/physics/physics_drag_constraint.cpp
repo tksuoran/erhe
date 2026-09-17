@@ -2,6 +2,7 @@
 
 #include "scene/node_joint.hpp"
 #include "scene/node_physics.hpp"
+#include "scene/scene_root.hpp"
 
 #include "erhe_log/log_glm.hpp"
 #include "erhe_physics/icollision_shape.hpp"
@@ -13,6 +14,8 @@
 #include <fmt/format.h>
 
 #include <glm/gtc/constants.hpp>
+
+#include <cmath>
 
 namespace editor {
 
@@ -55,7 +58,9 @@ auto make_jointed_body_drag_settings(const float body_mass) -> Physics_drag_cons
         .damping                    = c_jointed_drag_damping,
         .max_force                  = c_jointed_drag_max_force_in_body_weights * body_mass * c_standard_gravity,
         .solver_velocity_iterations = c_jointed_drag_solver_velocity_iterations,
-        .solver_position_iterations = c_jointed_drag_solver_position_iterations
+        .solver_position_iterations = c_jointed_drag_solver_position_iterations,
+        .drag_point_speed           = Drag_point_speed::braking,
+        .limit_margin               = c_jointed_drag_limit_margin
     };
 }
 
@@ -67,16 +72,17 @@ Physics_drag_constraint::~Physics_drag_constraint() noexcept
 }
 
 auto Physics_drag_constraint::attach(
-    erhe::physics::IWorld&                  world,
+    Scene_root&                             scene_root,
     erhe::physics::IRigid_body&             body,
     const glm::vec3                         pivot_in_body,
     const glm::vec3                         drag_point_in_world,
     const Physics_drag_constraint_settings&            settings,
-    const Physics_drag_monitor_info&                   monitor_info,
-    const std::span<const std::shared_ptr<Node_joint>> node_joints
+    const Physics_drag_monitor_info&        monitor_info
 ) -> bool
 {
     detach();
+
+    erhe::physics::IWorld& world = scene_root.get_physics_world();
 
     m_world         = &world;
     m_body          = &body;
@@ -98,8 +104,22 @@ auto Physics_drag_constraint::attach(
         return false;
     }
     world.add_rigid_body(m_drag_point_body.get());
-    configure_projection(node_joints, drag_point_in_world);
+    configure_projection(scene_root.get_node_joints(), drag_point_in_world);
+    m_drag_point_speed_limit = std::numeric_limits<float>::infinity();
+    if (settings.drag_point_speed == Drag_point_speed::braking) {
+        const float brake_acceleration = (settings.max_force / body.get_mass()) - c_standard_gravity;
+        const float brake_distance     = m_reach.is_angle_limited()
+            ? (m_reach.get_radius() * settings.limit_margin)
+            : c_jointed_drag_brake_distance;
+        if (std::isfinite(brake_acceleration) && (brake_acceleration > 0.0f)) {
+            m_drag_point_speed_limit = std::sqrt(2.0f * brake_acceleration * brake_distance);
+        }
+    }
+    m_drag_point = m_reach.project(drag_point_in_world);
     move_drag_point(drag_point_in_world, Drag_point_motion::teleport);
+    place_drag_point(m_drag_point, Drag_point_motion::teleport);
+    m_scene_root = &scene_root;
+    scene_root.register_physics_drag(this);
 
     body.begin_move();
 
@@ -186,7 +206,7 @@ void Physics_drag_constraint::configure_projection(
     const erhe::physics::Transform moving_anchor_from_world = inverse(world_from_moving_anchor);
     const glm::vec3 pivot_in_moving_anchor = (moving_anchor_from_world.basis * pivot_in_world) + moving_anchor_from_world.origin;
 
-    m_reach.configure(world_from_fixed_anchor, side, state.limits, pivot_in_moving_anchor, pivot_in_world);
+    m_reach.configure(world_from_fixed_anchor, side, state.limits, pivot_in_moving_anchor, pivot_in_world, m_settings.limit_margin);
 
     const std::string anchor = fmt::format(
         "joint '{}', dragged body is side {}, anchor '{}' at {}",
@@ -198,12 +218,13 @@ void Physics_drag_constraint::configure_projection(
             const erhe::physics::Constraint_axis_limit& limit = state.limits[3 + static_cast<std::size_t>(axis)];
             const float to_degrees = 180.0f / glm::pi<float>();
             m_projection_description = fmt::format(
-                "projected: circle ({}; rotation axis {} = world {}, center {}, radius {:.4f} m, angle {})",
+                "projected: circle ({}; rotation axis {} = world {}, center {}, radius {:.4f} m, joint angle {}, margin {:.3f} rad)",
                 anchor,
                 c_axis_names[axis],
                 world_from_fixed_anchor.basis[axis],
                 m_reach.get_center(), m_reach.get_radius(),
-                limit.limited ? fmt::format("{:.2f} .. {:.2f} deg", limit.min * to_degrees, limit.max * to_degrees) : std::string{"free"}
+                limit.limited ? fmt::format("{:.2f} .. {:.2f} deg", limit.min * to_degrees, limit.max * to_degrees) : std::string{"free"},
+                limit.limited ? m_settings.limit_margin : 0.0f
             );
             break;
         }
@@ -241,9 +262,29 @@ void Physics_drag_constraint::move_drag_point(const glm::vec3 requested_position
     if (!m_drag_point_body) {
         return;
     }
-    const glm::vec3 position_in_world = m_reach.project(requested_position_in_world);
     m_requested_drag_point = requested_position_in_world;
-    m_projected_drag_point = position_in_world;
+    m_projected_drag_point = m_reach.project(requested_position_in_world);
+    if (m_settings.drag_point_speed == Drag_point_speed::immediate) {
+        m_drag_point = m_projected_drag_point;
+        place_drag_point(m_drag_point, motion);
+    }
+}
+
+void Physics_drag_constraint::on_fixed_step(const float dt)
+{
+    if (!m_drag_point_body || (m_settings.drag_point_speed != Drag_point_speed::braking)) {
+        return;
+    }
+    const glm::vec3 next = m_reach.step_toward(m_drag_point, m_projected_drag_point, m_drag_point_speed_limit * dt);
+    if (next == m_drag_point) {
+        return;
+    }
+    m_drag_point = next;
+    place_drag_point(m_drag_point, Drag_point_motion::teleport);
+}
+
+void Physics_drag_constraint::place_drag_point(const glm::vec3 position_in_world, const Drag_point_motion motion)
+{
     m_drag_point_body->set_motion_mode(
         (motion == Drag_point_motion::kinematic)
             ? erhe::physics::Motion_mode::e_kinematic_physical
@@ -256,6 +297,10 @@ void Physics_drag_constraint::move_drag_point(const glm::vec3 requested_position
 
 void Physics_drag_constraint::detach()
 {
+    if (m_scene_root != nullptr) {
+        m_scene_root->unregister_physics_drag(this);
+        m_scene_root = nullptr;
+    }
     // The monitor reads the release velocity, so it hears first.
     if (m_monitor != nullptr) {
         m_monitor->end(*this);
@@ -325,6 +370,16 @@ auto Physics_drag_constraint::get_requested_drag_point() const -> glm::vec3
 auto Physics_drag_constraint::get_projected_drag_point() const -> glm::vec3
 {
     return m_projected_drag_point;
+}
+
+auto Physics_drag_constraint::get_drag_point() const -> glm::vec3
+{
+    return m_drag_point;
+}
+
+auto Physics_drag_constraint::get_drag_point_speed_limit() const -> float
+{
+    return m_drag_point_speed_limit;
 }
 
 }

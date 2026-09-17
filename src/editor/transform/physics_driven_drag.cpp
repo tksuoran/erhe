@@ -84,7 +84,7 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
             };
             driven_node.spring = std::make_unique<Physics_drag_constraint>();
             driven_node.spring->attach(
-                scene_root->get_physics_world(),
+                *scene_root,
                 *rigid_body,
                 glm::vec3{0.0f, 0.0f, 0.0f},
                 drag_point,
@@ -100,12 +100,11 @@ void Physics_driven_drag::begin(App_context& context, std::vector<Transform_entr
                         .gravity_factor  = rigid_body->get_gravity_factor()
                     },
                     .tool_details = fmt::format(
-                        "drag kind {}, spring pivot at center of mass {}, drag point teleported to the gizmo pose's center of mass (joint-space projected) each drive",
+                        "drag kind {}, spring pivot at center of mass {}, drag target = the gizmo pose's center of mass (joint-space projected) each drive, drag point advanced toward it each fixed step",
                         (kind == Transform_drag_kind::translate) ? "translate" : "rotate",
                         driven_node.center_of_mass_in_node
                     )
-                },
-                scene_root->get_node_joints()
+                }
             );
             log_physics->trace("Transform drag pulls jointed body through physics: {}", node->describe());
         } else {

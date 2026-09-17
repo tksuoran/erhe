@@ -81,6 +81,7 @@ class App_settings;
 class Item_tree_window;
 class Draw_mode;
 class Node_joint;
+class Physics_drag_constraint;
 class Node_physics;
 class Raytrace_primitive;
 class Rendertarget_mesh;
@@ -368,6 +369,11 @@ public:
     // Every registered Node_joint, live or pending (read at drag start to
     // build the joint-space projection of a physics drag).
     [[nodiscard]] auto get_node_joints() const -> const std::vector<std::shared_ptr<Node_joint>>&;
+    // Attached interactive physics drags: update_physics_simulation_fixed_step()
+    // calls Physics_drag_constraint::on_fixed_step() on each before stepping
+    // the world. attach() registers, detach() unregisters.
+    void register_physics_drag  (Physics_drag_constraint* drag);
+    void unregister_physics_drag(Physics_drag_constraint* drag);
 
     void before_physics_simulation_steps     ();
     void update_physics_simulation_fixed_step(double dt, const Physics_config& physics);
@@ -586,6 +592,7 @@ private:
     std::vector<std::shared_ptr<Draw_mode>>         m_draw_mode_proxy_rebuilds;
     ERHE_PROFILE_MUTEX(std::mutex,                  m_draw_mode_proxy_rebuilds_mutex);
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
+    std::vector<Physics_drag_constraint*>           m_physics_drags;
     Physics_drag_monitor                            m_physics_drag_monitor{m_node_joints};
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 

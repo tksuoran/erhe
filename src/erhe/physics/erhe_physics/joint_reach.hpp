@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <optional>
 
 namespace erhe::physics {
 
@@ -22,7 +23,7 @@ enum class Joint_side : unsigned int {
 enum class Joint_reach_shape : unsigned int {
     unprojected = 0, // the combination of free axes is not handled; project() returns the target
     point       = 1, // nothing moves the point: every axis fixed, or the point lies on the free rotation axis / at the ball center
-    circle      = 2, // one rotation axis free or ranged, translation fixed; the angular range is applied
+    circle      = 2, // one rotation axis free or ranged, translation fixed; the angular range less the margin is applied
     sphere      = 3, // two or three rotation axes free or ranged, translation fixed; angular limits are NOT applied
     box         = 4  // rotation fixed, one or more translation axes free or ranged; per-axis ranges applied
 };
@@ -61,18 +62,31 @@ public:
     // point_in_world_now:      where the point is now; seeds the last
     //                          projected point (used when a target has no
     //                          unique nearest reachable point).
+    // angular_margin:          radians the circle reach stays inside a
+    //                          limited rotation range at each end (a range
+    //                          narrower than two margins collapses to its
+    //                          middle).
     void configure(
         const Transform&                            world_from_fixed_anchor,
         Joint_side                                  moving_side,
         const std::array<Constraint_axis_limit, 6>& limits,
         glm::vec3                                   point_in_moving_anchor,
-        glm::vec3                                   point_in_world_now
+        glm::vec3                                   point_in_world_now,
+        float                                       angular_margin
     );
 
     // Nearest reachable position to target_in_world (world space). A target
     // with no unique nearest position (on the free rotation axis, at the ball
     // center) returns the last projected position.
     auto project(glm::vec3 target_in_world) -> glm::vec3;
+
+    // Moves from_in_world (a reachable position) at most max_distance toward
+    // to_in_world (a reachable position) along the reach: an arc of the
+    // circle inside its range (the shorter way around a free hinge), a great
+    // circle arc of the sphere, a straight line otherwise.
+    [[nodiscard]] auto step_toward(glm::vec3 from_in_world, glm::vec3 to_in_world, float max_distance) const -> glm::vec3;
+
+    [[nodiscard]] auto is_angle_limited() const -> bool; // a circle whose rotation range is limited
 
     [[nodiscard]] auto get_shape      () const -> Joint_reach_shape;
     [[nodiscard]] auto get_axis       () const -> int;       // rotation axis 0..2 of a circle, -1 otherwise
@@ -82,6 +96,10 @@ public:
 
 private:
     [[nodiscard]] auto project_local(glm::vec3 target_in_fixed_anchor, glm::vec3 fallback) const -> glm::vec3;
+    // Circle: the joint angle of a point (moved into the range when limited);
+    // empty on the rotation axis.
+    [[nodiscard]] auto circle_theta_of(glm::vec3 point_in_fixed_anchor) const -> std::optional<float>;
+    [[nodiscard]] auto circle_point_at(float theta) const -> glm::vec3; // fixed anchor frame
 
     Transform         m_world_from_fixed_anchor{};
     Transform         m_fixed_anchor_from_world{};
