@@ -145,11 +145,6 @@ auto Null_world::describe() const -> std::vector<std::string>
     return {};
 }
 
-auto Null_world::describe_stepping() const -> std::string
-{
-    return "null physics backend (no simulation)";
-}
-
 void Null_world::debug_draw(erhe::renderer::Jolt_debug_renderer&)
 {
 }

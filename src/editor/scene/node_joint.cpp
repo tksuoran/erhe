@@ -412,8 +412,7 @@ auto Node_joint::try_create_constraint() -> bool
         .node_physics_b = node_physics_b.get(),
         .frame_in_a     = constraint_settings.frame_in_a,
         .frame_in_b     = constraint_settings.frame_in_b,
-        .limits         = constraint_settings.limits,
-        .drives         = constraint_settings.drives
+        .limits         = constraint_settings.limits
     };
 
     // Settle both bodies to their joint pose at rest so the freshly added constraint

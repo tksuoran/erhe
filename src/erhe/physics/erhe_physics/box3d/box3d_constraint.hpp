@@ -11,8 +11,6 @@ class Box3d_constraint : public IConstraint
 public:
     ~Box3d_constraint() noexcept override;
 
-    [[nodiscard]] auto get_diagnostics() const -> Constraint_diagnostics override;
-
     [[nodiscard]] auto get_box3d_joint() const -> b3JointId { return m_joint; }
     [[nodiscard]] auto is_valid       () const -> bool      { return m_is_valid; }
 

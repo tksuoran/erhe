@@ -272,14 +272,6 @@ auto Physics_tool::begin_drag(
     m_original_friction        = rigid_body->get_friction();
     m_original_gravity         = rigid_body->get_gravity_factor();
 
-    const Physics_drag_body_values values_before_tool{
-        .linear_damping  = m_original_linear_damping,
-        .angular_damping = m_original_angular_damping,
-        .friction        = m_original_friction,
-        .gravity_factor  = m_original_gravity
-    };
-    const char* const mode_name = (m_mode == Physics_tool_mode::Drag) ? "drag" : ((m_mode == Physics_tool_mode::Push) ? "push" : "pull");
-
     m_target_jointed = scene_root.is_jointed_rigid_body(rigid_body);
     if (m_target_jointed) {
         // A body held by a joint: the same bounded spring as the Transform
@@ -295,17 +287,7 @@ auto Physics_tool::begin_drag(
             *rigid_body,
             glm::vec3{0.0f, 0.0f, 0.0f},
             center_of_mass_in_world,
-            make_jointed_body_drag_settings(rigid_body->get_mass()),
-            Physics_drag_monitor_info{
-                .monitor            = &scene_root.get_physics_drag_monitor(),
-                .tool_name          = "physics tool",
-                .node               = target_node,
-                .values_before_tool = values_before_tool,
-                .tool_details = fmt::format(
-                    "mode {}, jointed body: spring pivot at center of mass {}, grab in node {} (goal offset by grab -> center of mass each frame), no body overrides, no velocity reset, no extra damping, drag target set each frame, drag point advanced toward it each fixed step",
-                    mode_name, m_center_of_mass_in_node, m_grab_position_in_node
-                )
-            }
+            make_jointed_body_drag_settings(rigid_body->get_mass())
         );
         return true;
     }
@@ -333,21 +315,6 @@ auto Physics_tool::begin_drag(
         Physics_drag_constraint_settings{
             .frequency = m_frequency,
             .damping   = m_damping
-        },
-        Physics_drag_monitor_info{
-            .monitor            = &scene_root.get_physics_drag_monitor(),
-            .tool_name          = "physics tool",
-            .node               = target_node,
-            .values_before_tool = values_before_tool,
-            .tool_details = fmt::format(
-                "mode {}, depth {:.3f}, grab in node {}, velocities zeroed at grab, override damping {} ({:.3f}, {:.3f}), override friction {} ({:.3f}), override gravity {} ({:.3f}), extra per-frame velocity damping {} (linear {:.3f}, angular {:.3f}), drag point moved as kinematic each on_drag",
-                mode_name,
-                m_depth, m_grab_position_in_node,
-                m_override_damping_enable, m_override_linear_damping, m_override_angular_damping,
-                m_override_friction_enable, m_override_friction_value,
-                m_override_gravity_enable, m_override_gravity_value,
-                m_extra_damping_enable, m_extra_linear_damping, m_extra_angular_damping
-            )
         }
     );
 

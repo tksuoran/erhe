@@ -517,19 +517,6 @@ void Jolt_world::dispatch_trigger_events()
     m_dispatch_trigger_events.clear();
 }
 
-auto Jolt_world::describe_stepping() const -> std::string
-{
-    const JPH::PhysicsSettings& settings = m_physics_system.GetPhysicsSettings();
-    return fmt::format(
-        "Jolt: collision steps per update 1, velocity steps {}, position steps {}, baumgarte {}, penetration slop {}, allow sleeping {}",
-        settings.mNumVelocitySteps,
-        settings.mNumPositionSteps,
-        settings.mBaumgarte,
-        settings.mPenetrationSlop,
-        settings.mAllowSleeping
-    );
-}
-
 auto Jolt_world::describe() const -> std::vector<std::string>
 {
     std::vector<std::string> out;

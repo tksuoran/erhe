@@ -10,7 +10,6 @@
 #include "erhe_scene_renderer/material_set.hpp"
 #include "scene/draw_list_scene_dependencies.hpp"
 #include "scene/variant_table.hpp"
-#include "physics/physics_drag_monitor.hpp"
 
 #include <deque>
 #include <filesystem>
@@ -393,8 +392,6 @@ public:
     [[nodiscard]] auto layers            () const -> const Scene_layers&;
     [[nodiscard]] auto has_physics_world () const -> bool;
     [[nodiscard]] auto get_physics_world () -> erhe::physics::IWorld&;
-    // Diagnostics of interactive physics drags in this scene (editor.physics_drag).
-    [[nodiscard]] auto get_physics_drag_monitor() -> Physics_drag_monitor&;
 
     // Bounded log of recent sensor (trigger) overlap events, appended by the
     // physics world trigger callbacks at the end of update_fixed_step() and
@@ -593,7 +590,6 @@ private:
     ERHE_PROFILE_MUTEX(std::mutex,                  m_draw_mode_proxy_rebuilds_mutex);
     std::vector<std::shared_ptr<Node_joint>>        m_node_joints;
     std::vector<Physics_drag_constraint*>           m_physics_drags;
-    Physics_drag_monitor                            m_physics_drag_monitor{m_node_joints};
     std::vector<std::shared_ptr<Rendertarget_mesh>> m_rendertarget_meshes;
 
     std::vector<std::shared_ptr<erhe::Item_base>>   m_physics_disabled_nodes;

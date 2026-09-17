@@ -48,42 +48,6 @@ auto IConstraint::create_six_dof_constraint_unique(
     return std::make_unique<Jolt_six_dof_constraint>(settings);
 }
 
-auto Jolt_constraint::get_diagnostics() const -> Constraint_diagnostics
-{
-    Constraint_diagnostics result{};
-    const JPH::Constraint* const constraint = get_jolt_constraint();
-    if (constraint == nullptr) {
-        return result;
-    }
-    switch (constraint->GetSubType()) {
-        case JPH::EConstraintSubType::SixDOF: {
-            const JPH::SixDOFConstraint* const six_dof = static_cast<const JPH::SixDOFConstraint*>(constraint);
-            const JPH::Vec3 position = six_dof->GetTotalLambdaPosition();
-            const JPH::Vec3 rotation = six_dof->GetTotalLambdaRotation();
-            const JPH::Vec3 motor    = six_dof->GetTotalLambdaMotorTranslation();
-            result.kind         = "jolt six-dof";
-            result.has_load     = true;
-            result.load_unit    = "lambda N s / N m s (last step; linear includes translation motor lambda)";
-            result.linear_load  = glm::vec3{position.GetX() + motor.GetX(), position.GetY() + motor.GetY(), position.GetZ() + motor.GetZ()};
-            result.angular_load = glm::vec3{rotation.GetX(), rotation.GetY(), rotation.GetZ()};
-            break;
-        }
-        case JPH::EConstraintSubType::Distance: {
-            const JPH::DistanceConstraint* const distance = static_cast<const JPH::DistanceConstraint*>(constraint);
-            result.kind         = "jolt distance";
-            result.has_load     = true;
-            result.load_unit    = "lambda N s (last step, along the axis)";
-            result.linear_load  = glm::vec3{distance->GetTotalLambdaPosition(), 0.0f, 0.0f};
-            break;
-        }
-        default: {
-            result.kind = "jolt other";
-            break;
-        }
-    }
-    return result;
-}
-
 Jolt_point_to_point_constraint::Jolt_point_to_point_constraint(
     const Point_to_point_constraint_settings& settings
 )

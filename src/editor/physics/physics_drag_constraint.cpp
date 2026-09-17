@@ -76,18 +76,16 @@ auto Physics_drag_constraint::attach(
     erhe::physics::IRigid_body&             body,
     const glm::vec3                         pivot_in_body,
     const glm::vec3                         drag_point_in_world,
-    const Physics_drag_constraint_settings&            settings,
-    const Physics_drag_monitor_info&        monitor_info
+    const Physics_drag_constraint_settings& settings
 ) -> bool
 {
     detach();
 
     erhe::physics::IWorld& world = scene_root.get_physics_world();
 
-    m_world         = &world;
-    m_body          = &body;
-    m_pivot_in_body = pivot_in_body;
-    m_settings      = settings;
+    m_world    = &world;
+    m_body     = &body;
+    m_settings = settings;
 
     m_drag_point_body = world.create_rigid_body_shared(
         erhe::physics::IRigid_body_create_info{
@@ -137,11 +135,6 @@ auto Physics_drag_constraint::attach(
         }
     );
     world.add_constraint(m_constraint.get());
-
-    m_monitor = monitor_info.monitor;
-    if (m_monitor != nullptr) {
-        m_monitor->begin(*this, world, monitor_info);
-    }
     return true;
 }
 
@@ -301,11 +294,6 @@ void Physics_drag_constraint::detach()
         m_scene_root->unregister_physics_drag(this);
         m_scene_root = nullptr;
     }
-    // The monitor reads the release velocity, so it hears first.
-    if (m_monitor != nullptr) {
-        m_monitor->end(*this);
-        m_monitor = nullptr;
-    }
     // The constraint goes first: Box3D destroys the joint with the constraint
     // object, and the joint must not outlive the drag point body.
     if (m_constraint) {
@@ -342,21 +330,6 @@ auto Physics_drag_constraint::get_drag_point_body() const -> erhe::physics::IRig
     return m_drag_point_body.get();
 }
 
-auto Physics_drag_constraint::get_pivot_in_body() const -> glm::vec3
-{
-    return m_pivot_in_body;
-}
-
-auto Physics_drag_constraint::get_settings() const -> const Physics_drag_constraint_settings&
-{
-    return m_settings;
-}
-
-auto Physics_drag_constraint::is_projected() const -> bool
-{
-    return m_reach.get_shape() != erhe::physics::Joint_reach_shape::unprojected;
-}
-
 auto Physics_drag_constraint::get_projection_description() const -> const std::string&
 {
     return m_projection_description;
@@ -370,16 +343,6 @@ auto Physics_drag_constraint::get_requested_drag_point() const -> glm::vec3
 auto Physics_drag_constraint::get_projected_drag_point() const -> glm::vec3
 {
     return m_projected_drag_point;
-}
-
-auto Physics_drag_constraint::get_drag_point() const -> glm::vec3
-{
-    return m_drag_point;
-}
-
-auto Physics_drag_constraint::get_drag_point_speed_limit() const -> float
-{
-    return m_drag_point_speed_limit;
 }
 
 }

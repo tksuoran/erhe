@@ -19,10 +19,10 @@ namespace editor {
 
 class Node_physics;
 
-// What the live constraint of a Node_joint was built from, kept for read-only
-// diagnostics (the physics drag monitor). The Node_physics pointers stay valid
-// while the constraint lives: Scene_root tears the constraint down before a
-// referenced body leaves the world.
+// What the live constraint of a Node_joint was built from, read by the
+// joint-space projection of Physics_drag_constraint. The Node_physics pointers
+// stay valid while the constraint lives: Scene_root tears the constraint down
+// before a referenced body leaves the world.
 class Node_joint_constraint_state
 {
 public:
@@ -31,7 +31,6 @@ public:
     erhe::physics::Transform                                   frame_in_a{};            // in body A node space
     erhe::physics::Transform                                   frame_in_b{};            // in body B node space, or world space when B is the world
     std::array<erhe::physics::Constraint_axis_limit, 6>        limits{};                // 0..2 translation XYZ, 3..5 rotation XYZ
-    std::array<erhe::physics::Constraint_axis_drive, 6>        drives{};
 };
 
 // Node attachment that joins the nearest self-or-ancestor rigid body of its

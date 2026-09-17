@@ -130,7 +130,6 @@ public:
     auto get_rigid_body_count() const -> std::size_t              override;
     auto get_constraint_count() const -> std::size_t              override;
     auto describe            () const -> std::vector<std::string> override;
-    auto describe_stepping() const -> std::string override;
     void update_fixed_step   (double dt)                          override;
     void set_gravity         (const glm::vec3& gravity)           override;
     void add_rigid_body      (IRigid_body* rigid_body)            override;

@@ -438,8 +438,6 @@ erhe_target_sources_grouped(
     physics/collision_generator.hpp
     physics/physics_drag_constraint.cpp
     physics/physics_drag_constraint.hpp
-    physics/physics_drag_monitor.cpp
-    physics/physics_drag_monitor.hpp
     physics/physics_tool.cpp
     physics/physics_tool.hpp
     physics/physics_window.cpp
