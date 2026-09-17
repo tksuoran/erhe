@@ -275,3 +275,11 @@ geometry-tests-116->120;headless:coplanar-create_shape=error-editor-alive,tetra-
 erhe_tests-aggregate-target+gpu/editor-labels+wrapper-arg-pass-through+build.yml-ctest-step+tests.yml-verdict-workflow+ci_test_summary.py+README-tests-badge+AGENTS/building/graphics_test_coverage-docs
 verified-local:build_vs2026_vulkan-reconfigure+erhe_tests-build-clean+ctest--LE-gpu|editor-1371-tests{gpu-80,editor-53-excluded}
 ?first-CI-run-after-push{Linux/macOS/Windows-headless-test-builds-never-built-here}
+
+[TASK::newtons-cradle-physics-drag]{DONE+USER-VERIFIED+PUSHED-2026-09-17;via-harness;4-coders}
+✓creation-21{8974faec7+fdccecf7d+cabe99c3d+821303b6c+fcd084d98:cradle+backend-gap-flags+--keep-windows+--scene-only+pivots-in-the-frame}
+✓drag-through-physics{6de7b258b-physics-springs+Box3D-joint-stiffness|873fe258c-Transform-tool|8b9317662-Joint_reach|7fb8411a4-project_ray|535597229-both-tools-project+Physics-tool-bounded|9aecd84b8-Node_joint-rebuild-scope|05ca66ada-braking-drag-point}
+✓instrumentation{621049a60-editor.physics_drag-monitor}->removed-after-verification{41eeff517}+replaced-by-scripts/physics_drag_joint_sweep.py{878106c4d}
+✓cradle-hinge-unlimited{6bfd7ca5e:removes-the-last-flake=undragged-ball-hitting-a-hard-limit-on-Jolt}
+!measured::hold<=0.23mm-Jolt/0.05mm-Box3D,after-release<=0.37/0.13;reported-drag-704mm->0.01mm;far-ball-peak-unchanged-0.408/0.406
+?left::doc/ai_creations.md-entry-21+doc-image-are-in{8974faec7};unjointed-drag-fly-off+Box3D-0Hz-rigid-path-unfixed
